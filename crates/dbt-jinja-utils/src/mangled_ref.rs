@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use dbt_common::{ErrorCode, io_args::IoArgs, tracing::dbt_emit::emit_warn_log_message};
+use dbt_common::{ErrorCode, tracing::dbt_emit::emit_warn_log_message};
 use minijinja::{CodeLocation, OutputTrackerLocation, listener::RenderingEventListener};
 
 use minijinja::machinery::Span;
@@ -54,8 +54,6 @@ struct RefSourceInfo {
 pub struct MangledRefWarningPrinter {
     /// File path for error reporting
     path: PathBuf,
-    /// IO args for emitting warnings
-    io_args: IoArgs,
     /// Collected ref/source info during rendering
     ref_source_info: Arc<Mutex<Vec<RefSourceInfo>>>,
     /// Function call depth - only record refs at depth 0 (top level).
@@ -80,14 +78,9 @@ pub struct MangledRefWarningPrinter {
 
 impl MangledRefWarningPrinter {
     /// Create a new warning printer.
-    pub fn new(
-        path: PathBuf,
-        io_args: IoArgs,
-        output_tracker_location: Rc<OutputTrackerLocation>,
-    ) -> Self {
+    pub fn new(path: PathBuf, output_tracker_location: Rc<OutputTrackerLocation>) -> Self {
         Self {
             path,
-            io_args,
             ref_source_info: Arc::new(Mutex::new(Vec::new())),
             function_depth: Cell::new(0),
             output_tracker_location,
@@ -111,7 +104,6 @@ impl MangledRefWarningPrinter {
                 custom_checks:\n    analysis.mangled_ref: off",
                 info.ref_type, message, location
             ),
-            self.io_args.status_reporter.as_ref(),
         );
     }
 }

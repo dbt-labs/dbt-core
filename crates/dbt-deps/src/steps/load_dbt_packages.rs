@@ -1,4 +1,3 @@
-use dbt_common::io_args::IoArgs;
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
@@ -22,20 +21,17 @@ impl std::fmt::Display for DbtPackageType {
     }
 }
 
-pub async fn load_dbt_packages(
-    io: &IoArgs,
-    in_dir: &Path,
-) -> FsResult<(Option<DbtPackages>, DbtPackageType)> {
+pub async fn load_dbt_packages(in_dir: &Path) -> FsResult<(Option<DbtPackages>, DbtPackageType)> {
     let package_yml_path = in_dir.join(DBT_PACKAGES_YML);
     let dbt_package_yml: Option<DbtPackages> = if tokiofs::path_exists(&package_yml_path).await {
-        Some(read_dbt_package_yml(io, &package_yml_path).await?)
+        Some(read_dbt_package_yml(&package_yml_path).await?)
     } else {
         None
     };
     let dbt_dependencies_yml_path = in_dir.join(DBT_DEPENDENCIES_YML);
     let dbt_dependencies_yml: Option<DbtPackages> =
         if tokiofs::path_exists(&dbt_dependencies_yml_path).await {
-            Some(read_dbt_package_yml(io, &dbt_dependencies_yml_path).await?)
+            Some(read_dbt_package_yml(&dbt_dependencies_yml_path).await?)
         } else {
             None
         };
@@ -80,7 +76,7 @@ pub async fn load_dbt_packages(
     }
 }
 
-async fn read_dbt_package_yml(io: &IoArgs, package_yml_path: &Path) -> FsResult<DbtPackages> {
+async fn read_dbt_package_yml(package_yml_path: &Path) -> FsResult<DbtPackages> {
     let content = tokiofs::read_to_string(package_yml_path).await?;
-    dbt_jinja_utils::serde::from_yaml_raw(io, &content, Some(package_yml_path), true, None)
+    dbt_jinja_utils::serde::from_yaml_raw(&content, Some(package_yml_path), true, None)
 }

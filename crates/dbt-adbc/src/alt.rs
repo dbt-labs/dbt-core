@@ -30,6 +30,9 @@ pub const AUTH_TOKEN: &str = "adbc.dbt.auth.token";
 
 pub const CATALOG_BUNDLE: &str = "adbc.dbt.catalog_bundle";
 
+/// Connection-level kind of catalog the queries target, e.g. `"snowflake"`.
+pub const TARGET_CATALOG: &str = "adbc.dbt.target_catalog";
+
 /// Okta authorization endpoint.
 pub const OKTA_AUTH_URL: &str = "adbc.dbt.auth.okta.auth_url";
 /// Okta token endpoint.

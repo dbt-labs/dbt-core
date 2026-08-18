@@ -52,3 +52,6 @@ pub mod mangled_ref;
 /// Mock Jinja object
 #[cfg(any(test, feature = "testing"))]
 pub mod mock_object;
+
+/// Parse-time listener that warns on malformed snapshot/docs block names
+pub mod malformed_block_name;

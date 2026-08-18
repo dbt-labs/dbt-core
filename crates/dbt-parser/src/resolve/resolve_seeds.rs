@@ -1,7 +1,10 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
+    validate_compute_platform,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -113,10 +116,10 @@ pub async fn resolve_seeds(
     let config_resolver =
         ProjectConfigResolver::build(root_project_configs.seeds.clone(), is_dependency, || {
             init_project_config(
-                io_args,
                 &package.dbt_project.seeds,
                 package_quoting,
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         })?
         .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
@@ -217,7 +220,6 @@ pub async fn resolve_seeds(
             }
             (
                 into_typed_with_jinja::<SeedProperties, _>(
-                    io_args,
                     mpe.schema_value,
                     false,
                     jinja_env,
@@ -240,7 +242,6 @@ pub async fn resolve_seeds(
             arg.static_analysis,
             seed_name,
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
 
         // XXX: normalize column_types to uppercase if it is snowflake
@@ -300,6 +301,16 @@ pub async fn resolve_seeds(
         )?;
 
         validate_delimiter(&properties_config.delimiter)?;
+
+        validate_compute_platform(
+            properties_config.alt_compute,
+            &DbtMaterialization::Table,
+            properties_config.catalog_name.as_deref(),
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            false,
+            &path,
+        )?;
 
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds
@@ -362,6 +373,7 @@ pub async fn resolve_seeds(
                 delimiter: properties_config.delimiter.clone().map(|d| d.into_inner()),
                 root_path: Some(seed_file.base_path.clone()),
                 catalog_name: properties_config.catalog_name.clone(),
+                alt_compute: properties_config.alt_compute,
             },
             __other__: BTreeMap::new(),
             deprecated_config: properties_config.clone().into(),
@@ -394,7 +406,7 @@ pub async fn resolve_seeds(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(path.clone());
-                emit_error_log_from_fs_error(err_with_loc, io_args.status_reporter.as_ref());
+                emit_error_log_from_fs_error(err_with_loc);
             }
         }
 
@@ -430,10 +442,10 @@ pub async fn resolve_seeds(
                 "Unused schema.yml entry for seed '{}'",
                 seed_name,
             );
-            emit_warn_log_from_fs_error(*err, arg.io.status_reporter.as_ref());
+            emit_warn_log_from_fs_error(*err);
         }
     }
 
-    trigger_duplicate_errors(io_args, &mut duplicate_errors)?;
+    trigger_duplicate_errors(&mut duplicate_errors)?;
     Ok((seeds, disabled_seeds))
 }

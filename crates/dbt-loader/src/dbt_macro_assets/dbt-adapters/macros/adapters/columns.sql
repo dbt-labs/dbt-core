@@ -98,7 +98,8 @@
     {% call statement('get_columns_in_query', fetch_result=True, auto_begin=False) -%}
         {{ get_empty_subquery_sql(select_sql) }}
     {% endcall %}
-    {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
+    {# DIVERGENCE: Fusion reads the original schema because Agate flattens nested columns. #}
+    {{ return(load_result('get_columns_in_query').table.top_level_column_names) }}
 {% endmacro %}
 
 -- funcsign: (relation, string, string) -> string

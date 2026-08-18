@@ -141,7 +141,6 @@ impl DeferState {
                         format!(
                             "dbt State auto-deferral setup failed: {err}; continuing without synthesized defer state"
                         ),
-                        None,
                     );
                     None
                 }

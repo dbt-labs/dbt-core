@@ -10,7 +10,7 @@ use chrono::{
 };
 use chrono_tz::Tz;
 use minijinja::arg_utils::ArgsIter;
-use minijinja::{arg_utils::ArgParser, value::Object, Error, ErrorKind, Value};
+use minijinja::{arg_utils::ArgParser, value::Object, value::ObjectRepr, Error, ErrorKind, Value};
 
 use crate::modules::py_datetime::bound_method::BoundMethod;
 use crate::modules::py_datetime::date::PyDate;
@@ -1153,6 +1153,15 @@ impl PyDateTime {
 // Implement the `Object` trait for PyDateTime so Jinja can call methods
 //
 impl Object for PyDateTime {
+    // Without this, the default `ObjectRepr::Map` (with no enumerable fields,
+    // since `enumerate` is not overridden either) makes `tojson`/`|string`
+    // render this as the literal "{}" and `is mapping` report true. `Plain`
+    // makes stringification/serialization go through `render()` below, and
+    // matches the sibling `PyDate` object.
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
     fn is_true(self: &Arc<Self>) -> bool {
         true
     }

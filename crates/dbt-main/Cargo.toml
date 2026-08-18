@@ -33,6 +33,7 @@ dbt-dist = { workspace = true }
 dbt-docs-server = { workspace = true }
 dbt-error = { workspace = true }
 dbt-features = { workspace = true }
+dbt-freshness = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-index-core = { workspace = true }
 dbt-init = { workspace = true }
@@ -49,6 +50,7 @@ dbt-state = { workspace = true }
 dbt-tasks-core = { workspace = true }
 dbt-tasks-sa = { workspace = true }
 dbt-telemetry = { workspace = true }
+dbt-vortex = { workspace = true }
 
 arrow = { workspace = true }
 astral-tokio-tar = { workspace = true }
@@ -76,7 +78,6 @@ vortex-events = { workspace = true }
 [features]
 default = ["embed-ui"]
 embed-ui = ["dbt-docs-server/embed-ui"]
-openapi-ui = ["dbt-docs-server/openapi-ui"]
 
 [dev-dependencies]
 flate2 = { workspace = true }

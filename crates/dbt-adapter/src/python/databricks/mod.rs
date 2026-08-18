@@ -512,7 +512,6 @@ fn extract_timeout(config: &Value) -> u64 {
             emit_warn_log_message(
                 ErrorCode::InvalidConfig,
                 "Invalid timeout value, using default of 0",
-                None,
             );
             0
         }

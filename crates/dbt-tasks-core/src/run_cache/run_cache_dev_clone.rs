@@ -17,7 +17,7 @@ use dbt_state::service_config::CloneIncrementalInDev;
 
 use crate::context::TaskRunnerCtx;
 use crate::run_cache::run_cache_request::{
-    model_clone_table_properties, model_execution_type_input, node_identity,
+    DbtProjectInfo, model_clone_table_properties, model_execution_type_input, node_identity,
     snapshot_clone_table_properties, snapshot_execution_type_input,
 };
 use crate::run_cache::run_cache_service::{
@@ -25,14 +25,53 @@ use crate::run_cache::run_cache_service::{
     confirm_run_cache_service_execution, execute_run_cache_service_clone,
     run_cache_metadata_query_options,
 };
+use crate::run_cache::run_cache_service::{record_dev_clone_decision, replay_dev_clone_decision};
 
 pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     let Some(candidate) = dev_clone_candidate_for_node(ctx, node_id) else {
         return;
     };
+    let node = candidate.node();
+
+    if dbt_adapter::time_machine::is_replaying() {
+        let Some(clone) = replay_dev_clone_decision(node_id) else {
+            return;
+        };
+        match execute_run_cache_service_clone(
+            ctx,
+            node.as_ref(),
+            &clone,
+            ctx.adapter_type(),
+            ctx.dbt_profile().threads,
+            None,
+            false,
+        )
+        .await
+        {
+            Ok(_) => {
+                finish_dev_clone(
+                    ctx,
+                    node.as_ref(),
+                    &clone,
+                    clone.clone_source().to_string(),
+                    clone.clone_target().to_string(),
+                )
+                .await
+            }
+            Err(err) => emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "Time-machine dev clone failed for node {node_id}: {err}; executing normally"
+                ),
+            ),
+        }
+        return;
+    }
+
     let Some(policy) = dev_clone_policy(ctx, &candidate) else {
         return;
     };
+
     let Some(client) = ctx
         .inner
         .run_cache_ctx
@@ -51,7 +90,6 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
                 format!(
                     "dbt State dev clone request preparation failed for node {node_id}: {err}; executing normally"
                 ),
-                None,
             );
             return;
         }
@@ -66,7 +104,6 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
                 format!(
                     "dbt State dev clone registration failed for node {node_id}: {err}; executing normally"
                 ),
-                None,
             );
             return;
         }
@@ -84,7 +121,6 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     };
 
     let clone = RunCacheCloneDecision::from_response(&ready_to_clone, 0);
-    let node = candidate.node();
     match execute_run_cache_service_clone(
         ctx,
         node.as_ref(),
@@ -97,38 +133,16 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     .await
     {
         Ok(_) => {
-            let explain_dev_clone = StateExplainDevClone {
-                source_table_fqn: prepared.clone_source_table.clone(),
-                target_table_fqn: prepared.target_table.clone(),
-            };
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .invalidate_relation_metadata(&prepared.target_table);
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .insert_relation_exists(prepared.target_table, true);
-            // Confirm the clone as a dbt State execution so the server-side
-            // `latest_metadata` for the dev relation points at the prod
-            // execution via `clone_from_execution_id`. This matches the
-            // dbt-core plugin (`run_cache.py:_try_clone` calls
-            // `confirm_execution` after a successful clone), and lets the
-            // subsequent materialization submit resolve a parent execution
-            // id, return a Skip decision, and surface "Cloned from cached
-            // relation" rather than re-running the incremental merge.
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_dev_cloned_nodes
-                .insert(node_id.to_string(), explain_dev_clone);
-            confirm_run_cache_service_execution(
+            record_dev_clone_decision(node_id, &clone);
+            finish_dev_clone(
                 ctx,
                 node.as_ref(),
-                clone.success_confirmation(),
-                None,
+                &clone,
+                prepared.clone_source_table,
+                prepared.target_table,
             )
             .await;
-            let source = prepared.clone_source_table.clone();
+            let source = clone.clone_source().to_string();
             emit_trace_log_message(|| {
                 format!("dbt State dev clone completed for node {node_id} (source {source})")
             });
@@ -139,10 +153,35 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
                 format!(
                     "dbt State dev clone SQL failed for node {node_id}: {err}; executing normally"
                 ),
-                None,
             );
         }
     }
+}
+
+async fn finish_dev_clone(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    clone: &RunCacheCloneDecision,
+    source_table: String,
+    target_table: String,
+) {
+    let explain_dev_clone = StateExplainDevClone {
+        source_table_fqn: source_table,
+        target_table_fqn: target_table.clone(),
+    };
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_metadata
+        .invalidate_relation_metadata(&target_table);
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_metadata
+        .insert_relation_exists(target_table, true);
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_dev_cloned_nodes
+        .insert(node.unique_id(), explain_dev_clone);
+    confirm_run_cache_service_execution(ctx, node, clone.success_confirmation(), None).await;
 }
 
 fn dev_clone_candidate_for_node(ctx: &TaskRunnerCtx, node_id: &str) -> Option<DevCloneCandidate> {
@@ -410,6 +449,8 @@ async fn prepare_dev_clone_request(
     let source_last_modified_epoch =
         last_modified_epoch(ctx, &clone_source_table, source_relation.clone()).await;
 
+    let project_info = DbtProjectInfo::from(ctx);
+
     let request = CloneRequestInput {
         target_table: target_table.clone(),
         dialect: ctx.adapter_type().to_string(),
@@ -420,7 +461,12 @@ async fn prepare_dev_clone_request(
         labels: node_identity(candidate.local()).labels(),
         clone_source_table_type: candidate.clone_source_table_type(ctx.adapter_type()),
         table_properties: candidate.table_properties(),
-        clone_chain_depth_limit: clone_chain_depth_limit_for_adapter(ctx.adapter_type(), false),
+        clone_chain_depth_limit: clone_chain_depth_limit_for_adapter(
+            ctx.adapter_type(),
+            false,
+            ctx.dbt_profile().allow_clones,
+        ),
+        table_namespace: project_info.table_namespace,
     }
     .into_proto();
 
@@ -614,6 +660,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: Some(StatePreClone::Always),
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         let candidate = DevCloneCandidate::Model {
             local: Arc::new(local),
@@ -640,6 +687,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: Some(StatePreClone::IfMissing),
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         });
         let candidate = DevCloneCandidate::Snapshot {
             local: Arc::new(local),
@@ -726,6 +774,7 @@ mod tests {
             clone_source_table_type: Some("table".to_string()),
             table_properties: candidate.table_properties(),
             clone_chain_depth_limit: None,
+            table_namespace: Some("adapter-unique-id".to_string()),
         }
         .into_proto();
 
@@ -736,6 +785,7 @@ mod tests {
         assert_eq!(request.default_catalog, "dev");
         assert_eq!(request.execution_type, ModelExecutionType::Merge as i32);
         assert_eq!(request.clone_source_last_modified_epoch, Some(123));
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
         assert_eq!(
             request.labels.get("dbt_node_unique_id").map(String::as_str),
             Some("model.jaffle_shop.orders")

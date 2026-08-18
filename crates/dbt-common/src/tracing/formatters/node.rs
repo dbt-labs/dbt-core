@@ -1,16 +1,21 @@
+use console::Style;
 use dbt_telemetry::{
     AnyNodeOutcomeDetail, CompiledCode, CompiledCodeInline, ExecutionPhase, NodeEvaluated,
     NodeEvent, NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
     SourceFreshnessOutcome, TestOutcome, get_cache_detail, get_freshness_detail,
-    get_node_outcome_detail, get_test_outcome, has_node_warning, is_statically_checked_test,
+    get_node_outcome_detail, get_test_outcome, has_node_warning, is_batched_test,
+    is_statically_checked_test,
 };
 
 use crate::io_args::FsCommand;
 use crate::tracing::formatters::phase::get_phase_progress_text;
 
 use super::{
-    color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
-    constants::{MAX_QUALIFIER_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
+    color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW, maybe_apply_color},
+    constants::{
+        DURATION_WIDTH, MAX_QUALIFIER_DISPLAY_LEN, MEMBER_TREE_INDENT, MIN_NODE_TYPE_WIDTH,
+        UNIT_TEST_SCHEMA_SUFFIX,
+    },
     duration::format_duration_fixed_width,
     layout::right_align_static_action,
     phase::get_phase_action,
@@ -107,6 +112,19 @@ pub fn format_materialization_suffix(materialization: Option<&str>, desc: Option
     }
 }
 
+/// Format where a test is defined as `path`, `path:line` or `path:line:col`.
+fn format_test_source_location(node: &NodeProcessed) -> String {
+    if let Some(line) = node.defined_at_line {
+        if let Some(col) = node.defined_at_col {
+            format!("{}:{}:{}", node.relative_path, line, col)
+        } else {
+            format!("{}:{}", node.relative_path, line)
+        }
+    } else {
+        node.relative_path.clone()
+    }
+}
+
 fn format_node_description(node: &NodeProcessed) -> Option<String> {
     let node_type = node.node_type();
     let node_outcome = node.node_outcome();
@@ -150,21 +168,21 @@ fn format_node_description(node: &NodeProcessed) -> Option<String> {
         return Some("Statically checked".to_string());
     }
 
+    let aggregated = is_batched_test(node.into());
+
     if matches!(node_type, NodeType::Test | NodeType::UnitTest)
         && get_test_outcome(node.into()) != Some(TestOutcome::Passed)
     {
-        if let Some(line) = node.defined_at_line {
-            if let Some(col) = node.defined_at_col {
-                return Some(format!("{}:{}:{}", node.relative_path, line, col));
-            } else {
-                return Some(format!("{}:{}", node.relative_path, line));
-            }
+        let location = format_test_source_location(node);
+
+        return Some(if aggregated {
+            format!("Batched - {location}")
         } else {
-            return Some(node.relative_path.clone());
-        }
+            location
+        });
     }
 
-    None
+    aggregated.then(|| "Batched".to_string())
 }
 
 /// Formats the node outcome as a status string, optionally colorized.
@@ -217,18 +235,16 @@ pub fn format_node_outcome_as_status(
     }
 }
 
-/// Get the formatted (colored or plain) action text for a NodeProcessed event
-/// This uses the padded action constants for info level, main TUI output
-/// Note: test_outcome and freshness_outcome are mutually exclusive (oneof in proto).
-pub fn format_node_action(
+/// Resolve a node outcome to its unpadded action label and status colour.
+/// Callers that pad the label themselves need the plain text, hence the split.
+fn node_action_parts(
     node_outcome: NodeOutcome,
     skip_reason: Option<NodeSkipReason>,
     test_outcome: Option<TestOutcome>,
     freshness_outcome: Option<SourceFreshnessOutcome>,
     has_warn: bool,
-    colorize: bool,
-) -> String {
-    let (action, color) = match (node_outcome, skip_reason, test_outcome, freshness_outcome) {
+) -> (&'static str, &'static Style) {
+    match (node_outcome, skip_reason, test_outcome, freshness_outcome) {
         // Freshness outcomes (mutually exclusive with test_outcome)
         (NodeOutcome::Success, _, _, Some(f_outcome)) => match f_outcome {
             SourceFreshnessOutcome::OutcomePassed => ("Passed", &GREEN),
@@ -258,7 +274,27 @@ pub fn format_node_action(
         },
         (NodeOutcome::Canceled, _, _, _) => ("Cancelled", &YELLOW),
         (NodeOutcome::Unspecified, _, _, _) => ("Finished", &PLAIN),
-    };
+    }
+}
+
+/// Get the formatted (colored or plain) action text for a NodeProcessed event
+/// This uses the padded action constants for info level, main TUI output
+/// Note: test_outcome and freshness_outcome are mutually exclusive (oneof in proto).
+pub fn format_node_action(
+    node_outcome: NodeOutcome,
+    skip_reason: Option<NodeSkipReason>,
+    test_outcome: Option<TestOutcome>,
+    freshness_outcome: Option<SourceFreshnessOutcome>,
+    has_warn: bool,
+    colorize: bool,
+) -> String {
+    let (action, color) = node_action_parts(
+        node_outcome,
+        skip_reason,
+        test_outcome,
+        freshness_outcome,
+        has_warn,
+    );
 
     // Right align action
     let action = right_align_static_action(action);
@@ -592,6 +628,83 @@ pub fn format_skipped_test_group(
     )
 }
 
+/// Format the header line of an aggregated generic-test group
+///
+/// Returns formatted string in the pattern:
+/// `{worst_action} [{duration}] test {macro_name} on {model_name} ({member_count} batched)`
+pub fn format_aggregated_test_group_header(
+    macro_name: &str,
+    attached_node: &str,
+    member_count: usize,
+    worst_outcome: TestOutcome,
+    duration: std::time::Duration,
+    colorize: bool,
+) -> String {
+    // unique_id is `<type>.<package>.<name>[.v<version>]`; keep the version suffix.
+    let model_name = attached_node.splitn(3, '.').nth(2).unwrap_or(attached_node);
+    let label = format!("{macro_name} on {model_name}");
+
+    let action_formatted = format_node_action(
+        NodeOutcome::Success,
+        None, // skip_reason - an aggregated group always executed
+        Some(worst_outcome),
+        None,  // freshness_outcome
+        false, // has_warn - the group's verdict comes from its members
+        colorize,
+    );
+    let duration_formatted = format_duration_fixed_width(duration);
+    debug_assert_eq!(
+        duration_formatted.len(),
+        DURATION_WIDTH,
+        "duration must render at its declared fixed width"
+    );
+
+    format!(
+        "{} [{}] {} {}{}",
+        action_formatted,
+        duration_formatted,
+        format_node_type_fixed_width(NodeType::Test.as_static_ref(), colorize),
+        format_qualifier_alias("", &label, colorize),
+        format_materialization_suffix(None, Some(&format!("{member_count} batched")))
+    )
+}
+
+/// Format one member line of an aggregated generic-test group as a tree branch under
+/// the group header. `is_last` picks the terminating connector.
+///
+/// Returns formatted string in the pattern:
+/// `{indent}{connector} {action} {node_type} {name}{source_location_suffix}`
+pub fn format_aggregated_test_group_member(
+    node: &NodeProcessed,
+    is_last: bool,
+    colorize: bool,
+) -> String {
+    // Members carry no duration bracket; the header states the query's cost once.
+    let desc = (get_test_outcome(node.into()) != Some(TestOutcome::Passed))
+        .then(|| format_test_source_location(node));
+
+    let connector = if is_last { "└─" } else { "├─" };
+    let (action_label, action_style) = node_action_parts(
+        node.node_outcome(),
+        node.node_skip_reason.map(|_| node.node_skip_reason()),
+        get_test_outcome(node.into()),
+        None, // freshness_outcome
+        has_node_warning(node.into()),
+    );
+
+    // The action follows the connector unpadded, so a label longer than a test verdict
+    // shifts the rest of its own line right. Deliberate: padding reopens a wide gap.
+    format!(
+        "{}{} {} {} {}{}",
+        " ".repeat(MEMBER_TREE_INDENT),
+        connector,
+        maybe_apply_color(action_style, action_label, colorize),
+        format_node_type_fixed_width(node.node_type().as_static_ref(), colorize),
+        format_qualifier_alias("", &node.name, colorize),
+        format_materialization_suffix(None, desc.as_deref())
+    )
+}
+
 /// Format compiled inline code output
 ///
 /// Returns formatted string with title and SQL:
@@ -688,6 +801,9 @@ mod tests {
         node_processed::NodeOutcomeDetail as ProcessedDetail,
     };
 
+    /// Stand-in for the batch's synthetic test node unique_id that members are stamped with.
+    const BATCH_UNIQUE_ID: &str = "test.project.aggregated_accepted_values_orders";
+
     fn cached_warned_test_processed() -> NodeProcessed {
         let mut node = NodeProcessed::start(
             "test.project.accepted_values_orders_is_today_order__True".to_string(),
@@ -709,12 +825,17 @@ mod tests {
         node.set_node_outcome(NodeOutcome::Success);
         node.set_node_skip_reason(NodeSkipReason::Cached);
         node.node_outcome_detail = Some(ProcessedDetail::NodeTestDetail(
-            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None),
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None, None),
         ));
         node
     }
 
-    fn passed_test_processed(statically_checked: Option<bool>) -> NodeProcessed {
+    fn test_processed(
+        outcome: TestOutcome,
+        failures: i32,
+        statically_checked: Option<bool>,
+        batch_unique_id: Option<&str>,
+    ) -> NodeProcessed {
         let mut node = NodeProcessed::start(
             "test.project.accepted_values_orders_is_today_order__True".to_string(),
             "accepted_values_orders_is_today_order__True".to_string(),
@@ -733,9 +854,15 @@ mod tests {
             None,
         );
         node.set_node_outcome(NodeOutcome::Success);
-        node.node_outcome_detail = Some(ProcessedDetail::NodeTestDetail(
-            TestEvaluationDetail::new(TestOutcome::Passed, 0, None, None, statically_checked),
-        ));
+        node.node_outcome_detail =
+            Some(ProcessedDetail::NodeTestDetail(TestEvaluationDetail::new(
+                outcome,
+                failures,
+                None,
+                None,
+                statically_checked,
+                batch_unique_id.map(str::to_string),
+            )));
         node
     }
 
@@ -758,7 +885,7 @@ mod tests {
         node.set_node_outcome(NodeOutcome::Success);
         node.set_node_skip_reason(NodeSkipReason::Cached);
         node.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
-            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None),
+            TestEvaluationDetail::new(TestOutcome::Warned, 2, None, None, None, None),
         ));
         node
     }
@@ -779,7 +906,7 @@ mod tests {
     #[test]
     fn statically_checked_test_processed_formats_no_query_duration_and_description() {
         let output = format_node_processed_end(
-            &passed_test_processed(Some(true)),
+            &test_processed(TestOutcome::Passed, 0, Some(true), None),
             std::time::Duration::from_millis(250),
             false,
         );
@@ -792,7 +919,7 @@ mod tests {
     #[test]
     fn non_statically_checked_passed_test_processed_keeps_duration_and_description() {
         let output = format_node_processed_end(
-            &passed_test_processed(None),
+            &test_processed(TestOutcome::Passed, 0, None, None),
             std::time::Duration::from_millis(250),
             false,
         );
@@ -800,6 +927,192 @@ mod tests {
         assert!(output.contains("Passed"));
         assert!(!output.contains("[-------]"));
         assert!(!output.contains("Statically checked"));
+        assert!(!output.contains("Batched"));
+    }
+
+    // `format_node_processed_end` feeds `logs/dbt.log` and `--log-format json`, which stay
+    // one flat line per member test. Only stdout regroups; do not align these with it.
+    #[test]
+    fn aggregated_passed_test_processed_shows_flat_marker_for_log_sinks() {
+        let output = format_node_processed_end(
+            &test_processed(TestOutcome::Passed, 0, None, Some(BATCH_UNIQUE_ID)),
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Passed"));
+        assert!(output.contains("(Batched)"));
+        // An aggregated group does issue a query, so the duration must survive.
+        assert!(!output.contains("[-------]"));
+    }
+
+    #[test]
+    fn aggregated_failed_test_processed_shows_flat_marker_and_location_for_log_sinks() {
+        let output = format_node_processed_end(
+            &test_processed(TestOutcome::Failed, 3, None, Some(BATCH_UNIQUE_ID)),
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Failed"));
+        assert!(output.contains("(Batched - models/marts/orders.yml:37:13)"));
+    }
+
+    #[test]
+    fn non_aggregated_failed_test_processed_keeps_bare_location() {
+        let output = format_node_processed_end(
+            &test_processed(TestOutcome::Failed, 3, None, None),
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Failed"));
+        assert!(output.contains("(models/marts/orders.yml:37:13)"));
+        assert!(!output.contains("Batched"));
+    }
+
+    #[test]
+    fn aggregated_group_header_formats_worst_outcome_and_label() {
+        let output = format_aggregated_test_group_header(
+            "unique",
+            "model.my_pkg.unproven_unique",
+            2,
+            TestOutcome::Failed,
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Failed"));
+        assert!(output.contains("unique on unproven_unique"));
+        assert!(output.contains("(2 batched)"));
+    }
+
+    #[test]
+    fn aggregated_group_header_uses_unqualified_model_name() {
+        let output = format_aggregated_test_group_header(
+            "unique",
+            "model.my_pkg.unproven_unique",
+            2,
+            TestOutcome::Passed,
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("unique on unproven_unique"));
+        assert!(!output.contains("model.my_pkg."));
+    }
+
+    #[test]
+    fn aggregated_group_header_keeps_version_suffix() {
+        let output = format_aggregated_test_group_header(
+            "unique",
+            "model.simpler.model_with_version.v1",
+            2,
+            TestOutcome::Passed,
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("unique on model_with_version.v1"));
+        assert!(!output.contains("unique on v1"));
+    }
+
+    #[test]
+    fn aggregated_group_header_warned_outcome() {
+        let output = format_aggregated_test_group_header(
+            "unique",
+            "model.my_pkg.unproven_unique",
+            2,
+            TestOutcome::Warned,
+            std::time::Duration::from_millis(250),
+            false,
+        );
+
+        assert!(output.contains("Warned"));
+    }
+
+    #[test]
+    fn aggregated_group_member_passed_has_no_bracket_and_no_marker() {
+        let output = format_aggregated_test_group_member(
+            &test_processed(TestOutcome::Passed, 0, None, Some(BATCH_UNIQUE_ID)),
+            false,
+            false,
+        );
+
+        assert_eq!(
+            output,
+            "    ├─ Passed test  accepted_values_orders_is_today_order__True"
+        );
+    }
+
+    #[test]
+    fn aggregated_group_member_failed_keeps_source_location() {
+        let output = format_aggregated_test_group_member(
+            &test_processed(TestOutcome::Failed, 3, None, Some(BATCH_UNIQUE_ID)),
+            true,
+            false,
+        );
+
+        assert_eq!(
+            output,
+            "    └─ Failed test  accepted_values_orders_is_today_order__True \
+             (models/marts/orders.yml:37:13)"
+        );
+    }
+
+    #[test]
+    fn aggregated_group_member_branches_from_a_fixed_column() {
+        // Display columns, not byte offsets: the connector glyphs are 3 bytes per column.
+        let column_of = |line: &str, pat: &str| {
+            let byte = line.find(pat).unwrap_or_else(|| panic!("{pat} in {line}"));
+            line[..byte].chars().count()
+        };
+
+        let passed = test_processed(TestOutcome::Passed, 0, None, Some(BATCH_UNIQUE_ID));
+        // A cancelled member renders the longest reachable action label ("Cancelled"),
+        // the case that legitimately shifts its own node type column.
+        let mut cancelled = test_processed(TestOutcome::Passed, 0, None, Some(BATCH_UNIQUE_ID));
+        cancelled.set_node_outcome(NodeOutcome::Canceled);
+        assert!(
+            format_aggregated_test_group_member(&cancelled, false, false).contains("Cancelled")
+        );
+
+        // The connector column is the invariant: members branch from the column where the
+        // header's verdict starts, whatever their own action label is.
+        let header = format_aggregated_test_group_header(
+            "unique",
+            "model.my_pkg.unproven_unique",
+            2,
+            TestOutcome::Failed,
+            std::time::Duration::from_millis(250),
+            false,
+        );
+        for node in [&passed, &cancelled] {
+            for (is_last, connector) in [(false, "├─"), (true, "└─")] {
+                let member = format_aggregated_test_group_member(node, is_last, false);
+                assert_eq!(column_of(&header, "Failed"), column_of(&member, connector));
+            }
+        }
+
+        // Same-length labels share a node type column; a longer one pushes only its own
+        // line rightwards, by exactly the extra characters. Padding it back would
+        // reintroduce the wide gap this layout exists to remove.
+        let passed_member = format_aggregated_test_group_member(&passed, false, false);
+        let cancelled_member = format_aggregated_test_group_member(&cancelled, false, false);
+        assert_eq!(
+            column_of(&cancelled_member, "test ") - column_of(&passed_member, "test "),
+            "Cancelled".len() - "Passed".len(),
+        );
+    }
+
+    #[test]
+    fn aggregated_group_member_last_differs_only_by_connector() {
+        let node = test_processed(TestOutcome::Passed, 0, None, Some(BATCH_UNIQUE_ID));
+        let non_last = format_aggregated_test_group_member(&node, false, false);
+        let last = format_aggregated_test_group_member(&node, true, false);
+
+        assert_ne!(non_last, last);
+        assert_eq!(non_last.replacen("├─", "└─", 1), last);
     }
 
     #[test]

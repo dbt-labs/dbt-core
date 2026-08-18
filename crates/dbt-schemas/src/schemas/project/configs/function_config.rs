@@ -159,6 +159,29 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.access.is_some()
+            || self.alias.is_some()
+            || self.database.is_present()
+            || self.description.is_some()
+            || self.docs.is_some()
+            || self.enabled.is_some()
+            || self.grants.0.is_present()
+            || self.group.is_some()
+            || self.meta.is_some()
+            || self.on_configuration_change.is_some()
+            || self.quoting.is_some()
+            || self.schema.is_present()
+            || self.static_analysis.is_some()
+            || self.tags.is_some()
+            || self.function_kind.is_some()
+            || self.volatility.is_some()
+            || self.runtime_version.is_some()
+            || self.entry_point.is_some()
+            || self.packages.is_some()
+            || self.snowflake.is_some()
+    }
 }
 
 #[skip_serializing_none]

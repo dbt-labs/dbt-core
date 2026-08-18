@@ -3,6 +3,7 @@ use crate::columns::*;
 use crate::converters::ArrayConverter;
 use crate::flat_record_batch::FlatRecordBatch;
 use crate::grouper::Grouper;
+use crate::join::JoinType;
 use crate::print_table::TableDisplay;
 use crate::row::Row;
 use crate::rows::*;
@@ -144,14 +145,61 @@ impl TableRepr {
 
     /// Indices of the columns with the given names.
     ///
-    /// If a name is not found, it is simply skipped. And if a name appears multiple
-    /// times, only the first occurrence is returned.
+    /// If a name is not found, it is simply skipped.
     pub fn column_indices<'a>(&'a self, keys: &'a [String]) -> impl Iterator<Item = usize> + 'a {
         let fields = self.flat.schema_ref().as_ref().fields();
         let iter = keys
             .iter()
             .filter_map(|k| fields.iter().position(|f| f.name() == k));
         iter
+    }
+
+    /// Index of the column with the given name or at the given index.
+    ///
+    /// `None` if the name is not found or the index is out of range.
+    fn column_index_of(&self, key: &Value) -> Result<Option<usize>, Error> {
+        if let Some(name) = key.as_str() {
+            let fields = self.flat.schema_ref().as_ref().fields();
+            Ok(fields.iter().position(|f| f.name() == name))
+        } else if let Some(idx) = key.as_i64() {
+            Ok(adjusted_index(idx as isize, self.num_columns()))
+        } else {
+            Err(Error::new(
+                ErrorKind::InvalidArgument,
+                format!(
+                    "column identifier must be a column name or a column index: {key} found instead"
+                ),
+            ))
+        }
+    }
+
+    /// Indices of the columns identified by a Jinja value.
+    ///
+    /// `keys` may be a single column name, a single column index, or a sequence of
+    /// either (the two can be mixed).
+    ///
+    /// If a key is not found, it is simply skipped,
+    pub fn column_indices_of(&self, keys: &Value) -> Result<Vec<usize>, Error> {
+        // Strings are iterable in Jinja (by character), so single identifiers have to
+        // be handled before falling back to the sequence case below.
+        if keys.as_str().is_some() || keys.as_i64().is_some() {
+            return Ok(self.column_index_of(keys)?.into_iter().collect());
+        }
+        let iter = keys.try_iter().map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidArgument,
+                format!(
+                    "column identifiers must be a column name, a column index, or a sequence of either: {e}"
+                ),
+            )
+        })?;
+        let mut indices = Vec::new();
+        for key in iter {
+            if let Some(idx) = self.column_index_of(&key)? {
+                indices.push(idx);
+            }
+        }
+        Ok(indices)
     }
 
     pub fn select<'a>(&'a self, indices: impl Iterator<Item = usize> + 'a) -> Arc<Self> {
@@ -507,6 +555,13 @@ impl AgateTable {
         self.column_names_iter().map(|s| s.to_string()).collect()
     }
 
+    /// Indices of the columns identified by a Jinja value.
+    ///
+    /// See [TableRepr::column_indices_of].
+    pub fn column_indices_of(&self, keys: &Value) -> Result<Vec<usize>, Error> {
+        self.repr.column_indices_of(keys)
+    }
+
     /// Create a new table with only the specified columns.
     pub fn select(&self, keys: &[String]) -> AgateTable {
         let indices = self.repr.column_indices(keys);
@@ -543,6 +598,11 @@ impl AgateTable {
     /// Get the row names.
     pub fn row_names(&self) -> Option<Tuple> {
         self.repr.row_names()
+    }
+
+    /// Get the row names as the Arrow array backing them.
+    pub(crate) fn row_names_array(&self) -> Option<&Arc<StringViewArray>> {
+        self.repr.row_names.as_ref()
     }
 
     // Rest of API ------------------------------------------------------------
@@ -952,6 +1012,9 @@ impl Object for AgateTable {
                 let tuple = ColumnNamesAsTuple::of_table(&self.repr).into_tuple();
                 Some(Value::from_object(tuple))
             }
+            "top_level_column_names" => {
+                Some(Value::from_iter(self.repr.flat.top_level_column_names()))
+            }
             "rows" => {
                 let rows = self.rows();
                 Some(Value::from_object(rows))
@@ -1141,19 +1204,129 @@ impl Object for AgateTable {
                 Ok(Value::from_object(table_set))
             }
             // ```python
-            // def distinct(self, key=None):
+            // def join(self, right_table, left_key=None, right_key=None, inner=False,
+            //         full_outer=False, require_match=False, columns=None):
             //     """
-            //     Create a new table with only unique rows.
-
-            //     :param key:
-            //         Either the name of a single column to use to identify unique rows, a
-            //         sequence of such column names, a :class:`function` that takes a
-            //         row and returns a value to identify unique rows, or `None`, in
-            //         which case the entire row will be checked for uniqueness.
+            //     Create a new table by joining two table's on common values. This method
+            //     implements most varieties of SQL join, in addition to some unique features.
+            //
+            //     If :code:`left_key` and :code:`right_key` are both :code:`None` then this
+            //     method will perform a "sequential join", which is to say it will join on row
+            //     number. The :code:`inner` and :code:`full_outer` arguments will determine
+            //     whether dangling left-hand and right-hand rows are included, respectively.
+            //
+            //     If :code:`left_key` is specified, then a "left outer join" will be
+            //     performed. This will combine columns from the :code:`right_table` anywhere
+            //     that :code:`left_key` and :code:`right_key` are equal. Unmatched rows from
+            //     the left table will be included with the right-hand columns set to
+            //     :code:`None`.
+            //
+            //     If :code:`inner` is :code:`True` then an "inner join" will be performed.
+            //     Unmatched rows from either table will be left out.
+            //
+            //     If :code:`full_outer` is :code:`True` then a "full outer join" will be
+            //     performed. Unmatched rows from both tables will be included, with the
+            //     columns in the other table set to :code:`None`.
+            //
+            //     In all cases, if :code:`right_key` is :code:`None` then it :code:`left_key`
+            //     will be used for both tables.
+            //
+            //     If :code:`left_key` and :code:`right_key` are column names, the right-hand
+            //     identifier column will not be included in the output table.
+            //
+            //     If :code:`require_match` is :code:`True` unmatched rows will raise an
+            //     exception. This is like an "inner join" except any row that doesn't have a
+            //     match will raise an exception instead of being dropped. This is useful for
+            //     enforcing expectations about datasets that should match.
+            //
+            //     Column names from the right table which also exist in this table will
+            //     be suffixed "2" in the new table.
+            //
+            //     A subset of columns from the right-hand table can be included in the joined
+            //     table using the :code:`columns` argument.
+            //
+            //     :param right_table:
+            //         The "right" table to join to.
+            //     :param left_key:
+            //         Either the name of a column from the this table to join on, the index
+            //         of a column, a sequence of such column identifiers, a
+            //         :class:`function` that takes a row and returns a value to join on, or
+            //         :code:`None` in which case the tables will be joined on row number.
+            //     :param right_key:
+            //         Either the name of a column from :code:table` to join on, the index of
+            //         a column, a sequence of such column identifiers, or a :class:`function`
+            //         that takes a ow and returns a value to join on. If :code:`None` then
+            //         :code:`left_key` will be used for both. If :code:`left_key` is
+            //         :code:`None` then this value is ignored.
+            //     :param inner:
+            //         Perform a SQL-style "inner join" instead of a left outer join. Rows
+            //         which have no match for :code:`left_key` will not be included in
+            //         the output table.
+            //     :param full_outer:
+            //         Perform a SQL-style "full outer" join rather than a left or a right.
+            //         May not be used in combination with :code:`inner`.
+            //     :param require_match:
+            //         If true, an exception will be raised if there is a left_key with no
+            //         matching right_key.
+            //     :param columns:
+            //         A sequence of column names from :code:`right_table` to include in
+            //         the final output table. Defaults to all columns not in
+            //         :code:`right_key`. Ignored when :code:`full_outer` is :code:`True`.
             //     :returns:
-            //     A new :class:`.Table`.
+            //         A new :class:`.Table`.
             //     """
             // ```
+            "join" => {
+                let iter = ArgsIter::new("Table.join", &["right_table"], args);
+                let right_table = iter.next_arg::<&Value>()?;
+                let left_key = iter.next_kwarg::<Option<&Value>>("left_key")?;
+                let right_key = iter.next_kwarg::<Option<&Value>>("right_key")?;
+                let inner = iter.next_kwarg::<Option<bool>>("inner")?.unwrap_or(false);
+                let full_outer = iter
+                    .next_kwarg::<Option<bool>>("full_outer")?
+                    .unwrap_or(false);
+                let require_match = iter
+                    .next_kwarg::<Option<bool>>("require_match")?
+                    .unwrap_or(false);
+                let columns = iter.next_kwarg::<Option<&Value>>("columns")?;
+                iter.finish()?;
+
+                let right_table = match right_table.downcast_object_ref::<AgateTable>() {
+                    Some(table) => table,
+                    None => {
+                        return Err(Error::new(
+                            ErrorKind::InvalidArgument,
+                            format!(
+                                "Table.join: right_table must be a Table: {right_table} found instead"
+                            ),
+                        ));
+                    }
+                };
+
+                let join_type = if inner {
+                    if full_outer {
+                        return Err(Error::new(
+                            ErrorKind::InvalidArgument,
+                            "A join can not be both \"inner\" and \"full_outer\".",
+                        ));
+                    }
+                    JoinType::Inner
+                } else if full_outer {
+                    JoinType::FullOuter
+                } else {
+                    JoinType::LeftOuter
+                };
+
+                let table = self.join(
+                    right_table,
+                    left_key,
+                    right_key,
+                    join_type,
+                    require_match,
+                    columns,
+                )?;
+                Ok(Value::from_object(table))
+            }
             // ```python
             // def limit(self, start_or_stop=None, stop=None, step=None):
             //     """
@@ -1171,6 +1344,20 @@ impl Object for AgateTable {
                 })?;
                 Ok(Value::from_object(table))
             }
+            // ```python
+            // def distinct(self, key=None):
+            //     """
+            //     Create a new table with only unique rows.
+            //
+            //     :param key:
+            //         Either the name of a single column to use to identify unique rows, a
+            //         sequence of such column names, a :class:`function` that takes a
+            //         row and returns a value to identify unique rows, or `None`, in
+            //         which case the entire row will be checked for uniqueness.
+            //     :returns:
+            //     A new :class:`.Table`.
+            //     """
+            // ```
             "distinct" => {
                 let iter = ArgsIter::new("Table.distinct", &[], args);
                 let key = iter.next_kwarg::<Option<&Value>>("key")?;
@@ -1209,6 +1396,7 @@ impl Object for AgateTable {
 #[cfg(test)]
 mod tests {
     use crate::flat_record_batch::FlatRecordBatch;
+    use crate::test_fixtures::*;
     use crate::*;
     use arrow::array::{
         ArrayRef, BooleanBuilder, DictionaryArray, Float64Builder, Int32Array, Int32Builder,
@@ -1224,6 +1412,7 @@ mod tests {
     use minijinja::value::Kwargs;
     use minijinja::value::ValueMap;
     use minijinja::value::mutable_map::MutableMap;
+    use minijinja_contrib::testing::jinja_assert;
     use std::io;
     use std::sync::Arc;
 
@@ -1929,6 +2118,10 @@ mod tests {
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_empty_batch_column_types_and_names() {
+        let contact_fields = Fields::from(vec![
+            Field::new("first", DataType::Utf8, true),
+            Field::new("last", DataType::Utf8, true),
+        ]);
         let schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int32, false),
             Field::new("name", DataType::Utf8, false),
@@ -1937,7 +2130,9 @@ mod tests {
                 DataType::List(Arc::new(Field::new("item", DataType::Utf8, false))),
                 true,
             ),
+            Field::new("contact", DataType::Struct(contact_fields.clone()), true),
         ]));
+        let mut contact_builder = StructBuilder::from_fields(contact_fields, 0);
         let opts = RecordBatchOptions::default().with_row_count(Some(0));
         let batch = RecordBatch::try_new_with_options(
             schema,
@@ -1951,6 +2146,7 @@ mod tests {
                     )),
                     0,
                 )) as ArrayRef,
+                Arc::new(contact_builder.finish()) as ArrayRef,
             ],
             &opts,
         )
@@ -1963,13 +2159,37 @@ mod tests {
                 crate::DataType::new("Number".to_string()),
                 crate::DataType::new("Text".to_string()),
                 crate::DataType::new("Text".to_string()),
+                crate::DataType::new("Text".to_string()),
+                crate::DataType::new("Text".to_string()),
             ]
         );
         let column_names = table.column_names();
-        assert_eq!(column_names, vec!["id", "name", "event_tags.0"]);
+        assert_eq!(
+            column_names,
+            vec![
+                "id",
+                "name",
+                "event_tags.0",
+                "contact/first",
+                "contact/last",
+            ]
+        );
+        assert_eq!(
+            table
+                .repr
+                .flat
+                .top_level_column_names()
+                .collect::<Vec<&String>>(),
+            vec!["id", "name", "event_tags", "contact"]
+        );
+        jinja_assert(
+            table.clone(),
+            "{{ obj.top_level_column_names | join(',') }}",
+            "id,name,event_tags,contact",
+        );
 
         let column_types = table.column_types_as_tuple();
-        assert_eq!(column_types.len(), 3);
+        assert_eq!(column_types.len(), 5);
 
         // column_types now returns DataType objects, not strings
         let dt0 = column_types.get_item_by_index(0).unwrap();
@@ -1984,8 +2204,16 @@ mod tests {
         let dt2_obj = dt2.downcast_object_ref::<crate::DataType>().unwrap();
         assert_eq!(dt2_obj.type_name(), "Text");
 
+        let dt3 = column_types.get_item_by_index(3).unwrap();
+        let dt3_obj = dt3.downcast_object_ref::<crate::DataType>().unwrap();
+        assert_eq!(dt3_obj.type_name(), "Text");
+
+        let dt4 = column_types.get_item_by_index(4).unwrap();
+        let dt4_obj = dt4.downcast_object_ref::<crate::DataType>().unwrap();
+        assert_eq!(dt4_obj.type_name(), "Text");
+
         assert_eq!(column_types.count_occurrences_of(&Value::from("Number")), 1);
-        assert_eq!(column_types.count_occurrences_of(&Value::from("Text")), 2);
+        assert_eq!(column_types.count_occurrences_of(&Value::from("Text")), 4);
         assert_eq!(
             column_types.count_occurrences_of(&Value::from("DateTime")),
             0
@@ -1997,7 +2225,7 @@ mod tests {
         assert!(column_types.eq_repr(&column_types2 as &dyn TupleRepr));
 
         let column_names = table.column_names_as_tuple();
-        assert_eq!(column_names.len(), 3);
+        assert_eq!(column_names.len(), 5);
         assert_eq!(
             column_names.get_item_by_index(0).unwrap().as_str().unwrap(),
             "id"
@@ -2010,10 +2238,26 @@ mod tests {
             column_names.get_item_by_index(2).unwrap().as_str().unwrap(),
             "event_tags.0"
         );
+        assert_eq!(
+            column_names.get_item_by_index(3).unwrap().as_str().unwrap(),
+            "contact/first"
+        );
+        assert_eq!(
+            column_names.get_item_by_index(4).unwrap().as_str().unwrap(),
+            "contact/last"
+        );
         assert_eq!(column_names.count_occurrences_of(&Value::from("id")), 1);
         assert_eq!(column_names.count_occurrences_of(&Value::from("name")), 1);
         assert_eq!(
             column_names.count_occurrences_of(&Value::from("event_tags.0")),
+            1
+        );
+        assert_eq!(
+            column_names.count_occurrences_of(&Value::from("contact/first")),
+            1
+        );
+        assert_eq!(
+            column_names.count_occurrences_of(&Value::from("contact/last")),
             1
         );
         assert_eq!(
@@ -2023,6 +2267,11 @@ mod tests {
         assert_eq!(column_names.index_of(&Value::from("id")), Some(0));
         assert_eq!(column_names.index_of(&Value::from("name")), Some(1));
         assert_eq!(column_names.index_of(&Value::from("event_tags.0")), Some(2));
+        assert_eq!(
+            column_names.index_of(&Value::from("contact/first")),
+            Some(3)
+        );
+        assert_eq!(column_names.index_of(&Value::from("contact/last")), Some(4));
         assert_eq!(column_names.index_of(&Value::from("nonexistent")), None);
         let column_names2 = table.column_names_as_tuple();
         assert!(column_names.eq_repr(&column_names2 as &dyn TupleRepr));
@@ -2437,5 +2686,143 @@ mod tests {
         let distinct_table = result.downcast_object::<AgateTable>().unwrap();
 
         assert_eq!(distinct_table.num_rows(), 6);
+    }
+
+    #[test]
+    fn column_indices_of_accepts_names_indices_and_sequences() {
+        // columns: 0 = "id", 1 = "country"
+        let table = AgateTable::from_record_batch(simple_record_batch());
+        let indices = |keys: Value| table.column_indices_of(&keys);
+
+        // single column name and single column index
+        assert_eq!(indices(Value::from("country")).unwrap(), vec![1]);
+        assert_eq!(indices(Value::from(1)).unwrap(), vec![1]);
+        // negative indices count from the end
+        assert_eq!(indices(Value::from(-1)).unwrap(), vec![1]);
+
+        // sequences keep the order of the keys, not the order of the columns
+        assert_eq!(
+            indices(Value::from_iter(["country", "id"])).unwrap(),
+            vec![1, 0]
+        );
+        assert_eq!(indices(Value::from_iter([1, 0])).unwrap(), vec![1, 0]);
+        // names and indices can be mixed
+        assert_eq!(
+            indices(Value::from_iter([Value::from("country"), Value::from(0)])).unwrap(),
+            vec![1, 0]
+        );
+
+        // unknown names and out-of-range indices are skipped
+        assert_eq!(
+            indices(Value::from_iter(["country", "nope"])).unwrap(),
+            vec![1]
+        );
+        assert_eq!(indices(Value::from_iter([0, 7])).unwrap(), vec![0]);
+        assert_eq!(indices(Value::from("nope")).unwrap(), Vec::<usize>::new());
+
+        // anything that is not a column name or index is an error
+        let err = indices(Value::from(1.5)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidArgument);
+    }
+
+    /// The `Table.join` method as a macro would call it: through `call_method`, which
+    /// parses the arguments and turns `inner`/`full_outer` into a [JoinType].
+    fn call_join(
+        table: &Value,
+        args: &[Value],
+        kwargs: &[(&str, Value)],
+    ) -> Result<Value, minijinja::Error> {
+        let env = Environment::new();
+        let state = env.empty_state();
+        let args = if kwargs.is_empty() {
+            args.to_vec()
+        } else {
+            let mut args = args.to_vec();
+            args.push(Value::from(Kwargs::from_iter(kwargs.to_vec())));
+            args
+        };
+        table.call_method(&state, "join", args.as_slice(), &[])
+    }
+
+    fn joined_rows(result: Result<Value, minijinja::Error>) -> Vec<String> {
+        let table = result.unwrap().downcast_object::<AgateTable>().unwrap();
+        stringly_rows_of(&table, "|")
+    }
+
+    #[test]
+    fn call_join_accepts_keyword_arguments() {
+        let left = main_table(&[1, 2], &["a", "b"], &[Some(10), Some(20)]).into_value();
+        let right = related_table(&[Some(10)], &["The Sign of the Four"]).into_value();
+
+        let joined = call_join(
+            &left,
+            &[right],
+            &[
+                ("left_key", Value::from("fk")),
+                ("right_key", Value::from("id")),
+            ],
+        );
+        assert_eq!(
+            joined_rows(joined),
+            vec!["1|a|10|The Sign of the Four", "2|b|20|None"]
+        );
+    }
+
+    #[test]
+    fn call_join_accepts_positional_arguments() {
+        let left = main_table(&[1, 2], &["a", "b"], &[Some(10), Some(20)]).into_value();
+        let right = related_table(&[Some(10)], &["The Sign of the Four"]).into_value();
+
+        // right_table, left_key, right_key, inner
+        let joined = call_join(
+            &left,
+            &[
+                right,
+                Value::from("fk"),
+                Value::from("id"),
+                Value::from(true),
+            ],
+            &[],
+        );
+        assert_eq!(joined_rows(joined), vec!["1|a|10|The Sign of the Four"]);
+    }
+
+    #[test]
+    fn call_join_rejects_a_join_that_is_both_inner_and_full_outer() {
+        let left = main_table(&[1], &["a"], &[Some(10)]).into_value();
+        let right = related_table(&[Some(10)], &["The Sign of the Four"]).into_value();
+
+        let err = call_join(
+            &left,
+            &[right],
+            &[
+                ("left_key", Value::from("fk")),
+                ("right_key", Value::from("id")),
+                ("inner", Value::from(true)),
+                ("full_outer", Value::from(true)),
+            ],
+        )
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::InvalidArgument);
+        assert!(
+            err.to_string()
+                .contains(r#"A join can not be both "inner" and "full_outer"."#),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn call_join_rejects_a_right_table_that_is_not_a_table() {
+        let left = main_table(&[1], &["a"], &[Some(10)]).into_value();
+
+        let err = call_join(&left, &[Value::from("not a table")], &[]).unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::InvalidArgument);
+        assert!(
+            err.to_string()
+                .contains("Table.join: right_table must be a Table"),
+            "{err}"
+        );
     }
 }

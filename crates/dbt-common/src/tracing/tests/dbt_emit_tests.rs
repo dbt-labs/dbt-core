@@ -44,10 +44,10 @@ fn test_convenience_log_message_functions() {
         .entered();
 
         error_location = Location::caller();
-        emit_error_log_message(ErrorCode::Generic, "Test error log message", None);
+        emit_error_log_message(ErrorCode::Generic, "Test error log message");
 
         warn_location = Location::caller();
-        emit_warn_log_message(ErrorCode::AccessDenied, "Test warn log message", None);
+        emit_warn_log_message(ErrorCode::AccessDenied, "Test warn log message");
     });
 
     let log_records = {
@@ -148,7 +148,7 @@ fn test_emit_error_log_from_fs_error_md_reports_warning() {
 
         let err = fs_err!(ErrorCode::MacroSyntaxInvalid, "md parse error")
             .with_location(CodeLocationWithFile::new(1, 1, 0, "models/README.md"));
-        emit_error_log_from_fs_error(err, None);
+        emit_error_log_from_fs_error(err);
     });
 
     let log_records = {
@@ -196,7 +196,7 @@ fn test_emit_error_log_from_fs_error_sql_reports_error() {
 
         let err = fs_err!(ErrorCode::MacroSyntaxInvalid, "sql parse error")
             .with_location(CodeLocationWithFile::new(1, 1, 0, "models/view.sql"));
-        emit_error_log_from_fs_error(err, None);
+        emit_error_log_from_fs_error(err);
     });
 
     let log_records = {

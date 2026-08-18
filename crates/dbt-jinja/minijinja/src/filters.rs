@@ -230,6 +230,7 @@ tuple_impls! { A B }
 tuple_impls! { A B C }
 tuple_impls! { A B C D }
 tuple_impls! { A B C D E }
+tuple_impls! { A B C D E F }
 
 impl BoxedFilter {
     /// Creates a new boxed filter.
@@ -431,6 +432,22 @@ mod builtins {
         a.cmp(b)
     }
 
+    /// Undefined operands reach `dictsort` / `items` when a parse-phase template chains
+    /// through a missing attribute. `handle_undefined(true)` keeps Lenient and Strict erroring.
+    fn undefined_pair_list(state: &State) -> Result<Value, Error> {
+        ok!(state
+            .undefined_behavior()
+            .handle_undefined(true)
+            .map_err(|err| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    "cannot convert value into pair list",
+                )
+                .with_source(err)
+            }));
+        Ok(Value::from(MutableVec::<Value>::new()))
+    }
+
     /// Dict sorting functionality.
     ///
     /// This filter works like `|items` but sorts the pairs by key first.
@@ -442,6 +459,7 @@ mod builtins {
     /// * `reverse`: set to `true` to sort in reverse.
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn dictsort(
+        state: &State,
         v: &Value,
         case_sensitive: Option<bool>,
         by_value: Option<Cow<'_, str>>,
@@ -449,6 +467,9 @@ mod builtins {
         kwargs: Kwargs,
     ) -> Result<Value, Error> {
         if v.kind() != ValueKind::Map {
+            if v.is_undefined() {
+                return undefined_pair_list(state);
+            }
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
                 "cannot convert value into pair list",
@@ -478,10 +499,12 @@ mod builtins {
             rv.reverse();
         }
         kwargs.assert_all_used()?;
-        Ok(rv
-            .into_iter()
-            .map(|(k, v)| Value::from(vec![k, v]))
-            .collect())
+        // Always return a list (like Jinja2's dictsort)
+        Ok(Value::from(
+            rv.into_iter()
+                .map(|(k, v)| Value::from(vec![k, v]))
+                .collect::<MutableVec<_>>(),
+        ))
     }
 
     /// Returns a list of pairs (items) from a mapping.
@@ -502,7 +525,7 @@ mod builtins {
     /// </dl>
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
-    pub fn items(v: &Value) -> Result<Value, Error> {
+    pub fn items(state: &State, v: &Value) -> Result<Value, Error> {
         if v.kind() == ValueKind::Map {
             let rv = MutableVec::with_capacity(v.len().unwrap_or(0));
             let iter = ok!(v.try_iter());
@@ -511,6 +534,8 @@ mod builtins {
                 rv.push(Value::from(tuple![key, value]));
             }
             Ok(Value::from(rv))
+        } else if v.is_undefined() {
+            undefined_pair_list(state)
         } else {
             Err(Error::new(
                 ErrorKind::InvalidOperation,
@@ -691,7 +716,7 @@ mod builtins {
         let base = arg_parser.get_optional("base").unwrap_or(10);
 
         match &value.0 {
-            ValueRepr::Undefined => Err(Error::from(ErrorKind::UndefinedError)),
+            ValueRepr::Undefined(_) => Err(Error::from(ErrorKind::UndefinedError)),
             ValueRepr::None => Ok(Value::from(default)),
             ValueRepr::Bool(x) => Ok(Value::from(*x as u64)),
             ValueRepr::U64(_) | ValueRepr::I64(_) | ValueRepr::U128(_) | ValueRepr::I128(_) => {
@@ -739,7 +764,7 @@ mod builtins {
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn float(value: &Value) -> Result<Value, Error> {
         match &value.0 {
-            ValueRepr::Undefined | ValueRepr::None => Ok(Value::from(0.0)),
+            ValueRepr::Undefined(_) | ValueRepr::None => Ok(Value::from(0.0)),
             ValueRepr::Bool(x) => Ok(Value::from(*x as u64 as f64)),
             ValueRepr::String(..) | ValueRepr::SmallStr(_) => value
                 .as_str()
@@ -1446,7 +1471,7 @@ mod builtins {
             Ok(rv)
         } else {
             match &value.0 {
-                ValueRepr::None | ValueRepr::Undefined => Ok("".into()),
+                ValueRepr::None | ValueRepr::Undefined(_) => Ok("".into()),
                 ValueRepr::Bytes(b) => Ok(percent_encoding::percent_encode(b, SET).to_string()),
                 ValueRepr::String(..) | ValueRepr::SmallStr(_) => Ok(
                     percent_encoding::utf8_percent_encode(value.as_str().unwrap(), SET).to_string(),

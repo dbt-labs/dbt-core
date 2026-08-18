@@ -11,6 +11,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 // Type aliases for clarity
@@ -367,6 +368,109 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.database.is_some()
+            || self.schema.is_some()
+            || self.alias.is_some()
+            || self.materialized.is_some()
+            || self.strategy.is_some()
+            || self.unique_key.is_some()
+            || self.check_cols.is_some()
+            || self.updated_at.is_some()
+            || self.dbt_valid_to_current.is_some()
+            || self.snapshot_meta_column_names.is_some()
+            || self.hard_deletes.is_some()
+            || self.target_database.is_some()
+            || self.target_schema.is_some()
+            || self.enabled.is_some()
+            || self.full_refresh.is_some()
+            || self.tags.is_some()
+            || self.pre_hook.is_some()
+            || self.post_hook.is_some()
+            || self.persist_docs.is_some()
+            || self.grants.0.is_present()
+            || self.event_time.is_some()
+            || self.quoting.is_some()
+            || self.static_analysis.is_some()
+            || self.meta.is_some()
+            || self.group.is_some()
+            || self.quote_columns.is_some()
+            || self.invalidate_hard_deletes.is_some()
+            || self.docs.is_some()
+            || self.adapter_properties.is_some()
+            || self.automatic_clustering.is_some()
+            || self.auto_refresh.is_some()
+            || self.backup.is_some()
+            || self.base_location_root.is_some()
+            || self.base_location_subpath.is_some()
+            || self.copy_grants.is_some()
+            || self.copy_tags.is_some()
+            || self.external_volume.is_some()
+            || self.initialize.is_some()
+            || self.scheduler.is_some()
+            || self.query_tag.is_some()
+            || self.table_tag.is_some()
+            || self.row_access_policy.is_some()
+            || self.refresh_mode.is_some()
+            || self.secure.is_some()
+            || self.snowflake_initialization_warehouse.is_some()
+            || self.immutable_where.is_some()
+            || self.snowflake_warehouse.is_some()
+            || self.refresh_warehouse.is_some()
+            || self.target_lag.is_some()
+            || self.tmp_relation_type.is_some()
+            || self.transient.is_some()
+            || self.cluster_by.is_some()
+            || self.enable_refresh.is_some()
+            || self.grant_access_to.is_some()
+            || self.hours_to_expiration.is_present()
+            || self.job_execution_timeout_seconds.is_some()
+            || self.reservation.is_some()
+            || self.kms_key_name.is_some()
+            || self.labels.is_some()
+            || self.labels_from_meta.is_some()
+            || self.max_staleness.is_some()
+            || self.partition_by.is_some()
+            || self.partition_expiration_days.is_some()
+            || self.partitions.is_some()
+            || self.refresh_interval_minutes.is_some()
+            || self.resource_tags.is_some()
+            || self.require_partition_filter.is_some()
+            || self.auto_liquid_cluster.is_some()
+            || self.buckets.is_some()
+            || self.catalog.is_some()
+            || self.clustered_by.is_some()
+            || self.compute.is_some()
+            || self.compression.is_some()
+            || self.databricks_compute.is_some()
+            || self.databricks_tags.is_some()
+            || self.file_format.is_some()
+            || self.catalog_name.is_some()
+            || self.include_full_name_in_path.is_some()
+            || self.liquid_clustered_by.is_some()
+            || self.location_root.is_some()
+            || self.matched_condition.is_some()
+            || self.merge_with_schema_evolution.is_some()
+            || self.not_matched_by_source_action.is_some()
+            || self.not_matched_by_source_condition.is_some()
+            || self.not_matched_condition.is_some()
+            || self.skip_matched_step.is_some()
+            || self.skip_not_matched_step.is_some()
+            || self.source_alias.is_some()
+            || self.target_alias.is_some()
+            || self.tblproperties.is_some()
+            || self.bind.is_some()
+            || self.dist.is_some()
+            || self.sort.is_some()
+            || self.sort_type.is_some()
+            || self.as_columnstore.is_some()
+            || self.table_type.is_some()
+            || self.indexes.is_some()
+            || self.unlogged.is_some()
+            || self.schedule.is_some()
+            || self.sync.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -679,6 +783,27 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 // snapshot is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -860,8 +985,30 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
 }
 
 impl ConfigKeys for SnapshotConfig {
-    // The default implementation from the trait will handle
-    // extracting field names via serialization automatically
+    fn valid_field_names() -> HashSet<String> {
+        let default_instance = Self::default();
+        let serialized = dbt_yaml::to_value(&default_instance)
+            .expect("Failed to serialize SnapshotConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, _) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    field_names.insert(key_str);
+                }
+            }
+        }
+
+        // Add known aliases that might not show up in serialization
+        field_names.insert("project".to_string()); // alias for database
+        field_names.insert("data_space".to_string()); // alias for database
+        field_names.insert("dataset".to_string()); // alias for schema
+        field_names.insert("post-hook".to_string()); // might be serialized as post_hook
+        field_names.insert("pre-hook".to_string()); // might be serialized as pre_hook
+
+        field_names
+    }
 }
 
 #[cfg(test)]
@@ -996,6 +1143,7 @@ __warehouse_specific_config__: {}
                 evaluate_volatile_sql: Some(true),
                 pre_clone: Some(StatePreClone::IfMissing),
                 execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
             }),
             ..Default::default()
         };

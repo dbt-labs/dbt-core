@@ -56,20 +56,17 @@ pub fn load_profiles(
         relative_profile_path.clone()
     };
 
-    emit_info_progress_message(
-        ProgressMessage::new_from_action_and_target(
-            "Loading".to_string(),
-            show_path.display().to_string(),
-        ),
-        arg.io.status_reporter.as_ref(),
-    );
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        "Loading".to_string(),
+        show_path.display().to_string(),
+    ));
 
     let profile_name = profile.clone().into_inner();
 
     // Resolve the profile using dbt-profile's Jinja environment, plus the same base
     // functions as full dbt Jinja (`tojson`, `fromjson`, etc.) so profiles.yml matches dbt-core.
     let mut penv = ProfileEnvironment::new(arg.vars.clone());
-    register_base_functions(&mut penv.env, arg.io.clone(), WarnErrorOptions::default());
+    register_base_functions(&mut penv.env, WarnErrorOptions::default());
     let resolved: ResolvedProfile = resolve_with_env_ext(
         &penv,
         &profile_path,
@@ -89,6 +86,7 @@ pub fn load_profiles(
     })?;
 
     let defer_to_target = profile_defer_to_target(&resolved.credentials);
+    let allow_clones = target_allow_clones(&resolved.credentials);
 
     // Convert the rendered credentials mapping into a typed DbConfig
     let credentials_value = dbt_yaml::Value::Mapping(resolved.credentials, Span::default());
@@ -100,8 +98,7 @@ pub fn load_profiles(
         )
     })?;
 
-    let allow_experimental_adapters =
-        experimental_adapters_allowed(arg.io.status_reporter.as_ref());
+    let allow_experimental_adapters = experimental_adapters_allowed();
     enforce_adapter_gating(db_config.adapter_type(), allow_experimental_adapters)?;
 
     // Parse the optional alternate compute target output.
@@ -127,7 +124,6 @@ pub fn load_profiles(
             "The `execute:` field in profiles.yml is no longer supported and will be ignored. \
              Use the `--compute inline|sidecar|service|remote` CLI flag instead. \
              Please remove `execute:` from your profile.",
-            arg.io.status_reporter.as_ref(),
         );
     }
 
@@ -144,6 +140,7 @@ pub fn load_profiles(
         profile: profile.into_inner(),
         target: resolved.target_name,
         defer_to_target,
+        allow_clones,
         db_config,
         alt_target_db_config,
         relative_profile_path,
@@ -155,6 +152,18 @@ fn profile_defer_to_target(credentials: &dbt_yaml::Mapping) -> Option<String> {
     match credentials.get("defer_to_target") {
         Some(dbt_yaml::Value::String(target, _)) if !target.is_empty() => Some(target.clone()),
         _ => None,
+    }
+}
+
+/// Reads the active target's `allow_clones` setting straight from its
+/// `outputs.<target>` block in profiles.yml, ahead of typed `DbConfig` parsing.
+fn target_allow_clones(credentials: &dbt_yaml::Mapping) -> bool {
+    match credentials.get("allow_clones") {
+        Some(dbt_yaml::Value::Bool(allow_clones, _)) => *allow_clones,
+        Some(dbt_yaml::Value::String(value, _)) => {
+            matches!(value.to_ascii_lowercase().as_str(), "true")
+        }
+        _ => true, //if not specified, defaults to true
     }
 }
 
@@ -180,7 +189,6 @@ fn get_profile_with_span(
 mod tests {
     use super::*;
 
-    use dbt_common::io_args::IoArgs;
     use dbt_common::warn_error_options::WarnErrorOptions;
     use dbt_jinja_utils::register_base_functions;
     use dbt_profile::ProfileEnvironment;
@@ -206,15 +214,35 @@ mod tests {
     #[test]
     fn loader_registers_tojson_function_on_profile_env() {
         let mut penv = ProfileEnvironment::new(Default::default());
-        register_base_functions(
-            &mut penv.env,
-            IoArgs::default(),
-            WarnErrorOptions::default(),
-        );
+        register_base_functions(&mut penv.env, WarnErrorOptions::default());
         let out = penv
             .env
             .render_str("{{ tojson({'a': 1}) }}", &penv.ctx, &[])
             .expect("tojson should be registered for loader profile resolution");
         assert!(out.contains("\"a\""), "unexpected tojson output: {out}");
+    }
+
+    #[test]
+    fn target_allow_clones_defaults_to_true() {
+        let credentials = dbt_yaml::Mapping::new();
+        assert!(target_allow_clones(&credentials));
+    }
+
+    #[test]
+    fn target_allow_clones_reads_bool_value() {
+        let credentials = dbt_yaml::Mapping::from_iter([(
+            "allow_clones".into(),
+            dbt_yaml::Value::Bool(false, Span::default()),
+        )]);
+        assert!(!target_allow_clones(&credentials));
+    }
+
+    #[test]
+    fn target_allow_clones_reads_string_value() {
+        let credentials = dbt_yaml::Mapping::from_iter([(
+            "allow_clones".into(),
+            dbt_yaml::Value::String("false".to_string(), Span::default()),
+        )]);
+        assert!(!target_allow_clones(&credentials));
     }
 }

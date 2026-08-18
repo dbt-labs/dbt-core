@@ -12,12 +12,8 @@
 //!
 //! ```text
 //! target/
-//!   ├── schemas/
-//!   │   ├── analyzed/<unique_id>/output.parquet
-//!   │   └── sourced_remote/
-//!   │       ├── internal/<catalog>/<schema>/<table>/output.parquet
-//!   │       ├── deferred/<catalog>/<schema>/<table>/output.parquet
-//!   │       └── external/<catalog>/<schema>/<table>/output.parquet
+//!   ├── metadata/compile/schemas/{N}.parquet   ← compile-time schemas (no TTL)
+//!   ├── metadata/warehouse/schemas/{N}.parquet ← warehouse-fetched schemas (TTL)
 //!   └── data/...
 //! ```
 //!

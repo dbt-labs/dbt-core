@@ -26,7 +26,6 @@ use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
-use dbt_common::io_utils::StatusReporter;
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
@@ -42,6 +41,7 @@ use minijinja::arg_utils::ArgsIter;
 use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::mutable_vec::MutableVec;
 use minijinja::value::{Object, ValueKind};
 use minijinja::{State, Value};
 use serde::Deserialize;
@@ -154,7 +154,6 @@ impl Adapter {
         config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
-        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Adapter {
         let state = Self::make_parse_adapter_state(
@@ -163,7 +162,6 @@ impl Adapter {
             package_quoting,
             type_ops,
             Arc::new(RelationCache::default()),
-            status_reporter,
             catalogs,
         );
         Adapter {
@@ -179,13 +177,12 @@ impl Adapter {
         package_quoting: DbtQuoting,
         type_ops: Arc<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,
-        status_reporter: Option<Arc<dyn StatusReporter>>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
 
-        let warning_printer = Box::new(DefaultAuthWarningPrinter::new(status_reporter))
-            as Box<dyn AuthWarningPrinter>;
+        let warning_printer =
+            Box::new(DefaultAuthWarningPrinter::new()) as Box<dyn AuthWarningPrinter>;
         let auth: Arc<dyn Auth> = auth_for_backend(warning_printer, backend).into();
         let adapter_config = AdapterConfig::new(config);
         let quoting = package_quoting
@@ -1602,9 +1599,9 @@ impl Adapter {
                 iter.finish()?;
 
                 let result = adapter.get_missing_columns(state, &from_relation, &to_relation)?;
-                Ok(Value::from_object(result))
+                Ok(Value::from(MutableVec::from(result)))
             }
-            Parse(_) => Ok(empty_vec_value()),
+            Parse(_) => Ok(empty_mutable_vec_value()),
         }
     }
 
@@ -1633,14 +1630,14 @@ impl Adapter {
                         cached,
                     )
                 } else {
-                    Ok(Value::from(
+                    Ok(Value::from(MutableVec::from(
                         adapter.get_columns_in_relation(state, relation)?,
-                    ))
+                    )))
                 }
             }
             Parse(parse_adapter_state) => {
                 parse_adapter_state.record_get_columns_in_relation_call(state, relation)?;
-                Ok(empty_vec_value())
+                Ok(empty_mutable_vec_value())
             }
         }
     }
@@ -1665,7 +1662,7 @@ impl Adapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new("check_schema_exists", &["database", "schema"], args);
-                let database = iter.next_arg::<&str>()?;
+                let database = iter.next_arg::<Option<&str>>()?.unwrap_or("");
                 let schema = iter.next_arg::<&str>()?;
                 iter.finish()?;
 
@@ -2481,7 +2478,7 @@ impl Adapter {
     ///
     /// Accepts capability names as strings (e.g. 'replace_on', 'insert_by_name').
     ///
-    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L298-L315
     ///
     /// DEPRECATED: in favor of [`AdapterImpl::has_feature`]
     /// Use `has_feature(capability_name)` instead.
@@ -2491,25 +2488,69 @@ impl Adapter {
         state: &State,
         args: &[Value],
     ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("has_dbr_capability", &["capability_name"], args);
+        let capability_name = iter.next_arg::<&str>()?;
+        iter.finish()?;
+
         match &self.inner {
             Typed { adapter, .. } => {
-                let iter = ArgsIter::new("has_dbr_capability", &["capability_name"], args);
-                let capability_name = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
                 match adapter.adapter_type() {
                     AdapterType::Databricks => {
-                        let has_feature = adapter.has_feature(state, capability_name, self.cancellation_token.clone())?;
+                        let has_feature = adapter.has_feature(
+                            state,
+                            capability_name,
+                            self.cancellation_token.clone(),
+                        )?;
                         Ok(Value::from(has_feature.unwrap_or(false)))
                     }
-                    _ => Err(AdapterError::new(
+                    AdapterType::Snowflake
+                    | AdapterType::Bigquery
+                    | AdapterType::Redshift
+                    | AdapterType::Spark
+                    | AdapterType::DuckDB
+                    | AdapterType::Postgres
+                    | AdapterType::Salesforce
+                    | AdapterType::Fabric
+                    | AdapterType::ClickHouse
+                    | AdapterType::Exasol
+                    | AdapterType::Athena
+                    | AdapterType::Starburst
+                    | AdapterType::Trino
+                    | AdapterType::Datafusion
+                    | AdapterType::Dremio
+                    | AdapterType::Oracle
+                    | AdapterType::Alt => Err(AdapterError::new(
                         AdapterErrorKind::NotSupported,
                         format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
                     )
                     .into()),
                 }
             }
-            Parse(_) => Ok(Value::from(false)),
+            Parse(parse_state) => match parse_state.adapter_type {
+                AdapterType::Databricks => Ok(Value::from(
+                    AdapterImpl::parse_has_dbr_capability(
+                        parse_state.engine.get_config(),
+                        capability_name,
+                    ),
+                )),
+                AdapterType::Snowflake
+                | AdapterType::Bigquery
+                | AdapterType::Redshift
+                | AdapterType::Spark
+                | AdapterType::DuckDB
+                | AdapterType::Postgres
+                | AdapterType::Salesforce
+                | AdapterType::Fabric
+                | AdapterType::ClickHouse
+                | AdapterType::Exasol
+                | AdapterType::Athena
+                | AdapterType::Starburst
+                | AdapterType::Trino
+                | AdapterType::Datafusion
+                | AdapterType::Dremio
+                | AdapterType::Oracle
+                | AdapterType::Alt => Ok(Value::from(false)),
+            },
         }
     }
 
@@ -3332,13 +3373,13 @@ impl Adapter {
                 };
 
                 let mut conn = adapter.borrow_tlocal_connection(None, Some(node_id.to_string()))?;
-                adapter.use_warehouse(
+                let warehouse_changed = adapter.use_warehouse(
                     conn.as_mut(),
                     warehouse,
                     node_id,
                     self.cancellation_token.clone(),
                 )?;
-                Ok(Some(NodeOverride::Warehouse))
+                Ok(warehouse_changed.then_some(NodeOverride::Warehouse))
             }
             Parse(_) => Ok(None),
         }
@@ -3678,13 +3719,22 @@ impl Adapter {
                 self.get_relation(state, database, schema, identifier, needs_information)
             }
             "get_columns_in_relation" => {
-                // relation: BaseRelation
                 let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
+                let relation = iter
+                    .next_arg::<&Value>()
+                    .and_then(downcast_value_to_dyn_base_relation)
+                    .and_then(|relation| {
+                        iter.finish()?;
+                        Ok(relation)
+                    });
 
-                self.get_columns_in_relation(state, relation.as_ref())
+                // Core's parse stub accepts arbitrary arguments, while valid relations must
+                // still use the existing recording path.
+                match relation {
+                    Ok(relation) => self.get_columns_in_relation(state, relation.as_ref()),
+                    Err(_) if self.is_parse() => Ok(empty_mutable_vec_value()),
+                    Err(err) => Err(err),
+                }
             }
             "build_catalog_from_show_tables_and_svv_columns" => {
                 self.build_catalog_from_show_tables_and_svv_columns(state, args)
@@ -4079,6 +4129,7 @@ impl Adapter {
                     })?;
                 self.get_csv_data(table)
             }
+            "get_credentials" => self.get_credentials(args),
             "render_equals" => {
                 let iter = ArgsIter::new(name, &["expr1", "expr2"], args);
                 let expr1 = iter.next_arg::<&str>()?;
@@ -4090,6 +4141,20 @@ impl Adapter {
                 minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on adapter object: '{name}'"),
             )),
+        }
+    }
+
+    /// ClickHouse: `adapter.get_credentials(connection_overrides)` — connection
+    /// parameters for dictionary SOURCE clauses. See [AdapterImpl::get_credentials].
+    pub fn get_credentials(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_credentials", &["connection_overrides"], args);
+        let overrides = iter.next_arg::<Option<&Value>>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => {
+                Ok(adapter.get_credentials(overrides.unwrap_or(&Value::UNDEFINED)))
+            }
+            Parse(_) => Ok(empty_map_value()),
         }
     }
 
@@ -4110,6 +4175,17 @@ impl Adapter {
     }
 }
 
+/// Adapter methods whose `Parse`-mode implementation independently
+/// fabricates relation/table/column/schema-shaped data (rather than
+/// returning a trivial `bool`/`none` placeholder) instead of ever calling
+/// `execute`. Each of these needs to be tainted individually at the
+/// dispatch point below -- there is no single shared call they all funnel
+/// through to taint once. This is the canonical list; minijinja's
+/// `INTROSPECTIVE_METHOD_NAMES` (used for the static "does this macro reach
+/// an introspective call" analysis) must be kept in sync with it, since
+/// minijinja cannot depend on this crate to reuse it directly.
+const INTROSPECTIVE_METHODS: &[&str] = minijinja::INTROSPECTIVE_METHOD_NAMES;
+
 impl Object for Adapter {
     fn call_method(
         self: &Arc<Self>,
@@ -4119,7 +4195,37 @@ impl Object for Adapter {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
         if let Parse(_) = &self.inner {
-            return self.call_method_impl(state, name, args, listeners);
+            // A tainted argument (e.g. a column name drawn from a tainted
+            // `get_columns_in_relation()` result flowing into `quote()`)
+            // means `call_method_impl` can't be meaningfully evaluated: its
+            // native argument extraction expects a real `&str`/`i64`/etc.,
+            // not an `IntrospectiveValue` object, and would hard-fail with a
+            // type error instead of degrading gracefully. Skip the real impl
+            // entirely and hand back a tainted placeholder, mirroring
+            // `IntrospectiveValue::call`/`call_method`'s own "swallow, don't
+            // fail" rule for operations on fabricated stub data.
+            if args.iter().any(|v| v.is_introspective_stub()) {
+                return Ok(crate::introspective_taint::IntrospectiveValue::wrap(
+                    Value::UNDEFINED,
+                ));
+            }
+            let result = self.call_method_impl(state, name, args, listeners);
+            return result.map(|value| {
+                // Gated on a listener actually wanting introspective holes
+                // (only `JinjaRenderMode::Symbolic`'s listener does): wrapping
+                // unconditionally would change this value's `ValueRepr` from
+                // whatever primitive it really is (e.g. `None`) to `Object`
+                // for *every* render mode, silently breaking plain
+                // `{% if not adapter.get_relation(...) %}`/`is none`-style
+                // checks that never touch taint at all.
+                if INTROSPECTIVE_METHODS.contains(&name)
+                    && listeners.iter().any(|l| l.wants_introspective_holes())
+                {
+                    crate::introspective_taint::IntrospectiveValue::wrap(value)
+                } else {
+                    value
+                }
+            });
         }
         // NOTE(jason): This function uses the time machine - cross version Fusion snapshot tests
         // not to be confused with conformance ReplayAdapter or Adapter Record/Replay modes

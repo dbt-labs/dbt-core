@@ -13,7 +13,7 @@ use dbt_clap_core::{
     InternalCommand, LoginSubcommand, ProjectTemplate, ShowArgs, StateSubcommand,
 };
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::io_utils::{StatusReporter, determine_project_dir};
+use dbt_common::io_utils::determine_project_dir;
 use dbt_common::{
     ErrorCode, FsResult,
     artifact_io::write_artifact_to_file,
@@ -22,7 +22,7 @@ use dbt_common::{
         INSTALLING, VALIDATING,
     },
     create_root_info_span, fs_err,
-    io_args::{DisplayFormat, EvalArgs, IoArgs, Phases, ShowOptions, SystemArgs},
+    io_args::{DisplayFormat, EvalArgs, ListOutputFormat, Phases, ShowOptions, SystemArgs},
     node_selector::IndirectSelection,
     path::get_target_write_path,
     pretty_string::{GREEN, RED, color_quotes},
@@ -65,6 +65,7 @@ use dbt_loader::{
 };
 use dbt_login::{execute_login, execute_login_status};
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
+use dbt_schemas::schemas::DbtCommandExecutionArtifacts;
 use dbt_schemas::{
     man::execute_man_command,
     schemas::legacy_catalog::{DbtCatalog, build_catalog},
@@ -79,8 +80,9 @@ use dbt_schemas::{
 };
 use dbt_state::explain::{StateExplainOptions, execute_state_explain};
 use dbt_tasks_core::{
-    RunTaskResults, task_runner_hooks::TaskRunnerHooksFactory,
-    utils::write_run_results_json_or_warn,
+    RunTaskResults,
+    task_runner_hooks::TaskRunnerHooksFactory,
+    utils::{build_run_results_artifact, write_run_results_json_or_warn},
 };
 use dbt_tasks_sa::base_context::build_base_context;
 use dbt_telemetry::ArtifactType;
@@ -89,12 +91,12 @@ use dbt_telemetry::{
     ShowDataOutputFormat, ShowResult,
 };
 
+use dbt_vortex::vortex_producer_is_running;
 #[cfg(debug_assertions)]
 use git_version::git_version;
 use minijinja::Value;
 use serde_json::{json, to_string_pretty};
 use tracing::{Instrument, Span};
-use vortex_client::client::vortex_producer_is_running;
 use vortex_events::{build_result_string, invocation_end_event};
 
 use crate::{
@@ -109,22 +111,90 @@ use crate::{
 
 // ------------------------------------------------------------------------------------------------
 
+/// A failed dbt invocation together with any artifacts produced before it failed.
+pub struct DbtCommandExecutionFailure {
+    pub error: Box<FsError>,
+    pub artifacts: DbtCommandExecutionArtifacts,
+}
+
+impl std::fmt::Debug for DbtCommandExecutionFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DbtCommandExecutionFailure")
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Display for DbtCommandExecutionFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
+}
+
+impl std::error::Error for DbtCommandExecutionFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.error.as_ref())
+    }
+}
+
+impl From<DbtCommandExecutionFailure> for Box<FsError> {
+    fn from(failure: DbtCommandExecutionFailure) -> Self {
+        failure.error
+    }
+}
+
+impl From<Box<FsError>> for DbtCommandExecutionFailure {
+    fn from(error: Box<FsError>) -> Self {
+        Self {
+            error,
+            artifacts: DbtCommandExecutionArtifacts::default(),
+        }
+    }
+}
+
+pub type DbtCommandExecutionResult =
+    Result<DbtCommandExecutionArtifacts, DbtCommandExecutionFailure>;
+
+/// Runs a full invocation in a multi-invocation execution environment.
+///
+/// Flushes but doesn't shutdown telemtry if it is enabled.
+///
+/// Primary test entry point. Embedders that need the captured artifacts (the
+/// Python binding) call [`setup_and_execute_fs`] directly instead.
 pub async fn execute_fs(
     system_arg: SystemArgs,
     cli: Box<Cli>,
     feature_stack: Arc<FeatureStack>,
     token: CancellationToken,
 ) -> FsResult<()> {
-    execute_fs_and_shutdown(system_arg, cli, false, feature_stack, token).await
+    setup_and_execute_fs(system_arg, cli, false, feature_stack, token)
+        .await
+        .map(|_| ())
+        .map_err(Into::into)
 }
 
+/// Runs a full invocation for one-off execution, forcing full shutdown & discarding returned artifacts.
+///
+/// Primary cli entrypoint.
 pub async fn execute_fs_and_shutdown(
+    system_arg: SystemArgs,
+    cli: Box<Cli>,
+    feature_stack: Arc<FeatureStack>,
+    token: CancellationToken,
+) -> FsResult<()> {
+    setup_and_execute_fs(system_arg, cli, true, feature_stack, token)
+        .await
+        .map(|_| ())
+        .map_err(Into::into)
+}
+
+pub async fn setup_and_execute_fs(
     system_arg: SystemArgs,
     cli: Box<Cli>,
     shutdown: bool,
     feature_stack: Arc<FeatureStack>,
     token: CancellationToken,
-) -> FsResult<()> {
+) -> DbtCommandExecutionResult {
     // Resolve EvalArgs from SystemArgs and Cli. This will create out folders,
     // for commands that need it and canonicalize the paths. May error on invalid paths.
     // If this fails (e.g., not in a dbt project directory), print a concise error and exit 1.
@@ -172,7 +242,11 @@ pub async fn execute_fs_and_shutdown(
 
     // Create the Invocation span as a new root
     let invocation_span = create_root_info_span(create_invocation_attributes("dbt", &eval_arg));
-    let result = do_execute_fs(&eval_arg, cli, feature_stack, &token)
+
+    // We are forced to use a mutable argument, because we want to recover artifcats
+    // even when execution is short-circuited on Err and thus can't return it as the result type
+    let mut artifacts_sink = DbtCommandExecutionArtifacts::default();
+    let result = do_execute_fs(&eval_arg, cli, &mut artifacts_sink, feature_stack, &token)
         .instrument(invocation_span.clone())
         .await;
 
@@ -232,19 +306,31 @@ is false. This should not happen."
         .unwrap();
     }
 
-    result
+    // Hand the captured artifacts (if any) to the caller. Phase-checkpoint
+    // commands (parse, list, ...) signal success via Err(exit_status == 0) — a
+    // success sentinel — after the artifacts have been captured, so treat that
+    // the same as Ok here. Real errors propagate unchanged.
+    match result {
+        Ok(()) => Ok(artifacts_sink),
+        Err(e) if e.exit_status() == Some(0) => Ok(artifacts_sink),
+        Err(error) => Err(DbtCommandExecutionFailure {
+            error,
+            artifacts: artifacts_sink,
+        }),
+    }
 }
 
 #[allow(clippy::cognitive_complexity)]
 async fn do_execute_fs(
     eval_arg: &EvalArgs,
     cli: Box<Cli>,
+    artifacts_sink: &mut DbtCommandExecutionArtifacts,
     feature_stack: Arc<FeatureStack>,
     token: &CancellationToken,
 ) -> FsResult<()> {
     use CoreCommand::*;
 
-    warn_unused_engine_env_vars(eval_arg.io.status_reporter.as_ref());
+    warn_unused_engine_env_vars();
 
     // Current versions of rustls require us to explicitly install a default provider.
     // The default provider can only be installed once per process, so
@@ -268,7 +354,7 @@ async fn do_execute_fs(
                 ErrorCode::InvalidArgument,
                 "`dbt state explain` does not support --selector. Use --select and --exclude to filter explain output."
             );
-            emit_error_log_from_fs_error(*err, eval_arg.io.status_reporter.as_ref());
+            emit_error_log_from_fs_error(*err);
             return Err(FsError::exit_with_status(1));
         }
         let project_dir = state_args
@@ -298,7 +384,7 @@ async fn do_execute_fs(
             Ok(()) => Ok(()),
             Err(err) if err.exit_status().is_some() => Err(err),
             Err(err) => {
-                emit_error_log_from_fs_error(*err, eval_arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*err);
                 Err(FsError::exit_with_status(1))
             }
         };
@@ -332,22 +418,34 @@ async fn do_execute_fs(
                 run_docs_serve(
                     serve_args.clone(),
                     &feature_stack,
-                    eval_arg.io.status_reporter.as_ref(),
                     &eval_arg.io.in_dir,
                     &cli.common_args(),
                 )
                 .await
             }
-            _ => {
-                emit_warn_log_message(
-                    ErrorCode::DocsGenerateWarning,
-                    "`dbt docs generate` is not supported. Use `dbt compile --write-catalog` to write \
-                    catalog.json. To host docs locally, use the dbt Core index.html with catalog.json \
-                    and manifest.json in the same directory: \
-                    https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/task/docs/index.html",
-                    eval_arg.io.status_reporter.as_ref(),
+            Some(DocsSubcommand::Generate(generate_args)) => {
+                run_docs_generate(generate_args.clone(), eval_arg, &cli, feature_stack, token).await
+            }
+            // An unrecognized subcommand is a typo, not a request. Naming it beats
+            // the silent success this arm used to return.
+            Some(DocsSubcommand::Other(argv)) => {
+                emit_error_log_message(
+                    ErrorCode::Generic,
+                    format!(
+                        "unrecognized subcommand `{}`\n\nUsage: dbt docs <generate|serve>",
+                        argv.join(" "),
+                    ),
                 );
-                Ok(())
+                Err(FsError::exit_with_status(2))
+            }
+            None => {
+                emit_error_log_message(
+                    ErrorCode::Generic,
+                    "`dbt docs` needs a subcommand.\n\n  \
+                     dbt docs generate   Build a statically hostable docs site\n  \
+                     dbt docs serve      Build if needed, then serve it locally",
+                );
+                Err(FsError::exit_with_status(2))
             }
         };
     } else if let Command::Core(Init(init_args)) = &cli.command {
@@ -361,13 +459,10 @@ async fn do_execute_fs(
             .will_init_project(eval_arg.io.invocation_id, &cli, init_args)
             .await?;
 
-        emit_info_progress_message(
-            ProgressMessage::new_from_action_and_target(
-                INSTALLING.to_string(),
-                "dbt project and profile setup".to_string(),
-            ),
-            eval_arg.io.status_reporter.as_ref(),
-        );
+        emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+            INSTALLING.to_string(),
+            "dbt project and profile setup".to_string(),
+        ));
 
         let project_name = if init_args.project_name == "jaffle_shop" {
             None // Use default
@@ -401,19 +496,16 @@ async fn do_execute_fs(
             }
             Err(e) => {
                 let code = e.exit_status().unwrap_or(1);
-                emit_error_log_from_fs_error(*e, eval_arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
                 return Err(FsError::exit_with_status(code));
             }
         }
     } else if let Command::Core(Deps(deps_args)) = &cli.command {
         let command_name = feature_stack.tracing.config_provider.get_command_name();
-        emit_info_progress_message(
-            ProgressMessage::new_from_action_and_target(
-                command_name.to_string(),
-                env!("CARGO_PKG_VERSION").to_string(),
-            ),
-            eval_arg.io.status_reporter.as_ref(),
-        );
+        emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+            command_name.to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+        ));
 
         return match execute_deps_command(
             eval_arg,
@@ -421,37 +513,44 @@ async fn do_execute_fs(
             deps_args.common_args.warn_error_options.clone(),
             Some(feature_stack.tracing.config_provider.as_ref()),
             token,
+            feature_stack.loader.private_package_resolver.clone(),
         )
         .await
         {
             Ok(()) => Ok(()),
             Err(e) if e.exit_status().is_some() => Err(e),
             Err(e) => {
-                emit_error_log_from_fs_error(*e, eval_arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
                 Err(FsError::exit_with_status(1))
             }
         };
     } else if let Command::Core(Clean(clean_args)) = &cli.command {
         let command_name = feature_stack.tracing.config_provider.get_command_name();
-        emit_info_progress_message(
-            ProgressMessage::new_from_action_and_target(
-                command_name.to_string(),
-                env!("CARGO_PKG_VERSION").to_string(),
-            ),
-            eval_arg.io.status_reporter.as_ref(),
-        );
+        emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+            command_name.to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+        ));
 
         return execute_clean_command(eval_arg, &clean_args.files, token).await;
     }
     // Handle project specific commands
     let hooks_factory = Arc::clone(&feature_stack.task_runner.hooks_factory);
-    execute_setup_and_all_phases(eval_arg, &cli, feature_stack, hooks_factory, token).await
+    execute_setup_and_all_phases(
+        eval_arg,
+        &cli,
+        artifacts_sink,
+        feature_stack,
+        hooks_factory,
+        token,
+    )
+    .await
 }
 
 #[allow(clippy::cognitive_complexity)]
 pub async fn execute_setup_and_all_phases(
     eval_arg: &EvalArgs,
     cli: &Cli,
+    artifacts_sink: &mut DbtCommandExecutionArtifacts,
     feature_stack: Arc<FeatureStack>,
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     token: &CancellationToken,
@@ -461,9 +560,9 @@ pub async fn execute_setup_and_all_phases(
         feature_stack.tracing.config_provider.get_command_name(),
     )?;
 
-    check_options(&eval_arg.io, cli);
+    check_options(cli);
     if let Err(e) = validate_engine_env_vars() {
-        emit_error_log_from_fs_error(*e, eval_arg.io.status_reporter.as_ref());
+        emit_error_log_from_fs_error(*e);
         return Err(FsError::exit_with_status(1));
     }
 
@@ -473,11 +572,15 @@ pub async fn execute_setup_and_all_phases(
         AllPhasesExecutor::new(arg, cli, feature_stack, task_runner_hooks_factory)
     };
 
-    let result = match executor.execute_all_phases(token).await {
+    let phases_result = executor.execute_all_phases(token).await;
+    let result = match phases_result {
         Ok(()) => Ok(()),
         Err(e) if e.exit_status().is_some() => Err(e),
         Err(e) => {
-            emit_error_log_from_fs_error(*e, eval_arg.io.status_reporter.as_ref());
+            // Keep the rendered message for embedders: flattening below drops it,
+            // and `exit_with_status` carries no context of its own.
+            executor.captured_artifacts.error_message = Some(e.pretty());
+            emit_error_log_from_fs_error(*e);
             Err(FsError::exit_with_status(1))
         }
     };
@@ -497,11 +600,14 @@ pub async fn execute_setup_and_all_phases(
                 format!("{latest_version} (upgrade via the package manager you installed dbt with)")
             }
         };
-        emit_info_progress_message(
-            ProgressMessage::new_from_action_and_target("New version available".to_string(), hint),
-            eval_arg.io.status_reporter.as_ref(),
-        );
+        emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+            "New version available".to_string(),
+            hint,
+        ));
     }
+
+    // Hand the captured artifacts (if any) up to the caller via the sink.
+    *artifacts_sink = executor.captured_artifacts;
 
     result
 }
@@ -530,23 +636,20 @@ fn emit_version_info(eval_arg: &EvalArgs, command_name: &str) -> FsResult<()> {
                 git_hash,
                 formatted_time
             );
-            emit_info_progress_message(
-                ProgressMessage::new_from_action_and_target(command_name.to_string(), build_time),
-                eval_arg.io.status_reporter.as_ref(),
-            );
+            emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+                command_name.to_string(),
+                build_time,
+            ));
             return Ok(());
         };
     }
 
     // Show version (always shown in release builds, or in debug builds when not from_main)
     let current_version = env!("CARGO_PKG_VERSION");
-    emit_info_progress_message(
-        ProgressMessage::new_from_action_and_target(
-            command_name.to_string(),
-            current_version.to_string(),
-        ),
-        eval_arg.io.status_reporter.as_ref(),
-    );
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        command_name.to_string(),
+        current_version.to_string(),
+    ));
 
     Ok(())
 }
@@ -560,6 +663,7 @@ struct AllPhasesExecutor<'a> {
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     version_check_handle: Option<tokio::task::JoinHandle<Option<String>>>,
+    captured_artifacts: DbtCommandExecutionArtifacts,
     /// Previous batch results from retry, to skip already-successful overloads
     previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
 }
@@ -585,6 +689,7 @@ impl<'a> AllPhasesExecutor<'a> {
             jinja_type_checking_event_listener_factory,
             task_runner_hooks_factory,
             version_check_handle: None,
+            captured_artifacts: DbtCommandExecutionArtifacts::default(),
             previous_batch_results: Default::default(),
         }
     }
@@ -636,17 +741,14 @@ impl<'a> AllPhasesExecutor<'a> {
                 ));
             }
 
-            emit_info_progress_message(
-                ProgressMessage::new_from_action_and_target(
-                    "Retrying".to_string(),
-                    format!(
-                        "{} nodes from previous {} command",
-                        retry_state.retryable_node_ids.len(),
-                        retry_state.original_command
-                    ),
+            emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+                "Retrying".to_string(),
+                format!(
+                    "{} nodes from previous {} command",
+                    retry_state.retryable_node_ids.len(),
+                    retry_state.original_command
                 ),
-                self.arg.io.status_reporter.as_ref(),
-            );
+            ));
 
             // Modify command in-place eval args with the original command and effective SA
             let arg_for_retry = self.arg.to_mut();
@@ -704,6 +806,7 @@ impl<'a> AllPhasesExecutor<'a> {
             .instrumentation
             .event_emitter
             .as_ref();
+
         DbtProjectCompilation::initialize_cli(
             &self.feature_stack,
             self.arg.as_ref(),
@@ -713,6 +816,10 @@ impl<'a> AllPhasesExecutor<'a> {
                 as Arc<dyn JinjaTypeCheckingEventListenerFactory>,
             token,
             &mut self.version_check_handle,
+            // TODO: Same ugly pattern as artifacts sink. `initialize` needs to be refactored
+            // to avoid early exit with side-effect path within it and instead always return
+            // artifacts to be written by executor at the end. Then this may be removed
+            &mut self.captured_artifacts,
         )
         .await
     }
@@ -804,7 +911,7 @@ impl<'a> AllPhasesExecutor<'a> {
         &self,
         resolved_state: &ResolverState,
         schedule: &Schedule<String>,
-        map_compiled_sql: &HashMap<String, Option<String>>,
+        map_compiled_sql: &HashMap<&str, Option<&str>>,
     ) -> FsResult<()> {
         if !matches!(
             &self.cli.command,
@@ -852,10 +959,10 @@ impl<'a> AllPhasesExecutor<'a> {
             return Ok(());
         }
 
-        let compiled_sql = map_compiled_sql
-            .get(unique_id)
+        let compiled_sql: Cow<str> = map_compiled_sql
+            .get(unique_id.as_str())
             .and_then(Option::as_deref)
-            .map(|s| s.to_string())
+            .map(|s| s.into())
             .or_else(|| {
                 let path = get_target_write_path(
                     &self.arg.io.in_dir,
@@ -864,7 +971,7 @@ impl<'a> AllPhasesExecutor<'a> {
                     &model.__common_attr__.path,
                     &model.__common_attr__.original_file_path,
                 );
-                stdfs::read_to_string(&path).ok()
+                stdfs::read_to_string(&path).ok().map(Cow::Owned)
             })
             .ok_or_else(|| {
                 fs_err!(
@@ -943,7 +1050,7 @@ impl<'a> AllPhasesExecutor<'a> {
         base_context: &BTreeMap<String, Value>,
         resolved_state: &ResolverState,
         adapter: &Arc<Adapter>,
-    ) -> FsResult<()> {
+    ) -> FsResult<Option<DbtCatalog>> {
         debug_assert!(self.arg.write_json);
 
         if self.arg.write_catalog && !self.arg.write_metadata {
@@ -952,20 +1059,24 @@ impl<'a> AllPhasesExecutor<'a> {
                 .expect("Expected implements MetadataAdapter");
             let relations = metadata_adapter
                 .create_relations_from_executed_nodes(resolved_state, &run_task_results.stats.run);
-            let _ = write_catalog_json(
-                adapter,
-                resolved_state,
-                relations,
-                jinja_env,
-                compilation.root_project_name(),
-                base_context,
-                self.arg.as_ref(),
-                20,
-            )
-            .await?;
+            // Returned, not discarded: this is the only fetch on the --write-catalog
+            // without --write-metadata path, so a library caller has no other source.
+            return Ok(Some(
+                write_catalog_json(
+                    adapter,
+                    resolved_state,
+                    relations,
+                    jinja_env,
+                    compilation.root_project_name(),
+                    base_context,
+                    self.arg.as_ref(),
+                    20,
+                )
+                .await?,
+            ));
         }
 
-        Ok(())
+        Ok(None)
     }
 
     #[allow(clippy::cognitive_complexity)]
@@ -982,36 +1093,30 @@ impl<'a> AllPhasesExecutor<'a> {
         // Inform the user that schemas require --static-analysis strict, and CLL requires
         // --write-lineage in addition. Emitted after load_and_resolve_state so the project's
         // warn_error_options (applied during loading) can silence/upgrade these warnings.
-        if self.arg.write_metadata
+        //
+        // Not when `docs generate` drove this compile: the user passed none of these flags,
+        // so advising them to add some to a command they did not run is noise — and under
+        // `--warn-error` it would fail the export. The export prints its own lineage hint,
+        // which names the command that would produce it.
+        let advise_index_flags = self.arg.write_metadata
             && matches!(
                 self.arg.command,
                 FsCommand::Compile | FsCommand::Build | FsCommand::Run
             )
-            && !self
-                .arg
-                .static_analysis
-                .is_some_and(dbt_common::static_analysis::is_strict_static_analysis)
-        {
+            && self.arg.command_entrypoint != FsCommand::Docs;
+        let strict_static_analysis = self
+            .arg
+            .static_analysis
+            .is_some_and(dbt_common::static_analysis::is_strict_static_analysis);
+        if advise_index_flags && !strict_static_analysis {
             emit_warn_log_message(
                 ErrorCode::Generic,
                 "--write-index: column schemas will not be populated without `--static-analysis strict`; add `--write-lineage` to also write column-level lineage.",
-                self.arg.io.status_reporter.as_ref(),
             );
-        } else if self.arg.write_metadata
-            && matches!(
-                self.arg.command,
-                FsCommand::Compile | FsCommand::Build | FsCommand::Run
-            )
-            && self
-                .arg
-                .static_analysis
-                .is_some_and(dbt_common::static_analysis::is_strict_static_analysis)
-            && !self.arg.write_lineage
-        {
+        } else if advise_index_flags && strict_static_analysis && !self.arg.write_lineage {
             emit_warn_log_message(
                 ErrorCode::Generic,
                 "--write-index: add `--write-lineage` to write column-level lineage into compile/cll parquet.",
-                self.arg.io.status_reporter.as_ref(),
             );
         }
 
@@ -1051,17 +1156,31 @@ impl<'a> AllPhasesExecutor<'a> {
             }
         }
 
+        if self.arg.command == FsCommand::List {
+            self.captured_artifacts.list_items = Some(
+                schedule
+                    .show_dbt_nodes(
+                        &compilation.resolved_state.nodes,
+                        ListOutputFormat::Selector,
+                        &[],
+                    )
+                    .into_iter()
+                    .map(|item| item.content)
+                    .collect(),
+            );
+        }
+
+        let run_tasks_result = self
+            .run_tasks(
+                &mut compilation,
+                jinja_env,
+                compilation_cache_changes.as_ref(),
+                schedule.clone(),
+                token,
+            )
+            .await;
         let (run_task_args, run_task_results, jinja_env, adapter, compilation_cache_state) =
-            match self
-                .run_tasks(
-                    &mut compilation,
-                    jinja_env,
-                    compilation_cache_changes.as_ref(),
-                    schedule.clone(),
-                    token,
-                )
-                .await
-            {
+            match run_tasks_result {
                 Ok(result) => result,
                 Err(err) => {
                     // The manifest represents the parsed project state and is always valid after
@@ -1094,21 +1213,47 @@ impl<'a> AllPhasesExecutor<'a> {
                                     .collect(),
                                 nodes: Some(compilation.nodes().clone()),
                                 batch_results: Default::default(),
+                                compiled_code: Default::default(),
                             };
-                            write_run_results_json_or_warn(&error_stats, self.arg.as_ref());
+
+                            // Prepare artifact
+                            let run_results_artifact = build_run_results_artifact(
+                                &error_stats,
+                                // Adapter responses not available since we errored at compilation
+                                &HashMap::new(),
+                                self.arg.as_ref(),
+                            );
+
+                            write_run_results_json_or_warn(
+                                &run_results_artifact,
+                                self.arg.as_ref(),
+                            );
+
+                            // Save artifact for callers
+                            self.captured_artifacts.run_results = Some(run_results_artifact);
+
                             if self.arg.write_metadata {
-                                write_runtime_results_parquet(&error_stats, self.arg.as_ref());
+                                write_runtime_results_parquet(
+                                    &error_stats,
+                                    &HashMap::new(),
+                                    self.arg.as_ref(),
+                                );
                             }
                         }
 
                         let dbt_manifest = compilation.take_dbt_manifest();
-                        write_artifact_to_file(
+                        if let Err(e) = write_artifact_to_file(
                             &dbt_manifest,
                             ArtifactType::Manifest,
                             &self.arg.io.out_dir,
                             DBT_MANIFEST_JSON,
                             &self.arg.io.in_dir,
-                        )?;
+                        ) {
+                            self.captured_artifacts.manifest = Some(dbt_manifest);
+                            return Err(e);
+                        };
+
+                        self.captured_artifacts.manifest = Some(dbt_manifest);
                     }
                     return Err(err);
                 }
@@ -1116,20 +1261,44 @@ impl<'a> AllPhasesExecutor<'a> {
 
         let resolved_state = Arc::clone(&run_task_results.resolved_state);
 
+        // Prepare artifact
+        let run_results_artifact = build_run_results_artifact(
+            &run_task_results.stats.run,
+            &run_task_results.adapter_responses,
+            self.arg.as_ref(),
+        );
+
         // Write run_results.json eagerly from real stats so that it persists
         // even if post-execution steps (did_run_tasks, update_manifest,
         // save_build_cache, did_compile, etc.) fail before the late write_json() call.
         if self.arg.write_json && self.arg.command != FsCommand::Parse {
-            write_run_results_json_or_warn(&run_task_results.stats.run, self.arg.as_ref());
+            write_run_results_json_or_warn(&run_results_artifact, self.arg.as_ref());
         }
+
+        // Save artifact for callers
+        self.captured_artifacts.run_results = Some(run_results_artifact);
+
         if self.arg.write_metadata {
-            write_runtime_results_parquet(&run_task_results.stats.run, self.arg.as_ref());
+            write_runtime_results_parquet(
+                &run_task_results.stats.run,
+                &run_task_results.adapter_responses,
+                self.arg.as_ref(),
+            );
         }
 
         for s in &run_task_results.storeables {
             let path = self.arg.io.out_dir.join(s.out_dir_relpath());
-            let mut output = stdfs::File::create(&path)?;
-            s.write_results(resolved_state.as_ref(), &mut output)?;
+            let mut output = stdfs::File::create(&path).inspect_err(|_| {
+                self.captured_artifacts
+                    .manifest
+                    .get_or_insert_with(|| compilation.take_dbt_manifest());
+            })?;
+            s.write_results(resolved_state.as_ref(), &mut output)
+                .inspect_err(|_| {
+                    self.captured_artifacts
+                        .manifest
+                        .get_or_insert_with(|| compilation.take_dbt_manifest());
+                })?;
         }
 
         self.feature_stack
@@ -1143,7 +1312,12 @@ impl<'a> AllPhasesExecutor<'a> {
                 resolved_state.as_ref(),
                 token,
             )
-            .await?;
+            .await
+            .inspect_err(|_| {
+                self.captured_artifacts
+                    .manifest
+                    .get_or_insert_with(|| compilation.take_dbt_manifest());
+            })?;
 
         let mut dbt_manifest = compilation.take_dbt_manifest();
         // update_manifest clones the full ResolverState (~3GB for 6k nodes) to merge
@@ -1157,17 +1331,30 @@ impl<'a> AllPhasesExecutor<'a> {
                 .jinja_type_checking_event_listener_factory
                 .all_macro_depends_on();
 
-            Arc::new(update_manifest(
+            match update_manifest(
                 &run_task_args,
                 &type_ops_factory,
                 &schema_store,
                 resolved_state,
                 &macro_depends_on,
                 &mut dbt_manifest,
-            )?)
+            ) {
+                Err(e) => {
+                    self.captured_artifacts.manifest.get_or_insert(dbt_manifest);
+                    return Err(e);
+                }
+                Ok(resolved_state) => Arc::new(resolved_state),
+            }
         } else {
             resolved_state
         };
+
+        // Save updated manifest, overwriting previous one even if it was there (which would be a coding error really)
+        // TODO: above where we do `self.captured_artifacts.manifest.get_or_insert(dbt_manifest)` - this is
+        // defensive tactic to avoid reasoning through all possible control flows. Logically it should never be set if
+        // we reached here, since only parse pahse, which short-circuits writes manifest early. Maybe worth using
+        // debug_aserts! to check for this invariant everwhere we set it in this function...
+        self.captured_artifacts.manifest = Some(dbt_manifest);
 
         // Single warehouse INFORMATION_SCHEMA fetch shared by all catalog consumers.
         // Gated on write_metadata && (write_catalog || write_index): --write-metadata alone
@@ -1199,7 +1386,7 @@ impl<'a> AllPhasesExecutor<'a> {
         };
 
         // Produce parquet metadata epoch files (compile/nodes, compile/columns, cll, etc.).
-        // Must happen before into_map_compiled_sql() consumes the manifest.
+        // Must happen before the manifest is consumed below.
         if self.arg.write_metadata && self.arg.command != FsCommand::Show {
             // Catalog epochs fire whenever catalog_data is Some — catalog_data is non-None
             // only when write_metadata && (write_catalog || write_index) && Run|Build,
@@ -1246,7 +1433,10 @@ impl<'a> AllPhasesExecutor<'a> {
             if recomputed_targets.is_empty() {
                 write_metadata_parquet(
                     self.arg.as_ref(),
-                    &dbt_manifest,
+                    self.captured_artifacts
+                        .manifest
+                        .as_ref()
+                        .expect("Unconditionally set earlier"),
                     Some(resolved_state.as_ref()),
                     Some(schema_store.as_ref()),
                     None,
@@ -1258,7 +1448,10 @@ impl<'a> AllPhasesExecutor<'a> {
             } else if !self.arg.write_lineage {
                 write_metadata_parquet(
                     self.arg.as_ref(),
-                    &dbt_manifest,
+                    self.captured_artifacts
+                        .manifest
+                        .as_ref()
+                        .expect("Unconditionally set earlier"),
                     Some(resolved_state.as_ref()),
                     Some(schema_store.as_ref()),
                     Some(&[]),
@@ -1294,12 +1487,14 @@ impl<'a> AllPhasesExecutor<'a> {
                             emit_warn_log_message(
                                 ErrorCode::Generic,
                                 "--lineage requires --static-analysis strict; no column lineage written.",
-                                self.arg.io.status_reporter.as_ref(),
                             );
                         }
                         write_metadata_parquet(
                             self.arg.as_ref(),
-                            &dbt_manifest,
+                            self.captured_artifacts
+                                .manifest
+                                .as_ref()
+                                .expect("Unconditionally set earlier"),
                             Some(resolved_state.as_ref()),
                             Some(schema_store.as_ref()),
                             Some(&column_lineage),
@@ -1313,12 +1508,14 @@ impl<'a> AllPhasesExecutor<'a> {
                         emit_warn_log_message(
                             ErrorCode::Generic,
                             format!("dbt-index: column_lineage: {e}"),
-                            self.arg.io.status_reporter.as_ref(),
                         );
                         let empty_targets: HashSet<String> = HashSet::new();
                         write_metadata_parquet(
                             self.arg.as_ref(),
-                            &dbt_manifest,
+                            self.captured_artifacts
+                                .manifest
+                                .as_ref()
+                                .expect("Unconditionally set earlier"),
                             Some(resolved_state.as_ref()),
                             Some(schema_store.as_ref()),
                             Some(&[]),
@@ -1349,15 +1546,14 @@ impl<'a> AllPhasesExecutor<'a> {
                             emit_info_log_message("Successfully wrote catalog.json");
                         }
                         Err(e) => {
-                            emit_warn_log_message(
-                                ErrorCode::Generic,
-                                format!("catalog: {e}"),
-                                self.arg.io.status_reporter.as_ref(),
-                            );
+                            emit_warn_log_message(ErrorCode::Generic, format!("catalog: {e}"));
                         }
                     }
                 }
             }
+
+            // Save catalog
+            self.captured_artifacts.catalog = catalog_data;
 
             // When --write-index is active, convert metadata epochs → snapshot index parquet.
             if self.arg.write_index {
@@ -1375,14 +1571,12 @@ impl<'a> AllPhasesExecutor<'a> {
                             emit_warn_log_message(
                                 ErrorCode::Generic,
                                 format!("dbt-index: save_artifact_meta: {e}"),
-                                self.arg.io.status_reporter.as_ref(),
                             );
                         }
                     }
                     Err(e) => emit_warn_log_message(
                         ErrorCode::Generic,
                         format!("dbt-index: write-index: {e}"),
-                        self.arg.io.status_reporter.as_ref(),
                     ),
                 }
 
@@ -1402,8 +1596,12 @@ impl<'a> AllPhasesExecutor<'a> {
             }
         }
 
-        // todo: here we clone lots of stuff, but this could also be just the CAS
-        let map_compiled_sql = dbt_manifest.into_map_compiled_sql();
+        let map_compiled_sql = self
+            .captured_artifacts
+            .manifest
+            .as_ref()
+            .expect("Unconditionally set earlier")
+            .into_map_compiled_sql();
 
         if self.arg.io.should_show(ShowOptions::Stats) {
             emit_info_event(
@@ -1482,15 +1680,19 @@ impl<'a> AllPhasesExecutor<'a> {
         // Write run_results.json
         if self.arg.write_json {
             let base_context = build_base_context(&resolved_state, &jinja_env);
-            self.write_json(
-                &run_task_results,
-                &compilation,
-                &jinja_env,
-                &base_context,
-                &resolved_state,
-                &adapter,
-            )
-            .await?;
+            let refetched_catalog = self
+                .write_json(
+                    &run_task_results,
+                    &compilation,
+                    &jinja_env,
+                    &base_context,
+                    &resolved_state,
+                    &adapter,
+                )
+                .await?;
+            if refetched_catalog.is_some() {
+                self.captured_artifacts.catalog = refetched_catalog;
+            }
 
             if matches!(self.arg.command, FsCommand::Run | FsCommand::Build) {
                 upload_artifacts_ingest_if_enabled(
@@ -1519,10 +1721,296 @@ impl<'a> AllPhasesExecutor<'a> {
     }
 }
 
+/// `dbt docs generate` — compile the project, then write a statically hostable site.
+///
+/// Runs `compile --write-index` ([`build_index_for_docs`]) and turns the index that
+/// produces into a directory of files any host can serve. The compile is unconditional,
+/// exactly as in v1: `--no-compile` is how a user says they want the index that is
+/// already on disk. Inferring that from whether an index happens to exist looked like a
+/// saving and behaved like a bug — the second `docs generate` of the day silently
+/// published whatever the first one had compiled.
+///
+/// The compile is a synthesized invocation handed to the ordinary pipeline, not a
+/// docs-aware code path in the pipeline: the phase pipeline branches on
+/// `FsCommand::Compile | Build | Run` in roughly two dozen places, and threading a
+/// docs command through every one of them was tried once and abandoned.
+async fn run_docs_generate(
+    generate_args: dbt_clap_core::DocsGenerateArgs,
+    eval_arg: &EvalArgs,
+    cli: &Cli,
+    feature_stack: Arc<FeatureStack>,
+    token: &CancellationToken,
+) -> FsResult<()> {
+    // `docs generate` is a project command, so `out_dir` is the project's target
+    // directory, resolved the standard way: `--project-dir` or discovery, then
+    // `--target-path` or `dbt_project.yml`'s. The subcommand's own `--target-path`
+    // stays as an explicit override, and `--index-dir` / `--metadata-dir` still win
+    // over both, as they do everywhere else.
+    //
+    // A relative override resolves against the project directory, which is what
+    // `in_out_dir` does for `--target-path` everywhere else. Resolving it against the
+    // working directory instead would put the index the compile writes and the index
+    // the export reads in two different places whenever `--project-dir` is not `.`.
+    let target_dir = generate_args
+        .target_path
+        .clone()
+        .map(|path| {
+            if path.is_relative() {
+                eval_arg.io.in_dir.join(path)
+            } else {
+                path
+            }
+        })
+        .unwrap_or_else(|| eval_arg.io.out_dir.clone());
+
+    let index_dir = eval_arg
+        .index_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.join("index"));
+    let output_dir = generate_args
+        .output_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.clone());
+
+    // Roll any newer metadata epochs into the index, the same opportunistic
+    // catch-up `docs serve` does, so a run since the last `--write-index` is picked up.
+    // Under `--no-compile` this is the only thing that can advance the index; otherwise
+    // `build_index_for_docs` runs it again once its compile has finished.
+    let metadata_dir = eval_arg
+        .metadata_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.join("metadata"));
+    ingest_metadata_into_index(&metadata_dir, &index_dir, "dbt docs generate");
+
+    // Compile unless the user said not to, the way v1 does. `--no-compile` falls through
+    // to the export, and to the error below when there is nothing to export.
+    if !generate_args.no_compile {
+        emit_info_log_message(
+            "Running `compile --write-index`; pass `--no-compile` to export the existing \
+             index instead.",
+        );
+        build_index_for_docs(
+            &target_dir,
+            &index_dir,
+            &metadata_dir,
+            eval_arg,
+            cli,
+            Arc::clone(&feature_stack),
+            token,
+        )
+        .await?;
+    }
+
+    // No index to export. Under `--no-compile` that is the expected way to get here;
+    // otherwise the compile above ran but wrote nothing. Checked before opening the
+    // backend so the user gets the export's message — which names both commands that
+    // write an index — rather than the backend's generic "index directory does not exist".
+    if !dbt_docs_server::index_dir_has_artifacts(&index_dir) {
+        emit_error_log_message(
+            ErrorCode::Generic,
+            format!(
+                "dbt docs generate: {}",
+                dbt_docs_server::ExportError::NoIndex { index_dir }
+            ),
+        );
+        return Err(FsError::exit_with_status(1));
+    }
+
+    let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
+        Ok(backend) => backend,
+        Err(err) => {
+            emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
+            return Err(FsError::exit_with_status(1));
+        }
+    });
+    let providers = (feature_stack.index.providers_factory)(backend);
+
+    let project_dir = &eval_arg.io.in_dir;
+    let options = dbt_docs_server::ExportOptions {
+        index_dir,
+        output_dir,
+        duckdb_cdn_base: generate_args.duckdb_cdn_base,
+        // Consent is resolved here because the project and profile are only
+        // readable on this machine; the browser reads the answer, not the inputs.
+        analytics_enabled: std::env::var("DO_NOT_TRACK").as_deref() != Ok("1")
+            && cli
+                .common_args()
+                .get_send_anonymous_usage_stats_for_project(project_dir),
+    };
+
+    let summary = match dbt_docs_server::export_site(&providers, &options) {
+        Ok(summary) => summary,
+        Err(err) => {
+            emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
+            return Err(FsError::exit_with_status(1));
+        }
+    };
+
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        "Generated".to_string(),
+        format!(
+            "{}{}{}",
+            summary.output_dir.display(),
+            if summary.copied_artifacts > 0 {
+                format!(" ({} artifacts copied)", summary.copied_artifacts)
+            } else {
+                // The common case: the site reads the index where it already lies.
+                format!(" (reading {})", summary.data_dir)
+            },
+            if summary.has_column_lineage {
+                ""
+            } else {
+                " — no column lineage; rerun the compile or build with \
+                 `--write-index --static-analysis strict` to include it"
+            },
+        ),
+    ));
+    // The caveat only applies when the site was written into the target directory,
+    // which holds plenty besides the site. An explicit `--output-dir` gets a fresh
+    // directory containing nothing else.
+    let wrote_into_target = summary.output_dir == target_dir;
+    emit_info_log_message(format!(
+        "Host the contents of {} on any static file server.{}",
+        summary.output_dir.display(),
+        if wrote_into_target {
+            " Note that this publishes everything else in the target directory too, \
+             including compiled SQL and any stored test failures."
+        } else {
+            ""
+        },
+    ));
+
+    Ok(())
+}
+
+/// Roll metadata epochs newer than the index into it, best-effort.
+///
+/// A missing metadata directory is nothing to do, and a failed ingest is worth a
+/// warning but not the command: whatever the index already holds is still exportable.
+fn ingest_metadata_into_index(
+    metadata_dir: &std::path::Path,
+    index_dir: &std::path::Path,
+    context: &str,
+) {
+    if !metadata_dir.exists() {
+        return;
+    }
+    let mut state = IngestState::default();
+    if let Err(err) = apply_delta_direct(metadata_dir, index_dir, &mut state) {
+        emit_warn_log_message(
+            ErrorCode::Generic,
+            format!("{context}: failed to ingest metadata: {err}"),
+        );
+    }
+}
+
+/// Run `compile --write-index` in-process so `docs generate` has an index to export.
+///
+/// Synthesizes the compile's own args and hands them to the ordinary pipeline, which
+/// is how `dbt retry` reaches the command it is retrying (`prepare_for_potential_retry`)
+/// and how `dbt-repl` runs its bootstrap compile. `EvalArgs::command` therefore reads
+/// `Compile` — the pipeline branches on it in roughly two dozen places, and anything
+/// else silently produces an empty index — while `command_entrypoint` keeps `Docs` as
+/// the origin, the same way the LSP labels its internal compiles.
+async fn build_index_for_docs(
+    target_dir: &std::path::Path,
+    index_dir: &std::path::Path,
+    metadata_dir: &std::path::Path,
+    docs_arg: &EvalArgs,
+    docs_cli: &Cli,
+    feature_stack: Arc<FeatureStack>,
+    token: &CancellationToken,
+) -> FsResult<()> {
+    let mut common_args = docs_cli.common_args();
+    // `write_index` is the only flag to set — `CommonArgs::to_eval_args` derives
+    // `write_metadata` from it — and deliberately the only one. Static analysis is left
+    // at its default, so this is a plain `compile --write-index` and nothing more: an
+    // index built here is exactly what the two-command flow produces, no better and no
+    // worse. That means no column lineage, which needs `--static-analysis strict`; the
+    // export says so, naming the compile that would include it.
+    common_args.write_index = true;
+    // Pin the directories `run_docs_generate` resolved, so the compile writes exactly
+    // where the export reads. `docs generate --target-path` is a subcommand-level
+    // override that does not exist in `CommonArgs`, so without this the compile would
+    // write into the project's default target directory instead.
+    common_args.target_path = Some(target_dir.to_path_buf());
+    common_args.index_dir = Some(index_dir.to_path_buf());
+    common_args.metadata_dir = Some(metadata_dir.to_path_buf());
+
+    let compile_cli = Cli {
+        command: Command::Core(CoreCommand::Compile(CompileArgs {
+            common_args: common_args.clone(),
+            ..CompileArgs::default()
+        })),
+        common_args,
+    };
+
+    // Built from the docs invocation rather than `from_main`, so an embedder is not
+    // told this came from the binary, and so the compile shares the docs invocation id
+    // and log configuration. `to_eval_args` overwrites `in_dir` / `out_dir`, and
+    // `exit_process_on_panic` is not one of the fields it reads.
+    let system_args = SystemArgs {
+        command: FsCommand::Compile,
+        io: docs_arg.io.clone(),
+        from_main: docs_arg.from_main,
+        exit_process_on_panic: false,
+        num_threads: docs_arg.num_threads,
+        no_parallel: docs_arg.no_parallel,
+        target: docs_arg.target.clone(),
+    };
+    let mut compile_arg = compile_cli.to_eval_args(system_args)?;
+    compile_arg.command_entrypoint = FsCommand::Docs;
+
+    // Started before the run so the recorded duration is the compile's.
+    let invocation_ctx = InvocationContext::new(
+        compile_arg.metadata_dir(),
+        &compile_arg.io,
+        FsCommand::Compile,
+        &compile_cli.common_args(),
+    );
+
+    let hooks_factory = Arc::clone(&feature_stack.task_runner.hooks_factory);
+    // Boxed: this nests the whole phase pipeline's future inside the one `do_execute_fs`
+    // already returns, and the combined layout overflows rustc's query depth limit in
+    // downstream crates. `Box::pin` keeps the inner future off the outer one's layout.
+    let result = Box::pin(execute_setup_and_all_phases(
+        &compile_arg,
+        &compile_cli,
+        &mut DbtCommandExecutionArtifacts::default(),
+        feature_stack,
+        hooks_factory,
+        token,
+    ))
+    .await;
+
+    // Compile ends at the `Phases::Compile` checkpoint, which reports success as
+    // `Err` carrying exit status 0 — a sentinel, not a failure. Unwrapped the same way
+    // `setup_and_execute_fs` does for the top-level invocation.
+    let failure = match result {
+        Ok(()) => None,
+        Err(err) if err.exit_status() == Some(0) => None,
+        Err(err) => Some(err),
+    };
+    invocation_ctx.write(if failure.is_some() {
+        "error"
+    } else {
+        "success"
+    });
+    if let Some(err) = failure {
+        return Err(err);
+    }
+
+    // The invocation record is written after the compile's own `--write-index` ingest,
+    // so without this second pass it never reaches `dbt_rt.invocations` and the site's
+    // timings and status surfaces come up empty.
+    ingest_metadata_into_index(metadata_dir, index_dir, "dbt docs generate");
+
+    Ok(())
+}
+
 async fn run_docs_serve(
     serve_args: ClapDocsServeArgs,
     feature_stack: &Arc<FeatureStack>,
-    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
     project_dir: &std::path::Path,
     common_args: &dbt_clap_core::CommonArgs,
 ) -> FsResult<()> {
@@ -1536,6 +2024,8 @@ async fn run_docs_serve(
         no_open: serve_args.no_open,
         has_dbt_state,
         send_anonymous_usage_stats,
+        // Filled in below, once the site has been generated.
+        site_dir: None,
     };
     let index_dir = dbt_docs_server::resolve_index_dir(&args);
 
@@ -1555,61 +2045,90 @@ async fn run_docs_serve(
                  or pass `--target-path <DIR>` pointing at a directory whose `index/` subdirectory contains them.",
                 index_dir.display(),
             ),
-            status_reporter,
         );
         return Err(FsError::exit_with_status(1));
     }
 
-    if let Some(md) = metadata_dir.exists().then_some(metadata_dir.as_path()) {
-        if md.exists() {
-            let mut state = IngestState::default();
-            if let Err(err) = apply_delta_direct(md, &index_dir, &mut state) {
-                emit_warn_log_message(
-                    ErrorCode::Generic,
-                    format!("dbt docs serve: failed to ingest metadata: {err}"),
-                    None,
-                );
-            }
-        }
-    }
+    ingest_metadata_into_index(&metadata_dir, &index_dir, "dbt docs serve");
 
     let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
         Ok(b) => b,
         Err(err) => {
-            emit_error_log_message(
-                ErrorCode::Generic,
-                format!("dbt docs serve: {err}"),
-                status_reporter,
-            );
+            emit_error_log_message(ErrorCode::Generic, format!("dbt docs serve: {err}"));
             return Err(FsError::exit_with_status(1));
         }
     });
     let providers = (feature_stack.index.providers_factory)(backend);
 
+    // Serve the same static site `docs generate` produces rather than the
+    // embedded bundle, so local preview exercises the artifact the user will
+    // actually host. Regenerated when missing or older than the index; a failure
+    // here is not fatal, because the embedded bundle is still a usable fallback.
+    let site_dir = target.clone();
+    if site_needs_regenerating(&site_dir, &index_dir) {
+        let options = dbt_docs_server::ExportOptions {
+            index_dir: index_dir.clone(),
+            output_dir: site_dir.clone(),
+            duckdb_cdn_base: None,
+            analytics_enabled: std::env::var("DO_NOT_TRACK").as_deref() != Ok("1")
+                && send_anonymous_usage_stats,
+        };
+        match dbt_docs_server::export_site(&providers, &options) {
+            Ok(summary) => eprintln!(
+                "dbt docs serve: generated {} (reading {})",
+                summary.output_dir.display(),
+                summary.data_dir
+            ),
+            Err(err) => emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("dbt docs serve: could not generate the site: {err}"),
+            ),
+        }
+    }
+
+    let args = dbt_docs_server::DocsServeArgs {
+        site_dir: site_dir.exists().then_some(site_dir),
+        ..args
+    };
+
     dbt_docs_server::run_with_args(Arc::new(args), providers)
         .await
         .map_err(|err| {
-            emit_error_log_message(ErrorCode::Generic, err.to_string(), status_reporter);
+            emit_error_log_message(ErrorCode::Generic, err.to_string());
             FsError::exit_with_status(1)
         })
 }
 
+/// Whether `site_dir` is missing or predates the index it was built from.
+///
+/// Compares against the index directory's mtime, the same staleness signal
+/// `AppState::compute_generation` reports to the UI. Any unreadable timestamp
+/// means regenerate: cheap, and being wrong the other way serves stale docs.
+fn site_needs_regenerating(site_dir: &std::path::Path, index_dir: &std::path::Path) -> bool {
+    let Ok(site_mtime) = std::fs::metadata(site_dir.join("index.html")).and_then(|m| m.modified())
+    else {
+        return true;
+    };
+    let Ok(index_mtime) = std::fs::metadata(index_dir).and_then(|m| m.modified()) else {
+        return true;
+    };
+    site_mtime < index_mtime
+}
+
 #[allow(clippy::cognitive_complexity)]
-pub fn check_options(io_args: &IoArgs, cli: &Cli) {
+pub fn check_options(cli: &Cli) {
     let common_args = cli.common_args();
 
     if common_args.no_debug {
         emit_warn_log_message(
             ErrorCode::NotYetSupportedOption,
             "--no-debug is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.cache_selected_only || common_args.no_cache_selected_only {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--cache-selected is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
 
@@ -1617,7 +2136,6 @@ pub fn check_options(io_args: &IoArgs, cli: &Cli) {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--skip-write-msgpack-if-exist is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
 
@@ -1625,14 +2143,12 @@ pub fn check_options(io_args: &IoArgs, cli: &Cli) {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--log-cache-events is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.macro_debugging || common_args.no_macro_debugging {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--macro-debugging is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
 
@@ -1640,77 +2156,66 @@ pub fn check_options(io_args: &IoArgs, cli: &Cli) {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--partial-parse-file-diff is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.partial_parse_file_path.is_some() {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--partial-parse-file-path is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.populate_cache || common_args.no_populate_cache {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--populate-cache is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.print || common_args.no_print {
         emit_warn_log_message(
             ErrorCode::NotYetSupportedOption,
             "--print is not supported yet",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.printer_width != 120 {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--printer-width is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.record_timing_info.is_some() {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--record-timing-info is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.static_parser || common_args.no_static_parser {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--static_parser is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.use_colors || common_args.no_use_colors {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--use-colors is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.use_colors_file || common_args.no_use_colors_file {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--use-colors-file is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.use_experimental_parser || common_args.no_use_experimental_parser {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--use-experimental-parser is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
     if common_args.use_fast_test_edges || common_args.no_use_fast_test_edges {
         emit_warn_log_message(
             ErrorCode::NoLongerSupportedOption,
             "--use-fast-test-edges is no longer supported",
-            io_args.status_reporter.as_ref(),
         );
     }
 }
@@ -1750,7 +2255,6 @@ async fn try_fetch_catalog(
             emit_warn_log_message(
                 ErrorCode::Generic,
                 format!("Failed to fetch catalog data: {e}"),
-                arg.io.status_reporter.as_ref(),
             );
             None
         }
@@ -2094,7 +2598,6 @@ fn write_catalog_columns_epoch(catalog: &DbtCatalog, arg: &EvalArgs) {
         emit_warn_log_message(
             ErrorCode::Generic,
             format!("metadata: catalog_columns: {e}"),
-            arg.io.status_reporter.as_ref(),
         );
     }
 }

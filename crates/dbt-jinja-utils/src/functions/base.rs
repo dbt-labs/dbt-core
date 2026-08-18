@@ -11,8 +11,6 @@ use indexmap::IndexMap;
 use dbt_agate::AgateTable;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsError, fs_err,
-    io_args::IoArgs,
-    io_utils::StatusReporter,
     tracing::dbt_emit::{emit_warn_log_from_fs_error, emit_warn_log_message},
     tracing::emit::{emit_debug_event, emit_info_event},
     warn_error_options::{WarnErrorDecision, WarnErrorOptions},
@@ -35,7 +33,7 @@ use minijinja::{
     value::{Kwargs, Object},
 };
 type YmlValue = dbt_yaml::Value;
-use crate::utils::{ENV_VARS, get_status_reporter, node_metadata_from_state};
+use crate::utils::{ENV_VARS, node_metadata_from_state};
 
 use crate::functions::contract_error::get_contract_mismatches;
 use serde::Serialize;
@@ -89,18 +87,11 @@ fn to_json_string_python_style<T: Serialize>(value: &T) -> Result<String, serde_
 pub use dbt_jinja_vars::{LookupFn, SECRET_PLACEHOLDER, Var};
 
 /// Registers all the functions shared across all contexts
-pub fn register_base_functions(
-    env: &mut Environment,
-    io_args: IoArgs,
-    warn_error_options: WarnErrorOptions,
-) {
+pub fn register_base_functions(env: &mut Environment, warn_error_options: WarnErrorOptions) {
     env.add_global("dbt_version", Value::from(crate::utils::DBT_VERSION));
     env.add_global(
         "exceptions".to_owned(),
-        Value::from_object(Exceptions {
-            io_args,
-            warn_error_options,
-        }),
+        Value::from_object(Exceptions { warn_error_options }),
     );
     // dbt-core templates commonly use Python-ish constants (capitalized).
     // In Jinja2 the canonical values are `none/true/false`, but many dbt projects
@@ -111,6 +102,15 @@ pub fn register_base_functions(
     env.add_global("True", Value::from(true));
     env.add_global("False", Value::from(false));
 
+    // A plain global, like `dbt_version`, because trace_id is invariant for the whole
+    // invocation: safe to capture once here rather than read live, and this guarantees
+    // it's never missing from the returned value.
+    let trace_id = dbt_common::tracing::span_info::read_current_span_start_info(|info| {
+        format!("{:032x}", info.trace_id)
+    })
+    .unwrap_or_else(|| "0".repeat(32));
+    env.add_global("otel_trace_id", Value::from(trace_id));
+    env.add_func_func("otel_span_id", otel_span_id);
     env.add_func_func("fromjson", fromjson);
     env.add_func_func("tojson", tojson);
     env.add_func_func("fromyaml", fromyaml);
@@ -293,7 +293,6 @@ impl Object for DocMacro {
                 format!("Documentation depends on doc '{doc_name}' which was not found"),
             )),
             None => {
-                let status_reporter = get_status_reporter(state.env());
                 let current_span = state.current_span_of_context();
                 let current_file_path = state.current_path().clone();
                 if !current_file_path.as_os_str().is_empty() {
@@ -303,7 +302,7 @@ impl Object for DocMacro {
                         current_span.start_offset,
                         current_file_path,
                     );
-                    self.warn_missing_doc(&target_package, &doc_name, location, status_reporter);
+                    Self::warn_missing_doc(&target_package, &doc_name, location);
                 }
                 Ok(Value::from(Self::missing_doc_placeholder(
                     &target_package,
@@ -315,20 +314,14 @@ impl Object for DocMacro {
 }
 
 impl DocMacro {
-    fn warn_missing_doc(
-        &self,
-        package_name: &str,
-        doc_name: &str,
-        location: CodeLocationWithFile,
-        status_reporter: Option<&Arc<dyn StatusReporter>>,
-    ) {
+    fn warn_missing_doc(package_name: &str, doc_name: &str, location: CodeLocationWithFile) {
         let code = ErrorCode::InvalidConfig;
         let message = format!(
             "doc macro reference '{}' not found for package '{}'",
             doc_name, package_name
         );
         let warning = fs_err!(code, "{}", message).with_location(location);
-        emit_warn_log_from_fs_error(warning, status_reporter)
+        emit_warn_log_from_fs_error(warning)
     }
 
     fn missing_doc_placeholder(package_name: &str, doc_name: &str) -> String {
@@ -357,6 +350,25 @@ pub fn env_var(
         state,
         args,
     )
+}
+
+/// Returns the current span's OTEL id (16-char hex).
+///
+/// Real code always runs inside a tracing dispatcher, so a missing span is a
+/// bug, not a supported state: debug builds assert, release builds fall back
+/// to the OTEL-standard invalid span id (all zeros).
+pub fn otel_span_id(_state: &State, args: &[Value]) -> Result<Value, Error> {
+    let iter = ArgsIter::nullary("otel_span_id", args);
+    iter.finish()?;
+
+    let span_id = dbt_common::tracing::span_info::read_current_span_start_info(|info| {
+        format!("{:016x}", info.span_id)
+    });
+    debug_assert!(
+        span_id.is_some(),
+        "otel_span_id() called with no active span"
+    );
+    Ok(Value::from(span_id.unwrap_or_else(|| "0".repeat(16))))
 }
 
 /// Deserialize a JSON string into a Python object primitive (e.g., a dict or list).
@@ -488,16 +500,20 @@ pub fn fromyaml(_state: &State, args: &[Value]) -> Result<Value, Error> {
     let default = iter.next_kwarg::<Option<Value>>("default")?;
     iter.finish()?;
 
-    match dbt_yaml::from_str::<dbt_yaml::Value>(value) {
+    match parse_fromyaml_value(value) {
         Ok(serde_value) => Ok(Value::from_serialize(serde_value)),
-        Err(err) => match default {
+        Err(_) => match default {
             Some(default_value) => Ok(default_value),
-            None => Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!("Failed to parse YAML: {err}"),
-            )),
+            None => Ok(Value::from(())),
         },
     }
+}
+
+fn parse_fromyaml_value(value: &str) -> Result<dbt_yaml::Value, dbt_yaml::Error> {
+    let mut value =
+        dbt_yaml::Value::from_str(value, |_, _, _| dbt_yaml::mapping::DuplicateKey::Overwrite)?;
+    value.apply_merge()?;
+    Ok(value)
 }
 
 /// Serialize a Python object primitive to a YAML string.
@@ -1044,7 +1060,6 @@ fn parse_dict_of_lists(dict: &Value) -> Result<IndexMap<String, Vec<String>>, Er
 /// A struct that represents the 'exceptions' object, which makes exceptions.warn() and...
 #[derive(Debug)]
 pub struct Exceptions {
-    io_args: IoArgs,
     warn_error_options: WarnErrorOptions,
 }
 
@@ -1090,7 +1105,7 @@ impl Object for Exceptions {
                     .warn_error_options
                     .decision_for_error_code(warning.code)
                     == WarnErrorDecision::UpgradeToError;
-                emit_warn_log_from_fs_error(*warning, self.io_args.status_reporter.as_ref());
+                emit_warn_log_from_fs_error(*warning);
 
                 if warn_error_decision {
                     return Err(Error::new(ErrorKind::ExitWithStatus, warn_string));
@@ -1292,11 +1307,7 @@ impl Object for Exceptions {
                     "Data type of {name_part} timestamp columns ({snapshot_time_data_type}) does not match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'.{location_hint}"
                 );
 
-                emit_warn_log_message(
-                    ErrorCode::SnapshotTimestampMismatch,
-                    warning,
-                    self.io_args.status_reporter.as_ref(),
-                );
+                emit_warn_log_message(ErrorCode::SnapshotTimestampMismatch, warning);
 
                 Ok(Value::UNDEFINED)
             }
@@ -1575,6 +1586,92 @@ mod tests {
     use minijinja_contrib::pycompat::unknown_method_callback;
 
     #[test]
+    fn otel_trace_id_and_span_id_are_callable_with_nothing_bound_in_scope() {
+        // Must work even with nothing bound in the render context at all
+        // (e.g. connection-level queries with no `node`).
+        use dbt_tracing::emit::create_debug_span;
+        use dbt_tracing::test_support::mocks::{MockDynSpanEvent, test_data_layer};
+        use tracing::level_filters::LevelFilter;
+
+        let trace_id: u128 = 0xabc;
+        let subscriber = dbt_tracing::init::create_tracing_subcriber_with_layer(
+            LevelFilter::TRACE,
+            test_data_layer(
+                trace_id,
+                None,
+                false,
+                std::iter::empty(),
+                std::iter::empty(),
+            ),
+            &[],
+        )
+        .expect("subscriber should build");
+
+        tracing::subscriber::with_default(subscriber, || {
+            let span = create_debug_span(MockDynSpanEvent::default());
+            let _guard = span.enter();
+
+            let mut env = Environment::new();
+            register_base_functions(&mut env, WarnErrorOptions::default());
+
+            let tmpl = env
+                .template_from_str("{{ otel_trace_id }}|{{ otel_span_id()|length }}")
+                .unwrap();
+            let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+            assert_eq!(output, format!("{trace_id:032x}|16"));
+        });
+    }
+
+    #[test]
+    fn otel_trace_id_is_captured_once_and_does_not_track_later_spans() {
+        // otel_trace_id is captured at registration time (not read live per
+        // call like otel_span_id()), so it must keep returning the id of the
+        // span active when the env was built, even after that span is gone.
+        use dbt_tracing::emit::create_debug_span;
+        use dbt_tracing::test_support::mocks::{MockDynSpanEvent, test_data_layer};
+        use tracing::level_filters::LevelFilter;
+
+        let registered_trace_id: u128 = 0x1111;
+        let subscriber = dbt_tracing::init::create_tracing_subcriber_with_layer(
+            LevelFilter::TRACE,
+            test_data_layer(
+                registered_trace_id,
+                None,
+                false,
+                std::iter::empty(),
+                std::iter::empty(),
+            ),
+            &[],
+        )
+        .expect("subscriber should build");
+
+        let mut env = Environment::new();
+        tracing::subscriber::with_default(subscriber, || {
+            let span = create_debug_span(MockDynSpanEvent::default());
+            let _guard = span.enter();
+            register_base_functions(&mut env, WarnErrorOptions::default());
+        });
+
+        // A later, unrelated trace is active now; otel_trace_id must still
+        // report the one captured above, not this one.
+        let other_subscriber = dbt_tracing::init::create_tracing_subcriber_with_layer(
+            LevelFilter::TRACE,
+            test_data_layer(0x2222, None, false, std::iter::empty(), std::iter::empty()),
+            &[],
+        )
+        .expect("subscriber should build");
+
+        tracing::subscriber::with_default(other_subscriber, || {
+            let span = create_debug_span(MockDynSpanEvent::default());
+            let _guard = span.enter();
+
+            let tmpl = env.template_from_str("{{ otel_trace_id }}").unwrap();
+            let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+            assert_eq!(output, format!("{registered_trace_id:032x}"));
+        });
+    }
+
+    #[test]
     fn test_set_union_integration() {
         let mut env = Environment::new();
 
@@ -1719,6 +1816,43 @@ mod tests {
         let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "a: 1\nb: 2");
+    }
+
+    #[test]
+    fn test_fromyaml_allows_duplicate_keys() {
+        let mut env = Environment::new();
+        env.add_func_func("fromyaml", fromyaml);
+
+        let template_source = r#"
+            {% set parsed = fromyaml("HASHED_COLUMNS:\n  COMPANY_X_CONTACT_HASH_ID: old\n  COMPANY_X_CONTACT_HASH_ID: new") %}
+            {{ parsed.HASHED_COLUMNS.COMPANY_X_CONTACT_HASH_ID }}
+        "#;
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "new");
+    }
+
+    #[test]
+    fn test_fromyaml_returns_default_on_parse_error() {
+        let mut env = Environment::new();
+        env.add_func_func("fromyaml", fromyaml);
+
+        let template_source = r#"{{ fromyaml("[", default="fallback") }}"#;
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "fallback");
+    }
+
+    #[test]
+    fn test_fromyaml_returns_none_on_parse_error_without_default() {
+        let mut env = Environment::new();
+        env.add_func_func("fromyaml", fromyaml);
+
+        let tmpl = env
+            .template_from_str(r#"{{ fromyaml("[") is none }}"#)
+            .unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "True");
     }
 
     #[test]

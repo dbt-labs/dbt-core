@@ -772,7 +772,6 @@ fn match_source_status(
         emit_warn_log_message(
             ErrorCode::SelectorError,
             "source_status selector requires a sources.json with freshness results in the state directory.",
-            None,
         );
         return Ok(false);
     };
@@ -822,7 +821,6 @@ fn match_source_status(
                 emit_warn_log_message(
                     ErrorCode::SelectorError,
                     "The current sources.json file contains no freshness results.",
-                    None,
                 );
                 return Ok(false);
             }

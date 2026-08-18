@@ -89,6 +89,36 @@ impl SqlLiteralFormatter {
     }
 }
 
+/// Append a single Jinja value to `result` as a SQL literal for
+/// `adapter_type`'s dialect (destination-passing style: no per-value
+/// allocation for the dispatch itself, e.g. the numeric fallback formats
+/// straight into `result` via `Write` instead of `value.to_string()`).
+///
+/// Shared by [`format_sql_with_bindings`] (placeholder substitution) and by
+/// callers that build literal SQL when driver-level parameter binding is
+/// unavailable — both can be called once per cell in a large table, so a
+/// `-> String` return here would mean one allocation per value.
+pub fn push_value_as_sql_literal(adapter_type: AdapterType, value: &Value, result: &mut String) {
+    let formatter = SqlLiteralFormatter::new(adapter_type);
+    match value.kind() {
+        ValueKind::String => result.push_str(&formatter.format_str(value.as_str().unwrap())),
+        ValueKind::Bytes => result.push_str(&formatter.format_bytes(value)),
+        ValueKind::None => result.push_str(&formatter.none_value()),
+        ValueKind::Bool => result.push_str(&formatter.format_bool(value.is_true())),
+        _ => {
+            // TODO: handle the SQL escaping of more data types
+            if let Some(date) = value.downcast_object::<PyDate>() {
+                result.push_str(&formatter.format_date(date.as_ref().clone()));
+            } else if let Some(datetime) = value.downcast_object::<PyDateTime>() {
+                result.push_str(&formatter.format_datetime(datetime.as_ref().clone()));
+            } else {
+                use std::fmt::Write;
+                let _ = write!(result, "{value}");
+            }
+        }
+    }
+}
+
 /// Splits `sql` on the dialect's binding placeholder (`?` for Fabric, `%s`
 /// otherwise) and interleaves it with `bindings`, formatted as SQL literals.
 /// The split is naive text splitting, not SQL-aware parsing: the first chunk
@@ -99,7 +129,6 @@ pub fn format_sql_with_bindings(
     sql: &str,
     bindings: &Value,
 ) -> AdapterResult<String> {
-    let formatter = SqlLiteralFormatter::new(adapter_type);
     let mut result = String::with_capacity(sql.len());
     // this placeholder char is seen from `get_binding_char` macro
     let binding_char = if adapter_type == AdapterType::Fabric {
@@ -116,26 +145,7 @@ pub fn format_sql_with_bindings(
 
     for part in parts {
         match binding_iter.next() {
-            Some(value) => {
-                match value.kind() {
-                    ValueKind::String => {
-                        result.push_str(&formatter.format_str(value.as_str().unwrap()))
-                    }
-                    ValueKind::Bytes => result.push_str(&formatter.format_bytes(&value)),
-                    ValueKind::None => result.push_str(&formatter.none_value()),
-                    ValueKind::Bool => result.push_str(&formatter.format_bool(value.is_true())),
-                    _ => {
-                        // TODO: handle the SQL escaping of more data types
-                        if let Some(date) = value.downcast_object::<PyDate>() {
-                            result.push_str(&formatter.format_date(date.as_ref().clone()));
-                        } else if let Some(datetime) = value.downcast_object::<PyDateTime>() {
-                            result.push_str(&formatter.format_datetime(datetime.as_ref().clone()));
-                        } else {
-                            result.push_str(&value.to_string())
-                        }
-                    }
-                }
-            }
+            Some(value) => push_value_as_sql_literal(adapter_type, &value, &mut result),
             None => {
                 return Err(AdapterError::new(
                     AdapterErrorKind::Configuration,
@@ -159,6 +169,15 @@ pub fn format_sql_with_bindings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Test-only convenience wrapper around [`push_value_as_sql_literal`].
+    /// Not exposed outside tests: production call sites push into a shared
+    /// buffer instead of allocating a `String` per value.
+    fn format_value_as_sql_literal(adapter_type: AdapterType, value: &Value) -> String {
+        let mut result = String::new();
+        push_value_as_sql_literal(adapter_type, value, &mut result);
+        result
+    }
 
     #[test]
     fn format_timestamp_bigquery_truncates_to_microseconds() {
@@ -232,5 +251,55 @@ mod tests {
         assert_eq!(f.format_str(""), "''");
         assert_eq!(f.format_str("hello"), "'hello'");
         assert_eq!(f.format_str("Mom\\Baby"), "'Mom\\\\Baby'");
+    }
+
+    #[test]
+    fn value_as_sql_literal_quotes_and_escapes_strings() {
+        assert_eq!(
+            format_value_as_sql_literal(AdapterType::Alt, &Value::from("hello")),
+            "'hello'"
+        );
+        assert_eq!(
+            format_value_as_sql_literal(AdapterType::Alt, &Value::from("it's a test")),
+            "'it''s a test'"
+        );
+    }
+
+    #[test]
+    fn value_as_sql_literal_formats_none_as_null() {
+        assert_eq!(
+            format_value_as_sql_literal(AdapterType::Alt, &Value::from(())),
+            "NULL"
+        );
+    }
+
+    #[test]
+    fn value_as_sql_literal_formats_booleans() {
+        assert_eq!(
+            format_value_as_sql_literal(AdapterType::Alt, &Value::from(true)),
+            "true"
+        );
+        assert_eq!(
+            format_value_as_sql_literal(AdapterType::Alt, &Value::from(false)),
+            "false"
+        );
+    }
+
+    #[test]
+    fn value_as_sql_literal_formats_date() {
+        let date = PyDate::new(chrono::NaiveDate::from_ymd_opt(2026, 1, 15).unwrap());
+        let value = Value::from_object(date);
+        assert_eq!(
+            format_value_as_sql_literal(AdapterType::Alt, &value),
+            "'2026-01-15'"
+        );
+    }
+
+    #[test]
+    fn value_as_sql_literal_falls_back_to_display_for_numbers() {
+        assert_eq!(
+            format_value_as_sql_literal(AdapterType::Alt, &Value::from(42i64)),
+            "42"
+        );
     }
 }

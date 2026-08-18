@@ -85,7 +85,6 @@ fn register_seed_csv(
                 "Columns specified in column_types were not found in seed CSV header: {:?}",
                 result.unmatched_text_columns
             ),
-            None,
         );
     }
 

@@ -21,6 +21,7 @@ use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
+use dbt_schemas::schemas::relations::default_resolved_quoting_for;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 
 use arrow::array::RecordBatch;
@@ -80,6 +81,10 @@ impl StaticBaseRelation for RelationStatic {
         self.adapter_type.as_ref().to_string()
     }
 
+    fn get_default_quoting(&self) -> ResolvedQuoting {
+        default_resolved_quoting_for(self.adapter_type)
+    }
+
     fn create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         match self.adapter_type {
             AdapterType::Snowflake => {
@@ -103,12 +108,10 @@ impl StaticBaseRelation for RelationStatic {
                     })
                     .unwrap_or(self.quoting);
 
-                let table_format =
-                    if table_format.is_some_and(|s| s.eq_ignore_ascii_case("iceberg")) {
-                        TableFormat::Iceberg
-                    } else {
-                        TableFormat::Default
-                    };
+                let table_format = match table_format.as_deref() {
+                    Some(s) if s.eq_ignore_ascii_case("iceberg") => TableFormat::Iceberg,
+                    _ => TableFormat::Default,
+                };
 
                 let relation = Relation::new(AdapterType::Snowflake, database, schema, identifier)
                     .with_relation_type(relation_type.map(|s| RelationType::from(s.as_str())))
@@ -1167,6 +1170,12 @@ impl BaseRelation for Relation {
                 }
             }
             Bigquery => {
+                if remote_state_value.is_none() {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        "remote_state cannot be None",
+                    ));
+                }
                 let current_state = remote_state_value
                     .as_object()
                     .ok_or_else(|| {

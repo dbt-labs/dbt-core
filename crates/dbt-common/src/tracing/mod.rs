@@ -18,7 +18,7 @@ pub use config::{
     build_shared_middleware_layers, build_tracing_config_provider,
 };
 pub use dbt_data_layer::{dbt_data_layer_config, dbt_process_span_attributes};
-pub use dbt_init::init_tracing_with_consumer_layer;
+pub use dbt_init::init_tracing_with_data_layer;
 pub use dbt_tracing::async_tracing::{
     spawn_blocking_traced, spawn_traced, spawn_traced_block_in_place,
 };

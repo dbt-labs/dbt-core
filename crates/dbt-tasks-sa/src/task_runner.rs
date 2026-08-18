@@ -1,8 +1,9 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use dbt_adapter::Adapter;
+use dbt_adapter::response::AdapterResponse;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -54,6 +55,7 @@ pub fn summarize_task_runner_stats(
         stats: summarize_stats(schedule, &ctx.inner.analyze_stats),
         nodes: None,
         batch_results: Default::default(),
+        compiled_code: Default::default(),
     };
     let batch_results = ctx
         .inner
@@ -61,10 +63,17 @@ pub fn summarize_task_runner_stats(
         .iter()
         .map(|entry| (entry.key().clone(), entry.value().clone()))
         .collect();
+    let compiled_code = ctx
+        .inner
+        .rendered_sql
+        .iter()
+        .map(|entry| (entry.key().clone(), entry.value().sql.clone()))
+        .collect();
     let run = Stats {
         stats: summarize_stats(schedule, &ctx.inner.run_stats),
         nodes: Some(resolved_state.nodes.clone()),
         batch_results,
+        compiled_code,
     };
     TaskRunnerStats { compile, run }
 }
@@ -112,6 +121,7 @@ impl TaskRunner {
                 compile: Stats::default(),
                 run: Stats::default(),
             },
+            adapter_responses: HashMap::new(),
             storeables: Vec::new(),
             showables: Vec::new(),
             jinja_env: self.jinja_env,
@@ -203,7 +213,6 @@ impl TaskRunner {
 
     async fn register_schemas(
         &self,
-        run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
         base_context: BTreeMap<String, minijinja::Value>,
     ) -> FsResult<()> {
@@ -215,13 +224,7 @@ impl TaskRunner {
         let catalog_schemas_to_register =
             filter_missing_schemas(&self.adapter, &state, &selected_catalog_schemas)?;
 
-        register_catalog_schemas_remote(
-            &run_task_args.io,
-            &self.adapter,
-            &state,
-            catalog_schemas_to_register,
-        )
-        .await
+        register_catalog_schemas_remote(&self.adapter, &state, catalog_schemas_to_register).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -239,8 +242,7 @@ impl TaskRunner {
         self.hooks.will_run(&run_task_args, &schedule);
 
         let registered_schemas = if self.should_register_schemas(run_task_args.as_ref()) {
-            self.register_schemas(run_task_args.as_ref(), &schedule, base_context)
-                .await?;
+            self.register_schemas(&schedule, base_context).await?;
             true
         } else {
             false
@@ -343,7 +345,13 @@ impl TaskRunner {
             .await?;
 
         let mut stats = summarize_task_runner_stats(&ctx, &schedule, self.resolved_state.as_ref());
-        let results = stats.collect_as_results();
+        let adapter_responses: HashMap<String, AdapterResponse> = ctx
+            .inner
+            .main_adapter_responses
+            .iter()
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
+            .collect();
+        let results = stats.collect_as_results(&adapter_responses);
         let successful_relational_nodes =
             stats.collect_successful_relational_nodes(&self.resolved_state);
 
@@ -467,10 +475,7 @@ impl TaskRunner {
                             // execution failure is handled (see visitor.rs): emit it so it
                             // prints and drives a non-zero exit code, without unwinding out
                             // of `run()` and discarding the per-model stats.
-                            emit_error_log_from_fs_error(
-                                *e,
-                                run_task_args.io.status_reporter.as_ref(),
-                            );
+                            emit_error_log_from_fs_error(*e);
                             hook_failed = true;
                         }
                     }
@@ -500,6 +505,7 @@ impl TaskRunner {
 
         Ok(RunTaskResults {
             stats,
+            adapter_responses,
             storeables,
             showables,
             jinja_env: self.jinja_env,

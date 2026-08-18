@@ -33,6 +33,17 @@ pub(crate) fn discover() -> Result<Spec> {
     parse(cargo_workspace_root())
 }
 
+/// Like [`discover`] but reads the `pyproject.toml` under `dir` (relative paths
+/// resolve against the workspace root), for packages that don't live at the root.
+pub(crate) fn discover_at(dir: &Path) -> Result<Spec> {
+    let dir = if dir.is_absolute() {
+        dir.to_path_buf()
+    } else {
+        cargo_workspace_root().join(dir)
+    };
+    parse(dir)
+}
+
 fn parse(pyproject_dir: PathBuf) -> Result<Spec> {
     let pp_path = pyproject_dir.join("pyproject.toml");
     let text = fs::read_to_string(&pp_path)

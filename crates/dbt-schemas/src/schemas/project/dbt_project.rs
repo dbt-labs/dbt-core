@@ -378,6 +378,11 @@ pub trait TypedRecursiveConfig: Clone {
 
     /// Returns an iterator over the child configs.
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>>;
+
+    /// Returns whether this level of the recursive config sets any config fields.
+    /// This is just an approximation, since we can't reliably tell at this level if someone
+    /// explicitly set a config field to its default.
+    fn has_set_fields(&self) -> bool;
 }
 
 #[cfg(test)]

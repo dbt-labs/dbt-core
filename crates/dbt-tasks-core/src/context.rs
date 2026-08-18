@@ -12,6 +12,7 @@ use crate::run_cache::run_cache_service::{
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
 use dbt_adapter::relation::create_relation_from_node;
+use dbt_adapter::response::AdapterResponse;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::collections::{DashMap, SccHashMap};
@@ -161,6 +162,7 @@ pub struct TaskRunnerCtxInner {
     pub run_stats: DashMap<String, Stat>,
     pub data_test_execution_results: DashMap<String, CachedTestExecutionResult>,
     pub batch_results_map: DashMap<String, BatchResults>,
+    pub main_adapter_responses: DashMap<String, AdapterResponse>,
     pub node_hashes: DashMap<String, String>,
     pub rendered_sql: DashMap<String, RenderedNodeInfo>,
     pub freshness_seconds: SccHashMap<String, i64>,
@@ -242,6 +244,7 @@ impl TaskRunnerCtxInner {
             run_stats: DashMap::default(),
             data_test_execution_results: DashMap::default(),
             batch_results_map,
+            main_adapter_responses: DashMap::default(),
             node_hashes,
             rendered_sql: DashMap::default(),
             freshness_seconds: SccHashMap::default(),
@@ -453,7 +456,7 @@ impl TaskRunnerCtx {
         model: &T,
         base_context: &BTreeMap<String, Value>,
         ref_validation_config: DependencyValidationConfig,
-    ) -> (BTreeMap<String, Value>, Arc<DashMap<String, Value>>)
+    ) -> FsResult<(BTreeMap<String, Value>, Arc<DashMap<String, Value>>)>
     where
         T: InternalDbtNodeAttributes + ?Sized,
     {

@@ -30,7 +30,9 @@ use dbt_schemas::{
 };
 use minijinja::MacroSpans;
 
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::resolve::resolve_utils::{build_unrendered_config, extract_config_map};
 use crate::utils::{
@@ -88,10 +90,10 @@ pub async fn resolve_functions(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.functions,
                 package_quoting,
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?
@@ -103,6 +105,7 @@ pub async fn resolve_functions(
             root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
+            uses_snapshot_fqn: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -286,14 +289,9 @@ pub async fn resolve_functions(
                         unique_id: unique_id.as_str(),
                     },
                     dependency_package_name,
-                    arg.io.status_reporter.as_ref(),
                 );
                 if dbt_asset.is_python() {
-                    crate::validation::warn_python_static_analysis(
-                        kind,
-                        unique_id.as_str(),
-                        arg.io.status_reporter.as_ref(),
-                    );
+                    crate::validation::warn_python_static_analysis(kind, unique_id.as_str());
                 }
             }
         }
@@ -483,7 +481,7 @@ pub async fn resolve_functions(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
-                emit_error_log_from_fs_error(err_with_loc, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(err_with_loc);
             }
         }
 

@@ -101,7 +101,7 @@ impl Object for RunConfig {
                                             to access the custom config value if intended.",
                                             name, name, name, name, name
                                         ).with_location(location);
-                                        emit_warn_log_from_fs_error(error, None);
+                                        emit_warn_log_from_fs_error(error);
                                     }
                                 }
                             }
@@ -149,7 +149,7 @@ impl Object for RunConfig {
                                             to access the custom config value if intended.",
                                             name, name, name, name, name
                                         ).with_location(location);
-                                        emit_warn_log_from_fs_error(error, None);
+                                        emit_warn_log_from_fs_error(error);
                                     }
                                 }
                             }

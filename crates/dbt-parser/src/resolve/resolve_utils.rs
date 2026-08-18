@@ -41,10 +41,52 @@ pub(crate) fn extract_config_map(
         })
 }
 
+/// Coerces a hook config value into its flat list of entries: a sequence's items as-is, or a
+/// single non-sequence value (e.g. a lone hook string) as a one-element list.
+fn hook_value_entries(value: dbt_yaml::Value) -> Vec<dbt_yaml::Value> {
+    match value {
+        dbt_yaml::Value::Sequence(seq, _) => seq,
+        other => vec![other],
+    }
+}
+
+/// Combines two hook values into one, concatenating their entries (`existing` first). Hooks
+/// accumulate across config sources rather than the later source replacing the earlier one —
+/// matching the same "extend, don't replace" semantics [`default_hooks`] already applies on the
+/// rendered-config path, so `unrendered_config` reflects every configured hook, not just the
+/// most specific source's.
+fn merge_hook_values(existing: dbt_yaml::Value, incoming: dbt_yaml::Value) -> dbt_yaml::Value {
+    let mut entries = hook_value_entries(existing);
+    entries.extend(hook_value_entries(incoming));
+    dbt_yaml::Value::Sequence(entries, Default::default())
+}
+
+/// Merges `source`'s keys into `unrendered`. Ordinary keys overwrite (most specific source
+/// wins); `pre-hook`/`post-hook` accumulate instead, since a resource can configure hooks at
+/// more than one level (e.g. a schema.yml `post_hook` plus an inline SQL
+/// `{{ config(post_hook=...) }}`) and dbt expects to run all of them, not just the last one
+/// configured.
+fn merge_config_source(
+    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
+    source: BTreeMap<String, dbt_yaml::Value>,
+    normalize_hooks: bool,
+) {
+    for (key, value) in source {
+        if normalize_hooks && (key == "pre-hook" || key == "post-hook") {
+            if let Some(existing) = unrendered.remove(&key) {
+                unrendered.insert(key, merge_hook_values(existing, value));
+                continue;
+            }
+        }
+        unrendered.insert(key, value);
+    }
+}
+
 /// Builds `unrendered_config` by merging config sources in hierarchical order:
 /// project < root < schema.yml < inline. Each source is merged independently so
 /// that hook key normalization (pre_hook → pre-hook, etc.) applies per-source
-/// before merging, ensuring correct overwrite semantics.
+/// before merging. Ordinary keys use overwrite semantics (most specific source wins);
+/// `pre-hook`/`post-hook` accumulate across sources instead (see [`merge_config_source`]).
 ///
 /// Sources not applicable to a resource type should be passed as `None`.
 /// `normalize_hooks` should be `true` only for resource types that support
@@ -68,13 +110,17 @@ pub(crate) fn build_unrendered_config(
     let mut unrendered = apply(local.get_config_for_fqn(fqn).clone());
 
     if let Some(root_cfg) = root {
-        unrendered.extend(apply(root_cfg.get_config_for_fqn(fqn).clone()));
+        merge_config_source(
+            &mut unrendered,
+            apply(root_cfg.get_config_for_fqn(fqn).clone()),
+            normalize_hooks,
+        );
     }
     if let Some(schema_cfg) = schema {
-        unrendered.extend(apply(schema_cfg.clone()));
+        merge_config_source(&mut unrendered, apply(schema_cfg.clone()), normalize_hooks);
     }
     if let Some(inline_cfg) = inline {
-        unrendered.extend(apply(inline_cfg.clone()));
+        merge_config_source(&mut unrendered, apply(inline_cfg.clone()), normalize_hooks);
     }
 
     unrendered
@@ -208,7 +254,7 @@ pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Pat
         Some(other) => Err(fs_err!(
             code => ErrorCode::InvalidConfig,
             loc => path.to_path_buf(),
-            "unit_test compute config accepts 'remote' or 'sidecar'; got '{other}'",
+            "unit_test compute config accepts 'remote', 'sidecar', or 'local'; got '{other}'",
         )),
     }
 }
@@ -216,6 +262,7 @@ pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Pat
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::RawProjectConfig;
 
     /// Helper: run `validate_compute_platform` with `alt` placement and the
     /// given knobs, defaulting the valid-happy-path inputs.
@@ -381,5 +428,92 @@ mod tests {
                 validate_alt(mat, Some("horizon"), AdapterType::Snowflake, true, false).is_err()
             );
         }
+    }
+
+    fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), dbt_yaml::from_str(v).unwrap()))
+            .collect()
+    }
+
+    fn hook_strings(value: &dbt_yaml::Value) -> Vec<String> {
+        match value {
+            dbt_yaml::Value::Sequence(seq, _) => seq
+                .iter()
+                .map(|v| v.as_str().unwrap().to_string())
+                .collect(),
+            dbt_yaml::Value::String(s, _) => vec![s.clone()],
+            other => panic!("expected a hook string or sequence, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hooks_accumulate_across_config_sources_instead_of_overwriting() {
+        // A resource can configure a `post_hook` at both the schema.yml level and the inline
+        // SQL `{{ config(...) }}` level. Both should run (matching the rendered-config path's
+        // `default_hooks`, which already extends rather than replaces), so `unrendered_config`
+        // must reflect both, not just the more specific (inline) source.
+        let local = RawProjectConfig::empty();
+        let schema = config_map(&[("post_hook", "\"apply masking\"")]);
+        let inline = config_map(&[("post_hook", "\"delete rows\"")]);
+
+        let unrendered =
+            build_unrendered_config(&[], &local, None, Some(&schema), Some(&inline), true);
+
+        let post_hook = unrendered.get("post-hook").expect("expected post-hook key");
+        assert_eq!(
+            hook_strings(post_hook),
+            vec!["apply masking".to_string(), "delete rows".to_string()]
+        );
+    }
+
+    #[test]
+    fn non_hook_keys_still_use_overwrite_semantics() {
+        // Ordinary (non-hook) keys keep "most specific source wins" — only hooks accumulate.
+        let local = RawProjectConfig::empty();
+        let schema = config_map(&[("materialized", "\"view\"")]);
+        let inline = config_map(&[("materialized", "\"table\"")]);
+
+        let unrendered =
+            build_unrendered_config(&[], &local, None, Some(&schema), Some(&inline), true);
+
+        assert_eq!(
+            unrendered.get("materialized").and_then(|v| v.as_str()),
+            Some("table")
+        );
+    }
+
+    #[test]
+    fn single_source_hook_is_not_wrapped_unnecessarily() {
+        // When only one source configures a hook, no merge occurs -- confirms the accumulation
+        // path doesn't kick in (and doesn't panic) when there's nothing to merge with.
+        let local = RawProjectConfig::empty();
+        let inline = config_map(&[("post_hook", "\"delete rows\"")]);
+
+        let unrendered = build_unrendered_config(&[], &local, None, None, Some(&inline), true);
+
+        assert_eq!(
+            unrendered.get("post-hook").and_then(|v| v.as_str()),
+            Some("delete rows")
+        );
+    }
+
+    #[test]
+    fn hook_accumulation_does_not_apply_when_normalize_hooks_is_false() {
+        // `normalize_hooks=false` is used for resource types that don't support hooks (e.g.
+        // exposures); a `post_hook`-named key there is just an ordinary key, not special-cased.
+        let local = RawProjectConfig::empty();
+        let schema = config_map(&[("post_hook", "\"a\"")]);
+        let inline = config_map(&[("post_hook", "\"b\"")]);
+
+        let unrendered =
+            build_unrendered_config(&[], &local, None, Some(&schema), Some(&inline), false);
+
+        assert_eq!(
+            unrendered.get("post_hook").and_then(|v| v.as_str()),
+            Some("b")
+        );
+        assert!(!unrendered.contains_key("post-hook"));
     }
 }

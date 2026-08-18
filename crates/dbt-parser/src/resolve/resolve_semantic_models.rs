@@ -1,5 +1,7 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::utils::{
     extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
@@ -92,10 +94,10 @@ pub async fn resolve_semantic_models(
         is_dependency,
         || {
             init_project_config(
-                &args.io,
                 &package.dbt_project.semantic_models,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?;
@@ -136,7 +138,6 @@ pub async fn resolve_semantic_models(
                 format!(
                     "Cannot find resolved model '{model_unique_id}' referenced by semantic_model in package '{package_name}'"
                 ),
-                args.io.status_reporter.as_ref(),
             );
             continue;
         };

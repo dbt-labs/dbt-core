@@ -250,6 +250,20 @@ pub fn is_statically_checked_test(node: NodeEvent<'_>) -> bool {
     test_detail.statically_checked.unwrap_or(false)
 }
 
+/// Returns true if a test ran as part of a batched generic-test query.
+pub fn is_batched_test(node: NodeEvent<'_>) -> bool {
+    get_test_batch_unique_id(node).is_some()
+}
+
+/// Returns the unique_id of the batched test node whose query produced this result, if any.
+pub fn get_test_batch_unique_id(node: NodeEvent<'_>) -> Option<&str> {
+    let Some(AnyNodeOutcomeDetail::NodeTestDetail(test_detail)) = get_node_outcome_detail(node)
+    else {
+        return None;
+    };
+    test_detail.batch_unique_id.as_deref()
+}
+
 /// Extract cache detail from node details if available
 pub fn get_cache_detail(node: NodeEvent<'_>) -> Option<&'_ NodeCacheDetail> {
     get_node_outcome_detail(node).and_then(|detail| {
@@ -384,6 +398,7 @@ impl NodeEvaluated {
             dbt_core_event_code_for_node_evaluation(phase).map(str::to_string),
             None, // rows_affected
             None, // idle_time_ms
+            None, // state_decision_id
             None, // node_outcome_detail
         )
     }

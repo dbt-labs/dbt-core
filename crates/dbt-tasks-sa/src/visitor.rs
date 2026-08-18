@@ -697,10 +697,7 @@ async fn visit(
             if let Err(ref e) = result {
                 // Ensure log message inherits NodeEvaluated context (e.g., unique_id).
                 task_span.in_scope(|| {
-                    emit_error_log_from_fs_error(
-                        e.clone_without_backtrace(),
-                        io.status_reporter.as_ref(),
-                    );
+                    emit_error_log_from_fs_error(e.clone_without_backtrace());
                 });
             }
 

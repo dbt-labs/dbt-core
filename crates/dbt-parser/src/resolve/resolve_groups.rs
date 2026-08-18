@@ -1,5 +1,3 @@
-use crate::args::ResolveArgs;
-
 use dbt_common::FsResult;
 use dbt_common::path::DbtPath;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -17,7 +15,6 @@ use super::resolve_properties::MinimalPropertiesEntry;
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub async fn resolve_groups(
-    args: &ResolveArgs,
     group_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     package_name: &str,
     env: &JinjaEnv,
@@ -37,7 +34,6 @@ pub async fn resolve_groups(
             let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
             // GroupProperties is for the yaml schema
             let group: GroupProperties = into_typed_with_jinja(
-                &args.io,
                 schema_value,
                 false,
                 env,

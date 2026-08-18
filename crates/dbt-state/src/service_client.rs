@@ -112,15 +112,11 @@ impl RunCacheServiceError {
     /// for the rest of the process.
     pub fn disables_service(&self) -> bool {
         match self {
-            Self::OrgDisabled { .. } | Self::Transport(_) => true,
-            Self::Rpc(status) => {
-                matches!(
-                    status.code(),
-                    tonic::Code::PermissionDenied
-                        | tonic::Code::Unauthenticated
-                        | tonic::Code::Unavailable
-                ) || self.is_transient_transport_rpc()
-            }
+            Self::OrgDisabled { .. } => true,
+            Self::Rpc(status) => matches!(
+                status.code(),
+                tonic::Code::PermissionDenied | tonic::Code::Unauthenticated
+            ),
             Self::AuthRequest(_) => is_retryable_token_error(self),
             _ => false,
         }
@@ -411,7 +407,6 @@ impl GrpcRunCacheServiceClient {
                             "dbt State service disabled: {}; executing normally",
                             format_error_chain(&err)
                         ),
-                        None,
                     );
                 }
                 Err(RunCacheServiceError::Disabled)
@@ -584,7 +579,6 @@ where
                     "dbt State client validation failed: {}; executing normally",
                     format_error_chain(&err)
                 ),
-                None,
             );
             Ok(ClientVersionStatus::Skipped)
         }
@@ -782,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn disabled_locked_and_unavailable_errors_disable_service() {
+    fn account_access_errors_disable_service() {
         assert!(
             RunCacheServiceError::OrgDisabled {
                 org_id: "test-org".to_string()
@@ -796,8 +790,55 @@ mod tests {
         assert!(
             RunCacheServiceError::Rpc(tonic::Status::unauthenticated("locked")).disables_service()
         );
-        assert!(RunCacheServiceError::Rpc(tonic::Status::unavailable("down")).disables_service());
+        assert!(!RunCacheServiceError::Rpc(tonic::Status::unavailable("down")).disables_service());
+        assert!(
+            !RunCacheServiceError::Rpc(tonic::Status::unknown("transport error"))
+                .disables_service()
+        );
         assert!(!RunCacheServiceError::Auth("bad credentials".to_string()).disables_service());
+    }
+
+    #[tokio::test]
+    async fn initial_transport_error_does_not_disable_service() {
+        let err = GrpcRunCacheServiceClient::connect(RunCacheServiceConfig {
+            enabled: true,
+            api_url: "http://127.0.0.1:1".to_string(),
+            secure: false,
+            timeout: Duration::from_millis(1),
+            ..RunCacheServiceConfig::disabled()
+        })
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, RunCacheServiceError::Transport(_)));
+        assert!(!err.disables_service());
+    }
+
+    #[tokio::test]
+    async fn unavailable_rpc_does_not_disable_service() {
+        let channel = Endpoint::from_static("http://127.0.0.1:1").connect_lazy();
+        let client = GrpcRunCacheServiceClient {
+            sql: SqlClient::new(channel.clone()),
+            clone: clone_client::CloneClient::new(channel.clone()),
+            execution: ExecutionClient::new(channel.clone()),
+            client_telemetry: ClientTelemetryClient::new(channel.clone()),
+            client_validation: ClientValidationClient::new(channel.clone()),
+            explain: ExplainClient::new(channel),
+            auth: RunCacheAuth::None,
+            metadata: RunCacheClientMetadata::default(),
+            disabled: Arc::new(AtomicBool::new(false)),
+        };
+
+        assert!(matches!(
+            client.after_request::<()>(Err(RunCacheServiceError::Rpc(tonic::Status::unavailable(
+                "no healthy upstream"
+            ),))),
+            Err(RunCacheServiceError::Rpc(status))
+                if status.code() == tonic::Code::Unavailable
+                    && status.message() == "no healthy upstream"
+        ));
+        assert!(!client.is_disabled());
+        assert!(client.before_request().is_ok());
     }
 
     #[test]

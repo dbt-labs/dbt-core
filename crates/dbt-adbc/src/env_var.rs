@@ -5,6 +5,19 @@ use std::env;
 const TRUE_VALUES: [&str; 4] = ["1", "true", "yes", "on"];
 const FALSE_VALUES: [&str; 5] = ["0", "false", "no", "off", ""];
 
+/// [`env_var_bool`] for opt-in flags: unset or unparseable is `false`, with a
+/// warning. For flags read deep in the loader, where a typo shouldn't abort a
+/// run.
+pub fn env_var_bool_or_warn(var_name: &str) -> bool {
+    match env_var_bool(var_name) {
+        Ok(enabled) => enabled.unwrap_or(false),
+        Err(e) => {
+            tracing::warn!("Ignoring {var_name}: {e}");
+            false
+        }
+    }
+}
+
 pub fn env_var_bool(var_name: &str) -> Result<Option<bool>> {
     match env::var_os(var_name) {
         Some(val) => {

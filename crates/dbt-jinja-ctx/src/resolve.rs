@@ -76,6 +76,33 @@ pub struct ResolveBaseCtx {
     /// `{{ connection_name }}` — empty string at base scope.
     pub connection_name: String,
 
+    /// `{{ store_result(...) }}` — `ResultStore`-backed closure.
+    ///
+    /// Present at *base* scope, not just on [`ResolveModelCtx`], because
+    /// `generate_{database,schema,alias}_name` macros are invoked with the
+    /// bare base ctx (see `dbt_jinja_utils::utils::generate_component_name`).
+    /// dbt-core runs those through `generate_generate_name_macro_context`,
+    /// which builds a `MacroContext(ProviderContext)` and therefore always
+    /// exposes the three result-store functions. Omitting them here made a
+    /// customer macro that calls `run_query(...)` inside
+    /// `generate_schema_name` blow up on `load_result`, and the caller's
+    /// `unwrap_or_else` silently fell back to the profile schema.
+    ///
+    /// [`crate::CompileBaseCtx`] already carries these at base scope for the
+    /// same reason.
+    #[schemars(with = "serde_json::Value")]
+    pub store_result: MinijinjaValue,
+
+    /// `{{ load_result(...) }}` — `ResultStore`-backed closure.
+    /// See [`ResolveBaseCtx::store_result`] for why this is at base scope.
+    #[schemars(with = "serde_json::Value")]
+    pub load_result: MinijinjaValue,
+
+    /// `{{ store_raw_result(...) }}` — `ResultStore`-backed closure.
+    /// See [`ResolveBaseCtx::store_result`] for why this is at base scope.
+    #[schemars(with = "serde_json::Value")]
+    pub store_raw_result: MinijinjaValue,
+
     /// Per-package namespace objects. Each entry becomes its own top-level
     /// Jinja global via `#[serde(flatten)]` — e.g. `{ "dbt": <DbtNamespace>,
     /// "snowflake": <DbtNamespace>, … }` flattens into individual `{{ dbt }}`,

@@ -122,15 +122,42 @@ fn hook_entries(v: &dbt_yaml::Value) -> Option<Vec<String>> {
 ///
 /// A hook may be stored either as a real YAML sequence or as a single stringified list literal
 /// whose interior whitespace/indentation is not semantically meaningful. When both sides parse
-/// into hook entry lists, compare those (each entry canonicalized); otherwise fall back to the
-/// generic unrendered comparison.
+/// into hook entry lists, compare those as multisets (each entry canonicalized) rather than
+/// ordered lists: a resource can configure hooks at more than one level (schema.yml plus an
+/// inline SQL `{{ config(...) }}` call), and `canonicalize_hook_keys` merges those contributions
+/// together — but raw `unrendered_config` (particularly dbt-core's, which keeps the two spellings
+/// as separate top-level keys with no explicit relative order) carries no reliable ordering
+/// between them, only the fully-rendered/executed config does. Otherwise fall back to the generic
+/// unrendered comparison.
 fn unrendered_hook_value_eq(a: Option<&dbt_yaml::Value>, b: Option<&dbt_yaml::Value>) -> bool {
     if let (Some(va), Some(vb)) = (a, b) {
-        if let (Some(a_hooks), Some(b_hooks)) = (hook_entries(va), hook_entries(vb)) {
+        if let (Some(mut a_hooks), Some(mut b_hooks)) = (hook_entries(va), hook_entries(vb)) {
+            a_hooks.sort();
+            b_hooks.sort();
             return a_hooks == b_hooks;
         }
     }
     unrendered_value_eq(a, b)
+}
+
+/// Builds a source's unique_id the way dbt-core does: resource type, package name, source
+/// name and table name joined with `.`, all verbatim
+/// (`core/dbt/parser/schemas.py`, `add_source_definitions`).
+///
+/// Fusion instead runs the table name through `[^a-zA-Z0-9_]` → `__` first
+/// (`dbt-parser`, `resolve_sources.rs`), so a BigQuery wildcard source table `events_*` is
+/// `source.pkg.src.events___` here and `source.pkg.src.events_*` in a dbt-core-produced
+/// state manifest.  Since unique_id is the key that pairs a node with its previous-manifest
+/// counterpart, that divergence makes every such source look brand new, which under a
+/// descendant selector (`state:modified+`) drags in everything downstream of it.
+///
+/// The sanitization is not invertible — `__` could have come from `*`, `-`, `.`, `/`, a
+/// space, or a literal `__` — so the two spellings can only be reconciled with both nodes in
+/// hand.  This rebuilds the dbt-core spelling from the three components both engines store
+/// verbatim on the node (`package_name`, `source_name`, `name`), giving a join key that is
+/// stable across engines.
+fn core_style_source_uid(package_name: &str, source_name: &str, table_name: &str) -> String {
+    format!("source.{package_name}.{source_name}.{table_name}")
 }
 
 impl StateArtifacts {
@@ -269,6 +296,26 @@ impl StateArtifacts {
         nodes.get_node(base).map(|n| n as &dyn InternalDbtNode)
     }
 
+    /// Pairs a source with its state-manifest counterpart when the two engines spell its
+    /// unique_id differently — see [`core_style_source_uid`].  Keys on the three components
+    /// both engines store verbatim, so a source genuinely *renamed* to the sanitized spelling
+    /// looks itself up under that new name and correctly finds nothing.
+    fn find_previous_source_by_core_style_id<'a>(
+        current: &dyn InternalDbtNode,
+        nodes: &'a Nodes,
+    ) -> Option<&'a dyn InternalDbtNode> {
+        let current_source = current.as_any().downcast_ref::<DbtSource>()?;
+        let core_style_uid = core_style_source_uid(
+            &current_source.__common_attr__.package_name,
+            &current_source.__source_attr__.source_name,
+            &current_source.__common_attr__.name,
+        );
+        nodes
+            .sources
+            .get(&core_style_uid)
+            .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+    }
+
     fn previous_node_for<'a>(
         &'a self,
         current: &dyn InternalDbtNode,
@@ -277,6 +324,15 @@ impl StateArtifacts {
 
         if let Some(prev) = nodes.get_node(current.common().unique_id.as_str()) {
             return Some(prev as &dyn InternalDbtNode);
+        }
+
+        if current.resource_type() == NodeType::Source {
+            // Fallback: Fusion sanitizes a source's table name into its unique_id while
+            // dbt-core does not, so the exact lookup misses against a Mantle-produced state
+            // manifest.  Pair on the source's identity instead.
+            if let Some(found) = Self::find_previous_source_by_core_style_id(current, nodes) {
+                return Some(found);
+            }
         }
 
         if current.resource_type() == NodeType::Test {
@@ -353,7 +409,6 @@ impl StateArtifacts {
                         "The state and target directories are the same: '{}'. This could lead to missing changes due to overwritten state.",
                         state_path.display()
                     ),
-                    None,
                 );
             }
         }
@@ -406,7 +461,6 @@ impl StateArtifacts {
                                 state_path.display(),
                                 e
                             ),
-                            None,
                         );
                     }
                     OnManifestLoadFailure::Ignore => {}
@@ -1052,21 +1106,43 @@ impl UnrenderedKeyRelevance {
     }
 }
 
-/// Normalise hook key aliases so `pre_hook` and `pre-hook` compare as equal;
-/// they have been long-term aliases in dbt.
+/// Coerces a hook config value into its flat list of entries: a sequence's items as-is, or a
+/// single non-sequence value (e.g. a lone hook string) as a one-element list.
+fn hook_value_entries(value: dbt_yaml::Value) -> Vec<dbt_yaml::Value> {
+    match value {
+        dbt_yaml::Value::Sequence(seq, _) => seq,
+        other => vec![other],
+    }
+}
+
+/// Normalise hook key aliases so `pre_hook` and `pre-hook` compare as equal; they have been
+/// long-term aliases in dbt. Some previous-state manifests (notably dbt-core's: it only
+/// translates the alias for hooks contributed by an inline SQL `{{ config(...) }}` call, not
+/// ones contributed by a schema.yml `config:` block) carry BOTH spellings as separate keys when a
+/// resource configures hooks at more than one level — in that case the two entries are merged
+/// (concatenated, canonical-key first) rather than one silently overwriting the other.
 fn canonicalize_hook_keys(
     map: &std::collections::BTreeMap<String, dbt_yaml::Value>,
 ) -> std::collections::BTreeMap<String, dbt_yaml::Value> {
-    map.iter()
-        .map(|(k, v)| {
-            let k = match k.as_str() {
-                "pre_hook" => "pre-hook".to_string(),
-                "post_hook" => "post-hook".to_string(),
-                _ => k.clone(),
-            };
-            (k, v.clone())
-        })
-        .collect()
+    let mut out = std::collections::BTreeMap::new();
+    for (k, v) in map {
+        let k = match k.as_str() {
+            "pre_hook" => "pre-hook".to_string(),
+            "post_hook" => "post-hook".to_string(),
+            _ => k.clone(),
+        };
+        match out.remove(&k) {
+            Some(existing) => {
+                let mut entries = hook_value_entries(existing);
+                entries.extend(hook_value_entries(v.clone()));
+                out.insert(k, dbt_yaml::Value::Sequence(entries, Default::default()));
+            }
+            None => {
+                out.insert(k, v.clone());
+            }
+        }
+    }
+    out
 }
 
 /// The comparator `unrendered_configs_eq`'s loop applies to one `unrendered_config` key. Extracted
@@ -1229,6 +1305,88 @@ mod tests {
         }
     }
 
+    /// `unique_id` is spelled independently of the three identity fields so a test can
+    /// reproduce the Fusion (sanitized) and Mantle (verbatim) spellings side by side.
+    fn make_source(uid: &str, package: &str, source_name: &str, table_name: &str) -> DbtSource {
+        let mut source = DbtSource::default();
+        source.__common_attr__.unique_id = uid.to_string();
+        source.__common_attr__.package_name = package.to_string();
+        source.__common_attr__.name = table_name.to_string();
+        source.__source_attr__.source_name = source_name.to_string();
+        source.__common_attr__.fqn = vec![source_name.to_string(), table_name.to_string()];
+        source
+    }
+
+    fn state_with_previous_sources(previous_sources: Vec<DbtSource>) -> StateArtifacts {
+        let mut prev_nodes = Nodes::default();
+        for source in previous_sources {
+            prev_nodes
+                .sources
+                .insert(source.__common_attr__.unique_id.clone(), Arc::new(source));
+        }
+
+        StateArtifacts {
+            nodes: Some(prev_nodes),
+            run_results: None,
+            source_freshness_results: None,
+            state_path: PathBuf::from("/tmp/fake_state"),
+            target_path: None,
+            test_sig_index: Default::default(),
+            test_full_name_index: Default::default(),
+            truncated_name_to_state_uid: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// A BigQuery wildcard source table is `source.pkg.ga4.events_*` in a dbt-core-produced
+    /// state manifest but `source.pkg.ga4.events___` in Fusion, because Fusion sanitizes the
+    /// table name into the unique_id.  Before the identity fallback the exact lookup missed,
+    /// `is_new` fired, and `state:modified+` dragged in everything downstream of the source.
+    #[test]
+    fn source_with_sanitized_uid_pairs_with_mantle_verbatim_uid() {
+        let state = state_with_previous_sources(vec![make_source(
+            "source.pkg.ga4.events_*",
+            "pkg",
+            "ga4",
+            "events_*",
+        )]);
+        // Fusion's spelling of the same source: sanitized unique_id, verbatim `name`.
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events_*");
+
+        assert!(!state.is_new(&current));
+        assert!(!state.is_modified(&current, None, None, AdapterType::Bigquery));
+    }
+
+    /// The fallback keys on the table name both engines store verbatim, not on the sanitized
+    /// unique_id, so a source genuinely renamed to the sanitized spelling is still new.
+    #[test]
+    fn source_renamed_to_a_different_table_is_still_new() {
+        let state = state_with_previous_sources(vec![make_source(
+            "source.pkg.ga4.events_*",
+            "pkg",
+            "ga4",
+            "events_*",
+        )]);
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___");
+
+        assert!(state.is_new(&current));
+    }
+
+    /// When the state manifest contains both spellings as genuinely distinct sources, the
+    /// exact unique_id match owns the pairing — the fallback runs only after it misses.
+    #[test]
+    fn source_exact_uid_match_wins_over_identity_fallback() {
+        let state = state_with_previous_sources(vec![
+            make_source("source.pkg.ga4.events_*", "pkg", "ga4", "events_*"),
+            make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___"),
+        ]);
+
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___");
+        let previous = state
+            .previous_node_for(&current)
+            .expect("exact unique_id match");
+        assert_eq!(previous.common().name, "events___");
+    }
+
     #[test]
     fn state_modified_configs_treats_stringified_hook_lists_as_unchanged() {
         let uid = "model.pkg.orders";
@@ -1313,7 +1471,7 @@ mod tests {
     fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
         pairs
             .iter()
-            .map(|(k, v)| (k.to_string(), yml_value(v)))
+            .map(|(k, v)| ((*k).to_string(), yml_value(v)))
             .collect()
     }
 
@@ -1525,6 +1683,62 @@ mod tests {
                 "snapshot.pkg.s"
             ));
         }
+    }
+
+    #[test]
+    fn canonicalize_hook_keys_merges_dash_and_underscore_spellings_instead_of_overwriting() {
+        // dbt-core's own unrendered_config keeps `pre_hook`/`post_hook` (underscore, contributed
+        // by a schema.yml `config:` block) as a SEPARATE key from `pre-hook`/`post-hook` (dash,
+        // contributed by an inline SQL `{{ config(...) }}` call) when a resource configures hooks
+        // at more than one level -- dbt-core only translates the alias for the inline-SQL source.
+        // Before the fix, renaming both to the same key via a naive `.collect()` silently
+        // overwrote one value with the other (BTreeMap iteration order sorts "post-hook" before
+        // "post_hook", so the underscore entry always won) instead of merging them.
+        let mut map = BTreeMap::new();
+        map.insert("post-hook".to_string(), yml_value(r#""DELETE FROM t""#));
+        map.insert("post_hook".to_string(), yml_value(r#""apply masking""#));
+
+        let canonicalized = canonicalize_hook_keys(&map);
+
+        assert_eq!(canonicalized.len(), 1);
+        let merged = canonicalized.get("post-hook").expect("expected post-hook");
+        let dbt_yaml::Value::Sequence(entries, _) = merged else {
+            panic!("expected a merged sequence, got {merged:?}");
+        };
+        let strings: Vec<&str> = entries.iter().map(|v| v.as_str().unwrap()).collect();
+        assert_eq!(strings, vec!["DELETE FROM t", "apply masking"]);
+    }
+
+    #[test]
+    fn canonicalize_hook_keys_is_a_noop_when_only_one_spelling_is_present() {
+        let mut map = BTreeMap::new();
+        map.insert("pre_hook".to_string(), yml_value(r#""create masking""#));
+
+        let canonicalized = canonicalize_hook_keys(&map);
+
+        assert_eq!(canonicalized.len(), 1);
+        assert_eq!(
+            canonicalized.get("pre-hook").and_then(|v| v.as_str()),
+            Some("create masking")
+        );
+        assert!(!canonicalized.contains_key("pre_hook"));
+    }
+
+    #[test]
+    fn unrendered_hook_value_eq_ignores_order() {
+        // A merged (multi-source) hook value has no reliable relative order at the unrendered
+        // level (only the fully-rendered/executed config does) -- comparison must treat the
+        // entries as a multiset, not an ordered list.
+        let a = yml_value(r#"["DELETE FROM t", "apply masking"]"#);
+        let b = yml_value(r#"["apply masking", "DELETE FROM t"]"#);
+        assert!(unrendered_hook_value_eq(Some(&a), Some(&b)));
+    }
+
+    #[test]
+    fn unrendered_hook_value_eq_still_detects_a_genuine_difference() {
+        let a = yml_value(r#"["DELETE FROM t", "apply masking"]"#);
+        let b = yml_value(r#"["DELETE FROM t", "apply different masking"]"#);
+        assert!(!unrendered_hook_value_eq(Some(&a), Some(&b)));
     }
 
     #[test]
@@ -2268,6 +2482,7 @@ mod tests {
                         evaluate_volatile_sql: Some(true),
                         pre_clone: None,
                         execute_hooks_on_any_reuse: None,
+                        compare_unrendered_code: None,
                     })
                 }),
             ),
@@ -2544,6 +2759,7 @@ mod tests {
                         evaluate_volatile_sql: Some(true),
                         pre_clone: None,
                         execute_hooks_on_any_reuse: None,
+                        compare_unrendered_code: None,
                     })
                 }),
             ),

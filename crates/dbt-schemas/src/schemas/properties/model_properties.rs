@@ -176,6 +176,7 @@ pub struct ModelState {
     pub pre_clone: Option<StatePreClone>,
     #[serde(alias = "execute_hooks_on_reuse")]
     pub execute_hooks_on_any_reuse: Option<bool>,
+    pub compare_unrendered_code: Option<bool>,
 }
 
 impl PartialEq for ModelState {
@@ -188,19 +189,21 @@ impl PartialEq for ModelState {
             && self.evaluate_volatile_sql == other.evaluate_volatile_sql
             && self.pre_clone == other.pre_clone
             && self.execute_hooks_on_any_reuse == other.execute_hooks_on_any_reuse
+            && self.compare_unrendered_code == other.compare_unrendered_code
     }
 }
 
 impl Eq for ModelState {}
 
-/// The dbt State configs supported on data tests: only `require_fresh_data_from` and
-/// `evaluate_volatile_sql` (snapshots reuse the full `ModelState`). Other keys are not fields here,
-/// so they are flagged as unknown keys at parse time.
+/// The dbt State configs supported on data tests: only `require_fresh_data_from`,
+/// `evaluate_volatile_sql` and `compare_unrendered_code` (snapshots reuse the full `ModelState`).
+/// Other keys are not fields here, so they are flagged as unknown keys at parse time.
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct DataTestState {
     pub require_fresh_data_from: Option<UpdatesOn>,
     pub evaluate_volatile_sql: Option<bool>,
+    pub compare_unrendered_code: Option<bool>,
 }
 
 impl PartialEq for DataTestState {
@@ -209,6 +212,7 @@ impl PartialEq for DataTestState {
             &self.require_fresh_data_from,
             &other.require_fresh_data_from,
         ) && self.evaluate_volatile_sql == other.evaluate_volatile_sql
+            && self.compare_unrendered_code == other.compare_unrendered_code
     }
 }
 
@@ -277,6 +281,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
         let other = ModelState {
             require_fresh_data_from: Some(UpdatesOn::Any),
@@ -284,6 +289,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
 
         assert_eq!(base, other);
@@ -297,6 +303,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
         let other = ModelState {
             require_fresh_data_from: Some(UpdatesOn::All),
@@ -304,6 +311,7 @@ mod tests {
             evaluate_volatile_sql: None,
             pre_clone: None,
             execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
         };
 
         assert_ne!(base, other);
@@ -317,6 +325,47 @@ execute_hooks_on_reuse: true
         let state: ModelState = dbt_yaml::from_str(yaml).unwrap();
 
         assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
+    }
+
+    #[test]
+    fn compare_unrendered_code_parses_on_models_and_data_tests() {
+        let yaml = "compare_unrendered_code: true\n";
+
+        let model_state: ModelState = dbt_yaml::from_str(yaml).unwrap();
+        let data_test_state: DataTestState = dbt_yaml::from_str(yaml).unwrap();
+
+        assert_eq!(model_state.compare_unrendered_code, Some(true));
+        assert_eq!(data_test_state.compare_unrendered_code, Some(true));
+    }
+
+    #[test]
+    fn compare_unrendered_code_participates_in_state_eq() {
+        let base = ModelState {
+            require_fresh_data_from: None,
+            lag_tolerance: None,
+            evaluate_volatile_sql: None,
+            pre_clone: None,
+            execute_hooks_on_any_reuse: None,
+            compare_unrendered_code: None,
+        };
+        let other = ModelState {
+            compare_unrendered_code: Some(true),
+            ..base.clone()
+        };
+
+        assert_ne!(base, other);
+
+        let base_test = DataTestState {
+            require_fresh_data_from: None,
+            evaluate_volatile_sql: None,
+            compare_unrendered_code: None,
+        };
+        let other_test = DataTestState {
+            compare_unrendered_code: Some(true),
+            ..base_test.clone()
+        };
+
+        assert_ne!(base_test, other_test);
     }
 
     #[test]

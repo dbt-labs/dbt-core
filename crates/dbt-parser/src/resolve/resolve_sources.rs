@@ -1,6 +1,8 @@
 //! Module containing the entrypoint for the resolve phase.
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
 use crate::validation::check_node_static_analysis;
@@ -236,10 +238,10 @@ pub async fn resolve_sources(
     let config_resolver =
         ProjectConfigResolver::build(root_project_configs.sources.clone(), is_dependency, || {
             init_project_config(
-                io_args,
                 &package.dbt_project.sources,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         })?
         .with_resolve_defaults((
@@ -273,7 +275,6 @@ pub async fn resolve_sources(
             .unwrap_or_default();
 
         let source: SourceProperties = into_typed_with_jinja(
-            io_args,
             mpe.schema_value,
             false,
             jinja_env,
@@ -284,7 +285,6 @@ pub async fn resolve_sources(
         )?;
 
         let table: Tables = into_typed_with_jinja(
-            io_args,
             mpe.table_value.unwrap(),
             false,
             jinja_env,
@@ -342,7 +342,6 @@ pub async fn resolve_sources(
             arg.static_analysis,
             &unique_id,
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
 
         // `user_quoting` is the raw source+table YAML merge (no defaults). It is
@@ -428,10 +427,10 @@ pub async fn resolve_sources(
             // when the rule is consumed. F1 (fully-empty rule) is already
             // accepted silently by `FreshnessRules::validate`.
             if let Err(err) = FreshnessRules::validate(freshness.error_after.as_ref()) {
-                emit_warn_log_from_fs_error(*err, arg.io.status_reporter.as_ref());
+                emit_warn_log_from_fs_error(*err);
             }
             if let Err(err) = FreshnessRules::validate(freshness.warn_after.as_ref()) {
-                emit_warn_log_from_fs_error(*err, arg.io.status_reporter.as_ref());
+                emit_warn_log_from_fs_error(*err);
             }
         }
 
@@ -458,7 +457,11 @@ pub async fn resolve_sources(
                 unique_id: unique_id.to_owned(),
                 fqn,
                 description: Some(table.description.clone().unwrap_or_default()),
-                patch_path: Some(DbtPath::from(&mpe.relative_path)),
+                // Core only sets patch_path for sources in the rare cross-package
+                // source-override case, which Fusion doesn't implement:
+                // https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/parser/sources.py#L116
+                // For the normal (un-overridden) case it defaults to None.
+                patch_path: None,
                 meta: source_config.meta.clone().unwrap_or_default(),
                 tags: source_config
                     .tags
@@ -525,7 +528,7 @@ pub async fn resolve_sources(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(mpe.relative_path.clone());
-                emit_error_log_from_fs_error(err_with_loc, io_args.status_reporter.as_ref());
+                emit_error_log_from_fs_error(err_with_loc);
             }
         }
 
@@ -957,6 +960,28 @@ mod tests {
         let base = Omissible::Present(None);
         let update = Omissible::Omitted;
         assert_eq!(merge_freshness(&base, &update), None);
+    }
+
+    #[test]
+    fn test_merge_freshness_table_null_opts_out() {
+        // Table-level `config: freshness: null` → None, even when the source level sets rules.
+        //
+        // Together with `test_merge_freshness_omitted_no_base` this is what makes `None` mean
+        // "the user explicitly opted out" and nothing else — `dbt-freshness`'s
+        // `collects_freshness_during_build` relies on that distinction to skip the metadata
+        // query for opted-out sources only (dbt-labs/dbt-core#14534).
+        let base = Omissible::Present(Some(FreshnessDefinition {
+            warn_after: Some(FreshnessRules {
+                count: Some(12),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        }));
+        assert_eq!(merge_freshness(&base, &Omissible::Present(None)), None);
+        assert_eq!(
+            merge_freshness(&Omissible::Omitted, &Omissible::Present(None)),
+            None
+        );
     }
 
     #[test]

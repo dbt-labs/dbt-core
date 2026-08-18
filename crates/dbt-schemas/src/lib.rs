@@ -16,9 +16,9 @@ pub mod schemas {
     pub mod serialization_utils;
 
     pub use dbt_catalogs::{
-        AdapterPropsView, CatalogSpecView, CatalogType, DatabricksUnityPropsView, DbtCatalogsView,
-        FileFormat, SerializationPolicy, SnowflakeBuiltInPropsView, SnowflakeRestPropsView,
-        TargetFileSize, WriteIntegrationView, validate_catalogs,
+        AdapterPropsView, CatalogSpecView, DatabricksUnityPropsView, DbtCatalogsView, FileFormat,
+        SerializationPolicy, SnowflakeBuiltInPropsView, SnowflakeRestPropsView, TargetFileSize,
+        WriteIntegrationView, validate_catalogs,
     };
     pub use dbt_catalogs_v2::TableFormat;
     pub mod macros;
@@ -36,8 +36,8 @@ pub mod schemas {
         ModificationType, OnManifestLoadFailure, StateArtifacts, config_excluded_keys,
     };
     pub use run_results::{
-        BatchResults, ContextRunResult, RunResultOutput, RunResultsArgs, RunResultsArtifact,
-        RunResultsMetadata, TimingInfo,
+        BatchResults, ContextRunResult, DbtCommandExecutionArtifacts, RunResultOutput,
+        RunResultsArgs, RunResultsArtifact, RunResultsMetadata, TimingInfo,
     };
     pub use user_settings::UserSettings;
 

@@ -1,5 +1,7 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{
@@ -85,10 +87,10 @@ pub async fn resolve_saved_queries(
         is_dependency,
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.saved_queries,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?;
@@ -106,7 +108,7 @@ pub async fn resolve_saved_queries(
                     "Saved query name '{}' can only contain letters, numbers, and underscores.",
                     saved_query_name
                 );
-                emit_error_log_from_fs_error(*e, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(*e);
 
                 continue;
             }
@@ -131,7 +133,6 @@ pub async fn resolve_saved_queries(
 
             // Parse the saved query properties from YAML
             let saved_query_props: SavedQueriesProperties = into_typed_with_jinja(
-                &arg.io,
                 schema_value,
                 false,
                 &env,

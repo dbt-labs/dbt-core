@@ -43,6 +43,7 @@ vortex-events = { workspace = true }
 [dev-dependencies]
 dbt-telemetry = { workspace = true }
 tokio = { workspace = true }
+wiremock = "0.6"
 
 [lib]
 name = "fs_deps"

@@ -3,7 +3,7 @@ use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
-use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
+use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{DbtSource, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
@@ -59,6 +59,14 @@ impl RelationObject {
         self.relation.clone()
     }
 
+    /// Whether this relation is the placeholder returned during parsing.
+    pub fn is_parse_time(&self) -> bool {
+        self.relation
+            .as_any()
+            .downcast_ref::<Relation>()
+            .is_some_and(|relation| relation.is_parse_time)
+    }
+
     /// Create a new RelationObject with a run filter applied.
     ///
     /// This is used for microbatch execution to filter refs by event_time.
@@ -104,12 +112,14 @@ impl RelationObject {
                 )
             })?
             .map(|v| {
-                minijinja_value_to_typed_struct::<TypedConstraint>(v).map_err(|e| {
-                    minijinja::Error::new(
-                        minijinja::ErrorKind::SerdeDeserializeError,
-                        format!("enrich constraint item: {e}"),
-                    )
-                })
+                v.downcast_object_ref::<TypedConstraint>()
+                    .cloned()
+                    .ok_or_else(|| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            "enrich constraints must contain TypedConstraint objects",
+                        )
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?;
         let enriched = dbx.enrich(&constraints);
@@ -129,12 +139,6 @@ impl RelationObject {
                 )
             })?;
         Ok(Value::from(dbx.render_constraints_for_create()))
-    }
-
-    /// Databricks: get create_constraints for get_column_and_constraints_sql
-    fn relation_create_constraints(self: &Arc<Self>) -> Option<Value> {
-        let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
-        Some(Value::from_serialize(&dbx.create_constraints))
     }
 }
 
@@ -176,6 +180,10 @@ impl From<Box<dyn BaseRelation>> for RelationObject {
 }
 
 impl Object for RelationObject {
+    fn is_true(self: &Arc<Self>) -> bool {
+        !self.is_parse_time()
+    }
+
     fn call_method(
         self: &Arc<Self>,
         _state: &State,
@@ -203,6 +211,20 @@ impl Object for RelationObject {
                 self.get(&key, default)
             }
             "render" => Ok(render_without_filter(self)),
+            "derivative" => {
+                let iter = ArgsIter::new("derivative", &["suffix", "relation_type"], args);
+                let suffix = iter.next_arg::<&str>()?;
+                let relation_type = iter.next_arg::<Option<&str>>()?;
+                let interpret_suffix_as_full_identifier = iter
+                    .next_kwarg::<Option<bool>>("interpret_suffix_as_full_identifier")?
+                    .unwrap_or(false);
+                iter.finish()?;
+                let relation_type = relation_type
+                    .filter(|s| !s.is_empty())
+                    .map(RelationType::from);
+                self.derivative(suffix, relation_type, interpret_suffix_as_full_identifier)
+                    .map(|r| Value::from_object(RelationObject::new(r)))
+            }
             "without_identifier" => self
                 .without_identifier()
                 .map(|r| Value::from_object(RelationObject::new(r))),
@@ -334,7 +356,24 @@ impl Object for RelationObject {
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
-            Some("create_constraints") => self.relation_create_constraints(),
+            Some("alter_constraints") => {
+                let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
+                Some(Value::from_iter(
+                    dbx.alter_constraints
+                        .iter()
+                        .cloned()
+                        .map(Value::from_object),
+                ))
+            }
+            Some("create_constraints") => {
+                let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
+                Some(Value::from_iter(
+                    dbx.create_constraints
+                        .iter()
+                        .cloned()
+                        .map(Value::from_object),
+                ))
+            }
             Some("is_view") => Some(Value::from(self.is_view())),
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
@@ -405,6 +444,13 @@ impl Object for RelationObject {
 
         write!(f, "{}", jinja_render)
     }
+}
+
+/// Whether a Jinja value contains a parse-time relation placeholder.
+pub fn is_parse_time_relation(value: &Value) -> bool {
+    value
+        .downcast_object_ref::<RelationObject>()
+        .is_some_and(RelationObject::is_parse_time)
 }
 
 /// Creates a relation based on the adapter type
@@ -605,7 +651,7 @@ fn duckdb_local_filesystem_root(source: &DbtSource) -> Option<String> {
         .catalogs
         .iter()
         .find(|catalog| catalog.name.eq_ignore_ascii_case(catalog_name))?;
-    if catalog.catalog_type != V2CatalogType::LocalFilesystem {
+    if catalog.catalog_type != CatalogType::LocalFilesystem {
         return None;
     }
     let duckdb = catalog.config_block("duckdb")?;
@@ -634,6 +680,41 @@ fn looks_like_function_call(value: &str) -> bool {
         && value[..open_idx]
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+#[derive(Debug)]
+struct QuotePolicyObject(ResolvedQuoting);
+
+impl Object for QuotePolicyObject {
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State,
+        name: &str,
+        args: &[Value],
+        _listeners: &[std::rc::Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, minijinja::Error> {
+        match name {
+            "get_part" => {
+                let iter = ArgsIter::new("QuotePolicy.args", &[], args);
+                let name = iter.next_kwarg::<String>("name")?;
+                iter.finish()?;
+
+                match name.as_str() {
+                    "database" => Ok(Value::from(self.0.database)),
+                    "schema" => Ok(Value::from(self.0.schema)),
+                    "identifier" => Ok(Value::from(self.0.identifier)),
+                    _ => Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        format!("'{name}' is not a valid argument"),
+                    )),
+                }
+            }
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::UnknownMethod,
+                format!("Unknown method on DefaultQuotePolicyObject: '{name}'"),
+            )),
+        }
+    }
 }
 
 /// A Wrapper type for StaticBaseRelation
@@ -708,6 +789,13 @@ impl Object for StaticBaseRelationObject {
                     })?;
                 Ok(Value::from_object(relation_config))
             }
+            "get_default_quote_policy" => {
+                let iter = ArgsIter::new("Relation.get_default_quote_policy", &[], args);
+                iter.finish()?;
+                Ok(Value::from_object(QuotePolicyObject(
+                    self.0.get_default_quoting(),
+                )))
+            }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::UnknownMethod,
                 format!("Unknown method on StaticBaseRelationObject: '{name}'"),
@@ -730,6 +818,8 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
     ) -> Result<Value, minijinja::Error>;
 
     fn get_adapter_type(&self) -> String;
+
+    fn get_default_quoting(&self) -> ResolvedQuoting;
 
     /// Create a new relation from the given arguments
     /// impl for api.Relation.create
@@ -799,8 +889,11 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use crate::relation::factory::create_static_relation;
+
     use super::*;
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+    use minijinja_contrib::testing::jinja_assert;
 
     fn source_with_meta_location(location: &str) -> DbtSource {
         let mut source = DbtSource::default();
@@ -854,6 +947,46 @@ mod tests {
     }
 
     #[test]
+    fn databricks_relation_exposes_constraints_to_jinja() {
+        let relation = Relation::new(
+            AdapterType::Databricks,
+            "main".to_string(),
+            "default".to_string(),
+            "child_model".to_string(),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING)
+        .enrich(&[
+            TypedConstraint::PrimaryKey {
+                name: Some("pk_id".to_string()),
+                columns: vec!["id".to_string()],
+                expression: None,
+            },
+            TypedConstraint::Check {
+                name: Some("check_id_positive".to_string()),
+                expression: "id > 0".to_string(),
+                columns: Some(vec!["id".to_string()]),
+            },
+        ]);
+
+        jinja_assert(
+            RelationObject::new(Arc::new(relation)),
+            r#"
+            {%- for c in obj.create_constraints %}
+            create {{ c.type }} | {{ c.render() }}
+            {%- endfor %}
+            {%- for c in obj.alter_constraints %}
+            alter {{ c.type }} | {{ c.render() }}
+            {%- endfor %}
+            "#,
+            r#"
+            create primary_key | CONSTRAINT pk_id PRIMARY KEY (id)
+            alter check | CONSTRAINT check_id_positive CHECK (id > 0)
+            "#,
+        );
+    }
+
+    #[test]
     fn do_create_relation_clickhouse_normalizes_database_to_empty_string() {
         let relation = do_create_relation(
             AdapterType::ClickHouse,
@@ -871,5 +1004,253 @@ mod tests {
 
         assert_eq!(relation.render_self_as_str(), "`analytics`.`events`");
         assert_eq!(relation.database(), Some(""));
+    }
+
+    #[test]
+    fn derivative_appends_suffix_and_overrides_type_for_clickhouse() {
+        let relation = do_create_relation(
+            AdapterType::ClickHouse,
+            "ignored".to_string(),
+            "analytics".to_string(),
+            Some("events".to_string()),
+            Some(RelationType::Table),
+            ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        // suffix appended to identifier, type overridden, database stays empty
+        let mv = relation
+            .derivative("_mv", Some(RelationType::MaterializedView), false)
+            .unwrap();
+        assert_eq!(mv.render_self_as_str(), "`analytics`.`events_mv`");
+        assert_eq!(mv.database(), Some(""));
+        assert_eq!(mv.relation_type(), Some(RelationType::MaterializedView));
+
+        // interpret_suffix_as_full_identifier replaces the identifier entirely,
+        // and omitting relation_type inherits the source relation's type
+        let full = relation.derivative("custom_name", None, true).unwrap();
+        assert_eq!(full.render_self_as_str(), "`analytics`.`custom_name`");
+        assert_eq!(full.relation_type(), Some(RelationType::Table));
+    }
+
+    #[test]
+    fn derivative_via_call_method_accepts_single_argument() {
+        // The ClickHouse snapshot macro calls `target.derivative('__snapshot_upsert')`
+        // with a single positional argument (dbt-clickhouse snapshot.sql), so
+        // relation_type must be optional at the Jinja boundary and default to the
+        // source relation's type.
+        let relation = do_create_relation(
+            AdapterType::ClickHouse,
+            "ignored".to_string(),
+            "analytics".to_string(),
+            Some("events".to_string()),
+            Some(RelationType::Table),
+            ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let obj = Arc::new(RelationObject::from(relation));
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let derived = obj
+            .call_method(
+                &state,
+                "derivative",
+                &[Value::from("__snapshot_upsert")],
+                &[],
+            )
+            .unwrap();
+        let derived = derived
+            .downcast_object_ref::<RelationObject>()
+            .expect("derivative should return a relation")
+            .inner();
+        assert_eq!(
+            derived.render_self_as_str(),
+            "`analytics`.`events__snapshot_upsert`"
+        );
+        assert_eq!(derived.relation_type(), Some(RelationType::Table));
+
+        // Two positional args still override the type
+        let derived = obj
+            .call_method(
+                &state,
+                "derivative",
+                &[Value::from("_mv"), Value::from("materialized_view")],
+                &[],
+            )
+            .unwrap();
+        let derived = derived
+            .downcast_object_ref::<RelationObject>()
+            .expect("derivative should return a relation")
+            .inner();
+        assert_eq!(derived.render_self_as_str(), "`analytics`.`events_mv`");
+        assert_eq!(
+            derived.relation_type(),
+            Some(RelationType::MaterializedView)
+        );
+    }
+
+    #[test]
+    fn static_relation_snowflake_get_default_quote_policy_passes_with_get_part() {
+        let obj = create_static_relation(
+            AdapterType::Snowflake,
+            ResolvedQuoting {
+                database: true,
+                schema: false,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(&state, "get_default_quote_policy", &[], &[])
+            .unwrap();
+
+        let database = result
+            .call_method(&state, "get_part", &[Value::from("database")], &[])
+            .unwrap()
+            .is_true();
+        let schema = result
+            .call_method(&state, "get_part", &[Value::from("schema")], &[])
+            .unwrap()
+            .is_true();
+        let identifier = result
+            .call_method(&state, "get_part", &[Value::from("identifier")], &[])
+            .unwrap()
+            .is_true();
+
+        // snowflake defaults
+        assert!(!database);
+        assert!(!schema);
+        assert!(!identifier);
+    }
+
+    #[test]
+    fn static_relation_other_get_default_quote_policy_passes_with_get_part() {
+        let obj = create_static_relation(
+            AdapterType::Postgres,
+            ResolvedQuoting {
+                database: true,
+                schema: false,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(&state, "get_default_quote_policy", &[], &[])
+            .unwrap();
+
+        let database = result
+            .call_method(&state, "get_part", &[Value::from("database")], &[])
+            .unwrap()
+            .is_true();
+        let schema = result
+            .call_method(&state, "get_part", &[Value::from("schema")], &[])
+            .unwrap()
+            .is_true();
+        let identifier = result
+            .call_method(&state, "get_part", &[Value::from("identifier")], &[])
+            .unwrap()
+            .is_true();
+
+        // other defaults
+        assert!(database);
+        assert!(schema);
+        assert!(identifier);
+    }
+
+    #[test]
+    fn static_relation_get_default_quote_policy_fails_with_one_or_more_arguments() {
+        let obj = create_static_relation(
+            AdapterType::ClickHouse,
+            ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(
+                &state,
+                "get_default_quote_policy",
+                &[Value::from("bad arg")],
+                &[],
+            )
+            .unwrap_err();
+
+        assert_eq!(
+            result.detail().unwrap(),
+            "Relation.get_default_quote_policy() takes exactly zero positional arguments (1 given)"
+        );
+    }
+
+    #[test]
+    fn static_relation_get_default_quote_policy_with_get_part_should_fail() {
+        let obj = create_static_relation(
+            AdapterType::ClickHouse,
+            ResolvedQuoting {
+                database: true,
+                schema: false,
+                identifier: true,
+            },
+        )
+        .unwrap();
+
+        let env = minijinja::Environment::new();
+        let state = State::new_for_env(&env);
+
+        let result = obj
+            .call_method(&state, "get_default_quote_policy", &[], &[])
+            .unwrap();
+
+        let result_get_part = result
+            .call_method(&state, "get_part", &[], &[])
+            .unwrap_err();
+        assert_eq!(
+            result_get_part.detail().unwrap(),
+            "missing keyword argument 'name'"
+        );
+
+        let result_get_part = result
+            .call_method(
+                &state,
+                "get_part",
+                &[Value::from("schema"), Value::from("schema")],
+                &[],
+            )
+            .unwrap_err();
+        assert_eq!(
+            result_get_part.detail().unwrap(),
+            "QuotePolicy.args() takes from 0 to 1 positional arguments but 2 were given"
+        );
+
+        let result_get_part = result
+            .call_method(&state, "get_part", &[Value::from("bad")], &[])
+            .unwrap_err();
+        assert_eq!(
+            result_get_part.detail().unwrap(),
+            "'bad' is not a valid argument"
+        );
     }
 }

@@ -88,7 +88,6 @@ pub fn typecheck(
             emit_error_log_message(
                 ErrorCode::Generic,
                 format!("Failed to create template: {}", e),
-                arg_io.status_reporter.as_ref(),
             );
             return Ok(());
         }

@@ -65,6 +65,7 @@ pub struct RunCacheServiceConfig {
     pub clone_time_travel_limit_seconds: Option<i64>,
     pub metadata_cache_ttl_seconds: i64,
     pub run_hooks_on_no_op: bool,
+    pub compare_unrendered_code: bool,
     pub snowflake_get_view_ddl_override: Option<String>,
     pub snowflake_metadata_warehouse: Option<String>,
 }
@@ -190,6 +191,10 @@ impl RunCacheServiceConfig {
             Some(value) => parse_bool("RUN_HOOKS_ON_NO_OP", &value)?,
             None => false,
         };
+        let compare_unrendered_code = match config_value(&mut get_env, "COMPARE_UNRENDERED_CODE") {
+            Some(value) => parse_bool("COMPARE_UNRENDERED_CODE", &value)?,
+            None => false,
+        };
 
         Ok(Self {
             enabled,
@@ -226,6 +231,7 @@ impl RunCacheServiceConfig {
             clone_time_travel_limit_seconds,
             metadata_cache_ttl_seconds,
             run_hooks_on_no_op,
+            compare_unrendered_code,
             snowflake_get_view_ddl_override: config_value(
                 &mut get_env,
                 "SNOWFLAKE_GET_VIEW_DDL_OVERRIDE",
@@ -272,6 +278,7 @@ impl RunCacheServiceConfig {
             clone_time_travel_limit_seconds: None,
             metadata_cache_ttl_seconds: DEFAULT_METADATA_CACHE_TTL_SECONDS,
             run_hooks_on_no_op: false,
+            compare_unrendered_code: false,
             snowflake_get_view_ddl_override: None,
             snowflake_metadata_warehouse: None,
         }
@@ -590,6 +597,7 @@ mod tests {
             profile: "default".to_string(),
             target: target.to_string(),
             defer_to_target: defer_to_target.map(|target| target.to_string()),
+            allow_clones: true,
             db_config: DbConfig::DuckDB(Box::<DuckDbConfig>::default()),
             alt_target_db_config: None,
             schema: "dbt_test".to_string(),
@@ -649,6 +657,7 @@ mod tests {
         assert_eq!(config.clone_time_travel_limit_seconds, None);
         assert_eq!(config.metadata_cache_ttl_seconds, 0);
         assert!(!config.run_hooks_on_no_op);
+        assert!(!config.compare_unrendered_code);
         assert_eq!(config.snowflake_get_view_ddl_override, None);
         assert_eq!(config.snowflake_metadata_warehouse, None);
     }
@@ -849,6 +858,7 @@ mod tests {
             ("RUN_CACHE_ENABLE_RESPONSE_LOGGING", "false"),
             ("RUN_CACHE_ENABLE_DATA_TESTS", "0"),
             ("RUN_CACHE_RUN_HOOKS_ON_NO_OP", "true"),
+            ("RUN_CACHE_COMPARE_UNRENDERED_CODE", "true"),
         ])
         .unwrap();
 
@@ -860,6 +870,12 @@ mod tests {
         assert!(!config.enable_response_logging);
         assert!(!config.enable_data_tests);
         assert!(config.run_hooks_on_no_op);
+        assert!(config.compare_unrendered_code);
+    }
+
+    #[test]
+    fn compare_unrendered_code_rejects_unparseable_values() {
+        assert!(config_from_pairs(&[("RUN_CACHE_COMPARE_UNRENDERED_CODE", "maybe")]).is_err());
     }
 
     #[test]

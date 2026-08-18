@@ -135,8 +135,8 @@ use dbt_common::tracing::dbt_emit::{
 };
 
 emit_info_log_message("Parsing project");
-emit_warn_log_message(code, "Deprecated config", status_reporter);
-emit_error_log_from_fs_error(&error, status_reporter);
+emit_warn_log_message(code, "Deprecated config");
+emit_error_log_from_fs_error(error);
 ```
 
 `dbt_emit.rs` also contains helpers for package-scoped messages, strict parse

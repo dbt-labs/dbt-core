@@ -537,6 +537,6 @@ fn write_metadata_parquet_impl(
     }
 
     for e in errors {
-        emit_warn_log_message(ErrorCode::Generic, e, arg.io.status_reporter.as_ref());
+        emit_warn_log_message(ErrorCode::Generic, e);
     }
 }

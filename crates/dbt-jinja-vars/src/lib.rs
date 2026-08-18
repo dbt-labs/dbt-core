@@ -3,6 +3,7 @@
 //! Provides `env_var`, `Var`, `VarFunction`, `ConfiguredVar`, and `DbtVars`
 //! without depending on `dbt-common`, `dbt-jinja-utils`, or `dbt-schemas`.
 
+mod cli_value;
 mod configured_var;
 mod dbt_vars;
 mod env_var;

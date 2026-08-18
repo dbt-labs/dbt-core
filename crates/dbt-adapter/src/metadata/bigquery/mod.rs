@@ -6,11 +6,11 @@ use crate::metadata::freshness_overrides::{
     FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
 };
 use crate::metadata::*;
-use crate::record_batch::RecordBatchExt;
+use crate::record_batch::{RecordBatchExt, StructArrayExt};
 use crate::relation::Relation;
+use crate::time_machine::{args_freshness_with_overrides, with_time_machine_metadata_wrapper};
 use crate::{AdapterEngine, AdapterResult};
 
-use arrow_array::cast::AsArray;
 use arrow_array::*;
 use arrow_schema::*;
 use dbt_adapter_core::AdapterType;
@@ -47,8 +47,29 @@ pub const BIGQUERY_PSEUDOCOLUMNS: [&str; 7] = [
     "_CHANGE_SEQUENCE_NUMBER",
 ];
 
-#[allow(dead_code)]
 pub fn list_relations(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let relations = list_relations_via_adbc(engine, conn, db_schema)?;
+    let connection_project = engine
+        .config("execution_project")
+        .or_else(|| engine.config("project"))
+        .or_else(|| engine.config("database"));
+    let (target_project, _) =
+        normalize_quote(false, AdapterType::Bigquery, &db_schema.rendered_catalog);
+    let is_cross_project =
+        connection_project.is_some_and(|project| project.as_ref() != target_project);
+
+    verify_empty_adbc_listing(relations, is_cross_project, || {
+        list_relations_via_information_schema(engine, ctx, conn, db_schema, token)
+    })
+}
+
+fn list_relations_via_information_schema(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -93,7 +114,27 @@ FROM
     Ok(result)
 }
 
-pub fn list_relations_via_adbc(
+fn verify_empty_adbc_listing<F>(
+    relations: Vec<Arc<dyn BaseRelation>>,
+    is_cross_project: bool,
+    fallback: F,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>>
+where
+    F: FnOnce() -> AdapterResult<Vec<Arc<dyn BaseRelation>>>,
+{
+    // BigQuery GetObjects exposes only the connection project as a catalog, so a
+    // different target project produces an empty result. Verify emptiness with
+    // the target-qualified metadata query before the caller records the schema
+    // as complete.
+    // https://github.com/dbt-labs/bigquery-adbc/blob/c87c401a934c71783862dface246252d84f9d2e6/go/connection.go#L106-L123
+    if is_cross_project && relations.is_empty() {
+        fallback()
+    } else {
+        Ok(relations)
+    }
+}
+
+fn list_relations_via_adbc(
     engine: &dyn AdapterEngine,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
@@ -157,15 +198,7 @@ pub fn list_relations_via_adbc(
     //   - table_type: utf8
     //   - table_columns: list
     //   - table_constraints: list
-    let db_schema_tables = schemas_struct
-        .column_by_name("db_schema_tables")
-        .and_then(|c| c.as_any().downcast_ref::<ListArray>())
-        .ok_or_else(|| {
-            AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Missing or invalid 'db_schema_tables' column",
-            )
-        })?;
+    let db_schema_tables = schemas_struct.column_as::<ListArray>("db_schema_tables")?;
 
     let tables_struct = db_schema_tables
         .values()
@@ -178,24 +211,8 @@ pub fn list_relations_via_adbc(
             )
         })?;
 
-    let table_names = tables_struct
-        .column_by_name("table_name")
-        .and_then(|c| c.as_any().downcast_ref::<StringArray>())
-        .ok_or_else(|| {
-            AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Missing or invalid 'table_name' column",
-            )
-        })?;
-    let table_types = tables_struct
-        .column_by_name("table_type")
-        .and_then(|c| c.as_string_opt::<i32>())
-        .ok_or_else(|| {
-            AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Missing or invalid 'table_type' column",
-            )
-        })?;
+    let table_names = tables_struct.column_as::<StringArray>("table_name")?;
+    let table_types = tables_struct.column_as::<StringArray>("table_type")?;
 
     let mut result = Vec::with_capacity(tables_struct.len());
     for j in 0..tables_struct.len() {
@@ -847,7 +864,7 @@ impl BigqueryMetadataAdapter {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
         if overrides.is_empty() {
-            return self.freshness(relations, token);
+            return self.freshness_inner(relations, token);
         }
 
         let mut override_targets = Vec::new();
@@ -1310,7 +1327,16 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         overrides: &'a BTreeMap<String, FreshnessOverride>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        self.freshness_with_overrides_impl(relations, overrides, token)
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_with_overrides",
+            args_freshness_with_overrides(
+                relations.iter().map(|r| r.semantic_fqn()),
+                overrides,
+                None,
+            ),
+            self.freshness_with_overrides_impl(relations, overrides, token),
+        )
     }
 
     fn create_schemas_if_not_exists(
@@ -1487,7 +1513,11 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         map_reduce.run(Arc::new(keys), token)
     }
 
-    fn freshness_all_in_schema<'a>(
+    fn supports_bulk_freshness_dump(&self) -> bool {
+        true
+    }
+
+    fn freshness_all_in_schema_inner<'a>(
         &'a self,
         database: &'a str,
         schema: &'a str,
@@ -1550,8 +1580,40 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     }
 }
 
+/// BigQuery reports a miss through two different APIs, and bigquery-adbc
+/// formats each from whichever fields its error type carries — so the two
+/// share no common token:
+///
+/// - **Metadata lookup** — a REST `Tables.Get` that returns HTTP 404. Has a
+///   status code, no reason code (for example, `get_table_schema` -> Table.Metadata):
+///
+///   ```text
+///   [bq] Could not get metadata for table `p`.`d`.`t`: 404 Not Found: Not found: Table p:d.t
+///   ```
+///
+/// - **Query job** — the HTTP calls all succeed; the failure arrives inside
+///   the job payload. Has a reason code, no status code (`execute` arbitrary SQLs):
+///
+///   ```text
+///   [bq] Could not complete job: notFound: Not found: Dataset p:d was not found in location US ()
+///   ```
+///
+/// See `errToAdbcErr`, which dispatches on the Go error type:
+/// <https://github.com/dbt-labs/bigquery-adbc/blob/449ef311c5f2b82d586c97cf36d7c00dc8610851/go/util.go#L153>
+///
+/// arrow-adbc stringifies the raw SDK error instead, so both of its variants
+/// read `googleapi: Error 404: Not found: …`.
+///
+/// TODO: match on the ADBC status instead — bigquery-adbc already reports
+/// `StatusNotFound` for both — once the driver migration is complete.
 pub fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
-    e.message().contains("Error 404: Not found:")
+    let msg = e.message();
+    // arrow-adbc (both sources)
+    msg.contains("Error 404: Not found:")
+        // bigquery-adbc, metadata lookup
+        || msg.contains("404 Not Found:")
+        // bigquery-adbc, query job
+        || msg.contains("notFound:")
 }
 
 /// BigQuery surfaces access-control failures as googleapi HTTP 403 errors.
@@ -1586,6 +1648,65 @@ mod tests {
             )
             .with_quoting(DEFAULT_RESOLVED_QUOTING),
         )
+    }
+
+    #[test]
+    fn cross_project_adbc_miss_uses_target_qualified_fallback() {
+        let relations = verify_empty_adbc_listing(Vec::new(), true, || {
+            Ok(vec![bq_rel(
+                "target-project",
+                "analytics",
+                "existing_table",
+            )])
+        })
+        .unwrap();
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].database_as_str().unwrap(), "target-project");
+        assert_eq!(relations[0].schema_as_str().unwrap(), "analytics");
+        assert_eq!(relations[0].identifier_as_str().unwrap(), "existing_table");
+    }
+
+    #[test]
+    fn same_project_empty_adbc_relation_listing_remains_authoritative() {
+        let relations = verify_empty_adbc_listing(Vec::new(), false, || {
+            panic!("same-project listing should not use the fallback")
+        })
+        .unwrap();
+
+        assert!(relations.is_empty());
+    }
+
+    #[test]
+    fn nonempty_adbc_relation_listing_remains_authoritative() {
+        let relations = verify_empty_adbc_listing(
+            vec![bq_rel("connection-project", "analytics", "adbc_table")],
+            true,
+            || {
+                Ok(vec![bq_rel(
+                    "connection-project",
+                    "analytics",
+                    "fallback_table",
+                )])
+            },
+        )
+        .unwrap();
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(relations[0].identifier_as_str().unwrap(), "adbc_table");
+    }
+
+    #[test]
+    fn empty_adbc_relation_listing_returns_fallback_error() {
+        let error = verify_empty_adbc_listing(Vec::new(), true, || {
+            Err(AdapterError::new(
+                AdapterErrorKind::SqlExecution,
+                "target-qualified metadata is unavailable",
+            ))
+        })
+        .expect_err("fallback error should be returned");
+
+        assert_eq!(error.kind(), AdapterErrorKind::SqlExecution);
     }
 
     fn freshness_batch(rows: &[(&str, &str, Option<i64>, bool)]) -> RecordBatch {
@@ -1917,5 +2038,52 @@ mod tests {
              for dataset operations, quotaExceeded",
         );
         assert!(!is_bigquery_permission_error(&quota));
+    }
+
+    #[test]
+    fn test_is_bigquery_not_found_error() {
+        // arrow-adbc spelling.
+        let legacy = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "googleapi: Error 404: Not found: Table proj:dataset.tbl, notFound",
+        );
+        assert!(is_bigquery_not_found_error(&legacy));
+
+        // arrow-adbc, query job.
+        let legacy_job = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "googleapi: Error 404: Not found: Dataset proj:dataset was not found \
+             in location US, notFound",
+        );
+        assert!(is_bigquery_not_found_error(&legacy_job));
+
+        // bigquery-adbc metadata lookup: "<code> <StatusText>", not "Error <code>".
+        let foundry = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "[bq] Could not get metadata for table `proj`.`dataset`.`tbl`: \
+             404 Not Found: Not found: Table proj:dataset.tbl",
+        );
+        assert!(is_bigquery_not_found_error(&foundry));
+
+        // bigquery-adbc query job: no HTTP code at all, only the reason.
+        let foundry_job = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "[bq] Could not complete job: notFound: Not found: Dataset \
+             proj:dataset was not found in location US ()",
+        );
+        assert!(is_bigquery_not_found_error(&foundry_job));
+
+        // Other failures must still propagate.
+        let denied = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "googleapi: Error 403: Access Denied, accessDenied",
+        );
+        assert!(!is_bigquery_not_found_error(&denied));
+
+        let invalid = AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "[bq] Could not complete job: invalidQuery: Syntax error (query)",
+        );
+        assert!(!is_bigquery_not_found_error(&invalid));
     }
 }

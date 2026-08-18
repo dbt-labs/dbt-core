@@ -17,6 +17,7 @@ fn test_args() -> Arc<DocsServeArgs> {
         no_open: true,
         has_dbt_state: false,
         send_anonymous_usage_stats: true,
+        site_dir: None,
     })
 }
 

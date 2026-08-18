@@ -115,7 +115,11 @@ fn format_missing(names: &[String]) -> String {
 }
 
 pub fn execute(args: PypiPublishArgs) -> ExitCode {
-    let spec = match pyproject::discover() {
+    let spec = match &args.project_dir {
+        Some(dir) => pyproject::discover_at(dir),
+        None => pyproject::discover(),
+    };
+    let spec = match spec {
         Ok(s) => s,
         Err(e) => {
             eprintln!("error: {e:#}");
@@ -128,13 +132,6 @@ pub fn execute(args: PypiPublishArgs) -> ExitCode {
             return ExitCode::from(2);
         }
     }
-    let target = match PublishTarget::from_env(args.environment) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("error: {e:#}");
-            return ExitCode::from(64);
-        }
-    };
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -143,6 +140,29 @@ pub fn execute(args: PypiPublishArgs) -> ExitCode {
         Err(e) => {
             eprintln!("error: failed to start async runtime: {e}");
             return ExitCode::from(2);
+        }
+    };
+
+    // Build-only mode: assemble the sdist into `--sdist-out` and stop. The
+    // release pipeline stages it to S3/CDN itself, so no upload target is needed.
+    if let Some(out_dir) = &args.sdist_out {
+        return match rt.block_on(build_only_sdist(&args, &spec, out_dir)) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e:#}");
+                ExitCode::from(2)
+            }
+        };
+    }
+
+    let target = match PublishTarget::from_env(
+        args.environment
+            .expect("clap requires --environment unless --sdist-out"),
+    ) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            return ExitCode::from(64);
         }
     };
     match rt.block_on(run_publish(&args, &spec, target)) {
@@ -154,6 +174,40 @@ pub fn execute(args: PypiPublishArgs) -> ExitCode {
     }
 }
 
+/// Builds the download-at-install sdist into `out_dir` without uploading it.
+async fn build_only_sdist(
+    args: &PypiPublishArgs,
+    spec: &pyproject::Spec,
+    out_dir: &Path,
+) -> Result<()> {
+    let http = http_client()?;
+    // clap's `requires` guarantees `--version` alongside `--download-base-url`,
+    // which `--sdist-out` also requires.
+    let base_url = args
+        .download_base_url
+        .as_deref()
+        .context("--sdist-out requires --download-base-url")?;
+    let version = args
+        .version
+        .as_deref()
+        .expect("clap requires --version with --download-base-url");
+    fs::create_dir_all(out_dir)
+        .with_context(|| format!("create sdist out dir {}", out_dir.display()))?;
+    let sdist = build_release_sdist(
+        &http,
+        spec,
+        version,
+        base_url,
+        &args.targets,
+        &args.python_tag,
+        &args.abi_tag,
+        out_dir,
+    )
+    .await?;
+    eprintln!("✓ sdist: {}", sdist.display());
+    Ok(())
+}
+
 /// Resolves what to publish — a freshly-built sdist (`--download-base-url`) or
 /// local wheels — and uploads it to `target`.
 async fn run_publish(
@@ -162,42 +216,50 @@ async fn run_publish(
     target: PublishTarget,
 ) -> Result<()> {
     // `_tmp` keeps the sdist's temp dir alive until the upload finishes.
-    let (dists, _tmp): (Vec<(PathBuf, DistKind)>, _) = if let Some(base_url) =
-        &args.download_base_url
-    {
-        let http = http_client()?;
-        // clap's `requires` guarantees `--version` is set alongside the base url.
-        let version = args
-            .version
-            .as_deref()
-            .expect("clap requires --version with --download-base-url");
-        let tmp = tempfile::tempdir().context("create temp dir for sdist")?;
-        let sdist =
-            build_release_sdist(&http, spec, version, base_url, &args.targets, tmp.path()).await?;
-        (vec![(sdist, DistKind::Sdist)], Some(tmp))
-    } else {
-        let dist_dir = args
-            .dist
-            .clone()
-            .unwrap_or_else(|| cargo_workspace_root().join("target").join("wheels"));
-        let wheels = discover_wheels(&dist_dir, &spec.wheel_name, args.version.as_deref())?;
-        if wheels.is_empty() {
-            let suffix = args
+    let (dists, _tmp): (Vec<(PathBuf, DistKind)>, _) =
+        if let Some(base_url) = &args.download_base_url {
+            let http = http_client()?;
+            // clap's `requires` guarantees `--version` is set alongside the base url.
+            let version = args
                 .version
                 .as_deref()
-                .map(|v| format!(" at version {v}"))
-                .unwrap_or_default();
-            bail!(
-                "no `{}` wheel(s){suffix} in {}.",
-                spec.wheel_name,
-                dist_dir.display()
-            );
-        }
-        (
-            wheels.into_iter().map(|w| (w, DistKind::Wheel)).collect(),
-            None,
-        )
-    };
+                .expect("clap requires --version with --download-base-url");
+            let tmp = tempfile::tempdir().context("create temp dir for sdist")?;
+            let sdist = build_release_sdist(
+                &http,
+                spec,
+                version,
+                base_url,
+                &args.targets,
+                &args.python_tag,
+                &args.abi_tag,
+                tmp.path(),
+            )
+            .await?;
+            (vec![(sdist, DistKind::Sdist)], Some(tmp))
+        } else {
+            let dist_dir = args
+                .dist
+                .clone()
+                .unwrap_or_else(|| cargo_workspace_root().join("target").join("wheels"));
+            let wheels = discover_wheels(&dist_dir, &spec.wheel_name, args.version.as_deref())?;
+            if wheels.is_empty() {
+                let suffix = args
+                    .version
+                    .as_deref()
+                    .map(|v| format!(" at version {v}"))
+                    .unwrap_or_default();
+                bail!(
+                    "no `{}` wheel(s){suffix} in {}.",
+                    spec.wheel_name,
+                    dist_dir.display()
+                );
+            }
+            (
+                wheels.into_iter().map(|w| (w, DistKind::Wheel)).collect(),
+                None,
+            )
+        };
 
     eprintln!(
         "→ publishing {} `{}` artifact(s):",

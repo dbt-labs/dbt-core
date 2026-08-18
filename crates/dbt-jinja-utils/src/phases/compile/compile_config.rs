@@ -103,7 +103,7 @@ impl Object for CompileConfig {
                                     to access the custom config value if intended.",
                                     name, name, name, name, name
                                 ).with_location(location);
-                                emit_warn_log_from_fs_error(error, None);
+                                emit_warn_log_from_fs_error(error);
                             }
                         }
                         // Always return default, don't return meta values
@@ -163,7 +163,7 @@ impl Object for CompileConfig {
                                     to access the custom config value if intended.",
                                     name, name, name, name, name
                                 ).with_location(location);
-                                emit_warn_log_from_fs_error(error, None);
+                                emit_warn_log_from_fs_error(error);
                             }
                         }
                         // Always throw an error, don't return meta values

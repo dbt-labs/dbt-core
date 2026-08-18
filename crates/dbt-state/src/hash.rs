@@ -1,16 +1,16 @@
 use dbt_common::path::DbtPath;
 use dbt_schemas::schemas::{
-    DbtModel, DbtSeed, DbtTest, InternalDbtNode, InternalDbtNodeAttributes, common::Access,
-    config_excluded_keys, macros::DbtMacro,
+    DbtModel, DbtSeed, DbtTest, InternalDbtNode, InternalDbtNodeAttributes, config_excluded_keys,
+    macros::DbtMacro,
 };
 use md5;
 use serde::Serialize;
-use serde_json::to_string;
+use serde_json::{Value as JsonValue, ser::Formatter, to_string};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
 };
-use std::{io, io::BufReader};
+use std::{io, io::BufReader, io::Write};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -39,30 +39,30 @@ pub fn node_state_hashes<'a>(
     let type_erased_node = node.as_any();
 
     let node_body_hash = type_erased_node.downcast_ref::<DbtSeed>().map_or_else(
-        || node_body_hash(node),
+        || Ok(node_body_hash(node)),
         |s| seed_node_body_hash(s, project_root).map(Some),
     )?;
     let node_configs_hash = node_configs_hash(node)?;
     let node_persisted_descriptions_hash = node_persisted_docs_hash(node)?;
 
-    let node_macros_hash = node_macros_hash(node, macro_resolver)?;
+    let node_macros_hash = node_macros_hash(node, macro_resolver);
     let mut node_contract_hash = None;
     let node_fqn = Some(node.selector_string());
 
     let node_hash = if let Some(model_node) = type_erased_node.downcast_ref::<DbtModel>() {
-        node_contract_hash = Some(model_node_contract_hash(model_node)?);
+        node_contract_hash = Some(model_node_contract_hash(model_node));
         let node_ref_representation_hash = model_node_ref_representation_hash(model_node)?;
 
         // ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L180
-        hash_md5_list(vec![
-            node_body_hash.as_ref(),
-            node_configs_hash.as_ref(),
-            node_persisted_descriptions_hash.as_ref(),
-            node_macros_hash.as_ref(),
-            node_fqn.as_ref(),
-            node_contract_hash.as_ref(),
-            node_ref_representation_hash.as_ref(),
-        ])?
+        hash_parts(&[
+            node_body_hash.as_deref(),
+            node_configs_hash.as_deref(),
+            node_persisted_descriptions_hash.as_deref(),
+            node_macros_hash.as_deref(),
+            node_fqn.as_deref(),
+            node_contract_hash.as_deref(),
+            Some(node_ref_representation_hash.as_str()),
+        ])
     } else if type_erased_node.downcast_ref::<DbtSeed>().is_some() {
         // seeds just return the body hash directly or an empty string if it is not populated
         // ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L203
@@ -73,17 +73,17 @@ pub fn node_state_hashes<'a>(
         // __test_attr__.test_metadata being supplied means it's a generic test as opposed to a singular test
         // to match the Python code, we only have a special case for generic tests
         // ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L193
-        hash_md5_list(vec![node_configs_hash.as_ref(), node_fqn.as_ref()])?
+        hash_parts(&[node_configs_hash.as_deref(), node_fqn.as_deref()])
     } else {
         // fallback node_hash impl that covers a bunch of bases on the other node types
         // ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L43
-        hash_md5_list(vec![
-            node_body_hash.as_ref(),
-            node_configs_hash.as_ref(),
-            node_persisted_descriptions_hash.as_ref(),
-            node_macros_hash.as_ref(),
-            node_fqn.as_ref(),
-        ])?
+        hash_parts(&[
+            node_body_hash.as_deref(),
+            node_configs_hash.as_deref(),
+            node_persisted_descriptions_hash.as_deref(),
+            node_macros_hash.as_deref(),
+            node_fqn.as_deref(),
+        ])
     };
 
     let state_hashes = NodeStateHashes {
@@ -98,27 +98,14 @@ pub fn node_state_hashes<'a>(
     Ok(state_hashes)
 }
 
-#[derive(Debug, Serialize)]
-struct PersistedDocsHashValues<'a> {
-    description: Option<&'a str>,
-    columns: Option<BTreeMap<&'a str, &'a str>>,
-}
-
-#[derive(Serialize)]
-struct NodeRefRepresentationHashValues<'a> {
-    access: Option<&'a Access>,
-    deprecation_date: Option<&'a str>,
-    latest_version: &'a str,
-}
-
-fn node_body_hash(node: &dyn InternalDbtNode) -> Result<Option<String>, NodeHashError> {
+fn node_body_hash(node: &dyn InternalDbtNode) -> Option<String> {
     //ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L58
+    // Python hashes the raw string via `str()`, so the body must not be JSON-encoded.
     node.common()
         .raw_code
-        .as_ref()
+        .as_deref()
         .filter(|rc| !rc.is_empty())
-        .map(hash_md5)
-        .transpose()
+        .map(|rc| hash_parts(&[Some(rc)]))
 }
 
 fn node_configs_hash(node: &dyn InternalDbtNode) -> Result<Option<String>, NodeHashError> {
@@ -133,7 +120,7 @@ fn node_configs_hash(node: &dyn InternalDbtNode) -> Result<Option<String>, NodeH
         .collect::<BTreeMap<_, _>>();
 
     if !filtered.is_empty() {
-        hash_md5(&filtered).map(Some)
+        hash_json(&filtered).map(Some)
     } else {
         Ok(None)
     }
@@ -141,61 +128,57 @@ fn node_configs_hash(node: &dyn InternalDbtNode) -> Result<Option<String>, NodeH
 
 fn node_persisted_docs_hash(node: &dyn InternalDbtNode) -> Result<Option<String>, NodeHashError> {
     // ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L76
+    // Python builds `parts` incrementally, so a key whose `persist_docs` flag is unset is
+    // *absent* rather than `null`, and an empty `parts` yields `None` instead of a hash.
     let base_attr = node.base();
+    let Some(persist_docs) = base_attr.persist_docs.as_ref() else {
+        return Ok(None);
+    };
 
-    base_attr
-        .persist_docs
-        .as_ref()
-        .filter(|pd| pd.columns.is_some() || pd.relation.is_some())
-        .map(|d| {
-            let mut hash_values = PersistedDocsHashValues {
-                description: None,
-                columns: None,
-            };
+    let mut parts: BTreeMap<&str, JsonValue> = BTreeMap::new();
 
-            if let Some(persist_relation_description) = d.relation
-                && persist_relation_description
-            {
-                let description = node.common().description.as_deref().unwrap_or("");
-                hash_values.description = Some(description);
-            }
+    if persist_docs.relation == Some(true) {
+        let description = node.common().description.as_deref().unwrap_or("");
+        parts.insert("description", JsonValue::from(description));
+    }
 
-            if let Some(persist_column_descriptions) = d.columns
-                && persist_column_descriptions
-            {
-                let cols = base_attr
-                    .columns
-                    .iter()
-                    .map(|col| {
-                        let name = &*col.name;
-                        let description = col.description.as_deref().unwrap_or("");
-                        (name, description)
-                    })
-                    .collect::<BTreeMap<_, _>>();
+    if persist_docs.columns == Some(true) {
+        let cols = base_attr
+            .columns
+            .iter()
+            .map(|col| {
+                let name = &*col.name;
+                let description = col.description.as_deref().unwrap_or("");
+                (name, description)
+            })
+            .collect::<BTreeMap<_, _>>();
 
-                hash_values.columns = Some(cols);
-            }
+        parts.insert("columns", serde_json::to_value(cols)?);
+    }
 
-            hash_md5(&hash_values)
-        })
-        .transpose()
+    if parts.is_empty() {
+        return Ok(None);
+    }
+
+    hash_json(&parts).map(Some)
 }
 
 fn node_macros_hash<'a>(
     node: &'a dyn InternalDbtNode,
     macro_resolver: impl Fn(&str) -> Option<&'a DbtMacro>,
-) -> Result<Option<String>, NodeHashError> {
+) -> Option<String> {
     //ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L93
     if node.base().depends_on.macros.is_empty() {
-        return Ok(None);
+        return None;
     }
 
+    // Python hashes `"".join(macro_sqls)`, i.e. the macro bodies concatenated bare.
     let macro_sqls = resolve_macro_tree(node, macro_resolver)
         .values()
-        .map(|m| Some(&*m.macro_sql))
-        .collect::<Vec<_>>();
+        .map(|m| m.macro_sql.as_str())
+        .collect::<String>();
 
-    hash_md5_list(macro_sqls).map(Some)
+    Some(hash_parts(&[Some(macro_sqls.as_str())]))
 }
 
 fn resolve_macro_tree<'a>(
@@ -228,7 +211,7 @@ fn resolve_macro_tree<'a>(
     all_macros
 }
 
-fn model_node_contract_hash(node: &DbtModel) -> Result<String, NodeHashError> {
+fn model_node_contract_hash(node: &DbtModel) -> String {
     //ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L152
     let fallback = "enforced:false";
 
@@ -237,7 +220,12 @@ fn model_node_contract_hash(node: &DbtModel) -> Result<String, NodeHashError> {
         .contract
         .as_ref()
         .map(|contract| {
-            let checksum_string = contract.checksum.as_ref().and_then(|c| to_string(c).ok());
+            // Python interpolates the checksum into an f-string, so a string checksum must
+            // render bare. `to_string` would quote it.
+            let checksum_string = contract
+                .checksum
+                .as_ref()
+                .and_then(|c| c.as_str().map(str::to_owned).or_else(|| to_string(c).ok()));
 
             if contract.enforced
                 && let Some(checksum) = checksum_string
@@ -249,24 +237,42 @@ fn model_node_contract_hash(node: &DbtModel) -> Result<String, NodeHashError> {
         })
         .unwrap_or_else(|| fallback.to_owned());
 
-    hash_md5(&value_to_hash)
+    hash_parts(&[Some(value_to_hash.as_str())])
 }
 
-fn model_node_ref_representation_hash(node: &DbtModel) -> Result<Option<String>, NodeHashError> {
+fn model_node_ref_representation_hash(node: &DbtModel) -> Result<String, NodeHashError> {
     //ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L170
-    node.latest_version()
-        .map(|v| {
-            let lv = v.to_string();
-            let access = node.get_access();
-            let fields = NodeRefRepresentationHashValues {
-                latest_version: lv.as_str(),
-                access: access.as_ref(),
-                deprecation_date: node.__model_attr__.deprecation_date.as_deref(),
-            };
+    // Python gates on `hasattr(node, "latest_version")`, which is always true for a model,
+    // so this component is always present - it is NOT skipped for unversioned models.
+    // `access` and `deprecation_date` go through `str()`, making an absent value the literal
+    // string "None"; `latest_version` is passed through raw, so it keeps its JSON type.
+    let mut parts: BTreeMap<&str, JsonValue> = BTreeMap::new();
 
-            hash_md5(&fields)
-        })
-        .transpose()
+    parts.insert(
+        "latest_version",
+        match node.latest_version() {
+            Some(v) => serde_json::to_value(v)?,
+            None => JsonValue::Null,
+        },
+    );
+    parts.insert(
+        "access",
+        JsonValue::from(
+            node.get_access()
+                .map_or_else(|| "None".to_owned(), |a| a.to_string()),
+        ),
+    );
+    parts.insert(
+        "deprecation_date",
+        JsonValue::from(
+            node.__model_attr__
+                .deprecation_date
+                .as_deref()
+                .unwrap_or("None"),
+        ),
+    );
+
+    hash_json(&parts)
 }
 
 fn seed_node_body_hash(
@@ -284,26 +290,91 @@ fn seed_node_body_hash(
     Ok(format!("{:x}", ctx.compute()))
 }
 
-fn hash_md5<T>(value: &T) -> Result<String, NodeHashError>
-where
-    T: Serialize + ?Sized,
-{
-    hash_md5_list(vec![Some(value)])
+/// Mirrors Python `_calculate_hash(*args)`:
+/// `md5("".join(str(x) for x in args))`.
+///
+/// `None` entries are skipped, mirroring the `if p is not None` filter Python applies
+/// when composing parts. An empty slice hashes `""`, as Python's empty join does.
+/// ref: https://github.com/fivetran/query-cache/blob/4ab87c72f2783c230905c5c75ec19eb76314069e/clients/dbt_state/src/dbt_state/node_hash_calculator.py#L29
+fn hash_parts(parts: &[Option<&str>]) -> String {
+    let joined: String = parts.iter().flatten().copied().collect();
+    format!("{:x}", md5::compute(joined))
 }
 
-fn hash_md5_list<T>(values: Vec<Option<&T>>) -> Result<String, NodeHashError>
+/// Mirrors Python `_calculate_hash(json.dumps(value, sort_keys=True))`.
+///
+/// Key sorting must come from the value itself (use `BTreeMap`, not a struct, wherever
+/// Python relies on `sort_keys=True` — a struct serializes in declaration order).
+fn hash_json<T>(value: &T) -> Result<String, NodeHashError>
 where
     T: Serialize + ?Sized,
 {
-    // if values is empty, this will result in "" being hashed which mimics the Python implementation
-    let joined = values
-        .iter()
-        .filter_map(|maybe_v| maybe_v.and_then(|v| Some(to_string(v))))
-        .collect::<Result<Vec<_>, _>>()?
-        .join("");
+    Ok(format!("{:x}", md5::compute(python_json(value)?)))
+}
 
-    let digest = md5::compute(joined);
-    Ok(format!("{:x}", digest))
+fn python_json<T>(value: &T) -> Result<String, NodeHashError>
+where
+    T: Serialize + ?Sized,
+{
+    let mut buf = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut buf, PythonJsonFormatter);
+    value.serialize(&mut ser)?;
+    // `serde_json` only ever writes UTF-8, and the formatter below emits ASCII.
+    Ok(String::from_utf8(buf).expect("serde_json emits valid UTF-8"))
+}
+
+/// Makes `serde_json` match `json.dumps`'s defaults, which differ in two ways that both
+/// change the bytes fed to md5: separators (`", "` / `": "` vs serde's compact `,` / `:`)
+/// and `ensure_ascii=True` (`\uXXXX` escapes vs serde's raw UTF-8).
+struct PythonJsonFormatter;
+
+impl Formatter for PythonJsonFormatter {
+    fn begin_array_value<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
+    where
+        W: ?Sized + Write,
+    {
+        if first {
+            Ok(())
+        } else {
+            writer.write_all(b", ")
+        }
+    }
+
+    fn begin_object_key<W>(&mut self, writer: &mut W, first: bool) -> io::Result<()>
+    where
+        W: ?Sized + Write,
+    {
+        if first {
+            Ok(())
+        } else {
+            writer.write_all(b", ")
+        }
+    }
+
+    fn begin_object_value<W>(&mut self, writer: &mut W) -> io::Result<()>
+    where
+        W: ?Sized + Write,
+    {
+        writer.write_all(b": ")
+    }
+
+    fn write_string_fragment<W>(&mut self, writer: &mut W, fragment: &str) -> io::Result<()>
+    where
+        W: ?Sized + Write,
+    {
+        for c in fragment.chars() {
+            if c.is_ascii() {
+                writer.write_all(c.encode_utf8(&mut [0u8; 4]).as_bytes())?;
+            } else {
+                // Python escapes astral characters as UTF-16 surrogate pairs.
+                let mut buf = [0u16; 2];
+                for unit in c.encode_utf16(&mut buf) {
+                    write!(writer, "\\u{unit:04x}")?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -312,7 +383,7 @@ mod tests {
     use dbt_common::path::DbtPath;
     use dbt_schemas::schemas::{
         CommonAttributes, DbtSeedAttr, TestMetadata,
-        common::{DbtContract, PersistDocsConfig},
+        common::{Access, DbtContract, PersistDocsConfig},
         dbt_column::DbtColumn,
         macros::MacroDependsOn,
         serde::StringOrInteger,
@@ -364,20 +435,20 @@ mod tests {
         fn node_body_hash_present_when_raw_code_set() {
             let mut node = test_node(&["project", "models", "test_model"]);
             node.__common_attr__.raw_code = Some("SELECT * FROM table".to_string());
-            assert!(node_body_hash(&node).unwrap().is_some());
+            assert!(node_body_hash(&node).is_some());
         }
 
         #[test]
         fn node_body_hash_none_when_raw_code_absent() {
             let node = test_node(&["project", "models", "test_model"]);
-            assert_eq!(node_body_hash(&node).unwrap(), None);
+            assert_eq!(node_body_hash(&node), None);
         }
 
         #[test]
         fn node_body_hash_none_when_raw_code_empty() {
             let mut node = test_node(&["project", "models", "test_model"]);
             node.__common_attr__.raw_code = Some(String::new());
-            assert_eq!(node_body_hash(&node).unwrap(), None);
+            assert_eq!(node_body_hash(&node), None);
         }
 
         #[test]
@@ -386,7 +457,7 @@ mod tests {
             a.__common_attr__.raw_code = Some("SELECT * FROM table1".to_string());
             let mut b = test_node(&["project", "models", "test_model"]);
             b.__common_attr__.raw_code = Some("SELECT * FROM table2".to_string());
-            assert_ne!(node_body_hash(&a).unwrap(), node_body_hash(&b).unwrap());
+            assert_ne!(node_body_hash(&a), node_body_hash(&b));
         }
 
         #[test]
@@ -639,10 +710,7 @@ mod tests {
         fn node_macros_hash_none_when_no_macros_referenced() {
             let node = test_node(&["project", "models", "test_model"]);
             let macros_map: BTreeMap<String, DbtMacro> = BTreeMap::new();
-            assert_eq!(
-                node_macros_hash(&node, resolver(&macros_map)).unwrap(),
-                None
-            );
+            assert_eq!(node_macros_hash(&node, resolver(&macros_map)), None);
         }
 
         #[test]
@@ -658,11 +726,7 @@ mod tests {
                 },
             )]);
 
-            assert!(
-                node_macros_hash(&node, resolver(&macros_map))
-                    .unwrap()
-                    .is_some()
-            );
+            assert!(node_macros_hash(&node, resolver(&macros_map)).is_some());
         }
 
         #[test]
@@ -687,11 +751,11 @@ mod tests {
             let mut with_two = test_node(&["project", "models", "test_model"]);
             with_two.__base_attr__.depends_on.macros =
                 vec!["macro1".to_string(), "macro2".to_string()];
-            let two_hash = node_macros_hash(&with_two, resolver(&macros_map)).unwrap();
+            let two_hash = node_macros_hash(&with_two, resolver(&macros_map));
 
             let mut with_one = test_node(&["project", "models", "test_model"]);
             with_one.__base_attr__.depends_on.macros = vec!["macro1".to_string()];
-            let one_hash = node_macros_hash(&with_one, resolver(&macros_map)).unwrap();
+            let one_hash = node_macros_hash(&with_one, resolver(&macros_map));
 
             assert_ne!(two_hash, one_hash);
         }
@@ -723,10 +787,7 @@ mod tests {
                     ..Default::default()
                 },
             )]);
-            assert_eq!(
-                node_macros_hash(&node, resolver(&macros_map)).unwrap(),
-                None
-            );
+            assert_eq!(node_macros_hash(&node, resolver(&macros_map)), None);
         }
 
         #[test]
@@ -753,7 +814,7 @@ mod tests {
                     },
                 ),
             ]);
-            let with_dep_hash = node_macros_hash(&node, resolver(&macros_with_dep)).unwrap();
+            let with_dep_hash = node_macros_hash(&node, resolver(&macros_with_dep));
 
             let macros_without_dep = BTreeMap::from([(
                 "macro1".to_string(),
@@ -762,7 +823,7 @@ mod tests {
                     ..Default::default()
                 },
             )]);
-            let without_dep_hash = node_macros_hash(&node, resolver(&macros_without_dep)).unwrap();
+            let without_dep_hash = node_macros_hash(&node, resolver(&macros_without_dep));
 
             assert_ne!(with_dep_hash, without_dep_hash);
         }
@@ -772,11 +833,7 @@ mod tests {
             let mut node = test_node(&["project", "models", "test_model"]);
             node.__base_attr__.depends_on.macros = vec!["missing_macro".to_string()];
             let macros_map: BTreeMap<String, DbtMacro> = BTreeMap::new();
-            assert!(
-                node_macros_hash(&node, resolver(&macros_map))
-                    .unwrap()
-                    .is_some()
-            );
+            assert!(node_macros_hash(&node, resolver(&macros_map)).is_some());
         }
 
         #[test]
@@ -796,9 +853,9 @@ mod tests {
                 })
                 .collect();
 
-            let first = node_macros_hash(&node, resolver(&macros_map)).unwrap();
+            let first = node_macros_hash(&node, resolver(&macros_map));
             for _ in 0..9 {
-                let repeat = node_macros_hash(&node, resolver(&macros_map)).unwrap();
+                let repeat = node_macros_hash(&node, resolver(&macros_map));
                 assert_eq!(first, repeat);
             }
         }
@@ -823,8 +880,8 @@ mod tests {
             });
 
             assert_ne!(
-                model_node_contract_hash(&enforced).unwrap(),
-                model_node_contract_hash(&not_enforced).unwrap()
+                model_node_contract_hash(&enforced),
+                model_node_contract_hash(&not_enforced)
             );
         }
 
@@ -846,8 +903,8 @@ mod tests {
 
             // Both collapse to the "enforced:false" state per query-cache's node_contract_hash.
             assert_eq!(
-                model_node_contract_hash(&enforced_no_checksum).unwrap(),
-                model_node_contract_hash(&not_enforced_with_checksum).unwrap()
+                model_node_contract_hash(&enforced_no_checksum),
+                model_node_contract_hash(&not_enforced_with_checksum)
             );
         }
 
@@ -862,8 +919,8 @@ mod tests {
             });
 
             assert_eq!(
-                model_node_contract_hash(&no_contract).unwrap(),
-                model_node_contract_hash(&not_enforced).unwrap()
+                model_node_contract_hash(&no_contract),
+                model_node_contract_hash(&not_enforced)
             );
         }
     }
@@ -878,7 +935,7 @@ mod tests {
             node.__model_attr__.access = Access::Public;
             node.__model_attr__.deprecation_date = Some("2025-12-31".to_string());
 
-            assert!(model_node_ref_representation_hash(&node).unwrap().is_some());
+            assert_eq!(model_node_ref_representation_hash(&node).unwrap().len(), 32);
         }
 
         #[test]
@@ -1126,5 +1183,121 @@ mod tests {
         let hashes = node_state_hashes(&seed, &project_root, resolver(&macros_map)).unwrap();
 
         assert_eq!(hashes.node_hash, hashes.node_body_hash.unwrap());
+    }
+}
+
+/// Parity tests against digests generated by the real Python implementation
+/// (`node_hash_calculator.py` @ blob `54af5cb3`). These are *absolute* assertions: unlike
+/// the relative tests above, they fail if the encoding drifts from Python at all.
+#[cfg(test)]
+mod python_parity {
+    use super::*;
+
+    #[test]
+    fn hash_parts_matches_python_calculate_hash() {
+        // md5("SELECT 1"), not md5("\"SELECT 1\"")
+        assert_eq!(
+            hash_parts(&[Some("SELECT 1")]),
+            "b1698e52a0f16203489454196a0c6307"
+        );
+        // `None` entries are skipped, mirroring Python's `if p is not None`
+        assert_eq!(
+            hash_parts(&[Some("alpha"), None, Some("gamma")]),
+            "e789ea650d1653e1bb3d9dd9bf7d4343"
+        );
+        // an empty join hashes ""
+        assert_eq!(hash_parts(&[]), "d41d8cd98f00b204e9800998ecf8427e");
+    }
+
+    #[test]
+    fn hash_json_uses_python_dumps_separators() {
+        let cfg: BTreeMap<&str, JsonValue> = BTreeMap::from([
+            ("materialized", JsonValue::from("table")),
+            ("enabled", JsonValue::from(true)),
+        ]);
+        assert_eq!(
+            python_json(&cfg).unwrap(),
+            r#"{"enabled": true, "materialized": "table"}"#
+        );
+        assert_eq!(hash_json(&cfg).unwrap(), "eba87d5f0d3687e809ad8a92d18836b0");
+    }
+
+    #[test]
+    fn hash_json_escapes_non_ascii_like_ensure_ascii() {
+        let cfg: BTreeMap<&str, &str> = BTreeMap::from([("desc", "café — naïve")]);
+        assert_eq!(
+            python_json(&cfg).unwrap(),
+            r#"{"desc": "caf\u00e9 \u2014 na\u00efve"}"#
+        );
+        assert_eq!(hash_json(&cfg).unwrap(), "73c3bee704059be2e9c22398a0f37dbc");
+    }
+
+    #[test]
+    fn hash_json_escapes_astral_chars_as_surrogate_pairs() {
+        let cfg: BTreeMap<&str, &str> = BTreeMap::from([("emoji", "ok 😀")]);
+        assert_eq!(
+            python_json(&cfg).unwrap(),
+            r#"{"emoji": "ok \ud83d\ude00"}"#
+        );
+        assert_eq!(hash_json(&cfg).unwrap(), "578b1abd690250b685d42106abc2a9f1");
+    }
+
+    #[test]
+    fn contract_strings_match_python() {
+        // f"enforced:true|checksum:{checksum}" - lowercase literal, checksum unquoted
+        assert_eq!(
+            hash_parts(&[Some("enforced:true|checksum:abc123")]),
+            "891e7c8be2eed79961a4a84c64022605"
+        );
+        assert_eq!(
+            hash_parts(&[Some("enforced:false")]),
+            "298a88779c630d09cfb26e926f3af91b"
+        );
+    }
+
+    #[test]
+    fn macros_hash_concatenates_bare() {
+        assert_eq!(
+            hash_parts(&[Some("SQL1SQL2")]),
+            "0d672178832f67ee8e6353fa7eb9a5fe"
+        );
+    }
+
+    #[test]
+    fn persisted_docs_shapes_match_python() {
+        // Only the set key is present, and `columns` sorts before `description`.
+        let cols: BTreeMap<&str, &str> = BTreeMap::from([("id", "the id"), ("name", "the name")]);
+        let only_columns: BTreeMap<&str, JsonValue> =
+            BTreeMap::from([("columns", serde_json::to_value(&cols).unwrap())]);
+        assert_eq!(
+            hash_json(&only_columns).unwrap(),
+            "43a13119e7e34227d32da6168013e48d"
+        );
+
+        let only_description: BTreeMap<&str, JsonValue> =
+            BTreeMap::from([("description", JsonValue::from("a model"))]);
+        assert_eq!(
+            hash_json(&only_description).unwrap(),
+            "f540b8920872d148eaffa61ee958df95"
+        );
+    }
+
+    #[test]
+    fn ref_representation_defaults_match_python() {
+        // `access`/`deprecation_date` go through `str()`, so an absent value is the literal
+        // "None"; `latest_version` is passed through raw and stays JSON `null`.
+        let parts: BTreeMap<&str, JsonValue> = BTreeMap::from([
+            ("latest_version", JsonValue::Null),
+            ("access", JsonValue::from("protected")),
+            ("deprecation_date", JsonValue::from("None")),
+        ]);
+        assert_eq!(
+            python_json(&parts).unwrap(),
+            r#"{"access": "protected", "deprecation_date": "None", "latest_version": null}"#
+        );
+        assert_eq!(
+            hash_json(&parts).unwrap(),
+            "dd915b2a6c70d306ecf120a98e2b99ba"
+        );
     }
 }

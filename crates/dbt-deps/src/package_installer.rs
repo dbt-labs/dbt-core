@@ -1,13 +1,10 @@
 //! Concurrent package installation: one trait impl per unpinned package kind.
 
 use std::path::Path;
-use std::sync::Arc;
 
-use dbt_common::io_utils::StatusReporter;
 use dbt_common::tracing::dbt_emit::emit_info_log_message;
-use dbt_common::tracing::formatters::deps::get_package_display_name;
 use dbt_common::tracing::span_info::{SpanStatusRecorder as _, update_span_attrs};
-use dbt_common::{FsResult, constants::INSTALLING, create_info_span, stdfs, tokiofs};
+use dbt_common::{FsResult, create_info_span, stdfs, tokiofs};
 use dbt_telemetry::{DepsPackageInstalled, PackageType};
 use tracing::Instrument as _;
 use vortex_events::package_install_event;
@@ -59,7 +56,6 @@ pub(crate) trait PackageInstaller {
     async fn install(&self, ctx: &DepsOperationContext<'_>, dest: &Path) -> FsResult<()> {
         ctx.check_cancellation()?;
         let attrs = self.span_attrs();
-        report_progress(&attrs, ctx.io.status_reporter.as_ref());
         let span = create_info_span(attrs);
 
         let mut outcome = InstallOutcome::default();
@@ -87,16 +83,6 @@ pub(crate) trait PackageInstaller {
         });
 
         result
-    }
-}
-
-fn report_progress(
-    attrs: &DepsPackageInstalled,
-    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
-) {
-    if let Some(reporter) = status_reporter {
-        let detail = get_package_display_name(attrs).unwrap_or("unknown");
-        reporter.show_progress(INSTALLING, detail, None);
     }
 }
 
@@ -299,8 +285,7 @@ impl PackageInstaller for TarballUnpinnedPackage {
         }
 
         let dbt_project =
-            read_and_validate_dbt_project(ctx.io, &extract_path, false, ctx.jinja_env, ctx.vars)
-                .await?;
+            read_and_validate_dbt_project(&extract_path, false, ctx.jinja_env, ctx.vars).await?;
         let project_name = dbt_project.name;
         out.name = Some(project_name.clone());
         out.version = Some("tarball".to_string());
@@ -329,8 +314,7 @@ async fn install_git_like(
 
     // Warnings already emitted during resolve; suppress here.
     let dbt_project =
-        read_and_validate_dbt_project(ctx.io, &checkout_path, false, ctx.jinja_env, ctx.vars)
-            .await?;
+        read_and_validate_dbt_project(&checkout_path, false, ctx.jinja_env, ctx.vars).await?;
     out.name = Some(dbt_project.name.clone());
     move_dir(&checkout_path, &dest.join(&dbt_project.name)).await?;
     drop(tmp_dir);

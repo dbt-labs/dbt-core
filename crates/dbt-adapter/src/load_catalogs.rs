@@ -1,6 +1,5 @@
 //! Loads and validates `<project_root>/catalogs.yml` into a global holder.
 
-use dbt_common::io_utils::StatusReporter;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::warn_error_options::project_flags_get_value;
 use dbt_common::{ErrorCode, FsResult, fs_err};
@@ -49,9 +48,8 @@ pub fn load_catalogs(
     text_yml: yml::Value,
     path: &Path,
     project_flags: Option<&yml::Value>,
-    status_reporter: Option<&Arc<dyn StatusReporter>>,
 ) -> FsResult<()> {
-    let validated = do_load_catalogs(text_yml, path, project_flags, status_reporter)?;
+    let validated = do_load_catalogs(text_yml, path, project_flags)?;
     let mut write_guard = match CATALOGS.write() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
@@ -64,7 +62,6 @@ pub fn do_load_catalogs(
     text_yml: yml::Value,
     path: &Path,
     project_flags: Option<&yml::Value>,
-    status_reporter: Option<&Arc<dyn StatusReporter>>,
 ) -> FsResult<DbtCatalogs> {
     let _guard = yml::with_filename(Some(path.to_path_buf()));
 
@@ -88,7 +85,6 @@ pub fn do_load_catalogs(
             format!(
                 "catalogs.yml v2 schema validation is experimental, not officially supported yet, and its spec is liable to change. See {CATALOGS_V2_DISCUSSION_URL}"
             ),
-            status_reporter,
         );
         let view = catalogs.view_v2()?;
         validate_catalogs_v2(&view, path)?;

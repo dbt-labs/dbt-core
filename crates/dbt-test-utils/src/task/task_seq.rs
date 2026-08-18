@@ -10,7 +10,7 @@ use dbt_common::stdfs;
 use dbt_common::string_utils::split_into_whitespace_and_brackets;
 use dbt_common::tracing::reload::create_data_layer_for_tests;
 use dbt_common::tracing::{
-    TracingConfigProvider, dbt_data_layer_config, init_tracing_with_consumer_layer,
+    TracingConfigProvider, dbt_data_layer_config, init_tracing_with_data_layer,
 };
 use dbt_features::feature_stack::FeatureStack;
 use once_cell::sync::OnceCell;
@@ -170,7 +170,7 @@ impl TaskSeq {
 
         // Keep the guard alive for the duration of the test run so the process span
         // remains available to worker threads emitting telemetry.
-        let process_span_guard = init_tracing_with_consumer_layer(
+        let process_span_guard = init_tracing_with_data_layer(
             tracing::level_filters::LevelFilter::TRACE,
             dbt_common::tracing::dbt_process_span_attributes("dbt-tests"),
             data_layer,

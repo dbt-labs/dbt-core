@@ -320,6 +320,11 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
         "last updated",
         "=================== Errors and Warnings ====================",
         "' has been renamed to '", // TODO: remove when IA is updated with latest package names
+        // Debug-build notice emitted when DISABLE_CDN_DRIVER_CACHE makes the
+        // loader dlopen a locally-built driver instead of the CDN one. It names
+        // an absolute path on the developer's machine, so it can never match
+        // across environments and must not reach a goldie.
+        "ADBC driver is being loaded from",
     ];
 
     let mut res = content
@@ -340,7 +345,7 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
         .collect::<Vec<_>>()
         .join("\n");
 
-    if content.ends_with('\n') {
+    if !res.is_empty() && content.ends_with('\n') {
         res.push('\n');
     }
     res

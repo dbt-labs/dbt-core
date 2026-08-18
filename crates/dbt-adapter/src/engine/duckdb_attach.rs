@@ -5,13 +5,13 @@
 //!
 //! FIXME: as the number of catalog types and attach options grows, audit whether
 //! the attach composition logic here is clean and scalable — e.g. per-catalog-type
-//! attach builders rather than branching on V2CatalogType inline.
+//! attach builders rather than branching on CatalogType inline.
 
 use std::collections::HashMap;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::AdapterResult;
-use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
+use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, CatalogType, DbtCatalogsV2View};
 
 use dbt_adapter_sql::ident::escape_string_literal;
 
@@ -40,7 +40,7 @@ pub fn compose_v2_catalog_attach_stmts(
         .catalogs
         .iter()
         .filter(|catalog| {
-            matches!(catalog.catalog_type, V2CatalogType::DuckLake)
+            matches!(catalog.catalog_type, CatalogType::DuckLake)
                 || attaches_via_iceberg_rest(catalog.catalog_type)
         })
         .filter_map(|catalog| {
@@ -53,7 +53,7 @@ pub fn compose_v2_catalog_attach_stmts(
         })
     {
         let (alias, stmt) = match catalog.catalog_type {
-            V2CatalogType::DuckLake => {
+            CatalogType::DuckLake => {
                 needs_ducklake = true;
                 build_duckdb_ducklake_attach_stmt(catalog, duckdb)?
             }
@@ -279,12 +279,12 @@ fn duckdb_has_key(duckdb: &dbt_yaml::Mapping, key: &str) -> bool {
 /// `(config.duckdb key, full SQL option clause)`; the clause is emitted only
 /// when the user has not set that key, so explicit user values always win.
 /// These options require duckdb 1.5.4 / duckdb-iceberg#1017.
-fn catalog_attach_defaults(catalog_type: V2CatalogType) -> &'static [(&'static str, &'static str)] {
+fn catalog_attach_defaults(catalog_type: CatalogType) -> &'static [(&'static str, &'static str)] {
     match catalog_type {
         // Snowflake Horizon (Polaris) Iceberg REST: OAuth2 + vended credentials,
         // and a write path that supports neither staged creates nor multi-table
         // commits.
-        V2CatalogType::Horizon => &[
+        CatalogType::Horizon => &[
             ("authorization_type", "AUTHORIZATION_TYPE 'OAUTH2'"),
             (
                 "access_delegation_mode",
@@ -305,7 +305,7 @@ fn catalog_attach_defaults(catalog_type: V2CatalogType) -> &'static [(&'static s
         // REST multi-table commit, so default it off; single-table commits work.
         // (Other write-path options are left to DuckDB's defaults pending
         // confirmation against a live Unity catalog.)
-        V2CatalogType::Unity => &[(
+        CatalogType::Unity => &[(
             "disable_multi_table_commit",
             "DISABLE_MULTI_TABLE_COMMIT true",
         )],

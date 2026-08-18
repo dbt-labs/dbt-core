@@ -48,3 +48,7 @@ pub const SSL_ROOT_CERT: &str = "databricks.ssl_root_cert";
 
 /// User agent string for dbt attribution by databricks
 pub const USER_AGENT: &str = "databricks.user_agent";
+
+pub mod schema_metadata {
+    pub const QUERY_ID: &str = "DATABRICKS_QUERY_ID";
+}

@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter_core::AdapterType;
+use dbt_common::tracing::dbt_emit::emit_trace_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err, path::DbtPath};
 use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtMaterialization, OnSchemaChange};
@@ -53,11 +54,12 @@ const PERSISTED_DOCS_HASH_KEY: &str = "__persisted_docs_hash";
 
 #[derive(Clone, Debug)]
 pub struct DbtProjectInfo {
-    active_profile_name: String,
-    active_target_name: String,
-    project_name: String,
-    project_id: Option<String>, // dbt cloud project id; only present if dbt cloud is in use
-    project_root: DbtPath,
+    pub active_profile_name: String,
+    pub active_target_name: String,
+    pub project_name: String,
+    pub project_id: Option<String>, // dbt cloud project id; only present if dbt cloud is in use
+    pub project_root: DbtPath,
+    pub table_namespace: Option<String>,
 }
 
 impl From<&TaskRunnerCtx> for DbtProjectInfo {
@@ -78,6 +80,7 @@ impl From<&TaskRunnerCtx> for DbtProjectInfo {
             project_name,
             project_id,
             project_root,
+            table_namespace: profile.db_config.get_adapter_unique_id(),
         }
     }
 }
@@ -97,6 +100,9 @@ pub struct SqlRunCacheRequestContext {
     pub freshness_tolerance_seconds: i64,
     pub lenient_dependencies: Vec<String>,
     pub tolerate_nondeterminism: bool,
+    /// When set, the service first matches candidates on the unrendered node hashes carried in
+    /// `dbt_node_state` and only falls back to the compiled-SQL hash if those differ.
+    pub compare_unrendered_code: bool,
     pub full_refresh: bool,
     pub clone_time_travel_limit: Option<i64>,
     pub clone_table_properties: Option<TableProperties>,
@@ -200,7 +206,29 @@ fn build_node_state<'a, 'b>(
         node_persisted_descriptions_hash: hashes.node_persisted_descriptions_hash,
         node_macros_hash: hashes.node_macros_hash,
         node_contract_hash: hashes.node_contract_hash,
+        node_database_representation: None, //todo: implement
     };
+
+    // Every component is logged individually because the server compares them
+    // individually: a reuse decision turns on body/configs/macros agreeing, and any one of
+    // them differing is enough to fall back to the compiled-SQL hash. Logging only
+    // `node_hash` would say "something changed" without saying which.
+    emit_trace_log_message(|| {
+        format!(
+            "dbt State node hashes for {} (fqn {}): node_hash={} body={} configs={} persisted_docs={} macros={} contract={}",
+            node_state.node_unique_id,
+            node.selector_string(),
+            node_state.node_hash,
+            node_state.node_body_hash.as_deref().unwrap_or("<none>"),
+            node_state.node_configs_hash.as_deref().unwrap_or("<none>"),
+            node_state
+                .node_persisted_descriptions_hash
+                .as_deref()
+                .unwrap_or("<none>"),
+            node_state.node_macros_hash.as_deref().unwrap_or("<none>"),
+            node_state.node_contract_hash.as_deref().unwrap_or("<none>"),
+        )
+    });
 
     Ok(node_state)
 }
@@ -313,6 +341,7 @@ pub fn build_seed_values_request<'a>(
         clone_table_properties: context.clone_table_properties,
         clone_chain_depth_limit: context.clone_chain_depth_limit,
         dbt_node_state: Some(node_state),
+        table_namespace: context.dbt_project_info.table_namespace,
     }
     .into_proto())
 }
@@ -484,6 +513,8 @@ fn build_sql_request_input(
         stale_upstream_policy: context.stale_upstream_policy,
         clone_chain_depth_limit: context.clone_chain_depth_limit,
         dbt_node_state: Some(node_state),
+        compare_unrendered_code: context.compare_unrendered_code,
+        table_namespace: context.dbt_project_info.table_namespace,
     })
 }
 
@@ -827,6 +858,7 @@ mod tests {
             project_name: "test_project".to_owned(),
             project_id: None,
             project_root: "dummy-project-root".into(),
+            table_namespace: Some("adapter-unique-id".to_owned()),
         }
     }
 
@@ -955,6 +987,7 @@ mod tests {
             freshness_tolerance_seconds: 2700,
             lenient_dependencies: vec![],
             tolerate_nondeterminism: true,
+            compare_unrendered_code: false,
             full_refresh,
             clone_time_travel_limit: None,
             clone_table_properties: None,
@@ -983,6 +1016,7 @@ mod tests {
         );
         assert_eq!(request.default_catalog, "analytics");
         assert_eq!(request.execution_type, ModelExecutionType::Merge as i32);
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
         assert_eq!(
             request.labels.get("dbt_node_unique_id").unwrap(),
             "model.jaffle_shop.orders"
@@ -1350,6 +1384,7 @@ mod tests {
         assert_eq!(request.values_hash, node_state_hashes.node_hash);
         assert_eq!(request.last_modified_epoch, Some(456));
         assert_eq!(request.clone_time_travel_limit, Some(3600));
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
         assert_eq!(
             request.semantic_extras.get("column_types").unwrap(),
             "{\"id\":\"integer\"}"
@@ -1595,5 +1630,6 @@ mod tests {
         );
         // Data tests always submit with target_table=None (see build_test_sql_request).
         assert!(request.target_table.is_none());
+        assert_eq!(request.table_namespace(), "adapter-unique-id");
     }
 }

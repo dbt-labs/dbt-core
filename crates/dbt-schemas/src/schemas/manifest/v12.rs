@@ -87,17 +87,27 @@ pub struct DbtManifestV12 {
 }
 
 impl DbtManifestV12 {
-    pub fn into_map_compiled_sql(self) -> HashMap<String, Option<String>> {
+    pub fn into_map_compiled_sql(&self) -> HashMap<&str, Option<&str>> {
         self.nodes
-            .into_iter()
+            .iter()
             .filter_map(|(id, node)| match node {
-                DbtNode::Model(model) => Some((id, model.__base_attr__.compiled_code)),
-                DbtNode::Test(test) => Some((id, test.__base_attr__.compiled_code)),
-                DbtNode::Snapshot(snapshot) => Some((id, snapshot.__base_attr__.compiled_code)),
-                DbtNode::Seed(seed) => Some((id, seed.__base_attr__.compiled_code)),
+                DbtNode::Model(model) => {
+                    Some((id.as_str(), model.__base_attr__.compiled_code.as_deref()))
+                }
+                DbtNode::Test(test) => {
+                    Some((id.as_str(), test.__base_attr__.compiled_code.as_deref()))
+                }
+                DbtNode::Snapshot(snapshot) => {
+                    Some((id.as_str(), snapshot.__base_attr__.compiled_code.as_deref()))
+                }
+                DbtNode::Seed(seed) => {
+                    Some((id.as_str(), seed.__base_attr__.compiled_code.as_deref()))
+                }
                 DbtNode::Operation(_operation) => None,
                 DbtNode::Function(_function) => None,
-                DbtNode::Analysis(analysis) => Some((id, analysis.__base_attr__.compiled_code)),
+                DbtNode::Analysis(analysis) => {
+                    Some((id.as_str(), analysis.__base_attr__.compiled_code.as_deref()))
+                }
             })
             .collect::<HashMap<_, _>>()
     }

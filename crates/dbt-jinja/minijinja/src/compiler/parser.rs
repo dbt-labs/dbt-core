@@ -10,7 +10,7 @@ use crate::compiler::lexer::{Tokenizer, WhitespaceConfig};
 use crate::compiler::tokens::{Span, Token};
 use crate::error::{Error, ErrorKind};
 use crate::layout::JinjaLayoutEventKind;
-use crate::listener::TokenizerEventListener;
+use crate::listener::{BlockNameKind, TokenizerEventListener};
 use crate::syntax::SyntaxConfig;
 use crate::value::Value;
 
@@ -923,6 +923,28 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_expr_noif_or_implied_tuple(&mut self) -> Result<ast::Expr<'a>, Error> {
+        let first = ok!(self.parse_expr_noif());
+        if skip_token!(self, Token::Comma) {
+            let mut items = vec![first];
+            loop {
+                if matches_token!(self, Token::BlockEnd) || matches_token!(self, Token::Colon) {
+                    break;
+                }
+                items.push(ok!(self.parse_expr_noif()));
+                if !skip_token!(self, Token::Comma) {
+                    break;
+                }
+            }
+            Ok(ast::Expr::Tuple(Spanned::new(
+                ast::Tuple { items },
+                self.stream.expand_span(self.stream.last_span()),
+            )))
+        } else {
+            Ok(first)
+        }
+    }
+
     fn parse_expr_noif(&mut self) -> Result<ast::Expr<'a>, Error> {
         self.parse_or()
     }
@@ -1218,7 +1240,7 @@ impl<'a> Parser<'a> {
         start_open_span: Span,
         start_tag_kind: JinjaLayoutEventKind,
     ) -> Result<ast::IfCond<'a>, Error> {
-        let expr = ok!(self.parse_expr_noif());
+        let expr = ok!(self.parse_expr_noif_or_implied_tuple());
         skip_token!(self, Token::Colon);
         expect_token!(self, Token::BlockEnd, "end of block");
         let start_tag_span = self.stream.expand_span(start_open_span);
@@ -1816,13 +1838,20 @@ impl<'a> Parser<'a> {
         // full rationale. We stop *before* BlockEnd here (rather than consuming it like
         // `parse_doc` does) because `parse_snapshot_or_call_block_body` expects to
         // consume BlockEnd itself.
+        let mut drained_suffix = false;
         loop {
             match ok!(self.stream.current()) {
                 Some((&Token::BlockEnd, _)) | None => break,
                 Some(_) => {
+                    drained_suffix = true;
                     ok!(self.stream.next());
                 }
             }
+        }
+        if drained_suffix {
+            self.stream
+                .tokenizer
+                .notify_malformed_block_name(BlockNameKind::Snapshot, name, &span);
         }
         self.parse_snapshot_or_call_block_body(Some(macro_name), span)
     }
@@ -1865,14 +1894,27 @@ impl<'a> Parser<'a> {
         // parsing bug in dbt that is unreported (but let's bug-for-bug repro for now).
         // See also: `parse_snapshot`, which uses the same aggressive drain pattern.
         // Unlike here, that drain stops *before* consuming BlockEnd.
+        let mut drained_suffix = false;
         loop {
             match self.stream.next() {
                 Ok(Some((Token::BlockEnd, _))) => break,
-                Ok(_) => continue,
+                Ok(_) => {
+                    drained_suffix = true;
+                    continue;
+                }
                 Err(_) => {
+                    drained_suffix = true;
                     self.stream.tokenizer.force_advance(1)?;
                     continue;
                 }
+            }
+        }
+        // Only warn about a *valid* identifier followed by extra characters.
+        if let Some(name) = name {
+            if drained_suffix {
+                self.stream
+                    .tokenizer
+                    .notify_malformed_block_name(BlockNameKind::Docs, name, &span);
             }
         }
 
@@ -2202,4 +2244,89 @@ pub fn parse_expr(source: &str) -> Result<ast::Expr<'_>, Error> {
 
 pub fn materialization_macro_name<N: fmt::Display>(name: N, adapter: &str) -> String {
     format!("materialization_{name}_{adapter}")
+}
+
+#[cfg(test)]
+mod malformed_block_name_tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    use crate::compiler::lexer::WhitespaceConfig;
+    use crate::compiler::parser::Parser;
+    use crate::compiler::tokens::{Span, Token};
+    use crate::listener::{BlockNameKind, TokenizerEventListener};
+    use crate::syntax::SyntaxConfig;
+
+    #[derive(Debug, Default)]
+    struct CapturingListener {
+        events: RefCell<Vec<(BlockNameKind, String)>>,
+    }
+
+    impl TokenizerEventListener for CapturingListener {
+        fn on_source_token(&self, _token: &Token<'_>, _span: &Span) {}
+        fn on_malformed_block_name(&self, kind: BlockNameKind, name: &str, _span: &Span) {
+            self.events.borrow_mut().push((kind, name.to_string()));
+        }
+    }
+
+    fn events_for(src: &str) -> Vec<(BlockNameKind, String)> {
+        let listener = Rc::new(CapturingListener::default());
+        let dyn_listener: Rc<dyn TokenizerEventListener> = listener.clone();
+        let mut parser = Parser::new_with_tokenizer_listeners(
+            src,
+            "test.sql",
+            false,
+            SyntaxConfig::builder().build().unwrap(),
+            WhitespaceConfig::default(),
+            &[dyn_listener],
+        );
+        parser
+            .parse_top_level_statements(&["snapshot", "docs"])
+            .unwrap();
+        let events = listener.events.borrow().clone();
+        events
+    }
+
+    #[test]
+    fn malformed_snapshot_name_emits_event() {
+        let events = events_for("{% snapshot stg_crm.sql %}select 1{% endsnapshot %}");
+        assert_eq!(
+            events,
+            vec![(BlockNameKind::Snapshot, "stg_crm".to_string())]
+        );
+    }
+
+    #[test]
+    fn clean_snapshot_name_emits_nothing() {
+        let events = events_for("{% snapshot my_snapshot %}select 1{% endsnapshot %}");
+        assert!(events.is_empty(), "got {events:?}");
+    }
+
+    #[test]
+    fn malformed_docs_name_emits_event() {
+        let events = events_for("{% docs pkg.doc_name %}content{% enddocs %}");
+        assert_eq!(events, vec![(BlockNameKind::Docs, "pkg".to_string())]);
+    }
+
+    #[test]
+    fn lex_error_suffix_emits_event() {
+        // Suffix is composed of lex-error characters the parser drains via
+        // force_advance. A tokenizer-only listener would miss this entirely.
+        let events = events_for("{% docs my_doc $$$ %}content{% enddocs %}");
+        assert_eq!(events, vec![(BlockNameKind::Docs, "my_doc".to_string())]);
+    }
+
+    #[test]
+    fn clean_docs_name_emits_nothing() {
+        let events = events_for("{% docs my_doc %}content{% enddocs %}");
+        assert!(events.is_empty(), "got {events:?}");
+    }
+
+    #[test]
+    fn digit_leading_docs_name_emits_nothing() {
+        // Regression guard for issue #998: `3_months_prior_date` is a single
+        // valid doc name via digit-leading glue, not a malformed suffix.
+        let events = events_for("{% docs 3_months_prior_date %}content{% enddocs %}");
+        assert!(events.is_empty(), "got {events:?}");
+    }
 }

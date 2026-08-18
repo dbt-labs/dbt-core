@@ -76,8 +76,10 @@ use std::{
 };
 
 use dbt_common::{
-    CodeLocationWithFile, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str, tokiofs, tracing::dbt_emit::emit_strict_parse_error,
+    CodeLocationWithFile, ErrorCode, FsError, FsResult, fs_err,
+    io_utils::try_read_yml_to_str,
+    tokiofs,
+    tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_from_fs_error},
 };
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_yaml::Value;
@@ -98,14 +100,12 @@ pub use dbt_common::serde_utils::Omissible;
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 pub fn value_from_file(
-    io_args: &IoArgs,
     path: &Path,
     show_errors_or_warnings: bool,
     dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
     let input = try_read_yml_to_str(path)?;
     value_from_str(
-        io_args,
         dbt_sanitize_yml(&input),
         Some(path),
         show_errors_or_warnings,
@@ -115,14 +115,12 @@ pub fn value_from_file(
 
 /// Async variant of [`value_from_file`].
 pub async fn value_from_file_async(
-    io_args: &IoArgs,
     path: &Path,
     show_errors_or_warnings: bool,
     dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
     let input = tokiofs::read_to_string(path).await?;
     value_from_str(
-        io_args,
         dbt_sanitize_yml(&input),
         Some(path),
         show_errors_or_warnings,
@@ -173,9 +171,7 @@ impl MinijinjaContext for LoadContext {
 ///
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
-#[allow(clippy::too_many_arguments)]
 pub fn into_typed_with_jinja<T, S>(
-    io_args: &IoArgs,
     value: Value,
     should_render_secrets: bool,
     env: &JinjaEnv,
@@ -188,18 +184,15 @@ where
     T: DeserializeOwned,
     S: MinijinjaContext,
 {
-    let (res, errors) = into_typed_with_jinja_error(
-        Some(io_args),
-        value,
-        should_render_secrets,
-        env,
-        ctx,
-        listeners,
-    )?;
+    let (res, diagnostics) =
+        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
 
     if show_errors_or_warnings {
-        for error in errors {
-            emit_strict_parse_error(error, dependency_package_name, io_args);
+        for warning in diagnostics.typechecking {
+            emit_warn_log_from_fs_error(warning);
+        }
+        for error in diagnostics.recovered {
+            emit_strict_parse_error(error, dependency_package_name);
         }
     }
 
@@ -211,9 +204,7 @@ where
 ///
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
-#[allow(clippy::too_many_arguments)]
 pub fn into_typed_with_jinja_error_context<T, S>(
-    io_args: Option<&IoArgs>,
     value: Value,
     should_render_secrets: bool,
     env: &JinjaEnv,
@@ -227,15 +218,16 @@ where
     T: DeserializeOwned,
     S: MinijinjaContext,
 {
-    let (res, errors) =
-        into_typed_with_jinja_error(io_args, value, should_render_secrets, env, ctx, listeners)?;
+    let (res, diagnostics) =
+        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
 
-    if let Some(io_args) = io_args {
-        for error in errors {
-            let context = error_context(&error);
-            let error = error.with_context(context);
-            emit_strict_parse_error(error, dependency_package_name, io_args);
-        }
+    for warning in diagnostics.typechecking {
+        emit_warn_log_from_fs_error(warning);
+    }
+    for error in diagnostics.recovered {
+        let context = error_context(&error);
+        let error = error.with_context(context);
+        emit_strict_parse_error(error, dependency_package_name);
     }
 
     Ok(res)
@@ -243,7 +235,6 @@ where
 
 /// Deserializes a Yaml `Value` into a target `Deserialize` type T.
 pub fn into_typed_with_error<T>(
-    io_args: &IoArgs,
     value: Value,
     show_errors_or_warnings: bool,
     dependency_package_name: Option<&str>,
@@ -259,7 +250,7 @@ where
             let error = error.with_location(CodeLocationWithFile::from(
                 error_path.clone().unwrap_or_default(),
             ));
-            emit_strict_parse_error(error, dependency_package_name, io_args);
+            emit_strict_parse_error(error, dependency_package_name);
         }
     }
 
@@ -271,7 +262,6 @@ where
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 pub fn from_yaml_raw<T>(
-    io_args: &IoArgs,
     input: &str,
     error_display_path: Option<&Path>,
     show_errors_or_warnings: bool,
@@ -281,7 +271,6 @@ where
     T: DeserializeOwned,
 {
     let value = value_from_str(
-        io_args,
         dbt_sanitize_yml(input),
         error_display_path,
         show_errors_or_warnings,
@@ -294,7 +283,7 @@ where
 
     if show_errors_or_warnings {
         for error in errors {
-            emit_strict_parse_error(error, dependency_package_name, io_args);
+            emit_strict_parse_error(error, dependency_package_name);
         }
     }
 
@@ -337,7 +326,6 @@ fn dbt_sanitize_yml(input: &str) -> &str {
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 fn value_from_str(
-    io_args: &IoArgs,
     input: &str,
     error_display_path: Option<&Path>,
     show_errors_or_warnings: bool,
@@ -360,7 +348,7 @@ fn value_from_str(
         );
 
         if show_errors_or_warnings {
-            emit_strict_parse_error(*duplicate_key_error, dependency_package_name, io_args);
+            emit_strict_parse_error(*duplicate_key_error, dependency_package_name);
         }
         // last key wins:
         dbt_yaml::mapping::DuplicateKey::Overwrite
@@ -373,20 +361,19 @@ fn value_from_str(
     Ok(value)
 }
 
-/// Variant of into_typed_with_jinja which returns a Vec of warnings rather
-/// than firing them.
+/// Variant of into_typed_with_jinja which returns diagnostics rather than emitting them.
 fn into_typed_with_jinja_error<T, S>(
-    io_args: Option<&IoArgs>,
     value: Value,
     should_render_secrets: bool,
     env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
-) -> FsResult<(T, Vec<FsError>)>
+) -> FsResult<(T, JinjaDiagnostics)>
 where
     T: DeserializeOwned,
     S: MinijinjaContext,
 {
+    let mut typechecking = Vec::new();
     let jinja_renderer = |value: &Value| match value {
         Value::String(s, yaml_span) => {
             let updated_ctx = ctx.with_yaml_span(yaml_span);
@@ -395,22 +382,28 @@ where
             } else {
                 ctx
             };
-            let expanded = render_jinja_str(
-                io_args,
-                s,
-                should_render_secrets,
-                env,
-                ctx,
-                listeners,
-                yaml_span,
-            )
-            .map_err(|e| e.with_location(yaml_span.clone()))?;
+            let (expanded, diagnostics) =
+                render_jinja_str(s, should_render_secrets, env, ctx, listeners, yaml_span)
+                    .map_err(|e| e.with_location(yaml_span.clone()))?;
+            typechecking.extend(diagnostics);
             Ok(Some(expanded.with_span(yaml_span.clone())))
         }
         _ => Ok(None),
     };
 
-    into_typed_internal(value, jinja_renderer)
+    let (res, recovered) = into_typed_internal(value, jinja_renderer)?;
+    Ok((
+        res,
+        JinjaDiagnostics {
+            typechecking,
+            recovered,
+        },
+    ))
+}
+
+struct JinjaDiagnostics {
+    typechecking: Vec<FsError>,
+    recovered: Vec<FsError>,
 }
 
 fn into_typed_internal<T, F>(value: Value, transform: F) -> FsResult<(T, Vec<FsError>)>
@@ -449,14 +442,13 @@ pub fn strip_dunder_fields_from_path(path: &str) -> String {
 
 /// Render a Jinja expression to a Value
 fn render_jinja_str<S: Serialize>(
-    io_args: Option<&IoArgs>,
     s: &str,
     should_render_secrets: bool,
     env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
     yaml_span: &dbt_yaml::Span,
-) -> FsResult<Value> {
+) -> FsResult<(Value, Vec<FsError>)> {
     // Fast path: if string contains no Jinja control characters, return as-is
     // Reference: https://github.com/dbt-labs/dbt-mantle/blob/main/core/dbt/clients/jinja.py#L139
     if !RE_HAS_RENDER_CHARS.is_match(s) {
@@ -465,20 +457,15 @@ fn render_jinja_str<S: Serialize>(
         } else {
             s.to_string()
         };
-        return Ok(Value::string(result));
+        return Ok((Value::string(result), Vec::new()));
     }
     if check_single_expression_without_whitepsace_control(s) {
         let compiled = env.compile_expression(&s[2..s.len() - 2])?;
 
-        // Perform static type checking if we have io_args and span information
-        perform_typecheck(
-            io_args,
-            env,
-            yaml_span,
-            |funcsigns, builtins, listener, ctx| {
+        let diagnostics =
+            perform_typecheck(env, yaml_span, |funcsigns, builtins, listener, ctx| {
                 compiled.typecheck(funcsigns, builtins, listener, ctx)
-            },
-        );
+            });
 
         let eval = compiled.eval(ctx, listeners)?;
         let val = dbt_yaml::to_value(eval).map_err(|e| {
@@ -495,21 +482,16 @@ fn render_jinja_str<S: Serialize>(
             }
             _ => val,
         };
-        Ok(val)
+        Ok((val, diagnostics))
     // Otherwise, process the entire string through Jinja
     } else {
         // Compile template and perform typechecking
         let template = env.template_from_str(s)?;
 
-        // Perform static type checking if we have io_args and span information
-        perform_typecheck(
-            io_args,
-            env,
-            yaml_span,
-            |funcsigns, builtins, listener, ctx| {
+        let diagnostics =
+            perform_typecheck(env, yaml_span, |funcsigns, builtins, listener, ctx| {
                 template.typecheck(funcsigns, builtins, listener, ctx)
-            },
-        );
+            });
 
         let compiled = env.render_str(s, ctx, listeners)?;
         let compiled = if should_render_secrets {
@@ -518,17 +500,13 @@ fn render_jinja_str<S: Serialize>(
             compiled
         };
 
-        Ok(Value::string(compiled))
+        Ok((Value::string(compiled), diagnostics))
     }
 }
 
 /// Helper function to perform typechecking on Jinja expressions/templates
-fn perform_typecheck<F>(
-    io_args: Option<&IoArgs>,
-    env: &JinjaEnv,
-    yaml_span: &dbt_yaml::Span,
-    typecheck_fn: F,
-) where
+fn perform_typecheck<F>(env: &JinjaEnv, yaml_span: &dbt_yaml::Span, typecheck_fn: F) -> Vec<FsError>
+where
     F: FnOnce(
         std::sync::Arc<minijinja::compiler::typecheck::FunctionRegistry>,
         std::sync::Arc<dashmap::DashMap<String, minijinja::Type>>,
@@ -536,65 +514,60 @@ fn perform_typecheck<F>(
         BTreeMap<String, minijinja::Value>,
     ) -> FsResult<()>,
 {
-    if let Some(io_args) = io_args {
-        // Get status reporter from io_args
-        let status_reporter = io_args.status_reporter.clone();
+    // Get file path from yaml_span
+    let path = yaml_span
+        .filename
+        .as_ref()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
 
-        // Get file path from yaml_span
-        let path = yaml_span
-            .filename
-            .as_ref()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_default();
+    // Create minijinja span from yaml span
+    let minijinja_span = minijinja::machinery::Span {
+        start_line: yaml_span.start.line as u32,
+        start_col: yaml_span.start.column as u32,
+        start_offset: yaml_span.start.index as u32,
+        end_line: yaml_span.end.line as u32,
+        end_col: yaml_span.end.column as u32,
+        end_offset: yaml_span.end.index as u32,
+    };
 
-        // Create minijinja span from yaml span
-        let minijinja_span = minijinja::machinery::Span {
-            start_line: yaml_span.start.line as u32,
-            start_col: yaml_span.start.column as u32,
-            start_offset: yaml_span.start.index as u32,
-            end_line: yaml_span.end.line as u32,
-            end_col: yaml_span.end.column as u32,
-            end_offset: yaml_span.end.index as u32,
-        };
+    let mut typecheck_listener = Rc::new(YamlTypecheckingEventListener::new(path, minijinja_span));
 
-        let typecheck_listener = Rc::new(YamlTypecheckingEventListener::new(
-            status_reporter,
-            path,
-            minijinja_span,
-        ));
+    // Load builtins from the macro namespace registry
+    let macro_namespace_registry = env.env.get_macro_namespace_registry();
+    if let Ok(builtins) = minijinja::load_builtins_with_namespace(macro_namespace_registry) {
+        // Build typecheck context with required values
+        let mut typecheck_resolved_context = BTreeMap::new();
+        typecheck_resolved_context.insert(
+            "ROOT_PACKAGE_NAME".to_string(),
+            minijinja::Value::from("dbt"),
+        );
 
-        // Load builtins from the macro namespace registry
-        let macro_namespace_registry = env.env.get_macro_namespace_registry();
-        if let Ok(builtins) = minijinja::load_builtins_with_namespace(macro_namespace_registry) {
-            // Build typecheck context with required values
-            let mut typecheck_resolved_context = BTreeMap::new();
-            typecheck_resolved_context.insert(
-                "ROOT_PACKAGE_NAME".to_string(),
-                minijinja::Value::from("dbt"),
-            );
+        // Get DBT_AND_ADAPTERS_NAMESPACE directly from globals as a Value
+        let dbt_and_adapters = env
+            .env
+            .get_global("DBT_AND_ADAPTERS_NAMESPACE")
+            .unwrap_or_else(|| {
+                minijinja::Value::from_object(indexmap::IndexMap::<
+                    minijinja::Value,
+                    minijinja::Value,
+                >::new())
+            });
+        typecheck_resolved_context
+            .insert("DBT_AND_ADAPTERS_NAMESPACE".to_string(), dbt_and_adapters);
 
-            // Get DBT_AND_ADAPTERS_NAMESPACE directly from globals as a Value
-            let dbt_and_adapters = env
-                .env
-                .get_global("DBT_AND_ADAPTERS_NAMESPACE")
-                .unwrap_or_else(|| {
-                    minijinja::Value::from_object(indexmap::IndexMap::<
-                        minijinja::Value,
-                        minijinja::Value,
-                    >::new())
-                });
-            typecheck_resolved_context
-                .insert("DBT_AND_ADAPTERS_NAMESPACE".to_string(), dbt_and_adapters);
-
-            // Perform typecheck (ignore errors as they're already emitted as warnings)
-            let _ = typecheck_fn(
-                env.jinja_function_registry.clone(),
-                builtins,
-                typecheck_listener,
-                typecheck_resolved_context,
-            );
-        }
+        // Perform typecheck (ignore fatal errors and return reported diagnostics)
+        let _ = typecheck_fn(
+            env.jinja_function_registry.clone(),
+            builtins,
+            typecheck_listener.clone(),
+            typecheck_resolved_context,
+        );
     }
+
+    Rc::get_mut(&mut typecheck_listener)
+        .expect("typechecking listener should no longer be shared")
+        .drain_diagnostics()
 }
 
 /// Matches Jinja control sequences (open/close of expression, block, comment).
@@ -644,7 +617,6 @@ pub fn single_expression_body(input: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_common::io_args::IoArgs;
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {
@@ -701,9 +673,8 @@ mod tests {
     #[test]
     fn test_from_yaml_raw_strips_utf8_bom_and_parses_ok() {
         // \u{feff} is the UTF-8 BOM. BOM at start should be ignored and parsing should succeed.
-        let io = IoArgs::default();
         let input = "\u{feff}version: 2\nmodels:\n  - name: dim_bom_test\n";
-        let res = from_yaml_raw(&io, input, None, false, None);
+        let res = from_yaml_raw(input, None, false, None);
         assert!(
             res.is_ok(),
             "Expected BOM-prefixed YAML to parse successfully, got: {:?}",

@@ -1,5 +1,7 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{
@@ -64,6 +66,8 @@ pub async fn resolve_metrics(
     } else {
         None
     };
+    let disallow_plus_prefix =
+        disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref());
 
     let (nested_metrics, nested_disabled_metrics) = resolve_nested_model_metrics(
         arg,
@@ -77,6 +81,7 @@ pub async fn resolve_metrics(
         &mut seen_metric_names,
         &raw_local_project_config,
         raw_root_project_cfg.as_ref(),
+        disallow_plus_prefix,
     )?;
     metrics.extend(nested_metrics);
     disabled_metrics.extend(nested_disabled_metrics);
@@ -92,6 +97,7 @@ pub async fn resolve_metrics(
         &mut seen_metric_names,
         &raw_local_project_config,
         raw_root_project_cfg.as_ref(),
+        disallow_plus_prefix,
     )?;
     metrics.extend(top_level_metrics);
     disabled_metrics.extend(top_level_disabled_metrics);
@@ -112,6 +118,7 @@ pub fn resolve_nested_model_metrics(
     seen_metric_names: &mut HashSet<String>,
     raw_local_project_config: &crate::utils::RawProjectConfig,
     raw_root_project_cfg: Option<&crate::utils::RawProjectConfig>,
+    disallow_plus_prefix: bool,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -127,10 +134,10 @@ pub fn resolve_nested_model_metrics(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.metrics,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix,
             )
         },
     )?;
@@ -167,7 +174,7 @@ pub fn resolve_nested_model_metrics(
 
                 // Validate metric (name and window)
                 if let Err(e) = validate_metric(metric_props) {
-                    emit_error_log_from_fs_error(*e, arg.io.status_reporter.as_ref());
+                    emit_error_log_from_fs_error(*e);
 
                     continue;
                 }
@@ -180,7 +187,6 @@ pub fn resolve_nested_model_metrics(
                             "Duplicate metric name '{}' found in package '{}'",
                             metric_name, package_name
                         ),
-                        arg.io.status_reporter.as_ref(),
                     );
                     continue;
                 }
@@ -339,6 +345,7 @@ pub fn resolve_top_level_metrics(
     seen_metric_names: &mut HashSet<String>,
     raw_local_project_config: &crate::utils::RawProjectConfig,
     raw_root_project_cfg: Option<&crate::utils::RawProjectConfig>,
+    disallow_plus_prefix: bool,
 ) -> ResolveMetricsResult {
     let mut metrics = HashMap::new();
     let mut disabled_metrics = HashMap::new();
@@ -353,10 +360,10 @@ pub fn resolve_top_level_metrics(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.metrics,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix,
             )
         },
     )?;
@@ -376,7 +383,6 @@ pub fn resolve_top_level_metrics(
 
         // Parse the metric properties from YAML
         let metric_props: MetricsProperties = into_typed_with_jinja(
-            &arg.io,
             mpe.schema_value.clone(),
             false,
             env,
@@ -402,7 +408,7 @@ pub fn resolve_top_level_metrics(
 
         // Validate metric (name and window)
         if let Err(e) = validate_metric(&metric_props) {
-            emit_error_log_from_fs_error(*e, arg.io.status_reporter.as_ref());
+            emit_error_log_from_fs_error(*e);
 
             continue;
         }
@@ -415,7 +421,6 @@ pub fn resolve_top_level_metrics(
                     "Duplicate metric name '{}' found in package '{}'",
                     metric_name, package_name
                 ),
-                arg.io.status_reporter.as_ref(),
             );
             continue;
         }

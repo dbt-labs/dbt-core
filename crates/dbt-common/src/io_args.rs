@@ -35,17 +35,7 @@ pub enum LocalExecutionBackendKind {
 }
 
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    ValueEnum,
-    Display,
-    Default,
-    JsonSchema,
+    Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ValueEnum, Display, Default,
 )]
 #[serde(rename_all = "lowercase")]
 #[clap(rename_all = "lowercase")]
@@ -57,9 +47,67 @@ pub enum ComputeArg {
     /// Run computations in-process
     Inline,
     /// Run computations in a separate, ephemeral worker process
+    // `local` is the other accepted spelling, as in `Execute::from_str`. It is
+    // an alias, not a variant, so that one value reaches the code that matches
+    // on `Sidecar`, and so that we always serialize `sidecar`.
+    #[serde(alias = "local")]
+    #[value(alias = "local")]
     Sidecar,
     /// Run via the remote compute service (persistent workers/cluster).
     Service,
+}
+
+// Hand-written because schemars 0.8 drops `#[serde(alias)]`. Editors validate
+// YAML against this schema, so it must list `local`. If it does not, an editor
+// rejects a value that dbt accepts. Keep the descriptions in sync with the
+// variant docs above.
+impl schemars::JsonSchema for ComputeArg {
+    fn schema_name() -> String {
+        "ComputeArg".to_string()
+    }
+
+    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+        let variants: [(&[&str], &str); 4] = [
+            (
+                &["remote"],
+                "Execute on the remote warehouse (Snowflake, BigQuery, etc.)",
+            ),
+            (&["inline"], "Run computations in-process"),
+            (
+                &["sidecar", "local"],
+                "Run computations in a separate, ephemeral worker process",
+            ),
+            (
+                &["service"],
+                "Run via the remote compute service (persistent workers/cluster).",
+            ),
+        ];
+
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+                one_of: Some(
+                    variants
+                        .iter()
+                        .map(|(values, description)| {
+                            schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+                                metadata: Some(Box::new(schemars::schema::Metadata {
+                                    description: Some((*description).to_string()),
+                                    ..Default::default()
+                                })),
+                                instance_type: Some(schemars::schema::InstanceType::String.into()),
+                                enum_values: Some(
+                                    values.iter().map(|v| (*v).into()).collect::<Vec<_>>(),
+                                ),
+                                ..Default::default()
+                            })
+                        })
+                        .collect(),
+                ),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+    }
 }
 
 impl From<ComputeArg> for LocalExecutionBackendKind {
@@ -256,8 +304,6 @@ pub struct IoArgs {
 
     // internal fields
     pub show_timings: bool, // whether to show timings in the status messages
-    pub use_parquet_schema_store: bool,
-    pub verify_parquet_schema_store: bool,
     pub host: String,
     pub port: u16,
 }
@@ -1295,6 +1341,7 @@ pub enum OptimizeTestsOptions {
 }
 
 pub const SKIP_REDUNDANT_TESTS_ENV: &str = "DBT_ENGINE_SKIP_REDUNDANT_TESTS";
+pub const BATCH_TESTS_ENV: &str = "DBT_ENGINE_BATCH_TESTS";
 
 pub fn optimize_test_defaults_from_project_flags(
     project_flags: Option<&Value>,
@@ -1305,6 +1352,12 @@ pub fn optimize_test_defaults_from_project_flags(
         project_flags,
         OptimizeTestsOptions::TestStaticAnalysis,
         "skip_redundant_tests",
+    );
+    insert_project_default_if_enabled(
+        &mut optimize_tests,
+        project_flags,
+        OptimizeTestsOptions::TestAggregation,
+        "batch_tests",
     );
     optimize_tests
 }
@@ -1344,6 +1397,16 @@ fn resolve_effective_optimize_tests_with_env_lookup(
     get_env: impl Fn(&str) -> Option<OsString>,
 ) -> HashSet<OptimizeTestsOptions> {
     let mut optimize_tests = explicit_cli.clone();
+    // Not gated on Build: batching applies to every command that schedules generic
+    // tests. Graph construction filters by command, so it is inert elsewhere.
+    insert_effective_optimize_test_option(
+        &mut optimize_tests,
+        explicit_cli,
+        project_defaults,
+        &get_env,
+        OptimizeTestsOptions::TestAggregation,
+        BATCH_TESTS_ENV,
+    );
     if command == FsCommand::Build {
         insert_effective_optimize_test_option(
             &mut optimize_tests,
@@ -1388,6 +1451,37 @@ fn parse_boolish_env(value: &OsStr) -> Option<bool> {
     BoolishValueParser::new()
         .parse_ref(&clap::Command::new("dbt-fusion"), None, value)
         .ok()
+}
+
+pub const LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV: &str =
+    "DBT_LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT";
+
+pub fn resolve_latest_version_pointer_enabled_by_default(project_flags: Option<&Value>) -> bool {
+    resolve_latest_version_pointer_enabled_by_default_with_env_lookup(project_flags, |name| {
+        std::env::var_os(name)
+    })
+}
+
+fn resolve_latest_version_pointer_enabled_by_default_with_env_lookup(
+    project_flags: Option<&Value>,
+    get_env: impl Fn(&str) -> Option<OsString>,
+) -> bool {
+    if let Some(value) = get_env(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV) {
+        if let Some(resolved) = parse_boolish_env(value.as_ref()) {
+            return resolved;
+        }
+    }
+
+    if let Some(enabled) = project_flags
+        .and_then(|flags| {
+            project_flags_get_value(flags, "latest_version_pointer_enabled_by_default")
+        })
+        .and_then(Value::as_bool)
+    {
+        return enabled;
+    }
+
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum, EnumIter)]
@@ -1584,6 +1678,21 @@ mod tests {
         optimize_test_defaults_from_project_flags(Some(&project_flags))
     }
 
+    fn latest_version_pointer_with_env(
+        project_flags_yaml: Option<&str>,
+        env: &[(&str, &str)],
+    ) -> bool {
+        let project_flags =
+            project_flags_yaml.map(|yaml| dbt_yaml::from_str::<Value>(yaml).unwrap());
+        resolve_latest_version_pointer_enabled_by_default_with_env_lookup(
+            project_flags.as_ref(),
+            |name| {
+                env.iter()
+                    .find_map(|(key, value)| (*key == name).then(|| OsString::from(*value)))
+            },
+        )
+    }
+
     #[test]
     fn optimize_tests_env_enables_skip_redundant_tests() {
         let resolved = optimize_tests_with_env(
@@ -1665,6 +1774,45 @@ mod tests {
 
         assert!(resolved.contains(&OptimizeTestsOptions::TestAggregation));
         assert!(!resolved.contains(&OptimizeTestsOptions::TestStaticAnalysis));
+    }
+
+    #[test]
+    fn optimize_tests_batch_tests_project_flag_applies_to_test_command() {
+        let project_defaults = project_defaults("batch_tests: true\n");
+
+        let resolved =
+            optimize_tests_with_env(FsCommand::Test, &HashSet::default(), &project_defaults, &[]);
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestAggregation));
+    }
+
+    #[test]
+    fn optimize_tests_batch_tests_env_false_overrides_project_true() {
+        let project_defaults = project_defaults("batch_tests: true\n");
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &HashSet::default(),
+            &project_defaults,
+            &[(BATCH_TESTS_ENV, "0")],
+        );
+
+        assert!(!resolved.contains(&OptimizeTestsOptions::TestAggregation));
+    }
+
+    #[test]
+    fn optimize_tests_batch_tests_cli_true_wins_over_env_false() {
+        let mut explicit_cli = HashSet::default();
+        explicit_cli.insert(OptimizeTestsOptions::TestAggregation);
+
+        let resolved = optimize_tests_with_env(
+            FsCommand::Build,
+            &explicit_cli,
+            &HashSet::default(),
+            &[(BATCH_TESTS_ENV, "false")],
+        );
+
+        assert!(resolved.contains(&OptimizeTestsOptions::TestAggregation));
     }
 
     #[test]
@@ -1816,5 +1964,52 @@ mod tests {
             dbt_yaml::from_str::<StaticAnalysisKind>("\"True\"").unwrap(),
             StaticAnalysisKind::On
         );
+    }
+
+    #[test]
+    fn latest_version_pointer_env_true_overrides_project_false() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "true")],
+        );
+
+        assert!(resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_env_false_overrides_project_true() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: true\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "false")],
+        );
+
+        assert!(!resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_absent_env_uses_project_defaults() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[],
+        );
+
+        assert!(!resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_absent_env_and_project_defaults_true() {
+        let resolved = latest_version_pointer_with_env(None, &[]);
+
+        assert!(resolved);
+    }
+
+    #[test]
+    fn latest_version_pointer_malformed_env_falls_back_to_project() {
+        let resolved = latest_version_pointer_with_env(
+            Some("latest_version_pointer_enabled_by_default: false\n"),
+            &[(LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV, "maybe")],
+        );
+
+        assert!(!resolved);
     }
 }

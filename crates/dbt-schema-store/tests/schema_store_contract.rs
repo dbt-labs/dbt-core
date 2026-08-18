@@ -9,10 +9,7 @@ use dbt_schema_store::{LocalSchemaEntry, store::LookupEntry};
 
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use dbt_ident::Ident;
-use dbt_schema_store::{
-    CanonicalFqn, SchemaStoreTrait,
-    store::{SchemaStore, StoreFormat},
-};
+use dbt_schema_store::{CanonicalFqn, SchemaStoreTrait, store::SchemaStore};
 use tempfile::TempDir;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -29,7 +26,7 @@ fn cfqn(cat: &str, schema: &str, table: &str) -> CanonicalFqn {
     CanonicalFqn::new(&ident(cat), &ident(schema), &ident(table))
 }
 
-/// Builds an empty `SchemaStore` with `ParquetCache` format rooted at `dir`.
+/// Builds an empty `SchemaStore` rooted at `dir`.
 fn empty_store(dir: &TempDir) -> SchemaStore {
     SchemaStore::new(
         dir.path().to_path_buf(),
@@ -37,9 +34,7 @@ fn empty_store(dir: &TempDir) -> SchemaStore {
         HashMap::new(),
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         HashMap::new(),
-        None,
     )
 }
 
@@ -53,9 +48,7 @@ fn store_with_frontier(dir: &TempDir, c: &CanonicalFqn, uid: &str) -> SchemaStor
         frontier,
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         HashMap::new(),
-        None,
     )
 }
 
@@ -260,9 +253,7 @@ fn ttl_evicts_stale_entry() {
         frontier,
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         refresh_intervals,
-        None,
     );
 
     assert!(!store2.exists(&c), "stale entry must be evicted on reload");
@@ -294,9 +285,7 @@ fn ttl_keeps_fresh_entry() {
         frontier,
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         refresh_intervals,
-        None,
     );
 
     assert!(store2.exists(&c), "fresh entry must survive reload");
@@ -353,9 +342,7 @@ fn multiple_entries_independent() {
             frontier,
             HashMap::new(),
             vec![],
-            StoreFormat::ParquetCache,
             HashMap::new(),
-            None,
         );
         store
             .register_schema(&c1, None, make_schema("col_a"), false)
@@ -375,9 +362,7 @@ fn multiple_entries_independent() {
         frontier,
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         HashMap::new(),
-        None,
     );
 
     assert_eq!(
@@ -470,9 +455,7 @@ fn evict_stale_not_repersisted() {
         frontier.clone(),
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
-        HashMap::new(), // no TTL yet — fresh
-        None,
+        HashMap::new(),
     );
     store
         .register_schema(&c, None, make_schema("col"), false)
@@ -489,9 +472,7 @@ fn evict_stale_not_repersisted() {
         frontier.clone(),
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         long_ttl,
-        None,
     );
     assert!(store2.exists(&c), "entry must be loaded as fresh");
 
@@ -518,9 +499,7 @@ fn evict_stale_not_repersisted() {
         frontier,
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         short_ttl,
-        None,
     );
     assert!(
         !store3.exists(&c),
@@ -553,9 +532,7 @@ fn local_schema_not_persisted() {
             HashMap::new(),
             local,
             vec![local_entry],
-            StoreFormat::ParquetCache,
             HashMap::new(),
-            None,
         );
         assert!(store.exists(&c));
         store.save(dir.path()).unwrap();
@@ -575,9 +552,7 @@ fn local_schema_not_persisted() {
         HashMap::new(),
         local,
         vec![local_entry2],
-        StoreFormat::ParquetCache,
         HashMap::new(),
-        None,
     );
 
     assert!(store2.exists(&c));
@@ -646,9 +621,7 @@ fn promote_to_frontier_visible_in_run() {
         HashMap::new(),
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         HashMap::new(),
-        None,
     );
 
     // 1. Register the analyzed (Selected) schema.
@@ -692,9 +665,7 @@ fn promote_to_frontier_survives_reload() {
             HashMap::new(),
             HashMap::new(),
             vec![],
-            StoreFormat::ParquetCache,
             HashMap::new(),
-            None,
         );
         store
             .register_schema(&c, None, make_schema("amount"), false)
@@ -713,9 +684,7 @@ fn promote_to_frontier_survives_reload() {
             frontier,
             HashMap::new(),
             vec![],
-            StoreFormat::ParquetCache,
             HashMap::new(),
-            None,
         );
         assert!(
             store2.exists(&c),
@@ -748,9 +717,7 @@ fn delta_epoch_contains_only_new_entries() {
             frontier,
             HashMap::new(),
             vec![],
-            StoreFormat::ParquetCache,
             HashMap::new(),
-            None,
         );
         store
             .register_schema(&c_old, None, make_schema("old_col"), false)
@@ -769,9 +736,7 @@ fn delta_epoch_contains_only_new_entries() {
             frontier,
             HashMap::new(),
             vec![],
-            StoreFormat::ParquetCache,
             HashMap::new(),
-            None,
         );
         store
             .register_schema(&c_new, None, make_schema("new_col"), false)
@@ -789,9 +754,7 @@ fn delta_epoch_contains_only_new_entries() {
         frontier,
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         HashMap::new(),
-        None,
     );
     assert_eq!(
         store3.get_schema(&c_old).unwrap().inner().field(0).name(),
@@ -854,9 +817,7 @@ fn snapshot_entry_survives_reload() {
             HashMap::new(),
             HashMap::new(),
             vec![],
-            StoreFormat::ParquetCache,
             HashMap::new(),
-            None,
         );
         store
             .register_schema(&c, None, make_schema("snap_col"), false)
@@ -873,13 +834,175 @@ fn snapshot_entry_survives_reload() {
         HashMap::new(),
         HashMap::new(),
         vec![],
-        StoreFormat::ParquetCache,
         HashMap::new(),
-        None,
     );
     assert!(store2.exists(&c), "Snapshot schema must survive reload");
     assert_eq!(
         store2.get_schema(&c).unwrap().inner().field(0).name(),
         "snap_col"
+    );
+}
+
+// ── Selected-model accumulation ──────────────────────────────────────────────────
+
+/// A Selected model's schema from run 1 must be discoverable as a Frontier entry
+/// in run 2 without re-registration (schema store accumulates across runs).
+#[test]
+fn selected_schema_available_as_frontier_in_next_run() {
+    let dir = TempDir::new().unwrap();
+    let c = cfqn("db", "s", "model_b");
+    let uid = "model.pkg.model_b";
+
+    // Run 1: model_b is Selected, compiled, schema registered and saved.
+    {
+        let mut selected = HashMap::new();
+        selected.insert(c.clone(), uid.to_string());
+        let store = SchemaStore::new(
+            dir.path().to_path_buf(),
+            selected,
+            HashMap::new(),
+            HashMap::new(),
+            vec![],
+            HashMap::new(),
+        );
+        store
+            .register_schema(&c, None, make_schema("amount"), false)
+            .unwrap();
+        // Promote to frontier so it's discoverable as a Frontier key next run.
+        store.promote_to_frontier(&c).unwrap();
+        store.save(dir.path()).unwrap();
+    }
+
+    // Run 2: model_b is now a Frontier entry (model_a depends on it).
+    let mut frontier = HashMap::new();
+    frontier.insert(c.clone(), uid.to_string());
+    let store2 = SchemaStore::new(
+        dir.path().to_path_buf(),
+        HashMap::new(),
+        frontier,
+        HashMap::new(),
+        vec![],
+        HashMap::new(),
+    );
+
+    assert!(
+        store2.exists(&c),
+        "Selected schema from run 1 must be available as Frontier in run 2"
+    );
+    assert_eq!(
+        store2.get_schema(&c).unwrap().inner().field(0).name(),
+        "amount"
+    );
+}
+
+/// Latest Selected schema wins across runs.
+#[test]
+fn selected_schema_latest_wins_across_runs() {
+    let dir = TempDir::new().unwrap();
+    let c = cfqn("db", "s", "model_b");
+    let uid = "model.pkg.model_b";
+
+    // Run 1: compile with schema v1.
+    {
+        let mut selected = HashMap::new();
+        selected.insert(c.clone(), uid.to_string());
+        let store = SchemaStore::new(
+            dir.path().to_path_buf(),
+            selected,
+            HashMap::new(),
+            HashMap::new(),
+            vec![],
+            HashMap::new(),
+        );
+        store
+            .register_schema(&c, None, make_schema("v1"), false)
+            .unwrap();
+        store.promote_to_frontier(&c).unwrap();
+        store.save(dir.path()).unwrap();
+    }
+
+    // Run 2: recompile with schema v2.
+    {
+        let mut selected = HashMap::new();
+        selected.insert(c.clone(), uid.to_string());
+        let store = SchemaStore::new(
+            dir.path().to_path_buf(),
+            selected,
+            HashMap::new(),
+            HashMap::new(),
+            vec![],
+            HashMap::new(),
+        );
+        store
+            .register_schema(&c, None, make_schema("v2"), true)
+            .unwrap();
+        store.promote_to_frontier(&c).unwrap();
+        store.save(dir.path()).unwrap();
+    }
+
+    // Run 3: load as Frontier — must see v2.
+    let mut frontier = HashMap::new();
+    frontier.insert(c.clone(), uid.to_string());
+    let store3 = SchemaStore::new(
+        dir.path().to_path_buf(),
+        HashMap::new(),
+        frontier,
+        HashMap::new(),
+        vec![],
+        HashMap::new(),
+    );
+    assert_eq!(
+        store3.get_schema(&c).unwrap().inner().field(0).name(),
+        "v2",
+        "latest Selected schema must win across runs"
+    );
+}
+
+/// All Selected models (not just snapshots) should have their schemas persisted
+/// in the compile cache and be loadable in subsequent runs.
+#[test]
+fn all_selected_models_persisted_not_just_snapshots() {
+    let dir = TempDir::new().unwrap();
+    let c = cfqn("db", "s", "regular_model");
+    let uid = "model.pkg.regular_model";
+
+    // Run 1: register a regular (non-snapshot) Selected model.
+    {
+        let mut selected = HashMap::new();
+        selected.insert(c.clone(), uid.to_string());
+        let store = SchemaStore::new(
+            dir.path().to_path_buf(),
+            selected,
+            HashMap::new(),
+            HashMap::new(),
+            vec![],
+            HashMap::new(),
+        );
+        store
+            .register_schema(&c, None, make_schema("reg_col"), false)
+            .unwrap();
+        store.promote_to_frontier(&c).unwrap();
+        store.save(dir.path()).unwrap();
+    }
+
+    // Run 2: the same model is now in the frontier. Must find it.
+    let mut frontier = HashMap::new();
+    frontier.insert(c.clone(), uid.to_string());
+    let store2 = SchemaStore::new(
+        dir.path().to_path_buf(),
+        HashMap::new(),
+        frontier,
+        HashMap::new(),
+        vec![],
+        HashMap::new(),
+    );
+
+    assert!(
+        store2.exists(&c),
+        "regular (non-snapshot) Selected model must persist across runs"
+    );
+    assert_eq!(
+        store2.get_schema(&c).unwrap().inner().field(0).name(),
+        "reg_col"
     );
 }
