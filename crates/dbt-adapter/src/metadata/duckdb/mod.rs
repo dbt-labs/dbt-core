@@ -410,22 +410,25 @@ pub(crate) struct ExternalIcebergAttach {
 }
 
 /// Catalog types DuckDB reaches through an Iceberg REST `ATTACH ... (TYPE
-/// ICEBERG)`. Horizon and Unity are Iceberg REST services under the hood.
+/// ICEBERG)`. Horizon, Unity, and Glue are Iceberg REST services under the hood.
 /// Single answer to "is this an Iceberg REST-style attachment?" so the ATTACH
 /// composer (`engine::duckdb_attach`) and the metadata routing below can never
 /// disagree about which catalogs need REST-attachment treatment.
 pub(crate) fn attaches_via_iceberg_rest(catalog_type: V2CatalogType) -> bool {
     matches!(
         catalog_type,
-        V2CatalogType::IcebergRest | V2CatalogType::Horizon | V2CatalogType::Unity
+        V2CatalogType::IcebergRest
+            | V2CatalogType::Horizon
+            | V2CatalogType::Unity
+            | V2CatalogType::Glue
     )
 }
 
 /// DuckDB-specific classification of a single v2 catalog spec.
 pub(crate) trait CatalogSpecDuckDbExt {
     /// `Some(..)` iff this catalog is an external Iceberg REST-attached catalog
-    /// (IcebergRest/Horizon/Unity with `table_format: iceberg` and a `duckdb`
-    /// config block), carrying its sanitized `ATTACH` alias.
+    /// (IcebergRest/Horizon/Unity/Glue with `table_format: iceberg` and a
+    /// `duckdb` config block), carrying its sanitized `ATTACH` alias.
     fn external_iceberg_attach(&self) -> Option<ExternalIcebergAttach>;
 
     /// The sanitized DuckDB `ATTACH` alias this catalog resolves to

@@ -1,0 +1,15 @@
+# Scenario: the `endpoint_type: GLUE` shortcut on a generic iceberg_rest
+# catalog rather than a `type: glue` one — DuckDB's Glue code path is selected
+# by the endpoint type, not by dbt's catalog type.
+# Exercises: the ':' source default and the suppressed AUTHORIZATION_TYPE apply
+# on this route too, and the Glue-typed SIGV4 default does not leak here.
+catalogs:
+  - name: glue_via_rest
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint_type: GLUE
+        attach_as: "glue_rest_db"
+        secret: glue_s3
+        default_schema: "analytics"

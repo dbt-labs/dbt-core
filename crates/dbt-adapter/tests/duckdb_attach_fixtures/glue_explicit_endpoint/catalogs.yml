@@ -1,0 +1,16 @@
+# Scenario: AWS Glue pinned to an explicit regional endpoint instead of the
+# `endpoint_type` shortcut — the only route for regions whose endpoint does not
+# use the plain amazonaws.com suffix.
+# Exercises: the Glue AUTHORIZATION_TYPE 'SIGV4' default, which applies here
+# because nothing else supplies it (DuckDB would otherwise fall back to OAuth2);
+# and an explicit `warehouse` (AWS account id) winning over the ':' default.
+catalogs:
+  - name: glue_regional
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "glue.us-east-1.amazonaws.com/iceberg"
+        warehouse: "123456789012"
+        attach_as: "glue_db"
+        secret: glue_s3
