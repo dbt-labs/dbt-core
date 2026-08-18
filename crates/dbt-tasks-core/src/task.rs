@@ -127,6 +127,17 @@ impl<T: Send + 'static> TaskOp<T> {
     }
 }
 
+/// Identity of a set of dbt nodes that share a single query.
+#[derive(Debug)]
+pub struct AggregatedNodeGroup {
+    /// The group's synthetic unique_id, used as the group span key.
+    pub unique_id: String,
+    /// Generic test macro shared by every member of the group, e.g. `not_null`.
+    pub macro_name: String,
+    /// unique_id of the node the group's tests are attached to.
+    pub attached_node: String,
+}
+
 pub trait Task: Send + Sync {
     fn run_task<'a>(
         &'a self,
@@ -162,6 +173,16 @@ pub trait Task: Send + Sync {
     /// Returns the task phase if applicable, otherwise None.
     /// As of today only the barrier task does not belong to a phase.
     fn task_phase(&self) -> Option<TP>;
+
+    /// Returns the identity of the aggregated query group whose nodes this task runs, if
+    /// any. `None` for every task whose nodes each get their own query.
+    ///
+    /// Nodes reported here are grouped under a shared span so consumers can treat the
+    /// group's lifetime as one unit. Only the task that actually issues the shared query
+    /// should report a group.
+    fn aggregated_node_group(&self) -> Option<AggregatedNodeGroup> {
+        None
+    }
 
     /// Returns telemetry (sub)tree request that task visitor should create for this task
     /// via span manager.

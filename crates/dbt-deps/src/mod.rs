@@ -27,8 +27,10 @@ use dbt_common::tracing::span_info::{
 use dbt_common::{ErrorCode, FsResult, err, stdfs};
 use dbt_common::{create_info_span, fs_err, lease};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
 use dbt_telemetry::{DepsAllPackagesInstalled, GenericOpExecuted};
+use std::sync::Arc;
 use std::{collections::BTreeMap, path::Path};
 use steps::{
     compute_package_lock, install_packages, load_dbt_packages,
@@ -37,6 +39,7 @@ use steps::{
 use tracing::Instrument as _;
 
 use crate::context::DepsOperationContext;
+use crate::private_package::PrivatePackageResolver;
 
 /// Loads and installs packages, and returns the packages lock and the dependencies map
 #[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
@@ -55,6 +58,8 @@ pub async fn get_or_install_packages(
     replay_mode: Option<&ReplayMode>,
     token: &CancellationToken,
     use_v2_compatible_package_downloads: bool,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
+    cloud_config: Option<ResolvedCloudConfig>,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     let Some(packages_relative_dir) =
         DbtPath::from(packages_install_path).get_relative_path(&io.in_dir)
@@ -98,6 +103,8 @@ pub async fn get_or_install_packages(
         skip_private_deps,
         version_check,
         use_v2_compatible_package_downloads,
+        private_package_resolver,
+        cloud_config,
     );
 
     // Add package first if specified, then load the package definition

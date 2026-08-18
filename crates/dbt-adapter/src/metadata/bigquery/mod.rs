@@ -8,6 +8,7 @@ use crate::metadata::freshness_overrides::{
 use crate::metadata::*;
 use crate::record_batch::{RecordBatchExt, StructArrayExt};
 use crate::relation::Relation;
+use crate::time_machine::{args_freshness_with_overrides, with_time_machine_metadata_wrapper};
 use crate::{AdapterEngine, AdapterResult};
 
 use arrow_array::*;
@@ -863,7 +864,7 @@ impl BigqueryMetadataAdapter {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
         if overrides.is_empty() {
-            return self.freshness(relations, token);
+            return self.freshness_inner(relations, token);
         }
 
         let mut override_targets = Vec::new();
@@ -1326,7 +1327,16 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         overrides: &'a BTreeMap<String, FreshnessOverride>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        self.freshness_with_overrides_impl(relations, overrides, token)
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_with_overrides",
+            args_freshness_with_overrides(
+                relations.iter().map(|r| r.semantic_fqn()),
+                overrides,
+                None,
+            ),
+            self.freshness_with_overrides_impl(relations, overrides, token),
+        )
     }
 
     fn create_schemas_if_not_exists(
@@ -1507,7 +1517,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         true
     }
 
-    fn freshness_all_in_schema<'a>(
+    fn freshness_all_in_schema_inner<'a>(
         &'a self,
         database: &'a str,
         schema: &'a str,

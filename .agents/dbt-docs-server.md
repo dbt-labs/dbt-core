@@ -19,6 +19,25 @@ browser. Data comes from parquet files written to `<target>/index/` by a run wit
 `--write-index`. The exporter reads those through the `dbt-index-core::Backend` trait;
 the site reads its own copies over HTTP.
 
+**`dbt docs generate` compiles, every time.** It synthesizes a `compile --write-index`
+invocation and hands it to the ordinary phase pipeline (`build_index_for_docs`,
+`fs/sa/crates/dbt-main/src/dbt_lib.rs`), so a fresh checkout needs one command rather than
+two. `--no-compile` opts out and reduces the command to the pure exporter it used to be,
+where a missing index is an error. `--compile` is accepted as a hidden no-op for v1 script
+compatibility.
+
+There is deliberately **no artifact-presence check** deciding whether to compile. An
+earlier version compiled only when `index_dir/` held no artifacts; that made the second
+`docs generate` of the day publish the first one's output, which reads as a caching bug no
+matter how it is documented. `--no-compile` already says "use what is on disk", so nothing
+has to be inferred. This matches v1, which compiles unconditionally.
+
+The synthesized invocation carries `EvalArgs::command` = `Compile`, because the phase
+pipeline branches on it in roughly two dozen places and anything else silently produces
+a near-empty index, and `command_entrypoint` = `Docs`, so the origin stays visible. That
+second field is what suppresses the `--write-index` static-analysis advisories, which
+would otherwise tell the user to add flags to a command they never ran.
+
 ## Key decisions (see `crates/dbt-docs-server/API-CONTRACTS.md` for full rationale)
 
 The ADRs predate the static rearchitecture and are written in terms of REST endpoints.
@@ -42,6 +61,7 @@ so read "endpoint" as "the query behind that surface".
 ```
 dbt project
     │  dbt compile --write-index [--static-analysis strict]
+    │  …or nothing: `docs generate` runs that compile itself unless `--no-compile`
     ▼
 <target>/index/*.parquet        ← data source (NOT manifest.json)
     │  dbt docs generate — COPY … TO … per artifact, + the embedded SPA
@@ -56,14 +76,23 @@ React SPA (hash routing, relative asset base)
 
 `--static-analysis strict` on the compile is what produces column lineage. Without it
 the export writes no `dbt.column_lineage.parquet`, which is the normal case, not an
-edge case.
+edge case — and it stays the normal case for the auto-compile, which deliberately runs a
+plain `--write-index` rather than forcing strict. Column lineage therefore remains
+opt-in through an explicit compile.
 
 Typical local loop:
 
 ```
-dbtd compile --write-index          # dbtd = locally-built Fusion binary alias
-dbtd docs generate                  # writes into target/, like core v1
+dbtd docs generate                  # compiles, then writes into target/
 cd target && python3 -m http.server # a host with no SPA rewrite and no ranges
+```
+
+Compile separately when you want column lineage, or to iterate on the exporter without
+paying for a compile each time:
+
+```
+dbtd compile --write-index --static-analysis strict
+dbtd docs generate --no-compile
 ```
 
 That last step is the load-bearing check: if it works under `http.server` it works on

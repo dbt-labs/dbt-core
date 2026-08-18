@@ -1680,6 +1680,9 @@ fn build_doc_from_payload(uid: &str, payload: &Value, now: &str, rows: &mut Vec<
     rows.push(json!({
         "unique_id": uid,
         "name": m.name,
+        "package_name": m.package_name,
+        "file_path": m.file_path,
+        "original_file_path": m.original_file_path,
         "block_contents": m.block_contents,
         "ingested_at": now,
     }));

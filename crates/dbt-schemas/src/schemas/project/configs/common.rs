@@ -236,13 +236,13 @@ pub struct WarehouseSpecificNodeConfig {
 
     // Postgres
     // XXX: This is an incomplete set of configs
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexesConfig::is_none")]
     pub indexes: IndexesConfig,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub unlogged: Option<bool>,
 
     // Salesforce
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "PrimaryKeyConfig::is_none")]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
 

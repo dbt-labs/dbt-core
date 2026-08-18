@@ -91,6 +91,7 @@ describe('createDuckDbDataSource', () => {
       'fetchDistribution',
       'fetchAssetCounts',
       'fetchProject',
+      'fetchOverview',
       'fetchFiles',
       'fetchSearch',
       'fetchSearchFacets',
@@ -247,6 +248,63 @@ describe('createDuckDbDataSource', () => {
     await source.fetchAsset({ uniqueId: 'model.a.b', resourceType: 'model' });
     expect(engine.calls.at(-1)?.tables).toEqual(['dbt.nodes']);
   });
+  describe('fetchOverview', () => {
+    const overviewRow = {
+      unique_id: 'doc.jaffle_shop.__overview__',
+      package_name: 'jaffle_shop',
+      block_contents: '# Jaffle Shop',
+    };
+
+    it('maps the winning row to the domain shape', async () => {
+      const source = makeSource(fakeEngine(() => [overviewRow]));
+      await expect(source.fetchOverview!()).resolves.toEqual({
+        uniqueId: 'doc.jaffle_shop.__overview__',
+        packageName: 'jaffle_shop',
+        blockContents: '# Jaffle Shop',
+      });
+    });
+
+    it('resolves null when no package defines an overview', async () => {
+      // Zero rows is the "not defined" answer, and is what makes the page fall
+      // back to its bundled default rather than render an empty page.
+      const source = makeSource(fakeEngine(() => []));
+      await expect(source.fetchOverview!()).resolves.toBeNull();
+    });
+
+    it('excludes the injected default by unique_id, not package_name', async () => {
+      // `package_name` is NULL on any index written before the ingest populated
+      // it, and `NULL <> 'dbt'` is NULL — that predicate would drop every row,
+      // including the user's own overview.
+      const engine = fakeEngine(() => []);
+      await makeSource(engine).fetchOverview!();
+      const { sql } = engine.calls[0];
+      expect(sql).toContain("unique_id <> 'doc.dbt.__overview__'");
+      expect(sql).not.toContain("package_name <> 'dbt'");
+    });
+
+    it('orders the root project ahead of dependency packages', async () => {
+      // The choice happens in SQL under LIMIT 1, so it is only observable here.
+      const engine = fakeEngine(() => []);
+      await makeSource(engine).fetchOverview!();
+      const { sql } = engine.calls[0];
+      expect(sql).toContain("CASE WHEN package_name = 'jaffle_shop' THEN 0 ELSE 1 END");
+      expect(sql).toContain('LIMIT 1');
+    });
+
+    it('escapes quotes in the project name rather than breaking the query', async () => {
+      const engine = fakeEngine(() => []);
+      const data = { ...BOOTSTRAP_DATA, project: { name: "o'brien" } };
+      await makeSource(engine, data as BootstrapData).fetchOverview!();
+      expect(engine.calls[0].sql).toContain("'o''brien'");
+    });
+
+    it('asks only for dbt.docs', async () => {
+      const engine = fakeEngine(() => []);
+      await makeSource(engine).fetchOverview!();
+      expect(engine.calls[0].tables).toEqual(['dbt.docs']);
+    });
+  });
+
   describe('lineage', () => {
     it('is exposed now that it is ported', () => {
       expect('fetchLineage' in makeSource(fakeEngine(() => []))).toBe(true);

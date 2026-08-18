@@ -24,12 +24,22 @@
 
 ### Static sites (`dbt docs generate`)
 
-`dbt docs generate` writes into your target directory, which you can host on any plain file server — GitLab Pages, GitHub Pages, S3 — with no process and no state. It exports an index rather than building one, so run a compile or build with `--write-index` first:
+`dbt docs generate` writes into your target directory, which you can host on any plain file server — GitLab Pages, GitHub Pages, S3 — with no process and no state. From a clean checkout, one command is enough:
+
+```bash
+dbt docs generate
+```
+
+That runs `compile --write-index` and exports the index it writes, so the site always describes your project as it is now. Compiling is unconditional, as it is in dbt Core v1.
+
+To reuse an index you already have, ask for that explicitly with `--no-compile`:
 
 ```bash
 dbt compile --write-index --static-analysis strict   # or: dbt build --write-index …
-dbt docs generate
+dbt docs generate --no-compile                       # exports the index above, as-is
 ```
+
+That two-step form is how you get column-level lineage, which `--static-analysis strict` produces and the plain compile above does not. It is also the form to use where the warehouse is unreachable, or where you want the export to stay cheap and read-only. With `--no-compile` and no index, the command is an error rather than a compile.
 
 ```
 target/index.html        SPA entry, with window.__DBT_DOCS__ injected
@@ -66,6 +76,7 @@ Data comes from parquet files that the Fusion engine writes to `<target>/index/`
 ```
 dbt project
     │  dbt compile --write-index --static-analysis strict
+    │  …or nothing: `docs generate` runs that compile unless `--no-compile`
     ▼
 <target>/index/*.parquet   ← the data source (not manifest.json), read as written
     │  dbt docs generate — writes index.html + assets/, copies nothing

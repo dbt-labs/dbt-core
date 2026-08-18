@@ -43,6 +43,13 @@ const EMPTY_RELATION_DDL: Partial<Record<TableName, string>> = {
     '(unique_id VARCHAR, stat_id VARCHAR, stat_value VARCHAR)',
   'dbt.catalog_tables':
     'CREATE OR REPLACE TABLE "dbt"."catalog_tables" (unique_id VARCHAR)',
+  // The resolver always injects `doc.dbt.__overview__`, so in practice this table
+  // is never empty — but the delta write path skips a batch with no doc rows, and
+  // the overview query is the landing page. Zero rows means "no authored
+  // overview", which the page already renders the bundled default for.
+  'dbt.docs':
+    'CREATE OR REPLACE TABLE "dbt"."docs" ' +
+    '(unique_id VARCHAR, name VARCHAR, package_name VARCHAR, block_contents VARCHAR)',
 };
 
 /** Logical table name, e.g. `dbt.nodes`. Matches the artifact's file stem. */

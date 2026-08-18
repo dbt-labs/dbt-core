@@ -29,6 +29,7 @@ use dbt_schemas::state::DbtProfile;
 use dbt_telemetry::GenericOpItemProcessed;
 use dbt_yaml;
 use fs_deps::get_or_install_packages;
+use fs_deps::private_package::PrivatePackageResolver;
 use indexmap::IndexMap;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -203,6 +204,7 @@ pub async fn load(
     tracing_features: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
     loader_hooks: Arc<dyn LoaderHooks>,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
 ) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile, vars_from_file) =
         load_simplified_project_and_profiles(arg).await?;
@@ -497,6 +499,8 @@ pub async fn load(
         iarg.replay.as_ref(),
         token,
         use_v2_compatible_package_downloads,
+        private_package_resolver,
+        dbt_state.cloud_config.clone(),
     )
     .await?;
 

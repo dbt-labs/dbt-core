@@ -1,3 +1,4 @@
+use crate::python::PythonPackageManager;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,23 +26,6 @@ pub enum Generation {
     V1,
     V2,
     NotApplicable,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum PythonPackageManager {
-    Pip,
-    Pipx,
-    Uv,
-    Poetry,
-    Pdm,
-    Pipenv,
-    Hatch,
-    Conda,
-    Asdf,
-    Mise,
-    Pyenv,
-    Rye,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -94,27 +78,6 @@ mod tests {
     fn generation_serializes_to_spec_contract() {
         assert_eq!(serde_json::to_string(&Generation::V1).unwrap(), "\"v1\"");
         assert_eq!(serde_json::to_string(&Generation::V2).unwrap(), "\"v2\"");
-    }
-
-    #[test]
-    fn python_package_manager_serializes_to_spec_contract() {
-        let cases = [
-            (PythonPackageManager::Pip, "\"pip\""),
-            (PythonPackageManager::Pipx, "\"pipx\""),
-            (PythonPackageManager::Uv, "\"uv\""),
-            (PythonPackageManager::Poetry, "\"poetry\""),
-            (PythonPackageManager::Pdm, "\"pdm\""),
-            (PythonPackageManager::Pipenv, "\"pipenv\""),
-            (PythonPackageManager::Hatch, "\"hatch\""),
-            (PythonPackageManager::Conda, "\"conda\""),
-            (PythonPackageManager::Asdf, "\"asdf\""),
-            (PythonPackageManager::Mise, "\"mise\""),
-            (PythonPackageManager::Pyenv, "\"pyenv\""),
-            (PythonPackageManager::Rye, "\"rye\""),
-        ];
-        for (variant, expected) in cases {
-            assert_eq!(serde_json::to_string(&variant).unwrap(), expected);
-        }
     }
 
     #[test]

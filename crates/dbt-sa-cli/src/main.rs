@@ -21,6 +21,7 @@ fn main() -> ExitCode {
         cli.target_path().as_ref(),
         &arg.io,
         Some(&cli.common_args().get_cli_warn_error_options()),
+        cli.common_args().skip_fusion_only_upgrades(),
         "dbt",
     )
     .with_command_name(cli_parser.command_name())

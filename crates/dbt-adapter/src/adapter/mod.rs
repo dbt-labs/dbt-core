@@ -1666,7 +1666,7 @@ impl Adapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new("check_schema_exists", &["database", "schema"], args);
-                let database = iter.next_arg::<&str>()?;
+                let database = iter.next_arg::<Option<&str>>()?.unwrap_or("");
                 let schema = iter.next_arg::<&str>()?;
                 iter.finish()?;
 
@@ -3679,13 +3679,22 @@ impl Adapter {
                 self.get_relation(state, database, schema, identifier, needs_information)
             }
             "get_columns_in_relation" => {
-                // relation: BaseRelation
                 let iter = ArgsIter::new(name, &["relation"], args);
-                let relation = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation)?;
-                iter.finish()?;
+                let relation = iter
+                    .next_arg::<&Value>()
+                    .and_then(downcast_value_to_dyn_base_relation)
+                    .and_then(|relation| {
+                        iter.finish()?;
+                        Ok(relation)
+                    });
 
-                self.get_columns_in_relation(state, relation.as_ref())
+                // Core's parse stub accepts arbitrary arguments, while valid relations must
+                // still use the existing recording path.
+                match relation {
+                    Ok(relation) => self.get_columns_in_relation(state, relation.as_ref()),
+                    Err(_) if self.is_parse() => Ok(empty_mutable_vec_value()),
+                    Err(err) => Err(err),
+                }
             }
             "build_catalog_from_show_tables_and_svv_columns" => {
                 self.build_catalog_from_show_tables_and_svv_columns(state, args)
@@ -4146,6 +4155,20 @@ impl Object for Adapter {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
         if let Parse(_) = &self.inner {
+            // A tainted argument (e.g. a column name drawn from a tainted
+            // `get_columns_in_relation()` result flowing into `quote()`)
+            // means `call_method_impl` can't be meaningfully evaluated: its
+            // native argument extraction expects a real `&str`/`i64`/etc.,
+            // not an `IntrospectiveValue` object, and would hard-fail with a
+            // type error instead of degrading gracefully. Skip the real impl
+            // entirely and hand back a tainted placeholder, mirroring
+            // `IntrospectiveValue::call`/`call_method`'s own "swallow, don't
+            // fail" rule for operations on fabricated stub data.
+            if args.iter().any(|v| v.is_introspective_stub()) {
+                return Ok(crate::introspective_taint::IntrospectiveValue::wrap(
+                    Value::UNDEFINED,
+                ));
+            }
             let result = self.call_method_impl(state, name, args, listeners);
             return result.map(|value| {
                 // Gated on a listener actually wanting introspective holes

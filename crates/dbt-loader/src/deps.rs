@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
+use dbt_cloud_config::resolve_cloud_config;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::tracing::TracingConfigProvider;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::tracing::dbt_metrics::error_count_checkpoint;
 use dbt_common::warn_error_options::WarnErrorOptions;
 use dbt_common::{ErrorCode, FsResult, fs_err};
@@ -13,6 +16,7 @@ use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_schemas::schemas::project::DbtProjectSimplified;
 use fs_deps::get_or_install_packages;
+use fs_deps::private_package::PrivatePackageResolver;
 
 use crate::args::LoadArgs;
 use crate::loader::{
@@ -22,16 +26,18 @@ use crate::loader::{
 
 /// Execute `dbt deps` without loading a profile.
 ///
-/// Only reads `dbt_project.yml` to determine the packages install path,
-/// then delegates to `get_or_install_packages`. No `profiles.yml` lookup
-/// is performed, matching dbt-core's behaviour where `dbt deps` does not
-/// require a valid profile.
+/// Reads `dbt_project.yml` (to determine the packages install path) and,
+/// opportunistically, `dbt_cloud.yml`, then delegates to
+/// `get_or_install_packages`. No `profiles.yml` lookup is performed,
+/// matching dbt-core's behaviour where `dbt deps` does not require a valid
+/// profile.
 pub async fn execute_deps_command(
     arg: &EvalArgs,
     cli_warn_error: Option<bool>,
     cli_warn_error_options: Option<WarnErrorOptions>,
     tracing_features: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
 ) -> FsResult<()> {
     let load_args = LoadArgs::from_eval_args(arg);
 
@@ -43,6 +49,39 @@ pub async fn execute_deps_command(
         cli_warn_error_options.as_ref(),
         tracing_features,
     )?;
+
+    // Parse dbt_cloud.yml (if it exists)
+    let dbt_cloud_yml = match dbt_cloud_config::get_cloud_project_path() {
+        Ok(path) => match dbt_cloud_config::parse_cloud_config(&path) {
+            Ok(config) => config,
+            Err(e) => {
+                emit_warn_log_message(
+                    ErrorCode::InvalidConfig,
+                    format!(
+                        "Ignoring dbt_cloud.yml: {}. Cloud credentials will not be available.",
+                        e
+                    ),
+                );
+                None
+            }
+        },
+        Err(e) => {
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                format!(
+                    "Could not determine dbt_cloud.yml path: {}. Cloud credentials will not be available.",
+                    e
+                ),
+            );
+            None
+        }
+    };
+
+    // Resolve cloud config with precedence: env > dbt_project.yml > dbt_cloud.yml
+    let cloud_config = resolve_cloud_config(
+        dbt_cloud_yml.as_ref(),
+        simplified_dbt_project.dbt_cloud.as_ref(),
+    );
 
     let (packages_install_path, _internal_packages_install_path) = get_packages_install_path(
         &load_args.io.in_dir,
@@ -76,6 +115,8 @@ pub async fn execute_deps_command(
         None, // replay_mode
         token,
         use_v2_compatible_package_downloads,
+        private_package_resolver,
+        cloud_config,
     )
     .await?;
 

@@ -472,16 +472,20 @@ pub fn fromyaml(_state: &State, args: &[Value]) -> Result<Value, Error> {
     let default = iter.next_kwarg::<Option<Value>>("default")?;
     iter.finish()?;
 
-    match dbt_yaml::from_str::<dbt_yaml::Value>(value) {
+    match parse_fromyaml_value(value) {
         Ok(serde_value) => Ok(Value::from_serialize(serde_value)),
-        Err(err) => match default {
+        Err(_) => match default {
             Some(default_value) => Ok(default_value),
-            None => Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!("Failed to parse YAML: {err}"),
-            )),
+            None => Ok(Value::from(())),
         },
     }
+}
+
+fn parse_fromyaml_value(value: &str) -> Result<dbt_yaml::Value, dbt_yaml::Error> {
+    let mut value =
+        dbt_yaml::Value::from_str(value, |_, _, _| dbt_yaml::mapping::DuplicateKey::Overwrite)?;
+    value.apply_merge()?;
+    Ok(value)
 }
 
 /// Serialize a Python object primitive to a YAML string.
@@ -1698,6 +1702,43 @@ mod tests {
         let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "a: 1\nb: 2");
+    }
+
+    #[test]
+    fn test_fromyaml_allows_duplicate_keys() {
+        let mut env = Environment::new();
+        env.add_func_func("fromyaml", fromyaml);
+
+        let template_source = r#"
+            {% set parsed = fromyaml("HASHED_COLUMNS:\n  COMPANY_X_CONTACT_HASH_ID: old\n  COMPANY_X_CONTACT_HASH_ID: new") %}
+            {{ parsed.HASHED_COLUMNS.COMPANY_X_CONTACT_HASH_ID }}
+        "#;
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "new");
+    }
+
+    #[test]
+    fn test_fromyaml_returns_default_on_parse_error() {
+        let mut env = Environment::new();
+        env.add_func_func("fromyaml", fromyaml);
+
+        let template_source = r#"{{ fromyaml("[", default="fallback") }}"#;
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "fallback");
+    }
+
+    #[test]
+    fn test_fromyaml_returns_none_on_parse_error_without_default() {
+        let mut env = Environment::new();
+        env.add_func_func("fromyaml", fromyaml);
+
+        let tmpl = env
+            .template_from_str(r#"{{ fromyaml("[") is none }}"#)
+            .unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "True");
     }
 
     #[test]

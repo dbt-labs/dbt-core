@@ -76,12 +76,14 @@ impl Connection for ReplayConnection {
         column_name: Option<&'a str>,
     ) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
         let path = self.recordings_path.clone();
+        // Normalize so a randomized __dbt_tmp suffix matches the key stored at record time.
+        let normalized_table_name = table_name.map(|t| self.config.normalize_sql(t));
         let unique_id = compute_file_name_for_get_objects(
             &path,
             self.ctx.node_id.as_deref(),
             catalog,
             db_schema,
-            table_name,
+            normalized_table_name.as_deref(),
             table_type.as_deref(),
             column_name,
         );
@@ -130,12 +132,14 @@ impl Connection for ReplayConnection {
         table_name: &str,
     ) -> AdbcResult<Schema> {
         let path = self.recordings_path.clone();
+        // Same as get_objects: keep the hash key stable despite tmp-suffix churn.
+        let normalized_table_name = self.config.normalize_sql(table_name);
         let unique_id = compute_file_name_for_table_schema(
             &path,
             self.ctx.node_id.as_deref(),
             catalog,
             db_schema,
-            table_name,
+            &normalized_table_name,
         );
 
         let storage_type = crate::storage::detect_storage_type(&path, &unique_id);

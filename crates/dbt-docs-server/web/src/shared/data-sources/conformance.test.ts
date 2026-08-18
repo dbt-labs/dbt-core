@@ -48,6 +48,8 @@ interface Fixture {
   asset?: { unique_id: string; name: string; resource_type: string };
   /** False means the feature is unavailable, however the source expresses that. */
   columnLineage?: boolean;
+  /** Absent means no package defines an `__overview__`, which must resolve null. */
+  overview?: { package_name: string; block_contents: string };
 }
 
 interface Harness {
@@ -100,6 +102,14 @@ const fakeHarness: Harness = {
           fixture.columnLineage
             ? { kind: 'ok', graph: { nodes: [], edges: [] } }
             : { kind: 'gated' },
+        fetchOverview: async () =>
+          fixture.overview
+            ? {
+                uniqueId: `doc.${fixture.overview.package_name}.__overview__`,
+                packageName: fixture.overview.package_name,
+                blockContents: fixture.overview.block_contents,
+              }
+            : null,
         fetchSearch: async (args: { filter?: { q?: string } }) =>
           (args.filter?.q ?? '').length > 1024
             ? { kind: 'error', code: 'query_too_long', message: 'too long' }
@@ -148,6 +158,21 @@ const duckdbHarness: Harness = {
         }
         if (sql.includes('FROM dbt.nodes n')) {
           return (fixture.asset ? [fixture.asset] : []) as T[];
+        }
+        if (sql.includes('FROM dbt.docs')) {
+          // The query filters the injected default out in SQL, so "no authored
+          // overview" reaches the source as zero rows.
+          return (
+            fixture.overview
+              ? [
+                  {
+                    unique_id: `doc.${fixture.overview.package_name}.__overview__`,
+                    package_name: fixture.overview.package_name,
+                    block_contents: fixture.overview.block_contents,
+                  },
+                ]
+              : []
+          ) as T[];
         }
         return [] as T[];
       },
@@ -255,6 +280,23 @@ describe.each([fakeHarness, duckdbHarness])('$name conforms', (harness) => {
     const available = harness.create({ columnLineage: true });
     const result = await available.fetchColumnLineage?.({ uniqueId: 'model.a.b' });
     expect(result?.kind).toBe('ok');
+  });
+
+  it('resolves the overview to null when no package defines one', async () => {
+    // Null, not a rejection and not an empty string: it is what tells the landing
+    // page to render its built-in default instead of a blank page.
+    const source = harness.create({});
+    await expect(source.fetchOverview?.()).resolves.toBeNull();
+  });
+
+  it('returns the authored overview when a package defines one', async () => {
+    const source = harness.create({
+      overview: { package_name: 'jaffle_shop', block_contents: '# Jaffle Shop' },
+    });
+    await expect(source.fetchOverview?.()).resolves.toMatchObject({
+      packageName: 'jaffle_shop',
+      blockContents: '# Jaffle Shop',
+    });
   });
 
   it('surfaces a client search error as data, not a rejection', async () => {

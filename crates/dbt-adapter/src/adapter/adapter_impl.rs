@@ -2738,6 +2738,16 @@ impl AdapterImpl {
             dt => dt,
         };
 
+        // Almost every SQL dialect adds a "NOT NULL" to types with the type alone
+        // meaning a nullable type. ClickHouse it the opposite: nullable types are
+        // declared with an explicity Nullable(..) wrapper. We want want to render
+        // the clean type here, so we set the nullable flag to get the clean type.
+        #[allow(clippy::match_like_matches_macro)]
+        let nullable = match self.adapter_type() {
+            ClickHouse => false,
+            _ => true,
+        };
+
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_convert_type(state, data_type),
             Impl(Snowflake, _)
@@ -2752,7 +2762,7 @@ impl AdapterImpl {
                 let mut out = String::new();
                 engine
                     .type_ops()
-                    .format_arrow_type_as_sql(data_type, &mut out)?;
+                    .format_arrow_type_as_sql(data_type, nullable, &mut out)?;
                 Ok(out)
             }
         }
@@ -6511,6 +6521,35 @@ mod tests {
             None,
             None
         ])));
+    }
+
+    #[test]
+    fn test_convert_type_clickhouse_never_nullable() {
+        use arrow_array::Int64Array;
+
+        // Seed columns must never render as Nullable(...), regardless of the field
+        // flag (seed schemas always declare nullable) or the actual data: this
+        // matches the Python adapter's agate-based typing. Missing values are
+        // inserted as literal NULLs and become column defaults server-side via
+        // input_format_null_as_default.
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("with_nulls", DataType::Int64, true),
+            Field::new("no_nulls", DataType::Int64, true),
+        ]));
+        let with_nulls = Arc::new(Int64Array::from(vec![Some(1), None, Some(3)])) as ArrayRef;
+        let no_nulls = Arc::new(Int64Array::from(vec![Some(1), Some(2), Some(3)])) as ArrayRef;
+        let batch = RecordBatch::try_new(schema, vec![with_nulls, no_nulls]).unwrap();
+        let table = Arc::new(AgateTable::from_record_batch(Arc::new(batch)));
+
+        let adapter = clickhouse_adapter(Mapping::new());
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        assert_eq!(
+            adapter.convert_type(&state, Arc::clone(&table), 0).unwrap(),
+            "Int64"
+        );
+        assert_eq!(adapter.convert_type(&state, table, 1).unwrap(), "Int64");
     }
 
     #[test]
