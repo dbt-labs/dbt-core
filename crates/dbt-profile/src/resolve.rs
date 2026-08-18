@@ -356,34 +356,31 @@ pub fn render_target(
     target_val: &dbt_yaml::Value,
     penv: &ProfileEnvironment,
 ) -> Result<dbt_yaml::Mapping> {
+    let target = target_mapping(target_val)?;
+    let adapter_type = target
+        .get("type")
+        .map(|value| render_value_recursive(&penv.env, &penv.ctx, value))
+        .transpose()?
+        .and_then(|value| value.as_str().map(|value| value.to_ascii_lowercase()));
+
+    let mut rendered = dbt_yaml::Mapping::new();
+    for (key, value) in target.iter() {
+        let value = match adapter_type.as_deref() {
+            Some("databricks") => crate::databricks::render_value(key, value, penv)?,
+            _ => render_value_recursive(&penv.env, &penv.ctx, value)?,
+        };
+        rendered.insert(key.clone(), value);
+    }
+    Ok(rendered)
+}
+
+fn target_mapping(target_val: &dbt_yaml::Value) -> Result<&dbt_yaml::Mapping> {
     let dbt_yaml::Value::Mapping(target, _) = target_val else {
         return Err(ProfileError::Other(
             "rendered target output is not a mapping".to_owned(),
         ));
     };
-
-    let adapter_type = target
-        .get("type")
-        .map(|value| render_value_recursive(&penv.env, &penv.ctx, value))
-        .transpose()?
-        .and_then(|value| value.as_str().map(str::to_owned));
-    let preserve_query_tags = adapter_type
-        .as_deref()
-        .is_some_and(|adapter_type| adapter_type.eq_ignore_ascii_case("databricks"));
-
-    let mut rendered = dbt_yaml::Mapping::new();
-    for (key, value) in target.iter() {
-        let string_rendering = if preserve_query_tags && key.as_str() == Some("query_tags") {
-            StringRendering::Preserve
-        } else {
-            StringRendering::Native
-        };
-        rendered.insert(
-            key.clone(),
-            render_value_recursive_inner(&penv.env, &penv.ctx, value, string_rendering)?,
-        );
-    }
-    Ok(rendered)
+    Ok(target)
 }
 
 // ---------------------------------------------------------------------------
@@ -417,41 +414,17 @@ fn read_profile_from_project(project_dir: &Path) -> Option<String> {
 // Recursive Jinja rendering over YAML values
 // ---------------------------------------------------------------------------
 
-fn render_value_recursive<S: Serialize>(
+pub(crate) fn render_value_recursive<S: Serialize>(
     env: &Environment<'_>,
     ctx: &S,
     value: &dbt_yaml::Value,
-) -> Result<dbt_yaml::Value> {
-    render_value_recursive_inner(env, ctx, value, StringRendering::Native)
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum StringRendering {
-    Native,
-    Preserve,
-}
-
-fn render_value_recursive_inner<S: Serialize>(
-    env: &Environment<'_>,
-    ctx: &S,
-    value: &dbt_yaml::Value,
-    string_rendering: StringRendering,
 ) -> Result<dbt_yaml::Value> {
     let listeners: &[Rc<dyn RenderingEventListener>] = &[];
 
     match value {
         dbt_yaml::Value::String(s, span) => {
-            let has_jinja = s.contains("{{") || s.contains("{%");
-            let rendered = if has_jinja {
-                env.render_str(s, ctx, listeners)
-                    .map_err(ProfileError::Jinja)?
-            } else {
-                s.clone()
-            };
-            let resolved = render_secrets(&rendered)?;
-            if string_rendering == StringRendering::Preserve {
-                Ok(dbt_yaml::Value::String(resolved, span.clone()))
-            } else if !has_jinja && resolved == rendered {
+            let (resolved, has_jinja) = render_string_contents(env, ctx, listeners, s)?;
+            if !has_jinja && resolved == *s {
                 Ok(value.clone())
             } else {
                 match dbt_yaml::from_str::<dbt_yaml::Value>(&resolved) {
@@ -468,22 +441,49 @@ fn render_value_recursive_inner<S: Serialize>(
         dbt_yaml::Value::Mapping(map, span) => {
             let mut new_map = dbt_yaml::Mapping::new();
             for (k, v) in map.iter() {
-                new_map.insert(
-                    k.clone(),
-                    render_value_recursive_inner(env, ctx, v, StringRendering::Native)?,
-                );
+                new_map.insert(k.clone(), render_value_recursive(env, ctx, v)?);
             }
             Ok(dbt_yaml::Value::Mapping(new_map, span.clone()))
         }
         dbt_yaml::Value::Sequence(seq, span) => {
             let rendered: std::result::Result<Vec<_>, _> = seq
                 .iter()
-                .map(|v| render_value_recursive_inner(env, ctx, v, StringRendering::Native))
+                .map(|v| render_value_recursive(env, ctx, v))
                 .collect();
             Ok(dbt_yaml::Value::Sequence(rendered?, span.clone()))
         }
         _ => Ok(value.clone()),
     }
+}
+
+// Preserve profile fields whose rendered contents must remain strings instead of being re-parsed as native YAML.
+pub(crate) fn render_string<S: Serialize>(
+    env: &Environment<'_>,
+    ctx: &S,
+    value: &dbt_yaml::Value,
+) -> Result<Option<dbt_yaml::Value>> {
+    let listeners: &[Rc<dyn RenderingEventListener>] = &[];
+    let dbt_yaml::Value::String(value, span) = value else {
+        return Ok(None);
+    };
+    let (rendered, _) = render_string_contents(env, ctx, listeners, value)?;
+    Ok(Some(dbt_yaml::Value::String(rendered, span.clone())))
+}
+
+fn render_string_contents<S: Serialize>(
+    env: &Environment<'_>,
+    ctx: &S,
+    listeners: &[Rc<dyn RenderingEventListener>],
+    value: &str,
+) -> Result<(String, bool)> {
+    let has_jinja = value.contains("{{") || value.contains("{%");
+    let rendered = if has_jinja {
+        env.render_str(value, ctx, listeners)
+            .map_err(ProfileError::Jinja)?
+    } else {
+        value.to_owned()
+    };
+    Ok((render_secrets(&rendered)?, has_jinja))
 }
 
 // ---------------------------------------------------------------------------

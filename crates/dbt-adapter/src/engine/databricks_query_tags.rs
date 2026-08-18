@@ -1,8 +1,7 @@
-use std::collections::BTreeMap;
-
 use adbc_core::options::OptionValue;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
+use indexmap::IndexMap;
 use minijinja::State;
 use serde::Deserialize;
 use serde_json::Value;
@@ -23,7 +22,7 @@ const RESERVED_KEYS: [&str; 4] = [
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct DatabricksQueryTags {
-    tags: BTreeMap<String, String>,
+    tags: IndexMap<String, String>,
 }
 
 impl DatabricksQueryTags {
@@ -36,7 +35,7 @@ impl DatabricksQueryTags {
         let profile_tags = parse_user_tags(profile_query_tags, "Connection config")?;
         let model_tags = parse_user_tags(model_query_tags, "Model config")?;
 
-        let mut tags = BTreeMap::from([(
+        let mut tags = IndexMap::from([(
             DBT_CORE_VERSION.to_string(),
             truncate_default(env!("CARGO_PKG_VERSION")),
         )]);
@@ -88,55 +87,53 @@ fn query_tags_from_yaml_node(
     yaml_node: &dbt_yaml::Value,
     profile_query_tags: Option<&str>,
 ) -> AdapterResult<DatabricksQueryTags> {
-    if let Ok(model) = DbtModel::deserialize(yaml_node) {
-        let model_query_tags = model
-            .__adapter_attr__
-            .databricks_attr
-            .as_deref()
-            .and_then(|attr| attr.query_tags.as_deref());
-        return DatabricksQueryTags::from_sources(
-            profile_query_tags,
-            model_query_tags,
-            Some(&model.__common_attr__.name),
-            Some(&model.__base_attr__.materialized.to_string()),
-        );
-    }
-
-    if let Ok(node) = DbtUnitTest::deserialize(yaml_node) {
-        let query_tags = node
-            .deprecated_config
-            .__warehouse_specific_config__
-            .query_tags
-            .as_deref();
-        return DatabricksQueryTags::from_sources(
-            profile_query_tags,
-            query_tags,
-            Some(&node.__common_attr__.name),
-            None,
-        );
-    }
-
     macro_rules! tags_for_node {
-        ($node_type:ty) => {
-            if let Ok(node) = <$node_type>::deserialize(yaml_node) {
-                let query_tags = node
-                    .deprecated_config
-                    .__warehouse_specific_config__
-                    .query_tags
-                    .as_deref();
+        ($node_type:ty, $node:ident) => {
+            if let Ok($node) = <$node_type>::deserialize(yaml_node) {
+                let query_tags = $node
+                    .__adapter_attr__
+                    .databricks_attr
+                    .as_deref()
+                    .and_then(|attr| attr.query_tags.as_deref());
                 return DatabricksQueryTags::from_sources(
                     profile_query_tags,
                     query_tags,
-                    Some(&node.__common_attr__.name),
-                    Some(&node.__base_attr__.materialized.to_string()),
+                    Some(&$node.__common_attr__.name),
+                    Some(&$node.__base_attr__.materialized.to_string()),
                 );
             }
         };
     }
 
-    tags_for_node!(DbtTest);
-    tags_for_node!(DbtSnapshot);
-    tags_for_node!(DbtSeed);
+    // TODO: Remove this path after seeds and unit tests expose typed adapter attributes.
+    macro_rules! tags_for_node_deprecated {
+        ($node_type:ty, $node:ident, $materialized:expr) => {
+            if let Ok($node) = <$node_type>::deserialize(yaml_node) {
+                let query_tags = $node
+                    .deprecated_config
+                    .__warehouse_specific_config__
+                    .query_tags
+                    .as_deref();
+                let materialized: Option<String> = $materialized;
+                return DatabricksQueryTags::from_sources(
+                    profile_query_tags,
+                    query_tags,
+                    Some(&$node.__common_attr__.name),
+                    materialized.as_deref(),
+                );
+            }
+        };
+    }
+
+    tags_for_node!(DbtModel, model);
+    tags_for_node_deprecated!(DbtUnitTest, unit_test, None);
+    tags_for_node!(DbtTest, test);
+    tags_for_node!(DbtSnapshot, snapshot);
+    tags_for_node_deprecated!(
+        DbtSeed,
+        seed,
+        Some(seed.__base_attr__.materialized.to_string())
+    );
 
     DatabricksQueryTags::from_sources(profile_query_tags, None, None, None)
 }
@@ -144,26 +141,31 @@ fn query_tags_from_yaml_node(
 fn parse_user_tags(
     query_tags: Option<&str>,
     source: &str,
-) -> AdapterResult<BTreeMap<String, String>> {
+) -> AdapterResult<IndexMap<String, String>> {
     let Some(query_tags) = query_tags.filter(|value| !value.is_empty()) else {
-        return Ok(BTreeMap::new());
+        return Ok(IndexMap::new());
     };
 
-    let parsed: Value = serde_json::from_str(query_tags).map_err(|error| {
-        AdapterError::new(
-            AdapterErrorKind::Configuration,
-            format!("Invalid JSON in query_tags: {error}"),
-        )
+    let object: IndexMap<String, Value> = serde_json::from_str(query_tags).map_err(|error| {
+        if error.classify() == serde_json::error::Category::Data {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "query_tags must be a JSON object (dictionary)",
+            )
+        } else {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!("Invalid JSON in query_tags: {error}"),
+            )
+        }
     })?;
-    let Value::Object(object) = parsed else {
-        return configuration_error("query_tags must be a JSON object (dictionary)");
-    };
 
-    let reserved = object
+    let mut reserved = object
         .keys()
         .filter(|key| RESERVED_KEYS.contains(&key.as_str()))
         .cloned()
         .collect::<Vec<_>>();
+    reserved.sort();
     if !reserved.is_empty() {
         return configuration_error(format!(
             "{source}: Cannot use reserved query tag keys: {}. Reserved keys are: {}",
@@ -258,6 +260,36 @@ mod tests {
     }
 
     #[test]
+    fn preserves_query_tag_insertion_order() {
+        let options = DatabricksQueryTags::from_sources(
+            Some(r#"{"z_profile":"first","a_shared":"profile"}"#),
+            Some(r#"{"m_model":"last","a_shared":"model"}"#),
+            None,
+            None,
+        )
+        .unwrap()
+        .into_statement_options();
+
+        let names = options
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            [
+                "databricks.query_tag.@@dbt_core_version",
+                "databricks.query_tag.z_profile",
+                "databricks.query_tag.a_shared",
+                "databricks.query_tag.m_model",
+            ]
+        );
+        assert_eq!(
+            string_option(&options, "databricks.query_tag.a_shared"),
+            Some("model")
+        );
+    }
+
+    #[test]
     fn emits_empty_user_values() {
         let options = DatabricksQueryTags::from_sources(Some(r#"{"empty":""}"#), None, None, None)
             .unwrap()
@@ -323,9 +355,10 @@ mod tests {
     fn non_model_resources_emit_resource_query_tags() {
         let mut test = DbtTest::default();
         test.__common_attr__.name = "accepted_values_orders".to_string();
+        test.__adapter_attr__ = databricks_attr(r#"{"team":"resource"}"#);
         test.deprecated_config
             .__warehouse_specific_config__
-            .query_tags = Some(r#"{"team":"resource"}"#.to_string());
+            .query_tags = Some(r#"{"team":"deprecated"}"#.to_string());
         let test_materialized = test.__base_attr__.materialized.to_string();
         assert_resource_tags(
             dbt_yaml::to_value(test).unwrap(),
@@ -335,10 +368,11 @@ mod tests {
 
         let mut snapshot = DbtSnapshot::default();
         snapshot.__common_attr__.name = "orders_snapshot".to_string();
+        snapshot.__adapter_attr__ = databricks_attr(r#"{"team":"resource"}"#);
         snapshot
             .deprecated_config
             .__warehouse_specific_config__
-            .query_tags = Some(r#"{"team":"resource"}"#.to_string());
+            .query_tags = Some(r#"{"team":"deprecated"}"#.to_string());
         let snapshot_materialized = snapshot.__base_attr__.materialized.to_string();
         assert_resource_tags(
             dbt_yaml::to_value(snapshot).unwrap(),
@@ -417,6 +451,21 @@ mod tests {
                 DatabricksQueryTags::from_sources(None, Some(source), None, None).unwrap_err();
             assert!(model_error.message().contains("reserved query tag keys"));
         }
+
+        let error = DatabricksQueryTags::from_sources(
+            Some(r#"{"@@dbt_materialized":"override","@@dbt_core_version":"override"}"#),
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            error.message().contains(
+                "Cannot use reserved query tag keys: @@dbt_core_version, @@dbt_materialized"
+            ),
+            "{}",
+            error.message()
+        );
     }
 
     #[test]

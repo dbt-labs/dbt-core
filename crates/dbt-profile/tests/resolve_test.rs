@@ -199,6 +199,70 @@ my_project:
 }
 
 #[test]
+fn test_databricks_query_tags_requires_a_json_string() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      query_tags:
+        team: analytics
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let error = resolve(&args).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("Databricks profile query_tags must be a JSON string")
+    );
+}
+
+#[test]
+fn test_databricks_query_tags_accepts_null() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      query_tags: null
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    assert!(matches!(
+        result.credentials.get("query_tags"),
+        Some(dbt_yaml::Value::Null(_))
+    ));
+}
+
+#[test]
 fn test_nested_query_tags_key_keeps_native_rendering() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
@@ -218,7 +282,7 @@ my_project:
   target: dev
   outputs:
     dev:
-      type: custom
+      type: databricks
       adapter_options:
         query_tags: "{{ env_var('DBT_PROFILE_TEST_NESTED_QUERY_TAGS') }}"
 "#,
