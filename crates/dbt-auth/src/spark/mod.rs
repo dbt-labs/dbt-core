@@ -178,6 +178,45 @@ impl<'a> SparkAuthIR<'a> {
     }
 }
 
+fn extract_server_side_parameters<'a>(
+    config: &'a AdapterConfig,
+) -> Result<HashMap<&'a str, String>, AuthError> {
+    let mut session_params = HashMap::new();
+    let server_side_parameters = config
+        .get("server_side_parameters")
+        .or_else(|| config.get("conf"));
+
+    if let Some(ssp) = server_side_parameters {
+        let YmlValue::Mapping(ssp, _) = ssp else {
+            return Err(AuthError::config(
+                "'server_side_parameters' (or 'conf') must be mapping",
+            ));
+        };
+
+        for (key, value) in ssp {
+            let YmlValue::String(key, _) = key else {
+                return Err(AuthError::config(
+                    "'server_side_parameters' (or 'conf') key must be string",
+                ));
+            };
+
+            let value = match value {
+                YmlValue::String(v, _) => v.to_string(),
+                YmlValue::Number(v, _) => v.to_string(),
+                _ => {
+                    return Err(AuthError::config(
+                        "'server_side_parameters' (or 'conf') value must be string or number",
+                    ));
+                }
+            };
+
+            session_params.insert(key.as_str(), value);
+        }
+    }
+
+    Ok(session_params)
+}
+
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthError> {
     let method = config
         .get_str("method")
@@ -211,38 +250,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthErro
         },
     };
 
-    let mut session_params = HashMap::new();
-    let server_side_parameters = config
-        .get("server_side_parameters")
-        .or_else(|| config.get("conf"));
-
-    if let Some(ssp) = server_side_parameters {
-        let YmlValue::Mapping(ssp, _) = ssp else {
-            return Err(AuthError::config(
-                "'server_side_parameters' must be mapping",
-            ));
-        };
-
-        for (key, value) in ssp {
-            let YmlValue::String(key, _) = key else {
-                return Err(AuthError::config(
-                    "'server_side_parameters' key must be string",
-                ));
-            };
-
-            let value = match value {
-                YmlValue::String(v, _) => v.to_string(),
-                YmlValue::Number(v, _) => v.to_string(),
-                _ => {
-                    return Err(AuthError::config(
-                        "'server_side_parameters' value must be string or number",
-                    ));
-                }
-            };
-
-            session_params.insert(key.as_str(), value);
-        }
-    }
+    let mut session_params = extract_server_side_parameters(config)?;
 
     let ir = match method {
         "thrift" | "http" => SparkAuthIR::Thrift {
