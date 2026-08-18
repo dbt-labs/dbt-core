@@ -1,5 +1,7 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
 use dbt_adbc::{Backend, database, spark};
+
+mod fabric;
 pub use dbt_yaml::Value as YmlValue;
 
 use std::collections::HashMap;
@@ -362,6 +364,17 @@ impl Auth for SparkAuth {
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
+        // Microsoft Fabric Lakehouse targets are the "fabric" platform flavor
+        // of the spark adapter: identified by their required GUID fields and
+        // configured by the platform-specialized `fabric` module.
+        if fabric::is_fabric_spark_config(config) {
+            return auth_configure_pipeline!(
+                self.backend(),
+                &config,
+                fabric::parse_auth,
+                fabric::apply_connection_args
+            );
+        }
         auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }
