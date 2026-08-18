@@ -272,6 +272,13 @@ pub struct WarehouseSpecificNodeConfig {
     pub mv_on_schema_change: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub repopulate_from_mvs_on_full_refresh: Option<bool>,
+
+    // Exasol
+    // Key names match the Python dbt-exasol adapter so existing projects
+    // migrate without config changes.
+    pub partition_by_config: Option<StringOrArrayOfStrings>,
+    pub distribute_by_config: Option<StringOrArrayOfStrings>,
+    pub primary_key_config: Option<StringOrArrayOfStrings>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {

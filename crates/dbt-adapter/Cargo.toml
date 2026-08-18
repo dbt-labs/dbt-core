@@ -27,6 +27,7 @@ dbt-frontend-common = { workspace = true }
 dbt-handles = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
+dbt-sql-keywords = { workspace = true }
 dbt-sql-utils = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-tracing = { workspace = true }
