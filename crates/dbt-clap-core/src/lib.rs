@@ -2605,6 +2605,7 @@ impl CommonArgs {
                 send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.log_format,
+                log_format_file: self.log_format_file,
                 log_level: self.log_level,
                 log_level_file: self.log_level_file,
                 log_file_max_bytes: self.log_file_max_bytes,
@@ -2868,6 +2869,7 @@ impl InitArgs {
                 send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.common_args.log_format,
+                log_format_file: self.common_args.log_format_file,
                 log_level: self.common_args.log_level,
                 log_level_file: self.common_args.log_level_file,
                 log_file_max_bytes: self.common_args.log_file_max_bytes,
@@ -2916,6 +2918,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             send_anonymous_usage_stats: common_args.get_send_anonymous_usage_stats(),
             status_reporter: None,
             log_format: common_args.log_format,
+            log_format_file: common_args.log_format_file,
             log_level: match (common_args.debug, common_args.log_level) {
                 (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
                 (true, _) => Some(LogLevel::Debug),
@@ -2965,6 +2968,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             status_reporter: None,
             // should_cancel_compilation: None,
             log_format: common_args.log_format,
+            log_format_file: common_args.log_format_file,
             log_level: common_args.log_level,
             log_level_file: common_args.log_level_file,
             log_file_max_bytes: common_args.log_file_max_bytes,
@@ -3647,5 +3651,36 @@ mod tests {
     fn get_distribution_info_path_and_all_are_mutually_exclusive() {
         let result = parse_internal_args(&["get-distribution-info", "--all", "/some/dbt"]);
         assert!(result.is_err());
+    }
+
+    /// Regression test for dbt-core#15685: both entrypoints carry
+    /// `--log-format-file` from `CommonArgs` into `IoArgs`.
+    #[test]
+    fn cli_entrypoints_carry_log_format_file_into_io_args() {
+        // `Cli::common_args()` reads the subcommand's args, not the top-level field.
+        let cli = Cli {
+            command: Command::Core(CoreCommand::Run(RunArgs {
+                common_args: CommonArgs {
+                    log_format: LogFormat::Text,
+                    log_format_file: Some(LogFormat::Json),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
+            common_args: CommonArgs::default(),
+        };
+
+        for (entrypoint, args) in [("from_main", from_main(&cli)), ("from_lib", from_lib(&cli))] {
+            assert_eq!(
+                args.io.log_format_file,
+                Some(LogFormat::Json),
+                "expected `{entrypoint}` to carry log_format_file"
+            );
+            assert_eq!(
+                args.io.log_format,
+                LogFormat::Text,
+                "expected `{entrypoint}` to leave log_format alone"
+            );
+        }
     }
 }
