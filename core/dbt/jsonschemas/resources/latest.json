@@ -406,7 +406,7 @@
             "null"
           ],
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/StringOrMap"
           }
         },
         "tags": {
@@ -553,7 +553,7 @@
             "null"
           ],
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/StringOrMap"
           }
         },
         "quote": {
@@ -7576,12 +7576,21 @@
       ]
     },
     "PartitionsConfig": {
-      "description": "External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`) or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).",
+      "description": "External-table style `partitions` config — a string or list-of-strings (e.g. `['ds=2023-01-01']`), or a map or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).",
       "anyOf": [
+        {
+          "type": "string"
+        },
         {
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
           }
         },
         {
@@ -12167,6 +12176,23 @@
         }
       ]
     },
+    "StringOrMap": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
     "StringOrMetricPropertiesMetricInput": {
       "anyOf": [
         {
@@ -13796,7 +13822,7 @@
             "null"
           ],
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/StringOrMap"
           }
         },
         "quote": {
