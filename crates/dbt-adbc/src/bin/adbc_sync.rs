@@ -90,6 +90,11 @@ fn download_and_hash(agent: &ureq::Agent, url: &str) -> Result<String, ureq::Err
 }
 
 fn main() {
+    // Checksums are of whatever this host serves, so name it: a stray
+    // DBT_ADBC_USE_STAGING_CDN would otherwise silently record pre-release
+    // hashes.
+    eprintln!("Syncing checksums from https://{}", install::cdn_host());
+
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let output_path = crate_dir.join("src/checksums.rs");
 

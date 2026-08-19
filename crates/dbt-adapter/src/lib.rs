@@ -17,6 +17,7 @@ pub mod engine;
 pub mod errors;
 pub mod format_ident;
 pub mod formatter;
+pub mod introspective_taint;
 pub mod load_catalogs;
 pub mod metadata;
 pub mod need_quotes;

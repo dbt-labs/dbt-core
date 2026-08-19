@@ -140,6 +140,26 @@ fn unrendered_hook_value_eq(a: Option<&dbt_yaml::Value>, b: Option<&dbt_yaml::Va
     unrendered_value_eq(a, b)
 }
 
+/// Builds a source's unique_id the way dbt-core does: resource type, package name, source
+/// name and table name joined with `.`, all verbatim
+/// (`core/dbt/parser/schemas.py`, `add_source_definitions`).
+///
+/// Fusion instead runs the table name through `[^a-zA-Z0-9_]` → `__` first
+/// (`dbt-parser`, `resolve_sources.rs`), so a BigQuery wildcard source table `events_*` is
+/// `source.pkg.src.events___` here and `source.pkg.src.events_*` in a dbt-core-produced
+/// state manifest.  Since unique_id is the key that pairs a node with its previous-manifest
+/// counterpart, that divergence makes every such source look brand new, which under a
+/// descendant selector (`state:modified+`) drags in everything downstream of it.
+///
+/// The sanitization is not invertible — `__` could have come from `*`, `-`, `.`, `/`, a
+/// space, or a literal `__` — so the two spellings can only be reconciled with both nodes in
+/// hand.  This rebuilds the dbt-core spelling from the three components both engines store
+/// verbatim on the node (`package_name`, `source_name`, `name`), giving a join key that is
+/// stable across engines.
+fn core_style_source_uid(package_name: &str, source_name: &str, table_name: &str) -> String {
+    format!("source.{package_name}.{source_name}.{table_name}")
+}
+
 impl StateArtifacts {
     fn test_signature(test: &DbtTest) -> Option<TestSignature> {
         #[cfg(test)]
@@ -276,6 +296,26 @@ impl StateArtifacts {
         nodes.get_node(base).map(|n| n as &dyn InternalDbtNode)
     }
 
+    /// Pairs a source with its state-manifest counterpart when the two engines spell its
+    /// unique_id differently — see [`core_style_source_uid`].  Keys on the three components
+    /// both engines store verbatim, so a source genuinely *renamed* to the sanitized spelling
+    /// looks itself up under that new name and correctly finds nothing.
+    fn find_previous_source_by_core_style_id<'a>(
+        current: &dyn InternalDbtNode,
+        nodes: &'a Nodes,
+    ) -> Option<&'a dyn InternalDbtNode> {
+        let current_source = current.as_any().downcast_ref::<DbtSource>()?;
+        let core_style_uid = core_style_source_uid(
+            &current_source.__common_attr__.package_name,
+            &current_source.__source_attr__.source_name,
+            &current_source.__common_attr__.name,
+        );
+        nodes
+            .sources
+            .get(&core_style_uid)
+            .map(|n| Arc::as_ref(n) as &dyn InternalDbtNode)
+    }
+
     fn previous_node_for<'a>(
         &'a self,
         current: &dyn InternalDbtNode,
@@ -284,6 +324,15 @@ impl StateArtifacts {
 
         if let Some(prev) = nodes.get_node(current.common().unique_id.as_str()) {
             return Some(prev as &dyn InternalDbtNode);
+        }
+
+        if current.resource_type() == NodeType::Source {
+            // Fallback: Fusion sanitizes a source's table name into its unique_id while
+            // dbt-core does not, so the exact lookup misses against a Mantle-produced state
+            // manifest.  Pair on the source's identity instead.
+            if let Some(found) = Self::find_previous_source_by_core_style_id(current, nodes) {
+                return Some(found);
+            }
         }
 
         if current.resource_type() == NodeType::Test {
@@ -1257,6 +1306,88 @@ mod tests {
         }
     }
 
+    /// `unique_id` is spelled independently of the three identity fields so a test can
+    /// reproduce the Fusion (sanitized) and Mantle (verbatim) spellings side by side.
+    fn make_source(uid: &str, package: &str, source_name: &str, table_name: &str) -> DbtSource {
+        let mut source = DbtSource::default();
+        source.__common_attr__.unique_id = uid.to_string();
+        source.__common_attr__.package_name = package.to_string();
+        source.__common_attr__.name = table_name.to_string();
+        source.__source_attr__.source_name = source_name.to_string();
+        source.__common_attr__.fqn = vec![source_name.to_string(), table_name.to_string()];
+        source
+    }
+
+    fn state_with_previous_sources(previous_sources: Vec<DbtSource>) -> StateArtifacts {
+        let mut prev_nodes = Nodes::default();
+        for source in previous_sources {
+            prev_nodes
+                .sources
+                .insert(source.__common_attr__.unique_id.clone(), Arc::new(source));
+        }
+
+        StateArtifacts {
+            nodes: Some(prev_nodes),
+            run_results: None,
+            source_freshness_results: None,
+            state_path: PathBuf::from("/tmp/fake_state"),
+            target_path: None,
+            test_sig_index: Default::default(),
+            test_full_name_index: Default::default(),
+            truncated_name_to_state_uid: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// A BigQuery wildcard source table is `source.pkg.ga4.events_*` in a dbt-core-produced
+    /// state manifest but `source.pkg.ga4.events___` in Fusion, because Fusion sanitizes the
+    /// table name into the unique_id.  Before the identity fallback the exact lookup missed,
+    /// `is_new` fired, and `state:modified+` dragged in everything downstream of the source.
+    #[test]
+    fn source_with_sanitized_uid_pairs_with_mantle_verbatim_uid() {
+        let state = state_with_previous_sources(vec![make_source(
+            "source.pkg.ga4.events_*",
+            "pkg",
+            "ga4",
+            "events_*",
+        )]);
+        // Fusion's spelling of the same source: sanitized unique_id, verbatim `name`.
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events_*");
+
+        assert!(!state.is_new(&current));
+        assert!(!state.is_modified(&current, None, None, AdapterType::Bigquery));
+    }
+
+    /// The fallback keys on the table name both engines store verbatim, not on the sanitized
+    /// unique_id, so a source genuinely renamed to the sanitized spelling is still new.
+    #[test]
+    fn source_renamed_to_a_different_table_is_still_new() {
+        let state = state_with_previous_sources(vec![make_source(
+            "source.pkg.ga4.events_*",
+            "pkg",
+            "ga4",
+            "events_*",
+        )]);
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___");
+
+        assert!(state.is_new(&current));
+    }
+
+    /// When the state manifest contains both spellings as genuinely distinct sources, the
+    /// exact unique_id match owns the pairing — the fallback runs only after it misses.
+    #[test]
+    fn source_exact_uid_match_wins_over_identity_fallback() {
+        let state = state_with_previous_sources(vec![
+            make_source("source.pkg.ga4.events_*", "pkg", "ga4", "events_*"),
+            make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___"),
+        ]);
+
+        let current = make_source("source.pkg.ga4.events___", "pkg", "ga4", "events___");
+        let previous = state
+            .previous_node_for(&current)
+            .expect("exact unique_id match");
+        assert_eq!(previous.common().name, "events___");
+    }
+
     #[test]
     fn state_modified_configs_treats_stringified_hook_lists_as_unchanged() {
         let uid = "model.pkg.orders";
@@ -1341,7 +1472,7 @@ mod tests {
     fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
         pairs
             .iter()
-            .map(|(k, v)| (k.to_string(), yml_value(v)))
+            .map(|(k, v)| ((*k).to_string(), yml_value(v)))
             .collect()
     }
 

@@ -7,7 +7,7 @@ use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{AdapterResult, errors::AsyncAdapterResult, metadata::*};
 use arrow_schema::Schema;
 
-use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};
+use arrow_array::{Array, RecordBatch, StringArray, UInt64Array};
 
 use dbt_adapter_core::ExecutionPhase;
 use dbt_adbc::{Connection, MapReduce, QueryCtx};
@@ -61,6 +61,8 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
         self.adapter.adapter_type()
     }
 
+    /// Parse the record batch produced by the `clickhouse__get_catalog*` macros
+    /// into per-relation table metadata.
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,
@@ -125,6 +127,8 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
         Ok(result)
     }
 
+    /// Parse the record batch produced by the `clickhouse__get_catalog*` macros
+    /// into per-relation column metadata.
     fn build_columns_from_get_columns(
         &self,
         stats_sql_result: Arc<RecordBatch>,
@@ -138,7 +142,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
         let table_names = stats_sql_result.column_values::<StringArray>("table_name")?;
 
         let column_names = stats_sql_result.column_values::<StringArray>("column_name")?;
-        let column_indices = stats_sql_result.column_values::<Decimal128Array>("column_index")?;
+        let column_indices = stats_sql_result.column_values::<UInt64Array>("column_index")?;
         let column_types = stats_sql_result.column_values::<StringArray>("column_type")?;
         let column_comments = stats_sql_result.column_values::<StringArray>("column_comment")?;
 
@@ -158,7 +162,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
 
             let column = ColumnMetadata {
                 name: column_name.to_string(),
-                index: column_index,
+                index: column_index as i128,
                 data_type: column_type.to_string(),
                 comment: match column_comment {
                     "" => None,
@@ -427,6 +431,156 @@ fn build_schema_from_clickhouse_describe(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sql_types::DefaultTypeOps;
+    use crate::stmt_splitter::DefaultStmtSplitter;
+    use arrow_schema::{DataType, Field};
+    use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+    /// A ClickHouse metadata adapter backed by a mock engine (no live
+    /// connection); the catalog batch parsers never touch the engine.
+    fn make_metadata_adapter() -> ClickHouseMetadataAdapter {
+        ClickHouseMetadataAdapter {
+            adapter: AdapterImpl::new_mock(
+                AdapterType::ClickHouse,
+                BTreeMap::new(),
+                DEFAULT_RESOLVED_QUOTING,
+                Arc::new(DefaultTypeOps::new(AdapterType::ClickHouse)),
+                Arc::new(DefaultStmtSplitter),
+            ),
+        }
+    }
+
+    /// Build a catalog record batch with the same Arrow types the ClickHouse
+    /// ADBC driver produces for the `clickhouse__get_catalog*` macro SQL:
+    /// strings everywhere except `column_index`, which is a `UInt64`
+    /// (`system.columns.position`). Using other types here (e.g. Decimal128
+    /// for `column_index`) must fail, so these tests pin the wire format.
+    #[allow(clippy::type_complexity)]
+    fn catalog_batch(rows: &[(&str, &str, &str, &str, &str, u64, &str, &str)]) -> Arc<RecordBatch> {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("table_database", DataType::Utf8, false),
+            Field::new("table_schema", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+            Field::new("table_comment", DataType::Utf8, true),
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("column_index", DataType::UInt64, false),
+            Field::new("column_type", DataType::Utf8, false),
+            Field::new("column_comment", DataType::Utf8, true),
+            Field::new("table_owner", DataType::Utf8, true),
+        ]));
+        Arc::new(
+            RecordBatch::try_new(
+                schema,
+                vec![
+                    // table_database is always '' for ClickHouse (2-part naming)
+                    Arc::new(StringArray::from(vec![""; rows.len()])),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.0))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.1))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.2))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.3))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.4))),
+                    Arc::new(UInt64Array::from_iter_values(rows.iter().map(|r| r.5))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.6))),
+                    Arc::new(StringArray::from_iter_values(rows.iter().map(|r| r.7))),
+                    // table_owner is `cast(null as Nullable(String))` in the macro
+                    Arc::new(StringArray::from(vec![None::<&str>; rows.len()])),
+                ],
+            )
+            .expect("catalog_batch test fixture should build a valid RecordBatch"),
+        )
+    }
+
+    fn sample_batch() -> Arc<RecordBatch> {
+        catalog_batch(&[
+            (
+                "db1",
+                "orders",
+                "table",
+                "fact table",
+                "id",
+                1,
+                "UInt64",
+                "",
+            ),
+            (
+                "db1",
+                "orders",
+                "table",
+                "fact table",
+                "amount",
+                2,
+                "Decimal(18, 2)",
+                "in cents",
+            ),
+            ("db1", "orders_v", "view", "", "id", 1, "UInt64", ""),
+        ])
+    }
+
+    #[test]
+    fn build_schemas_from_stats_sql_groups_rows_per_relation() {
+        let adapter = make_metadata_adapter();
+        let result = adapter
+            .build_schemas_from_stats_sql(sample_batch())
+            .unwrap();
+
+        assert_eq!(
+            result.keys().collect::<Vec<_>>(),
+            vec![".db1.orders", ".db1.orders_v"]
+        );
+
+        let orders = &result[".db1.orders"].metadata;
+        assert_eq!(orders.materialization_type, "table");
+        assert_eq!(orders.schema, "db1");
+        assert_eq!(orders.name, "orders");
+        assert_eq!(orders.database, Some("".to_string()));
+        assert_eq!(orders.comment, Some("fact table".to_string()));
+        // null table_owner reads back as an empty string
+        assert_eq!(orders.owner, Some("".to_string()));
+
+        let view = &result[".db1.orders_v"].metadata;
+        assert_eq!(view.materialization_type, "view");
+        assert_eq!(view.comment, None);
+    }
+
+    #[test]
+    fn build_columns_from_get_columns_reads_uint64_positions() {
+        let adapter = make_metadata_adapter();
+        let result = adapter
+            .build_columns_from_get_columns(sample_batch())
+            .unwrap();
+
+        let orders = &result[".db1.orders"];
+        assert_eq!(orders.len(), 2);
+        assert_eq!(orders["id"].index, 1);
+        assert_eq!(orders["id"].data_type, "UInt64");
+        assert_eq!(orders["id"].comment, None);
+        assert_eq!(orders["amount"].index, 2);
+        assert_eq!(orders["amount"].data_type, "Decimal(18, 2)");
+        assert_eq!(orders["amount"].comment, Some("in cents".to_string()));
+
+        let view = &result[".db1.orders_v"];
+        assert_eq!(view.len(), 1);
+        assert_eq!(view["id"].index, 1);
+    }
+
+    #[test]
+    fn catalog_batch_parsers_accept_empty_batches() {
+        let adapter = make_metadata_adapter();
+        let batch = catalog_batch(&[]);
+        assert!(
+            adapter
+                .build_schemas_from_stats_sql(batch.clone())
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            adapter
+                .build_columns_from_get_columns(batch)
+                .unwrap()
+                .is_empty()
+        );
+    }
 
     /// ClickHouse's `system.tables` is case-sensitive on `database` and `name`
     #[test]

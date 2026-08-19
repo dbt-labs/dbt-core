@@ -19,7 +19,7 @@ use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, 
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_loader::internal_macro_package_names;
-use dbt_schema_store::{CanonicalFqn, SchemaStoreTrait};
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::relations::base::ComponentName;
@@ -628,66 +628,6 @@ pub fn filter_missing_schemas(
     }
 
     Ok(missing_catalog_schemas)
-}
-
-pub fn mirror_schema_to_frontier_cache(
-    io_args_out_dir: &Path,
-    canonical_fqn: &CanonicalFqn,
-    unique_id: &str,
-    schema_store: &dyn SchemaStoreTrait,
-) -> FsResult<()> {
-    // For the ParquetCache store format, promote the Selected entry directly
-    // in the in-memory cache; no per-file copy is needed.
-    schema_store
-        .promote_to_frontier(canonical_fqn)
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to promote schema to frontier cache: {}",
-                e
-            )
-        })?;
-
-    // For legacy per-file formats (StoreFormat::Parquet), copy the analyzed
-    // parquet file to the sourced_remote path. This is a no-op for ParquetCache
-    // because the analyzed file no longer exists on disk.
-    let schema_root = io_args_out_dir.join("schemas");
-    let analyzed_path = schema_root
-        .join("analyzed")
-        .join(unique_id)
-        .join("output.parquet");
-    if !analyzed_path.exists() {
-        return Ok(());
-    }
-
-    let frontier_path = schema_root
-        .join("sourced_remote")
-        .join("internal")
-        .join(canonical_fqn.catalog().as_str())
-        .join(canonical_fqn.schema().as_str())
-        .join(canonical_fqn.table().as_str())
-        .join("output.parquet");
-    if let Some(parent) = frontier_path.parent() {
-        stdfs::create_dir_all(parent).map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to create schema cache directory {}: {}",
-                parent.display(),
-                e
-            )
-        })?;
-    }
-
-    stdfs::copy(&analyzed_path, &frontier_path).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to mirror seed schema from {} to {}: {}",
-            analyzed_path.display(),
-            frontier_path.display(),
-            e
-        )
-    })?;
-    Ok(())
 }
 
 pub fn typecheck_macros(

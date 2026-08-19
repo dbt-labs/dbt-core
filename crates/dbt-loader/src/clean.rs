@@ -65,8 +65,7 @@ pub async fn execute_clean_command(
     )?;
 
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
-    let (dbt_project, _) =
-        load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())?;
+    let (dbt_project, _) = load_project_yml(&env, &dbt_project_path, None, arg.vars.clone())?;
 
     clean_project(&arg, files, &dbt_project, /* clean_targets */ true).await?;
 

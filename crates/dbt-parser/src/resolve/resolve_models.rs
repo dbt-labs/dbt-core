@@ -1,6 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
+use crate::dbt_project_config::disallow_plus_prefix_from_flags;
 use crate::dbt_project_config::init_project_config;
 use crate::python_ast::parse_python;
 use crate::python_file_info::PythonFileInfo;
@@ -212,6 +213,7 @@ pub async fn resolve_models(
                 &package.dbt_project.models,
                 package_quoting,
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         })?
         .with_resolve_defaults((
@@ -832,7 +834,13 @@ pub async fn resolve_models(
         };
 
         let components = RelationComponents {
-            database: model_config.database.clone().into_inner().unwrap_or(None),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && model_config.__warehouse_specific_config__.catalog.is_some()
+            {
+                model_config.__warehouse_specific_config__.catalog.clone()
+            } else {
+                model_config.database.clone().into_inner().unwrap_or(None)
+            },
             schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
@@ -1226,7 +1234,7 @@ fn process_python_models(
         // Extract and parse properties from YAML if they exist
         let ref_name = python_asset.path.file_stem().unwrap().to_str().unwrap();
         let (maybe_properties, patch_path) =
-            extract_model_properties(arg, env, base_ctx, models_properties, ref_name)?;
+            extract_model_properties(env, base_ctx, models_properties, ref_name)?;
 
         // Merge Python model config with project config and schema.yml properties
         let merged_config = match merge_python_config(
@@ -1293,7 +1301,6 @@ fn process_python_models(
 /// Consumes the schema_value from models_properties to mark it as "used"
 /// and prevent "Unused schema.yml entry" warnings
 fn extract_model_properties(
-    arg: &ResolveArgs,
     env: &Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
@@ -1311,7 +1318,6 @@ fn extract_model_properties(
             minijinja::Value::from(mpe.relative_path.to_string_lossy().to_string()),
         );
         let properties = dbt_jinja_utils::serde::into_typed_with_jinja::<ModelProperties, _>(
-            &arg.io,
             schema_value,
             false,
             env,

@@ -27,7 +27,9 @@ use dbt_schemas::{
 use minijinja::MacroSpans;
 
 use super::resolve_properties::MinimalPropertiesEntry;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::utils::{RelationComponents, update_node_relation_components};
 use crate::{
@@ -67,7 +69,14 @@ pub async fn resolve_analyses(
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.analyses.clone(),
         dependency_package_name.is_some(),
-        || init_project_config(&package.dbt_project.analyses, (), dependency_package_name),
+        || {
+            init_project_config(
+                &package.dbt_project.analyses,
+                (),
+                dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+            )
+        },
     )?;
 
     let render_ctx = RenderCtx {

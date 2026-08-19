@@ -226,6 +226,12 @@ pub struct ProjectUnitTestConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub skip_not_matched_step: Option<bool>,
+    #[serde(
+        default,
+        rename = "+unique_tmp_table_suffix",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unique_tmp_table_suffix: Option<bool>,
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
     pub schedule: Option<Schedule>,
@@ -281,6 +287,84 @@ impl TypedRecursiveConfig for ProjectUnitTestConfig {
 
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
+    }
+
+    fn has_set_fields(&self) -> bool {
+        self.enabled.is_some()
+            || self.compute.is_some()
+            || self.meta.is_some()
+            || self.tags.is_some()
+            || self.static_analysis.is_some()
+            || self.adapter_properties.is_some()
+            || self.external_volume.is_some()
+            || self.base_location_root.is_some()
+            || self.base_location_subpath.is_some()
+            || self.target_lag.is_some()
+            || self.snowflake_initialization_warehouse.is_some()
+            || self.immutable_where.is_some()
+            || self.snowflake_warehouse.is_some()
+            || self.refresh_warehouse.is_some()
+            || self.refresh_mode.is_some()
+            || self.initialize.is_some()
+            || self.scheduler.is_some()
+            || self.tmp_relation_type.is_some()
+            || self.query_tag.is_some()
+            || self.table_tag.is_some()
+            || self.row_access_policy.is_some()
+            || self.automatic_clustering.is_some()
+            || self.copy_grants.is_some()
+            || self.copy_tags.is_some()
+            || self.secure.is_some()
+            || self.transient.is_some()
+            || self.partition_by.is_some()
+            || self.cluster_by.is_some()
+            || self.hours_to_expiration.is_present()
+            || self.job_execution_timeout_seconds.is_some()
+            || self.reservation.is_some()
+            || self.labels.is_some()
+            || self.labels_from_meta.is_some()
+            || self.kms_key_name.is_some()
+            || self.require_partition_filter.is_some()
+            || self.partition_expiration_days.is_some()
+            || self.grant_access_to.is_some()
+            || self.partitions.is_some()
+            || self.enable_refresh.is_some()
+            || self.refresh_interval_minutes.is_some()
+            || self.max_staleness.is_some()
+            || self.file_format.is_some()
+            || self.catalog_name.is_some()
+            || self.location_root.is_some()
+            || self.tblproperties.is_some()
+            || self.include_full_name_in_path.is_some()
+            || self.liquid_clustered_by.is_some()
+            || self.auto_liquid_cluster.is_some()
+            || self.clustered_by.is_some()
+            || self.buckets.is_some()
+            || self.catalog.is_some()
+            || self.databricks_tags.is_some()
+            || self.compression.is_some()
+            || self.databricks_compute.is_some()
+            || self.target_alias.is_some()
+            || self.source_alias.is_some()
+            || self.matched_condition.is_some()
+            || self.not_matched_condition.is_some()
+            || self.not_matched_by_source_condition.is_some()
+            || self.not_matched_by_source_action.is_some()
+            || self.merge_with_schema_evolution.is_some()
+            || self.skip_matched_step.is_some()
+            || self.skip_not_matched_step.is_some()
+            || self.unique_tmp_table_suffix.is_some()
+            || self.schedule.is_some()
+            || self.auto_refresh.is_some()
+            || self.backup.is_some()
+            || self.bind.is_some()
+            || self.dist.is_some()
+            || self.sort.is_some()
+            || self.sort_type.is_some()
+            || self.as_columnstore.is_some()
+            || self.table_type.is_some()
+            || self.indexes.is_some()
+            || self.unlogged.is_some()
     }
 }
 
@@ -373,6 +457,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
+                zorder: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -388,6 +473,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
                 incremental_apply_config_changes: None,
                 use_safer_relation_operations: None,
@@ -409,6 +495,27 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 // unit test is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -501,6 +608,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
                 .merge_with_schema_evolution,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            unique_tmp_table_suffix: config.__warehouse_specific_config__.unique_tmp_table_suffix,
             schedule: config.__warehouse_specific_config__.schedule,
             // Redshift fields
             auto_refresh: config.__warehouse_specific_config__.auto_refresh,
@@ -554,4 +662,32 @@ impl ResolvableConfig<UnitTestConfig> for UnitTestConfig {
 impl ConfigKeys for UnitTestConfig {
     // The default implementation from the trait will handle
     // extracting field names via serialization automatically
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ComputeArg, ProjectUnitTestConfig, UnitTestConfig};
+
+    #[test]
+    fn test_compute_local_is_an_alias_for_sidecar() {
+        // Project-level, in dbt_project.yml.
+        let project_config: ProjectUnitTestConfig = dbt_yaml::from_str(
+            r#"
++compute: local
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.compute, Some(ComputeArg::Sidecar));
+
+        // Per-test, in a properties file or `config()`.
+        let config: UnitTestConfig = dbt_yaml::from_str(
+            r#"
+compute: local
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.compute, Some(ComputeArg::Sidecar));
+    }
 }

@@ -8,11 +8,13 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{FsCommand, IoArgs};
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use fs_deps::get_or_install_packages;
+use fs_deps::private_package::LocalPrivatePackageResolver;
 use tempfile::TempDir;
 
 const PROVENANCE: &str = ".provenance";
@@ -87,6 +89,8 @@ impl TestProject {
             None,  // replay_mode
             &CancellationToken::never_cancels(),
             false, // use_v2_compatible_package_downloads
+            Arc::new(LocalPrivatePackageResolver),
+            None, // cloud_config
             ai_provider,
         )
         .await

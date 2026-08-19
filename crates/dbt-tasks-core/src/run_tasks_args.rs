@@ -104,6 +104,8 @@ pub struct RunTasksArgs {
     pub event_time_end: Option<String>,
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
     pub event_time_start: Option<String>,
+    /// The raw `--sample` spec (e.g. `"30 days"` or a `{start, end}` JSON range), if passed.
+    pub sample: Option<String>,
     /// Per-invocation fail-fast signal.
     pub fail_fast: FailFast,
     /// Whether the user passed `--fail-fast`. The signal above is triggered on
@@ -165,6 +167,7 @@ impl RunTasksArgs {
             full_refresh: arg.full_refresh,
             event_time_start: arg.event_time_start.clone(),
             event_time_end: arg.event_time_end.clone(),
+            sample: arg.sample.clone(),
             fail_fast,
             fail_fast_flag: arg.fail_fast,
             skip_post_hooks: arg.skip_post_hooks,

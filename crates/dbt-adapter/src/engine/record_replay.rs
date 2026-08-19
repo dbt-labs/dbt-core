@@ -168,8 +168,12 @@ impl AdapterEngine for RecordReplayEngine {
             }
             Mode::Record => {
                 let inner = self.inner.new_connection(state, node_id.clone())?;
-                let mut conn =
-                    RecordConnection::new(self.recordings_path.clone(), inner, self.generation);
+                let mut conn = RecordConnection::new(
+                    self.recordings_path.clone(),
+                    inner,
+                    self.config.clone(),
+                    self.generation,
+                );
                 conn.set_recording_context(RecordingContext {
                     node_id,
                     metadata: false,

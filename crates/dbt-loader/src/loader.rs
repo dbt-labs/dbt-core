@@ -29,6 +29,7 @@ use dbt_schemas::state::DbtProfile;
 use dbt_telemetry::GenericOpItemProcessed;
 use dbt_yaml;
 use fs_deps::get_or_install_packages;
+use fs_deps::private_package::PrivatePackageResolver;
 use indexmap::IndexMap;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -121,6 +122,7 @@ fn resolve_and_set_threads(
         iarg.num_threads
     };
 
+    dbt_profile.threads = final_threads;
     dbt_profile
         .db_config
         .set_threads(Some(StringOrInteger::Integer(
@@ -203,6 +205,7 @@ pub async fn load(
     tracing_features: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
     loader_hooks: Arc<dyn LoaderHooks>,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
 ) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile, vars_from_file) =
         load_simplified_project_and_profiles(arg).await?;
@@ -376,7 +379,7 @@ pub async fn load(
             if DISPATCH_CONFIG.get().is_none() {
                 let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
                 if let Ok((proj, _)) =
-                    load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())
+                    load_project_yml(&env, &dbt_project_path, None, arg.vars.clone())
                 {
                     let map = proj.dispatch.as_ref().map_or_else(BTreeMap::new, |d| {
                         d.iter()
@@ -497,6 +500,8 @@ pub async fn load(
         iarg.replay.as_ref(),
         token,
         use_v2_compatible_package_downloads,
+        private_package_resolver,
+        dbt_state.cloud_config.clone(),
         arg.ai_provider.as_deref(),
     )
     .await?;
@@ -664,7 +669,7 @@ pub async fn load_catalogs(
             let raw_text_yml: dbt_yaml::Value = dbt_yaml::from_str(&raw_text)
                 .map_err(|e| yaml_to_fs_error(e, Some(&catalogs_yml_path)))?;
             let text: dbt_yaml::Value =
-                into_typed_with_jinja(&arg.io, raw_text_yml, true, env, &ctx, &[], None, true)?;
+                into_typed_with_jinja(raw_text_yml, true, env, &ctx, &[], None, true)?;
             load_catalogs::load_catalogs(text, &catalogs_yml_path, project_flags)
         }
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
@@ -799,16 +804,8 @@ pub async fn load_simplified_project_and_profiles(
         ),
     ]);
 
-    let simplified_dbt_project: DbtProjectSimplified = into_typed_with_jinja(
-        &arg.io,
-        raw_dbt_project_in_val,
-        true,
-        &env,
-        &ctx,
-        &[],
-        None,
-        true,
-    )?;
+    let simplified_dbt_project: DbtProjectSimplified =
+        into_typed_with_jinja(raw_dbt_project_in_val, true, &env, &ctx, &[], None, true)?;
 
     if simplified_dbt_project.data_paths.is_some() {
         return err!(
@@ -884,7 +881,6 @@ pub async fn load_inner(
     };
 
     let (dbt_project, raw_project_yml) = load_project_yml(
-        &arg.io,
         env,
         &dbt_project_path,
         dependency_package_name.as_deref(),
@@ -1481,6 +1477,34 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::time::SystemTime;
+
+    #[test]
+    fn resolve_threads_sets_profile_threads_from_target() {
+        let db_config = dbt_yaml::from_str(
+            "type: duckdb\n\
+             path: db.duckdb\n\
+             threads: 4",
+        )
+        .expect("valid DuckDB profile");
+        let mut dbt_profile = DbtProfile {
+            profile: "test".to_string(),
+            target: "duckdb".to_string(),
+            defer_to_target: None,
+            allow_clones: true,
+            db_config,
+            alt_target_db_config: None,
+            schema: "main".to_string(),
+            database: "db".to_string(),
+            relative_profile_path: PathBuf::from("profiles.yml"),
+            threads: None,
+        };
+
+        let resolved = resolve_and_set_threads(&mut dbt_profile, &InvocationArgs::default())
+            .expect("profile threads should resolve");
+
+        assert_eq!(resolved, Some(4));
+        assert_eq!(dbt_profile.threads, Some(4));
+    }
 
     #[test]
     fn test_find_files_by_kind_and_extension_excludes_generic_test_paths() {

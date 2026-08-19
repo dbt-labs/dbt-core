@@ -19,7 +19,9 @@ use std::path::{Path, PathBuf};
 
 use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, stdfs};
-use dbt_schemas::schemas::project::{DEFAULT_SKILL_PATH, DbtProject, ProjectSkillConfig};
+use dbt_schemas::schemas::project::{
+    DEFAULT_SKILL_PATH, DbtProject, ProjectSkillConfig, disallow_plus_prefix_from_flags,
+};
 
 use crate::config::{filter_enabled, resolve_collisions};
 use crate::discover::{SkillSourceProject, discover_skills};
@@ -108,7 +110,11 @@ pub fn install_package_skills(
         return Ok(None);
     }
 
-    let enabled = filter_enabled(discovered, &projects)?;
+    let enabled = filter_enabled(
+        discovered,
+        &projects,
+        disallow_plus_prefix_from_flags(root_project.flags.as_ref()),
+    )?;
     let selected = resolve_collisions(enabled);
     let reports = install_skills(project_root, &destinations, &selected)?;
 

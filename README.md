@@ -4,7 +4,7 @@
 
 > [!WARNING]
 > **dbt Core v1 development has moved to the [`1.latest`](https://github.com/dbt-labs/dbt-core/tree/1.latest) branch.**
-> The `main` branch now hosts dbt Core v2.0 (alpha) — a ground-up rewrite in Rust that is the foundation of the Fusion engine. If you're looking for the Python implementation of dbt Core, switch to [`1.latest`](https://github.com/dbt-labs/dbt-core/tree/1.latest).
+> The `main` branch now hosts dbt Core v2.0 (beta) — a ground-up rewrite in Rust that is the foundation of the Fusion engine. If you're looking for the Python implementation of dbt Core, switch to [`1.latest`](https://github.com/dbt-labs/dbt-core/tree/1.latest).
 
 **[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
 
@@ -12,7 +12,7 @@
 
 ## About dbt Core v2.0
 
-> 🚧 dbt Core v2.0 is in alpha. Behavior, APIs, and on-disk formats may change before the stable release.
+> 🚧 dbt Core v2.0 is in beta. Behavior, APIs, and on-disk formats may change before the stable release.
 
 dbt Core v2.0 is engineered for performance at scale — parsing, compiling, and running projects in a fraction of the time compared to v1. It's released under the Apache 2.0 license and is the foundation of the [Fusion engine](https://docs.getdbt.com/docs/fusion/about-fusion).
 
@@ -50,8 +50,8 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 Start by choosing a distribution. dbt Core is the baseline distribution of dbt. Fusion extends dbt Core with additional SQL comprehension abilities. Both distributions are free to install and can run locally.
 
-- **If you need an Apache 2.0 licensed tool** and the ability to review every line of code inside of it, [install dbt Core](https://docs.getdbt.com/docs/local/install-dbt#dbt-core).
-- **If you need a free CLI you can use locally**, [install Fusion](https://docs.getdbt.com/docs/local/install-dbt#dbt-fusion-engine-recommended). It can do more than dbt Core out of the box and you can seamlessly enable other advanced features over time if you choose to. 
+- **If you need an Apache 2.0 licensed tool** and the ability to review every line of code inside of it, [install dbt Core](https://docs.getdbt.com/docs/local/install-dbt-core-v2?version=2.0).
+- **If you need a free CLI you can use locally**, [install Fusion](https://docs.getdbt.com/docs/local/install-dbt?version=2.0). It can do more than dbt Core out of the box and you can seamlessly enable other advanced features over time if you choose to.
 
 Regardless of the distribution you choose, each is part of a single framework with a single language specification, meaning your business logic is portable in both directions.
 

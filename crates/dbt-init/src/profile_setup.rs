@@ -86,22 +86,13 @@ impl ProjectStore {
             return Ok(None);
         }
 
-        let io_args = IoArgs::default();
         let yaml_value = value_from_file(&dbt_cloud_config_path, true, None)?;
 
         let env = initialize_load_profile_jinja_environment();
         let empty_context = HashMap::<String, String>::new();
 
-        let config: DbtCloudYml = into_typed_with_jinja(
-            &io_args,
-            yaml_value,
-            false,
-            &env,
-            &empty_context,
-            &[],
-            None,
-            true,
-        )?;
+        let config: DbtCloudYml =
+            into_typed_with_jinja(yaml_value, false, &env, &empty_context, &[], None, true)?;
 
         Ok(Some(Self { config }))
     }

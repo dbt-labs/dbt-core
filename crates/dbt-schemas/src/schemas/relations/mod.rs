@@ -39,3 +39,11 @@ pub fn default_dbt_quoting_for(adapter_type: AdapterType) -> DbtQuoting {
         _ => DEFAULT_DBT_QUOTING,
     }
 }
+
+#[inline]
+pub fn default_resolved_quoting_for(adapter_type: AdapterType) -> ResolvedQuoting {
+    match adapter_type {
+        AdapterType::Snowflake => SNOWFLAKE_RESOLVED_QUOTING,
+        _ => DEFAULT_RESOLVED_QUOTING,
+    }
+}

@@ -20,10 +20,9 @@ use tokio::sync::mpsc;
 
 use crate::context::TaskRunnerCtx;
 use crate::task::{TaskOp, TaskResult};
-use dbt_adapter::Adapter;
 use dbt_adapter::AdapterResult;
-use dbt_adapter::errors::{Cancellable, into_fs_error};
-use dbt_adapter::metadata::{FreshnessOverride, MetadataAdapter, MetadataQueryOptions};
+use dbt_adapter::errors::{AdapterErrorKind, Cancellable, into_fs_error};
+use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
 use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
@@ -33,6 +32,7 @@ use dbt_common::adapter::dialect_of;
 use dbt_common::io_args::RunCacheMode;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::dbt_emit::{emit_trace_log_message, emit_warn_log_message};
+use dbt_common::tracing::span_info::find_and_update_span_attrs;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_frontend_common::ident::FullyQualifiedName;
 use dbt_frontend_common::named_reference::NamedReference;
@@ -64,7 +64,7 @@ use dbt_state::request_builder::{
     values_execution_record_from_submit_request,
 };
 use dbt_state::service_client::RunCacheServiceError;
-use dbt_telemetry::NodeType;
+use dbt_telemetry::{NodeEvaluated, NodeType};
 
 use crate::run_cache::run_cache_request::{
     DbtProjectInfo, SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
@@ -72,7 +72,6 @@ use crate::run_cache::run_cache_request::{
     is_microbatch_model, node_identity,
 };
 use chrono::{DateTime, Utc};
-use futures::stream::{StreamExt, TryStreamExt};
 
 pub fn collect_upstream_hashes(ctx: &TaskRunnerCtx, unique_id: &str) -> HashMap<String, String> {
     ctx.inner
@@ -387,7 +386,7 @@ impl RunCacheCloneDecision {
             execution_results: response.clone_execution_results.clone(),
             execution_runtime_ms: response.execution_runtime_ms,
             freshness_tolerance_seconds: freshness_tolerance_seconds.max(0) as u64,
-            explained_decision: response.explained_decision,
+            explained_decision: response.explained_decision.clone(),
             transformed_nodes_by_query: response.transformed_nodes_by_query.clone(),
             execution_decision_id: response.execution_decision_id.clone(),
         }
@@ -406,7 +405,65 @@ impl RunCacheCloneDecision {
         RunCacheExecutionConfirmation::new(self.request_id.clone(), true)
     }
 
-    fn success_status(&self) -> NodeStatus {
+    pub fn clone_source(&self) -> &str {
+        &self.clone_source
+    }
+
+    pub fn clone_target(&self) -> &str {
+        &self.clone_target
+    }
+
+    /// Project this decision into a serializable form for time-machine recording.
+    ///
+    /// Only carries the fields that actually drive clone execution/confirmation
+    /// (see `execute_run_cache_service_clone`, `success_status`, `success_confirmation`);
+    /// the full protobuf `execution_results`/`transformed_nodes_by_query` are
+    /// telemetry-only and dropped, and `explained_decision` is reduced to the
+    /// single `is_stale` flag consumers actually read.
+    pub fn to_recorded(&self) -> dbt_adapter::time_machine::RecordedRunCacheCloneDecision {
+        dbt_adapter::time_machine::RecordedRunCacheCloneDecision {
+            request_id: self.request_id.clone(),
+            clone_sqls: self.clone_sqls.clone(),
+            clone_source: self.clone_source.clone(),
+            clone_target: self.clone_target.clone(),
+            required_source_epoch: self.required_source_epoch,
+            execution_runtime_ms: self.execution_runtime_ms,
+            freshness_tolerance_seconds: self.freshness_tolerance_seconds,
+            is_stale: self
+                .explained_decision
+                .as_ref()
+                .is_some_and(|decision| decision.is_stale),
+            execution_decision_id: self.execution_decision_id.clone(),
+        }
+    }
+
+    /// Reconstruct a decision from a time-machine recording during replay.
+    ///
+    /// `execution_results` and `transformed_nodes_by_query` are reset to their
+    /// empty defaults since replay never confirms back to the live service
+    /// (see `confirm_run_cache_service_execution`'s client-absent early return).
+    pub fn from_recorded(
+        recorded: dbt_adapter::time_machine::RecordedRunCacheCloneDecision,
+    ) -> Self {
+        Self {
+            request_id: recorded.request_id,
+            clone_sqls: recorded.clone_sqls,
+            clone_source: recorded.clone_source,
+            clone_target: recorded.clone_target,
+            required_source_epoch: recorded.required_source_epoch,
+            execution_results: None,
+            execution_runtime_ms: recorded.execution_runtime_ms,
+            freshness_tolerance_seconds: recorded.freshness_tolerance_seconds,
+            explained_decision: Some(ExplainedDecision {
+                is_stale: recorded.is_stale,
+                ..Default::default()
+            }),
+            transformed_nodes_by_query: HashMap::new(),
+            execution_decision_id: recorded.execution_decision_id,
+        }
+    }
+
+    pub fn replay_status(&self) -> NodeStatus {
         if self
             .explained_decision
             .as_ref()
@@ -417,6 +474,36 @@ impl RunCacheCloneDecision {
             NodeStatus::ReusedCloned(None)
         }
     }
+
+    fn success_status(&self) -> NodeStatus {
+        self.replay_status()
+    }
+}
+
+pub fn record_run_cache_clone_decision(node_id: &str, clone: &RunCacheCloneDecision) {
+    let Some(recorder) = dbt_adapter::time_machine::global_recorder() else {
+        return;
+    };
+    recorder.record_run_cache_clone(node_id, clone.to_recorded());
+}
+
+pub fn record_dev_clone_decision(node_id: &str, clone: &RunCacheCloneDecision) {
+    let Some(recorder) = dbt_adapter::time_machine::global_recorder() else {
+        return;
+    };
+    recorder.record_dev_clone(node_id, clone.to_recorded());
+}
+
+pub fn replay_run_cache_clone_decision(node_id: &str) -> Option<RunCacheCloneDecision> {
+    let replayer = dbt_adapter::time_machine::global_replayer()?;
+    let event = replayer.get_run_cache_clone_event_for_phase(node_id, false)?;
+    Some(RunCacheCloneDecision::from_recorded(event.clone.clone()))
+}
+
+pub fn replay_dev_clone_decision(node_id: &str) -> Option<RunCacheCloneDecision> {
+    let replayer = dbt_adapter::time_machine::global_replayer()?;
+    let event = replayer.get_run_cache_clone_event_for_phase(node_id, true)?;
+    Some(RunCacheCloneDecision::from_recorded(event.clone.clone()))
 }
 
 /// If the node is a selected (non-deferred) view model, insert its
@@ -749,38 +836,6 @@ async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) -> FsResult<(
     result
 }
 
-/// Concurrency to use for the per-schema freshness fan-out when a dedicated
-/// metadata warehouse is configured but the profile does not expose a thread
-/// count (e.g. mock / sidecar engines). Keeps the fan-out bounded so a project
-/// with many schemas does not open an unbounded number of connections.
-const DEFAULT_SCHEMA_PREFETCH_FANOUT: usize = 4;
-
-/// Per-`(database, schema)` inputs for the last-modified prefetch, materialized
-/// up front so the borrowed futures can share them whether the groups run
-/// sequentially or concurrently.
-struct SchemaPrefetchGroup {
-    database: String,
-    schema: String,
-    /// Map of `semantic_fqn → rendered relation name` for this group.
-    semantic_to_name: BTreeMap<String, String>,
-    relation_values: Vec<Arc<dyn BaseRelation>>,
-}
-
-/// Fan the per-schema freshness dumps out concurrently only when a dedicated
-/// metadata warehouse is configured.
-///
-/// With a metadata warehouse the queries run on that isolated warehouse instead
-/// of competing with model execution, so issuing them in parallel is a clear
-/// win. Without one they would contend on the main warehouse, so we keep the
-/// sequential behavior to avoid congesting it with many concurrent metadata
-/// queries.
-fn should_fan_out_schema_prefetch(options: &MetadataQueryOptions) -> bool {
-    options
-        .warehouse
-        .as_deref()
-        .is_some_and(|warehouse| !warehouse.is_empty())
-}
-
 /// Total freshness-prefetch time above which we hint that a dedicated metadata
 /// warehouse would help. Mirrors the dbt-core run-cache plugin's threshold.
 const SLOW_METADATA_PREFETCH_WARN_THRESHOLD: std::time::Duration =
@@ -796,8 +851,12 @@ fn should_warn_slow_metadata_prefetch(
     options: &MetadataQueryOptions,
     elapsed: std::time::Duration,
 ) -> bool {
+    let has_metadata_warehouse = options
+        .warehouse
+        .as_deref()
+        .is_some_and(|warehouse| !warehouse.is_empty());
     adapter_type == AdapterType::Snowflake
-        && !should_fan_out_schema_prefetch(options)
+        && !has_metadata_warehouse
         && elapsed >= SLOW_METADATA_PREFETCH_WARN_THRESHOLD
 }
 
@@ -822,21 +881,16 @@ fn maybe_warn_slow_metadata_prefetch(ctx: &TaskRunnerCtx, elapsed: std::time::Du
     );
 }
 
-/// Prefetch last-modified epochs using per-schema dump queries rather than
-/// per-table predicates.
+/// Prefetch last-modified epochs for the selected relations and warm
+/// `run_cache_metadata`.
 ///
-/// For each (database, schema) group, calls `freshness_all_in_schema` which
-/// returns ALL rows for the schema with a single `WHERE table_schema = '...'`
-/// filter — matching the plugin's approach. Relations with source overrides
-/// (`loaded_at_query` / `loaded_at_field`) are handled separately via the
-/// existing per-table path so their custom freshness logic is preserved.
-///
-/// When a dedicated metadata warehouse is configured the per-schema dumps are
-/// fanned out concurrently (bounded by the profile's thread count), since they
-/// run on the isolated warehouse and each single-schema query is far more
-/// selective than one broad multi-schema scan. Without a metadata warehouse the
-/// groups run sequentially so the metadata queries don't contend with model
-/// execution on the main warehouse. See `should_fan_out_schema_prefetch`.
+/// Relations with source overrides (`loaded_at_query` / `loaded_at_field`) are
+/// handled separately via the per-table path so their custom freshness logic is
+/// preserved. Everything else is handed to the metadata adapter's
+/// `freshness_all_in_schemas`, which owns the engine-specific strategy (per-schema
+/// dumps, metadata-warehouse fan-out, adaptive broad-vs-sequential). Failures are
+/// fail-open: a relation whose freshness could not be determined is cached as
+/// unknown (`None`), never aborting the run.
 async fn bulk_prefetch_last_modified_by_schema(
     ctx: &TaskRunnerCtx,
     relations: &BTreeMap<String, Arc<dyn BaseRelation>>,
@@ -876,164 +930,64 @@ async fn bulk_prefetch_last_modified_by_schema(
         return Ok(());
     }
 
-    let groups: Vec<SchemaPrefetchGroup> = group_relations_by_database_and_schema(&bulk_relations)
-        .into_iter()
-        .map(|((database, schema), grouped)| {
-            let semantic_to_name = grouped
-                .iter()
-                .map(|(name, rel)| (rel.semantic_fqn(), name.clone()))
-                .collect();
-            let relation_values = grouped.values().cloned().collect();
-            SchemaPrefetchGroup {
-                database: database.unwrap_or_default(),
-                schema: schema.unwrap_or_default(),
-                semantic_to_name,
-                relation_values,
-            }
-        })
+    // `freshness_all_in_schemas` keys its result by `semantic_fqn`; keep the
+    // mapping back to each relation's cache name (rendered relation name).
+    let semantic_to_name: BTreeMap<String, String> = bulk_relations
+        .iter()
+        .map(|(name, rel)| (rel.semantic_fqn(), name.clone()))
         .collect();
+    let relation_values: Vec<Arc<dyn BaseRelation>> = bulk_relations.values().cloned().collect();
 
-    // Sequential when no metadata warehouse is set (fan-out width 1); otherwise
-    // keep up to `fan_out` schema dumps in flight at once so many schemas don't
-    // open an unbounded number of connections. A sliding window (rather than
-    // fixed batches) means a slow schema never leaves the other slots idle.
-    let fan_out = if should_fan_out_schema_prefetch(&metadata_options) {
-        adapter
-            .engine()
-            .threads()
-            .unwrap_or(DEFAULT_SCHEMA_PREFETCH_FANOUT)
-            .max(1)
-    } else {
-        1
-    };
-
-    let mut group_futures = Vec::with_capacity(groups.len());
-    for group in &groups {
-        group_futures.push(prefetch_last_modified_for_schema_group(
-            ctx,
-            adapter,
-            metadata_adapter.as_ref(),
+    // The adapter owns the strategy and is fail-open per group internally; treat
+    // a top-level error the same way (unknown freshness for the whole batch) so a
+    // metadata failure never aborts the run.
+    let freshness = match metadata_adapter
+        .freshness_all_in_schemas(
+            &relation_values,
             &metadata_options,
-            group,
-        ));
-    }
-
-    futures::stream::iter(group_futures)
-        .buffer_unordered(fan_out)
-        .try_collect::<Vec<()>>()
-        .await?;
-
-    Ok(())
-}
-
-/// Prefetch last-modified epochs for a single `(database, schema)` group and
-/// write them into `run_cache_metadata`.
-///
-/// A schema-dump failure is treated as unknown freshness for the group (cached
-/// as `None`) and does not propagate, matching the plugin: broad metadata
-/// prefetch failures should not disable dbt State. An empty dump falls back to
-/// the batched per-table path; only that fallback can propagate an error.
-async fn prefetch_last_modified_for_schema_group(
-    ctx: &TaskRunnerCtx,
-    adapter: &Adapter,
-    metadata_adapter: &dyn MetadataAdapter,
-    metadata_options: &MetadataQueryOptions,
-    group: &SchemaPrefetchGroup,
-) -> FsResult<()> {
-    let SchemaPrefetchGroup {
-        database,
-        schema,
-        semantic_to_name,
-        relation_values,
-    } = group;
-
-    let dump = match metadata_adapter
-        .freshness_all_in_schema(
-            database,
-            schema,
-            relation_values,
-            metadata_options,
             adapter.cancellation_token(),
         )
         .await
     {
-        Ok(dump) => dump,
+        Ok(freshness) => freshness,
+        Err(Cancellable::Error(err)) if err.kind() == AdapterErrorKind::ReplayDataMissing => {
+            // Older recordings may not contain the new schema-bulk event, but
+            // they can contain the existing per-table freshness event.
+            match metadata_adapter
+                .freshness(&relation_values, adapter.cancellation_token())
+                .await
+            {
+                Ok(freshness) => freshness,
+                Err(Cancellable::Error(err))
+                    if err.kind() == AdapterErrorKind::ReplayDataMissing =>
+                {
+                    return Ok(());
+                }
+                Err(err) => return Err(into_fs_error(err)),
+            }
+        }
         Err(err) => {
             let err = into_fs_error(err);
-            // Matches the Python plugin: broad metadata prefetch failures
-            // should not disable dbt State; unknown freshness keeps
-            // downstream decisions conservative.
             emit_warn_log_message(
                 ErrorCode::StateServiceWarn,
                 format!(
-                    "dbt State schema-level freshness dump failed for {database}.{schema}: {err}; \
-                     caching unknown freshness for {} relations",
+                    "dbt State freshness prefetch failed for {} relations: {err}; caching unknown \
+                     freshness",
                     semantic_to_name.len()
                 ),
             );
-            for name in semantic_to_name.values() {
-                ctx.inner
-                    .run_cache_ctx
-                    .run_cache_metadata
-                    .insert_last_modified_epoch(name, None);
-            }
-            return Ok(());
+            BTreeMap::new()
         }
     };
 
-    if dump.is_empty() {
-        // Empty result from the schema dump. This is typically caused by
-        // INFORMATION_SCHEMA eventual consistency: Fusion's global prefetch
-        // fires eagerly at run start (before any node executes), whereas the
-        // dbt-core plugin prefetches lazily on the first node-start event.
-        // The extra seconds of compilation time in the plugin's path are
-        // usually enough for Snowflake's INFORMATION_SCHEMA to propagate a
-        // table created by the immediately preceding run. Fusion doesn't get
-        // that grace period, so the dump can return empty even when the table
-        // actually exists.
-        //
-        // Fall back to freshness_with_overrides_and_options for this schema
-        // group. That call is still batched — one query per database group
-        // with all tables in a single WHERE clause (the old per-table predicate
-        // form rather than the schema-only dump form) — so it does not
-        // degenerate into one query per table. The fallback only fires when
-        // the schema dump returns empty, which is unusual, so the cost of the
-        // larger WHERE clause is acceptable.
-        emit_warn_log_message(
-            ErrorCode::StateServiceWarn,
-            format!(
-                "dbt State schema-level freshness dump returned empty for {database}.{schema}; \
-                 falling back to per-node warehouse queries for {} relations",
-                semantic_to_name.len()
-            ),
-        );
-        let empty_overrides = BTreeMap::new();
-        let freshness = metadata_adapter
-            .freshness_with_overrides_and_options(
-                relation_values,
-                &empty_overrides,
-                metadata_options,
-                adapter.cancellation_token(),
-            )
-            .await
-            .map_err(into_fs_error)?;
-        for (sem_fqn, name) in semantic_to_name {
-            let epoch = freshness
-                .get(sem_fqn)
-                .map(|m| m.last_altered.timestamp_millis());
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .insert_last_modified_epoch(name, epoch);
-        }
-    } else {
-        for (sem_fqn, name) in semantic_to_name {
-            let epoch = dump.get(sem_fqn).map(|m| m.last_altered.timestamp_millis());
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .insert_last_modified_epoch(name, epoch);
-        }
+    for (semantic_fqn, name) in &semantic_to_name {
+        let epoch = freshness
+            .get(semantic_fqn)
+            .map(|m| m.last_altered.timestamp_millis());
+        ctx.inner
+            .run_cache_ctx
+            .run_cache_metadata
+            .insert_last_modified_epoch(name, epoch);
     }
 
     Ok(())
@@ -1513,11 +1467,17 @@ pub async fn run_cache_service_before_execution(
                 .run_cache_dev_cloned_nodes
                 .contains_key(node.unique_id().as_str());
             let decision = relabel_skip_for_dev_cloned_node(is_dev_cloned, decision);
-            write_state_explain_node(
-                ctx,
-                node,
-                state_explain_execution_decision_id(Some(&outcome.response), &decision),
-            );
+            let execution_decision_id =
+                state_explain_execution_decision_id(Some(&outcome.response), &decision);
+            // Surface the service-side execution decision id on the node's
+            // run-phase evaluation span so successful executions can be
+            // correlated with the dbt State decision that governed them.
+            if let Some(id) = execution_decision_id.as_deref() {
+                find_and_update_span_attrs(|attrs: &mut NodeEvaluated| {
+                    attrs.state_decision_id = Some(id.to_string());
+                });
+            }
+            write_state_explain_node(ctx, node, execution_decision_id);
             decision
         }
         Ok(Some(RunCacheSubmitResult::ExecuteUntracked(record))) => {
@@ -1740,6 +1700,12 @@ pub async fn confirm_run_cache_service_execution(
             }
         }
     };
+
+    // Replay must consume the recorded final freshness event and clear the
+    // cached pre-build value, but it must not contact the live dbt State service.
+    if dbt_adapter::time_machine::is_replaying() {
+        return;
+    }
 
     let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
         emit_warn_log_message(
@@ -3248,6 +3214,7 @@ fn metadata_query_options_for_warehouses(
 ) -> MetadataQueryOptions {
     MetadataQueryOptions {
         warehouse: profile_warehouse.or(legacy_service_warehouse),
+        ..MetadataQueryOptions::default()
     }
 }
 
@@ -3263,7 +3230,18 @@ pub(crate) fn run_cache_metadata_query_options(ctx: &TaskRunnerCtx) -> MetadataQ
         .as_ref()
         .and_then(|config| config.snowflake_metadata_warehouse.clone());
 
-    metadata_query_options_for_warehouses(profile_warehouse, legacy_service_warehouse)
+    // Adaptive broad-vs-sequential freshness fetch: read from the Snowflake
+    // target config, defaulting to `true` (adaptive on). Only the Snowflake
+    // no-metadata-warehouse strategy consults it; other adapters ignore it.
+    let adaptive_metadata_fetch = match &ctx.dbt_profile().db_config {
+        DbConfig::Snowflake(config) => config.adaptive_metadata_fetch.unwrap_or(true),
+        _ => true,
+    };
+
+    MetadataQueryOptions {
+        adaptive_metadata_fetch,
+        ..metadata_query_options_for_warehouses(profile_warehouse, legacy_service_warehouse)
+    }
 }
 
 /// Returns deferred dependencies that should be treated leniently by the dbt
@@ -3781,21 +3759,35 @@ async fn refresh_last_modified_epochs(
     };
 
     for grouped_relations in group_relations_by_database_and_schema(relations).into_values() {
+        let grouped_names = grouped_relations.keys().collect::<BTreeSet<_>>();
+        let grouped_overrides = overrides
+            .iter()
+            .filter(|(name, _)| grouped_names.contains(name))
+            .map(|(name, override_)| (name.clone(), override_.clone()))
+            .collect::<BTreeMap<_, _>>();
         let semantic_to_name = grouped_relations
             .iter()
             .map(|(name, relation)| (relation.semantic_fqn(), name.clone()))
             .collect::<BTreeMap<_, _>>();
         let relation_values = grouped_relations.values().cloned().collect::<Vec<_>>();
         let metadata_options = run_cache_metadata_query_options(ctx);
-        let freshness = metadata_adapter
+        let freshness = match metadata_adapter
             .freshness_with_overrides_and_options(
                 &relation_values,
-                overrides,
+                &grouped_overrides,
                 &metadata_options,
                 adapter.cancellation_token(),
             )
             .await
-            .map_err(into_fs_error)?;
+        {
+            Ok(freshness) => freshness,
+            Err(Cancellable::Error(err)) if err.kind() == AdapterErrorKind::ReplayDataMissing => {
+                // Older recordings do not contain this override-prefetch event.
+                // Leave entries absent so the per-node freshness events can replay.
+                continue;
+            }
+            Err(err) => return Err(into_fs_error(err)),
+        };
 
         for (semantic_fqn, name) in semantic_to_name {
             let epoch = freshness
@@ -6178,26 +6170,11 @@ mod tests {
     }
 
     #[test]
-    fn fans_out_schema_prefetch_only_when_metadata_warehouse_is_set() {
-        let with_warehouse = MetadataQueryOptions {
-            warehouse: Some("META_WH".to_string()),
-        };
-        assert!(should_fan_out_schema_prefetch(&with_warehouse));
-
-        let empty_warehouse = MetadataQueryOptions {
-            warehouse: Some(String::new()),
-        };
-        assert!(!should_fan_out_schema_prefetch(&empty_warehouse));
-
-        let no_warehouse = MetadataQueryOptions { warehouse: None };
-        assert!(!should_fan_out_schema_prefetch(&no_warehouse));
-    }
-
-    #[test]
     fn warns_on_slow_snowflake_prefetch_without_metadata_warehouse() {
-        let no_warehouse = MetadataQueryOptions { warehouse: None };
+        let no_warehouse = MetadataQueryOptions::default();
         let with_warehouse = MetadataQueryOptions {
             warehouse: Some("META_WH".to_string()),
+            ..MetadataQueryOptions::default()
         };
         let slow = SLOW_METADATA_PREFETCH_WARN_THRESHOLD;
         let fast = SLOW_METADATA_PREFETCH_WARN_THRESHOLD - std::time::Duration::from_secs(1);

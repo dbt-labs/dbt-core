@@ -19,6 +19,9 @@ use minijinja::{
 };
 use regex::Regex;
 use serde::Deserialize;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Location, Token, Tokenizer};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -224,22 +227,148 @@ pub fn inject_and_persist_ephemeral_models(
         return Ok(final_sql);
     }
 
-    // Wrap the current SQL in a subquery and prepend CTEs
     let ctes = all_ctes.join(", ");
-    final_sql = format!(
-        "with {ctes}\n--EPHEMERAL-SELECT-WRAPPER-START\nselect * from (\n{final_sql}\n--EPHEMERAL-SELECT-WRAPPER-END\n)"
-    );
-    // Shift expanded macro spans down by number of added lines and added offet
-    // for the "with ... select * from (" line, and the CTEs
-    let added_lines = ctes.lines().count() + 2;
-    let added_offset = ctes.len() + 23;
-    for span in macro_spans.items.iter_mut() {
-        span.1.start_line += added_lines as u32;
-        span.1.end_line += added_lines as u32;
-        span.1.start_offset += added_offset as u32;
-        span.1.end_offset += added_offset as u32;
+    if let Some((sql, insertion)) = inject_ctes_into_existing_with(&final_sql, &ctes) {
+        final_sql = sql;
+        shift_macro_spans_after_insertion(macro_spans, insertion);
+    } else {
+        // Preserve the wrapper fallback for statements without a leading WITH clause.
+        final_sql = format!(
+            "with {ctes}\n--EPHEMERAL-SELECT-WRAPPER-START\nselect * from (\n{final_sql}\n--EPHEMERAL-SELECT-WRAPPER-END\n)"
+        );
+        let added_lines = ctes.lines().count() + 2;
+        let added_offset = ctes.len() + 23;
+        for span in macro_spans.items.iter_mut() {
+            span.1.start_line += added_lines as u32;
+            span.1.end_line += added_lines as u32;
+            span.1.start_offset += added_offset as u32;
+            span.1.end_offset += added_offset as u32;
+        }
     }
     Ok(final_sql)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Insertion {
+    line: u32,
+    col: u32,
+    offset: u32,
+    added_lines: u32,
+    added_bytes: u32,
+    added_cols: u32,
+    trailing_cols: u32,
+}
+
+/// Uses token locations to splice ephemeral CTEs into a leading WITH chain
+/// without reformatting the warehouse-specific SQL.
+fn inject_ctes_into_existing_with(sql: &str, ctes: &str) -> Option<(String, Insertion)> {
+    let dialect = GenericDialect {};
+    let mut tokens = Vec::new();
+    // A later warehouse-specific token may be unsupported by the generic dialect.
+    // The prefix tokens collected before that error are sufficient for this splice.
+    let _ = Tokenizer::new(&dialect, sql).tokenize_with_location_into_buf(&mut tokens);
+    let (with_index, with) = tokens
+        .iter()
+        .enumerate()
+        .find(|(_, token)| !matches!(token.token, Token::Whitespace(_)))?;
+    if !matches!(&with.token, Token::Word(word) if word.keyword == Keyword::WITH) {
+        return None;
+    }
+
+    // Comments between WITH and RECURSIVE are trivia, so preserve them and
+    // insert after the modifier.
+    let next = tokens[with_index + 1..]
+        .iter()
+        .find(|token| !matches!(token.token, Token::Whitespace(_)));
+    let insertion_token = match next {
+        Some(token) if matches!(&token.token, Token::Word(word) if word.keyword == Keyword::RECURSIVE) => {
+            token
+        }
+        _ => with,
+    };
+    let insertion_location = insertion_token.span.end;
+    let offset = byte_offset_at_location(sql, insertion_location)?;
+    let line = insertion_location.line.try_into().ok()?;
+    let col = insertion_location.column.try_into().ok()?;
+    let inserted = format!("  {ctes},");
+    let added_lines = inserted.bytes().filter(|byte| *byte == b'\n').count() as u32;
+    let added_cols = inserted.chars().count() as u32;
+    let trailing_cols = inserted.rsplit('\n').next().unwrap().chars().count() as u32 + 1;
+
+    let mut result = String::with_capacity(sql.len() + inserted.len());
+    result.push_str(&sql[..offset]);
+    result.push_str(&inserted);
+    result.push_str(&sql[offset..]);
+
+    Some((
+        result,
+        Insertion {
+            line,
+            col,
+            offset: offset as u32,
+            added_lines,
+            added_bytes: inserted.len() as u32,
+            added_cols,
+            trailing_cols,
+        },
+    ))
+}
+
+fn byte_offset_at_location(sql: &str, target: Location) -> Option<usize> {
+    let mut line = 1;
+    let mut col = 1;
+    for (offset, ch) in sql.char_indices() {
+        if line == target.line && col == target.column {
+            return Some(offset);
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line == target.line && col == target.column).then_some(sql.len())
+}
+
+fn shift_macro_spans_after_insertion(macro_spans: &mut MacroSpans, insertion: Insertion) {
+    for (_, expanded) in &mut macro_spans.items {
+        if expanded.end_offset <= insertion.offset {
+            continue;
+        }
+        if expanded.start_offset >= insertion.offset {
+            shift_span_position(
+                &mut expanded.start_line,
+                &mut expanded.start_col,
+                &mut expanded.start_offset,
+                insertion,
+            );
+        }
+        shift_span_position(
+            &mut expanded.end_line,
+            &mut expanded.end_col,
+            &mut expanded.end_offset,
+            insertion,
+        );
+    }
+}
+
+fn shift_span_position(line: &mut u32, col: &mut u32, offset: &mut u32, insertion: Insertion) {
+    if *offset < insertion.offset {
+        return;
+    }
+
+    *offset += insertion.added_bytes;
+    if *line == insertion.line {
+        if insertion.added_lines == 0 {
+            *col += insertion.added_cols;
+        } else {
+            *line += insertion.added_lines;
+            *col = insertion.trailing_cols + (*col).saturating_sub(insertion.col);
+        }
+    } else {
+        *line += insertion.added_lines;
+    }
 }
 
 /// Extract all model names from `__dbt__cte__` references
@@ -712,11 +841,176 @@ pub fn add_task_context(
 mod tests {
     use std::rc::Rc;
 
-    use minijinja::{Environment, context, listener::RenderingEventListener};
+    use minijinja::{
+        Environment, MacroSpans, context, listener::RenderingEventListener, machinery::Span,
+    };
 
     use crate::listener::DefaultRenderingEventListener;
 
-    use super::raw_source_spans_to_macro_span_vec;
+    use super::{
+        inject_ctes_into_existing_with, raw_source_spans_to_macro_span_vec,
+        shift_macro_spans_after_insertion,
+    };
+
+    #[test]
+    fn injects_ctes_into_existing_with_chain() {
+        let sql = "WITH student_attendance AS (\n    SELECT 1\n)\nSELECT * FROM student_attendance";
+        let ctes = "__dbt__cte__valid_class as (\nSELECT 1\n)";
+
+        let (actual, _) = inject_ctes_into_existing_with(sql, ctes).unwrap();
+
+        assert_eq!(
+            actual,
+            "WITH  __dbt__cte__valid_class as (\nSELECT 1\n), student_attendance AS (\n    SELECT 1\n)\nSELECT * FROM student_attendance"
+        );
+    }
+
+    #[test]
+    fn injects_after_recursive_keyword_and_preserves_leading_comments() {
+        let sql = "-- model comment\n/* unicode: ☃ */\nWITH RECURSIVE paths AS (SELECT 1)\nSELECT * FROM paths";
+
+        let (actual, _) = inject_ctes_into_existing_with(sql, "injected AS (SELECT 2)").unwrap();
+
+        assert_eq!(
+            actual,
+            "-- model comment\n/* unicode: ☃ */\nWITH RECURSIVE  injected AS (SELECT 2), paths AS (SELECT 1)\nSELECT * FROM paths"
+        );
+    }
+
+    #[test]
+    fn injects_after_recursive_keyword_separated_by_comments() {
+        for (sql, expected) in [
+            (
+                "WITH /* keep */ RECURSIVE paths AS (SELECT 1) SELECT * FROM paths",
+                "WITH /* keep */ RECURSIVE  injected AS (SELECT 2), paths AS (SELECT 1) SELECT * FROM paths",
+            ),
+            (
+                "WITH -- keep\nRECURSIVE paths AS (SELECT 1) SELECT * FROM paths",
+                "WITH -- keep\nRECURSIVE  injected AS (SELECT 2), paths AS (SELECT 1) SELECT * FROM paths",
+            ),
+        ] {
+            let (actual, _) =
+                inject_ctes_into_existing_with(sql, "injected AS (SELECT 2)").unwrap();
+
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn ignores_with_outside_a_leading_keyword() {
+        for sql in [
+            "SELECT 'WITH value'",
+            "SELECT 1 -- WITH ignored",
+            "(WITH nested AS (SELECT 1) SELECT * FROM nested)",
+            "\"WITH\" AS identifier",
+        ] {
+            assert!(inject_ctes_into_existing_with(sql, "injected AS (SELECT 2)").is_none());
+        }
+    }
+
+    #[test]
+    fn shifts_only_macro_spans_after_the_insertion() {
+        let sql = "WITH existing AS (\n    SELECT value\n)";
+        let (_, insertion) =
+            inject_ctes_into_existing_with(sql, "injected AS (\nSELECT 1\n)").unwrap();
+        let source = Span::default();
+        let before = Span {
+            start_line: 1,
+            start_col: 1,
+            start_offset: 0,
+            end_line: 1,
+            end_col: 4,
+            end_offset: 3,
+        };
+        let after = Span {
+            start_line: 1,
+            start_col: 6,
+            start_offset: 5,
+            end_line: 1,
+            end_col: 14,
+            end_offset: 13,
+        };
+        let ending_at_insertion = Span {
+            start_line: 1,
+            start_col: 1,
+            start_offset: 0,
+            end_line: 1,
+            end_col: 5,
+            end_offset: 4,
+        };
+        let crossing_insertion = Span {
+            start_line: 1,
+            start_col: 1,
+            start_offset: 0,
+            end_line: 1,
+            end_col: 14,
+            end_offset: 13,
+        };
+        let mut macro_spans = MacroSpans {
+            items: vec![
+                (source, before),
+                (source, ending_at_insertion),
+                (source, crossing_insertion),
+                (source, after),
+            ],
+            ..Default::default()
+        };
+
+        shift_macro_spans_after_insertion(&mut macro_spans, insertion);
+
+        assert_eq!(macro_spans.items[0].1, before);
+        assert_eq!(macro_spans.items[1].1, ending_at_insertion);
+        assert_eq!(
+            macro_spans.items[2].1.start_line,
+            crossing_insertion.start_line
+        );
+        assert_eq!(
+            macro_spans.items[2].1.start_col,
+            crossing_insertion.start_col
+        );
+        assert_eq!(
+            macro_spans.items[2].1.start_offset,
+            crossing_insertion.start_offset
+        );
+        assert_eq!(
+            macro_spans.items[2].1.end_offset,
+            crossing_insertion.end_offset + insertion.added_bytes
+        );
+        assert_eq!(macro_spans.items[3].1.start_line, 3);
+        assert_eq!(macro_spans.items[3].1.start_col, 4);
+        assert_eq!(
+            macro_spans.items[3].1.start_offset,
+            after.start_offset + insertion.added_bytes
+        );
+    }
+
+    #[test]
+    fn shifts_same_line_unicode_macro_span_by_character_columns() {
+        let sql = "/* ☃ */ WITH existing AS (SELECT value)";
+        let existing_offset = sql.find("existing").unwrap();
+        let existing_col = sql[..existing_offset].chars().count() as u32 + 1;
+        let expanded = Span {
+            start_line: 1,
+            start_col: existing_col,
+            start_offset: existing_offset as u32,
+            end_line: 1,
+            end_col: existing_col + "existing".len() as u32,
+            end_offset: (existing_offset + "existing".len()) as u32,
+        };
+        let (actual, insertion) =
+            inject_ctes_into_existing_with(sql, "injected AS (SELECT '☃')").unwrap();
+        let mut macro_spans = MacroSpans {
+            items: vec![(Span::default(), expanded)],
+            ..Default::default()
+        };
+
+        shift_macro_spans_after_insertion(&mut macro_spans, insertion);
+
+        let actual_offset = actual.find("existing").unwrap();
+        let actual_col = actual[..actual_offset].chars().count() as u32 + 1;
+        assert_eq!(macro_spans.items[0].1.start_offset, actual_offset as u32);
+        assert_eq!(macro_spans.items[0].1.start_col, actual_col);
+    }
 
     #[test]
     fn raw_source_spans_track_rendered_loop_lines() {

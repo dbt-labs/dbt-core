@@ -46,6 +46,16 @@ impl TypedRecursiveConfig for ProjectSavedQueryConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.cache.is_some()
+            || self.enabled.is_some()
+            || self.export_as.is_some()
+            || self.schema.is_some()
+            || self.group.is_some()
+            || self.meta.is_some()
+            || self.tags.is_some()
+    }
 }
 
 #[derive(Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]

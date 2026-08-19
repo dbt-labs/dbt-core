@@ -174,6 +174,9 @@ impl SemanticCategory {
             | "list_relations_schemas_by_patterns"
             | "list_relations_in_parallel"
             | "freshness"
+            | "freshness_with_overrides"
+            | "freshness_all_in_schema"
+            | "freshness_all_in_schemas"
             | "list_user_defined_functions"
             | "build_schemas_from_stats_sql"
             | "build_columns_from_get_columns"
@@ -282,6 +285,10 @@ mod tests {
         );
         assert_eq!(
             SemanticCategory::from_metadata_method("freshness"),
+            SemanticCategory::MetadataRead
+        );
+        assert_eq!(
+            SemanticCategory::from_metadata_method("freshness_all_in_schemas"),
             SemanticCategory::MetadataRead
         );
         assert_eq!(

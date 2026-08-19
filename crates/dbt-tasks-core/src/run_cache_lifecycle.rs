@@ -1,3 +1,4 @@
+use dbt_adapter::time_machine::is_replaying;
 use dbt_adapter_core::AdapterType;
 use dbt_cloud_config::ResolvedCloudConfig;
 use dbt_common::io_args::FsCommand;
@@ -254,7 +255,13 @@ fn should_initialize_run_cache_service(
     execute: Execute,
     adapter_type: AdapterType,
 ) -> bool {
-    execute == Execute::Remote && adapter_supports_dbt_state(adapter_type) && arg.run_cache_service
+    // Never contact the live dbt State service while replaying a time-machine
+    // recording: replay must be fully reproducible from recorded events, with
+    // no network/auth dependency on the real service.
+    !is_replaying()
+        && execute == Execute::Remote
+        && adapter_supports_dbt_state(adapter_type)
+        && arg.run_cache_service
 }
 
 /// Returns true when the adapter is supported by the dbt State service.
@@ -353,6 +360,50 @@ mod tests {
             Execute::Remote,
             AdapterType::DuckDB,
         ));
+    }
+
+    // Serializes tests that touch the process-global time-machine state
+    // (`GLOBAL_SESSION`/`GLOBAL_REPLAYER` in `dbt_adapter::time_machine`).
+    static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[tokio::test]
+    async fn should_initialize_run_cache_service_is_false_while_replaying() {
+        use dbt_adapter::time_machine::{
+            EventReplayer, get_or_init_recording, get_or_init_replayer, reset_time_machine_globals,
+        };
+        use dbt_common::cancellation::CancellationToken;
+
+        let _guard = TIME_MACHINE_TEST_LOCK.lock().await;
+        reset_time_machine_globals().await.unwrap();
+
+        // Even with every other condition satisfied (service requested,
+        // remote compute, supported adapter), replay must always disable
+        // the live dbt State service.
+        assert!(should_initialize_run_cache_service(
+            &requested_args(),
+            Execute::Remote,
+            AdapterType::Snowflake,
+        ));
+
+        let dir = tempfile::tempdir().unwrap();
+        let handle = get_or_init_recording(
+            dir.path(),
+            "snowflake",
+            "test-invocation",
+            None,
+            CancellationToken::never_cancels(),
+        );
+        handle.shutdown().await.unwrap();
+        reset_time_machine_globals().await.unwrap();
+        get_or_init_replayer(|| Ok(std::sync::Arc::new(EventReplayer::load(dir.path())?))).unwrap();
+
+        assert!(!should_initialize_run_cache_service(
+            &requested_args(),
+            Execute::Remote,
+            AdapterType::Snowflake,
+        ));
+
+        reset_time_machine_globals().await.unwrap();
     }
 
     #[test]

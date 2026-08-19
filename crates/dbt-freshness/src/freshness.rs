@@ -351,6 +351,31 @@ async fn calculate_freshness_common(
     Ok(result)
 }
 
+/// Whether a source takes part in the freshness pass that state-aware orchestration
+/// (`dbt build` / `dbt run`) runs before the task runner, to decide whether downstream
+/// models must rebuild.
+///
+/// A source opts out of freshness with the documented escape hatch
+/// `config: freshness: null`, which is the *only* way `__source_attr__.freshness` ends up
+/// `None`: a source that configures nothing still resolves to an empty `FreshnessDefinition`
+/// (see `merge_freshness_unwrapped` in `dbt-parser`'s `resolve_sources`, META-5461), so those
+/// sources keep their metadata tracked here. An opted-out source has no rule to evaluate, so
+/// querying `INFORMATION_SCHEMA.TABLES` for it buys nothing and warns for objects that don't
+/// live there at all — e.g. Snowflake SEQUENCE objects declared as sources, which is what
+/// dbt-labs/dbt-core#14534 reported.
+///
+/// A `loaded_at_field` / `loaded_at_query` is still honored on an opted-out source: the user
+/// named a column/query to measure freshness from, so it is measured.
+///
+/// Skipped sources have no entry in the returned results, which the run-cache treats like any
+/// other source without freshness data: the source counts as just-updated and its dependents
+/// rebuild.
+fn collects_freshness_during_build(node: &DbtSource) -> bool {
+    node.__source_attr__.freshness.is_some()
+        || !node.get_loaded_at_field().is_empty()
+        || !node.get_loaded_at_query().is_empty()
+}
+
 /// This function is used to calculate the freshness of the sources and extended models.
 #[allow(clippy::cognitive_complexity)]
 #[allow(clippy::too_many_arguments)]
@@ -421,6 +446,8 @@ pub async fn run_freshness(
         // If this is a source freshness command, then we don't need to check extended models
         vec![]
     } else {
+        sources.retain(|node| collects_freshness_during_build(node));
+
         // If this is not a source freshness command, then we need to check extended models
         set_of_nodes
             .iter()
@@ -1042,5 +1069,80 @@ pub fn emit_freshness_stats(io_args: &IoArgs, results: &BTreeMap<String, Freshne
             ShowResult::new_text(info, "stats", "Source freshness stats"),
             None,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::common::FreshnessDefinition;
+    use dbt_schemas::schemas::nodes::DbtSourceAttr;
+
+    /// A source whose `freshness` resolved to `Some(..)`, i.e. anything that did not opt out
+    /// with `config: freshness: null`. `default()` is what a source that configures no freshness
+    /// at all resolves to (META-5461).
+    fn source_with_freshness(freshness: Option<FreshnessDefinition>) -> DbtSource {
+        DbtSource {
+            __source_attr__: DbtSourceAttr {
+                freshness,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn source_without_any_freshness_config_is_collected() {
+        // No `freshness` anywhere in the project resolves to an empty rule, not to `None`
+        // (`merge_freshness_unwrapped`, META-5461). These sources are the ones state-aware
+        // orchestration tracks off `INFORMATION_SCHEMA.TABLES.LAST_ALTERED`, so they must keep
+        // being collected — skipping them would make every dependent model rebuild every run.
+        let node = source_with_freshness(Some(FreshnessDefinition::default()));
+        assert!(collects_freshness_during_build(&node));
+    }
+
+    #[test]
+    fn source_with_freshness_rules_is_collected() {
+        let node = source_with_freshness(Some(FreshnessDefinition {
+            warn_after: Some(FreshnessRules {
+                count: Some(12),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        }));
+        assert!(collects_freshness_during_build(&node));
+    }
+
+    #[test]
+    fn source_opted_out_with_freshness_null_is_skipped() {
+        // `config: freshness: null` — dbt-labs/dbt-core#14534. Nothing to evaluate, so the
+        // source is dropped before any metadata query is issued.
+        let node = source_with_freshness(None);
+        assert!(!collects_freshness_during_build(&node));
+    }
+
+    #[test]
+    fn source_opted_out_but_with_loaded_at_field_is_collected() {
+        let mut node = source_with_freshness(None);
+        node.__source_attr__.loaded_at_field = Some("updated_at".to_string());
+        assert!(collects_freshness_during_build(&node));
+    }
+
+    #[test]
+    fn source_opted_out_but_with_loaded_at_query_is_collected() {
+        let mut node = source_with_freshness(None);
+        node.__source_attr__.loaded_at_query = Some("select max(updated_at) from t".to_string());
+        assert!(collects_freshness_during_build(&node));
+    }
+
+    #[test]
+    fn empty_loaded_at_strings_do_not_count_as_configured() {
+        // `apply_freshness_loaded_at_override` writes `Some("")` for the peer field when only
+        // one of `loaded_at_field` / `loaded_at_query` is set, so an empty string must read as
+        // "unset" here.
+        let mut node = source_with_freshness(None);
+        node.__source_attr__.loaded_at_field = Some(String::new());
+        node.__source_attr__.loaded_at_query = Some(String::new());
+        assert!(!collects_freshness_during_build(&node));
     }
 }

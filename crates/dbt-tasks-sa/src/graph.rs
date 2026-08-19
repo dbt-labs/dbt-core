@@ -858,17 +858,20 @@ fn compute_first_upstream_for_phase(
 
 /// Add test-to-model run dependencies if fail_fast is enabled (i.e. fail running models when
 /// upstream tests fail)
+///
+/// The downstream side also includes snapshots and seeds, since `dbt build` can run those
+/// alongside models and they must be blocked by upstream test failures too.
 fn add_test_to_model_dependencies(
     run_nodes: &BTreeMap<String, Arc<dyn Task>>,
     deps: &BTreeMap<String, BTreeSet<String>>,
     runnable_node_index_map: &BTreeMap<String, NodeIndex>,
     graph: &mut DiGraph<Arc<dyn Task>, ()>,
 ) {
-    // Partition run nodes into models and tests
+    // Partition run nodes into blockable nodes (models, snapshots, seeds) and tests
     let mut model_run_nodes = Vec::new();
     let mut test_run_nodes = Vec::new();
     for (unique_id, _) in run_nodes.iter() {
-        if unique_id.starts_with("model.") {
+        if unique_id.starts_with("model.") || unique_id.starts_with("snapshot.") {
             model_run_nodes.push(unique_id.clone());
         } else if unique_id.starts_with("test.") {
             test_run_nodes.push(unique_id.clone());

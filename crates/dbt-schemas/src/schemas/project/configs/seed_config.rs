@@ -13,9 +13,11 @@ type YmlValue = dbt_yaml::Value;
 use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
+use crate::schemas::common::ComputePlatform;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
@@ -67,9 +69,9 @@ pub struct ProjectSeedConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(rename = "+post-hook")]
+    #[serde(rename = "+post-hook", alias = "+post_hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
-    #[serde(rename = "+pre-hook")]
+    #[serde(rename = "+pre-hook", alias = "+pre_hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(
         default,
@@ -193,6 +195,8 @@ pub struct ProjectSeedConfig {
     pub file_format: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+alt_compute")]
+    pub alt_compute: Option<ComputePlatform>,
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
@@ -305,6 +309,98 @@ impl TypedRecursiveConfig for ProjectSeedConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.column_types.is_some()
+            || self.copy_grants.is_some()
+            || self.copy_tags.is_some()
+            || self.database.is_some()
+            || self.alias.is_some()
+            || self.docs.is_some()
+            || self.enabled.is_some()
+            || self.event_time.is_some()
+            || self.full_refresh.is_some()
+            || self.grants.0.is_present()
+            || self.group.is_some()
+            || self.meta.is_some()
+            || self.persist_docs.is_some()
+            || self.post_hook.is_some()
+            || self.pre_hook.is_some()
+            || self.quote_columns.is_some()
+            || self.schema.is_some()
+            || self.snowflake_initialization_warehouse.is_some()
+            || self.immutable_where.is_some()
+            || self.snowflake_warehouse.is_some()
+            || self.refresh_warehouse.is_some()
+            || self.static_analysis.is_some()
+            || self.tags.is_some()
+            || self.transient.is_some()
+            || self.quoting.is_some()
+            || self.delimiter.is_some()
+            || self.external_volume.is_some()
+            || self.adapter_properties.is_some()
+            || self.base_location_root.is_some()
+            || self.base_location_subpath.is_some()
+            || self.target_lag.is_some()
+            || self.refresh_mode.is_some()
+            || self.initialize.is_some()
+            || self.scheduler.is_some()
+            || self.tmp_relation_type.is_some()
+            || self.query_tag.is_some()
+            || self.table_tag.is_some()
+            || self.row_access_policy.is_some()
+            || self.automatic_clustering.is_some()
+            || self.secure.is_some()
+            || self.partition_by.is_some()
+            || self.cluster_by.is_some()
+            || self.hours_to_expiration.is_present()
+            || self.job_execution_timeout_seconds.is_some()
+            || self.reservation.is_some()
+            || self.labels.is_some()
+            || self.labels_from_meta.is_some()
+            || self.kms_key_name.is_some()
+            || self.require_partition_filter.is_some()
+            || self.partition_expiration_days.is_some()
+            || self.grant_access_to.is_some()
+            || self.partitions.is_some()
+            || self.enable_refresh.is_some()
+            || self.refresh_interval_minutes.is_some()
+            || self.resource_tags.is_some()
+            || self.max_staleness.is_some()
+            || self.file_format.is_some()
+            || self.catalog_name.is_some()
+            || self.location_root.is_some()
+            || self.tblproperties.is_some()
+            || self.include_full_name_in_path.is_some()
+            || self.liquid_clustered_by.is_some()
+            || self.auto_liquid_cluster.is_some()
+            || self.clustered_by.is_some()
+            || self.buckets.is_some()
+            || self.catalog.is_some()
+            || self.databricks_tags.is_some()
+            || self.compression.is_some()
+            || self.databricks_compute.is_some()
+            || self.target_alias.is_some()
+            || self.source_alias.is_some()
+            || self.matched_condition.is_some()
+            || self.not_matched_condition.is_some()
+            || self.not_matched_by_source_condition.is_some()
+            || self.not_matched_by_source_action.is_some()
+            || self.merge_with_schema_evolution.is_some()
+            || self.skip_matched_step.is_some()
+            || self.skip_not_matched_step.is_some()
+            || self.auto_refresh.is_some()
+            || self.backup.is_some()
+            || self.bind.is_some()
+            || self.dist.is_some()
+            || self.sort.is_some()
+            || self.sort_type.is_some()
+            || self.as_columnstore.is_some()
+            || self.table_type.is_some()
+            || self.indexes.is_some()
+            || self.unlogged.is_some()
+            || self.schedule.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -319,6 +415,9 @@ pub struct SeedConfig {
     pub schema: Option<String>,
     pub alias: Option<String>,
     pub catalog_name: Option<String>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt_compute: Option<ComputePlatform>,
     pub docs: Option<DocsConfig>,
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -356,6 +455,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             schema: config.schema,
             alias: config.alias,
             catalog_name: config.catalog_name.clone(),
+            alt_compute: config.alt_compute,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -434,6 +534,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
+                zorder: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -449,6 +550,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                unique_tmp_table_suffix: None,
                 schedule: config.schedule,
                 incremental_apply_config_changes: None,
                 use_safer_relation_operations: None,
@@ -471,6 +573,27 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 // seed is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -483,6 +606,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             database: config.database,
             schema: config.schema,
             alias: config.alias,
+            alt_compute: config.alt_compute,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -631,8 +755,30 @@ impl ResolvableConfig<SeedConfig> for SeedConfig {
 }
 
 impl ConfigKeys for SeedConfig {
-    // The default implementation from the trait will handle
-    // extracting field names via serialization automatically
+    fn valid_field_names() -> HashSet<String> {
+        let default_instance = Self::default();
+        let serialized = dbt_yaml::to_value(&default_instance)
+            .expect("Failed to serialize SeedConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, _) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    field_names.insert(key_str);
+                }
+            }
+        }
+
+        // Add known aliases that might not show up in serialization
+        field_names.insert("project".to_string()); // alias for database
+        field_names.insert("data_space".to_string()); // alias for database
+        field_names.insert("dataset".to_string()); // alias for schema
+        field_names.insert("post-hook".to_string()); // might be serialized as post_hook
+        field_names.insert("pre-hook".to_string()); // might be serialized as pre_hook
+
+        field_names
+    }
 }
 
 #[cfg(test)]
@@ -695,5 +841,25 @@ __additional_properties__: {}
             .resource_tags
             .expect("resource_tags should propagate from SeedConfig back to ProjectSeedConfig");
         assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
+
+    #[test]
+    fn test_project_seed_config_alt_compute_parses_and_round_trips() {
+        use crate::schemas::common::ComputePlatform;
+
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++alt_compute: alt
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.alt_compute, Some(ComputePlatform::Alt));
+
+        let seed_config: SeedConfig = project_config.into();
+        assert_eq!(seed_config.alt_compute, Some(ComputePlatform::Alt));
+
+        let round_tripped: ProjectSeedConfig = seed_config.into();
+        assert_eq!(round_tripped.alt_compute, Some(ComputePlatform::Alt));
     }
 }

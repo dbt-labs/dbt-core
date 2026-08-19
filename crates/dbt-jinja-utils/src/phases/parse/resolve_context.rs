@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
+use dbt_adapter::load_store::ResultStore;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_ctx::{DbtNamespace, DocsContext, JinjaObject, ResolveBaseCtx, to_jinja_btreemap};
 use dbt_jinja_vars::ConfiguredVar;
@@ -214,6 +215,14 @@ pub fn build_resolve_context(
         .map(|(k, v)| (k, MinijinjaValue::from(v)))
         .collect();
 
+    // One store for the whole package, mirroring `build_compile_base_ctx`.
+    // Safe to share here (unlike the per-batch case `reset_result_store`
+    // guards against): `execute` is false at parse, so `statement` short-
+    // circuits before reaching `store_result` and nothing is ever written.
+    // Every `load_result` therefore returns none, which is what makes an
+    // unguarded `run_query(...)` a no-op at parse — same as dbt-core.
+    let result_store = ResultStore::default();
+
     let ctx = ResolveBaseCtx {
         doc: MinijinjaValue::from_object(DocMacro::new(root_project_name.to_string(), docs_map)),
         macro_dispatch_order,
@@ -221,6 +230,9 @@ pub fn build_resolve_context(
         execute: false,
         node: MinijinjaValue::NONE,
         connection_name: String::new(),
+        store_result: MinijinjaValue::from_function(result_store.store_result()),
+        load_result: MinijinjaValue::from_function(result_store.load_result()),
+        store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),
         dbt_namespaces,
     };
 

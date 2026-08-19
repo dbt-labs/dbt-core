@@ -1405,6 +1405,24 @@ pub fn hooks_equal(a: &Verbatim<Option<Hooks>>, b: &Verbatim<Option<Hooks>>) -> 
     }
 }
 
+/// Serializes hooks in dbt-core's manifest shape: always a `List[Hook]`, and `[]` rather
+/// than `null` when unset, whatever form the user authored (bare string, list of strings,
+/// or `{sql, transaction}` mapping). For config structs that are serialized straight into
+/// the manifest; the ones with a dedicated `Manifest*Config` normalize in `From` instead.
+pub fn serialize_hooks_as_list<S>(
+    hooks: &Verbatim<Option<Hooks>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let normalized = match &**hooks {
+        Some(hooks) => hooks.to_hook_config_array(),
+        None => Vec::new(),
+    };
+    normalized.serialize(serializer)
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct HookConfig {

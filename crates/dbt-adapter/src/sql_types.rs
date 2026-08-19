@@ -56,8 +56,12 @@ pub trait TypeOps: Send + Sync {
     /// Picks a SQL type for a given Arrow DataType and renders it as SQL.
     ///
     /// The implementation is dialect-specific.
-    fn format_arrow_type_as_sql(&self, data_type: &DataType, out: &mut String)
-    -> AdapterResult<()>;
+    fn format_arrow_type_as_sql(
+        &self,
+        data_type: &DataType,
+        nullable: bool,
+        out: &mut String,
+    ) -> AdapterResult<()>;
 
     /// Renders a given SqlType as SQL.
     ///
@@ -78,7 +82,7 @@ pub trait TypeOps: Send + Sync {
             .map(Ok)
             .unwrap_or_else(|| {
                 let mut out = String::new();
-                self.format_arrow_type_as_sql(field.data_type(), &mut out)
+                self.format_arrow_type_as_sql(field.data_type(), field.is_nullable(), &mut out)
                     .map(|_| Cow::Owned(out))
             })
     }
@@ -174,14 +178,15 @@ impl TypeOps for DefaultTypeOps {
     fn format_arrow_type_as_sql(
         &self,
         data_type: &DataType,
+        nullable: bool,
         out: &mut String,
     ) -> AdapterResult<()> {
         use AdapterType::*;
         let adapter_type = self.0;
         match adapter_type {
-            Postgres | Salesforce => postgres::try_format_type(data_type, true, out),
-            Fabric => fabric::try_format_type(data_type, true, out),
-            ClickHouse => clickhouse::try_format_type(data_type, true, out),
+            Postgres | Salesforce => postgres::try_format_type(data_type, nullable, out),
+            Fabric => fabric::try_format_type(data_type, nullable, out),
+            ClickHouse => clickhouse::try_format_type(data_type, nullable, out),
             _ => {
                 // sdf-specific distinct types are encoded as FixedSizeList(field, 1).
                 // Render them as the uppercased field name (e.g. "variant" → "VARIANT").
@@ -195,7 +200,7 @@ impl TypeOps for DefaultTypeOps {
                         out.push_str("ARRAY");
                     } else {
                         out.push_str("ARRAY<");
-                        self.format_arrow_type_as_sql(field.data_type(), out)?;
+                        self.format_arrow_type_as_sql(field.data_type(), field.is_nullable(), out)?;
                         out.push('>');
                     }
                     return Ok(());
@@ -209,7 +214,7 @@ impl TypeOps for DefaultTypeOps {
                         }
                         out.push_str(field.name());
                         out.push(' ');
-                        self.format_arrow_type_as_sql(field.data_type(), out)?;
+                        self.format_arrow_type_as_sql(field.data_type(), field.is_nullable(), out)?;
                     }
                     out.push('>');
                     return Ok(());
@@ -690,11 +695,26 @@ pub mod bigquery {
         let type_key = get_field_sql_type_metadata_key(AdapterType::Bigquery);
 
         if let Some(original_ctype) = field.metadata().get(type_key) {
+            // REPEATED - this is an Array type
+            let is_array = field
+                .metadata()
+                .get("Repeated")
+                .is_some_and(|v| v == "true");
+
             let inner_sql_type = match original_ctype.as_str() {
                 "RECORD" => {
-                    // STRUCT/RECORD type, recurse and build original type
-                    match field.data_type() {
-                        DataType::Struct(fields) => {
+                    // STRUCT/RECORD type, recurse and build original type.
+                    let struct_fields = match field.data_type() {
+                        DataType::Struct(fields) => Some(fields),
+                        DataType::List(element) if is_array => match element.data_type() {
+                            DataType::Struct(fields) => Some(fields),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+
+                    match struct_fields {
+                        Some(fields) => {
                             let field_strings: Vec<String> = fields
                                 .iter()
                                 .map(|nested_field| {
@@ -705,7 +725,7 @@ pub mod bigquery {
                                 .collect::<Option<Vec<_>>>()?;
                             Cow::Owned(format!("STRUCT<{}>", field_strings.join(", ")))
                         }
-                        _ => Cow::Borrowed(original_ctype.as_str()),
+                        None => Cow::Borrowed(original_ctype.as_str()),
                     }
                 }
                 "INTEGER" => Cow::Borrowed("INT64"),
@@ -715,11 +735,6 @@ pub mod bigquery {
                 other => Cow::Borrowed(other),
             };
 
-            // REPEATED - this is an Array type
-            let is_array = field
-                .metadata()
-                .get("Repeated")
-                .is_some_and(|v| v == "true");
             let sql_type = if is_array {
                 Cow::Owned(format!("ARRAY<{}>", inner_sql_type))
             } else {
@@ -773,8 +788,12 @@ pub mod postgres {
             DataType::Time64(TimeUnit::Microsecond) => out.push_str("time without time zone"),
             DataType::Time64(TimeUnit::Nanosecond) => out.push_str("time without time zone"),
             DataType::Interval(_) => out.push_str("interval"),
-            DataType::Binary => out.push_str("binary"),
-            DataType::Utf8 | DataType::Utf8View => out.push_str("character varying"),
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
+                out.push_str("binary")
+            }
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+                out.push_str("character varying")
+            }
             DataType::List(_) => out.push_str("array"),
             DataType::Dictionary(key, value)
                 if key.as_ref() == &DataType::UInt16 && value.as_ref() == &DataType::Utf8 =>
@@ -836,7 +855,9 @@ pub mod clickhouse {
             DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
                 rendered.push_str("String")
             }
-            DataType::Binary | DataType::LargeBinary => rendered.push_str("String"),
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
+                rendered.push_str("String")
+            }
             DataType::Date32 | DataType::Date64 => rendered.push_str("Date32"),
             DataType::Timestamp(TimeUnit::Second, _) => rendered.push_str("DateTime"),
             DataType::Timestamp(TimeUnit::Millisecond, _) => rendered.push_str("DateTime64(3)"),
@@ -920,8 +941,12 @@ pub mod fabric {
                     "INTERVAL is not supported in Microsoft Fabric",
                 ));
             }
-            DataType::Binary => out.push_str("VARBINARY(MAX)"),
-            DataType::Utf8 | DataType::Utf8View => out.push_str(FABRIC_MAX_VARCHAR_TYPE),
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView => {
+                out.push_str("VARBINARY(MAX)")
+            }
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View => {
+                out.push_str(FABRIC_MAX_VARCHAR_TYPE)
+            }
 
             DataType::List(_) => {
                 return Err(AdapterError::new(
@@ -1103,19 +1128,27 @@ pub fn var_size(adapter_type: AdapterType, data_type: &DataType) -> Option<usize
     match (adapter_type, data_type) {
         // Strings: Redshift wants a length; persist it in char_size
         // TODO(jason): We need to report the correct size and not just a default
-        (Redshift, DataType::Utf8 | DataType::Utf8View) => max_varchar_size(Redshift),
-        // For VARCHAR types, no explicit size in Snowflake unless specified
-        (Snowflake, DataType::Utf8 | DataType::Utf8View) => None,
-        // XXX: need to think about the defaults for these adapters
-        (Postgres | Bigquery | Databricks | Salesforce, DataType::Utf8 | DataType::Utf8View) => {
-            None
+        (Redshift, DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View) => {
+            max_varchar_size(Redshift)
         }
+        // For VARCHAR types, no explicit size in Snowflake unless specified
+        (Snowflake, DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View) => None,
+        // XXX: need to think about the defaults for these adapters
+        (
+            Postgres | Bigquery | Databricks | Salesforce,
+            DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View,
+        ) => None,
 
         // Bytes
         // TODO(jason): We need to report the correct size and not just a default
-        (Redshift, DataType::Binary) => max_varbinary_size(Redshift),
+        (Redshift, DataType::Binary | DataType::LargeBinary | DataType::BinaryView) => {
+            max_varbinary_size(Redshift)
+        }
         // XXX: need to think about the defaults for these adapters
-        (Snowflake | Postgres | Bigquery | Databricks | Salesforce, DataType::Binary) => None,
+        (
+            Snowflake | Postgres | Bigquery | Databricks | Salesforce,
+            DataType::Binary | DataType::LargeBinary | DataType::BinaryView,
+        ) => None,
 
         // Snowflake: For timestamp/date/time types, extract precision if available
         (Snowflake, dt) if snowflake::is_time(dt).is_yes() => {
@@ -1381,5 +1414,63 @@ mod tests {
         assert_eq!(convert_text_type(Postgres), "text");
         assert_eq!(convert_text_type(Snowflake), "text");
         assert_eq!(convert_text_type(Redshift), "text");
+    }
+
+    fn bq(ty: &str, repeated: bool) -> HashMap<String, String> {
+        HashMap::from([
+            ("Type".to_string(), ty.to_string()),
+            ("Repeated".to_string(), repeated.to_string()),
+        ])
+    }
+
+    #[test]
+    fn bigquery_field_to_string_recovers_nested_types_of_repeated_records() {
+        // pois ARRAY<STRUCT<poi_name STRING, location STRUCT<poi_type STRING, point_geom GEOGRAPHY>>>
+        // A REPEATED RECORD arrives as a list wrapping the struct.
+        let poi_name =
+            Field::new("poi_name", DataType::Utf8, true).with_metadata(bq("STRING", false));
+        let poi_type =
+            Field::new("poi_type", DataType::Utf8, true).with_metadata(bq("STRING", false));
+        let point_geom =
+            Field::new("point_geom", DataType::Utf8, true).with_metadata(bq("GEOGRAPHY", false));
+
+        let location = Field::new(
+            "location",
+            DataType::Struct(vec![poi_type, point_geom].into()),
+            true,
+        )
+        .with_metadata(bq("RECORD", false));
+        let element = Field::new(
+            "item",
+            DataType::Struct(vec![poi_name, location].into()),
+            true,
+        );
+        let pois = Field::new("pois", DataType::List(Arc::new(element)), true)
+            .with_metadata(bq("RECORD", true));
+
+        assert_eq!(
+            bigquery::field_to_string(&pois).unwrap(),
+            "ARRAY<STRUCT<`poi_name` STRING, `location` STRUCT<`poi_type` STRING, `point_geom` GEOGRAPHY>>>"
+        );
+    }
+
+    #[test]
+    fn bigquery_field_to_string_recurses_through_repeated_records_at_every_level() {
+        // outer ARRAY<STRUCT<inner ARRAY<STRUCT<point_geom GEOGRAPHY>>>>
+        let point_geom =
+            Field::new("point_geom", DataType::Utf8, true).with_metadata(bq("GEOGRAPHY", false));
+
+        let inner_element = Field::new("item", DataType::Struct(vec![point_geom].into()), true);
+        let inner = Field::new("inner", DataType::List(Arc::new(inner_element)), true)
+            .with_metadata(bq("RECORD", true));
+
+        let outer_element = Field::new("item", DataType::Struct(vec![inner].into()), true);
+        let outer = Field::new("outer", DataType::List(Arc::new(outer_element)), true)
+            .with_metadata(bq("RECORD", true));
+
+        assert_eq!(
+            bigquery::field_to_string(&outer).unwrap(),
+            "ARRAY<STRUCT<`inner` ARRAY<STRUCT<`point_geom` GEOGRAPHY>>>>"
+        );
     }
 }

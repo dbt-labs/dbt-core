@@ -1,5 +1,7 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::utils::{
     extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
@@ -95,6 +97,7 @@ pub async fn resolve_semantic_models(
                 &package.dbt_project.semantic_models,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?;

@@ -687,6 +687,8 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_warehouse: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub adaptive_metadata_fetch: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>, // Setting as Option but required as of dbt 1.7.1
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
@@ -1572,6 +1574,7 @@ pub struct SnowflakeTargetEnv {
     pub user: Option<String>,
     pub warehouse: Option<String>,
     pub metadata_warehouse: Option<String>,
+    pub adaptive_metadata_fetch: Option<bool>,
     pub role: Option<String>,
     pub authenticator: Option<String>,
     pub oauth_client_id: Option<String>,
@@ -1851,6 +1854,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     user: config.user,
                     warehouse: config.warehouse,
                     metadata_warehouse: config.metadata_warehouse,
+                    adaptive_metadata_fetch: config.adaptive_metadata_fetch,
                     role: config.role.clone(),
                     authenticator: config.authenticator,
                     oauth_client_id: config.oauth_client_id,
@@ -2352,6 +2356,47 @@ mod tests {
         };
         assert_eq!(target.warehouse.as_deref(), Some("build_wh"));
         assert_eq!(target.metadata_warehouse.as_deref(), Some("metadata_wh"));
+    }
+
+    #[test]
+    fn test_snowflake_adaptive_metadata_fetch_parses_and_reaches_target_context() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: snowflake\n\
+             account: acct\n\
+             database: db\n\
+             schema: schema\n\
+             warehouse: build_wh\n\
+             adaptive_metadata_fetch: false",
+        )
+        .unwrap();
+
+        let DbConfig::Snowflake(snowflake_config) = config.clone() else {
+            panic!("expected snowflake config");
+        };
+        assert_eq!(snowflake_config.adaptive_metadata_fetch, Some(false));
+
+        let target = TargetContext::try_from(config).expect("snowflake target context");
+        let TargetContext::Snowflake(target) = target else {
+            panic!("expected snowflake target context");
+        };
+        assert_eq!(target.adaptive_metadata_fetch, Some(false));
+    }
+
+    #[test]
+    fn test_snowflake_adaptive_metadata_fetch_defaults_to_unset() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: snowflake\n\
+             account: acct\n\
+             database: db\n\
+             schema: schema\n\
+             warehouse: build_wh",
+        )
+        .unwrap();
+
+        let DbConfig::Snowflake(snowflake_config) = config else {
+            panic!("expected snowflake config");
+        };
+        assert_eq!(snowflake_config.adaptive_metadata_fetch, None);
     }
 
     #[test]

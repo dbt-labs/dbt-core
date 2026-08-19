@@ -335,8 +335,7 @@ fn bigquery_get_relation(
         return Ok(None);
     }
 
-    let column = batch.column_by_name("table_type").unwrap();
-    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let string_array = batch.column_values::<StringArray>("table_type")?;
 
     let relation_type_name = string_array.value(0).to_uppercase();
     let relation_type = RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
@@ -628,8 +627,7 @@ LEFT JOIN materialized_views mv
         return Ok(None);
     }
 
-    let column = batch.column_by_name("object_type").unwrap();
-    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let string_array = batch.column_values::<StringArray>("object_type")?;
 
     if string_array.len() != 1 {
         return Err(AdapterError::new(
@@ -708,8 +706,7 @@ fn postgres_get_relation(
         return Ok(None);
     }
 
-    let column = batch.column_by_name("type").unwrap();
-    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let string_array = batch.column_values::<StringArray>("type")?;
 
     if string_array.len() != 1 {
         return Err(AdapterError::new(
@@ -765,8 +762,7 @@ fn exasol_get_relation(
         return Ok(None);
     }
 
-    let column = batch.column_by_name("type").unwrap();
-    let arr = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let arr = batch.column_values::<StringArray>("type")?;
     let relation_type = match arr.value(0) {
         "table" => Some(RelationType::Table),
         "view" => Some(RelationType::View),
@@ -898,8 +894,7 @@ fn duckdb_get_relation(
         return Ok(None);
     }
 
-    let column = batch.column_by_name("type").unwrap();
-    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let string_array = batch.column_values::<StringArray>("type")?;
 
     if string_array.len() != 1 {
         return Err(AdapterError::new(
@@ -975,8 +970,7 @@ fn fabric_get_relation(
         return Ok(None);
     }
 
-    let column = batch.column_by_name("TABLE_TYPE").unwrap();
-    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let string_array = batch.column_values::<StringArray>("TABLE_TYPE")?;
 
     if string_array.len() != 1 {
         return Err(AdapterError::new(

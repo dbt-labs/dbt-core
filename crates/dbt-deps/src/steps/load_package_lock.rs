@@ -189,14 +189,9 @@ async fn try_load_from_deprecated_dbt_packages_lock(
                             io.in_dir.join(&local_path)
                         };
 
-                        let dbt_project = read_and_validate_dbt_project(
-                            io,
-                            &dbt_project_path,
-                            true,
-                            jinja_env,
-                            vars,
-                        )
-                        .await?;
+                        let dbt_project =
+                            read_and_validate_dbt_project(&dbt_project_path, true, jinja_env, vars)
+                                .await?;
                         let package_name = dbt_project.name;
                         packages.push(DbtPackageLock::Local(LocalPackageLock {
                             name: package_name,

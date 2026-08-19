@@ -135,24 +135,7 @@ pub async fn resolve(
         macros.docs_macros.extend(docs_macros);
     }
 
-    // dbt Core always ships a global project with an overview.md that produces
-    // doc.dbt.__overview__.  The dbt Docs HTML unconditionally reads this entry
-    // (overview controller: `i = n.docs["doc.dbt.__overview__"]`) and crashes
-    // with a TypeError if it is absent.  Inject a default entry whenever the
-    // user's project (and its dependencies) have not defined their own
-    // {% docs __overview__ %} block.
-    let overview_uid = "doc.dbt.__overview__".to_string();
-    macros
-        .docs_macros
-        .entry(overview_uid.clone())
-        .or_insert_with(|| DbtDocsMacro {
-            name: "__overview__".to_string(),
-            package_name: "dbt".to_string(),
-            path: DbtPath::from("overview.md"),
-            original_file_path: DbtPath::from("docs/overview.md"),
-            unique_id: overview_uid,
-            block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
-        });
+    inject_default_overview(&mut macros.docs_macros);
 
     let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
 
@@ -279,7 +262,6 @@ pub async fn resolve(
                 &jinja_env,
             )?;
             apply_macro_patches(
-                &arg.io,
                 &mut macros.macros,
                 &macro_properties,
                 &package_name,
@@ -703,6 +685,7 @@ pub async fn resolve_inner(
     let mut min_properties = resolve_minimal_properties(
         arg,
         package,
+        dbt_state.root_package(),
         root_package_name,
         root_project_configs,
         &jinja_env,
@@ -745,7 +728,6 @@ pub async fn resolve_inner(
         }
 
         let typed_model_props: ModelProperties = into_typed_with_jinja(
-            &arg.io,
             model_yml,
             false,
             &jinja_env,
@@ -830,7 +812,6 @@ pub async fn resolve_inner(
     disabled_nodes.snapshots.extend(disabled_snapshots);
 
     let (groups, disabled_groups) = resolve_groups(
-        arg,
         &mut min_properties.groups,
         package_name,
         &jinja_env,
@@ -1010,6 +991,7 @@ pub async fn resolve_inner(
         arg,
         min_properties.unit_tests,
         package,
+        dbt_state.root_package(),
         package_quoting,
         root_project_configs,
         package_name,
@@ -1362,6 +1344,34 @@ async fn resolve_package_waves(
     ))
 }
 
+/// Add the `dbt` global project's `__overview__` doc block if it isn't there.
+///
+/// dbt Core always ships a global project with an overview.md that produces
+/// `doc.dbt.__overview__`, and the dbt Docs HTML reads that key unconditionally
+/// (overview controller: `i = n.docs["doc.dbt.__overview__"]`), crashing with a
+/// TypeError if it is absent.
+///
+/// This entry is *always* present, exactly as in dbt Core — a user's own
+/// `{% docs __overview__ %}` is keyed `doc.<their_package>.__overview__` and so
+/// coexists with it rather than replacing it. Both dbt Docs and the docs-v2
+/// Overview page pick the winner at read time, preferring any non-`dbt` package.
+/// Do not "optimize" this into skipping injection when a user overview exists:
+/// `block_contents` here is compared byte-for-byte against dbt Core's manifest
+/// by the conformance regression suite, and the docs-v2 page relies on the row
+/// as its fallback.
+fn inject_default_overview(docs: &mut BTreeMap<String, DbtDocsMacro>) {
+    let overview_uid = "doc.dbt.__overview__".to_string();
+    docs.entry(overview_uid.clone())
+        .or_insert_with(|| DbtDocsMacro {
+            name: "__overview__".to_string(),
+            package_name: "dbt".to_string(),
+            path: DbtPath::from("overview.md"),
+            original_file_path: DbtPath::from("docs/overview.md"),
+            unique_id: overview_uid,
+            block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
+        });
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -1369,22 +1379,8 @@ mod tests {
     use dbt_common::path::DbtPath;
     use dbt_schemas::schemas::macros::DbtDocsMacro;
 
+    use super::inject_default_overview;
     use crate::constants::DEFAULT_OVERVIEW_CONTENTS;
-
-    /// Helper that applies the same injection logic as the resolver so tests
-    /// stay in sync with the production code.
-    fn inject_default_overview(docs: &mut BTreeMap<String, DbtDocsMacro>) {
-        let overview_uid = "doc.dbt.__overview__".to_string();
-        docs.entry(overview_uid.clone())
-            .or_insert_with(|| DbtDocsMacro {
-                name: "__overview__".to_string(),
-                package_name: "dbt".to_string(),
-                path: DbtPath::from("overview.md"),
-                original_file_path: DbtPath::from("docs/overview.md"),
-                unique_id: overview_uid,
-                block_contents: DEFAULT_OVERVIEW_CONTENTS.to_string(),
-            });
-    }
 
     /// When a project defines no {% docs %} blocks, `doc.dbt.__overview__`
     /// must be present in the manifest so the dbt Docs HTML doesn't crash.
@@ -1406,11 +1402,16 @@ mod tests {
         );
     }
 
-    /// A user-defined {% docs __overview__ %} (package_name = project) must
-    /// NOT be overwritten by the default injection.
+    /// A user-defined {% docs __overview__ %} and the injected default coexist,
+    /// under different keys — which is exactly dbt Core's manifest shape.
+    ///
+    /// `resolve_docs_macros` keys docs as `doc.{package_name}.{name}`, so a
+    /// block in `my_project` is `doc.my_project.__overview__` and never collides
+    /// with the injected `doc.dbt.__overview__`. Readers pick the winner; see
+    /// [`inject_default_overview`].
     #[test]
-    fn test_user_overview_not_overwritten() {
-        let uid = "doc.dbt.__overview__".to_string();
+    fn test_user_overview_coexists_with_default() {
+        let uid = "doc.my_project.__overview__".to_string();
         let user_doc = DbtDocsMacro {
             name: "__overview__".to_string(),
             package_name: "my_project".to_string(),
@@ -1421,15 +1422,20 @@ mod tests {
         };
 
         let mut docs: BTreeMap<String, DbtDocsMacro> = BTreeMap::new();
-        docs.insert(uid, user_doc);
+        docs.insert(uid.clone(), user_doc);
         inject_default_overview(&mut docs);
 
-        let entry = docs
-            .get("doc.dbt.__overview__")
-            .expect("entry must still exist");
         assert_eq!(
-            entry.block_contents, "# My custom overview",
-            "user-defined overview must not be replaced by the default"
+            docs.get(&uid)
+                .expect("user overview must survive")
+                .block_contents,
+            "# My custom overview",
+        );
+        assert_eq!(
+            docs.get("doc.dbt.__overview__")
+                .expect("the default must still be injected alongside it")
+                .block_contents,
+            DEFAULT_OVERVIEW_CONTENTS,
         );
     }
 
@@ -1554,7 +1560,7 @@ mod tests {
             model.__model_attr__.catalog_name = catalog_name.map(str::to_string);
             model.__model_attr__.table_format = table_format.map(str::to_string);
             model.__base_attr__.depends_on.nodes =
-                upstreams.iter().map(|s| s.to_string()).collect();
+                upstreams.iter().map(|s| (*s).to_string()).collect();
             model
         };
 

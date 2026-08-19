@@ -1,6 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
+use crate::dbt_project_config::disallow_plus_prefix_from_flags;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_utils::validate_unit_test_compute;
@@ -60,6 +61,7 @@ pub fn resolve_unit_tests(
     arg: &ResolveArgs,
     unit_test_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
+    root_package: &DbtPackage,
     package_quoting: DbtQuoting,
     root_project_configs: &RootProjectConfigs,
     package_name: &str,
@@ -77,7 +79,14 @@ pub fn resolve_unit_tests(
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.unit_tests.clone(),
         dependency_package_name.is_some(),
-        || init_project_config(&package.dbt_project.unit_tests, (), dependency_package_name),
+        || {
+            init_project_config(
+                &package.dbt_project.unit_tests,
+                (),
+                dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+            )
+        },
     )?
     .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
@@ -95,7 +104,6 @@ pub fn resolve_unit_tests(
         });
 
         let unit_test = into_typed_with_jinja::<UnitTestProperties, _>(
-            &arg.io,
             mpe.schema_value,
             false,
             jinja_env,

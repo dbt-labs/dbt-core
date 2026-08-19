@@ -1,5 +1,7 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
@@ -58,7 +60,14 @@ pub async fn resolve_exposures(
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.exposures.clone(),
         is_dependency,
-        || init_project_config(&package.dbt_project.exposures, (), dependency_package_name),
+        || {
+            init_project_config(
+                &package.dbt_project.exposures,
+                (),
+                dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+            )
+        },
     )?;
 
     let raw_local_project_config =
@@ -100,7 +109,6 @@ pub async fn resolve_exposures(
             let raw_properties_yml_config = extract_config_map(&schema_value);
             // ExposureProperties is for the yaml schema
             let exposure: ExposureProperties = into_typed_with_jinja(
-                &args.io,
                 schema_value,
                 false,
                 env,

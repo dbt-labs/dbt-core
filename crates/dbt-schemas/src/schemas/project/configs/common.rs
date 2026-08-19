@@ -151,6 +151,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_liquid_cluster: Option<bool>,
+    pub zorder: Option<StringOrArrayOfStrings>,
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
@@ -176,6 +177,8 @@ pub struct WarehouseSpecificNodeConfig {
     pub use_safer_relation_operations: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub view_update_via_alter: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub unique_tmp_table_suffix: Option<bool>,
 
     // Snowflake
     pub table_tag: Option<String>,
@@ -236,15 +239,42 @@ pub struct WarehouseSpecificNodeConfig {
 
     // Postgres
     // XXX: This is an incomplete set of configs
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexesConfig::is_none")]
     pub indexes: IndexesConfig,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub unlogged: Option<bool>,
 
     // Salesforce
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "PrimaryKeyConfig::is_none")]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // ClickHouse
+    // table materialization
+    pub engine: Option<String>,
+    pub order_by: Option<StringOrArrayOfStrings>,
+    pub ttl: Option<String>,
+    pub settings: Option<BTreeMap<String, YmlValue>>,
+    pub query_settings: Option<BTreeMap<String, YmlValue>>,
+    // dictionary materialization
+    pub connection_overrides: Option<BTreeMap<String, YmlValue>>,
+    pub fields: Option<Vec<YmlValue>>,
+    pub source_type: Option<String>,
+    pub url: Option<String>,
+    pub format: Option<String>,
+    pub layout: Option<String>,
+    pub lifetime: Option<YmlValue>,
+    pub range: Option<YmlValue>,
+    pub table: Option<String>,
+    pub update_field: Option<String>,
+    pub update_lag: Option<YmlValue>,
+    // materialized-view materialization
+    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub catchup: Option<bool>,
+    pub mv_on_schema_change: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub repopulate_from_mvs_on_full_refresh: Option<bool>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -395,6 +425,7 @@ pub fn same_warehouse_config(
         self_wh.include_full_name_in_path == other_wh.include_full_name_in_path;
     let liquid_clustered_by_eq = self_wh.liquid_clustered_by == other_wh.liquid_clustered_by;
     let auto_liquid_cluster_eq = self_wh.auto_liquid_cluster == other_wh.auto_liquid_cluster;
+    let zorder_eq = self_wh.zorder == other_wh.zorder;
     let clustered_by_eq = self_wh.clustered_by == other_wh.clustered_by;
     let buckets_eq = self_wh.buckets == other_wh.buckets;
     let catalog_eq = self_wh.catalog == other_wh.catalog;
@@ -413,6 +444,8 @@ pub fn same_warehouse_config(
         self_wh.merge_with_schema_evolution == other_wh.merge_with_schema_evolution;
     let skip_matched_step_eq = self_wh.skip_matched_step == other_wh.skip_matched_step;
     let skip_not_matched_step_eq = self_wh.skip_not_matched_step == other_wh.skip_not_matched_step;
+    let unique_tmp_table_suffix_eq =
+        self_wh.unique_tmp_table_suffix == other_wh.unique_tmp_table_suffix;
     let schedule_eq = self_wh.schedule == other_wh.schedule;
     let adapter_properties_eq = self_wh.adapter_properties == other_wh.adapter_properties;
     let table_tag_eq = self_wh.table_tag == other_wh.table_tag;
@@ -447,6 +480,27 @@ pub fn same_warehouse_config(
     let indexes_eq = self_wh.indexes == other_wh.indexes;
     let primary_key_eq = self_wh.primary_key == other_wh.primary_key;
     let category_eq = self_wh.category == other_wh.category;
+    let engine_eq = self_wh.engine == other_wh.engine;
+    let order_by_eq = self_wh.order_by == other_wh.order_by;
+    let ttl_eq = self_wh.ttl == other_wh.ttl;
+    let settings_eq = self_wh.settings == other_wh.settings;
+    let query_settings_eq = self_wh.query_settings == other_wh.query_settings;
+    let connection_overrides_eq = self_wh.connection_overrides == other_wh.connection_overrides;
+    let fields_eq = self_wh.fields == other_wh.fields;
+    let source_type_eq = self_wh.source_type == other_wh.source_type;
+    let url_eq = self_wh.url == other_wh.url;
+    let format_eq = self_wh.format == other_wh.format;
+    let layout_eq = self_wh.layout == other_wh.layout;
+    let lifetime_eq = self_wh.lifetime == other_wh.lifetime;
+    let range_eq = self_wh.range == other_wh.range;
+    let table_eq = self_wh.table == other_wh.table;
+    let update_field_eq = self_wh.update_field == other_wh.update_field;
+    let update_lag_eq = self_wh.update_lag == other_wh.update_lag;
+    let refreshable_eq = self_wh.refreshable == other_wh.refreshable;
+    let catchup_eq = self_wh.catchup == other_wh.catchup;
+    let mv_on_schema_change_eq = self_wh.mv_on_schema_change == other_wh.mv_on_schema_change;
+    let repopulate_from_mvs_on_full_refresh_eq =
+        self_wh.repopulate_from_mvs_on_full_refresh == other_wh.repopulate_from_mvs_on_full_refresh;
 
     let result = partition_by_eq
         && cluster_by_eq
@@ -470,6 +524,7 @@ pub fn same_warehouse_config(
         && include_full_name_in_path_eq
         && liquid_clustered_by_eq
         && auto_liquid_cluster_eq
+        && zorder_eq
         && clustered_by_eq
         && buckets_eq
         && catalog_eq
@@ -485,6 +540,7 @@ pub fn same_warehouse_config(
         && merge_with_schema_evolution_eq
         && skip_matched_step_eq
         && skip_not_matched_step_eq
+        && unique_tmp_table_suffix_eq
         && schedule_eq
         && adapter_properties_eq
         && table_tag_eq
@@ -517,7 +573,27 @@ pub fn same_warehouse_config(
         && table_type_eq
         && indexes_eq
         && primary_key_eq
-        && category_eq;
+        && category_eq
+        && engine_eq
+        && order_by_eq
+        && ttl_eq
+        && settings_eq
+        && query_settings_eq
+        && connection_overrides_eq
+        && fields_eq
+        && source_type_eq
+        && url_eq
+        && format_eq
+        && layout_eq
+        && lifetime_eq
+        && range_eq
+        && table_eq
+        && update_field_eq
+        && update_lag_eq
+        && refreshable_eq
+        && catchup_eq
+        && mv_on_schema_change_eq
+        && repopulate_from_mvs_on_full_refresh_eq;
 
     if !result {
         log_state_mod_diff(
@@ -701,6 +777,14 @@ pub fn same_warehouse_config(
                     )),
                 ),
                 (
+                    "zorder",
+                    zorder_eq,
+                    Some((
+                        format!("{:?}", &self_wh.zorder),
+                        format!("{:?}", &other_wh.zorder),
+                    )),
+                ),
+                (
                     "clustered_by",
                     clustered_by_eq,
                     Some((
@@ -818,6 +902,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.skip_not_matched_step),
                         format!("{:?}", &other_wh.skip_not_matched_step),
+                    )),
+                ),
+                (
+                    "unique_tmp_table_suffix",
+                    unique_tmp_table_suffix_eq,
+                    Some((
+                        format!("{:?}", &self_wh.unique_tmp_table_suffix),
+                        format!("{:?}", &other_wh.unique_tmp_table_suffix),
                     )),
                 ),
                 (
@@ -1082,6 +1174,166 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.category),
                         format!("{:?}", &other_wh.category),
+                    )),
+                ),
+                (
+                    "engine",
+                    engine_eq,
+                    Some((
+                        format!("{:?}", &self_wh.engine),
+                        format!("{:?}", &other_wh.engine),
+                    )),
+                ),
+                (
+                    "order_by",
+                    order_by_eq,
+                    Some((
+                        format!("{:?}", &self_wh.order_by),
+                        format!("{:?}", &other_wh.order_by),
+                    )),
+                ),
+                (
+                    "ttl",
+                    ttl_eq,
+                    Some((
+                        format!("{:?}", &self_wh.ttl),
+                        format!("{:?}", &other_wh.ttl),
+                    )),
+                ),
+                (
+                    "settings",
+                    settings_eq,
+                    Some((
+                        format!("{:?}", &self_wh.settings),
+                        format!("{:?}", &other_wh.settings),
+                    )),
+                ),
+                (
+                    "query_settings",
+                    query_settings_eq,
+                    Some((
+                        format!("{:?}", &self_wh.query_settings),
+                        format!("{:?}", &other_wh.query_settings),
+                    )),
+                ),
+                (
+                    "connection_overrides",
+                    connection_overrides_eq,
+                    Some((
+                        format!("{:?}", &self_wh.connection_overrides),
+                        format!("{:?}", &other_wh.connection_overrides),
+                    )),
+                ),
+                (
+                    "fields",
+                    fields_eq,
+                    Some((
+                        format!("{:?}", &self_wh.fields),
+                        format!("{:?}", &other_wh.fields),
+                    )),
+                ),
+                (
+                    "source_type",
+                    source_type_eq,
+                    Some((
+                        format!("{:?}", &self_wh.source_type),
+                        format!("{:?}", &other_wh.source_type),
+                    )),
+                ),
+                (
+                    "url",
+                    url_eq,
+                    Some((
+                        format!("{:?}", &self_wh.url),
+                        format!("{:?}", &other_wh.url),
+                    )),
+                ),
+                (
+                    "format",
+                    format_eq,
+                    Some((
+                        format!("{:?}", &self_wh.format),
+                        format!("{:?}", &other_wh.format),
+                    )),
+                ),
+                (
+                    "layout",
+                    layout_eq,
+                    Some((
+                        format!("{:?}", &self_wh.layout),
+                        format!("{:?}", &other_wh.layout),
+                    )),
+                ),
+                (
+                    "lifetime",
+                    lifetime_eq,
+                    Some((
+                        format!("{:?}", &self_wh.lifetime),
+                        format!("{:?}", &other_wh.lifetime),
+                    )),
+                ),
+                (
+                    "range",
+                    range_eq,
+                    Some((
+                        format!("{:?}", &self_wh.range),
+                        format!("{:?}", &other_wh.range),
+                    )),
+                ),
+                (
+                    "table",
+                    table_eq,
+                    Some((
+                        format!("{:?}", &self_wh.table),
+                        format!("{:?}", &other_wh.table),
+                    )),
+                ),
+                (
+                    "update_field",
+                    update_field_eq,
+                    Some((
+                        format!("{:?}", &self_wh.update_field),
+                        format!("{:?}", &other_wh.update_field),
+                    )),
+                ),
+                (
+                    "update_lag",
+                    update_lag_eq,
+                    Some((
+                        format!("{:?}", &self_wh.update_lag),
+                        format!("{:?}", &other_wh.update_lag),
+                    )),
+                ),
+                (
+                    "refreshable",
+                    refreshable_eq,
+                    Some((
+                        format!("{:?}", &self_wh.refreshable),
+                        format!("{:?}", &other_wh.refreshable),
+                    )),
+                ),
+                (
+                    "catchup",
+                    catchup_eq,
+                    Some((
+                        format!("{:?}", &self_wh.catchup),
+                        format!("{:?}", &other_wh.catchup),
+                    )),
+                ),
+                (
+                    "mv_on_schema_change",
+                    mv_on_schema_change_eq,
+                    Some((
+                        format!("{:?}", &self_wh.mv_on_schema_change),
+                        format!("{:?}", &other_wh.mv_on_schema_change),
+                    )),
+                ),
+                (
+                    "repopulate_from_mvs_on_full_refresh",
+                    repopulate_from_mvs_on_full_refresh_eq,
+                    Some((
+                        format!("{:?}", &self_wh.repopulate_from_mvs_on_full_refresh),
+                        format!("{:?}", &other_wh.repopulate_from_mvs_on_full_refresh),
                     )),
                 ),
             ],

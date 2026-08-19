@@ -137,7 +137,24 @@ impl Object for Macro {
             listener.on_macro_execute_end(&qualified_name);
         }
 
-        rv
+        // If this macro is statically known to reach an introspective
+        // (warehouse-dependent) adapter call, taint its result outright,
+        // regardless of what this particular render actually computed --
+        // see `RenderingEventListener::is_known_introspective_macro`'s doc
+        // comment for why call-boundary/fine-grained taint propagation alone
+        // isn't sufficient here.
+        if let Ok(value) = rv {
+            if !value.is_introspective_stub()
+                && listeners
+                    .iter()
+                    .any(|l| l.is_known_introspective_macro(&qualified_name))
+            {
+                return Ok(crate::value::introspective::IntrospectiveValue::wrap(value));
+            }
+            Ok(value)
+        } else {
+            rv
+        }
     }
 
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {

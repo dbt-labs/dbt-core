@@ -30,10 +30,13 @@ pub struct SelectedSkill {
 /// Resolve `enabled` for every discovered skill and drop the disabled ones.
 ///
 /// `projects` must be the same slice, in the same order, that produced
-/// `skills`; `precedence` indexes into it.
+/// `skills`; `precedence` indexes into it. `disallow_plus_prefix` comes from the
+/// root project's behavior flags, the same way the parser sources it, so a
+/// `+`-prefixed resource path is treated identically here and at parse time.
 pub fn filter_enabled(
     skills: Vec<DiscoveredSkill>,
     projects: &[SkillSourceProject],
+    disallow_plus_prefix: bool,
 ) -> FsResult<Vec<DiscoveredSkill>> {
     let root_project = projects.first().ok_or_else(|| {
         fs_err!(
@@ -42,7 +45,7 @@ pub fn filter_enabled(
         )
     })?;
     let root_config: DbtProjectConfig<SkillConfig> =
-        init_project_config(&root_project.skills_config, (), None)?;
+        init_project_config(&root_project.skills_config, (), None, disallow_plus_prefix)?;
 
     // One resolver per source project, built once and reused across its skills.
     let mut resolvers: BTreeMap<usize, ProjectConfigResolver<SkillConfig>> = BTreeMap::new();
@@ -54,6 +57,7 @@ pub fn filter_enabled(
                 &project.skills_config,
                 (),
                 Some(project.package_name.as_str()),
+                disallow_plus_prefix,
             )?;
             ProjectConfigResolver::for_dependency(local, root_config.clone())
         };
@@ -185,7 +189,7 @@ mod tests {
     fn skills_are_enabled_by_default() {
         let projects = [source_project("root_project", None)];
         let skills = vec![skill("alpha", 0, SkillOrigin::Project)];
-        assert_eq!(filter_enabled(skills, &projects).unwrap().len(), 1);
+        assert_eq!(filter_enabled(skills, &projects, false).unwrap().len(), 1);
     }
 
     #[test]
@@ -198,7 +202,7 @@ mod tests {
             skill("alpha", 0, SkillOrigin::Project),
             skill("beta", 0, SkillOrigin::Project),
         ];
-        let enabled = filter_enabled(skills, &projects).unwrap();
+        let enabled = filter_enabled(skills, &projects, false).unwrap();
         assert_eq!(enabled.len(), 1);
         assert_eq!(enabled[0].name, "beta");
     }
@@ -210,7 +214,7 @@ mod tests {
             source_project("transitive_pkg", None),
         ];
         let skills = vec![skill("bloat", 1, package("transitive_pkg"))];
-        assert!(filter_enabled(skills, &projects).unwrap().is_empty());
+        assert!(filter_enabled(skills, &projects, false).unwrap().is_empty());
     }
 
     #[test]
@@ -227,7 +231,7 @@ mod tests {
             ),
         ];
         let skills = vec![skill("useful", 1, package("some_pkg"))];
-        assert_eq!(filter_enabled(skills, &projects).unwrap().len(), 1);
+        assert_eq!(filter_enabled(skills, &projects, false).unwrap().len(), 1);
     }
 
     #[test]
@@ -240,7 +244,7 @@ mod tests {
             ),
         ];
         let skills = vec![skill("internal", 1, package("some_pkg"))];
-        assert!(filter_enabled(skills, &projects).unwrap().is_empty());
+        assert!(filter_enabled(skills, &projects, false).unwrap().is_empty());
     }
 
     #[test]

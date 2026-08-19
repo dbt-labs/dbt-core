@@ -100,7 +100,6 @@ pub const WARNED: &str = "    Warned";
 pub const FAILED: &str = "    Failed";
 pub const REUSED: &str = "    Reused";
 pub const SKIPPED: &str = "   Skipped";
-pub const RENDERED: &str = "  Rendered";
 
 // debug command
 pub const VALIDATING: &str = "Validating";

@@ -14,7 +14,9 @@ use adbc_core::{
     options::{AdbcVersion, OptionDatabase, OptionValue},
 };
 use parking_lot::RwLockUpgradableReadGuard;
-use std::{collections::HashMap, env, ffi::c_int, fmt, path::Path, path::PathBuf, sync::LazyLock};
+use std::{
+    collections::HashMap, env, ffi::c_int, fmt, mem, path::Path, path::PathBuf, sync::LazyLock,
+};
 use std::{hash, sync::Arc};
 
 #[cfg(debug_assertions)]
@@ -171,13 +173,14 @@ pub trait Driver {
 struct AdbcDriverKey {
     backend: Backend,
     adbc_version: AdbcVersion,
-    // TODO: include load strategy
+    load_strategy: mem::Discriminant<LoadStrategy>,
 }
 
 impl hash::Hash for AdbcDriverKey {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.backend.hash(state);
         c_int::from(self.adbc_version).hash(state);
+        self.load_strategy.hash(state);
     }
 }
 
@@ -348,6 +351,7 @@ impl AdbcDriver {
         let key = AdbcDriverKey {
             backend,
             adbc_version,
+            load_strategy: mem::discriminant(&load_strategy),
         };
         let cache = LOADED_ADBC_DRIVERS.upgradable_read();
         if let Some(driver) = cache.get(&key) {

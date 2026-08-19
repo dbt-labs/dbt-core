@@ -1,25 +1,29 @@
 use dbt_common::FsResult;
 use dbt_common::constants::DBT_PROJECT_YML;
-use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, fs_err};
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::{Var, jinja_environment::JinjaEnv, phases::parse::build_resolve_context};
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::{
-    ProjectAnalysisConfig, ProjectDataTestConfig, ProjectExposureConfig, ProjectFunctionConfig,
-    ProjectModelConfig, ProjectSeedConfig, ProjectSemanticModelConfig, ProjectSkillConfig,
-    ProjectSnapshotConfig, ProjectSourceConfig, ProjectUnitTestConfig,
+    ConfigKeys, DataTestConfig, FunctionConfig, ModelConfig, ProjectAnalysisConfig,
+    ProjectDataTestConfig, ProjectExposureConfig, ProjectFunctionConfig, ProjectModelConfig,
+    ProjectSeedConfig, ProjectSemanticModelConfig, ProjectSkillConfig, ProjectSnapshotConfig,
+    ProjectSourceConfig, ProjectUnitTestConfig, SeedConfig, SnapshotConfig, SourceConfig,
+    UnitTestConfig,
 };
 use dbt_yaml::{ShouldBe, Value as YmlValue};
 use minijinja::Value;
 use minijinja::constants::CURRENT_PATH;
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::Path,
+};
 
 macro_rules! prune_section {
-    ($proj:expr, $field:ident, $name:expr, $ty:ty) => {
+    ($proj:expr, $field:ident, $name:expr, $ty:ty, $valid_field_names:expr) => {
         if let Some(cfg) = $proj.$field.as_mut() {
-            prune_unexpected_nulls_in_section($name, cfg, |c: &mut $ty| {
+            prune_unexpected_nulls_in_section($name, cfg, &$valid_field_names, |c: &mut $ty| {
                 &mut c.__additional_properties__
             });
         }
@@ -27,21 +31,86 @@ macro_rules! prune_section {
 }
 
 fn prune_sections(dbt_project: &mut DbtProject) {
-    prune_section!(dbt_project, models, "models", ProjectModelConfig);
-    prune_section!(dbt_project, seeds, "seeds", ProjectSeedConfig);
-    prune_section!(dbt_project, snapshots, "snapshots", ProjectSnapshotConfig);
-    prune_section!(dbt_project, sources, "sources", ProjectSourceConfig);
-    prune_section!(dbt_project, tests, "tests", ProjectDataTestConfig);
-    prune_section!(dbt_project, unit_tests, "unit_tests", ProjectUnitTestConfig);
-    prune_section!(dbt_project, exposures, "exposures", ProjectExposureConfig);
-    prune_section!(dbt_project, analyses, "analyses", ProjectAnalysisConfig);
-    prune_section!(dbt_project, skills, "skills", ProjectSkillConfig);
-    prune_section!(dbt_project, functions, "functions", ProjectFunctionConfig);
+    prune_section!(
+        dbt_project,
+        models,
+        "models",
+        ProjectModelConfig,
+        ModelConfig::valid_field_names()
+    );
+    prune_section!(
+        dbt_project,
+        seeds,
+        "seeds",
+        ProjectSeedConfig,
+        SeedConfig::valid_field_names()
+    );
+    prune_section!(
+        dbt_project,
+        snapshots,
+        "snapshots",
+        ProjectSnapshotConfig,
+        SnapshotConfig::valid_field_names()
+    );
+    prune_section!(
+        dbt_project,
+        sources,
+        "sources",
+        ProjectSourceConfig,
+        SourceConfig::valid_field_names()
+    );
+    prune_section!(
+        dbt_project,
+        tests,
+        "tests",
+        ProjectDataTestConfig,
+        DataTestConfig::valid_field_names()
+    );
+    prune_section!(
+        dbt_project,
+        unit_tests,
+        "unit_tests",
+        ProjectUnitTestConfig,
+        UnitTestConfig::valid_field_names()
+    );
+    prune_section!(
+        dbt_project,
+        functions,
+        "functions",
+        ProjectFunctionConfig,
+        FunctionConfig::valid_field_names()
+    );
+    // TODO: Do we need to implement ConfigKeys for ExposureConfig?
+    prune_section!(
+        dbt_project,
+        exposures,
+        "exposures",
+        ProjectExposureConfig,
+        HashSet::<String>::new()
+    );
+    // TODO: Do we need to implement ConfigKeys for AnalysisConfig?
+    prune_section!(
+        dbt_project,
+        analyses,
+        "analyses",
+        ProjectAnalysisConfig,
+        HashSet::<String>::new()
+    );
+    // TODO: Do we need to implement ConfigKeys for SemanticModelConfig?
     prune_section!(
         dbt_project,
         semantic_models,
         "semantic-models",
-        ProjectSemanticModelConfig
+        ProjectSemanticModelConfig,
+        HashSet::<String>::new()
+    );
+    // TODO: Do we need to implement ConfigKeys for SkillConfig?
+    prune_section!(
+        dbt_project,
+        skills,
+        "skills",
+        ProjectSkillConfig,
+        HashSet::<String>::new()
     );
 }
 
@@ -49,6 +118,7 @@ fn prune_unexpected_nulls_in_children<T>(
     section_name: &str,
     current_path: &str,
     cfg: &mut T,
+    valid_field_names: &HashSet<String>,
     get_children_map: fn(&mut T) -> &mut BTreeMap<String, ShouldBe<T>>,
 ) {
     let children = get_children_map(cfg);
@@ -68,6 +138,7 @@ fn prune_unexpected_nulls_in_children<T>(
                     section_name,
                     &next_path,
                     child_cfg,
+                    valid_field_names,
                     get_children_map,
                 );
             }
@@ -81,7 +152,11 @@ fn prune_unexpected_nulls_in_children<T>(
                     } else {
                         format!("{}.{}.{}", section_name, current_path, trimmed_key)
                     };
-                    let suggestion = if !trimmed_key.starts_with('+') {
+                    // An empty set means the section has no ConfigKeys impl to
+                    // gate on, so fall back to always suggesting.
+                    let suggestion = if !trimmed_key.starts_with('+')
+                        && (valid_field_names.is_empty() || valid_field_names.contains(trimmed_key))
+                    {
                         format!(" Try '+{}' instead.", trimmed_key)
                     } else {
                         String::new()
@@ -109,13 +184,19 @@ fn prune_unexpected_nulls_in_children<T>(
 fn prune_unexpected_nulls_in_section<T>(
     section_name: &str,
     section_cfg: &mut T,
+    valid_field_names: &HashSet<String>,
     get_children_map: fn(&mut T) -> &mut BTreeMap<String, ShouldBe<T>>,
 ) {
-    prune_unexpected_nulls_in_children(section_name, "", section_cfg, get_children_map);
+    prune_unexpected_nulls_in_children(
+        section_name,
+        "",
+        section_cfg,
+        valid_field_names,
+        get_children_map,
+    );
 }
 
 pub fn load_project_yml(
-    io_args: &IoArgs,
     env: &JinjaEnv,
     dbt_project_path: &Path,
     dependency_package_name: Option<&str>,
@@ -141,7 +222,6 @@ pub fn load_project_yml(
 
     // Parse the template without vars using Jinja
     let mut dbt_project: DbtProject = into_typed_with_jinja(
-        io_args,
         raw_yml.clone(),
         false,
         env,

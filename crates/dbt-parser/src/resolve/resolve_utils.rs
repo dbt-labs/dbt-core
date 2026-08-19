@@ -254,7 +254,7 @@ pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Pat
         Some(other) => Err(fs_err!(
             code => ErrorCode::InvalidConfig,
             loc => path.to_path_buf(),
-            "unit_test compute config accepts 'remote' or 'sidecar'; got '{other}'",
+            "unit_test compute config accepts 'remote', 'sidecar', or 'local'; got '{other}'",
         )),
     }
 }
@@ -433,7 +433,7 @@ mod tests {
     fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
         pairs
             .iter()
-            .map(|(k, v)| (k.to_string(), dbt_yaml::from_str(v).unwrap()))
+            .map(|(k, v)| ((*k).to_string(), dbt_yaml::from_str(v).unwrap()))
             .collect()
     }
 

@@ -4,6 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
+use dbt_common::warn_error_options::project_flags_get_value;
+use dbt_common::{ErrorCode, FsError};
 use indexmap::IndexMap;
 
 use crate::schemas::{common::DbtQuoting, project::DbtProject};
@@ -15,7 +17,10 @@ use crate::schemas::{
     },
     serde::yaml_to_fs_error,
 };
-use dbt_common::{FsResult, tracing::dbt_emit::emit_strict_parse_error};
+use dbt_common::{
+    FsResult,
+    tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message},
+};
 use dbt_yaml::ShouldBe;
 
 /// Used to deserialize the top-level `dbt_project.yml` configuration
@@ -50,29 +55,80 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
         dbt_config: &T,
         configs: &S,
         dependency_package_name: Option<&str>,
-    ) -> FsResult<Self> {
-        let on_error = |variant: &ShouldBe<S>, key_path: &str| {
-            if let Some(err) = variant.take_err() {
-                let filename = if let Some(raw) = variant.as_ref_raw()
-                    && let Some(filename) = raw.span().get_filename()
-                {
-                    Some(filename)
-                } else {
-                    None
-                };
-                let fs_err = yaml_to_fs_error(err, filename).with_context(format!(
-                    "Invalid {} definition `{}`: {}",
-                    S::type_name(),
-                    key_path,
-                    variant
+        disallow_plus_prefix: bool,
+    ) -> FsResult<Self>
+    where
+        T: PartialEq,
+    {
+        let on_error = |variant: &ShouldBe<S>, key: &str, key_path: &str| {
+            let key_path = if key_path.is_empty() {
+                key.to_string()
+            } else {
+                format!("{key_path}.{key}")
+            };
+            match variant {
+                ShouldBe::AndIs(_) => {
+                    // If we're calling `on_error` on a valid key, it must start with `+`.
+                    let detail = format!(
+                        "Unrecognized key `{key_path}`. Custom keys must go under `+meta`."
+                    );
+                    let fs_err = FsError::new(
+                        ErrorCode::SerializationError,
+                        format!(
+                            "Invalid {} definition `{}`: {}",
+                            S::type_name(),
+                            key_path,
+                            detail
+                        ),
+                    );
+                    emit_strict_parse_error(fs_err, dependency_package_name);
+                }
+                ShouldBe::ButIsnt(_) => {
+                    let filename = if let Some(raw) = variant.as_ref_raw()
+                        && let Some(filename) = raw.span().get_filename()
+                    {
+                        Some(filename)
+                    } else {
+                        None
+                    };
+
+                    // An unknown key produces the error message `expected struct <SelfType>` due to
+                    // the recursive type. Catch the error here to inject a more descriptive error.
+                    let err_msg = variant
                         .as_err_msg()
-                        .expect("Error message always present on ShouldBe::ButIsnt variant")
-                ));
-                emit_strict_parse_error(fs_err, dependency_package_name);
+                        .expect("Error message always present on ShouldBe::ButIsnt variant");
+                    let self_type = std::any::type_name::<S>()
+                        .rsplit("::")
+                        .next()
+                        .unwrap_or_default();
+                    let detail = if err_msg.contains(&format!("expected struct {self_type}")) {
+                        format!("Unrecognized key `{key_path}`. Custom keys must go under `+meta`.")
+                    } else {
+                        err_msg.to_string()
+                    };
+
+                    let err = variant
+                        .take_err()
+                        .expect("Error always present on ShouldBe::ButIsnt variant");
+                    let fs_err = yaml_to_fs_error(err, filename).with_context(format!(
+                        "Invalid {} definition `{}`: {}",
+                        S::type_name(),
+                        key_path,
+                        detail
+                    ));
+                    emit_strict_parse_error(fs_err, dependency_package_name);
+                }
             }
         };
+        if !disallow_plus_prefix {
+            warn_plus_prefixed_resource_paths::<S>("", configs, "", false);
+        }
         Ok(recur_build_dbt_project_config(
-            dbt_config, configs, "", &on_error,
+            dbt_config,
+            configs,
+            "",
+            &on_error,
+            disallow_plus_prefix,
         ))
     }
 
@@ -294,11 +350,12 @@ pub fn recur_build_dbt_project_config<T, S, F>(
     child: &S,
     key_path: &str,
     on_error: &F,
+    disallow_plus_prefix: bool,
 ) -> DbtProjectConfig<T>
 where
-    T: ResolvableConfig<T>,
+    T: ResolvableConfig<T> + PartialEq,
     S: Into<T> + TypedRecursiveConfig,
-    F: Fn(&ShouldBe<S>, &str),
+    F: Fn(&ShouldBe<S>, &str, &str),
 {
     let mut child_config: T = child.clone().into();
     child_config.default_to(parent_config);
@@ -306,15 +363,23 @@ where
 
     // Handle additional properties generically - each child inherits from current config
     for (key, maybe_child_config_variant) in child.iter_children() {
-        let key_path = if key_path.is_empty() {
+        let child_key_path = if key_path.is_empty() {
             key.clone()
         } else {
             format!("{key_path}.{key}")
         };
+
+        if key.starts_with("+") {
+            if disallow_plus_prefix {
+                on_error(maybe_child_config_variant, key, key_path);
+                continue;
+            }
+        }
+
         let child_config_variant = match maybe_child_config_variant {
             ShouldBe::AndIs(config) => config,
             ShouldBe::ButIsnt(..) => {
-                on_error(maybe_child_config_variant, &key_path);
+                on_error(maybe_child_config_variant, key, key_path);
                 continue;
             }
         };
@@ -324,8 +389,9 @@ where
             recur_build_dbt_project_config(
                 &child_config,
                 child_config_variant,
-                &key_path,
+                &child_key_path,
                 on_error,
+                disallow_plus_prefix,
             ),
         );
     }
@@ -334,6 +400,74 @@ where
         config: child_config,
         children,
     }
+}
+
+/// Emit one warning for each `+`-prefixed resource path in the config tree.
+///
+/// A `+`-prefixed key is a resource path whose name starts with `+` when it carries a
+/// non-default config or has a `+`-prefixed child.
+///
+/// Returns whether `key` itself starts with `+`.
+fn warn_plus_prefixed_resource_paths<S>(key: &str, value: &S, path: &str, inside_plus: bool) -> bool
+where
+    S: TypedRecursiveConfig,
+{
+    let key_is_plus = key.starts_with('+');
+
+    let key_path = if path.is_empty() {
+        key.to_string()
+    } else {
+        format!("{path}.{key}")
+    };
+
+    let warn = || {
+        emit_warn_log_message(
+            ErrorCode::InvalidConfig,
+            format!(
+                "Resource path `{key_path}` in dbt_project.yml starts with `+`. This will be deprecated in future versions of dbt."
+            ),
+        );
+    };
+
+    // Case 1: `value` is non-default, meaning there is a valid config inside it somewhere.
+    // We definitely know a config value was set, because it must have this shape:
+    //
+    // ```
+    // +key:
+    //   +some_config: some_value
+    // ```
+    //
+    // This is just an approximation and will miss cases where the config is explicitly set to
+    // default.
+    let valid_config_exists = value.has_set_fields();
+
+    // We want to throw warnings at the location of the topmost +-prefixed key, so we throw exactly
+    // one warning per offending resource path.
+    let is_parent_plus = key_is_plus && !inside_plus;
+    if is_parent_plus && valid_config_exists {
+        warn();
+        return key_is_plus;
+    }
+
+    // Case 2: Any non-config children start with +, or any descendants fall under case 1.
+    let mut any_child_plus = false;
+    for (child_key, child_variant) in value.iter_children() {
+        let child_is_plus = match child_variant {
+            ShouldBe::AndIs(child) => warn_plus_prefixed_resource_paths::<S>(
+                child_key,
+                child,
+                &key_path,
+                inside_plus || key_is_plus,
+            ),
+            ShouldBe::ButIsnt(..) => child_key.starts_with('+'),
+        };
+        any_child_plus |= child_is_plus;
+    }
+    if is_parent_plus && any_child_plus {
+        warn();
+    }
+
+    key_is_plus || valid_config_exists || any_child_plus
 }
 
 /// Config wrapping propagated configs for the root project
@@ -367,6 +501,21 @@ pub struct RootProjectConfigs {
     pub skills: DbtProjectConfig<SkillConfig>,
 }
 
+/// Read the `require_resource_names_without_plus_prefix` behavior flag from a
+/// project's `flags` block. Absent or non-boolean values resolve to `false`.
+/// Whether `+`-prefixed resource paths in `dbt_project.yml` are an error.
+///
+/// `pub` rather than `pub(crate)` because this module moved down from
+/// dbt-parser, whose modules still need it.
+pub fn disallow_plus_prefix_from_flags(flags: Option<&dbt_yaml::Value>) -> bool {
+    flags
+        .and_then(|flags| {
+            project_flags_get_value(flags, "require_resource_names_without_plus_prefix")
+        })
+        .and_then(dbt_yaml::Value::as_bool)
+        .unwrap_or(false)
+}
+
 /// Build the [RootProjectConfigs] from a [DbtProject]
 pub fn build_root_project_configs(
     root_project: &DbtProject,
@@ -381,34 +530,79 @@ pub fn build_root_project_configs(
             (None, Some(data_tests)) => Some(data_tests),
             (None, None) => None,
         };
+    let disallow_plus_prefix = disallow_plus_prefix_from_flags(root_project.flags.as_ref());
 
     Ok(RootProjectConfigs {
-        models: init_project_config(&root_project.models, root_project_quoting, None)?,
-        sources: init_project_config(&root_project.sources, (), None)?,
-        snapshots: init_project_config(&root_project.snapshots, root_project_quoting, None)?,
-        seeds: init_project_config(&root_project.seeds, root_project_quoting, None)?,
-        tests: init_project_config(&maybe_root_project_config, root_project_quoting, None)?,
-        unit_tests: init_project_config(&root_project.unit_tests, (), None)?,
-        exposures: init_project_config(&root_project.exposures, (), None)?,
-        semantic_models: init_project_config(&root_project.semantic_models, (), None)?,
-        metrics: init_project_config(&root_project.metrics, (), None)?,
-        saved_queries: init_project_config(&root_project.saved_queries, (), None)?,
-        analyses: init_project_config(&root_project.analyses, (), None)?,
-        functions: init_project_config(&root_project.functions, root_project_quoting, None)?,
-        skills: init_project_config(&root_project.skills, (), None)?,
+        models: init_project_config(
+            &root_project.models,
+            root_project_quoting,
+            None,
+            disallow_plus_prefix,
+        )?,
+        sources: init_project_config(&root_project.sources, (), None, disallow_plus_prefix)?,
+        snapshots: init_project_config(
+            &root_project.snapshots,
+            root_project_quoting,
+            None,
+            disallow_plus_prefix,
+        )?,
+        seeds: init_project_config(
+            &root_project.seeds,
+            root_project_quoting,
+            None,
+            disallow_plus_prefix,
+        )?,
+        tests: init_project_config(
+            &maybe_root_project_config,
+            root_project_quoting,
+            None,
+            disallow_plus_prefix,
+        )?,
+        unit_tests: init_project_config(&root_project.unit_tests, (), None, disallow_plus_prefix)?,
+        exposures: init_project_config(&root_project.exposures, (), None, disallow_plus_prefix)?,
+        semantic_models: init_project_config(
+            &root_project.semantic_models,
+            (),
+            None,
+            disallow_plus_prefix,
+        )?,
+        metrics: init_project_config(&root_project.metrics, (), None, disallow_plus_prefix)?,
+        saved_queries: init_project_config(
+            &root_project.saved_queries,
+            (),
+            None,
+            disallow_plus_prefix,
+        )?,
+        analyses: init_project_config(&root_project.analyses, (), None, disallow_plus_prefix)?,
+        functions: init_project_config(
+            &root_project.functions,
+            root_project_quoting,
+            None,
+            disallow_plus_prefix,
+        )?,
+        skills: init_project_config(&root_project.skills, (), None, disallow_plus_prefix)?,
     })
 }
 
 /// generate the project config that will be inherited throughout the project
-pub fn init_project_config<T: ResolvableConfig<T>, S: TypedRecursiveConfig + Into<T>>(
+pub fn init_project_config<
+    T: ResolvableConfig<T> + PartialEq,
+    S: TypedRecursiveConfig + Into<T>,
+>(
     dbt_project_configs: &Option<S>,
     package_defaults: T::PackageDefaults,
     dependency_package_name: Option<&str>,
+    disallow_plus_prefix: bool,
 ) -> FsResult<DbtProjectConfig<T>> {
     let mut default_config = T::default();
     default_config.apply_package_defaults(package_defaults);
     let project_config = if let Some(configs) = dbt_project_configs {
-        DbtProjectConfig::try_new(&default_config, configs, dependency_package_name)?
+        DbtProjectConfig::try_new(
+            &default_config,
+            configs,
+            dependency_package_name,
+            disallow_plus_prefix,
+        )?
     } else {
         DbtProjectConfig {
             config: default_config,

@@ -230,6 +230,7 @@ pub(crate) mod argtypes;
 #[cfg(feature = "deserialization")]
 mod deserialize;
 pub mod function_object;
+pub mod introspective;
 pub(crate) mod merge_object;
 pub(crate) mod namespace_object;
 mod object;
@@ -450,7 +451,14 @@ impl SmallStr {
 
 #[derive(Clone)]
 pub(crate) enum ValueRepr {
-    Undefined,
+    /// An undefined value, optionally remembering the identifier it came from.
+    ///
+    /// The payload exists purely so an error can say *which* variable was undefined
+    /// (see [`Value::undefined_named`]). It is **not** part of the value's identity:
+    /// every consumer other than error formatting must treat all undefined values as
+    /// interchangeable, so equality, hashing, ordering and serialization all ignore
+    /// it. Match with `Undefined(_)` unless you specifically want the name.
+    Undefined(Option<Arc<str>>),
     Bool(bool),
     U64(u64),
     I64(i64),
@@ -468,7 +476,7 @@ pub(crate) enum ValueRepr {
 impl fmt::Debug for ValueRepr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ValueRepr::Undefined => f.write_str("undefined"),
+            ValueRepr::Undefined(_) => f.write_str("undefined"),
             ValueRepr::Bool(val) => write!(f, "{}", if *val { "True" } else { "False" }),
             ValueRepr::U64(val) => fmt::Debug::fmt(val, f),
             ValueRepr::I64(val) => fmt::Debug::fmt(val, f),
@@ -512,7 +520,7 @@ impl fmt::Debug for ValueRepr {
 impl Hash for Value {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match &self.0 {
-            ValueRepr::None | ValueRepr::Undefined => 0u8.hash(state),
+            ValueRepr::None | ValueRepr::Undefined(_) => 0u8.hash(state),
             ValueRepr::String(ref s, _) => s.hash(state),
             ValueRepr::SmallStr(s) => s.as_str().hash(state),
             ValueRepr::Bool(b) => b.hash(state),
@@ -542,9 +550,9 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
             (ValueRepr::None, ValueRepr::None) => true,
-            (ValueRepr::None, ValueRepr::Undefined) => false,
-            (ValueRepr::Undefined, ValueRepr::None) => false,
-            (ValueRepr::Undefined, ValueRepr::Undefined) => true,
+            (ValueRepr::None, ValueRepr::Undefined(_)) => false,
+            (ValueRepr::Undefined(_), ValueRepr::None) => false,
+            (ValueRepr::Undefined(_), ValueRepr::Undefined(_)) => true,
             (ValueRepr::String(ref a, _), ValueRepr::String(ref b, _)) => a == b,
             (ValueRepr::SmallStr(a), ValueRepr::SmallStr(b)) => a.as_str() == b.as_str(),
             (ValueRepr::Bytes(a), ValueRepr::Bytes(b)) => a == b,
@@ -640,7 +648,7 @@ impl Ord for Value {
         }
         match (&self.0, &other.0) {
             (ValueRepr::None, ValueRepr::None) => Ordering::Equal,
-            (ValueRepr::Undefined, ValueRepr::Undefined) => Ordering::Equal,
+            (ValueRepr::Undefined(_), ValueRepr::Undefined(_)) => Ordering::Equal,
             (ValueRepr::String(ref a, _), ValueRepr::String(ref b, _)) => a.cmp(b),
             (ValueRepr::SmallStr(a), ValueRepr::SmallStr(b)) => a.as_str().cmp(b.as_str()),
             (ValueRepr::Bytes(a), ValueRepr::Bytes(b)) => a.cmp(b),
@@ -698,7 +706,7 @@ impl fmt::Debug for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.0 {
-            ValueRepr::Undefined => Ok(()),
+            ValueRepr::Undefined(_) => Ok(()),
             ValueRepr::Bool(val) => write!(f, "{}", if *val { "True" } else { "False" }),
             ValueRepr::U64(val) => val.fmt(f),
             ValueRepr::I64(val) => val.fmt(f),
@@ -729,7 +737,7 @@ impl fmt::Display for Value {
 
 impl Default for Value {
     fn default() -> Value {
-        ValueRepr::Undefined.into()
+        ValueRepr::Undefined(None).into()
     }
 }
 
@@ -774,12 +782,16 @@ pub(crate) fn intern_into_value(s: &str) -> Value {
 /// [`Value::get_attr`] API. The context variable-resolution path uses
 /// `get_attr_fast` directly and skips this so context variables named
 /// `items` / `keys` / etc. still resolve to their user values.
+/// [`namespace_object::Namespace`] stays exempt because its stored attributes
+/// take precedence over dictionary methods in Jinja.
 pub(crate) fn bound_dict_method_for_attr(receiver: &Value, key: &str) -> Option<Value> {
     let dy = match receiver.0 {
         ValueRepr::Object(ref dy) => dy,
         _ => return None,
     };
-    if !matches!(dy.repr(), ObjectRepr::Map) {
+    if !matches!(dy.repr(), ObjectRepr::Map)
+        || dy.downcast_ref::<namespace_object::Namespace>().is_some()
+    {
         return None;
     }
     let method = crate::value::object::reserved_dict_method_name(key)?;
@@ -795,7 +807,27 @@ impl Value {
     ///
     /// This constant exists because the undefined type does not exist in Rust
     /// and this is the only way to construct it.
-    pub const UNDEFINED: Value = Value(ValueRepr::Undefined);
+    pub const UNDEFINED: Value = Value(ValueRepr::Undefined(None));
+
+    /// An undefined value that remembers the identifier it came from.
+    ///
+    /// Behaves exactly like [`Value::UNDEFINED`] — the name is carried only so an
+    /// error can report *which* variable was undefined, and survives the value being
+    /// passed around (into a macro, say), which a name captured at the point of use
+    /// cannot do. Read it back with [`Value::undefined_name`].
+    pub fn undefined_named(name: impl Into<Arc<str>>) -> Value {
+        Value(ValueRepr::Undefined(Some(name.into())))
+    }
+
+    /// The identifier this undefined value came from, if it was recorded.
+    ///
+    /// `None` both for defined values and for undefined values minted without a name.
+    pub fn undefined_name(&self) -> Option<&str> {
+        match &self.0 {
+            ValueRepr::Undefined(name) => name.as_deref(),
+            _ => None,
+        }
+    }
 
     /// The none value.
     ///
@@ -1132,7 +1164,7 @@ impl Value {
     /// perform operations on it.
     pub fn kind(&self) -> ValueKind {
         match self.0 {
-            ValueRepr::Undefined => ValueKind::Undefined,
+            ValueRepr::Undefined(_) => ValueKind::Undefined,
             ValueRepr::Bool(_) => ValueKind::Bool,
             ValueRepr::U64(_) | ValueRepr::I64(_) | ValueRepr::F64(_) => ValueKind::Number,
             ValueRepr::None => ValueKind::None,
@@ -1222,7 +1254,7 @@ impl Value {
             ValueRepr::String(ref x, _) => !x.is_empty(),
             ValueRepr::SmallStr(ref x) => !x.is_empty(),
             ValueRepr::Bytes(ref x) => !x.is_empty(),
-            ValueRepr::None | ValueRepr::Undefined | ValueRepr::Invalid(_) => false,
+            ValueRepr::None | ValueRepr::Undefined(_) | ValueRepr::Invalid(_) => false,
             ValueRepr::Object(ref x) => x.is_true(),
         }
     }
@@ -1242,7 +1274,7 @@ impl Value {
 
     /// Returns `true` if this value is undefined.
     pub fn is_undefined(&self) -> bool {
-        matches!(&self.0, ValueRepr::Undefined)
+        matches!(&self.0, ValueRepr::Undefined(_))
     }
 
     /// Returns `true` if this value is none.
@@ -1306,6 +1338,13 @@ impl Value {
         }
     }
 
+    /// Returns `true` if this value is a stand-in for an unknowable value
+    /// produced by an introspective (warehouse-dependent) call evaluated
+    /// without a real connection. See [`Object::is_introspective_stub`].
+    pub fn is_introspective_stub(&self) -> bool {
+        self.as_object().is_some_and(|o| o.is_introspective_stub())
+    }
+
     /// Returns the length of the contained value.
     ///
     /// Values without a length will return `None`.
@@ -1342,7 +1381,7 @@ impl Value {
     /// # Ok(()) }
     /// ```
     pub fn get_attr(&self, key: &str) -> Result<Value, Error> {
-        if let ValueRepr::Undefined = self.0 {
+        if let ValueRepr::Undefined(_) = self.0 {
             return Err(Error::from(ErrorKind::UndefinedError));
         }
         if let Some(bound) = bound_dict_method_for_attr(self, key) {
@@ -1406,7 +1445,7 @@ impl Value {
     /// assert_eq!(value.to_string(), "Foo");
     /// ```
     pub fn get_item(&self, key: &Value) -> Result<Value, Error> {
-        if let ValueRepr::Undefined = self.0 {
+        if let ValueRepr::Undefined(_) = self.0 {
             Err(Error::from(ErrorKind::UndefinedError))
         } else {
             Ok(self.get_item_opt(key).unwrap_or(Value::UNDEFINED))
@@ -1440,7 +1479,7 @@ impl Value {
     /// ```
     pub fn try_iter(&self) -> Result<ValueIter, Error> {
         match self.0 {
-            ValueRepr::None | ValueRepr::Undefined => Some(ValueIterImpl::Empty),
+            ValueRepr::None | ValueRepr::Undefined(_) => Some(ValueIterImpl::Empty),
             ValueRepr::String(ref s, _) => {
                 Some(ValueIterImpl::Chars(0, s.chars().count(), Arc::clone(s)))
             }
@@ -1471,7 +1510,7 @@ impl Value {
     ///   reversible itself, it consumes it and then reverses it.
     pub fn reverse(&self) -> Result<Value, Error> {
         match self.0 {
-            ValueRepr::Undefined | ValueRepr::None => Some(self.clone()),
+            ValueRepr::Undefined(_) | ValueRepr::None => Some(self.clone()),
             ValueRepr::String(ref s, _) => Some(Value::from(s.chars().rev().collect::<String>())),
             ValueRepr::SmallStr(ref s) => {
                 // TODO: add small str optimization here
@@ -1824,7 +1863,7 @@ impl Serialize for Value {
             ValueRepr::U64(u) => serializer.serialize_u64(u),
             ValueRepr::I64(i) => serializer.serialize_i64(i),
             ValueRepr::F64(f) => serializer.serialize_f64(f),
-            ValueRepr::None | ValueRepr::Undefined | ValueRepr::Invalid(_) => {
+            ValueRepr::None | ValueRepr::Undefined(_) | ValueRepr::Invalid(_) => {
                 serializer.serialize_unit()
             }
             ValueRepr::U128(u) => serializer.serialize_u128(u.0),

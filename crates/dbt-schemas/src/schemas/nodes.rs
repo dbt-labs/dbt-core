@@ -346,6 +346,14 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         }
     }
 
+    /// The kind of path to cite when this node errors during `phase`.
+    ///
+    /// Defaults to the definition path for every phase. Node types whose reporting is
+    /// phase-accurate override this and opt in per phase.
+    fn error_path_kind(&self, _phase: ExecutionPhase) -> NodePathKind {
+        NodePathKind::Definition
+    }
+
     /// Constructs the absolute path for the requested kind.
     ///
     /// `get_node_path` applies node-kind fallback for display/reporting paths. This lower-level
@@ -4644,6 +4652,7 @@ pub struct DbtSeedAttr {
     pub delimiter: Option<String>,
     pub root_path: Option<PathBuf>,
     pub catalog_name: Option<String>,
+    pub alt_compute: Option<ComputePlatform>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -5539,6 +5548,7 @@ impl AdapterAttr {
                     include_full_name_in_path: config.include_full_name_in_path,
                     liquid_clustered_by: config.liquid_clustered_by.clone(),
                     auto_liquid_cluster: config.auto_liquid_cluster,
+                    zorder: config.zorder.clone(),
                     clustered_by: config.clustered_by.clone(),
                     buckets: config.buckets,
                     catalog: config.catalog.clone(),
@@ -5554,6 +5564,7 @@ impl AdapterAttr {
                     merge_with_schema_evolution: config.merge_with_schema_evolution,
                     skip_matched_step: config.skip_matched_step,
                     skip_not_matched_step: config.skip_not_matched_step,
+                    unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                     schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                 })))
             }
@@ -5642,6 +5653,7 @@ impl AdapterAttr {
                         include_full_name_in_path: config.include_full_name_in_path,
                         liquid_clustered_by: config.liquid_clustered_by.clone(),
                         auto_liquid_cluster: config.auto_liquid_cluster,
+                        zorder: config.zorder.clone(),
                         clustered_by: config.clustered_by.clone(),
                         buckets: config.buckets,
                         catalog: config.catalog.clone(),
@@ -5659,6 +5671,7 @@ impl AdapterAttr {
                         merge_with_schema_evolution: config.merge_with_schema_evolution,
                         skip_matched_step: config.skip_matched_step,
                         skip_not_matched_step: config.skip_not_matched_step,
+                        unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                         schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                     })))
             }
@@ -5714,6 +5727,7 @@ pub struct DatabricksAttr {
     pub include_full_name_in_path: Option<bool>,
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     pub auto_liquid_cluster: Option<bool>,
+    pub zorder: Option<StringOrArrayOfStrings>,
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
@@ -5729,6 +5743,7 @@ pub struct DatabricksAttr {
     pub merge_with_schema_evolution: Option<bool>,
     pub skip_matched_step: Option<bool>,
     pub skip_not_matched_step: Option<bool>,
+    pub unique_tmp_table_suffix: Option<bool>,
     pub schedule: Option<ScheduleConfig>,
 }
 
@@ -7069,6 +7084,11 @@ impl InternalDbtNode for DbtAnalysis {
 
     fn resource_type(&self) -> NodeType {
         NodeType::Analysis
+    }
+
+    /// Analysis-phase errors on an analysis cite its compiled SQL under `target/compiled/`.
+    fn error_path_kind(&self, phase: ExecutionPhase) -> NodePathKind {
+        phase.into()
     }
 
     fn as_any(&self) -> &dyn Any {

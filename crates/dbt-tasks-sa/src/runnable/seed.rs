@@ -213,7 +213,7 @@ pub fn execute_seed_remote(seed: &DbtSeed, ctx: &TaskRunnerCtx) -> FsResult<Node
     // takes ownership of `agate_table`, in case we need to enrich a downstream error.
     let new_cols_sorted = sorted_lowercase_columns(&agate_table);
 
-    let relations_map = match materialize_seed(
+    let (relations_map, main_response) = match materialize_seed(
         seed,
         ctx.adapter_type(),
         ctx.runtime_config(),
@@ -232,6 +232,11 @@ pub fn execute_seed_remote(seed: &DbtSeed, ctx: &TaskRunnerCtx) -> FsResult<Node
             });
         }
     };
+    if let Some(main_response) = main_response {
+        ctx.inner
+            .main_adapter_responses
+            .insert(seed.__common_attr__.unique_id.clone(), main_response);
+    }
     let _ = cache_materialization_return_value(ctx.env.clone(), &relations_map);
 
     if had_warning {

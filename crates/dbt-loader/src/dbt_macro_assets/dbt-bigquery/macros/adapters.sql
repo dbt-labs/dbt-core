@@ -259,6 +259,37 @@ having count(*) > 1
 
 {% endmacro %}
 
+{% macro bigquery__make_relation_with_suffix(base_relation, suffix, dstring) %}
+    {% if dstring %}
+      {% set dt = modules.datetime.datetime.now() %}
+      {% set dtstring = dt.strftime("%H%M%S%f") %}
+      {% set suffix = suffix ~ dtstring %}
+    {% endif %}
+    {% set suffix_length = suffix|length %}
+    {% set relation_max_name_length = 1024 %}  {# BigQuery limit #}
+    {% if suffix_length > relation_max_name_length %}
+        {% do exceptions.raise_compiler_error('Relation suffix is too long (' ~ suffix_length ~ ' characters). Maximum length is ' ~ relation_max_name_length ~ ' characters.') %}
+    {% endif %}
+    {% set identifier = base_relation.identifier[:relation_max_name_length - suffix_length] ~ suffix %}
+
+    {{ return(base_relation.incorporate(path={"identifier": identifier })) }}
+
+{% endmacro %}
+
+{% macro bigquery__make_temp_relation(base_relation, suffix) %}
+    {% set temp_relation = bigquery__make_relation_with_suffix(base_relation, suffix, dstring=True) %}
+    {{ return(temp_relation) }}
+{% endmacro %}
+
+{% macro bigquery__make_intermediate_relation(base_relation, suffix) %}
+    {{ return(bigquery__make_relation_with_suffix(base_relation, suffix, dstring=False)) }}
+{% endmacro %}
+
+{% macro bigquery__make_backup_relation(base_relation, backup_relation_type, suffix) %}
+    {% set backup_relation = bigquery__make_relation_with_suffix(base_relation, suffix, dstring=False) %}
+    {{ return(backup_relation.incorporate(type=backup_relation_type)) }}
+{% endmacro %}
+
 
 {# DIVERGENCE: in core, create_schema dispatches to the default global macro.
    Under dbt-core (1.x), short-circuit to the adapter call; under Fusion (2.x) the SQL path is preserved

@@ -367,10 +367,17 @@ got {:?}, expected an instance of {}",
         use CoreCommand::*;
         match &self.command {
             Command::Core(
-                Man(_) | Init(_) | Docs(_) | Login(_) | State(_) | Completions(_) | Internal(_),
+                Man(_) | Init(_) | Login(_) | State(_) | Completions(_) | Internal(_),
             ) => {
                 // These commands do not require a project directory
                 false
+            }
+            // `docs generate` reads a project's target directory, so it resolves
+            // `--project-dir` / `--target-path` the same way every project command
+            // does. `docs serve` only serves a directory and is documented as not
+            // requiring a project, so it stays out.
+            Command::Core(Docs(args)) => {
+                matches!(args.subcommand, Some(DocsSubcommand::Generate(_)))
             }
             Command::Core(_) => {
                 // Assume all the other core commands require a project directory.
@@ -823,7 +830,7 @@ pub struct ShowArgs {
     pub common_args: CommonArgs,
 
     /// Show the given query
-    #[arg(long)]
+    #[arg(long, allow_hyphen_values = true)]
     pub inline: Option<String>,
 
     /// Select nodes of a specific type;
@@ -955,8 +962,8 @@ pub struct TestArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Aggregate compatible generic tests.
-    #[arg(long, hide = true)]
+    /// Batch compatible generic tests.
+    #[arg(long = "batch-tests", hide = true)]
     pub aggregate_tests: bool,
 
     /// Select nodes of a specific type;
@@ -1047,8 +1054,8 @@ pub struct BuildArgs {
     #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
-    /// Aggregate compatible generic tests.
-    #[arg(long, hide = true)]
+    /// Batch compatible generic tests.
+    #[arg(long = "batch-tests", hide = true)]
     pub aggregate_tests: bool,
 
     /// Skip data tests that are proven redundant.
@@ -1452,6 +1459,16 @@ pub struct GetDistributionInfoArgs {
     pub common_args: CommonArgs,
 }
 
+/// Args for `dbt system upgrade-distribution`. No `common_args` flatten:
+/// this is a `System` subcommand, and `SystemMgmtArgs` already flattens
+/// `CommonArgs` once (same precedent as `SystemUpdateArgs`/`SystemUninstallArgs`).
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct SystemUpgradeDistributionArgs {
+    /// Skip the confirmation prompt and proceed automatically.
+    #[arg(short = 'y', long)]
+    pub yes: bool,
+}
+
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 pub struct StateArgs {
     #[clap(flatten)]
@@ -1512,8 +1529,15 @@ impl DocsArgs {
 
 #[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum DocsSubcommand {
-    /// Generate docs catalog (deprecated: use `dbt compile --write-catalog` instead)
-    Generate,
+    /// Generate a self-contained, statically hostable docs site.
+    ///
+    /// Runs `compile --write-index`, then writes the site that index describes to
+    /// `--output-dir`. The result is a plain directory of files: host it anywhere,
+    /// no server process required.
+    ///
+    /// Pass `--no-compile` to skip the compile and export the index a previous
+    /// `--write-index` run wrote, which is then an error if there is none.
+    Generate(DocsGenerateArgs),
     /// Start the dbt docs v2 server backed by parquet artifacts in the target directory.
     ///
     /// Reads parquet artifacts written by `--use-index` (or `--write-index`) and
@@ -1526,7 +1550,8 @@ pub enum DocsSubcommand {
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 pub struct DocsServeArgs {
     /// Path to the dbt target directory containing the `index/` subdirectory of
-    /// parquet artifacts. Defaults to `./target` in the current working directory.
+    /// parquet artifacts. Defaults to the project's target directory, resolved from
+    /// `--project-dir` and `--target-path` like any other project command.
     #[arg(long, value_name = "DIR", env = "DBT_DOCS_TARGET_PATH")]
     pub target_path: Option<PathBuf>,
 
@@ -1552,6 +1577,49 @@ impl Default for DocsServeArgs {
             no_open: false,
         }
     }
+}
+
+/// Args for `dbt docs generate`.
+///
+/// Mirrors [`DocsServeArgs`] on `--target-path`, including the env var, so both
+/// docs subcommands locate the index identically. `generate` compiles with
+/// `--write-index` and exports the index that produces, so it needs a project
+/// directory and a warehouse connection — unless `--no-compile` reduces it to the
+/// exporter it used to be.
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct DocsGenerateArgs {
+    /// Path to the dbt target directory containing the `index/` subdirectory of
+    /// parquet artifacts. Defaults to `./target` in the current working directory.
+    #[arg(long, value_name = "DIR", env = "DBT_DOCS_TARGET_PATH")]
+    pub target_path: Option<PathBuf>,
+
+    /// Directory to write the static site to. Defaults to the target directory
+    /// itself, so `index.html` lands where core v1 wrote it.
+    #[arg(long, value_name = "DIR", env = "DBT_DOCS_OUTPUT_DIR")]
+    pub output_dir: Option<PathBuf>,
+
+    /// Base URL the browser loads DuckDB-WASM from at runtime.
+    ///
+    /// Defaults to the pinned jsDelivr path. Point this at a mirror to serve the
+    /// wasm from your own infrastructure; the site never bundles it.
+    #[arg(long, value_name = "URL", env = "DBT_DOCS_DUCKDB_CDN_BASE")]
+    pub duckdb_cdn_base: Option<String>,
+
+    /// Export only what is already indexed; never compile.
+    ///
+    /// Without this, `compile --write-index` runs first, so the site always reflects
+    /// the project as it is now. With it, the export reads the index a previous
+    /// `--write-index` run wrote and a missing one is an error naming that remedy —
+    /// useful where the warehouse is unreachable, or to keep the command cheap and
+    /// read-only.
+    #[arg(long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), env = "DBT_DOCS_NO_COMPILE", overrides_with = "compile")]
+    pub no_compile: bool,
+
+    /// Accepted for dbt v1 compatibility, where it was the default. Compiling is
+    /// the default here too, so this is a no-op; it exists so v1 scripts that pass
+    /// it keep working.
+    #[arg(long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true, overrides_with = "no_compile")]
+    pub compile: bool,
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
@@ -1862,17 +1930,6 @@ pub struct CommonArgs {
     // Support for query cache
     #[arg(global = true, long, env = "DBT_BETA_USE_QUERY_CACHE", hide = true)]
     pub beta_use_query_cache: bool,
-
-    // Support for parquet-based schema store
-    #[arg(global = true, long, env = "DBT_USE_PARQUET_SCHEMA_STORE", hide = true)]
-    pub use_parquet_schema_store: bool,
-    #[arg(
-        global = true,
-        long,
-        env = "DBT_VERIFY_PARQUET_SCHEMA_STORE",
-        hide = true
-    )]
-    pub verify_parquet_schema_store: bool,
 
     //
     // NOTE: The arguments below were generated by a script to temporarily fill gaps between fs and
@@ -2580,8 +2637,6 @@ impl CommonArgs {
                 export_to_otlp: self.export_to_otlp,
                 show_all_deprecations: self.show_all_deprecations,
                 show_timings: arg.io.show_timings,
-                use_parquet_schema_store: self.use_parquet_schema_store,
-                verify_parquet_schema_store: self.verify_parquet_schema_store,
                 host: self.host.clone(),
                 port: self.port,
                 use_v2_compatible_package_downloads: self.use_v2_compatible_package_downloads,
@@ -2757,6 +2812,11 @@ impl CommonArgs {
 
         options
     }
+
+    /// True when replaying a prior recorded dbt run via `--dbt-replay`, since those recordings predate fusion-only warnings.
+    pub fn skip_fusion_only_upgrades(&self) -> bool {
+        self.dbt_replay.is_some()
+    }
 }
 
 /// Generate shell completion scripts
@@ -2846,8 +2906,6 @@ impl InitArgs {
                 show_all_deprecations: self.common_args.show_all_deprecations,
                 show_timings: arg.from_main,
                 export_to_otlp: self.common_args.export_to_otlp,
-                use_parquet_schema_store: self.common_args.use_parquet_schema_store,
-                verify_parquet_schema_store: self.common_args.verify_parquet_schema_store,
                 host: self.common_args.host.clone(),
                 port: self.common_args.port,
                 use_v2_compatible_package_downloads: self
@@ -2904,8 +2962,6 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: true,
-            use_parquet_schema_store: common_args.use_parquet_schema_store,
-            verify_parquet_schema_store: common_args.verify_parquet_schema_store,
             host: common_args.host,
             port: common_args.port,
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
@@ -2947,8 +3003,6 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: false,
-            use_parquet_schema_store: common_args.use_parquet_schema_store,
-            verify_parquet_schema_store: common_args.verify_parquet_schema_store,
             host: common_args.host,
             port: common_args.port,
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,

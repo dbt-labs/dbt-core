@@ -132,14 +132,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let cfg: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -175,14 +168,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -216,14 +202,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -232,6 +211,35 @@ mod tests {
             "expected error_after to deserialize as null, got {:?}",
             freshness.error_after
         );
+    }
+
+    #[test]
+    fn test_freshness_entire_value_nested_dict_renders_as_typed() {
+        use dbt_schemas::schemas::common::{FreshnessDefinition, FreshnessPeriod};
+
+        // The whole `freshness` value is a single Jinja expression evaluating to
+        // a mapping whose `warn_after` entry is itself a nested dict literal
+        // (issue #13214). The adjacent closing braces from the inner and outer
+        // dict literals (`...'day'}}`) must not be mistaken for a Jinja `}}`
+        // delimiter -- doing so previously routed the whole mapping through
+        // string rendering and raised dbt1013 instead of a typed FreshnessDefinition.
+        let yaml = r#""{{ {'warn_after': {'count': 1, 'period': 'day'}} }}""#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
+            val, false, &env, &ctx, &listeners, None, true,
+        )
+        .unwrap();
+
+        let warn = freshness
+            .warn_after
+            .expect("warn_after should deserialize as FreshnessRules");
+        assert_eq!(warn.count, Some(1));
+        assert_eq!(warn.period, Some(FreshnessPeriod::day));
     }
 
     #[tokio::test]
@@ -1229,14 +1237,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let pmc: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -1245,7 +1246,8 @@ mod tests {
             &base,
             &pmc,
             "",
-            &|_variant: &dbt_yaml::ShouldBe<ProjectModelConfig>, _key_path: &str| {},
+            &|_variant: &dbt_yaml::ShouldBe<ProjectModelConfig>, _key: &str, _key_path: &str| {},
+            false,
         );
 
         let hours = |cfg: &ModelConfig| {
@@ -1286,14 +1288,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let pmc: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -1302,7 +1297,8 @@ mod tests {
             &base,
             &pmc,
             "",
-            &|_variant: &dbt_yaml::ShouldBe<ProjectModelConfig>, _key_path: &str| {},
+            &|_variant: &dbt_yaml::ShouldBe<ProjectModelConfig>, _key: &str, _key_path: &str| {},
+            false,
         )
     }
 
@@ -1435,14 +1431,7 @@ mod tests {
         let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
 
         let psc: ProjectSnapshotConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
-            &IoArgs::default(),
-            val,
-            false,
-            &env,
-            &ctx,
-            &listeners,
-            None,
-            true,
+            val, false, &env, &ctx, &listeners, None, true,
         )
         .unwrap();
 
@@ -1451,7 +1440,8 @@ mod tests {
             &base,
             &psc,
             "",
-            &|_variant: &dbt_yaml::ShouldBe<ProjectSnapshotConfig>, _key_path: &str| {},
+            &|_variant: &dbt_yaml::ShouldBe<ProjectSnapshotConfig>, _key: &str, _key_path: &str| {},
+            false,
         );
 
         let hours = |cfg: &SnapshotConfig| {

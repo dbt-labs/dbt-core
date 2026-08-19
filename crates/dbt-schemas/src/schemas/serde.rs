@@ -697,12 +697,15 @@ where
     }
 }
 
-/// External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`)
-/// or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).
+/// External-table style `partitions` config — a string or list-of-strings (e.g.
+/// `['ds=2023-01-01']`), or a map or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`,
+/// as used by `dbt-external-tables`).
 #[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, DbtSchema)]
 #[serde(untagged)]
 pub enum PartitionsConfig {
+    String(String),
     Strings(Vec<String>),
+    Map(HashMap<String, YmlValue>),
     Maps(Vec<HashMap<String, YmlValue>>),
 }
 
@@ -969,6 +972,28 @@ impl PrimaryKeyConfig {
 // - Always serializes as a list
 // - Generates correct JSON schema automatically
 
+/// A ClickHouse data-skipping index: `{name, definition}` items consumed by the
+/// ClickHouse macros (`ADD INDEX {{ index.get('name') }} {{ index.get('definition') }}`).
+/// Both fields are required, so no `skip_serializing_none` is needed.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+pub struct ClickHouseIndex {
+    name: String,
+    definition: String,
+}
+
+/// One element of the shared `indexes` config. Adapter shapes are kept as distinct
+/// typed variants (like `PartitionConfig` does for BigQuery); the required fields are
+/// disjoint (`columns` vs `name`+`definition`), so untagged deserialization is
+/// unambiguous, and each variant serializes its own shape back to Jinja.
+#[derive(Debug, Clone, PartialEq, UntaggedEnumDeserialize, Serialize, DbtSchema)]
+#[serde(untagged)]
+pub enum IndexItem {
+    /// Postgres: `{columns, unique, type}`
+    Postgres(PostgresIndex),
+    /// ClickHouse: `{name, definition}`
+    ClickHouse(ClickHouseIndex),
+}
+
 /// A wrapper type for the `indexes` config field that handles flexible deserialization.
 ///
 /// dbt-core accepts both list and dictionary formats for indexes. This type accepts
@@ -984,7 +1009,7 @@ impl PrimaryKeyConfig {
 /// // Serializes as: [{columns: ["id"], unique: true}]  (keys are discarded)
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, DbtSchema)]
-pub struct IndexesConfig(Option<Vec<PostgresIndex>>);
+pub struct IndexesConfig(Option<Vec<IndexItem>>);
 
 impl IndexesConfig {
     /// Creates a new empty IndexesConfig
@@ -992,13 +1017,13 @@ impl IndexesConfig {
         Self(None)
     }
 
-    /// Creates an IndexesConfig from a Vec of PostgresIndex
-    pub fn from_vec(indexes: Vec<PostgresIndex>) -> Self {
+    /// Creates an IndexesConfig from a Vec of IndexItem
+    pub fn from_vec(indexes: Vec<IndexItem>) -> Self {
         Self(Some(indexes))
     }
 
     /// Consumes self and returns the inner value
-    pub fn into_inner(self) -> Option<Vec<PostgresIndex>> {
+    pub fn into_inner(self) -> Option<Vec<IndexItem>> {
         self.0
     }
 
@@ -1023,8 +1048,8 @@ impl IndexesConfig {
     }
 }
 
-impl AsRef<Option<Vec<PostgresIndex>>> for IndexesConfig {
-    fn as_ref(&self) -> &Option<Vec<PostgresIndex>> {
+impl AsRef<Option<Vec<IndexItem>>> for IndexesConfig {
+    fn as_ref(&self) -> &Option<Vec<IndexItem>> {
         &self.0
     }
 }
@@ -1034,7 +1059,7 @@ impl Serialize for IndexesConfig {
     where
         S: Serializer,
     {
-        // Always serialize as Option<Vec<PostgresIndex>>
+        // Always serialize as Option<Vec<IndexItem>>
         self.0.serialize(serializer)
     }
 }
@@ -1048,14 +1073,14 @@ impl<'de> Deserialize<'de> for IndexesConfig {
         use std::fmt;
         use std::marker::PhantomData;
 
-        struct IndexesVisitor(PhantomData<PostgresIndex>);
+        struct IndexesVisitor(PhantomData<IndexItem>);
 
         impl<'de> Visitor<'de> for IndexesVisitor {
-            type Value = Option<Vec<PostgresIndex>>;
+            type Value = Option<Vec<IndexItem>>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str(
-                    "a sequence of PostgresIndex, a map of name -> PostgresIndex, or null",
+                    "a sequence of index configs, a map of name -> index config, or null",
                 )
             }
 
@@ -1090,7 +1115,7 @@ impl<'de> Deserialize<'de> for IndexesConfig {
             {
                 let mut vec = Vec::new();
                 // Discard the keys, collect just the values
-                while let Some((_key, value)) = map.next_entry::<String, PostgresIndex>()? {
+                while let Some((_key, value)) = map.next_entry::<String, IndexItem>()? {
                     vec.push(value);
                 }
                 Ok(Some(vec))
@@ -1103,13 +1128,13 @@ impl<'de> Deserialize<'de> for IndexesConfig {
     }
 }
 
-impl From<Option<Vec<PostgresIndex>>> for IndexesConfig {
-    fn from(value: Option<Vec<PostgresIndex>>) -> Self {
+impl From<Option<Vec<IndexItem>>> for IndexesConfig {
+    fn from(value: Option<Vec<IndexItem>>) -> Self {
         IndexesConfig(value)
     }
 }
 
-impl From<IndexesConfig> for Option<Vec<PostgresIndex>> {
+impl From<IndexesConfig> for Option<Vec<IndexItem>> {
     fn from(config: IndexesConfig) -> Self {
         config.0
     }
@@ -1196,12 +1221,62 @@ impl std::fmt::Display for FloatOrString {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schemas::common::PartitionConfig;
     use dbt_common::serde_utils::Omissible;
 
     #[derive(Serialize, Deserialize)]
     struct TestConfig {
         #[serde(default)]
         grants: OmissibleGrantConfig,
+    }
+
+    #[test]
+    fn partition_by_round_trips_string_and_list() {
+        let scalar: PartitionConfig = dbt_yaml::from_str("toYYYYMM(created_at)").unwrap();
+        assert_eq!(
+            dbt_yaml::to_string(&scalar).unwrap().trim(),
+            "toYYYYMM(created_at)"
+        );
+
+        let list: PartitionConfig = dbt_yaml::from_str("[a, b]").unwrap();
+        let round_tripped: Vec<String> =
+            dbt_yaml::from_str(&dbt_yaml::to_string(&list).unwrap()).unwrap();
+        assert_eq!(round_tripped, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn indexes_round_trip_clickhouse_and_postgres_shapes() {
+        // ClickHouse {name, definition}
+        let ch: IndexesConfig =
+            dbt_yaml::from_str("[{name: idx1, definition: 'a TYPE minmax GRANULARITY 4'}]")
+                .unwrap();
+        assert!(matches!(
+            ch.as_ref().as_deref(),
+            Some([IndexItem::ClickHouse(_)])
+        ));
+        // Round-trip: re-parse the serialized YAML and compare to the original items
+        // (robust against emitter quoting/reflow choices).
+        let ch_reparsed: Vec<IndexItem> =
+            dbt_yaml::from_str(&dbt_yaml::to_string(&ch).unwrap()).unwrap();
+        assert_eq!(Some(ch_reparsed), ch.into_inner());
+
+        // Postgres {columns, unique} — list form
+        let pg: IndexesConfig = dbt_yaml::from_str("[{columns: [id], unique: true}]").unwrap();
+        assert!(matches!(
+            pg.as_ref().as_deref(),
+            Some([IndexItem::Postgres(_)])
+        ));
+        let pg_reparsed: Vec<IndexItem> =
+            dbt_yaml::from_str(&dbt_yaml::to_string(&pg).unwrap()).unwrap();
+        assert_eq!(Some(pg_reparsed), pg.into_inner());
+
+        // Postgres dict-of-indexes form still works, and serializes back as a list
+        let pg_map: IndexesConfig =
+            dbt_yaml::from_str("{my_index: {columns: [id], unique: true}}").unwrap();
+        assert_eq!(pg_map.len(), 1);
+        let pg_map_reparsed: Vec<IndexItem> =
+            dbt_yaml::from_str(&dbt_yaml::to_string(&pg_map).unwrap()).unwrap();
+        assert_eq!(Some(pg_map_reparsed), pg_map.into_inner());
     }
 
     #[test]
@@ -1272,8 +1347,46 @@ mod tests {
                     vec!["ds=2023-01-01".to_string(), "ds=2023-01-02".to_string()]
                 );
             }
-            PartitionsConfig::Maps(_) => panic!("expected Strings variant"),
+            PartitionsConfig::Maps(_) | PartitionsConfig::String(_) | PartitionsConfig::Map(_) => {
+                panic!("expected Strings variant")
+            }
         }
+    }
+
+    #[test]
+    fn test_partitions_config_accepts_string() {
+        let yaml = "ds=2023-01-01\n";
+        let parsed: PartitionsConfig = dbt_yaml::from_str(yaml).unwrap();
+        assert_eq!(
+            parsed,
+            PartitionsConfig::String("ds=2023-01-01".to_string())
+        );
+        assert_eq!(
+            serde_json::to_string(&parsed).unwrap(),
+            r#""ds=2023-01-01""#
+        );
+    }
+
+    #[test]
+    fn test_partitions_config_accepts_map() {
+        let yaml = "name: extracted_at_ts\ndata_type: timestamptz\n";
+        let parsed: PartitionsConfig = dbt_yaml::from_str(yaml).unwrap();
+        match &parsed {
+            PartitionsConfig::Map(map) => {
+                assert_eq!(
+                    map.get("name").and_then(|value| value.as_str()),
+                    Some("extracted_at_ts")
+                );
+                assert_eq!(
+                    map.get("data_type").and_then(|value| value.as_str()),
+                    Some("timestamptz")
+                );
+            }
+            _ => panic!("expected Map variant"),
+        }
+        let json = serde_json::to_string(&parsed).unwrap();
+        assert!(json.contains(r#""name":"extracted_at_ts""#));
+        assert!(json.contains(r#""data_type":"timestamptz""#));
     }
 
     #[test]
@@ -1293,7 +1406,9 @@ mod tests {
                     Some("timestamptz"),
                 );
             }
-            PartitionsConfig::Strings(_) => panic!("expected Maps variant"),
+            PartitionsConfig::Strings(_)
+            | PartitionsConfig::String(_)
+            | PartitionsConfig::Map(_) => panic!("expected Maps variant"),
         }
     }
 

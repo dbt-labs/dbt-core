@@ -14,6 +14,9 @@ pub mod args;
 pub mod constants;
 /// DbtNamespace for intercepting dbt macro calls during parse phase
 pub mod dbt_namespace;
+#[cfg(test)]
+mod dbt_project_config_tests;
+
 /// FQN-based `dbt_project.yml` config resolution.
 ///
 /// The implementation lives in `dbt-schemas` so that it can be shared with code
@@ -22,7 +25,8 @@ pub mod dbt_namespace;
 pub mod dbt_project_config {
     pub use dbt_schemas::schemas::project::{
         DbtProjectConfig, ProjectConfigResolver, RootProjectConfigs, build_root_project_configs,
-        init_project_config, recur_build_dbt_project_config, strip_resource_paths_from_ref_path,
+        disallow_plus_prefix_from_flags, init_project_config, recur_build_dbt_project_config,
+        strip_resource_paths_from_ref_path,
     };
 }
 /// Parallel dispatch utilities

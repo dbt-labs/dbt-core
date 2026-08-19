@@ -2,11 +2,13 @@
 use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_adapter_core::AdapterType;
+use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::malformed_block_name::MalformedBlockNameListener;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -18,12 +20,14 @@ use dbt_schemas::state::DbtPackage;
 use minijinja::ArgSpec;
 use minijinja::compiler::ast::{CallArg, Expr, MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
+use minijinja::listener::TokenizerEventListener;
 use minijinja::machinery::{Span, WhitespaceConfig};
 use minijinja::syntax::SyntaxConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 /// A raw (unrendered) project config tree built from a `dbt_project.yml` models hierarchy.
@@ -190,11 +194,13 @@ pub fn get_snapshot_fqn(
         .is_some_and(|ext| ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml"));
 
     if is_yaml_defined {
+        // We've already normalized the yaml snapshots here under snapshots/,
+        // so we strip the normalized snapshots path instead of the original.
         get_node_fqn(
             package_name,
             path.to_path_buf(),
             vec![snapshot_name.to_string()],
-            snapshot_paths,
+            &[DBT_SNAPSHOTS_DIR_NAME.into()],
         )
     } else {
         let original_file_stem = strip_resource_paths_from_ref_path(original_path, snapshot_paths)
@@ -860,13 +866,16 @@ pub fn parse_macro_statements(
     statement_types: &[&str],
 ) -> FsResult<Vec<SqlResource<NoOpConfig>>> {
     let file_name = path.display().to_string();
-    let mut parser = Parser::new(
+    let listener: Rc<dyn TokenizerEventListener> =
+        Rc::new(MalformedBlockNameListener::new(path.to_path_buf()));
+    let mut parser = Parser::new_with_tokenizer_listeners(
         sql,
         &file_name,
         false,
         #[allow(clippy::default_constructed_unit_structs)]
         SyntaxConfig::builder().build().unwrap(),
         WhitespaceConfig::default(),
+        &[listener],
     );
     // We should throw an error here if we can't process the macro because we shouldn't see any non macro's here
     let ast = parser

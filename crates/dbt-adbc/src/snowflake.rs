@@ -73,3 +73,9 @@ pub mod auth_type {
 pub const CLIENT_ID: &str = "adbc.snowflake.sql.client_option.client_id";
 pub const CLIENT_SECRET: &str = "adbc.snowflake.sql.client_option.client_secret";
 pub const REFRESH_TOKEN: &str = "adbc.snowflake.sql.client_option.refresh_token";
+
+// Names of schema metadata keys -----------------------------------------
+
+pub mod schema_metadata {
+    pub const QUERY_ID: &str = "SNOWFLAKE_QUERY_ID";
+}

@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 
 use crate::connection::AdapterConnectionFactory;
 
+use crate::time_machine::{args_freshness_with_overrides, with_time_machine_metadata_wrapper};
 use arrow_array::*;
 use arrow_schema::{Field, Schema};
 use dbt_adapter_core::AdapterType;
@@ -348,82 +349,76 @@ impl DatabricksMetadataAdapter {
             }
             RelationType::StreamingTable => {}
             RelationType::Table => {
-                let is_hive_metastore = base_relation.is_hive_metastore();
-                if is_hive_metastore {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::NotSupported,
-                        format!(
-                            "Incremental application of constraints and column masks is not supported for Hive Metastore! Relation: `{database}`.`{schema}`.`{identifier}`"
-                        ),
-                    ));
+                // Tags, constraints and column masks all live in `information_schema`, which
+                // Hive Metastore does not have.
+                if !base_relation.is_hive_metastore() {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaColumnTags,
+                        self.fetch_column_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::NonNullConstraints,
+                        self.fetch_non_null_constraint_columns(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::PrimaryKeyConstraints,
+                        self.fetch_primary_key_constraints(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::ForeignKeyConstraints,
+                        self.fetch_foreign_key_constraints(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::ColumnMasks,
+                        self.fetch_column_masks(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
                 }
-
-                metadata.insert(
-                    DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                    self.fetch_tags(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::InfoSchemaColumnTags,
-                    self.fetch_column_tags(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::NonNullConstraints,
-                    self.fetch_non_null_constraint_columns(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::PrimaryKeyConstraints,
-                    self.fetch_primary_key_constraints(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::ForeignKeyConstraints,
-                    self.fetch_foreign_key_constraints(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-                metadata.insert(
-                    DatabricksRelationMetadataKey::ColumnMasks,
-                    self.fetch_column_masks(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
 
                 // Match dbt-databricks/Mantle ordering: SHOW TBLPROPERTIES then DESCRIBE EXTENDED.
                 metadata.insert(
@@ -448,7 +443,8 @@ impl DatabricksMetadataAdapter {
             | RelationType::PointerTable
             | RelationType::DynamicTable
             | RelationType::MetricView
-            | RelationType::Function => {
+            | RelationType::Function
+            | RelationType::Dictionary => {
                 return Err(AdapterError::new(
                     AdapterErrorKind::NotSupported,
                     format!(
@@ -711,6 +707,73 @@ impl DatabricksMetadataAdapter {
         let (_, result) =
             self.execute_sql_with_context(&sql, state, "Fetch column tags", conn, token)?;
         Ok(result)
+    }
+
+    fn freshness_with_overrides_impl<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        overrides: &'a BTreeMap<String, FreshnessOverride>,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        if overrides.is_empty() {
+            return self.freshness_inner(relations, token);
+        }
+
+        // Partition: sources with loaded_at_query / loaded_at_field get their own
+        // targeted query; all other relations go through the bulk DESCRIBE HISTORY path.
+        let (bulk_relations, override_targets) = partition_override_relations(relations, overrides);
+
+        let engine = self.adapter.engine().clone();
+        let threads = engine.threads();
+        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
+
+        type Acc = BTreeMap<String, MetadataFreshness>;
+        let mut tasks: Vec<FreshnessTask> = Vec::new();
+        if !bulk_relations.is_empty() {
+            tasks.push(FreshnessTask::Bulk(bulk_relations));
+        }
+        for (relation, ovr) in override_targets {
+            tasks.push(FreshnessTask::Override(relation, ovr));
+        }
+
+        let token_clone = token.clone();
+        let adapter_for_map = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          task: &FreshnessTask|
+              -> AdapterResult<FreshnessTaskResult> {
+            match task {
+                FreshnessTask::Bulk(bulk) => {
+                    let mut acc: Acc = BTreeMap::new();
+                    for relation in bulk {
+                        if let Some(freshness) = databricks_freshness_for_relation(
+                            &adapter_for_map,
+                            conn,
+                            relation,
+                            token_clone.clone(),
+                        )? {
+                            acc.insert(relation.semantic_fqn(), freshness);
+                        }
+                    }
+                    Ok(FreshnessTaskResult::Bulk(acc))
+                }
+                FreshnessTask::Override(relation, ovr) => {
+                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
+                }
+            }
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             _task: FreshnessTask,
+                             res: AdapterResult<FreshnessTaskResult>|
+              -> Result<(), Cancellable<AdapterError>> {
+            if let Ok(task_result) = res {
+                apply_freshness_task_result(acc, task_result)?;
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
+        map_reduce.run(Arc::new(tasks), token)
     }
 }
 
@@ -1022,65 +1085,16 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         overrides: &'a BTreeMap<String, FreshnessOverride>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        if overrides.is_empty() {
-            return self.freshness(relations, token);
-        }
-
-        // Partition: sources with loaded_at_query / loaded_at_field get their own
-        // targeted query; all other relations go through the bulk DESCRIBE HISTORY path.
-        let (bulk_relations, override_targets) = partition_override_relations(relations, overrides);
-
-        let engine = self.adapter.engine().clone();
-        let threads = engine.threads();
-        let factory = Box::new(AdapterConnectionFactory::new(engine, threads));
-
-        type Acc = BTreeMap<String, MetadataFreshness>;
-        let mut tasks: Vec<FreshnessTask> = Vec::new();
-        if !bulk_relations.is_empty() {
-            tasks.push(FreshnessTask::Bulk(bulk_relations));
-        }
-        for (relation, ovr) in override_targets {
-            tasks.push(FreshnessTask::Override(relation, ovr));
-        }
-
-        let token_clone = token.clone();
-        let adapter_for_map = self.adapter.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
-                          task: &FreshnessTask|
-              -> AdapterResult<FreshnessTaskResult> {
-            match task {
-                FreshnessTask::Bulk(bulk) => {
-                    let mut acc: Acc = BTreeMap::new();
-                    for relation in bulk {
-                        if let Some(freshness) = databricks_freshness_for_relation(
-                            &adapter_for_map,
-                            conn,
-                            relation,
-                            token_clone.clone(),
-                        )? {
-                            acc.insert(relation.semantic_fqn(), freshness);
-                        }
-                    }
-                    Ok(FreshnessTaskResult::Bulk(acc))
-                }
-                FreshnessTask::Override(relation, ovr) => {
-                    run_override_query(&adapter_for_map, conn, relation, ovr, token_clone.clone())
-                }
-            }
-        };
-
-        let reduce_f = move |acc: &mut Acc,
-                             _task: FreshnessTask,
-                             res: AdapterResult<FreshnessTaskResult>|
-              -> Result<(), Cancellable<AdapterError>> {
-            if let Ok(task_result) = res {
-                apply_freshness_task_result(acc, task_result)?;
-            }
-            Ok(())
-        };
-
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        map_reduce.run(Arc::new(tasks), token)
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_with_overrides",
+            args_freshness_with_overrides(
+                relations.iter().map(|r| r.semantic_fqn()),
+                overrides,
+                None,
+            ),
+            self.freshness_with_overrides_impl(relations, overrides, token),
+        )
     }
 
     fn create_schemas_if_not_exists(
@@ -1230,7 +1244,11 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         map_reduce.run(Arc::new(fqns), token)
     }
 
-    fn freshness_all_in_schema<'a>(
+    fn supports_bulk_freshness_dump(&self) -> bool {
+        true
+    }
+
+    fn freshness_all_in_schema_inner<'a>(
         &'a self,
         _database: &'a str,
         _schema: &'a str,

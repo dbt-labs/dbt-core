@@ -80,7 +80,6 @@ pub struct SqlFileRenderResult<T: ResolvableConfig<T>, S> {
 /// Extracts model and version configuration from node properties
 fn extract_model_and_version_config<T: ResolvableConfig<T>, S: GetConfig<T> + Debug>(
     mpe: &mut MinimalPropertiesEntry,
-    arg: &ResolveArgs,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     dependency_package_name: Option<&str>,
@@ -96,7 +95,6 @@ fn extract_model_and_version_config<T: ResolvableConfig<T>, S: GetConfig<T> + De
     let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
 
     let maybe_model = into_typed_with_jinja_error_context::<S, _>(
-        Some(&arg.io),
         schema_value,
         false,
         jinja_env,
@@ -109,7 +107,6 @@ fn extract_model_and_version_config<T: ResolvableConfig<T>, S: GetConfig<T> + De
     let maybe_version_config = if let Some(version_info) = mpe.version_info.as_ref() {
         if let Some(version_config) = version_info.version_config.as_ref() {
             let version_config = into_typed_with_jinja_error_context::<T, _>(
-                Some(&arg.io),
                 version_config.clone(),
                 false,
                 jinja_env,
@@ -307,7 +304,6 @@ where
         if let Some(mpe) = node_properties.get_mut(ref_name) {
             extract_model_and_version_config::<T, S>(
                 mpe,
-                args,
                 jinja_env,
                 base_ctx,
                 dependency_package_name,
@@ -927,7 +923,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             node_resolver.clone(),
             runtime_config.clone(),
             DependencyValidationConfig::new_for_node(&model).skip_validation(),
-        );
+        )?;
 
         // Inject the DbtNamespace to intercept dbt macro calls
         let dbt_namespace = DbtNamespace::new(parse_adapter.clone());

@@ -30,7 +30,9 @@ use dbt_schemas::{
 };
 use minijinja::MacroSpans;
 
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::resolve::resolve_utils::{build_unrendered_config, extract_config_map};
 use crate::utils::{
@@ -91,6 +93,7 @@ pub async fn resolve_functions(
                 &package.dbt_project.functions,
                 package_quoting,
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         },
     )?
@@ -451,13 +454,21 @@ pub async fn resolve_functions(
                 entry_point: model_config.entry_point.clone(),
                 packages: model_config.packages.clone(),
                 snowflake: model_config.snowflake.clone(),
+                pre_hook: model_config.pre_hook.clone(),
+                post_hook: model_config.post_hook.clone(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),
         };
 
         let components = RelationComponents {
-            database: model_config.database.clone().into_inner().unwrap_or(None),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && model_config.__warehouse_specific_config__.catalog.is_some()
+            {
+                model_config.__warehouse_specific_config__.catalog.clone()
+            } else {
+                model_config.database.clone().into_inner().unwrap_or(None)
+            },
             schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,

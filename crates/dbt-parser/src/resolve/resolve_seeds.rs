@@ -1,7 +1,10 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
+    validate_compute_platform,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -116,6 +119,7 @@ pub async fn resolve_seeds(
                 &package.dbt_project.seeds,
                 package_quoting,
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
         })?
         .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
@@ -216,7 +220,6 @@ pub async fn resolve_seeds(
             }
             (
                 into_typed_with_jinja::<SeedProperties, _>(
-                    io_args,
                     mpe.schema_value,
                     false,
                     jinja_env,
@@ -299,6 +302,16 @@ pub async fn resolve_seeds(
 
         validate_delimiter(&properties_config.delimiter)?;
 
+        validate_compute_platform(
+            properties_config.alt_compute,
+            &DbtMaterialization::Table,
+            properties_config.catalog_name.as_deref(),
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            false,
+            &path,
+        )?;
+
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds
         let original_file_path =
@@ -360,13 +373,26 @@ pub async fn resolve_seeds(
                 delimiter: properties_config.delimiter.clone().map(|d| d.into_inner()),
                 root_path: Some(seed_file.base_path.clone()),
                 catalog_name: properties_config.catalog_name.clone(),
+                alt_compute: properties_config.alt_compute,
             },
             __other__: BTreeMap::new(),
             deprecated_config: properties_config.clone().into(),
         };
 
         let components = RelationComponents {
-            database: properties_config.database.clone(),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && properties_config
+                    .__warehouse_specific_config__
+                    .catalog
+                    .is_some()
+            {
+                properties_config
+                    .__warehouse_specific_config__
+                    .catalog
+                    .clone()
+            } else {
+                properties_config.database.clone()
+            },
             schema: properties_config.schema.clone(),
             alias: properties_config.alias.clone(),
             store_failures: None,

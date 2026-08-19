@@ -236,6 +236,10 @@ pub enum ErrorCode {
     ValidateMacroArgs = 1506,
     JinjaTypeCheckFailed = 1507,
     JinjaTopLevelReturn = 1508,
+    /// Emitted when a `{% snapshot %}`/`{% docs %}` block name is followed by
+    /// extra characters that dbt-core's regex-based name extractor silently
+    /// discards (e.g. `{% snapshot foo.sql %}`). Deprecation warning only.
+    MalformedBlockName = 1509,
 
     // --------------------------------------------------------------------------------------------
     // Local execution
@@ -250,6 +254,8 @@ pub enum ErrorCode {
     DeprecatedOption = 1702,
     DeprecatedStaticAnalysisValue = 1703,
     NotSupportedWarnErrorOption = 1704,
+    /// No longer emitted. Retained so an existing `warn_error_options` entry naming it
+    /// keeps resolving instead of failing as an unknown code.
     DocsGenerateWarning = 1705,
 
     // --------------------------------------------------------------------------------------------

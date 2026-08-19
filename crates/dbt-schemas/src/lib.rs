@@ -16,9 +16,9 @@ pub mod schemas {
     pub mod serialization_utils;
 
     pub use dbt_catalogs::{
-        AdapterPropsView, CatalogSpecView, CatalogType, DatabricksUnityPropsView, DbtCatalogsView,
-        FileFormat, SerializationPolicy, SnowflakeBuiltInPropsView, SnowflakeRestPropsView,
-        TargetFileSize, WriteIntegrationView, validate_catalogs,
+        AdapterPropsView, CatalogSpecView, DatabricksUnityPropsView, DbtCatalogsView, FileFormat,
+        SerializationPolicy, SnowflakeBuiltInPropsView, SnowflakeRestPropsView, TargetFileSize,
+        WriteIntegrationView, validate_catalogs,
     };
     pub use dbt_catalogs_v2::TableFormat;
     pub mod macros;
@@ -148,8 +148,8 @@ pub mod schemas {
 
         pub use config_tree::{
             DbtProjectConfig, ProjectConfigResolver, RootProjectConfigs,
-            build_root_project_configs, init_project_config, recur_build_dbt_project_config,
-            strip_resource_paths_from_ref_path,
+            build_root_project_configs, disallow_plus_prefix_from_flags, init_project_config,
+            recur_build_dbt_project_config, strip_resource_paths_from_ref_path,
         };
         pub use configs::analysis_config::{
             AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,

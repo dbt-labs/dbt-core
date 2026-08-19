@@ -1,5 +1,5 @@
 use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
-use dbt_adapter::Adapter;
+use dbt_adapter::{Adapter, relation::is_parse_time_relation};
 use dbt_common::{
     ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err,
     warn_error_options::WarnErrorOptions,
@@ -457,6 +457,10 @@ impl JinjaEnvBuilder {
     }
 
     fn register_tests(&mut self) {
+        self.env.add_test("none", |value: Value| {
+            value.is_none() || is_parse_time_relation(&value)
+        });
+
         // https://github.com/pallets/jinja/blob/5ef70112a1ff19c05324ff889dd30405b1002044/src/jinja2/runtime.py#L878
         // Since `__call__` is technically implemented, {{ undefined is callable }} is true.
         self.env.add_test("callable", |value: Value| {
@@ -548,6 +552,36 @@ mod tests {
         assert_snapshot!(rv, @r"
 
 all okay!");
+    }
+
+    #[test]
+    fn parse_get_relation_matches_none_control_flow() {
+        let adapter = Arc::new(Adapter::new_parse_phase_adapter(
+            AdapterType::DuckDB,
+            dbt_yaml::Mapping::new(),
+            DEFAULT_DBT_QUOTING,
+            Arc::new(DefaultTypeOps::new(AdapterType::DuckDB)),
+            None,
+        ));
+        let globals = BTreeMap::from([(
+            "adapter".to_string(),
+            Value::from_object(adapter.as_ref().clone()),
+        )]);
+        let env = JinjaEnvBuilder::new()
+            .with_adapter(adapter)
+            .with_globals(globals)
+            .build();
+
+        let rendered = env
+            .render_str(
+                r#"{%- set relation = adapter.get_relation(database="", schema="main", identifier="missing") -%}
+{{- relation is none }}|{{ relation is not none }}|{{ relation and "truthy" or "falsey" }}|{{ relation.include(database=false, schema=false, identifier=false).render() is none -}}"#,
+                context! {},
+                &[],
+            )
+            .unwrap();
+
+        assert_eq!(rendered, "True|False|falsey|True");
     }
 
     #[test]

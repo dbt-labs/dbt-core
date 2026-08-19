@@ -27,7 +27,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
-#[cfg(debug_assertions)]
 pub(crate) mod env_var;
 
 pub mod driver;
@@ -51,6 +50,7 @@ pub mod semaphore;
 
 pub(crate) mod builder;
 pub(crate) mod checksums;
+pub(crate) mod driver_channel;
 pub mod driver_manager;
 pub mod duration;
 pub mod install;
@@ -84,10 +84,13 @@ pub fn str_from_sqlstate(sqlstate: &[c_char; 5]) -> &str {
 }
 
 pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.16";
+/// Legacy driver built from `dbt-labs/arrow-adbc` repository
 pub const BIGQUERY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.17";
+/// Built from `dbt-labs/bigquery-adbc repository
+pub const BIGQUERY_FOUNDRY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.1.2";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.21.0+dbt0.21.0";
-pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.11";
-pub const REDSHIFT_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.18.5";
+pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.12";
+pub const REDSHIFT_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.18.6";
 pub const DUCKDB_DRIVER_VERSION: &str = "1.5.4";
 pub const DUCKDB_EXTENDED_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.28";
 pub const ALT_DRIVER_VERSION: &str = "0.4.0+dbt0.1.0.ga3f6df3";

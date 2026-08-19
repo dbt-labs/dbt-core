@@ -97,7 +97,7 @@ use dbt_telemetry::{ExecutionPhase, PhaseExecuted, ShowResult};
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::PathBuf,
     sync::OnceLock,
 };
@@ -115,7 +115,6 @@ use dbt_tasks_sa::debug::DebugArgs;
 
 use dbt_telemetry::{ArtifactType, ListItemOutput};
 
-use std::collections::BTreeSet;
 use std::{sync::Arc, time::SystemTime};
 
 use serde_json::to_string_pretty;
@@ -207,6 +206,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             Some(feature_stack.tracing.config_provider.as_ref()),
             &self.token,
             feature_stack.loader.hooks.clone(),
+            feature_stack.loader.private_package_resolver.clone(),
             feature_stack.jinja.factory.clone(),
         )
         .await?;
@@ -280,6 +280,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             config,
             self.arg.local_execution_backend,
             !feature_stack.version_check_enabled,
+            feature_stack.cli.command_name,
         );
         self.token.check_cancellation()?;
 
@@ -294,7 +295,9 @@ impl<'a> CompilationPhasesExecutor<'a> {
         // Handle 'debug' or 'init' commands to run debug.
         if let FsCommand::Debug | FsCommand::Init = self.arg.command {
             let mut debug_args = DebugArgs::from_eval_args(self.arg.as_ref());
-            debug_args.alt_propagation_checker = feature_stack.cli.hooks.alt_propagation_checker();
+            debug_args.alt_propagation_checker = feature_stack.alt.propagation_checker.clone();
+            debug_args.alt_catalog_attach_checker =
+                feature_stack.alt.catalog_attach_checker.clone();
             compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
                 .await?;
             self.token.check_cancellation()?;
@@ -551,17 +554,24 @@ impl<'a> CompilationPhasesExecutor<'a> {
                             .collect(),
                         nodes: Some(resolved_state.nodes.clone()),
                         batch_results: Default::default(),
+                        compiled_code: Default::default(),
                     };
                     if self.arg.write_json {
                         write_run_results_json_or_warn(
                             // TODO: should also be captured by the caller?
-                            &build_run_results_artifact(&error_stats, self.arg.as_ref()),
+                            &build_run_results_artifact(
+                                &error_stats,
+                                // Adapter responses are not available during parse phase.
+                                &HashMap::new(),
+                                self.arg.as_ref(),
+                            ),
                             self.arg.as_ref(),
                         );
                     }
                     if self.arg.write_metadata {
                         crate::utils::write_runtime_results_parquet(
                             &error_stats,
+                            &HashMap::new(),
                             self.arg.as_ref(),
                         );
                     }
@@ -1773,8 +1783,6 @@ impl DbtProjectCompilation {
                 &arg.io.out_dir,
                 self.resolved_state.adapter_type,
                 extra_frontier_unique_ids,
-                arg.io.use_parquet_schema_store,
-                arg.io.verify_parquet_schema_store,
             )?)
         };
 
@@ -2062,10 +2070,21 @@ impl DbtProjectCompilation {
                 stats: vec![stat],
                 nodes: Some(resolved_state.nodes),
                 batch_results: Default::default(),
+                compiled_code: Default::default(),
             };
             if arg.write_json {
                 // TODO: should also be captured by the caller?
-                write_run_results_json(&build_run_results_artifact(&run_stats, arg), arg)?;
+                write_run_results_json(
+                    &build_run_results_artifact(
+                        &run_stats,
+                        // NOTE: dbt Core v1 does not populate AdapterResponse on `dbt run-operation`.
+                        // However we technically could pull the adapter responses from the macro
+                        // execution and add them here. We just have to wire it up.
+                        &HashMap::new(),
+                        arg,
+                    ),
+                    arg,
+                )?;
             }
 
             return Err(return_exit_code_from_error_counter());
@@ -2386,6 +2405,7 @@ fn spawn_version_check_if_possible(
     config: &CompilationConfig,
     compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
     version_check_disabled: bool,
+    command_name: &'static str,
 ) -> Option<tokio::task::JoinHandle<Option<String>>> {
     if version_check_disabled {
         return None;
@@ -2400,7 +2420,8 @@ fn spawn_version_check_if_possible(
         let current_version = env!("CARGO_PKG_VERSION");
         if !disable_version_check {
             return Some(tokio::spawn(
-                version_check::check_version(current_version, None).in_current_span(),
+                version_check::check_version_and_build_hint(current_version, None, command_name)
+                    .in_current_span(),
             ));
         }
     }
