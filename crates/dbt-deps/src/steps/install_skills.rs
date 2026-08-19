@@ -12,31 +12,39 @@ use dbt_schemas::schemas::packages::{DbtPackages, DbtPackagesLock};
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_skills::{InstalledPackage, install_package_skills};
 
+/// What the skill install pass needs from the surrounding deps run.
+pub struct SkillInstallInputs<'a> {
+    /// Project root, which is both where `dbt_project.yml` lives and where the
+    /// provider directories are written.
+    pub in_dir: &'a Path,
+    pub packages_install_path: &'a Path,
+    pub dbt_packages_lock: &'a DbtPackagesLock,
+    /// The parsed `packages.yml`/`dependencies.yml`, used only to recover
+    /// declaration order — `package-lock.yml` is sorted by name, but skill name
+    /// collisions are resolved by declaration order.
+    pub package_def: Option<&'a DbtPackages>,
+    pub ai_provider: Option<&'a [String]>,
+}
+
 /// Install skills from the root project and every installed package.
-///
-/// `package_def` is the parsed `packages.yml`/`dependencies.yml`, used only to
-/// recover declaration order — `package-lock.yml` is sorted by name, but the
-/// spec resolves skill name collisions by declaration order. Packages that
-/// aren't declared there (transitive dependencies) sort after the declared ones,
-/// keeping their lock order, which is stable.
 ///
 /// Never fails the install for skill-content reasons: bad frontmatter or a name
 /// collision warns and is skipped. Any error here is surfaced as a warning too,
 /// so a filesystem problem writing skills can't break `dbt deps` itself.
-pub fn install_skills(
-    in_dir: &Path,
-    dbt_packages_lock: &DbtPackagesLock,
-    package_def: Option<&DbtPackages>,
-    packages_install_path: &Path,
-    ai_provider: Option<&[String]>,
-) {
-    let Some(root_project) = read_root_project(in_dir) else {
+pub fn install_skills(inputs: SkillInstallInputs<'_>) {
+    let Some(root_project) = read_root_project(inputs.in_dir) else {
         return;
     };
 
-    let packages = ordered_packages(dbt_packages_lock, package_def, packages_install_path);
+    let packages = ordered_packages(
+        inputs.dbt_packages_lock,
+        inputs.package_def,
+        inputs.packages_install_path,
+    );
 
-    if let Err(e) = install_package_skills(in_dir, &root_project, &packages, ai_provider) {
+    let installed =
+        install_package_skills(inputs.in_dir, &root_project, &packages, inputs.ai_provider);
+    if let Err(e) = installed {
         emit_warn_log_message(
             ErrorCode::IoError,
             format!("Could not install agent skills: {e}"),

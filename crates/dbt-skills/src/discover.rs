@@ -91,28 +91,39 @@ impl SkillSourceProject {
 /// reported as a warning and skipped, so one malformed skill in a third-party
 /// package can't break `dbt deps` for everything else.
 pub fn discover_skills(projects: &[SkillSourceProject]) -> Vec<DiscoveredSkill> {
-    let mut discovered = Vec::new();
+    projects
+        .iter()
+        .enumerate()
+        .flat_map(|(precedence, project)| {
+            project
+                .skill_paths
+                .iter()
+                .flat_map(move |skill_path| discover_under(project, precedence, skill_path))
+        })
+        .collect()
+}
 
-    for (precedence, project) in projects.iter().enumerate() {
-        for skill_path in &project.skill_paths {
-            let search_root = project.root.join(skill_path);
-            if !search_root.is_dir() {
-                continue;
-            }
-
-            for skill_dir in find_skill_dirs(&search_root) {
-                match build_skill(project, precedence, skill_path, &skill_dir) {
-                    Ok(skill) => discovered.push(skill),
-                    Err(e) => emit_warn_log_message(
-                        ErrorCode::InvalidSkill,
-                        format!("Skipping skill: {e}"),
-                    ),
-                }
-            }
-        }
+/// Skills under a single one of a project's `skill-paths`.
+fn discover_under(
+    project: &SkillSourceProject,
+    precedence: usize,
+    skill_path: &str,
+) -> Vec<DiscoveredSkill> {
+    let search_root = project.root.join(skill_path);
+    if !search_root.is_dir() {
+        return Vec::new();
     }
 
-    discovered
+    find_skill_dirs(&search_root)
+        .iter()
+        .filter_map(|skill_dir| {
+            build_skill(project, precedence, skill_path, skill_dir)
+                .inspect_err(|e| {
+                    emit_warn_log_message(ErrorCode::InvalidSkill, format!("Skipping skill: {e}"))
+                })
+                .ok()
+        })
+        .collect()
 }
 
 /// Directories under `search_root` that directly contain a `SKILL.md`.

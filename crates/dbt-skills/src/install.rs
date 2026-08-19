@@ -89,44 +89,64 @@ fn install_one(destination: &Path, selection: &SelectedSkill) -> FsResult<Instal
     let source_hash = hash_skill_dir(&skill.dir)?;
 
     if target.exists() {
-        let Some(existing) = read_provenance(&target) else {
-            emit_warn_log_message(
-                ErrorCode::SkillDestinationOccupied,
-                format!(
-                    "Not installing skill '{}' into {}: a skill dbt does not manage is already there.",
-                    skill.name,
-                    target.display()
-                ),
-            );
-            return Ok(InstallOutcome::SkippedNotOurs);
-        };
-
-        let current_hash = hash_skill_dir(&target)?;
-        if current_hash != existing.content_hash {
-            emit_warn_log_message(
-                ErrorCode::SkillModifiedByUser,
-                format!(
-                    "Leaving skill '{}' in {} alone: it has been edited since dbt installed it.",
-                    skill.name,
-                    target.display()
-                ),
-            );
-            return Ok(InstallOutcome::SkippedUserModified);
+        match classify_existing(&target, selection, &source_hash)? {
+            // Leave it alone: not ours, or ours but edited since.
+            Some(outcome) => return Ok(outcome),
+            // Ours and stale — replace it.
+            None => {
+                stdfs::remove_dir_all(&target)?;
+                write_skill(selection, &target, &source_hash)?;
+                return Ok(InstallOutcome::Updated);
+            }
         }
-
-        if existing.content_hash == source_hash && existing.shadowed == selection.shadowed {
-            return Ok(InstallOutcome::Unchanged);
-        }
-
-        stdfs::remove_dir_all(&target)?;
-        copy_skill(&skill.dir, &target)?;
-        write_provenance(&target, &build_provenance(selection, &source_hash))?;
-        return Ok(InstallOutcome::Updated);
     }
 
-    copy_skill(&skill.dir, &target)?;
-    write_provenance(&target, &build_provenance(selection, &source_hash))?;
+    write_skill(selection, &target, &source_hash)?;
     Ok(InstallOutcome::Installed)
+}
+
+/// Decide what to do about a directory already sitting at the target path.
+///
+/// `Some(outcome)` means leave it as it is; `None` means it is dbt's own and
+/// out of date, so the caller should replace it.
+fn classify_existing(
+    target: &Path,
+    selection: &SelectedSkill,
+    source_hash: &str,
+) -> FsResult<Option<InstallOutcome>> {
+    let name = &selection.skill.name;
+
+    let Some(existing) = read_provenance(target) else {
+        emit_warn_log_message(
+            ErrorCode::SkillDestinationOccupied,
+            format!(
+                "Not installing skill '{name}' into {}: a skill dbt does not manage is already there.",
+                target.display()
+            ),
+        );
+        return Ok(Some(InstallOutcome::SkippedNotOurs));
+    };
+
+    if hash_skill_dir(target)? != existing.content_hash {
+        emit_warn_log_message(
+            ErrorCode::SkillModifiedByUser,
+            format!(
+                "Leaving skill '{name}' in {} alone: it has been edited since dbt installed it.",
+                target.display()
+            ),
+        );
+        return Ok(Some(InstallOutcome::SkippedUserModified));
+    }
+
+    let up_to_date =
+        existing.content_hash == source_hash && existing.shadowed == selection.shadowed;
+    Ok(up_to_date.then_some(InstallOutcome::Unchanged))
+}
+
+/// Copy a skill into `target` and record where it came from.
+fn write_skill(selection: &SelectedSkill, target: &Path, source_hash: &str) -> FsResult<()> {
+    copy_skill(&selection.skill.dir, target)?;
+    write_provenance(target, &build_provenance(selection, source_hash))
 }
 
 /// Remove dbt-installed skills in `destination` that are no longer wanted.
@@ -223,31 +243,37 @@ fn build_provenance(selection: &SelectedSkill, content_hash: &str) -> Provenance
 fn copy_skill(source: &Path, target: &Path) -> FsResult<()> {
     stdfs::create_dir_all(target)?;
 
-    for entry in WalkDir::new(source)
+    let entries = WalkDir::new(source)
         .follow_links(false)
         .into_iter()
         .filter_map(Result::ok)
-    {
+        .filter(|entry| entry.file_name() != PROVENANCE_FILE);
+
+    for entry in entries {
         let relative = stdfs::diff_paths(entry.path(), source)?;
         if relative.as_os_str().is_empty() {
             continue;
         }
-        if entry.file_name() == PROVENANCE_FILE {
-            continue;
-        }
-
-        let destination = target.join(&relative);
-        if entry.file_type().is_dir() {
-            stdfs::create_dir_all(&destination)?;
-        } else if entry.file_type().is_file() {
-            if let Some(parent) = destination.parent() {
-                stdfs::create_dir_all(parent)?;
-            }
-            stdfs::copy(entry.path(), &destination)?;
-        }
+        copy_entry(entry.path(), &target.join(&relative), entry.file_type())?;
     }
 
     Ok(())
+}
+
+/// Recreate one walked entry at `destination`. Anything that is neither a file
+/// nor a directory (a symlink inside the source tree, say) is skipped.
+fn copy_entry(source: &Path, destination: &Path, file_type: std::fs::FileType) -> FsResult<()> {
+    if file_type.is_dir() {
+        return stdfs::create_dir_all(destination);
+    }
+    if !file_type.is_file() {
+        return Ok(());
+    }
+
+    if let Some(parent) = destination.parent() {
+        stdfs::create_dir_all(parent)?;
+    }
+    stdfs::copy(source, destination).map(|_| ())
 }
 
 /// Compare two paths by their canonical form, falling back to a literal

@@ -253,39 +253,25 @@ impl DbtProject {
         format!("{:x}", md5::compute(self.name.as_bytes()))
     }
 
+    /// Every configured resource path, in a fixed order.
+    ///
+    /// Unset path configs contribute nothing.
     pub fn all_source_paths(&self) -> Vec<String> {
-        /*
-        Returns a vector of strings combining all path configurations:
-        model_paths, function_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, and test_paths.
-        */
-        let mut paths = Vec::new();
-
-        if let Some(ref model_paths) = self.model_paths {
-            paths.extend(model_paths.clone());
-        }
-        if let Some(ref function_paths) = self.function_paths {
-            paths.extend(function_paths.clone());
-        }
-        if let Some(ref seed_paths) = self.seed_paths {
-            paths.extend(seed_paths.clone());
-        }
-        if let Some(ref snapshot_paths) = self.snapshot_paths {
-            paths.extend(snapshot_paths.clone());
-        }
-        if let Some(ref analysis_paths) = self.analysis_paths {
-            paths.extend(analysis_paths.clone());
-        }
-        if let Some(ref macro_paths) = self.macro_paths {
-            paths.extend(macro_paths.clone());
-        }
-        if let Some(ref test_paths) = self.test_paths {
-            paths.extend(test_paths.clone());
-        }
-        if let Some(ref skill_paths) = self.skill_paths {
-            paths.extend(skill_paths.clone());
-        }
-
-        paths
+        [
+            &self.model_paths,
+            &self.function_paths,
+            &self.seed_paths,
+            &self.snapshot_paths,
+            &self.analysis_paths,
+            &self.macro_paths,
+            &self.test_paths,
+            &self.skill_paths,
+        ]
+        .into_iter()
+        .flatten()
+        .flatten()
+        .cloned()
+        .collect()
     }
 
     /// `skill-paths`, falling back to the default of `skills/`.
