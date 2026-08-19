@@ -2206,6 +2206,16 @@
             "string",
             "null"
           ]
+        },
+        "zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -3965,6 +3975,28 @@
             }
           ]
         },
+        "post-hook": {
+          "default": [],
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre-hook": {
+          "default": [],
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
@@ -4434,6 +4466,16 @@
           "anyOf": [
             {
               "$ref": "#/definitions/Volatility"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
             },
             {
               "type": "null"
@@ -6995,6 +7037,16 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -9161,6 +9213,16 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -10591,6 +10653,16 @@
               "pattern": "^\\{.*\\}$"
             }
           ]
+        },
+        "zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -11857,6 +11929,16 @@
             {
               "type": "string",
               "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
             }
           ]
         }
@@ -13360,6 +13442,16 @@
             {
               "type": "string",
               "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
             }
           ]
         }

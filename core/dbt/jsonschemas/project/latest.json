@@ -2714,6 +2714,26 @@
             }
           ]
         },
+        "+post-hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+pre-hook": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+quoting": {
           "anyOf": [
             {
@@ -4471,6 +4491,16 @@
             {
               "type": "string",
               "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+zorder": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
             }
           ]
         }
