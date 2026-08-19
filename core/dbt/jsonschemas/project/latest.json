@@ -4381,6 +4381,21 @@
             }
           ]
         },
+        "+unique_tmp_table_suffix": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+unlogged": {
           "anyOf": [
             {
@@ -6422,6 +6437,21 @@
             }
           ]
         },
+        "+unique_tmp_table_suffix": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "+unlogged": {
           "anyOf": [
             {
@@ -7757,6 +7787,21 @@
           ]
         },
         "+transient": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+unique_tmp_table_suffix": {
           "anyOf": [
             {
               "default": null,
