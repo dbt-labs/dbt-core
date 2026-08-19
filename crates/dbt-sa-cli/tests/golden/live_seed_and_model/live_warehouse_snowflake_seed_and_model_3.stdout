@@ -1,0 +1,16 @@
+dbt-fusion 
+   Loading profiles.yml
+   Parsing models/m1.sql
+   Parsing models/m2.sql
+ Rendering models/m2.sql
+Previewing model (model.live_seed_and_model.m2)
+Query show_model_live_seed_and_model_m2
+┌─────────┐
+│ COUNTER │
+╞═════════╡
+│ 108346  │
+└─────────┘
+1 rows.
+ Succeeded [duration] model fusion_tests_schema__replaced.m2 (view)
+==================== Execution Summary =====================
+Finished 'show' successfully for target 'snowflake' [duration]

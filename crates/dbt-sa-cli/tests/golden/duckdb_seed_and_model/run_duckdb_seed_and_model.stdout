@@ -1,0 +1,10 @@
+dbt-fusion 
+   Loading profiles.yml
+   Parsing models/m1.sql
+   Parsing models/m2.sql
+   Running ../scratch/target/run/duckdb_seed_and_model/seeds/counter_table.sql
+ Succeeded [duration] seed  main.counter_table (table)
+==================== Execution Summary =====================
+Finished 'seed' successfully for target 'dev' [duration]
+Processed: 1 seed
+Summary: 1 total | 1 success
