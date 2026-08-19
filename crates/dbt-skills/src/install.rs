@@ -532,4 +532,34 @@ mod tests {
         assert!(!root.join(DEST).join("alpha").exists());
         assert!(mine.join(SKILL_FILE).is_file());
     }
+
+    #[test]
+    #[cfg(unix)]
+    fn two_destinations_that_symlink_to_one_directory_install_once() {
+        // dbt-core's own repo symlinks .claude/skills -> ../.agents/skills, so a
+        // user with `ai_provider: [wizard, claude]` has two destination paths
+        // naming one directory. The second pass must recognize dbt's own
+        // just-written copy rather than duplicating or clobbering it.
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let selected = vec![selection(make_source(root, "alpha", "body"))];
+
+        fs::create_dir_all(root.join(DEST)).unwrap();
+        fs::create_dir_all(root.join(".claude")).unwrap();
+        std::os::unix::fs::symlink("../.agents/skills", root.join(".claude/skills")).unwrap();
+
+        let destinations = [PathBuf::from(DEST), PathBuf::from(".claude/skills")];
+        let reports = install_skills(root, &destinations, &selected).unwrap();
+
+        assert_eq!(
+            outcomes(&reports),
+            vec![InstallOutcome::Installed, InstallOutcome::Unchanged]
+        );
+        let installed: Vec<_> = fs::read_dir(root.join(DEST))
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(installed, vec!["alpha".to_string()]);
+    }
 }
