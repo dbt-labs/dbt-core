@@ -1531,13 +1531,52 @@ async fn prepare_inline_sql(
 mod tests {
     use super::*;
     use dbt_schemas::schemas::profiles::DbConfig;
+    use dbt_schemas::schemas::project::{ProjectModelConfig, WarehouseSpecificNodeConfig};
     use dbt_schemas::state::ProfileAdapter;
     use dbt_schemas::state::ResourcePathKind;
+    use serde::de::DeserializeOwned;
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
     use std::time::SystemTime;
+
+    fn render_typed_config<T: DeserializeOwned>(yaml: &str) -> T {
+        let raw = dbt_yaml::from_str(yaml).expect("valid config yaml");
+        let env = initialize_load_profile_jinja_environment();
+        let ctx = BTreeMap::from([(
+            "target".to_string(),
+            minijinja::Value::from_serialize(BTreeMap::from([(
+                "database".to_string(),
+                "main".to_string(),
+            )])),
+        )]);
+        into_typed_with_jinja(raw, true, &env, &ctx, &[], None, true)
+            .expect("config should render and deserialize")
+    }
+
+    #[test]
+    fn view_update_via_alter_renders_jinja_booleans_in_project_config() {
+        for (expression, expected) in [
+            ("'psbx' not in target.database", true),
+            ("'main' not in target.database", false),
+        ] {
+            let config: ProjectModelConfig = render_typed_config(&format!(
+                "+view_update_via_alter: \"{{{{ {expression} }}}}\"\n"
+            ));
+            assert_eq!(config.view_update_via_alter, Some(expected));
+        }
+    }
+
+    #[test]
+    fn view_update_via_alter_renders_jinja_booleans_in_model_config() {
+        for (expression, expected) in [("true", true), ("false", false)] {
+            let config: WarehouseSpecificNodeConfig = render_typed_config(&format!(
+                "view_update_via_alter: \"{{{{ {expression} }}}}\"\n"
+            ));
+            assert_eq!(config.view_update_via_alter, Some(expected));
+        }
+    }
 
     #[test]
     fn resolve_threads_sets_profile_threads_from_target() {
