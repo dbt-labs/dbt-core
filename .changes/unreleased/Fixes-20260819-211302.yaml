@@ -1,0 +1,7 @@
+kind: Fixes
+body: Respect full refresh when view_update_via_alter is enabled for Databricks views.
+time: 2026-08-19T21:13:02.759619+05:30
+custom:
+    author: sd-db
+    issue: "14359"
+    project: dbt-core
