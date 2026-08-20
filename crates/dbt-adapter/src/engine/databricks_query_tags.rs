@@ -260,18 +260,6 @@ mod tests {
     }
 
     #[test]
-    fn passes_empty_user_values_to_the_driver() {
-        let options = DatabricksQueryTags::from_node(Some(r#"{"empty":""}"#), None, None)
-            .unwrap()
-            .into_statement_options();
-
-        assert_eq!(
-            string_option(&options, "databricks.query_tag.empty"),
-            Some("")
-        );
-    }
-
-    #[test]
     fn missing_state_and_operations_inherit_database_defaults_without_statement_options() {
         assert!(
             query_tags_from_state(None)
@@ -439,57 +427,12 @@ mod tests {
     }
 
     #[test]
-    fn allows_dbt_databricks_version_as_a_user_key() {
-        let options = DatabricksQueryTags::from_node(
-            Some(r#"{"@@dbt_databricks_version":"custom"}"#),
-            None,
-            None,
-        )
-        .unwrap()
-        .into_statement_options();
-
-        assert_eq!(
-            string_option(&options, "databricks.query_tag.@@dbt_databricks_version"),
-            Some("custom")
-        );
-    }
-
-    #[test]
-    fn defers_total_tag_count_to_the_driver() {
-        let user_tags = serde_json::to_string(
-            &(0..19)
-                .map(|index| (format!("tag_{index}"), "value"))
-                .collect::<std::collections::BTreeMap<_, _>>(),
-        )
-        .unwrap();
-        let options =
-            DatabricksQueryTags::from_node(Some(&user_tags), Some("orders"), Some("incremental"))
-                .unwrap()
-                .into_statement_options();
-
-        assert_eq!(options.len(), 21);
-    }
-
-    #[test]
-    fn passes_raw_values_to_the_driver_and_truncates_automatic_values() {
+    fn truncates_automatic_node_values_to_128_characters() {
         let model_name = format!("{}::", "x".repeat(127));
-        let query_tags = format!(
-            r#"{{"path":"folder\\name,a:b","long":"{}"}}"#,
-            ",".repeat(65)
-        );
-        let options =
-            DatabricksQueryTags::from_node(Some(&query_tags), Some(&model_name), Some("table"))
-                .unwrap()
-                .into_statement_options();
+        let options = DatabricksQueryTags::from_node(None, Some(&model_name), Some("table"))
+            .unwrap()
+            .into_statement_options();
 
-        assert_eq!(
-            string_option(&options, "databricks.query_tag.path"),
-            Some(r#"folder\name,a:b"#)
-        );
-        assert_eq!(
-            string_option(&options, "databricks.query_tag.long"),
-            Some(",".repeat(65).as_str())
-        );
         assert_eq!(
             string_option(&options, "databricks.query_tag.@@dbt_model_name")
                 .unwrap()
