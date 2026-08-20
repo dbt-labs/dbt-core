@@ -1,0 +1,9 @@
+kind: Dependencies
+body: Require `sqlparse>=0.6.0,<0.7.0`, raising the floor from `0.5.5` and the ceiling
+  from `<0.6.0`. `sqlparse` 0.6.0 is the fixed release for CVE-2026-54284, CVE-2026-59893,
+  CVE-2026-59894 and CVE-2026-71491 (parser denial-of-service); no `0.5.x` release carries
+  those fixes, so the floor is raised rather than only widening the ceiling.
+time: 2026-08-19T11:45:00.000000+05:30
+custom:
+    Author: ulixius9
+    Issue: "15988"
