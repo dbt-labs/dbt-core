@@ -38,6 +38,13 @@ pub struct UnitTestOverrides {
     // rendering would round-trip a Jinja expression's return value through
     // `YmlValue` and lose non-scalar values (e.g. a datetime) before the
     // real render ever runs.
+    #[serde(skip_serializing_if = "verbatim_option_is_none")]
     pub macros: Verbatim<Option<BTreeMap<String, YmlValue>>>,
     pub vars: Option<BTreeMap<String, YmlValue>>,
+}
+
+// `skip_serializing_none` only rewrites fields whose declared outer type is
+// `Option`, so it cannot elide `macros` through the `Verbatim` wrapper.
+fn verbatim_option_is_none<T>(value: &Verbatim<Option<T>>) -> bool {
+    value.is_none()
 }
