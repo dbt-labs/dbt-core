@@ -2478,7 +2478,7 @@ impl Adapter {
     ///
     /// Accepts capability names as strings (e.g. 'replace_on', 'insert_by_name').
     ///
-    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L298-L315
     ///
     /// DEPRECATED: in favor of [`AdapterImpl::has_feature`]
     /// Use `has_feature(capability_name)` instead.
@@ -2488,25 +2488,69 @@ impl Adapter {
         state: &State,
         args: &[Value],
     ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("has_dbr_capability", &["capability_name"], args);
+        let capability_name = iter.next_arg::<&str>()?;
+        iter.finish()?;
+
         match &self.inner {
             Typed { adapter, .. } => {
-                let iter = ArgsIter::new("has_dbr_capability", &["capability_name"], args);
-                let capability_name = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
                 match adapter.adapter_type() {
                     AdapterType::Databricks => {
-                        let has_feature = adapter.has_feature(state, capability_name, self.cancellation_token.clone())?;
+                        let has_feature = adapter.has_feature(
+                            state,
+                            capability_name,
+                            self.cancellation_token.clone(),
+                        )?;
                         Ok(Value::from(has_feature.unwrap_or(false)))
                     }
-                    _ => Err(AdapterError::new(
+                    AdapterType::Snowflake
+                    | AdapterType::Bigquery
+                    | AdapterType::Redshift
+                    | AdapterType::Spark
+                    | AdapterType::DuckDB
+                    | AdapterType::Postgres
+                    | AdapterType::Salesforce
+                    | AdapterType::Fabric
+                    | AdapterType::ClickHouse
+                    | AdapterType::Exasol
+                    | AdapterType::Athena
+                    | AdapterType::Starburst
+                    | AdapterType::Trino
+                    | AdapterType::Datafusion
+                    | AdapterType::Dremio
+                    | AdapterType::Oracle
+                    | AdapterType::Alt => Err(AdapterError::new(
                         AdapterErrorKind::NotSupported,
                         format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
                     )
                     .into()),
                 }
             }
-            Parse(_) => Ok(Value::from(false)),
+            Parse(parse_state) => match parse_state.adapter_type {
+                AdapterType::Databricks => Ok(Value::from(
+                    AdapterImpl::parse_has_dbr_capability(
+                        parse_state.engine.get_config(),
+                        capability_name,
+                    ),
+                )),
+                AdapterType::Snowflake
+                | AdapterType::Bigquery
+                | AdapterType::Redshift
+                | AdapterType::Spark
+                | AdapterType::DuckDB
+                | AdapterType::Postgres
+                | AdapterType::Salesforce
+                | AdapterType::Fabric
+                | AdapterType::ClickHouse
+                | AdapterType::Exasol
+                | AdapterType::Athena
+                | AdapterType::Starburst
+                | AdapterType::Trino
+                | AdapterType::Datafusion
+                | AdapterType::Dremio
+                | AdapterType::Oracle
+                | AdapterType::Alt => Ok(Value::from(false)),
+            },
         }
     }
 

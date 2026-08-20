@@ -37,6 +37,23 @@ enum SQLServerAuthIR<'a> {
         client_secret: &'a str,
     },
 
+    /// Pre-minted Entra bearer token supplied directly in the profile.
+    ///
+    /// Profile: `authentication: ActiveDirectoryAccessToken`, `access_token`.
+    ///
+    /// URI: `fedauth=ActiveDirectoryServicePrincipalAccessToken`, `password={access_token}`.
+    ///
+    /// Note: the profile name and the `fedauth` value differ on purpose; the driver spells
+    /// this workflow `ActiveDirectoryServicePrincipalAccessToken` and reads the token from
+    /// `password`.
+    ///
+    /// No credential exchange happens: the token is forwarded to the TDS FEDAUTH handshake
+    /// verbatim, so an expired token fails at connection time and is never refreshed.
+    ActiveDirectoryAccessToken {
+        /// Entra bearer token (`access_token` in profile, `password` in URI).
+        access_token: &'a str,
+    },
+
     /// user/password auth via the resource-owner password credentials flow.
     ///
     /// Profile: `authentication: ActiveDirectoryPassword`, `UID`, `PWD`, and `client_id`.
@@ -91,6 +108,16 @@ impl<'a> SQLServerAuthIR<'a> {
                         .finish();
                 }
             }
+            Self::ActiveDirectoryAccessToken { access_token } => {
+                if let Some(uri) = builder.uri.as_mut() {
+                    // go-mssqldb reads the bearer token from `password` and requires no
+                    // `user id` for this workflow.
+                    uri.query_pairs_mut()
+                        .append_pair("fedauth", "ActiveDirectoryServicePrincipalAccessToken")
+                        .append_pair("password", access_token)
+                        .finish();
+                }
+            }
             Self::ActiveDirectoryPassword {
                 client_id,
                 user,
@@ -125,12 +152,30 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SQLServerAuthIR<'a>, Auth
         authentication = "ActiveDirectoryServicePrincipal";
     }
 
+    // dbt-fabric matches this method case-insensitively:
+    // `credentials.authentication.lower() == "activedirectoryaccesstoken"`
+    if authentication.eq_ignore_ascii_case("ActiveDirectoryAccessToken") {
+        authentication = "ActiveDirectoryAccessToken";
+    }
+
     match authentication {
         "ActiveDirectoryServicePrincipal" => Ok(SQLServerAuthIR::ActiveDirectoryServicePrincipal {
             tenant_id: config.get_str("tenant_id"),
             client_id: config.require_str("client_id")?,
             client_secret: config.require_str("client_secret")?,
         }),
+        "ActiveDirectoryAccessToken" => {
+            let access_token = config.require_str("access_token")?;
+            // The driver rejects an empty token with a message that names the `password`
+            // URI parameter, which does not exist in the user's profile. Fail earlier with
+            // the profile field name instead.
+            if access_token.is_empty() {
+                return Err(AuthError::config(
+                    "`access_token` must not be empty when using ActiveDirectoryAccessToken authentication",
+                ));
+            }
+            Ok(SQLServerAuthIR::ActiveDirectoryAccessToken { access_token })
+        }
         "ActiveDirectoryPassword" => Ok(SQLServerAuthIR::ActiveDirectoryPassword {
             user: config.require_str("UID")?,
             password: config.require_str("PWD")?,
@@ -141,7 +186,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SQLServerAuthIR<'a>, Auth
             unimplemented!("authentication method {} not implemented", authentication)
         }
         _ => Err(AuthError::config(format!(
-            "Invalid authentication method: {authentication} must be one of: [ActiveDirectoryServicePrincipal, ActiveDirectoryPassword, environment]"
+            "Invalid authentication method: {authentication} must be one of: [ActiveDirectoryServicePrincipal, ActiveDirectoryAccessToken, ActiveDirectoryPassword, environment]"
         ))),
     }
 }
@@ -333,5 +378,100 @@ mod tests {
         let uri = uri_value(&outcome.builder);
 
         assert_contains!(&uri, "fedauth=ActiveDirectoryServicePrincipal");
+    }
+
+    const FAKE_ACCESS_TOKEN: &str = "eyJ0eXAiOiJKV1QifQ.eyJhdWQiOiJkYiJ9.c2lnbmF0dXJl";
+
+    #[test]
+    fn test_active_directory_access_token() {
+        let config = make_config([
+            ("authentication", "ActiveDirectoryAccessToken"),
+            ("host", "myserver.database.windows.net"),
+            ("database", "mydb"),
+            ("access_token", FAKE_ACCESS_TOKEN),
+        ]);
+
+        let outcome = SQLServerAuth.configure(&config).expect("configure");
+        let uri = uri_value(&outcome.builder);
+
+        assert_contains!(&uri, "sqlserver://myserver.database.windows.net:1433");
+        assert_contains!(&uri, "database=mydb");
+        // dbt-fabric spells the profile value `ActiveDirectoryAccessToken`, but the driver
+        // only understands the go-mssqldb spelling.
+        assert_contains!(&uri, "fedauth=ActiveDirectoryServicePrincipalAccessToken");
+        assert_contains!(&uri, &format!("password={FAKE_ACCESS_TOKEN}"));
+        // This workflow takes no identity parameters.
+        assert!(!uri.contains("user+id"), "unexpected `user id` in {uri}");
+        assert!(
+            !uri.contains("applicationclientid"),
+            "unexpected `applicationclientid` in {uri}"
+        );
+    }
+
+    #[test]
+    fn test_access_token_is_case_insensitive() {
+        // dbt-fabric lowercases `authentication` before comparing.
+        let config = make_config([
+            ("authentication", "activedirectoryaccesstoken"),
+            ("host", "myserver.database.windows.net"),
+            ("database", "mydb"),
+            ("access_token", FAKE_ACCESS_TOKEN),
+        ]);
+
+        let outcome = SQLServerAuth.configure(&config).expect("configure");
+        let uri = uri_value(&outcome.builder);
+
+        assert_contains!(&uri, "fedauth=ActiveDirectoryServicePrincipalAccessToken");
+    }
+
+    #[test]
+    fn test_access_token_missing() {
+        let config = make_config([
+            ("authentication", "ActiveDirectoryAccessToken"),
+            ("host", "myserver.database.windows.net"),
+            ("database", "mydb"),
+        ]);
+
+        let err = SQLServerAuth
+            .configure(&config)
+            .expect_err("missing access_token must fail");
+
+        match err {
+            AuthError::YAML(e) => {
+                assert_contains!(e.to_string(), "missing field `access_token`")
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_access_token_empty() {
+        let config = make_config([
+            ("authentication", "ActiveDirectoryAccessToken"),
+            ("host", "myserver.database.windows.net"),
+            ("database", "mydb"),
+            ("access_token", ""),
+        ]);
+
+        let err = SQLServerAuth
+            .configure(&config)
+            .expect_err("empty access_token must fail");
+
+        assert_contains!(err.msg(), "`access_token` must not be empty");
+    }
+
+    #[test]
+    fn test_invalid_authentication_lists_access_token() {
+        let config = make_config([
+            ("authentication", "NotAnAuthMethod"),
+            ("host", "myserver.database.windows.net"),
+            ("database", "mydb"),
+        ]);
+
+        let err = SQLServerAuth
+            .configure(&config)
+            .expect_err("invalid authentication must fail");
+
+        assert_contains!(err.msg(), "ActiveDirectoryAccessToken");
     }
 }

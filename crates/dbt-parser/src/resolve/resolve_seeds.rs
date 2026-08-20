@@ -380,7 +380,19 @@ pub async fn resolve_seeds(
         };
 
         let components = RelationComponents {
-            database: properties_config.database.clone(),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && properties_config
+                    .__warehouse_specific_config__
+                    .catalog
+                    .is_some()
+            {
+                properties_config
+                    .__warehouse_specific_config__
+                    .catalog
+                    .clone()
+            } else {
+                properties_config.database.clone()
+            },
             schema: properties_config.schema.clone(),
             alias: properties_config.alias.clone(),
             store_failures: None,

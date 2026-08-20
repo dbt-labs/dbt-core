@@ -635,7 +635,7 @@ impl TryFrom<minijinja::Value> for NodeVersion {
     }
 }
 
-#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, DbtSchema)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum StringOrMap {
     StringValue(String),
@@ -697,12 +697,15 @@ where
     }
 }
 
-/// External-table style `partitions` config — list-of-strings (e.g. `['ds=2023-01-01']`)
-/// or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`, as used by `dbt-external-tables`).
+/// External-table style `partitions` config — a string or list-of-strings (e.g.
+/// `['ds=2023-01-01']`), or a map or list-of-maps (e.g. `[{name: foo, data_type: varchar}]`,
+/// as used by `dbt-external-tables`).
 #[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, DbtSchema)]
 #[serde(untagged)]
 pub enum PartitionsConfig {
+    String(String),
     Strings(Vec<String>),
+    Map(HashMap<String, YmlValue>),
     Maps(Vec<HashMap<String, YmlValue>>),
 }
 
@@ -1344,8 +1347,46 @@ mod tests {
                     vec!["ds=2023-01-01".to_string(), "ds=2023-01-02".to_string()]
                 );
             }
-            PartitionsConfig::Maps(_) => panic!("expected Strings variant"),
+            PartitionsConfig::Maps(_) | PartitionsConfig::String(_) | PartitionsConfig::Map(_) => {
+                panic!("expected Strings variant")
+            }
         }
+    }
+
+    #[test]
+    fn test_partitions_config_accepts_string() {
+        let yaml = "ds=2023-01-01\n";
+        let parsed: PartitionsConfig = dbt_yaml::from_str(yaml).unwrap();
+        assert_eq!(
+            parsed,
+            PartitionsConfig::String("ds=2023-01-01".to_string())
+        );
+        assert_eq!(
+            serde_json::to_string(&parsed).unwrap(),
+            r#""ds=2023-01-01""#
+        );
+    }
+
+    #[test]
+    fn test_partitions_config_accepts_map() {
+        let yaml = "name: extracted_at_ts\ndata_type: timestamptz\n";
+        let parsed: PartitionsConfig = dbt_yaml::from_str(yaml).unwrap();
+        match &parsed {
+            PartitionsConfig::Map(map) => {
+                assert_eq!(
+                    map.get("name").and_then(|value| value.as_str()),
+                    Some("extracted_at_ts")
+                );
+                assert_eq!(
+                    map.get("data_type").and_then(|value| value.as_str()),
+                    Some("timestamptz")
+                );
+            }
+            _ => panic!("expected Map variant"),
+        }
+        let json = serde_json::to_string(&parsed).unwrap();
+        assert!(json.contains(r#""name":"extracted_at_ts""#));
+        assert!(json.contains(r#""data_type":"timestamptz""#));
     }
 
     #[test]
@@ -1365,7 +1406,9 @@ mod tests {
                     Some("timestamptz"),
                 );
             }
-            PartitionsConfig::Strings(_) => panic!("expected Maps variant"),
+            PartitionsConfig::Strings(_)
+            | PartitionsConfig::String(_)
+            | PartitionsConfig::Map(_) => panic!("expected Maps variant"),
         }
     }
 

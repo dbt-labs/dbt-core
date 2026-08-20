@@ -160,6 +160,11 @@ impl FeatureStackBuilder {
             factory: Arc::new(dbt_jinja_utils::DefaultJinjaFactory),
         };
 
+        let alt = crate::alt::AltFeature {
+            propagation_checker: None,
+            catalog_attach_checker: None,
+        };
+
         let stack = FeatureStack {
             instrumentation,
             cli,
@@ -173,6 +178,7 @@ impl FeatureStackBuilder {
             resolver,
             loader,
             jinja,
+            alt,
             login_hooks,
             version_check_enabled,
         };

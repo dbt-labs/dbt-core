@@ -122,6 +122,7 @@ fn resolve_and_set_threads(
         iarg.num_threads
     };
 
+    dbt_profile.threads = final_threads;
     dbt_profile
         .db_config
         .set_threads(Some(StringOrInteger::Integer(
@@ -1475,6 +1476,34 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::time::SystemTime;
+
+    #[test]
+    fn resolve_threads_sets_profile_threads_from_target() {
+        let db_config = dbt_yaml::from_str(
+            "type: duckdb\n\
+             path: db.duckdb\n\
+             threads: 4",
+        )
+        .expect("valid DuckDB profile");
+        let mut dbt_profile = DbtProfile {
+            profile: "test".to_string(),
+            target: "duckdb".to_string(),
+            defer_to_target: None,
+            allow_clones: true,
+            db_config,
+            alt_target_db_config: None,
+            schema: "main".to_string(),
+            database: "db".to_string(),
+            relative_profile_path: PathBuf::from("profiles.yml"),
+            threads: None,
+        };
+
+        let resolved = resolve_and_set_threads(&mut dbt_profile, &InvocationArgs::default())
+            .expect("profile threads should resolve");
+
+        assert_eq!(resolved, Some(4));
+        assert_eq!(dbt_profile.threads, Some(4));
+    }
 
     #[test]
     fn test_find_files_by_kind_and_extension_excludes_generic_test_paths() {

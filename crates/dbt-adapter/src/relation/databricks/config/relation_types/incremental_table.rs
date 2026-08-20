@@ -235,13 +235,13 @@ mod tests {
     </persist>
 </column_comments>
 <column_tags>
-    <tags>
+    <set_column_tags>
         <b_column>
             <col_tag>
                 new
             </col_tag>
         </b_column>
-    </tags>
+    </set_column_tags>
 </column_tags>
 <comment>
     <comment>

@@ -86,6 +86,7 @@ pub async fn resolve_analyses(
             config_resolver,
             package_quoting,
             uses_snapshot_fqn: false,
+            defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -133,6 +134,7 @@ pub async fn resolve_analyses(
         macro_spans,
         properties: maybe_properties,
         status,
+        render_error_deferred,
         patch_path,
         ..
     } in analysis_sql_resources_map.into_iter()
@@ -185,7 +187,7 @@ pub async fn resolve_analyses(
             analysis_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
 
-        let is_enabled = matches!(status, ModelStatus::Enabled);
+        let is_enabled = status != ModelStatus::Disabled;
         let macro_depends_on = all_depends_on
             .get(&format!("{package_name}.{analysis_name}"))
             .cloned()
@@ -294,12 +296,14 @@ pub async fn resolve_analyses(
             adapter_type,
         )?;
 
-        if status == ModelStatus::Enabled {
+        if status == ModelStatus::Enabled || render_error_deferred {
             analyses.insert(unique_id.to_owned(), Arc::new(dbt_analysis));
-            rendering_results.insert(
-                unique_id.to_owned(),
-                (rendered_sql.clone(), macro_spans.clone()),
-            );
+            if status == ModelStatus::Enabled {
+                rendering_results.insert(
+                    unique_id.to_owned(),
+                    (rendered_sql.clone(), macro_spans.clone()),
+                );
+            }
         }
     }
 

@@ -13,8 +13,9 @@ use strum::Display;
 type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::{
-    common::DimensionValidityParams, semantic_layer::semantic_manifest::SemanticLayerElementConfig,
-    serde::StringOrArrayOfStrings,
+    common::DimensionValidityParams,
+    semantic_layer::semantic_manifest::SemanticLayerElementConfig,
+    serde::{StringOrArrayOfStrings, StringOrMap},
 };
 
 use super::{common::Constraint, data_tests::DataTests};
@@ -47,7 +48,7 @@ pub struct DbtColumn {
     pub meta: IndexMap<String, YmlValue>,
     #[serde(default)]
     pub tags: Vec<String>,
-    pub policy_tags: Option<Vec<String>>,
+    pub policy_tags: Option<Vec<StringOrMap>>,
     pub classifiers: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -120,7 +121,7 @@ pub struct ColumnProperties {
     pub tests: Option<Vec<DataTests>>,
     pub data_tests: Option<Vec<DataTests>>,
     pub granularity: Option<Granularity>,
-    pub policy_tags: Option<Vec<String>>,
+    pub policy_tags: Option<Vec<StringOrMap>>,
     pub classifiers: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -147,7 +148,7 @@ pub struct VersionColumnProperties {
     pub tests: Option<Vec<DataTests>>,
     pub data_tests: Option<Vec<DataTests>>,
     pub granularity: Option<Granularity>,
-    pub policy_tags: Option<Vec<String>>,
+    pub policy_tags: Option<Vec<StringOrMap>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
@@ -186,7 +187,7 @@ pub struct ColumnConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
-    pub policy_tags: Option<Vec<String>>,
+    pub policy_tags: Option<Vec<StringOrMap>>,
 }
 
 /// Represents column inheritance rules for a model version
@@ -457,6 +458,39 @@ mod tests {
                 ColumnPropertiesDimensionType::time
             ))
         ));
+    }
+
+    /// Regression for fs#13281: mapping-valued `policy_tags` entries must deserialize, not be rejected.
+    #[test]
+    fn test_column_properties_policy_tags_accepts_mixed_string_and_map_entries() {
+        let yaml = "\
+name: ssn
+policy_tags:
+  - projects/my-project/locations/us/taxonomies/1/policyTags/2
+  - masking_policy: mask_ssn
+    using_columns: [ssn]
+";
+        let parsed: ColumnProperties = dbt_yaml::from_str(yaml).unwrap();
+        let tags = parsed.policy_tags.expect("policy_tags preserved");
+        assert_eq!(tags.len(), 2);
+        match &tags[0] {
+            StringOrMap::StringValue(s) => {
+                assert_eq!(
+                    s,
+                    "projects/my-project/locations/us/taxonomies/1/policyTags/2"
+                );
+            }
+            StringOrMap::MapValue(_) => panic!("expected StringValue for first entry"),
+        }
+        match &tags[1] {
+            StringOrMap::MapValue(m) => {
+                assert_eq!(
+                    m.get("masking_policy").and_then(|v| v.as_str()),
+                    Some("mask_ssn")
+                );
+            }
+            StringOrMap::StringValue(_) => panic!("expected MapValue for second entry"),
+        }
     }
 }
 

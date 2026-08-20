@@ -12,16 +12,26 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+run_script = { workspace = true }
+
 [dependencies]
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-yaml = { workspace = true }
+
+dialoguer = { workspace = true }
 libc = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 toml_edit = { workspace = true }
+
+[dev-dependencies]
+console = { workspace = true }
+tokio = { workspace = true }
 
 [lib]
 name = "dbt_dist"

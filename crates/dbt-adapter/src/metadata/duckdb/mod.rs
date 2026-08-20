@@ -14,7 +14,9 @@ use dbt_adbc::{Connection, MapReduce, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
+use dbt_schemas::schemas::dbt_catalogs_v2::{
+    CatalogSpecV2View, CatalogType, DbtCatalogsV2View, PhysicalFormatResolver,
+};
 use dbt_schemas::schemas::{
     common::ResolvedQuoting,
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
@@ -414,10 +416,10 @@ pub(crate) struct ExternalIcebergAttach {
 /// Single answer to "is this an Iceberg REST-style attachment?" so the ATTACH
 /// composer (`engine::duckdb_attach`) and the metadata routing below can never
 /// disagree about which catalogs need REST-attachment treatment.
-pub(crate) fn attaches_via_iceberg_rest(catalog_type: V2CatalogType) -> bool {
+pub(crate) fn attaches_via_iceberg_rest(catalog_type: CatalogType) -> bool {
     matches!(
         catalog_type,
-        V2CatalogType::IcebergRest | V2CatalogType::Horizon | V2CatalogType::Unity
+        CatalogType::IcebergRest | CatalogType::Horizon | CatalogType::Unity
     )
 }
 
@@ -502,11 +504,7 @@ impl CatalogsViewDuckDbExt for DbtCatalogsV2View<'_> {
             if !alias.eq_ignore_ascii_case(database) {
                 return None;
             }
-            Some(if catalog.catalog_type == V2CatalogType::DuckLake {
-                "ducklake"
-            } else {
-                catalog.table_format.as_str()
-            })
+            Some(catalog.physical_table_format().as_str())
         })
     }
 }

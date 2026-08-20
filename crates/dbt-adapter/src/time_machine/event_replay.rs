@@ -5,13 +5,16 @@
 //! act as ordering barriers that must match in sequence, but reads between two barriers
 //! (a "segment") can match in any order, so minor read reordering doesn't break replay.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 use flate2::read::GzDecoder;
 use parking_lot::RwLock;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 
@@ -24,6 +27,10 @@ use super::serde::values_match;
 use super::validation::{SqlSanitizer, TmpSuffixSanitizer, UuidSanitizer};
 use crate::AdapterType;
 use crate::sql::diff::compare_sql;
+
+/// Marker for temp-relation identifiers, which carry a non-deterministic suffix.
+static TMP_MARKER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)__dbt_tmp").expect("valid regex"));
 
 /// Extract the SQL string from args (first string in array, or the string itself).
 ///
@@ -150,6 +157,12 @@ pub(crate) fn adapter_args_match_for_type(
     actual: &serde_json::Value,
     adapter_type: AdapterType,
 ) -> bool {
+    // Temp-relation identifiers embed a non-deterministic suffix, so normalize both
+    // sides before any per-method comparison.
+    let recorded_norm = normalized_tmp_suffixes(recorded);
+    let actual_norm = normalized_tmp_suffixes(actual);
+    let (recorded, actual) = (recorded_norm.as_ref(), actual_norm.as_ref());
+
     match method {
         "get_relation" => match (
             GetRelationArgs::try_from(recorded),
@@ -175,19 +188,35 @@ pub(crate) fn adapter_args_match_for_type(
                 |(rec_sql, act_sql)| compare_sql(rec_sql, act_sql, adapter_type).is_ok(),
             ),
         "submit_python_job" => python_job_args_match(recorded, actual),
-        "expand_target_column_types" => values_match(
-            &normalize_tmp_suffixes(recorded),
-            &normalize_tmp_suffixes(actual),
-        ),
         _ => values_match(recorded, actual),
+    }
+}
+
+/// Normalize `__dbt_tmp<suffix>` in every string, borrowing when no marker is present.
+///
+/// The sanitizer is the identity without a marker, so the gate only avoids the clone.
+fn normalized_tmp_suffixes(value: &serde_json::Value) -> Cow<'_, serde_json::Value> {
+    if has_tmp_marker(value) {
+        Cow::Owned(normalize_tmp_suffixes(value))
+    } else {
+        Cow::Borrowed(value)
+    }
+}
+
+/// True if any string in the JSON tree mentions `__dbt_tmp` (case-insensitive).
+fn has_tmp_marker(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(s) => TMP_MARKER_RE.is_match(s),
+        serde_json::Value::Array(arr) => arr.iter().any(has_tmp_marker),
+        serde_json::Value::Object(obj) => obj.values().any(has_tmp_marker),
+        _ => false,
     }
 }
 
 /// Recursively normalize `__dbt_tmp<suffix>` substrings in every string value.
 ///
-/// `expand_target_column_types`'s `from_relation`/`to_relation` kwargs embed the
-/// non-deterministic temp-relation suffix; normalize both sides like `TmpSuffixSanitizer`
-/// does for SQL text, or replay false-fails.
+/// Temp-relation identifiers carry a non-deterministic suffix; normalize both sides like
+/// `TmpSuffixSanitizer` does for SQL text, or replay false-fails.
 fn normalize_tmp_suffixes(value: &serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::String(s) => serde_json::Value::String(TmpSuffixSanitizer.sanitize(s)),
@@ -2198,6 +2227,265 @@ mod tests {
             &explicit_true,
             &positional_true,
             AdapterType::Snowflake,
+        ));
+    }
+
+    /// Minimal `RelationObject`-shaped arg, per `RelationObject::to_time_machine_json`.
+    fn relation_arg(database: &str, schema: &str, identifier: &str) -> serde_json::Value {
+        relation_arg_for("bigquery", database, schema, identifier)
+    }
+
+    fn relation_arg_for(
+        adapter_type: &str,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "__type__": "RelationObject",
+            "adapter_type": adapter_type,
+            "database": database,
+            "schema": schema,
+            "identifier": identifier,
+            "is_table": true,
+        })
+    }
+
+    fn bare_staging_relation() -> serde_json::Value {
+        relation_arg("my_project", "my_schema", "my_snapshot__dbt_tmp")
+    }
+
+    fn suffixed_staging_relation() -> serde_json::Value {
+        relation_arg(
+            "my_project",
+            "my_schema",
+            "my_snapshot__dbt_tmp152555838935494",
+        )
+    }
+
+    fn target_relation() -> serde_json::Value {
+        relation_arg("my_project", "my_schema", "my_snapshot")
+    }
+
+    fn assert_args_match_both_ways(
+        method: &str,
+        recorded: &serde_json::Value,
+        actual: &serde_json::Value,
+    ) {
+        assert_args_match_both_ways_for(AdapterType::Bigquery, method, recorded, actual);
+    }
+
+    fn assert_args_match_both_ways_for(
+        adapter_type: AdapterType,
+        method: &str,
+        recorded: &serde_json::Value,
+        actual: &serde_json::Value,
+    ) {
+        assert!(
+            adapter_args_match_for_type(method, recorded, actual, adapter_type),
+            "{adapter_type} args should match recorded -> actual"
+        );
+        assert!(
+            adapter_args_match_for_type(method, actual, recorded, adapter_type),
+            "{adapter_type} args should match actual -> recorded"
+        );
+    }
+
+    #[test]
+    fn test_get_missing_columns_matches_bare_and_suffixed_tmp_relation() {
+        // A bare staging identifier on one side and a clock-suffixed one on the other must
+        // still compare equal; every other relation field is identical.
+        let recorded = serde_json::json!([bare_staging_relation(), target_relation()]);
+        let actual = serde_json::json!([suffixed_staging_relation(), target_relation()]);
+
+        assert_args_match_both_ways("get_missing_columns", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_get_columns_in_relation_matches_bare_and_suffixed_tmp_relation() {
+        let recorded = serde_json::json!([bare_staging_relation()]);
+        let actual = serde_json::json!([suffixed_staging_relation()]);
+
+        assert_args_match_both_ways("get_columns_in_relation", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_drop_relation_matches_bare_and_suffixed_tmp_relation() {
+        let recorded = serde_json::json!([bare_staging_relation()]);
+        let actual = serde_json::json!([suffixed_staging_relation()]);
+
+        assert_args_match_both_ways("drop_relation", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_tmp_suffix_normalization_still_rejects_different_relations() {
+        let recorded = serde_json::json!([
+            relation_arg("my_project", "my_schema", "snapshot_a__dbt_tmp"),
+            target_relation()
+        ]);
+        let different_base = serde_json::json!([
+            relation_arg("my_project", "my_schema", "snapshot_b__dbt_tmp111"),
+            target_relation()
+        ]);
+        assert!(!adapter_args_match_for_type(
+            "get_missing_columns",
+            &recorded,
+            &different_base,
+            AdapterType::Bigquery
+        ));
+
+        let different_schema = serde_json::json!([
+            relation_arg("my_project", "my_other_schema", "snapshot_a__dbt_tmp111"),
+            target_relation()
+        ]);
+        assert!(!adapter_args_match_for_type(
+            "get_missing_columns",
+            &recorded,
+            &different_schema,
+            AdapterType::Bigquery
+        ));
+    }
+
+    #[test]
+    fn test_expand_target_column_types_still_matches_after_arm_removal() {
+        let recorded = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "from_relation": bare_staging_relation(),
+                "to_relation": target_relation(),
+            }
+        ]);
+        let actual = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "from_relation": suffixed_staging_relation(),
+                "to_relation": target_relation(),
+            }
+        ]);
+
+        assert_args_match_both_ways("expand_target_column_types", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_get_columns_in_select_sql_matches_suffixed_tmp_relation_in_sql() {
+        let recorded =
+            serde_json::json!(["select * from `my_project`.`my_schema`.`my_snapshot__dbt_tmp`"]);
+        let actual = serde_json::json!([
+            "select * from `my_project`.`my_schema`.`my_snapshot__dbt_tmp152555838935494`"
+        ]);
+        assert_args_match_both_ways("get_columns_in_select_sql", &recorded, &actual);
+
+        let other_table = serde_json::json!([
+            "select * from `my_project`.`my_schema`.`my_other_snapshot__dbt_tmp152555838935494`"
+        ]);
+        assert!(!adapter_args_match_for_type(
+            "get_columns_in_select_sql",
+            &recorded,
+            &other_table,
+            AdapterType::Bigquery
+        ));
+    }
+
+    /// Normalization runs before the per-method comparison, so it must hold for every
+    /// adapter, not just the BigQuery snapshots that motivated it.
+    #[test]
+    fn test_tmp_suffix_normalization_covers_other_adapters() {
+        // Postgres and Redshift append strftime("%H%M%S%f") with no separator, as BigQuery
+        // does; Snowflake and Spark reuse the bare identifier.
+        let cases = [
+            (AdapterType::Postgres, "my_snapshot__dbt_tmp152555838935494"),
+            (AdapterType::Redshift, "my_snapshot__dbt_tmp152555838935494"),
+            (AdapterType::Snowflake, "my_snapshot__dbt_tmp"),
+            (AdapterType::Spark, "my_snapshot__dbt_tmp"),
+        ];
+
+        for (adapter_type, identifier) in cases {
+            let serialized = adapter_type.to_string();
+            let recorded = serde_json::json!([relation_arg_for(
+                &serialized,
+                "my_db",
+                "my_schema",
+                "my_snapshot__dbt_tmp"
+            )]);
+            let actual = serde_json::json!([relation_arg_for(
+                &serialized,
+                "my_db",
+                "my_schema",
+                identifier
+            )]);
+            assert_args_match_both_ways_for(
+                adapter_type,
+                "get_columns_in_relation",
+                &recorded,
+                &actual,
+            );
+
+            // A different base name must still be rejected on every adapter.
+            let other = serde_json::json!([relation_arg_for(
+                &serialized,
+                "my_db",
+                "my_schema",
+                "my_other_snapshot__dbt_tmp"
+            )]);
+            assert!(
+                !adapter_args_match_for_type(
+                    "get_columns_in_relation",
+                    &recorded,
+                    &other,
+                    adapter_type
+                ),
+                "{adapter_type} must not match a different base relation"
+            );
+        }
+    }
+
+    /// Pins a known over-match: microbatch appends `_<batch.id>`, which `TmpSuffixSanitizer`
+    /// consumes, so two batches of one node compare equal. Tightening the regex flips this.
+    #[test]
+    fn test_microbatch_batch_ids_currently_collapse() {
+        let batch_a = serde_json::json!([relation_arg_for(
+            "snowflake",
+            "my_db",
+            "my_schema",
+            "my_model__dbt_tmp_20240115"
+        )]);
+        let batch_b = serde_json::json!([relation_arg_for(
+            "snowflake",
+            "my_db",
+            "my_schema",
+            "my_model__dbt_tmp_20240116"
+        )]);
+
+        assert!(adapter_args_match_for_type(
+            "get_columns_in_relation",
+            &batch_a,
+            &batch_b,
+            AdapterType::Snowflake
+        ));
+    }
+
+    /// Pins a known gap: Databricks `unique_tmp_table_suffix` and duckdb build the suffix
+    /// from a UUID, which `TmpSuffixSanitizer` never matches, so it is compared verbatim.
+    #[test]
+    fn test_uuid_tmp_suffix_is_not_normalized() {
+        let recorded = serde_json::json!([relation_arg_for(
+            "databricks",
+            "my_catalog",
+            "my_schema",
+            "my_snapshot__dbt_tmp"
+        )]);
+        let actual = serde_json::json!([relation_arg_for(
+            "databricks",
+            "my_catalog",
+            "my_schema",
+            "my_snapshot__dbt_tmp_3f2a1b4c_a0ba_4708_a0b1_813316032bfb"
+        )]);
+
+        assert!(!adapter_args_match_for_type(
+            "get_columns_in_relation",
+            &recorded,
+            &actual,
+            AdapterType::Databricks
         ));
     }
 

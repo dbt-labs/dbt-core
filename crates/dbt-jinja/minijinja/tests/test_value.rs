@@ -1293,6 +1293,26 @@ fn test_object_btree_map() {
 }
 
 #[test]
+fn test_namespace_dict_method_names_resolve_to_attributes() {
+    let env = Environment::new();
+    assert_eq!(
+        env.render_str(
+            r#"{%- set ns = namespace(
+                items="item value",
+                keys="key value",
+                values="complete SQL",
+                get="get value",
+            ) -%}
+            {{- ns.items }}|{{ ns.keys }}|{{ ns.values }}|{{ ns.get }}"#,
+            (),
+            &[],
+        )
+        .unwrap(),
+        "item value|key value|complete SQL|get value"
+    );
+}
+
+#[test]
 fn test_downcast_arg() {
     #[derive(Debug)]
     struct A;

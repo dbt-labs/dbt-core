@@ -228,6 +228,12 @@ pub struct ProjectUnitTestConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub skip_not_matched_step: Option<bool>,
+    #[serde(
+        default,
+        rename = "+unique_tmp_table_suffix",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unique_tmp_table_suffix: Option<bool>,
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
     pub schedule: Option<Schedule>,
@@ -349,6 +355,7 @@ impl TypedRecursiveConfig for ProjectUnitTestConfig {
             || self.merge_with_schema_evolution.is_some()
             || self.skip_matched_step.is_some()
             || self.skip_not_matched_step.is_some()
+            || self.unique_tmp_table_suffix.is_some()
             || self.schedule.is_some()
             || self.auto_refresh.is_some()
             || self.backup.is_some()
@@ -453,6 +460,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
+                zorder: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -468,6 +476,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
                 incremental_apply_config_changes: None,
                 use_safer_relation_operations: None,
@@ -603,6 +612,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
                 .merge_with_schema_evolution,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            unique_tmp_table_suffix: config.__warehouse_specific_config__.unique_tmp_table_suffix,
             schedule: config.__warehouse_specific_config__.schedule,
             // Redshift fields
             auto_refresh: config.__warehouse_specific_config__.auto_refresh,

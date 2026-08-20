@@ -118,7 +118,7 @@ my_project:
 }
 
 #[test]
-fn test_query_tags_env_var_remains_a_json_string() {
+fn test_query_tags_env_var_uses_generic_native_rendering() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
 
@@ -149,9 +149,19 @@ my_project:
     };
 
     let result = resolve(&args).unwrap();
+    let query_tags = result
+        .credentials
+        .get("query_tags")
+        .expect("query_tags should be present");
     assert_eq!(
-        result.get_str("query_tags"),
-        Some(r#"{"team":"analytics","cost_center":"3000"}"#)
+        query_tags.get("team").and_then(dbt_yaml::Value::as_str),
+        Some("analytics")
+    );
+    assert_eq!(
+        query_tags
+            .get("cost_center")
+            .and_then(dbt_yaml::Value::as_str),
+        Some("3000")
     );
 
     unsafe {
@@ -160,7 +170,7 @@ my_project:
 }
 
 #[test]
-fn test_query_tags_with_embedded_jinja_remains_a_json_string() {
+fn test_query_tags_with_embedded_jinja_uses_generic_native_rendering() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
 
@@ -189,8 +199,12 @@ my_project:
 
     let result = resolve(&args).unwrap();
     assert_eq!(
-        result.get_str("query_tags"),
-        Some(r#"{"run_id":"run-123"}"#)
+        result
+            .credentials
+            .get("query_tags")
+            .and_then(|value| value.get("run_id"))
+            .and_then(dbt_yaml::Value::as_str),
+        Some("run-123")
     );
 
     unsafe {
@@ -199,7 +213,7 @@ my_project:
 }
 
 #[test]
-fn test_databricks_query_tags_requires_a_json_string() {
+fn test_databricks_query_tags_mapping_uses_generic_recursive_rendering() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
 
@@ -213,7 +227,7 @@ my_project:
     dev:
       type: databricks
       query_tags:
-        team: analytics
+        team: "{{ env_var('DBT_PROFILE_TEST_QUERY_TAG_TEAM', 'analytics') }}"
 "#,
     );
 
@@ -223,11 +237,45 @@ my_project:
         ..Default::default()
     };
 
-    let error = resolve(&args).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("Databricks profile query_tags must be a JSON string")
+    let result = resolve(&args).unwrap();
+    assert_eq!(
+        result
+            .credentials
+            .get("query_tags")
+            .and_then(|value| value.get("team"))
+            .and_then(dbt_yaml::Value::as_str),
+        Some("analytics")
+    );
+}
+
+#[test]
+fn test_databricks_literal_query_tags_json_remains_a_string() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      query_tags: '{"team":"analytics"}'
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+    assert_eq!(
+        result.get_str("query_tags"),
+        Some(r#"{"team":"analytics"}"#)
     );
 }
 

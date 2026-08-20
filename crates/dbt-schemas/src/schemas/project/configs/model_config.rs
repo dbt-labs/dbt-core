@@ -195,6 +195,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub view_update_via_alter: Option<bool>,
+    #[serde(
+        default,
+        rename = "+unique_tmp_table_suffix",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unique_tmp_table_suffix: Option<bool>,
 
     // NOTE: This is only for BigQuery materialized views
     #[serde(rename = "+description")]
@@ -283,6 +289,8 @@ pub struct ProjectModelConfig {
     pub labels_from_meta: Option<bool>,
     #[serde(rename = "+liquid_clustered_by")]
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+zorder")]
+    pub zorder: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+location")]
     pub location: Option<String>,
     #[serde(rename = "+location_root")]
@@ -395,9 +403,9 @@ pub struct ProjectModelConfig {
     pub partitions: Option<PartitionsConfig>,
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(rename = "+post-hook")]
+    #[serde(rename = "+post-hook", alias = "+post_hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
-    #[serde(rename = "+pre-hook")]
+    #[serde(rename = "+pre-hook", alias = "+pre_hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(rename = "+predicates")]
     pub predicates: Option<Vec<String>>,
@@ -788,7 +796,9 @@ pub struct ModelConfig {
     pub lookback: Option<i32>,
     pub begin: Option<String>,
     pub persist_docs: Option<PersistDocsConfig>,
+    #[serde(alias = "post-hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[resolved(promote, expect = "apply_package_defaults guarantees quoting is set")]
     pub quoting: Option<DbtQuoting>,
@@ -993,6 +1003,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
+                zorder: config.zorder,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -1008,6 +1019,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,
@@ -1195,6 +1207,7 @@ impl From<ModelConfig> for ProjectModelConfig {
                 .include_full_name_in_path,
             liquid_clustered_by: config.__warehouse_specific_config__.liquid_clustered_by,
             auto_liquid_cluster: config.__warehouse_specific_config__.auto_liquid_cluster,
+            zorder: config.__warehouse_specific_config__.zorder,
             clustered_by: config.__warehouse_specific_config__.clustered_by,
             buckets: config.__warehouse_specific_config__.buckets,
             catalog: config.__warehouse_specific_config__.catalog,
@@ -1235,6 +1248,7 @@ impl From<ModelConfig> for ProjectModelConfig {
                 .__warehouse_specific_config__
                 .use_safer_relation_operations,
             view_update_via_alter: config.__warehouse_specific_config__.view_update_via_alter,
+            unique_tmp_table_suffix: config.__warehouse_specific_config__.unique_tmp_table_suffix,
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,

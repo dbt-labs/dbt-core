@@ -1,0 +1,8 @@
+kind: Features
+body: '[dbt-fusion] (fabric) support `authentication: ActiveDirectoryAccessToken`, authenticating
+    with a pre-minted Entra bearer token from the `access_token` profile field'
+time: 2026-08-05T18:20:06.218617-07:00
+custom:
+    author: mghorpade1
+    issue: "15926"
+    project: dbt-core

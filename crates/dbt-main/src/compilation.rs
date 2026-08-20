@@ -280,6 +280,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             config,
             self.arg.local_execution_backend,
             !feature_stack.version_check_enabled,
+            feature_stack.cli.command_name,
         );
         self.token.check_cancellation()?;
 
@@ -294,7 +295,9 @@ impl<'a> CompilationPhasesExecutor<'a> {
         // Handle 'debug' or 'init' commands to run debug.
         if let FsCommand::Debug | FsCommand::Init = self.arg.command {
             let mut debug_args = DebugArgs::from_eval_args(self.arg.as_ref());
-            debug_args.alt_propagation_checker = feature_stack.cli.hooks.alt_propagation_checker();
+            debug_args.alt_propagation_checker = feature_stack.alt.propagation_checker.clone();
+            debug_args.alt_catalog_attach_checker =
+                feature_stack.alt.catalog_attach_checker.clone();
             compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
                 .await?;
             self.token.check_cancellation()?;
@@ -2402,6 +2405,7 @@ fn spawn_version_check_if_possible(
     config: &CompilationConfig,
     compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
     version_check_disabled: bool,
+    command_name: &'static str,
 ) -> Option<tokio::task::JoinHandle<Option<String>>> {
     if version_check_disabled {
         return None;
@@ -2416,7 +2420,8 @@ fn spawn_version_check_if_possible(
         let current_version = env!("CARGO_PKG_VERSION");
         if !disable_version_check {
             return Some(tokio::spawn(
-                version_check::check_version(current_version, None).in_current_span(),
+                version_check::check_version_and_build_hint(current_version, None, command_name)
+                    .in_current_span(),
             ));
         }
     }

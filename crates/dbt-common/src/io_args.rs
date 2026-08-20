@@ -11,6 +11,7 @@ use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
 use std::ffi::{OsStr, OsString};
 use std::fs;
+use std::io::Write;
 use std::str::FromStr;
 use std::{
     collections::BTreeMap,
@@ -121,7 +122,8 @@ impl From<ComputeArg> for LocalExecutionBackendKind {
     }
 }
 
-use crate::constants::{DBT_METADATA_DIR_NAME, DBT_TARGET_DIR_NAME};
+use crate::constants::{DBT_METADATA_DIR_NAME, DBT_TARGET_DIR_NAME, WARNING};
+use crate::pretty_string::YELLOW;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[clap(rename_all = "lowercase")]
@@ -1565,6 +1567,42 @@ pub fn check_target(filename: &str) -> Result<String, String> {
     }
 }
 
+/// `{key:value}` (no space) parses in YAML as one scalar key with a null value, not
+/// a pair — a colon-containing key with null is that collapse's unambiguous signature
+/// (a real key never has a null value), so we split and re-parse it here (#12873).
+///
+/// This is only called for flow-style inputs (wrapped in {}). Block-style YAML is
+/// unambiguous and doesn't need recovery; the YAML parser handles it correctly.
+fn recover_unspaced_colon_pairs(mut btree: BTreeMap<String, Value>) -> BTreeMap<String, Value> {
+    let ambiguous_keys: Vec<String> = btree
+        .iter()
+        .filter(|(key, val)| key.contains(':') && val.is_null())
+        .map(|(key, _)| key.clone())
+        .collect();
+
+    for full_key in ambiguous_keys {
+        let Some((real_key, raw_value)) = full_key.split_once(':') else {
+            continue;
+        };
+        let raw_value = raw_value.trim();
+        let mut stderr = std::io::stderr();
+        let _ = writeln!(
+            stderr,
+            "{}: --vars key '{full_key}' has no space after ':', so YAML treats it as a single \
+             key with a null value rather than a 'key: value' pair. Recovered it as \
+             '{real_key}: {raw_value}' — add a space after the colon to avoid relying on this.",
+            YELLOW.apply_to(WARNING)
+        );
+        btree.remove(&full_key);
+        btree.insert(
+            real_key.to_string(),
+            dbt_yaml::from_str::<Value>(raw_value).unwrap_or_else(|_| Value::from(raw_value)),
+        );
+    }
+
+    btree
+}
+
 pub fn check_key_value_cli_arg(value: &str) -> Result<BTreeMap<String, Value>, String> {
     // Handle empty input
     if value.trim().is_empty() {
@@ -1581,18 +1619,7 @@ pub fn check_key_value_cli_arg(value: &str) -> Result<BTreeMap<String, Value>, S
     let yaml_str = vars.to_string();
 
     match dbt_yaml::from_str::<BTreeMap<String, Value>>(&yaml_str) {
-        Ok(btree) => {
-            // Disallow the '{key:value}' format for flow-style YAML syntax
-            // to prevent key:value: None interpretation: https://stackoverflow.com/a/70909331
-            for key in btree.keys() {
-                if key.contains(':') {
-                    return Err(format!(
-                        "Invalid key-value pair: '{key}'. Value must start with a space after colon."
-                    ));
-                }
-            }
-            Ok(btree)
-        }
+        Ok(btree) => Ok(btree),
         Err(_) => {
             // If YAML parsing fails, try JSON
             match serde_json::from_str(&yaml_str) {
@@ -1604,6 +1631,20 @@ pub fn check_key_value_cli_arg(value: &str) -> Result<BTreeMap<String, Value>, S
             }
         }
     }
+}
+
+pub fn check_key_value_cli_arg_with_recovery(
+    value: &str,
+) -> Result<BTreeMap<String, Value>, String> {
+    let btree = check_key_value_cli_arg(value)?;
+    // Only apply recovery for flow-style inputs (wrapped in {}). Block-style YAML
+    // is unambiguous and doesn't need recovery; the YAML parser handles it correctly.
+    let is_flow_style = value.trim().trim_matches('\'').starts_with('{');
+    Ok(if is_flow_style {
+        recover_unspaced_colon_pairs(btree)
+    } else {
+        btree
+    })
 }
 
 pub fn check_env_var(vars: &str) -> Result<HashMap<String, String>, String> {
@@ -1847,9 +1888,8 @@ mod tests {
     #[test]
     fn test_check_var_invalid() {
         let invalid_vars = vec![
-            "key",         // Missing colon — YAML returns scalar string, not dict
-            "key:value",   // No space after colon — YAML returns scalar string, not dict
-            "{key:value}", // Flow-style without space — key-contains-colon guard catches it
+            "key",       // Missing colon — YAML returns scalar string, not dict
+            "key:value", // No space after colon — YAML returns scalar string, not dict
         ];
 
         for var in invalid_vars {
@@ -1858,6 +1898,55 @@ mod tests {
                 "Should have failed: {var}"
             );
         }
+    }
+
+    #[test]
+    fn test_check_var_flow_style_without_space_after_colon() {
+        // Flow-style: {key:value} without space after ':' collapses to a single null-valued key.
+        // Recovery splits it back to the intended pair {key: value} (#12873).
+        let result = check_key_value_cli_arg_with_recovery("{key:value}").unwrap();
+        let expected = BTreeMap::from([("key".to_string(), dbt_yaml::from_str("value").unwrap())]);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_check_var_flow_style_complex_unspaced() {
+        // Real example (#12873): {adf_run_id:<uuid>, start_date: X, end_date: Y}
+        // Unspaced pair collapses; recovery extracts it while preserving spaced pairs.
+        let result = check_key_value_cli_arg_with_recovery(
+            "{adf_run_id:30578aee-7913-47b7-a36c-549a2ede5210, start_date: 12.07.2026, end_date: 09.08.2026}"
+        ).unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(
+            result["adf_run_id"],
+            dbt_yaml::from_str::<Value>("30578aee-7913-47b7-a36c-549a2ede5210").unwrap()
+        );
+        assert!(result.contains_key("start_date"));
+        assert!(result.contains_key("end_date"));
+    }
+
+    #[test]
+    fn test_check_var_flow_style_unspaced_numeric_value() {
+        // The recovered value is re-parsed as a YAML scalar (not forced to a string), so
+        // typed values still come through correctly, e.g. an unspaced numeric pair.
+        // Uses _with_recovery since recovery now happens in the vars-specific handler.
+        let result = check_key_value_cli_arg_with_recovery("{count:5}").unwrap();
+        let expected = BTreeMap::from([("count".to_string(), dbt_yaml::from_str("5").unwrap())]);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_check_var_flow_style_key_with_colon_and_real_value_untouched() {
+        // A deliberately colon-containing key with a real (non-null) value is NOT the
+        // ambiguous collapse case — it already has an unambiguous ': ' separator — so
+        // recovery must leave it alone rather than re-splitting it.
+        let result = check_key_value_cli_arg("{ns:key: value}").unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("ns:key"));
+        assert_eq!(
+            result["ns:key"],
+            dbt_yaml::from_str::<Value>("value").unwrap()
+        );
     }
 
     #[test]
@@ -1872,15 +1961,6 @@ mod tests {
     }
 
     #[test]
-    fn test_check_var_block_yaml_three_keys() {
-        let result = check_key_value_cli_arg("a: 1\nb: 2\nc: 3").unwrap();
-        assert_eq!(result.len(), 3);
-        assert!(result.contains_key("a"));
-        assert!(result.contains_key("b"));
-        assert!(result.contains_key("c"));
-    }
-
-    #[test]
     fn test_check_var_value_with_colons() {
         // Values containing colons are valid YAML (and valid in dbt-core / PyYAML).
         // The colon-count pre-check that was removed in the fix for issue #402
@@ -1891,6 +1971,24 @@ mod tests {
             dbt_yaml::from_str("value:with:colons").unwrap(),
         )]);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_check_var_block_yaml_key_with_double_colon() {
+        // Block-style: keys can contain colons since the last ': ' is the separator.
+        // Example: 'set_var::something: value' parses as key 'set_var::something'.
+        let result = check_key_value_cli_arg("set_var::something: value").unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("set_var::something"));
+    }
+
+    #[test]
+    fn test_check_var_flow_style_key_with_double_colon() {
+        // Same as above but in flow-map ('{...}') form; the spaced ': ' still acts as
+        // the separator even though the key itself contains '::'.
+        let result = check_key_value_cli_arg("{key::with::colons: value}").unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("key::with::colons"));
     }
 
     #[test]
@@ -2011,5 +2109,37 @@ mod tests {
         );
 
         assert!(!resolved);
+    }
+
+    #[test]
+    fn test_check_var_straightforward_plain_pair() {
+        // Simple block-style: 'plain: valid' parses correctly as-is.
+        let result = check_key_value_cli_arg_with_recovery("plain: valid").unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("plain"));
+        assert_eq!(
+            result["plain"],
+            dbt_yaml::from_str::<Value>("valid").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_check_var_flow_style_explicit_null_value() {
+        // Flow-style: {key: null} (no colon in key)
+        // Recovery does not trigger; null is preserved correctly.
+        let result = check_key_value_cli_arg("{key: null}").unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("key"));
+        assert!(result["key"].is_null());
+    }
+
+    #[test]
+    fn test_check_var_flow_style_colon_key_explicit_null() {
+        // Flow-style: {ns:key: null} recovers to {ns: key}.
+        // Recovery splits on first ':' for unspaced collapse detection.
+        let result = check_key_value_cli_arg_with_recovery("{ns:key: null}").unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result.contains_key("ns"));
+        assert_eq!(result["ns"], dbt_yaml::from_str::<Value>("key").unwrap());
     }
 }

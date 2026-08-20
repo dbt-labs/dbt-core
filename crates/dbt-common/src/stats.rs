@@ -111,7 +111,7 @@ impl Stat {
             start_time,
             end_time,
             status,
-            thread_id: format!("Thread-{}", thread_id),
+            thread_id: format!("Thread-{} (worker)", thread_id),
             message,
         }
     }
@@ -197,18 +197,26 @@ mod tests {
             1,
         );
 
-        // Thread ID should be in format "Thread-<number>"
+        // Thread ID should be in format "Thread-<number> (worker)"
         assert!(
             stat.thread_id.starts_with("Thread-"),
             "thread_id should start with 'Thread-', got: {}",
             stat.thread_id
         );
+        assert!(
+            stat.thread_id.ends_with(" (worker)"),
+            "thread_id should end with ' (worker)', got: {}",
+            stat.thread_id
+        );
 
         // Extract the number part and verify it's a valid number
-        let number_part = stat.thread_id.trim_start_matches("Thread-");
+        let number_part = stat
+            .thread_id
+            .trim_start_matches("Thread-")
+            .trim_end_matches(" (worker)");
         assert!(
             number_part.parse::<u64>().is_ok(),
-            "thread_id should end with a number, got: {}",
+            "thread_id should have a number between 'Thread-' and ' (worker)', got: {}",
             stat.thread_id
         );
     }

@@ -20,7 +20,7 @@ mod flock;
 mod postgres;
 mod redshift;
 mod salesforce;
-mod snowflake;
+pub mod snowflake;
 mod spark;
 mod sqlserver;
 #[cfg(test)]

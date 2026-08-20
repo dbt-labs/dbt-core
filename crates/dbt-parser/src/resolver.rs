@@ -999,6 +999,9 @@ pub async fn resolve_inner(
         &base_ctx,
         &min_properties.models,
         &nodes.models,
+        &dbt_state.packages,
+        adapter_type,
+        &node_resolver,
     )?;
 
     nodes.unit_tests.extend(unit_tests);

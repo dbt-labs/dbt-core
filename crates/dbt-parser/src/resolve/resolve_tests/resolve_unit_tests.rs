@@ -35,6 +35,7 @@ use dbt_schemas::schemas::common::Expect;
 use dbt_schemas::schemas::common::Formats;
 use dbt_schemas::schemas::common::Given;
 use dbt_schemas::schemas::common::NodeDependsOn;
+use dbt_schemas::schemas::common::Rows;
 use dbt_schemas::schemas::packages::DeprecatedDbtPackageLock;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::ResolvableConfig;
@@ -46,8 +47,10 @@ use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
 use dbt_schemas::schemas::{CommonAttributes, DbtUnitTest, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
+use dbt_schemas::state::NodeResolverTracker;
 use dbt_schemas::state::ResourcePathKind;
 use dbt_yaml::Spanned;
+use dbt_yaml::Value as YmlValue;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -69,6 +72,9 @@ pub fn resolve_unit_tests(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     models: &BTreeMap<String, Arc<DbtModel>>,
+    packages: &[DbtPackage],
+    adapter_type: AdapterType,
+    node_resolver: &dyn NodeResolverTracker,
 ) -> FsResult<(
     BTreeMap<String, Arc<DbtUnitTest>>,
     BTreeMap<String, Arc<DbtUnitTest>>,
@@ -200,28 +206,56 @@ pub fn resolve_unit_tests(
             });
         }
 
-        let given = unit_test.given.as_ref().map_or(vec![], |vec| {
-            vec.iter()
-                .map(|given| {
-                    let full_path: Option<String> = match given.fixture {
-                        Some(ref fixture) if given.format == Formats::Csv => {
-                            file_map.get(&(fixture.clone() + ".csv")).cloned()
-                        }
-                        Some(ref fixture) if given.format == Formats::Sql => {
-                            file_map.get(&(fixture.clone() + ".sql")).cloned()
-                        }
-                        _ => given.fixture.clone(),
-                    };
-
-                    Given {
-                        fixture: full_path,
-                        input: given.input.clone(),
-                        rows: given.rows.clone(),
-                        format: given.format.clone(),
+        let mut given = Vec::new();
+        if let Some(given_entries) = unit_test.given.as_ref() {
+            for given_entry in given_entries {
+                let full_path: Option<String> = match given_entry.fixture {
+                    Some(ref fixture) if given_entry.format == Formats::Csv => {
+                        file_map.get(&(fixture.clone() + ".csv")).cloned()
                     }
-                })
-                .collect::<Vec<_>>()
-        });
+                    Some(ref fixture) if given_entry.format == Formats::Sql => {
+                        file_map.get(&(fixture.clone() + ".sql")).cloned()
+                    }
+                    _ => given_entry.fixture.clone(),
+                };
+
+                let rows = if given_entry.format == Formats::Dict
+                    && given_entry.rows.is_none()
+                    && given_entry.fixture.is_none()
+                {
+                    let seed_unique_id = resolve_given_seed(
+                        jinja_env,
+                        base_ctx,
+                        &given_entry.input,
+                        adapter_type,
+                        &database,
+                        &schema,
+                        &unit_test.model,
+                        &fqn,
+                        package_name,
+                        &root_package.dbt_project.name,
+                        package_quoting,
+                        &mpe.relative_path,
+                        arg.static_analysis,
+                        node_resolver,
+                    )?;
+                    Some(Rows::List(load_implicit_seed_rows(
+                        packages,
+                        &seed_unique_id,
+                        &given_entry.input,
+                    )?))
+                } else {
+                    given_entry.rows.clone()
+                };
+
+                given.push(Given {
+                    fixture: full_path,
+                    input: given_entry.input.clone(),
+                    rows,
+                    format: given_entry.format.clone(),
+                });
+            }
+        }
 
         let expect = {
             let full_path: Option<String> = match unit_test.expect.fixture {
@@ -399,6 +433,181 @@ pub fn resolve_unit_tests(
     Ok((unit_tests, disabled_unit_tests))
 }
 
+#[allow(clippy::too_many_arguments)]
+fn resolve_given_seed(
+    jinja_env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, minijinja::Value>,
+    input: &Spanned<String>,
+    adapter_type: AdapterType,
+    database: &str,
+    schema: &str,
+    model_name: &str,
+    fqn: &[String],
+    package_name: &str,
+    root_project_name: &str,
+    package_quoting: DbtQuoting,
+    relative_path: &std::path::Path,
+    global_static_analysis: Option<StaticAnalysisKind>,
+    node_resolver: &dyn NodeResolverTracker,
+) -> FsResult<String> {
+    let sql_resources: Arc<Mutex<Vec<SqlResource<UnitTestConfig>>>> =
+        Arc::new(Mutex::new(Vec::new()));
+    let mut resolve_model_context = base_ctx.clone();
+    resolve_model_context.extend(build_resolve_model_context(
+        &UnitTestConfig::default(),
+        adapter_type,
+        database,
+        schema,
+        model_name,
+        fqn.to_vec(),
+        package_name,
+        root_project_name,
+        package_quoting,
+        Arc::new(DbtRuntimeConfig::default()),
+        sql_resources.clone(),
+        Arc::new(AtomicBool::new(false)),
+        relative_path,
+        &PathBuf::new(),
+        global_static_analysis,
+    ));
+
+    match render_extract_ref_or_source_expr(
+        jinja_env,
+        &resolve_model_context,
+        sql_resources,
+        input,
+    )? {
+        SqlResource::Ref((name, package, version, _)) => {
+            let (unique_id, _, _, _) = node_resolver.lookup_ref(
+                &package,
+                &name,
+                &version.as_ref().map(ToString::to_string),
+                &Some(package_name.to_string()),
+            )?;
+            if unique_id.starts_with("seed.") {
+                Ok(unique_id)
+            } else {
+                err!(
+                    ErrorCode::InvalidConfig,
+                    "Unit test input '{}' must reference a seed when rows and fixture are omitted",
+                    input.as_str()
+                )
+            }
+        }
+        _ => err!(
+            ErrorCode::InvalidConfig,
+            "Unit test input '{}' must reference a seed when rows and fixture are omitted",
+            input.as_str()
+        ),
+    }
+}
+
+fn load_implicit_seed_rows(
+    packages: &[DbtPackage],
+    seed_unique_id: &str,
+    input: &Spanned<String>,
+) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
+    let (package, seed_asset) = packages
+        .iter()
+        .find_map(|package| {
+            package.seed_files.iter().find_map(|asset| {
+                let seed_name = asset.path.file_stem()?.to_str()?;
+                (asset
+                    .path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("csv"))
+                    && seed_unique_id == format!("seed.{}.{}", package.dbt_project.name, seed_name))
+                .then_some((package, asset))
+            })
+        })
+        .ok_or_else(|| {
+            fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => input.span().clone(),
+                "Unable to find seed '{}' for unit tests",
+                seed_unique_id
+            )
+        })?;
+
+    let data = match package
+        .embedded_file_contents
+        .as_ref()
+        .and_then(|contents| contents.get(&DbtPath::from(&seed_asset.path)))
+    {
+        Some(content) => content.as_bytes().to_vec(),
+        None => {
+            let path = seed_asset.base_path.join(&seed_asset.path);
+            std::fs::read(&path).map_err(|error| {
+                fs_err!(
+                    code => ErrorCode::IoError,
+                    loc => path,
+                    "Failed to read implicit unit test seed: {}",
+                    error
+                )
+            })?
+        }
+    };
+
+    parse_implicit_seed_rows(&data).map_err(|error| {
+        fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => input.span().clone(),
+            "Failed to read seed '{}' for unit tests: {}",
+            seed_unique_id,
+            error
+        )
+    })
+}
+
+fn parse_implicit_seed_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .flexible(true)
+        .from_reader(data);
+    let headers = reader
+        .headers()
+        .map_err(|error| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Failed to read headers: {}",
+                error
+            )
+        })?
+        .clone();
+    let mut rows = Vec::new();
+
+    for result in reader.records() {
+        let record = result.map_err(|error| {
+            fs_err!(ErrorCode::InvalidConfig, "Failed to read record: {}", error)
+        })?;
+        if record.len() > headers.len() {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "CSV row has {} fields, but the header has {}",
+                record.len(),
+                headers.len()
+            );
+        }
+
+        rows.push(
+            headers
+                .iter()
+                .enumerate()
+                .map(|(index, header)| {
+                    let value = match record.get(index) {
+                        Some(value) => YmlValue::string(value.to_string()),
+                        None => YmlValue::null(),
+                    };
+                    (header.to_string(), value)
+                })
+                .collect(),
+        );
+    }
+
+    Ok(rows)
+}
+
 fn parse_version_numbers_yml(value: &dbt_yaml::Value) -> Option<Vec<String>> {
     match value {
         dbt_yaml::Value::Sequence(arr, _) => Some(
@@ -433,4 +642,21 @@ fn should_include_version_for_unit_test(
         .unwrap_or(false); // No exclude list means exclude none
 
     meets_include && meets_exclude
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_implicit_seed_rows_preserves_strings_and_trailing_nulls() {
+        let rows = parse_implicit_seed_rows(b"id,name,note\n1,alpha,\n2,beta\n")
+            .expect("implicit seed rows should use DictReader-compatible parsing");
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].get("id"), Some(&YmlValue::string("1".into())));
+        assert_eq!(rows[0].get("name"), Some(&YmlValue::string("alpha".into())));
+        assert_eq!(rows[0].get("note"), Some(&YmlValue::string("".into())));
+        assert_eq!(rows[1].get("note"), Some(&YmlValue::null()));
+    }
 }

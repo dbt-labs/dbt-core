@@ -20,32 +20,26 @@ const RESERVED_KEYS: [&str; 4] = [
     DBT_DATABRICKS_VERSION,
 ];
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct DatabricksQueryTags {
     tags: IndexMap<String, String>,
 }
 
 impl DatabricksQueryTags {
-    fn from_sources(
-        profile_query_tags: Option<&str>,
+    fn from_node(
         model_query_tags: Option<&str>,
         model_name: Option<&str>,
         materialized: Option<&str>,
     ) -> AdapterResult<Self> {
-        let profile_tags = parse_user_tags(profile_query_tags, "Connection config")?;
         let model_tags = parse_user_tags(model_query_tags, "Model config")?;
 
-        let mut tags = IndexMap::from([(
-            DBT_CORE_VERSION.to_string(),
-            truncate_default(env!("CARGO_PKG_VERSION")),
-        )]);
+        let mut tags = IndexMap::new();
         if let Some(model_name) = model_name {
             tags.insert(DBT_MODEL_NAME.to_string(), truncate_default(model_name));
         }
         if let Some(materialized) = materialized {
             tags.insert(DBT_MATERIALIZED.to_string(), truncate_default(materialized));
         }
-        tags.extend(profile_tags);
         tags.extend(model_tags);
 
         if tags.len() > MAX_TAGS {
@@ -71,22 +65,16 @@ impl DatabricksQueryTags {
     }
 }
 
-pub(super) fn query_tags_from_state(
-    state: Option<&State>,
-    profile_query_tags: Option<&str>,
-) -> AdapterResult<DatabricksQueryTags> {
+pub(super) fn query_tags_from_state(state: Option<&State>) -> AdapterResult<DatabricksQueryTags> {
     let Some(node) = state.and_then(|state| state.lookup("model", &[])) else {
-        return DatabricksQueryTags::from_sources(profile_query_tags, None, None, None);
+        return Ok(DatabricksQueryTags::default());
     };
     let yaml_node = dbt_yaml::to_value(&node)
         .map_err(|error| AdapterError::new(AdapterErrorKind::Configuration, error.to_string()))?;
-    query_tags_from_yaml_node(&yaml_node, profile_query_tags)
+    query_tags_from_yaml_node(&yaml_node)
 }
 
-fn query_tags_from_yaml_node(
-    yaml_node: &dbt_yaml::Value,
-    profile_query_tags: Option<&str>,
-) -> AdapterResult<DatabricksQueryTags> {
+fn query_tags_from_yaml_node(yaml_node: &dbt_yaml::Value) -> AdapterResult<DatabricksQueryTags> {
     macro_rules! tags_for_node {
         ($node_type:ty, $node:ident) => {
             if let Ok($node) = <$node_type>::deserialize(yaml_node) {
@@ -95,8 +83,7 @@ fn query_tags_from_yaml_node(
                     .databricks_attr
                     .as_deref()
                     .and_then(|attr| attr.query_tags.as_deref());
-                return DatabricksQueryTags::from_sources(
-                    profile_query_tags,
+                return DatabricksQueryTags::from_node(
                     query_tags,
                     Some(&$node.__common_attr__.name),
                     Some(&$node.__base_attr__.materialized.to_string()),
@@ -115,8 +102,7 @@ fn query_tags_from_yaml_node(
                     .query_tags
                     .as_deref();
                 let materialized: Option<String> = $materialized;
-                return DatabricksQueryTags::from_sources(
-                    profile_query_tags,
+                return DatabricksQueryTags::from_node(
                     query_tags,
                     Some(&$node.__common_attr__.name),
                     materialized.as_deref(),
@@ -135,7 +121,7 @@ fn query_tags_from_yaml_node(
         Some(seed.__base_attr__.materialized.to_string())
     );
 
-    DatabricksQueryTags::from_sources(profile_query_tags, None, None, None)
+    Ok(DatabricksQueryTags::default())
 }
 
 fn parse_user_tags(
@@ -212,7 +198,10 @@ fn escaped_value_len(value: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{DatabricksQueryTags, QUERY_TAG_OPTION_PREFIX, query_tags_from_yaml_node};
+    use super::{
+        DatabricksQueryTags, QUERY_TAG_OPTION_PREFIX, query_tags_from_state,
+        query_tags_from_yaml_node,
+    };
     use adbc_core::options::OptionValue;
     use dbt_schemas::schemas::{
         AdapterAttr, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
@@ -232,9 +221,8 @@ mod tests {
     }
 
     #[test]
-    fn emits_driver_statement_options_with_model_precedence() {
-        let options = DatabricksQueryTags::from_sources(
-            Some(r#"{"team":"profile","profile_only":"yes"}"#),
+    fn emits_only_node_driver_statement_options() {
+        let options = DatabricksQueryTags::from_node(
             Some(r#"{"team":"model"}"#),
             Some("orders"),
             Some("incremental"),
@@ -247,10 +235,6 @@ mod tests {
             Some("model")
         );
         assert_eq!(
-            string_option(&options, &format!("{QUERY_TAG_OPTION_PREFIX}profile_only")),
-            Some("yes")
-        );
-        assert_eq!(
             string_option(
                 &options,
                 &format!("{QUERY_TAG_OPTION_PREFIX}@@dbt_model_name")
@@ -261,11 +245,10 @@ mod tests {
 
     #[test]
     fn preserves_query_tag_insertion_order() {
-        let options = DatabricksQueryTags::from_sources(
-            Some(r#"{"z_profile":"first","a_shared":"profile"}"#),
+        let options = DatabricksQueryTags::from_node(
             Some(r#"{"m_model":"last","a_shared":"model"}"#),
-            None,
-            None,
+            Some("orders"),
+            Some("incremental"),
         )
         .unwrap()
         .into_statement_options();
@@ -277,10 +260,10 @@ mod tests {
         assert_eq!(
             names,
             [
-                "databricks.query_tag.@@dbt_core_version",
-                "databricks.query_tag.z_profile",
-                "databricks.query_tag.a_shared",
+                "databricks.query_tag.@@dbt_model_name",
+                "databricks.query_tag.@@dbt_materialized",
                 "databricks.query_tag.m_model",
+                "databricks.query_tag.a_shared",
             ]
         );
         assert_eq!(
@@ -291,7 +274,7 @@ mod tests {
 
     #[test]
     fn emits_empty_user_values() {
-        let options = DatabricksQueryTags::from_sources(Some(r#"{"empty":""}"#), None, None, None)
+        let options = DatabricksQueryTags::from_node(Some(r#"{"empty":""}"#), None, None)
             .unwrap()
             .into_statement_options();
 
@@ -302,23 +285,30 @@ mod tests {
     }
 
     #[test]
-    fn operations_emit_only_profile_and_core_tags() {
+    fn missing_state_and_operations_inherit_database_defaults_without_statement_options() {
+        assert!(
+            query_tags_from_state(None)
+                .unwrap()
+                .into_statement_options()
+                .is_empty()
+        );
+
         let mut operation = DbtOperation::default();
         operation.__common_attr__.name = "on-run-start-0".to_string();
         let yaml = dbt_yaml::to_value(operation).unwrap();
 
-        let options = query_tags_from_yaml_node(&yaml, Some(r#"{"team":"profile"}"#))
+        let options = query_tags_from_yaml_node(&yaml)
             .unwrap()
             .into_statement_options();
-        let names = options
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<Vec<_>>();
+        assert!(options.is_empty());
 
-        assert!(names.contains(&"databricks.query_tag.team"));
-        assert!(names.contains(&"databricks.query_tag.@@dbt_core_version"));
-        assert!(!names.contains(&"databricks.query_tag.@@dbt_model_name"));
-        assert!(!names.contains(&"databricks.query_tag.@@dbt_materialized"));
+        let internal = dbt_yaml::from_str("internal: true").unwrap();
+        assert!(
+            query_tags_from_yaml_node(&internal)
+                .unwrap()
+                .into_statement_options()
+                .is_empty()
+        );
     }
 
     fn databricks_attr(query_tags: &str) -> AdapterAttr {
@@ -333,7 +323,7 @@ mod tests {
         resource_name: &str,
         materialized: Option<&str>,
     ) {
-        let options = query_tags_from_yaml_node(&yaml, Some(r#"{"team":"profile"}"#))
+        let options = query_tags_from_yaml_node(&yaml)
             .unwrap()
             .into_statement_options();
 
@@ -412,7 +402,7 @@ mod tests {
         model.__adapter_attr__ = databricks_attr(r#"{"team":"model"}"#);
         let yaml = dbt_yaml::to_value(model).unwrap();
 
-        let options = query_tags_from_yaml_node(&yaml, Some(r#"{"team":"profile"}"#))
+        let options = query_tags_from_yaml_node(&yaml)
             .unwrap()
             .into_statement_options();
 
@@ -420,41 +410,39 @@ mod tests {
             string_option(&options, "databricks.query_tag.team"),
             Some("model")
         );
+        assert!(
+            string_option(&options, "databricks.query_tag.profile_only").is_none(),
+            "profile defaults belong to the database, not statement options"
+        );
     }
 
     #[test]
     fn rejects_invalid_shapes_and_non_string_values() {
         let non_object =
-            DatabricksQueryTags::from_sources(Some(r#"["not","an","object"]"#), None, None, None)
+            DatabricksQueryTags::from_node(Some(r#"["not","an","object"]"#), None, None)
                 .unwrap_err();
         assert!(non_object.message().contains("must be a JSON object"));
 
         let non_string =
-            DatabricksQueryTags::from_sources(Some(r#"{"cost_center":3000}"#), None, None, None)
+            DatabricksQueryTags::from_node(Some(r#"{"cost_center":3000}"#), None, None)
                 .unwrap_err();
         assert!(non_string.message().contains("values must be strings"));
     }
 
     #[test]
-    fn rejects_reserved_user_keys_from_both_sources() {
+    fn rejects_reserved_node_query_tag_keys() {
         for source in [
             r#"{"@@dbt_core_version":"override"}"#,
             r#"{"@@dbt_model_name":"override"}"#,
             r#"{"@@dbt_materialized":"override"}"#,
             r#"{"@@dbt_databricks_version":"override"}"#,
         ] {
-            let profile_error =
-                DatabricksQueryTags::from_sources(Some(source), None, None, None).unwrap_err();
-            assert!(profile_error.message().contains("reserved query tag keys"));
-
-            let model_error =
-                DatabricksQueryTags::from_sources(None, Some(source), None, None).unwrap_err();
+            let model_error = DatabricksQueryTags::from_node(Some(source), None, None).unwrap_err();
             assert!(model_error.message().contains("reserved query tag keys"));
         }
 
-        let error = DatabricksQueryTags::from_sources(
+        let error = DatabricksQueryTags::from_node(
             Some(r#"{"@@dbt_materialized":"override","@@dbt_core_version":"override"}"#),
-            None,
             None,
             None,
         )
@@ -472,31 +460,45 @@ mod tests {
     fn validates_escaped_value_length_and_total_tag_count() {
         let long_after_escaping = format!(r#"{{"value":"{}"}}"#, ",".repeat(65));
         let length_error =
-            DatabricksQueryTags::from_sources(Some(&long_after_escaping), None, None, None)
-                .unwrap_err();
+            DatabricksQueryTags::from_node(Some(&long_after_escaping), None, None).unwrap_err();
         assert!(length_error.message().contains("at most 128 characters"));
 
         let too_many = serde_json::to_string(
-            &(0..20)
+            &(0..19)
                 .map(|index| (format!("tag_{index}"), "value"))
                 .collect::<std::collections::BTreeMap<_, _>>(),
         )
         .unwrap();
         let count_error =
-            DatabricksQueryTags::from_sources(Some(&too_many), None, None, None).unwrap_err();
+            DatabricksQueryTags::from_node(Some(&too_many), Some("orders"), Some("incremental"))
+                .unwrap_err();
         assert!(
             count_error
                 .message()
                 .contains("Too many total query tags (21)")
         );
+
+        let exact_boundary = serde_json::to_string(
+            &(0..18)
+                .map(|index| (format!("tag_{index}"), "value"))
+                .collect::<std::collections::BTreeMap<_, _>>(),
+        )
+        .unwrap();
+        let options = DatabricksQueryTags::from_node(
+            Some(&exact_boundary),
+            Some("orders"),
+            Some("incremental"),
+        )
+        .unwrap()
+        .into_statement_options();
+        assert_eq!(options.len(), 20);
     }
 
     #[test]
     fn passes_raw_values_to_the_driver_and_truncates_automatic_values() {
         let model_name = format!("{}::", "x".repeat(127));
-        let options = DatabricksQueryTags::from_sources(
+        let options = DatabricksQueryTags::from_node(
             Some(r#"{"path":"folder\\name,a:b"}"#),
-            None,
             Some(&model_name),
             Some("table"),
         )

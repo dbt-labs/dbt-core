@@ -782,12 +782,16 @@ pub(crate) fn intern_into_value(s: &str) -> Value {
 /// [`Value::get_attr`] API. The context variable-resolution path uses
 /// `get_attr_fast` directly and skips this so context variables named
 /// `items` / `keys` / etc. still resolve to their user values.
+/// [`namespace_object::Namespace`] stays exempt because its stored attributes
+/// take precedence over dictionary methods in Jinja.
 pub(crate) fn bound_dict_method_for_attr(receiver: &Value, key: &str) -> Option<Value> {
     let dy = match receiver.0 {
         ValueRepr::Object(ref dy) => dy,
         _ => return None,
     };
-    if !matches!(dy.repr(), ObjectRepr::Map) {
+    if !matches!(dy.repr(), ObjectRepr::Map)
+        || dy.downcast_ref::<namespace_object::Namespace>().is_some()
+    {
         return None;
     }
     let method = crate::value::object::reserved_dict_method_name(key)?;

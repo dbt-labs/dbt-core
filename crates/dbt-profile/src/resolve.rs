@@ -357,18 +357,9 @@ pub fn render_target(
     penv: &ProfileEnvironment,
 ) -> Result<dbt_yaml::Mapping> {
     let target = target_mapping(target_val)?;
-    let adapter_type = target
-        .get("type")
-        .map(|value| render_value_recursive(&penv.env, &penv.ctx, value))
-        .transpose()?
-        .and_then(|value| value.as_str().map(|value| value.to_ascii_lowercase()));
-
     let mut rendered = dbt_yaml::Mapping::new();
     for (key, value) in target.iter() {
-        let value = match adapter_type.as_deref() {
-            Some("databricks") => crate::databricks::render_value(key, value, penv)?,
-            _ => render_value_recursive(&penv.env, &penv.ctx, value)?,
-        };
+        let value = render_value_recursive(&penv.env, &penv.ctx, value)?;
         rendered.insert(key.clone(), value);
     }
     Ok(rendered)
@@ -454,20 +445,6 @@ pub(crate) fn render_value_recursive<S: Serialize>(
         }
         _ => Ok(value.clone()),
     }
-}
-
-// Preserve profile fields whose rendered contents must remain strings instead of being re-parsed as native YAML.
-pub(crate) fn render_string<S: Serialize>(
-    env: &Environment<'_>,
-    ctx: &S,
-    value: &dbt_yaml::Value,
-) -> Result<Option<dbt_yaml::Value>> {
-    let listeners: &[Rc<dyn RenderingEventListener>] = &[];
-    let dbt_yaml::Value::String(value, span) = value else {
-        return Ok(None);
-    };
-    let (rendered, _) = render_string_contents(env, ctx, listeners, value)?;
-    Ok(Some(dbt_yaml::Value::String(rendered, span.clone())))
 }
 
 fn render_string_contents<S: Serialize>(

@@ -911,7 +911,7 @@ pub struct DatabricksDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_scopes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub query_tags: Option<String>,
+    pub query_tags: Option<YmlValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub session_properties: Option<HashMap<String, YmlValue>>,
@@ -2196,7 +2196,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_databricks_profile_deserializes_query_tags_as_json_string() {
+    fn test_databricks_profile_deserializes_query_tags_from_both_profile_shapes() {
         let config: DbConfig = dbt_yaml::from_str(
             r#"
 type: databricks
@@ -2209,8 +2209,31 @@ query_tags: '{"team":"analytics"}'
         };
 
         assert_eq!(
-            config.query_tags.as_deref(),
+            config.query_tags.as_ref().and_then(YmlValue::as_str),
             Some(r#"{"team":"analytics"}"#)
+        );
+
+        let config: DbConfig = dbt_yaml::from_str(
+            r#"
+type: databricks
+query_tags:
+  team: analytics
+  cost_center: "3000"
+"#,
+        )
+        .unwrap();
+        let DbConfig::Databricks(config) = config else {
+            panic!("Expected Databricks config");
+        };
+
+        let query_tags = config.query_tags.as_ref().unwrap();
+        assert_eq!(
+            query_tags.get("team").and_then(YmlValue::as_str),
+            Some("analytics")
+        );
+        assert_eq!(
+            query_tags.get("cost_center").and_then(YmlValue::as_str),
+            Some("3000")
         );
     }
 

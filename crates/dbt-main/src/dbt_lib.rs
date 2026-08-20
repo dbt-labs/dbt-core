@@ -590,16 +590,8 @@ pub async fn execute_setup_and_all_phases(
     // appears just before the prompt.
     let version_check_handle = executor.version_check_handle_mut().take();
     if let Some(handle) = version_check_handle
-        && let Ok(Some(latest_version)) = handle.await
+        && let Ok(Some(hint)) = handle.await
     {
-        let hint = match crate::install_method::InstallMethod::detect()
-            .upgrade_command(Some(&latest_version))
-        {
-            Some(command) => format!("{latest_version} (run `{command}`)"),
-            None => {
-                format!("{latest_version} (upgrade via the package manager you installed dbt with)")
-            }
-        };
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             "New version available".to_string(),
             hint,

@@ -1125,7 +1125,7 @@ fn resolve_catalog_type(catalog_name: Option<&str>) -> Option<String> {
             .catalogs
             .iter()
             .find(|catalog| catalog.name == catalog_name)?;
-        return Some(catalog.catalog_type.as_str().to_string());
+        return Some(catalog.catalog_type.as_str().to_lowercase());
     }
     let view = catalogs.view().ok()?;
     let catalog = view

@@ -10,9 +10,11 @@ use crate::utils::{
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_SNAPSHOTS_DIR_NAME, DBT_TARGET_DIR_NAME, PARSING};
-use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
+use dbt_common::io_args::{FsCommand, IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
-use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
+use dbt_common::tracing::dbt_emit::{
+    emit_debug_log_message, emit_error_log_from_fs_error, emit_warn_log_from_fs_error,
+};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsError, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -57,6 +59,8 @@ pub struct SqlFileRenderResult<T: ResolvableConfig<T>, S> {
     pub asset: DbtAsset,
     /// The status of the model
     pub status: ModelStatus,
+    /// Whether a render failure was intentionally deferred until command selection.
+    pub render_error_deferred: bool,
     /// The file info for the rendered SQL file
     pub sql_file_info: SqlFileInfo<T>,
     /// Fully resolved config for this node (project + properties + inline + root overlay).
@@ -285,6 +289,7 @@ where
         resource_paths,
         package_quoting,
         uses_snapshot_fqn,
+        defer_render_errors_to_compile,
     } = &**inner;
 
     token.check_cancellation()?;
@@ -362,6 +367,7 @@ where
             macro_spans: MacroSpans::default(),
             properties: maybe_model,
             status: ModelStatus::Disabled,
+            render_error_deferred: false,
             patch_path: node_properties
                 .get(ref_name)
                 .map(|mpe| mpe.relative_path.clone()),
@@ -564,15 +570,16 @@ where
                 (
                     sql_file_info,
                     resolved_config,
-                    status,
+                    (status, false),
                     rendered_sql,
                     macro_spans,
                     macro_dependencies,
                 )
             }
             Err(err) => {
-                // Build minimal info for error/disabled outcome
-                let mut was_enabled = true;
+                // Keep the partially resolved node available to selection. Executable
+                // commands render selected nodes again during compilation, so a render
+                // failure in an unselected node must not abort the parse phase.
                 let (sql_file_info, resolved_config) = {
                     let sql_resources_locked = sql_resources.lock().unwrap().clone();
                     let normalized_sql = normalize_sql(&sql);
@@ -581,7 +588,7 @@ where
                         DbtChecksum::hash(normalized_sql.as_bytes()),
                         execute_exists.load(atomic::Ordering::Relaxed),
                     );
-                    let cfg = config_resolver.resolve_with_overrides(
+                    let cfg = config_resolver.resolve_with_configs(
                         &original_fqn,
                         &fqn,
                         &[
@@ -589,28 +596,44 @@ where
                             maybe_version_config.as_ref(),
                             info.explicit_config.as_deref(),
                         ],
-                        |c| {
-                            was_enabled = c.get_enabled_with_default();
-                            c.disable();
-                        },
                     );
                     (info, cfg)
                 };
 
-                let status = match err.code {
-                    ErrorCode::DisabledModel => ModelStatus::Disabled,
+                let (status, render_error_deferred) = match err.code {
+                    ErrorCode::DisabledModel => (ModelStatus::Disabled, false),
                     ErrorCode::MacroSyntaxInvalid => {
                         let err_with_loc = err.with_location(display_path.clone());
                         emit_error_log_from_fs_error(err_with_loc);
-                        ModelStatus::ParsingFailed
+                        (ModelStatus::ParsingFailed, false)
                     }
                     _ => {
-                        if was_enabled {
+                        if resolved_config.enabled() {
                             let err_with_loc = err.with_location(display_path.clone());
-                            emit_error_log_from_fs_error(err_with_loc);
-                            ModelStatus::ParsingFailed
+                            if *defer_render_errors_to_compile
+                                && matches!(
+                                    args.command,
+                                    FsCommand::Compile
+                                        | FsCommand::Run
+                                        | FsCommand::RunOperation
+                                        | FsCommand::Test
+                                        | FsCommand::Seed
+                                        | FsCommand::Snapshot
+                                        | FsCommand::Show
+                                        | FsCommand::Build
+                                        | FsCommand::Source
+                                        | FsCommand::Clone
+                                        | FsCommand::Retry
+                                )
+                            {
+                                emit_debug_log_message(err_with_loc.message());
+                                (ModelStatus::ParsingFailed, true)
+                            } else {
+                                emit_error_log_from_fs_error(err_with_loc);
+                                (ModelStatus::ParsingFailed, false)
+                            }
                         } else {
-                            ModelStatus::Disabled
+                            (ModelStatus::Disabled, false)
                         }
                     }
                 };
@@ -618,13 +641,15 @@ where
                 (
                     sql_file_info,
                     resolved_config,
-                    status,
+                    (status, render_error_deferred),
                     String::new(),
                     MacroSpans::default(),
                     Vec::new(),
                 )
             }
         };
+
+    let (status, render_error_deferred) = status;
 
     // Only check for duplicate resource definitions for enabled models to match dbt-core behavior.
     if status == ModelStatus::Enabled
@@ -651,6 +676,7 @@ where
         macro_spans,
         properties: maybe_model,
         status,
+        render_error_deferred,
         patch_path: node_properties
             .get(ref_name)
             .map(|mpe| mpe.relative_path.clone()),
@@ -688,6 +714,9 @@ pub struct RenderCtxInner<T: ResolvableConfig<T>> {
     /// from the rewritten `{snapshot_name}.sql` stub path and disagree with both
     /// dbt-core and the fqn stored on the node.
     pub uses_snapshot_fqn: bool,
+    /// Keep parse-failed runnable nodes available for selection so compilation
+    /// reports the error only when the command selects that node.
+    pub defer_render_errors_to_compile: bool,
 }
 
 /// Outer context for rendering sql files

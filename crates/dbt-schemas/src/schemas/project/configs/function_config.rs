@@ -4,12 +4,14 @@ use dbt_common::serde_utils::Omissible;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
 use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
@@ -17,7 +19,7 @@ use super::config_keys::ConfigKeys;
 use dbt_proc_macros::{DefaultTo, Resolvable};
 
 use crate::schemas::common::DocsConfig;
-use crate::schemas::common::{Access, DbtQuoting};
+use crate::schemas::common::{Access, DbtQuoting, Hooks, hooks_equal, serialize_hooks_as_list};
 use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
@@ -69,6 +71,12 @@ pub struct ProjectFunctionConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+on_configuration_change")]
     pub on_configuration_change: Option<String>,
+    // dbt-core's `FunctionConfig` extends `NodeConfig`, so functions carry hooks like any
+    // other node; both spellings are accepted (see `translate_hook_names`).
+    #[serde(rename = "+post-hook", alias = "+post_hook")]
+    pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(rename = "+pre-hook", alias = "+pre_hook")]
+    pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+schema")]
@@ -108,6 +116,8 @@ impl Default for ProjectFunctionConfig {
             group: None,
             meta: None,
             on_configuration_change: None,
+            post_hook: Verbatim::from(None),
+            pre_hook: Verbatim::from(None),
             quoting: None,
             schema: Omissible::Omitted,
             static_analysis: None,
@@ -171,6 +181,8 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
             || self.group.is_some()
             || self.meta.is_some()
             || self.on_configuration_change.is_some()
+            || self.post_hook.is_some()
+            || self.pre_hook.is_some()
             || self.quoting.is_some()
             || self.schema.is_present()
             || self.static_analysis.is_some()
@@ -205,6 +217,24 @@ pub struct FunctionConfig {
     pub group: Option<String>,
     pub docs: Option<DocsConfig>,
     pub grants: OmissibleGrantConfig,
+    // Unlike models/seeds/snapshots, functions have no separate `Manifest*Config`: this
+    // struct is what `ManifestFunction` serializes. So the field carries the manifest key
+    // (`pre-hook`) with the authored spelling as an alias, and normalizes to `List[Hook]`
+    // on the way out — `Verbatim` keeps the flexible authored input shapes.
+    #[serde(
+        rename = "post-hook",
+        alias = "post_hook",
+        default,
+        serialize_with = "serialize_hooks_as_list"
+    )]
+    pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(
+        rename = "pre-hook",
+        alias = "pre_hook",
+        default,
+        serialize_with = "serialize_hooks_as_list"
+    )]
+    pub pre_hook: Verbatim<Option<Hooks>>,
     #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
     pub on_configuration_change: Option<String>,
@@ -269,6 +299,8 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             group: config.group,
             docs: config.docs,
             grants: config.grants,
+            post_hook: config.post_hook,
+            pre_hook: config.pre_hook,
             quoting: config.quoting,
             on_configuration_change: config.on_configuration_change,
             static_analysis: config.static_analysis,
@@ -297,6 +329,8 @@ impl FunctionConfig {
         let quoting_eq = self.quoting == other.quoting;
         let on_configuration_change_eq =
             self.on_configuration_change == other.on_configuration_change;
+        let post_hook_eq = hooks_equal(&self.post_hook, &other.post_hook);
+        let pre_hook_eq = hooks_equal(&self.pre_hook, &other.pre_hook);
         // `static_analysis` is a Fusion-only, invocation-driven value (e.g. set by
         // `--static-analysis`) with no dbt-core equivalent, so it can never be a
         // legitimate dbt-core `state:modified` trigger and is deliberately excluded
@@ -322,6 +356,8 @@ impl FunctionConfig {
             && grants_eq
             && quoting_eq
             && on_configuration_change_eq
+            && post_hook_eq
+            && pre_hook_eq
             && function_kind_eq
             && volatility_eq
             && access_eq_result
@@ -386,6 +422,22 @@ impl FunctionConfig {
                         )),
                     ),
                     (
+                        "post_hook",
+                        post_hook_eq,
+                        Some((
+                            format!("{:?}", &self.post_hook),
+                            format!("{:?}", &other.post_hook),
+                        )),
+                    ),
+                    (
+                        "pre_hook",
+                        pre_hook_eq,
+                        Some((
+                            format!("{:?}", &self.pre_hook),
+                            format!("{:?}", &other.pre_hook),
+                        )),
+                    ),
+                    (
                         "function_kind",
                         function_kind_eq,
                         Some((
@@ -435,8 +487,26 @@ impl FunctionConfig {
 }
 
 impl ConfigKeys for FunctionConfig {
-    // The default implementation from the trait will handle
-    // extracting field names via serialization automatically
+    fn valid_field_names() -> HashSet<String> {
+        let serialized = dbt_yaml::to_value(Self::default())
+            .expect("Failed to serialize FunctionConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, _) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    field_names.insert(key_str);
+                }
+            }
+        }
+
+        // Serializing a default instance only yields the canonical spellings
+        // (`pre-hook`/`post-hook`); the aliases have to be listed explicitly.
+        field_names.insert("pre_hook".to_string());
+        field_names.insert("post_hook".to_string());
+
+        field_names
+    }
 }
 
 #[cfg(test)]

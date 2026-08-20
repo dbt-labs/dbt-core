@@ -228,6 +228,7 @@ pub async fn resolve_models(
             config_resolver: config_resolver.clone(),
             package_quoting,
             uses_snapshot_fqn: false,
+            defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -348,6 +349,7 @@ pub async fn resolve_models(
         macro_spans,
         properties: maybe_properties,
         status,
+        render_error_deferred,
         patch_path,
         macro_dependencies,
     } in model_sql_resources_map.into_iter()
@@ -834,7 +836,13 @@ pub async fn resolve_models(
         };
 
         let components = RelationComponents {
-            database: model_config.database.clone().into_inner().unwrap_or(None),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && model_config.__warehouse_specific_config__.catalog.is_some()
+            {
+                model_config.__warehouse_specific_config__.catalog.clone()
+            } else {
+                model_config.database.clone().into_inner().unwrap_or(None)
+            },
             schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
@@ -916,7 +924,26 @@ pub async fn resolve_models(
                     )?;
                 }
             }
-            ModelStatus::ParsingFailed => {}
+            ModelStatus::ParsingFailed => {
+                if render_error_deferred {
+                    models.insert(unique_id.to_owned(), Arc::new(dbt_model));
+                    node_names.insert(model_name.to_owned());
+
+                    if !arg.skip_creating_generic_tests {
+                        properties.as_testable().persist(
+                            package_name,
+                            &root_package.dbt_project.name,
+                            collected_generic_tests,
+                            test_name_truncations,
+                            adapter_type,
+                            &arg.io,
+                            patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                            false,
+                            &raw_test_configs.get(ref_name).cloned().unwrap_or_default(),
+                        )?;
+                    }
+                }
+            }
         }
     }
 
@@ -1280,6 +1307,7 @@ fn process_python_models(
             macro_spans: Default::default(),
             properties: maybe_properties,
             status,
+            render_error_deferred: false,
             patch_path,
             macro_dependencies: Vec::new(),
         };

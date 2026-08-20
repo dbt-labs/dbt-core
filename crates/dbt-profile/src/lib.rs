@@ -16,7 +16,6 @@
 //! println!("{}: {}", profile.adapter_type, profile.credentials_json().unwrap());
 //! ```
 
-mod databricks;
 mod error;
 mod jinja;
 mod resolve;

@@ -213,6 +213,35 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_freshness_entire_value_nested_dict_renders_as_typed() {
+        use dbt_schemas::schemas::common::{FreshnessDefinition, FreshnessPeriod};
+
+        // The whole `freshness` value is a single Jinja expression evaluating to
+        // a mapping whose `warn_after` entry is itself a nested dict literal
+        // (issue #13214). The adjacent closing braces from the inner and outer
+        // dict literals (`...'day'}}`) must not be mistaken for a Jinja `}}`
+        // delimiter -- doing so previously routed the whole mapping through
+        // string rendering and raised dbt1013 instead of a typed FreshnessDefinition.
+        let yaml = r#""{{ {'warn_after': {'count': 1, 'period': 'day'}} }}""#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        let freshness: FreshnessDefinition = dbt_jinja_utils::serde::into_typed_with_jinja(
+            val, false, &env, &ctx, &listeners, None, true,
+        )
+        .unwrap();
+
+        let warn = freshness
+            .warn_after
+            .expect("warn_after should deserialize as FreshnessRules");
+        assert_eq!(warn.count, Some(1));
+        assert_eq!(warn.period, Some(FreshnessPeriod::day));
+    }
+
     #[tokio::test]
     async fn test_render_sql_with_ref_macro() {
         let (env, sql_resources, init_config) = setup_test_env();

@@ -1,4 +1,4 @@
-mod key_format;
+pub mod key_format;
 
 use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, AuthWarningPrinter};
 use database::Builder as DatabaseBuilder;

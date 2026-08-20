@@ -6,6 +6,7 @@ use dbt_adbc::{Connection, Statement};
 use std::fmt;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::RecordingContext;
 use crate::SharedConfig;
@@ -187,7 +188,7 @@ pub(crate) struct RecordStatement {
 }
 
 impl RecordStatement {
-    fn new(
+    pub(crate) fn new(
         recordings_path: PathBuf,
         inner_stmt: Box<dyn Statement>,
         ctx: RecordingContext,
@@ -258,7 +259,42 @@ impl Statement for RecordStatement {
     }
 
     fn execute_update(&mut self) -> AdbcResult<Option<i64>> {
-        self.inner_stmt.execute_update()
+        let sql = match &self.sql {
+            Some(sql) => sql,
+            None => "none",
+        };
+
+        let result = self.inner_stmt.execute_update();
+
+        let path = self.recordings_path.clone();
+        create_dir_all(&path).map_err(|e| to_adbc_error(e.into(), Some(&path)))?;
+
+        let unique_id = compute_file_name(
+            &path,
+            self.ctx.node_id.as_ref(),
+            Some(sql),
+            self.ctx.metadata,
+        )?;
+
+        let sqlite_handler = SqliteHandler::new(&path);
+
+        match result {
+            Ok(rows_affected) => {
+                sqlite_handler
+                    .write_execute(&unique_id, sql, &[], Arc::new(Schema::empty()))
+                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
+                Ok(rows_affected)
+            }
+            Err(err) => {
+                sqlite_handler
+                    .write_execute_error(&unique_id, sql, &format!("{err}"))
+                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
+                Err(AdbcError::with_message_and_status(
+                    format!("{err}"),
+                    AdbcStatus::Internal,
+                ))
+            }
+        }
     }
 
     fn execute_schema(&mut self) -> AdbcResult<Schema> {
@@ -300,5 +336,125 @@ impl Statement for RecordStatement {
 
     fn get_option_string(&self, key: OptionStatement) -> AdbcResult<String> {
         self.inner_stmt.get_option_string(key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::replay::ReplayStatement;
+
+    struct MockStatement {
+        result: Option<AdbcResult<Option<i64>>>,
+    }
+
+    impl Statement for MockStatement {
+        fn bind(&mut self, _batch: RecordBatch) -> AdbcResult<()> {
+            unimplemented!()
+        }
+        fn bind_stream(&mut self, _reader: Box<dyn RecordBatchReader + Send>) -> AdbcResult<()> {
+            unimplemented!()
+        }
+        fn execute<'a>(&'a mut self) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
+            unimplemented!()
+        }
+        fn execute_update(&mut self) -> AdbcResult<Option<i64>> {
+            self.result.take().expect("execute_update called once")
+        }
+        fn execute_schema(&mut self) -> AdbcResult<Schema> {
+            unimplemented!()
+        }
+        fn execute_partitions(&mut self) -> AdbcResult<adbc_core::PartitionedResult> {
+            unimplemented!()
+        }
+        fn get_parameter_schema(&self) -> AdbcResult<Schema> {
+            unimplemented!()
+        }
+        fn prepare(&mut self) -> AdbcResult<()> {
+            unimplemented!()
+        }
+        fn set_sql_query(&mut self, _sql: &str) -> AdbcResult<()> {
+            Ok(())
+        }
+        fn set_substrait_plan(&mut self, _plan: &[u8]) -> AdbcResult<()> {
+            unimplemented!()
+        }
+        fn cancel(&mut self) -> AdbcResult<()> {
+            unimplemented!()
+        }
+    }
+
+    fn ctx_with_node_id(node_id: &str) -> RecordingContext {
+        RecordingContext {
+            node_id: Some(node_id.to_string()),
+            metadata: false,
+        }
+    }
+
+    #[test]
+    fn record_execute_update_writes_a_recording() {
+        let dir = tempfile::tempdir().unwrap();
+        let mock = MockStatement {
+            result: Some(Ok(Some(3))),
+        };
+        let mut recorder = RecordStatement::new(
+            dir.path().to_path_buf(),
+            Box::new(mock),
+            ctx_with_node_id("model.test.a"),
+        );
+        recorder.set_sql_query("INSERT INTO t VALUES (1)").unwrap();
+        assert_eq!(recorder.execute_update().unwrap(), Some(3));
+
+        let entry = SqliteHandler::new(dir.path())
+            .read_execute("model.test.a-0", "INSERT INTO t VALUES (1)")
+            .unwrap();
+        assert_eq!(entry.sql.as_deref(), Some("INSERT INTO t VALUES (1)"));
+    }
+
+    #[test]
+    fn replay_execute_update_matches_recording_made_via_execute() {
+        let dir = tempfile::tempdir().unwrap();
+        SqliteHandler::new(dir.path())
+            .write_execute(
+                "model.test.a-0",
+                "CREATE SCHEMA IF NOT EXISTS x",
+                &[],
+                Arc::new(Schema::empty()),
+            )
+            .unwrap();
+
+        let mut replayer = ReplayStatement::new(
+            dir.path().to_path_buf(),
+            SharedConfig::default(),
+            ctx_with_node_id("model.test.a"),
+        );
+        replayer
+            .set_sql_query("CREATE SCHEMA IF NOT EXISTS x")
+            .unwrap();
+        assert_eq!(replayer.execute_update().unwrap(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "do not match")]
+    fn replay_execute_update_panics_on_sql_mismatch() {
+        let dir = tempfile::tempdir().unwrap();
+        SqliteHandler::new(dir.path())
+            .write_execute(
+                "model.test.a-0",
+                "CREATE SCHEMA IF NOT EXISTS x",
+                &[],
+                Arc::new(Schema::empty()),
+            )
+            .unwrap();
+
+        let mut replayer = ReplayStatement::new(
+            dir.path().to_path_buf(),
+            SharedConfig::default(),
+            ctx_with_node_id("model.test.a"),
+        );
+        replayer
+            .set_sql_query("SELECT * FROM x.non_existing_dest")
+            .unwrap();
+        let _ = replayer.execute_update();
     }
 }

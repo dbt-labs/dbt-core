@@ -108,12 +108,10 @@ impl StaticBaseRelation for RelationStatic {
                     })
                     .unwrap_or(self.quoting);
 
-                let table_format =
-                    if table_format.is_some_and(|s| s.eq_ignore_ascii_case("iceberg")) {
-                        TableFormat::Iceberg
-                    } else {
-                        TableFormat::Default
-                    };
+                let table_format = match table_format.as_deref() {
+                    Some(s) if s.eq_ignore_ascii_case("iceberg") => TableFormat::Iceberg,
+                    _ => TableFormat::Default,
+                };
 
                 let relation = Relation::new(AdapterType::Snowflake, database, schema, identifier)
                     .with_relation_type(relation_type.map(|s| RelationType::from(s.as_str())))

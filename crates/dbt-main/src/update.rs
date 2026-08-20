@@ -644,8 +644,9 @@ pub async fn exec_update(
     version: Option<&str>,
     package: Option<&str>,
     force: bool,
+    command_name: &str,
 ) -> FsResult<()> {
-    exec_update_with_client(version, package, force, &ReqwestUpdateClient).await
+    exec_update_with_client(version, package, force, command_name, &ReqwestUpdateClient).await
 }
 
 fn validate_update_package(package: Option<&str>) -> FsResult<()> {
@@ -669,21 +670,21 @@ fn validate_update_package(package: Option<&str>) -> FsResult<()> {
 /// Returns the error message explaining why an in-place self-update is refused,
 /// or `None` if the update may proceed. Self-update is blocked when the binary
 /// is owned by a package manager, unless `force` is set.
-fn blocked_self_update_message(
-    install_method: crate::install_method::InstallMethod,
-    force: bool,
-) -> Option<String> {
-    if install_method.is_self_updatable() || force {
+fn blocked_self_update_message(dist_info: &dbt_dist::DistInfo, force: bool) -> Option<String> {
+    if dist_info.is_self_managed() || force {
         return None;
     }
-    let message = match install_method.upgrade_command(None) {
+    if let Some(message) = dist_info.unsupported_channel_message("update") {
+        return Some(message);
+    }
+    let message = match &dist_info.upgrade_cmd {
         Some(command) => format!(
             "dbt was installed via {}. To upgrade, run:\n\n    {}\n\n\
              (Self-updating here would overwrite the binary {} manages. \
              Pass --force to self-update anyway.)",
-            install_method.label(),
+            dist_info.install_label(),
             command,
-            install_method.label(),
+            dist_info.install_label(),
         ),
         None => "dbt was installed by another package manager, so it can't self-update. \
              Please upgrade dbt using the package manager you installed it with, \
@@ -699,12 +700,13 @@ pub(crate) async fn exec_update_with_client(
     version: Option<&str>,
     package: Option<&str>,
     force: bool,
+    command_name: &str,
     client: &dyn UpdateHttpClient,
 ) -> FsResult<()> {
     validate_update_package(package)?;
 
-    let install_method = crate::install_method::InstallMethod::detect();
-    if let Some(message) = blocked_self_update_message(install_method, force) {
+    let dist_info = dbt_dist::DistInfo::current(command_name)?;
+    if let Some(message) = blocked_self_update_message(&dist_info, force) {
         return err!(ErrorCode::NotSupported, "{}", message);
     }
 
@@ -1211,34 +1213,69 @@ mod tests {
         assert_eq!(std::fs::read(runner_path).unwrap(), b"existing-runner");
     }
 
+    fn dist_info_for_test(
+        channel: Option<dbt_dist::Channel>,
+        upgrade_cmd: Option<&str>,
+    ) -> dbt_dist::DistInfo {
+        dbt_dist::DistInfo {
+            path: "/usr/local/bin/dbt".to_string(),
+            channel,
+            distribution: None,
+            generation: dbt_dist::Generation::V2,
+            py_package_manager: None,
+            py_venv_root: None,
+            version: None,
+            is_prerelease: None,
+            upgrade_cmd: upgrade_cmd.map(str::to_string),
+            uninstall_cmd: None,
+        }
+    }
+
     #[test]
     fn test_blocked_self_update_message() {
-        use crate::install_method::InstallMethod;
+        use dbt_dist::Channel;
 
-        // Self-updatable installs are never blocked.
-        assert!(blocked_self_update_message(InstallMethod::Direct, false).is_none());
+        // Self-managed installs are never blocked.
+        for channel in [Channel::Standalone, Channel::Unclaimed] {
+            let info = dist_info_for_test(Some(channel), Some("dbt system update"));
+            assert!(blocked_self_update_message(&info, false).is_none());
+        }
 
-        // Package-manager installs are blocked with a method-specific command.
-        let msg = blocked_self_update_message(InstallMethod::Homebrew, false).unwrap();
+        // Package-manager installs are blocked with a channel-specific command.
+        let info = dist_info_for_test(Some(Channel::Brew), Some("brew upgrade dbt"));
+        let msg = blocked_self_update_message(&info, false).unwrap();
         assert!(msg.contains("brew upgrade dbt"), "got: {msg}");
         assert!(msg.contains("--force"), "got: {msg}");
 
-        // The catch-all `Other` has no command but still mentions --force.
-        let msg = blocked_self_update_message(InstallMethod::Other, false).unwrap();
+        // An unresolved channel has no command but still mentions --force.
+        let info = dist_info_for_test(None, None);
+        let msg = blocked_self_update_message(&info, false).unwrap();
         assert!(msg.contains("--force"), "got: {msg}");
 
-        // --force overrides the block for every method.
-        for method in [
-            InstallMethod::Homebrew,
-            InstallMethod::Pip,
-            InstallMethod::Winget,
-            InstallMethod::Other,
+        // A recognized-but-unsupported manager names itself and points at
+        // the install docs instead of a specific command.
+        let info = dist_info_for_test(Some(Channel::Unsupported("Chocolatey".to_string())), None);
+        let msg = blocked_self_update_message(&info, false).unwrap();
+        assert!(msg.contains("Chocolatey"), "got: {msg}");
+        assert!(
+            msg.contains("https://docs.getdbt.com/docs/local/install-dbt?version=2"),
+            "got: {msg}"
+        );
+
+        // --force overrides the block for every channel.
+        for (channel, command) in [
+            (Channel::Brew, "brew upgrade dbt"),
+            (Channel::Pypi, "pip install --upgrade dbt"),
+            (Channel::Winget, "winget upgrade --id dbtLabs.dbt --exact"),
         ] {
+            let info = dist_info_for_test(Some(channel.clone()), Some(command));
             assert!(
-                blocked_self_update_message(method, true).is_none(),
-                "--force should bypass block for {method:?}"
+                blocked_self_update_message(&info, true).is_none(),
+                "--force should bypass block for {channel:?}"
             );
         }
+        let info = dist_info_for_test(None, None);
+        assert!(blocked_self_update_message(&info, true).is_none());
     }
 
     #[test]
