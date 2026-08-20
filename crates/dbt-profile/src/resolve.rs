@@ -356,22 +356,13 @@ pub fn render_target(
     target_val: &dbt_yaml::Value,
     penv: &ProfileEnvironment,
 ) -> Result<dbt_yaml::Mapping> {
-    let target = target_mapping(target_val)?;
-    let mut rendered = dbt_yaml::Mapping::new();
-    for (key, value) in target.iter() {
-        let value = render_value_recursive(&penv.env, &penv.ctx, value)?;
-        rendered.insert(key.clone(), value);
-    }
-    Ok(rendered)
-}
-
-fn target_mapping(target_val: &dbt_yaml::Value) -> Result<&dbt_yaml::Mapping> {
-    let dbt_yaml::Value::Mapping(target, _) = target_val else {
-        return Err(ProfileError::Other(
+    let rendered = render_value_recursive(&penv.env, &penv.ctx, target_val)?;
+    match rendered {
+        dbt_yaml::Value::Mapping(m, _) => Ok(m),
+        _ => Err(ProfileError::Other(
             "rendered target output is not a mapping".to_owned(),
-        ));
-    };
-    Ok(target)
+        )),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +396,7 @@ fn read_profile_from_project(project_dir: &Path) -> Option<String> {
 // Recursive Jinja rendering over YAML values
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_value_recursive<S: Serialize>(
+fn render_value_recursive<S: Serialize>(
     env: &Environment<'_>,
     ctx: &S,
     value: &dbt_yaml::Value,
@@ -414,8 +405,15 @@ pub(crate) fn render_value_recursive<S: Serialize>(
 
     match value {
         dbt_yaml::Value::String(s, span) => {
-            let (resolved, has_jinja) = render_string_contents(env, ctx, listeners, s)?;
-            if !has_jinja && resolved == *s {
+            let has_jinja = s.contains("{{") || s.contains("{%");
+            let rendered = if has_jinja {
+                env.render_str(s, ctx, listeners)
+                    .map_err(ProfileError::Jinja)?
+            } else {
+                s.clone()
+            };
+            let resolved = render_secrets(&rendered)?;
+            if !has_jinja && resolved == rendered {
                 Ok(value.clone())
             } else {
                 match dbt_yaml::from_str::<dbt_yaml::Value>(&resolved) {
@@ -445,22 +443,6 @@ pub(crate) fn render_value_recursive<S: Serialize>(
         }
         _ => Ok(value.clone()),
     }
-}
-
-fn render_string_contents<S: Serialize>(
-    env: &Environment<'_>,
-    ctx: &S,
-    listeners: &[Rc<dyn RenderingEventListener>],
-    value: &str,
-) -> Result<(String, bool)> {
-    let has_jinja = value.contains("{{") || value.contains("{%");
-    let rendered = if has_jinja {
-        env.render_str(value, ctx, listeners)
-            .map_err(ProfileError::Jinja)?
-    } else {
-        value.to_owned()
-    };
-    Ok((render_secrets(&rendered)?, has_jinja))
 }
 
 // ---------------------------------------------------------------------------

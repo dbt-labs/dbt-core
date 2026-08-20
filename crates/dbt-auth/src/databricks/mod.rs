@@ -17,15 +17,7 @@ const QUERY_TAG_OPTION_PREFIX: &str = "databricks.query_tag.";
 const DBT_CORE_VERSION: &str = "@@dbt_core_version";
 const DBT_MODEL_NAME: &str = "@@dbt_model_name";
 const DBT_MATERIALIZED: &str = "@@dbt_materialized";
-const DBT_DATABRICKS_VERSION: &str = "@@dbt_databricks_version";
-const MAX_QUERY_TAGS: usize = 20;
-const MAX_QUERY_TAG_VALUE_CHARS: usize = 128;
-const RESERVED_QUERY_TAG_KEYS: [&str; 4] = [
-    DBT_CORE_VERSION,
-    DBT_MODEL_NAME,
-    DBT_MATERIALIZED,
-    DBT_DATABRICKS_VERSION,
-];
+const RESERVED_QUERY_TAG_KEYS: [&str; 3] = [DBT_CORE_VERSION, DBT_MODEL_NAME, DBT_MATERIALIZED];
 
 /// Supported Databricks authentication types.
 /// When `auth_type` is absent, defaults to token-based (PAT) authentication.
@@ -267,13 +259,6 @@ fn apply_query_tag_mapping(
         )));
     }
 
-    if query_tags.len() + 1 > MAX_QUERY_TAGS {
-        return Err(AuthError::config(format!(
-            "Too many total query tags ({}). Maximum allowed is {MAX_QUERY_TAGS}",
-            query_tags.len() + 1
-        )));
-    }
-
     for (key, value) in query_tags {
         let key = key.as_str().ok_or_else(|| {
             AuthError::config("query_tags keys must be strings. Only string keys are supported.")
@@ -283,22 +268,10 @@ fn apply_query_tag_mapping(
                 "Connection config: query_tags values must be strings for key '{key}'. Only string values are supported."
             ))
         })?;
-        if escaped_query_tag_value_len(value) > MAX_QUERY_TAG_VALUE_CHARS {
-            return Err(AuthError::config(format!(
-                "Connection config: Query tag values must be at most {MAX_QUERY_TAG_VALUE_CHARS} characters after escaping. Key '{key}' exceeds the limit."
-            )));
-        }
         builder.with_named_option(format!("{QUERY_TAG_OPTION_PREFIX}{key}"), value.to_owned())?;
     }
 
     Ok(())
-}
-
-fn escaped_query_tag_value_len(value: &str) -> usize {
-    value
-        .chars()
-        .map(|character| usize::from(matches!(character, '\\' | ',' | ':')) + 1)
-        .sum()
 }
 
 /// Resolve the Microsoft Entra ID tenant for an Azure Databricks workspace from the
@@ -619,11 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn test_query_tags_database_defaults_enforce_json_length_and_count_limits() {
-        let too_many = Mapping::from_iter(
-            (0..20).map(|index| (format!("tag_{index}").into(), "value".into())),
-        );
-        let too_long = ",".repeat(65);
+    fn test_query_tags_database_defaults_reject_invalid_json_strings() {
         for (query_tags, expected) in [
             (
                 YmlValue::string(r#"["not","an","object"]"#.to_owned()),
@@ -632,14 +601,6 @@ mod tests {
             (
                 YmlValue::string(r#"{"invalid": json}"#.to_owned()),
                 "Invalid JSON in query_tags",
-            ),
-            (
-                YmlValue::mapping(too_many),
-                "Too many total query tags (21)",
-            ),
-            (
-                YmlValue::mapping(Mapping::from_iter([("too_long".into(), too_long.into())])),
-                "at most 128 characters after escaping",
             ),
         ] {
             let mut config = base_config();
@@ -654,9 +615,9 @@ mod tests {
     }
 
     #[test]
-    fn test_query_tags_database_defaults_accept_exact_twenty_tag_boundary() {
+    fn test_query_tags_database_defaults_defer_total_count_to_driver() {
         let profile_tags = Mapping::from_iter(
-            (0..19).map(|index| (format!("tag_{index}").into(), "value".into())),
+            (0..20).map(|index| (format!("tag_{index}").into(), "value".into())),
         );
         let mut config = base_config();
         config.insert("token".into(), "T".into());
@@ -678,7 +639,54 @@ mod tests {
             })
             .count();
 
-        assert_eq!(count, 20);
+        assert_eq!(count, 21);
+    }
+
+    #[test]
+    fn test_query_tags_database_defaults_defer_value_length_to_driver() {
+        let long_value = ",".repeat(65);
+        let mut config = base_config();
+        config.insert("token".into(), "T".into());
+        config.insert(
+            "query_tags".into(),
+            YmlValue::mapping(Mapping::from_iter([(
+                "long".into(),
+                long_value.clone().into(),
+            )])),
+        );
+
+        let builder = DatabricksAuth {}
+            .configure(&AdapterConfig::new(config))
+            .unwrap()
+            .builder;
+
+        assert_eq!(
+            other_option_value(&builder, "databricks.query_tag.long"),
+            Some(long_value.as_str())
+        );
+    }
+
+    #[test]
+    fn test_query_tags_database_defaults_allow_dbt_databricks_version_user_key() {
+        let mut config = base_config();
+        config.insert("token".into(), "T".into());
+        config.insert(
+            "query_tags".into(),
+            YmlValue::mapping(Mapping::from_iter([(
+                "@@dbt_databricks_version".into(),
+                "custom".into(),
+            )])),
+        );
+
+        let builder = DatabricksAuth {}
+            .configure(&AdapterConfig::new(config))
+            .unwrap()
+            .builder;
+
+        assert_eq!(
+            other_option_value(&builder, "databricks.query_tag.@@dbt_databricks_version"),
+            Some("custom")
+        );
     }
 
     #[test]

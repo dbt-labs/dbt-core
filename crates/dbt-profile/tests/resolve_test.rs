@@ -118,7 +118,7 @@ my_project:
 }
 
 #[test]
-fn test_query_tags_env_var_uses_generic_native_rendering() {
+fn test_rendered_query_tags_json_becomes_a_mapping() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
 
@@ -170,50 +170,7 @@ my_project:
 }
 
 #[test]
-fn test_query_tags_with_embedded_jinja_uses_generic_native_rendering() {
-    let tmp = tempfile::tempdir().unwrap();
-    let profiles_dir = tmp.path();
-
-    unsafe {
-        std::env::set_var("DBT_PROFILE_TEST_QUERY_TAG_RUN_ID", "run-123");
-    }
-
-    write_file(
-        profiles_dir,
-        "profiles.yml",
-        r#"
-my_project:
-  target: dev
-  outputs:
-    dev:
-      type: databricks
-      query_tags: '{"run_id":"{{ env_var("DBT_PROFILE_TEST_QUERY_TAG_RUN_ID") }}"}'
-"#,
-    );
-
-    let args = ResolveArgs {
-        profiles_dir: Some(profiles_dir.to_path_buf()),
-        profile: Some("my_project".to_owned()),
-        ..Default::default()
-    };
-
-    let result = resolve(&args).unwrap();
-    assert_eq!(
-        result
-            .credentials
-            .get("query_tags")
-            .and_then(|value| value.get("run_id"))
-            .and_then(dbt_yaml::Value::as_str),
-        Some("run-123")
-    );
-
-    unsafe {
-        std::env::remove_var("DBT_PROFILE_TEST_QUERY_TAG_RUN_ID");
-    }
-}
-
-#[test]
-fn test_databricks_query_tags_mapping_uses_generic_recursive_rendering() {
+fn test_query_tags_mapping_renders_values() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
 
@@ -249,7 +206,7 @@ my_project:
 }
 
 #[test]
-fn test_databricks_literal_query_tags_json_remains_a_string() {
+fn test_literal_query_tags_json_remains_a_string() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
 
@@ -277,133 +234,6 @@ my_project:
         result.get_str("query_tags"),
         Some(r#"{"team":"analytics"}"#)
     );
-}
-
-#[test]
-fn test_databricks_query_tags_accepts_null() {
-    let tmp = tempfile::tempdir().unwrap();
-    let profiles_dir = tmp.path();
-
-    write_file(
-        profiles_dir,
-        "profiles.yml",
-        r#"
-my_project:
-  target: dev
-  outputs:
-    dev:
-      type: databricks
-      query_tags: null
-"#,
-    );
-
-    let args = ResolveArgs {
-        profiles_dir: Some(profiles_dir.to_path_buf()),
-        profile: Some("my_project".to_owned()),
-        ..Default::default()
-    };
-
-    let result = resolve(&args).unwrap();
-    assert!(matches!(
-        result.credentials.get("query_tags"),
-        Some(dbt_yaml::Value::Null(_))
-    ));
-}
-
-#[test]
-fn test_nested_query_tags_key_keeps_native_rendering() {
-    let tmp = tempfile::tempdir().unwrap();
-    let profiles_dir = tmp.path();
-
-    unsafe {
-        std::env::set_var(
-            "DBT_PROFILE_TEST_NESTED_QUERY_TAGS",
-            r#"{"team":"analytics"}"#,
-        );
-    }
-
-    write_file(
-        profiles_dir,
-        "profiles.yml",
-        r#"
-my_project:
-  target: dev
-  outputs:
-    dev:
-      type: databricks
-      adapter_options:
-        query_tags: "{{ env_var('DBT_PROFILE_TEST_NESTED_QUERY_TAGS') }}"
-"#,
-    );
-
-    let args = ResolveArgs {
-        profiles_dir: Some(profiles_dir.to_path_buf()),
-        profile: Some("my_project".to_owned()),
-        ..Default::default()
-    };
-
-    let result = resolve(&args).unwrap();
-    let nested_query_tags = result
-        .credentials
-        .get("adapter_options")
-        .and_then(|value| value.get("query_tags"))
-        .expect("nested query_tags should be present");
-    assert_eq!(
-        nested_query_tags
-            .get("team")
-            .and_then(dbt_yaml::Value::as_str),
-        Some("analytics")
-    );
-
-    unsafe {
-        std::env::remove_var("DBT_PROFILE_TEST_NESTED_QUERY_TAGS");
-    }
-}
-
-#[test]
-fn test_custom_adapter_query_tags_keeps_native_rendering() {
-    let tmp = tempfile::tempdir().unwrap();
-    let profiles_dir = tmp.path();
-
-    unsafe {
-        std::env::set_var(
-            "DBT_PROFILE_TEST_CUSTOM_QUERY_TAGS",
-            r#"{"team":"analytics"}"#,
-        );
-    }
-
-    write_file(
-        profiles_dir,
-        "profiles.yml",
-        r#"
-my_project:
-  target: dev
-  outputs:
-    dev:
-      type: custom
-      query_tags: "{{ env_var('DBT_PROFILE_TEST_CUSTOM_QUERY_TAGS') }}"
-"#,
-    );
-
-    let args = ResolveArgs {
-        profiles_dir: Some(profiles_dir.to_path_buf()),
-        profile: Some("my_project".to_owned()),
-        ..Default::default()
-    };
-
-    let result = resolve(&args).unwrap();
-    let query_tags = result
-        .credentials
-        .get("query_tags")
-        .expect("query_tags should be present");
-    assert_eq!(
-        query_tags.get("team").and_then(dbt_yaml::Value::as_str),
-        Some("analytics")
-    );
-
-    unsafe {
-        std::env::remove_var("DBT_PROFILE_TEST_CUSTOM_QUERY_TAGS");
-    }
 }
 
 #[test]

@@ -10,15 +10,8 @@ const QUERY_TAG_OPTION_PREFIX: &str = "databricks.query_tag.";
 const DBT_CORE_VERSION: &str = "@@dbt_core_version";
 const DBT_MODEL_NAME: &str = "@@dbt_model_name";
 const DBT_MATERIALIZED: &str = "@@dbt_materialized";
-const DBT_DATABRICKS_VERSION: &str = "@@dbt_databricks_version";
-const MAX_TAGS: usize = 20;
-const MAX_VALUE_CHARS: usize = 128;
-const RESERVED_KEYS: [&str; 4] = [
-    DBT_CORE_VERSION,
-    DBT_MODEL_NAME,
-    DBT_MATERIALIZED,
-    DBT_DATABRICKS_VERSION,
-];
+const MAX_AUTOMATIC_VALUE_CHARS: usize = 128;
+const RESERVED_KEYS: [&str; 3] = [DBT_CORE_VERSION, DBT_MODEL_NAME, DBT_MATERIALIZED];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct DatabricksQueryTags {
@@ -41,13 +34,6 @@ impl DatabricksQueryTags {
             tags.insert(DBT_MATERIALIZED.to_string(), truncate_default(materialized));
         }
         tags.extend(model_tags);
-
-        if tags.len() > MAX_TAGS {
-            return configuration_error(format!(
-                "Too many total query tags ({}). Maximum allowed is {MAX_TAGS}",
-                tags.len()
-            ));
-        }
 
         Ok(Self { tags })
     }
@@ -168,11 +154,6 @@ fn parse_user_tags(
                     "{source}: query_tags values must be strings for key '{key}'. Only string values are supported."
                 ));
             };
-            if escaped_value_len(&value) > MAX_VALUE_CHARS {
-                return configuration_error(format!(
-                    "{source}: Query tag values must be at most {MAX_VALUE_CHARS} characters after escaping. Key '{key}' exceeds the limit."
-                ));
-            }
             Ok((key, value))
         })
         .collect()
@@ -186,14 +167,7 @@ fn configuration_error<T>(message: impl Into<String>) -> AdapterResult<T> {
 }
 
 fn truncate_default(value: &str) -> String {
-    value.chars().take(MAX_VALUE_CHARS).collect()
-}
-
-fn escaped_value_len(value: &str) -> usize {
-    value
-        .chars()
-        .map(|character| usize::from(matches!(character, '\\' | ',' | ':')) + 1)
-        .sum()
+    value.chars().take(MAX_AUTOMATIC_VALUE_CHARS).collect()
 }
 
 #[cfg(test)]
@@ -204,8 +178,8 @@ mod tests {
     };
     use adbc_core::options::OptionValue;
     use dbt_schemas::schemas::{
-        AdapterAttr, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
-        nodes::DatabricksAttr,
+        AdapterAttr, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest,
+        common::DbtMaterialization, manifest::DbtOperation, nodes::DatabricksAttr,
     };
 
     fn string_option<'a>(options: &'a [(String, OptionValue)], name: &str) -> Option<&'a str> {
@@ -229,6 +203,19 @@ mod tests {
         )
         .unwrap()
         .into_statement_options();
+
+        assert_eq!(options.len(), 3);
+        assert_eq!(
+            options
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "databricks.query_tag.@@dbt_model_name",
+                "databricks.query_tag.@@dbt_materialized",
+                "databricks.query_tag.team",
+            ]
+        );
 
         assert_eq!(
             string_option(&options, &format!("{QUERY_TAG_OPTION_PREFIX}team")),
@@ -273,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn emits_empty_user_values() {
+    fn passes_empty_user_values_to_the_driver() {
         let options = DatabricksQueryTags::from_node(Some(r#"{"empty":""}"#), None, None)
             .unwrap()
             .into_statement_options();
@@ -345,41 +332,41 @@ mod tests {
     fn non_model_resources_emit_resource_query_tags() {
         let mut test = DbtTest::default();
         test.__common_attr__.name = "accepted_values_orders".to_string();
+        test.__base_attr__.materialized = DbtMaterialization::Test;
         test.__adapter_attr__ = databricks_attr(r#"{"team":"resource"}"#);
         test.deprecated_config
             .__warehouse_specific_config__
             .query_tags = Some(r#"{"team":"deprecated"}"#.to_string());
-        let test_materialized = test.__base_attr__.materialized.to_string();
         assert_resource_tags(
             dbt_yaml::to_value(test).unwrap(),
             "accepted_values_orders",
-            Some(&test_materialized),
+            Some("test"),
         );
 
         let mut snapshot = DbtSnapshot::default();
         snapshot.__common_attr__.name = "orders_snapshot".to_string();
+        snapshot.__base_attr__.materialized = DbtMaterialization::Snapshot;
         snapshot.__adapter_attr__ = databricks_attr(r#"{"team":"resource"}"#);
         snapshot
             .deprecated_config
             .__warehouse_specific_config__
             .query_tags = Some(r#"{"team":"deprecated"}"#.to_string());
-        let snapshot_materialized = snapshot.__base_attr__.materialized.to_string();
         assert_resource_tags(
             dbt_yaml::to_value(snapshot).unwrap(),
             "orders_snapshot",
-            Some(&snapshot_materialized),
+            Some("snapshot"),
         );
 
         let mut seed = DbtSeed::default();
         seed.__common_attr__.name = "orders_seed".to_string();
+        seed.__base_attr__.materialized = DbtMaterialization::Seed;
         seed.deprecated_config
             .__warehouse_specific_config__
             .query_tags = Some(r#"{"team":"resource"}"#.to_string());
-        let seed_materialized = seed.__base_attr__.materialized.to_string();
         assert_resource_tags(
             dbt_yaml::to_value(seed).unwrap(),
             "orders_seed",
-            Some(&seed_materialized),
+            Some("seed"),
         );
 
         let mut unit_test = DbtUnitTest::default();
@@ -410,10 +397,6 @@ mod tests {
             string_option(&options, "databricks.query_tag.team"),
             Some("model")
         );
-        assert!(
-            string_option(&options, "databricks.query_tag.profile_only").is_none(),
-            "profile defaults belong to the database, not statement options"
-        );
     }
 
     #[test]
@@ -435,7 +418,6 @@ mod tests {
             r#"{"@@dbt_core_version":"override"}"#,
             r#"{"@@dbt_model_name":"override"}"#,
             r#"{"@@dbt_materialized":"override"}"#,
-            r#"{"@@dbt_databricks_version":"override"}"#,
         ] {
             let model_error = DatabricksQueryTags::from_node(Some(source), None, None).unwrap_err();
             assert!(model_error.message().contains("reserved query tag keys"));
@@ -457,57 +439,56 @@ mod tests {
     }
 
     #[test]
-    fn validates_escaped_value_length_and_total_tag_count() {
-        let long_after_escaping = format!(r#"{{"value":"{}"}}"#, ",".repeat(65));
-        let length_error =
-            DatabricksQueryTags::from_node(Some(&long_after_escaping), None, None).unwrap_err();
-        assert!(length_error.message().contains("at most 128 characters"));
-
-        let too_many = serde_json::to_string(
-            &(0..19)
-                .map(|index| (format!("tag_{index}"), "value"))
-                .collect::<std::collections::BTreeMap<_, _>>(),
-        )
-        .unwrap();
-        let count_error =
-            DatabricksQueryTags::from_node(Some(&too_many), Some("orders"), Some("incremental"))
-                .unwrap_err();
-        assert!(
-            count_error
-                .message()
-                .contains("Too many total query tags (21)")
-        );
-
-        let exact_boundary = serde_json::to_string(
-            &(0..18)
-                .map(|index| (format!("tag_{index}"), "value"))
-                .collect::<std::collections::BTreeMap<_, _>>(),
-        )
-        .unwrap();
+    fn allows_dbt_databricks_version_as_a_user_key() {
         let options = DatabricksQueryTags::from_node(
-            Some(&exact_boundary),
-            Some("orders"),
-            Some("incremental"),
-        )
-        .unwrap()
-        .into_statement_options();
-        assert_eq!(options.len(), 20);
-    }
-
-    #[test]
-    fn passes_raw_values_to_the_driver_and_truncates_automatic_values() {
-        let model_name = format!("{}::", "x".repeat(127));
-        let options = DatabricksQueryTags::from_node(
-            Some(r#"{"path":"folder\\name,a:b"}"#),
-            Some(&model_name),
-            Some("table"),
+            Some(r#"{"@@dbt_databricks_version":"custom"}"#),
+            None,
+            None,
         )
         .unwrap()
         .into_statement_options();
 
         assert_eq!(
+            string_option(&options, "databricks.query_tag.@@dbt_databricks_version"),
+            Some("custom")
+        );
+    }
+
+    #[test]
+    fn defers_total_tag_count_to_the_driver() {
+        let user_tags = serde_json::to_string(
+            &(0..19)
+                .map(|index| (format!("tag_{index}"), "value"))
+                .collect::<std::collections::BTreeMap<_, _>>(),
+        )
+        .unwrap();
+        let options =
+            DatabricksQueryTags::from_node(Some(&user_tags), Some("orders"), Some("incremental"))
+                .unwrap()
+                .into_statement_options();
+
+        assert_eq!(options.len(), 21);
+    }
+
+    #[test]
+    fn passes_raw_values_to_the_driver_and_truncates_automatic_values() {
+        let model_name = format!("{}::", "x".repeat(127));
+        let query_tags = format!(
+            r#"{{"path":"folder\\name,a:b","long":"{}"}}"#,
+            ",".repeat(65)
+        );
+        let options =
+            DatabricksQueryTags::from_node(Some(&query_tags), Some(&model_name), Some("table"))
+                .unwrap()
+                .into_statement_options();
+
+        assert_eq!(
             string_option(&options, "databricks.query_tag.path"),
             Some(r#"folder\name,a:b"#)
+        );
+        assert_eq!(
+            string_option(&options, "databricks.query_tag.long"),
+            Some(",".repeat(65).as_str())
         );
         assert_eq!(
             string_option(&options, "databricks.query_tag.@@dbt_model_name")
