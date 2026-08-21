@@ -912,7 +912,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
             meta: config.meta,
-            on_configuration_change: config.on_configuration_change,
+            on_configuration_change: resolve_configuration_change(config.on_configuration_change),
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,
             packages: Packages(config.packages),
@@ -1063,6 +1063,12 @@ impl From<ProjectModelConfig> for ModelConfig {
             meta_keys_defaults: None,
         }
     }
+}
+
+fn resolve_configuration_change(
+    value: Option<OnConfigurationChange>,
+) -> Option<OnConfigurationChange> {
+    Some(value.unwrap_or_default())
 }
 
 impl From<ModelConfig> for ProjectModelConfig {
@@ -1882,10 +1888,29 @@ fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization
 #[cfg(test)]
 mod tests {
     use super::ModelConfig;
-    use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
+    use crate::schemas::common::{FreshnessPeriod, OnConfigurationChange, UpdatesOn};
     use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
+
+    #[test]
+    fn omitted_on_configuration_change_defaults_to_apply_in_runtime_configs() {
+        let project: ProjectModelConfig =
+            dbt_yaml::from_str("__additional_properties__: {}\n").unwrap();
+        let project_runtime: ModelConfig = project.into();
+        assert_eq!(
+            project_runtime.on_configuration_change,
+            Some(OnConfigurationChange::Apply)
+        );
+
+        let manifest: ManifestModelConfig =
+            dbt_yaml::from_str("__warehouse_specific_config__: {}\n").unwrap();
+        let manifest_runtime: ModelConfig = manifest.into();
+        assert_eq!(
+            manifest_runtime.on_configuration_change,
+            Some(OnConfigurationChange::Apply)
+        );
+    }
 
     #[test]
     fn test_classifiers_merge_in_default_to() {

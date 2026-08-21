@@ -1233,7 +1233,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             full_refresh: config.full_refresh,
             unique_key: config.unique_key,
             on_schema_change: config.on_schema_change,
-            on_configuration_change: config.on_configuration_change,
+            on_configuration_change: Some(config.on_configuration_change.unwrap_or_default()),
             on_error: config.on_error,
             grants: config.grants,
             python_version: config.python_version,
