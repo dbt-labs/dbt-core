@@ -256,6 +256,10 @@ pub struct WarehouseSpecificNodeConfig {
     pub ttl: Option<String>,
     pub settings: Option<BTreeMap<String, YmlValue>>,
     pub query_settings: Option<BTreeMap<String, YmlValue>>,
+    pub projections: Option<Vec<YmlValue>>,
+    // incremental materialization
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub inserts_only: Option<bool>,
     // dictionary materialization
     pub connection_overrides: Option<BTreeMap<String, YmlValue>>,
     pub fields: Option<Vec<YmlValue>>,
@@ -268,6 +272,9 @@ pub struct WarehouseSpecificNodeConfig {
     pub table: Option<String>,
     pub update_field: Option<String>,
     pub update_lag: Option<YmlValue>,
+    // view materialization
+    pub definer: Option<String>,
+    pub sql_security: Option<String>,
     // materialized-view materialization
     pub refreshable: Option<BTreeMap<String, YmlValue>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -485,6 +492,8 @@ pub fn same_warehouse_config(
     let ttl_eq = self_wh.ttl == other_wh.ttl;
     let settings_eq = self_wh.settings == other_wh.settings;
     let query_settings_eq = self_wh.query_settings == other_wh.query_settings;
+    let projections_eq = self_wh.projections == other_wh.projections;
+    let inserts_only_eq = self_wh.inserts_only == other_wh.inserts_only;
     let connection_overrides_eq = self_wh.connection_overrides == other_wh.connection_overrides;
     let fields_eq = self_wh.fields == other_wh.fields;
     let source_type_eq = self_wh.source_type == other_wh.source_type;
@@ -496,6 +505,8 @@ pub fn same_warehouse_config(
     let table_eq = self_wh.table == other_wh.table;
     let update_field_eq = self_wh.update_field == other_wh.update_field;
     let update_lag_eq = self_wh.update_lag == other_wh.update_lag;
+    let definer_eq = self_wh.definer == other_wh.definer;
+    let sql_security_eq = self_wh.sql_security == other_wh.sql_security;
     let refreshable_eq = self_wh.refreshable == other_wh.refreshable;
     let catchup_eq = self_wh.catchup == other_wh.catchup;
     let mv_on_schema_change_eq = self_wh.mv_on_schema_change == other_wh.mv_on_schema_change;
@@ -579,6 +590,8 @@ pub fn same_warehouse_config(
         && ttl_eq
         && settings_eq
         && query_settings_eq
+        && projections_eq
+        && inserts_only_eq
         && connection_overrides_eq
         && fields_eq
         && source_type_eq
@@ -590,6 +603,8 @@ pub fn same_warehouse_config(
         && table_eq
         && update_field_eq
         && update_lag_eq
+        && definer_eq
+        && sql_security_eq
         && refreshable_eq
         && catchup_eq
         && mv_on_schema_change_eq
@@ -1217,6 +1232,22 @@ pub fn same_warehouse_config(
                     )),
                 ),
                 (
+                    "projections",
+                    projections_eq,
+                    Some((
+                        format!("{:?}", &self_wh.projections),
+                        format!("{:?}", &other_wh.projections),
+                    )),
+                ),
+                (
+                    "inserts_only",
+                    inserts_only_eq,
+                    Some((
+                        format!("{:?}", &self_wh.inserts_only),
+                        format!("{:?}", &other_wh.inserts_only),
+                    )),
+                ),
+                (
                     "connection_overrides",
                     connection_overrides_eq,
                     Some((
@@ -1302,6 +1333,22 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.update_lag),
                         format!("{:?}", &other_wh.update_lag),
+                    )),
+                ),
+                (
+                    "definer",
+                    definer_eq,
+                    Some((
+                        format!("{:?}", &self_wh.definer),
+                        format!("{:?}", &other_wh.definer),
+                    )),
+                ),
+                (
+                    "sql_security",
+                    sql_security_eq,
+                    Some((
+                        format!("{:?}", &self_wh.sql_security),
+                        format!("{:?}", &other_wh.sql_security),
                     )),
                 ),
                 (
