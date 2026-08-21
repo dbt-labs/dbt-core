@@ -13702,6 +13702,15 @@
       "description": "Column entry inside a model version block.\n\nUnlike `ColumnProperties`, `name` is optional here because version column lists can contain include/exclude directives (e.g. `include: all, exclude: [col]`) that have no name.",
       "type": "object",
       "properties": {
+        "classifiers": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "column_mask": {
           "anyOf": [
             {
@@ -13864,7 +13873,7 @@
           ]
         },
         "columns": {
-          "readOnly": true,
+          "description": "Columns for this version. Each entry is either a column definition or the single optional `include`/`exclude` directive controlling which model-level columns this version inherits. When no directive is given, every model-level column is inherited.",
           "type": [
             "array",
             "null"
