@@ -4750,6 +4750,15 @@
             "null"
           ]
         },
+        "+resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "+row_access_policy": {
           "type": [
             "string",
@@ -5681,6 +5690,15 @@
             "string",
             "null"
           ]
+        },
+        "+resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "+row_access_policy": {
           "type": [
