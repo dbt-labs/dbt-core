@@ -1,0 +1,7 @@
+kind: Features
+body: Support catalog_sync config for Snowflake-managed Iceberg tables to sync with Snowflake Open Catalog
+time: 2026-08-12T16:41:05.803407+01:00
+custom:
+    author: zak-nuccio
+    issue: "15919"
+    project: dbt-core

@@ -113,6 +113,8 @@ pub struct ProjectModelConfig {
     pub catalog: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+catalog_sync")]
+    pub catalog_sync: Option<String>,
     #[serde(rename = "+alt_compute")]
     pub alt_compute: Option<ComputePlatform>,
     #[serde(rename = "+cluster_by")]
@@ -624,6 +626,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.buckets.is_some()
             || self.catalog.is_some()
             || self.catalog_name.is_some()
+            || self.catalog_sync.is_some()
             || self.alt_compute.is_some()
             || self.cluster_by.is_some()
             || self.clustered_by.is_some()
@@ -776,6 +779,7 @@ pub struct ModelConfig {
     #[serde(default)]
     pub classifiers: Classifiers,
     pub catalog_name: Option<String>,
+    pub catalog_sync: Option<String>,
     // Internal placement hint; kept out of serialized config/telemetry output.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alt_compute: Option<ComputePlatform>,
@@ -898,6 +902,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
             catalog_name: config.catalog_name.clone(),
+            catalog_sync: config.catalog_sync.clone(),
             alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
@@ -1086,6 +1091,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             begin: config.begin,
             bind: config.__warehouse_specific_config__.bind,
             catalog_name: config.catalog_name,
+            catalog_sync: config.catalog_sync,
             alt_compute: config.alt_compute,
             column_types: config.column_types,
             compute: config.compute,
@@ -1366,6 +1372,7 @@ impl ModelConfig {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
+        let catalog_sync_eq = self.catalog_sync == other.catalog_sync;
         let alt_compute_eq = self.alt_compute == other.alt_compute;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let materialized_eq_result = materialized_eq(&self.materialized, &other.materialized);
@@ -1426,6 +1433,7 @@ impl ModelConfig {
 
         let result = enabled_eq
             && catalog_name_eq
+            && catalog_sync_eq
             && alt_compute_eq
             && meta_eq_result
             && materialized_eq_result
@@ -1481,6 +1489,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.catalog_name),
                             format!("{:?}", &other.catalog_name),
+                        )),
+                    ),
+                    (
+                        "catalog_sync",
+                        catalog_sync_eq,
+                        Some((
+                            format!("{:?}", &self.catalog_sync),
+                            format!("{:?}", &other.catalog_sync),
                         )),
                     ),
                     (
@@ -1961,6 +1977,73 @@ mod tests {
                 "pii".to_string(),
             ]))
         );
+    }
+
+    #[test]
+    fn test_catalog_sync_parses() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+catalog_sync: MY_CATALOG
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.catalog_sync.as_deref(), Some("MY_CATALOG"));
+    }
+
+    #[test]
+    fn test_catalog_sync_none_child_inherits_parent() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+
+        let parent = ModelConfig {
+            catalog_sync: Some("PARENT_CATALOG".to_string()),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            catalog_sync: None,
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        assert_eq!(child.catalog_sync.as_deref(), Some("PARENT_CATALOG"));
+    }
+
+    #[test]
+    fn test_catalog_sync_detects_config_change() {
+        let a = ModelConfig {
+            catalog_sync: Some("CAT_A".to_string()),
+            ..Default::default()
+        };
+        let b = ModelConfig {
+            catalog_sync: Some("CAT_B".to_string()),
+            ..Default::default()
+        };
+        let c = ModelConfig {
+            catalog_sync: Some("CAT_A".to_string()),
+            ..Default::default()
+        };
+
+        assert!(!a.same_config(&b));
+        assert!(a.same_config(&c));
+    }
+
+    #[test]
+    fn test_catalog_sync_counts_as_set_field() {
+        use crate::schemas::project::dbt_project::TypedRecursiveConfig;
+
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++catalog_sync: MY_CATALOG
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.catalog_sync.as_deref(), Some("MY_CATALOG"));
+        assert!(config.has_set_fields());
     }
 
     #[test]
