@@ -42,7 +42,8 @@ const fn node_type_to_order(node_type: NodeType) -> u8 {
         NodeType::Function => 13,
         NodeType::Macro => 14,
         NodeType::DocsMacro => 15,
-        NodeType::Unspecified => 16,
+        NodeType::Skill => 16,
+        NodeType::Unspecified => 17,
     }
 }
 
@@ -65,6 +66,7 @@ pub fn node_type_plural(node: NodeType) -> &'static str {
         NodeType::SavedQuery => "saved queries",
         NodeType::SemanticModel => "semantic models",
         NodeType::Function => "functions",
+        NodeType::Skill => "skills",
     }
 }
 

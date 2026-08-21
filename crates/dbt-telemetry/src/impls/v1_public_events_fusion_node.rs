@@ -41,6 +41,7 @@ impl NodeType {
             Self::SavedQuery => "saved_query",
             Self::SemanticModel => "semantic_model",
             Self::Function => "function",
+            Self::Skill => "skill",
         }
     }
 }
@@ -64,6 +65,7 @@ impl NodeType {
             Self::SavedQuery => "saved query",
             Self::SemanticModel => "semantic model",
             Self::Function => "function",
+            Self::Skill => "skill",
         }
     }
 }

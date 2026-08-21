@@ -117,6 +117,7 @@ pub async fn execute_deps_command(
         use_v2_compatible_package_downloads,
         private_package_resolver,
         cloud_config,
+        load_args.ai_provider.as_deref(),
     )
     .await?;
 

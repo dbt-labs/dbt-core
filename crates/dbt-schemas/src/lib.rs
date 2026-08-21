@@ -124,6 +124,7 @@ pub mod schemas {
         pub mod semantic_model;
     }
     pub mod project {
+        mod config_tree;
         mod dbt_project;
         pub(crate) mod configs {
             pub mod analysis_config;
@@ -139,11 +140,17 @@ pub mod schemas {
             pub mod saved_query_config;
             pub mod seed_config;
             pub mod semantic_model_config;
+            pub mod skill_config;
             pub mod snapshot_config;
             pub mod source_config;
             pub mod unit_test_config;
         }
 
+        pub use config_tree::{
+            DbtProjectConfig, ProjectConfigResolver, RootProjectConfigs,
+            build_root_project_configs, disallow_plus_prefix_from_flags, init_project_config,
+            recur_build_dbt_project_config, strip_resource_paths_from_ref_path,
+        };
         pub use configs::analysis_config::{
             AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,
         };
@@ -174,6 +181,7 @@ pub mod schemas {
         pub use configs::semantic_model_config::{
             ProjectSemanticModelConfig, ResolvedSemanticModelConfig, SemanticModelConfig,
         };
+        pub use configs::skill_config::{ProjectSkillConfig, ResolvedSkillConfig, SkillConfig};
         pub use configs::snapshot_config::{
             ProjectSnapshotConfig, ResolvedSnapshotConfig, SnapshotConfig, SnapshotMetaColumnNames,
         };
@@ -182,8 +190,9 @@ pub mod schemas {
             ProjectUnitTestConfig, ResolvedUnitTestConfig, UnitTestConfig,
         };
         pub use dbt_project::{
-            DbtProject, DbtProjectNameOnly, DbtProjectSimplified, ProjectDbtCloudConfig,
-            QueryComment, ResolvableConfig, ResolvedConfig, TypedRecursiveConfig,
+            DEFAULT_SKILL_PATH, DbtProject, DbtProjectNameOnly, DbtProjectSimplified,
+            ProjectDbtCloudConfig, QueryComment, ResolvableConfig, ResolvedConfig,
+            TypedRecursiveConfig,
         };
     }
 

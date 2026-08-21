@@ -502,6 +502,7 @@ pub async fn load(
         use_v2_compatible_package_downloads,
         private_package_resolver,
         dbt_state.cloud_config.clone(),
+        arg.ai_provider.as_deref(),
     )
     .await?;
 

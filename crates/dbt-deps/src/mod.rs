@@ -33,7 +33,7 @@ use dbt_telemetry::{DepsAllPackagesInstalled, GenericOpExecuted};
 use std::sync::Arc;
 use std::{collections::BTreeMap, path::Path};
 use steps::{
-    compute_package_lock, install_packages, load_dbt_packages,
+    SkillInstallInputs, compute_package_lock, install_packages, install_skills, load_dbt_packages,
     load_dbt_packages_lock_without_validation, try_load_valid_dbt_packages_lock,
 };
 use tracing::Instrument as _;
@@ -60,6 +60,7 @@ pub async fn get_or_install_packages(
     use_v2_compatible_package_downloads: bool,
     private_package_resolver: Arc<dyn PrivatePackageResolver>,
     cloud_config: Option<ResolvedCloudConfig>,
+    ai_provider: Option<&[String]>,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     let Some(packages_relative_dir) =
         DbtPath::from(packages_install_path).get_relative_path(&io.in_dir)
@@ -289,6 +290,18 @@ pub async fn get_or_install_packages(
     }
 
     deps_context.flush_notices(&dbt_packages_lock);
+
+    // Skills ship inside packages, so install them at the same moment the
+    // packages land. Skipped in lock-only mode, where nothing was unpacked.
+    if !lock {
+        install_skills(SkillInstallInputs {
+            in_dir: &io.in_dir,
+            packages_install_path,
+            dbt_packages_lock: &dbt_packages_lock,
+            package_def: package_def.as_ref(),
+            ai_provider,
+        });
+    }
 
     Ok((
         dbt_packages_lock,

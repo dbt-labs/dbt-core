@@ -259,6 +259,21 @@ pub enum ErrorCode {
     DocsGenerateWarning = 1705,
 
     // --------------------------------------------------------------------------------------------
+    // Agent skills
+    /// `ai_provider` names a harness dbt has no destination directory for.
+    UnknownAiProvider = 1800,
+    /// Skills were found but `ai_provider` is unset, so nothing was installed.
+    AiProviderUnset = 1801,
+    /// A `SKILL.md` is missing required frontmatter or its `name` doesn't match its directory.
+    InvalidSkill = 1802,
+    /// Two enabled skills want the same flat install destination.
+    SkillNameCollision = 1803,
+    /// A dbt-installed skill was edited by the user, so dbt left it alone.
+    SkillModifiedByUser = 1804,
+    /// A user-authored skill occupies a destination dbt wanted to install into.
+    SkillDestinationOccupied = 1805,
+
+    // --------------------------------------------------------------------------------------------
     // Local execution
     SessionError = 2000,
     UnsupportedLocalExecutionDialect = 2001,

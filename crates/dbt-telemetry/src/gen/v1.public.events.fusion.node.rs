@@ -506,6 +506,7 @@ pub enum NodeType {
     SavedQuery = 13,
     SemanticModel = 14,
     Function = 15,
+    Skill = 16,
 }
 impl NodeType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -530,6 +531,7 @@ impl NodeType {
             Self::SavedQuery => "NODE_TYPE_SAVED_QUERY",
             Self::SemanticModel => "NODE_TYPE_SEMANTIC_MODEL",
             Self::Function => "NODE_TYPE_FUNCTION",
+            Self::Skill => "NODE_TYPE_SKILL",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -551,6 +553,7 @@ impl NodeType {
             "NODE_TYPE_SAVED_QUERY" => Some(Self::SavedQuery),
             "NODE_TYPE_SEMANTIC_MODEL" => Some(Self::SemanticModel),
             "NODE_TYPE_FUNCTION" => Some(Self::Function),
+            "NODE_TYPE_SKILL" => Some(Self::Skill),
             _ => None,
         }
     }
