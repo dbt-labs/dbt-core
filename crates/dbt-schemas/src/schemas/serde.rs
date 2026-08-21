@@ -250,6 +250,58 @@ where
         .or_else(|| value.as_str().map(|s| s.to_lowercase() == "true")))
 }
 
+/// Deserialize booleans using Pydantic's non-strict `bool` coercion rules.
+///
+/// This is intentionally narrower than [`bool_or_string_bool`]: invalid strings,
+/// collections, null, and numbers other than zero or one are rejected instead of
+/// silently becoming `false`.
+pub fn pydantic_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
+    parse_pydantic_bool(&value)
+        .map(Some)
+        .ok_or_else(|| de::Error::custom("expected a valid boolean"))
+}
+
+fn parse_pydantic_bool(value: &dbt_yaml::Value) -> Option<bool> {
+    value
+        .as_bool()
+        .or_else(|| value.as_i64().and_then(parse_zero_or_one))
+        .or_else(|| {
+            let dbt_yaml::Value::Number(number, _) = value else {
+                return None;
+            };
+            number.as_f64().and_then(parse_zero_or_one_float)
+        })
+        .or_else(|| value.as_str().and_then(parse_pydantic_bool_string))
+}
+
+fn parse_zero_or_one(value: i64) -> Option<bool> {
+    match value {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
+fn parse_zero_or_one_float(value: f64) -> Option<bool> {
+    match value {
+        0.0 => Some(false),
+        1.0 => Some(true),
+        _ => None,
+    }
+}
+
+fn parse_pydantic_bool_string(value: &str) -> Option<bool> {
+    match value.to_ascii_lowercase().as_str() {
+        "0" | "false" | "f" | "n" | "no" | "off" => Some(false),
+        "1" | "true" | "t" | "y" | "yes" | "on" => Some(true),
+        _ => None,
+    }
+}
+
 pub fn bool_or_string_bool_default<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: Deserializer<'de>,

@@ -970,6 +970,8 @@ pub struct ManifestModelConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub create_notebook: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub notebook_scoped_libraries: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub index_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_libs: Option<Vec<YmlValue>>,
@@ -1183,6 +1185,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             cluster_id: config.cluster_id.clone(),
             http_path: config.http_path.clone(),
             create_notebook: config.create_notebook,
+            notebook_scoped_libraries: config.notebook_scoped_libraries,
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
@@ -1262,6 +1265,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             cluster_id: config.cluster_id.clone(),
             http_path: config.http_path.clone(),
             create_notebook: config.create_notebook,
+            notebook_scoped_libraries: config.notebook_scoped_libraries,
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,

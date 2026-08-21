@@ -971,6 +971,10 @@ impl Adapter {
                 let compiled_code = iter.next_arg::<&str>()?;
                 iter.finish()?;
 
+                if adapter.adapter_type() == AdapterType::Databricks {
+                    crate::python::databricks::DatabricksPythonJobConfig::try_from_model(model)?;
+                }
+
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("submit_python_job adapter call");

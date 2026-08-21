@@ -606,18 +606,17 @@ impl DatabricksApiClient {
         Ok(response.job_id)
     }
 
-    /// https://docs.databricks.com/api/workspace/jobs/update
+    /// https://docs.databricks.com/api/workspace/jobs/reset
     pub(crate) fn update_workflow(
         &self,
         job_id: u64,
         workflow_spec: serde_json::Value,
     ) -> AdapterResult<()> {
-        let mut payload = workflow_spec;
-        if let serde_json::Value::Object(ref mut map) = payload {
-            map.insert("job_id".to_string(), json!(job_id));
-        }
-
-        self.post_json::<serde_json::Value>("/api/2.1/jobs/update", payload)?;
+        let payload = json!({
+            "job_id": job_id,
+            "new_settings": workflow_spec,
+        });
+        self.post_json::<serde_json::Value>("/api/2.1/jobs/reset", payload)?;
         Ok(())
     }
 

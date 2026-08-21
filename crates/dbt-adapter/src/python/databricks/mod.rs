@@ -4,11 +4,67 @@ use crate::adapter::adapter_impl::AdapterImpl;
 use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use minijinja::{State, Value};
+use serde::Deserialize;
 use serde_json::json;
 
 mod api_client;
+#[cfg(test)]
+mod notebook_scoped_packages_tests;
+#[cfg(test)]
+mod parity_regression_tests;
 use api_client::DatabricksApiClient;
+
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct DatabricksPythonJobModel {
+    #[serde(default)]
+    pub(crate) config: DatabricksPythonJobConfig,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct DatabricksPythonJobConfig {
+    #[serde(default)]
+    packages: Option<Vec<String>>,
+    #[serde(
+        default,
+        deserialize_with = "dbt_schemas::schemas::serde::pydantic_bool"
+    )]
+    notebook_scoped_libraries: Option<bool>,
+    index_url: Option<String>,
+    submission_method: Option<String>,
+}
+
+impl DatabricksPythonJobConfig {
+    pub fn try_from_model(model: &Value) -> AdapterResult<Self> {
+        minijinja_value_to_typed_struct::<DatabricksPythonJobModel>(model.clone())
+            .map(|parsed| parsed.config)
+            .map_err(|error| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!("Invalid Databricks Python model config: {error}"),
+                )
+            })
+    }
+
+    fn packages(&self) -> &[String] {
+        self.packages.as_deref().unwrap_or_default()
+    }
+
+    fn notebook_scoped_libraries(&self) -> bool {
+        self.notebook_scoped_libraries.unwrap_or(false)
+    }
+
+    fn index_url(&self) -> Option<&str> {
+        self.index_url.as_deref().filter(|value| !value.is_empty())
+    }
+
+    fn submission_method(&self) -> &str {
+        self.submission_method
+            .as_deref()
+            .unwrap_or("all_purpose_cluster")
+    }
+}
 
 pub fn submit_python_job(
     adapter: &AdapterImpl,
@@ -18,6 +74,8 @@ pub fn submit_python_job(
     model: &Value,
     compiled_code: &str,
 ) -> AdapterResult<AdapterResponse> {
+    let typed_config = DatabricksPythonJobConfig::try_from_model(model)?;
+
     let config = model
         .get_attr("config")
         .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?;
@@ -40,20 +98,17 @@ pub fn submit_python_job(
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .ok_or_else(|| AdapterError::new(AdapterErrorKind::Internal, "alias is required"))?;
 
-    let submission_method = config
-        .get_attr("submission_method")
-        .ok()
-        .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "all_purpose_cluster".to_string());
+    let compiled_code = prepare_code_from_config(&typed_config, compiled_code);
 
-    match submission_method.as_str() {
+    match typed_config.submission_method() {
         "all_purpose_cluster" => submit_all_purpose_cluster(
             adapter,
             &config,
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
+            &typed_config,
         ),
         "job_cluster" => submit_job_cluster(
             adapter,
@@ -61,7 +116,8 @@ pub fn submit_python_job(
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
+            &typed_config,
         ),
         "serverless_cluster" => submit_serverless_cluster(
             adapter,
@@ -69,7 +125,7 @@ pub fn submit_python_job(
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
         ),
         "workflow_job" => submit_workflow_job(
             adapter,
@@ -77,13 +133,13 @@ pub fn submit_python_job(
             &catalog,
             &schema,
             &identifier,
-            compiled_code,
+            &compiled_code,
         ),
         _ => Err(AdapterError::new(
             AdapterErrorKind::NotSupported,
             format!(
                 "Unsupported submission_method: '{}'. Supported methods: all_purpose_cluster, job_cluster, serverless_cluster, workflow_job",
-                submission_method
+                typed_config.submission_method()
             ),
         )),
     }
@@ -97,6 +153,7 @@ fn submit_all_purpose_cluster(
     schema: &str,
     identifier: &str,
     compiled_code: &str,
+    typed_config: &DatabricksPythonJobConfig,
 ) -> AdapterResult<AdapterResponse> {
     let cluster_id = resolve_cluster_id(adapter, config)?;
 
@@ -108,12 +165,6 @@ fn submit_all_purpose_cluster(
 
     if create_notebook {
         // Extract library configuration (packages, index_url, additional_libs)
-        let packages = extract_packages(config);
-        let index_url = config
-            .get_attr("index_url")
-            .ok()
-            .and_then(|v| v.as_str().map(|s| s.to_string()));
-
         let additional_libs = config
             .get_attr("additional_libs")
             .ok()
@@ -124,7 +175,12 @@ fn submit_all_purpose_cluster(
             })
             .unwrap_or_default();
 
-        let libraries = build_libraries(&packages, index_url.as_deref(), &additional_libs);
+        let libraries = build_libraries(
+            typed_config.packages(),
+            typed_config.index_url(),
+            &additional_libs,
+            typed_config.notebook_scoped_libraries(),
+        );
 
         let mut task_settings = json!({
             "existing_cluster_id": cluster_id
@@ -244,6 +300,7 @@ fn submit_job_cluster(
     schema: &str,
     identifier: &str,
     compiled_code: &str,
+    typed_config: &DatabricksPythonJobConfig,
 ) -> AdapterResult<AdapterResponse> {
     let job_cluster_config = config.get_attr("job_cluster_config").ok().ok_or_else(|| {
         AdapterError::new(
@@ -253,12 +310,6 @@ fn submit_job_cluster(
     })?;
 
     validate_job_cluster_config(&job_cluster_config)?;
-
-    let packages = extract_packages(config);
-    let index_url = config
-        .get_attr("index_url")
-        .ok()
-        .and_then(|v| v.as_str().map(|s| s.to_string()));
 
     let additional_libs = config
         .get_attr("additional_libs")
@@ -277,7 +328,12 @@ fn submit_job_cluster(
         )
     })?;
 
-    let libraries = build_libraries(&packages, index_url.as_deref(), &additional_libs);
+    let libraries = build_libraries(
+        typed_config.packages(),
+        typed_config.index_url(),
+        &additional_libs,
+        typed_config.notebook_scoped_libraries(),
+    );
 
     let mut task_settings = json!({
         "new_cluster": cluster_config_json
@@ -484,16 +540,37 @@ fn validate_job_cluster_config(config: &Value) -> AdapterResult<()> {
     Ok(())
 }
 
-fn extract_packages(config: &Value) -> Vec<String> {
-    config
-        .get_attr("packages")
-        .ok()
-        .and_then(|v| v.try_iter().ok())
-        .map(|iter| {
-            iter.filter_map(|v| v.as_str().map(String::from))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default()
+fn prepare_code_from_config(config: &DatabricksPythonJobConfig, compiled_code: &str) -> String {
+    prepare_code_with_notebook_scoped_packages(
+        compiled_code,
+        config.packages(),
+        config.notebook_scoped_libraries(),
+        config.index_url(),
+    )
+}
+
+fn prepare_code_with_notebook_scoped_packages(
+    compiled_code: &str,
+    packages: &[String],
+    notebook_scoped_libraries: bool,
+    index_url: Option<&str>,
+) -> String {
+    if !notebook_scoped_libraries || packages.is_empty() {
+        return compiled_code.to_string();
+    }
+
+    let index_url = index_url
+        .filter(|url| !url.is_empty())
+        .map(|url| format!("--index-url {url} "))
+        .unwrap_or_default();
+    let pip_install = format!("%pip install {index_url}-q {}", packages.join(" "));
+    let separator = "\n\n# COMMAND ----------\n\n";
+    [
+        pip_install,
+        "dbutils.library.restartPython()".to_string(),
+        compiled_code.to_string(),
+    ]
+    .join(separator)
 }
 
 fn extract_timeout(config: &Value) -> u64 {
@@ -522,25 +599,28 @@ fn build_libraries(
     packages: &[String],
     index_url: Option<&str>,
     additional_libs: &[serde_json::Value],
+    notebook_scoped_libraries: bool,
 ) -> Vec<serde_json::Value> {
     let mut libraries = Vec::new();
 
-    for package in packages {
-        let lib = if let Some(idx_url) = index_url {
-            json!({
-                "pypi": {
-                    "package": package,
-                    "repo": idx_url
-                }
-            })
-        } else {
-            json!({
-                "pypi": {
-                    "package": package
-                }
-            })
-        };
-        libraries.push(lib);
+    if !notebook_scoped_libraries {
+        for package in packages {
+            let lib = if let Some(idx_url) = index_url.filter(|url| !url.is_empty()) {
+                json!({
+                    "pypi": {
+                        "package": package,
+                        "repo": idx_url
+                    }
+                })
+            } else {
+                json!({
+                    "pypi": {
+                        "package": package
+                    }
+                })
+            };
+            libraries.push(lib);
+        }
     }
 
     libraries.extend_from_slice(additional_libs);
@@ -713,6 +793,14 @@ fn build_workflow_spec(
         )
     })?;
 
+    for control_field in [
+        "grants",
+        "existing_job_id",
+        "post_hook_tasks",
+        "additional_task_settings",
+    ] {
+        spec_map.remove(control_field);
+    }
     spec_map.insert("name".to_string(), json!(workflow_name));
     spec_map.insert("tasks".to_string(), json!(tasks));
 
