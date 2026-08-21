@@ -1,0 +1,7 @@
+kind: Features
+body: Implement liquid clustering changeset computation for Databricks incremental materializations.
+time: 2026-07-08T13:21:57.370142+05:30
+custom:
+    author: '@Pavan19047'
+    issue: "15450"
+    project: dbt-core
