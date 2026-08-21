@@ -17,9 +17,11 @@ import shutil
 import subprocess
 import sysconfig
 import tempfile
+import threading
 import time
+from collections import deque
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Deque, List, Optional
 
 from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.artifacts.schemas.manifest import WritableManifest
@@ -34,9 +36,16 @@ from dbt.exceptions import (
 from dbt.flags import get_flags
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import Note
 
 if TYPE_CHECKING:
     from dbt.config import RuntimeConfig
+
+# Trailing output lines (stdout+stderr, interleaved by arrival order) kept in
+# memory and surfaced in FusionParserError on a nonzero exit, so the failure
+# reason is visible even to a consumer that only sees the raised exception
+# rather than the live event stream (e.g. dbt Studio's error surfacing).
+_OUTPUT_TAIL_LINES = 40
 
 
 def parse_with_fusion(
@@ -332,25 +341,33 @@ def _fusion_subprocess_env() -> dict:
 
 
 def _run_fusion(argv: List[str]) -> None:
-    # Passthrough mode: the fusion parser inherits dbt's stdout/stderr so users
-    # see progress and errors live. This bypasses dbt's event system (no
-    # log-file capture, no --log-format json, no level filtering), but is the
-    # only way to get streaming output without re-parsing the parser's
-    # free-form text.
-    #
-    # TODO: replace with Popen + line-by-line streaming and re-emit through
-    # fire_event once the fusion parser ships its structured (JSON) log stream
-    # and the Python parsing library lands. Sketch:
-    #   proc = subprocess.Popen(argv, stdout=PIPE, stderr=PIPE, text=True, bufsize=1)
-    #   - read stdout/stderr concurrently (threads or selectors; a single
-    #     blocking readline() on one stream deadlocks if the other fills its pipe)
-    #   - parse each line as a structured log record
-    #   - map level/message to a dbt event type and fire_event(...)
-    #   - proc.wait() and check returncode
-    # Until then, capturing-then-printing-at-end would lose streaming (fusion
-    # parsing can take minutes on large projects), so we inherit fds instead.
+    """Run the fusion parser subprocess, capturing stdout/stderr and re-emitting
+    each line live through dbt-core's event system as it arrives.
+
+    Piping (rather than inheriting) the child's fds means its output only
+    reaches the user via fire_event — this is what makes it visible to any
+    consumer of dbt-core's own event stream (e.g. dbt Studio's IDE log
+    capture), which previously only saw the fusion parser's output if
+    something was reading the raw inherited file descriptors directly (true
+    for a CLI terminal, not true inside Studio's execution model).
+
+    The fusion parser doesn't yet emit a structured (JSON/OTel) log stream
+    dbt-core can parse, so lines are re-emitted verbatim as Note events —
+    stdout at INFO, stderr at WARN — rather than mapped to fusion's own
+    per-line levels.
+    TODO: once the fusion parser ships that structured log stream and the
+    Python library to decode it lands, replace this raw re-emission with a
+    real parse into properly leveled/structured dbt events.
+    """
     try:
-        result = subprocess.run(argv, check=False, env=_fusion_subprocess_env())
+        proc = subprocess.Popen(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            env=_fusion_subprocess_env(),
+        )
     except FileNotFoundError as e:
         raise FusionParserError(
             f"Fusion parser command not found: {argv[0]!r}. "
@@ -358,10 +375,34 @@ def _run_fusion(argv: List[str]) -> None:
             f"point to an alternate engine binary."
         ) from e
 
-    if result.returncode != 0:
+    tail: Deque[str] = deque(maxlen=_OUTPUT_TAIL_LINES)
+    tail_lock = threading.Lock()
+
+    def _pump(stream, level: EventLevel) -> None:
+        for raw_line in stream:
+            line = raw_line.rstrip("\n")
+            with tail_lock:
+                tail.append(line)
+            fire_event(Note(msg=line), level=level)
+
+    # Separate threads per stream avoid the deadlock a single blocking
+    # readline() would hit if the other stream fills its OS pipe buffer.
+    readers = [
+        threading.Thread(target=_pump, args=(proc.stdout, EventLevel.INFO), daemon=True),
+        threading.Thread(target=_pump, args=(proc.stderr, EventLevel.WARN), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    for reader in readers:
+        reader.join()
+    returncode = proc.wait()
+
+    if returncode != 0:
+        with tail_lock:
+            excerpt = "\n".join(tail)
         raise FusionParserError(
-            f"Fusion parser failed (exit {result.returncode}); see parser output above.",
-            returncode=result.returncode,
+            f"Fusion parser failed (exit {returncode}).\n{excerpt}",
+            returncode=returncode,
         )
 
 
