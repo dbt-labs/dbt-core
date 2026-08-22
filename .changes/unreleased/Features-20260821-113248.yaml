@@ -1,0 +1,7 @@
+kind: Features
+body: '[ClickHouse] New configs available: definer, sql_security, inserts_only. Available but not working yet: projections, codec.'
+time: 2026-08-21T11:32:48.386104+02:00
+custom:
+    author: koletzilla
+    issue: "14585"
+    project: dbt-core

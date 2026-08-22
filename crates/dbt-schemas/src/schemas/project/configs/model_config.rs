@@ -544,6 +544,16 @@ pub struct ProjectModelConfig {
     pub settings: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+query_settings")]
     pub query_settings: Option<BTreeMap<String, YmlValue>>,
+    // list of `{name, query}` maps rendered as `ADD PROJECTION` by table.sql
+    #[serde(rename = "+projections")]
+    pub projections: Option<Vec<YmlValue>>,
+    // incremental materialization
+    #[serde(
+        default,
+        rename = "+inserts_only",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub inserts_only: Option<bool>,
     // dictionary materialization
     #[serde(rename = "+connection_overrides")]
     pub connection_overrides: Option<BTreeMap<String, YmlValue>>,
@@ -567,6 +577,10 @@ pub struct ProjectModelConfig {
     pub update_field: Option<String>,
     #[serde(rename = "+update_lag")]
     pub update_lag: Option<YmlValue>,
+    #[serde(rename = "+definer")]
+    pub definer: Option<String>,
+    #[serde(rename = "+sql_security")]
+    pub sql_security: Option<String>,
     // materialized-view materialization
     #[serde(rename = "+refreshable")]
     pub refreshable: Option<BTreeMap<String, YmlValue>>,
@@ -1050,6 +1064,8 @@ impl From<ProjectModelConfig> for ModelConfig {
                 ttl: config.ttl,
                 settings: config.settings,
                 query_settings: config.query_settings,
+                projections: config.projections,
+                inserts_only: config.inserts_only,
                 connection_overrides: config.connection_overrides,
                 fields: config.fields,
                 source_type: config.source_type,
@@ -1061,6 +1077,8 @@ impl From<ProjectModelConfig> for ModelConfig {
                 table: config.table,
                 update_field: config.update_field,
                 update_lag: config.update_lag,
+                definer: config.definer,
+                sql_security: config.sql_security,
                 refreshable: config.refreshable,
                 catchup: config.catchup,
                 mv_on_schema_change: config.mv_on_schema_change,
@@ -1263,6 +1281,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             ttl: config.__warehouse_specific_config__.ttl,
             settings: config.__warehouse_specific_config__.settings,
             query_settings: config.__warehouse_specific_config__.query_settings,
+            projections: config.__warehouse_specific_config__.projections,
+            inserts_only: config.__warehouse_specific_config__.inserts_only,
             connection_overrides: config.__warehouse_specific_config__.connection_overrides,
             fields: config.__warehouse_specific_config__.fields,
             source_type: config.__warehouse_specific_config__.source_type,
@@ -1274,6 +1294,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             table: config.__warehouse_specific_config__.table,
             update_field: config.__warehouse_specific_config__.update_field,
             update_lag: config.__warehouse_specific_config__.update_lag,
+            definer: config.__warehouse_specific_config__.definer,
+            sql_security: config.__warehouse_specific_config__.sql_security,
             refreshable: config.__warehouse_specific_config__.refreshable,
             catchup: config.__warehouse_specific_config__.catchup,
             mv_on_schema_change: config.__warehouse_specific_config__.mv_on_schema_change,
@@ -2484,5 +2506,66 @@ __additional_properties__: {}
             roundtripped.repopulate_from_mvs_on_full_refresh,
             project_config.repopulate_from_mvs_on_full_refresh
         );
+    }
+
+    #[test]
+    fn test_clickhouse_view_config_keys_roundtrip_through_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++definer: admin@localhost
++sql_security: definer
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.definer.as_deref(), Some("admin@localhost"));
+        assert_eq!(project_config.sql_security.as_deref(), Some("definer"));
+
+        // ProjectModelConfig -> ModelConfig lands the keys in the warehouse config
+        let model_config: ModelConfig = project_config.clone().into();
+        let wh = &model_config.__warehouse_specific_config__;
+        assert_eq!(wh.definer, project_config.definer);
+        assert_eq!(wh.sql_security, project_config.sql_security);
+
+        // ModelConfig -> ProjectModelConfig restores them
+        let roundtripped: ProjectModelConfig = model_config.into();
+        assert_eq!(roundtripped.definer, project_config.definer);
+        assert_eq!(roundtripped.sql_security, project_config.sql_security);
+    }
+
+    #[test]
+    fn test_clickhouse_projections_and_inserts_only_roundtrip_through_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++projections:
+  - name: my_projection
+    query: SELECT id, count() GROUP BY id
++inserts_only: "true"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        let projections = project_config
+            .projections
+            .as_ref()
+            .expect("+projections should parse");
+        assert_eq!(projections.len(), 1);
+        assert_eq!(
+            projections[0].get("name").and_then(|v| v.as_str()),
+            Some("my_projection")
+        );
+        // bool_or_string_bool accepts the string form
+        assert_eq!(project_config.inserts_only, Some(true));
+
+        // ProjectModelConfig -> ModelConfig lands the keys in the warehouse config
+        let model_config: ModelConfig = project_config.clone().into();
+        let wh = &model_config.__warehouse_specific_config__;
+        assert_eq!(wh.projections, project_config.projections);
+        assert_eq!(wh.inserts_only, Some(true));
+
+        // ModelConfig -> ProjectModelConfig restores them
+        let roundtripped: ProjectModelConfig = model_config.into();
+        assert_eq!(roundtripped.projections, project_config.projections);
+        assert_eq!(roundtripped.inserts_only, project_config.inserts_only);
     }
 }
