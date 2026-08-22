@@ -36,9 +36,15 @@ on:
       - 'crates/dbt-loader/src/mod.rs'
 
 # only run this once per PR at a time
+#
+# Cancelling is scoped to `synchronize`: a new push supersedes the run for the
+# previous head, so dropping it is right. No other action may cancel, because
+# the `labeled` run that cla-bot's `cla:yes` triggers seconds after a PR opens
+# lands in this same group, skips at `check_run_approval`, and would otherwise
+# take the `opened` run's dispatch down with it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event.action == 'synchronize' }}
 
 permissions: {}
 
