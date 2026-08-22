@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix regression in log-format-file use
+time: 2026-07-27T18:28:08.493615-07:00
+custom:
+    author: epapineau
+    issue: "15685"
+    project: dbt-core

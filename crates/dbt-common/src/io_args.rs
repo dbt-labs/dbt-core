@@ -289,6 +289,7 @@ pub struct IoArgs {
     pub otel_parquet_file_name: Option<String>,
     pub export_to_otlp: bool,
     pub log_format: LogFormat,
+    pub log_format_file: Option<LogFormat>,
     pub log_level: Option<LogLevel>,
     pub log_level_file: Option<LogLevel>,
     pub log_file_max_bytes: u64,
