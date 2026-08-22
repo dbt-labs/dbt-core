@@ -39,7 +39,7 @@
     {%- endfor %}
     from {{ target }}
     where dbt_scd_id not in (
-      select {{ source }}.dbt_scd_id from {{ source }} 
+      select {{ source }}.dbt_scd_id from {{ source }}
     )
   {% endcall %}
 
