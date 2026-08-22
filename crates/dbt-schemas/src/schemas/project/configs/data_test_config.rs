@@ -115,6 +115,8 @@ pub struct ProjectDataTestConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -524,6 +526,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -673,6 +676,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -843,6 +847,23 @@ impl ConfigKeys for DataTestConfig {
 mod tests {
     use super::{DataTestConfig, ProjectDataTestConfig};
     use crate::schemas::common::UpdatesOn;
+
+    #[test]
+    fn test_data_test_query_tags_propagate_through_resolved_config() {
+        let project: ProjectDataTestConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"data-test"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: DataTestConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"data-test"}"#)
+        );
+    }
 
     #[test]
     fn test_project_data_test_config_state_parses_with_plus_prefix() {

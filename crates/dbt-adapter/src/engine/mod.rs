@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::{thread, time::Duration};
 
 mod adapter_engine;
+mod databricks_query_tags;
 pub use adapter_engine::AdapterEngine;
 pub use adapter_engine::Options;
 

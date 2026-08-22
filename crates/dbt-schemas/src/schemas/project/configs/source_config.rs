@@ -377,6 +377,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 scheduler: None,
                 tmp_relation_type: None,
                 query_tag: None,
+                query_tags: None,
                 table_tag: None,
                 row_access_policy: None,
                 automatic_clustering: None,
