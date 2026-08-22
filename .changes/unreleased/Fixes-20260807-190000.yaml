@@ -1,0 +1,9 @@
+kind: Fixes
+body: Disambiguate generated generic-test SQL asset paths on name collisions so tests
+    on different models/columns that flatten to the same generated name are no longer
+    silently dropped from the manifest
+time: 2026-08-07T19:00:00.000000+09:00
+custom:
+    author: ota2000
+    issue: "15841"
+    project: dbt-fusion

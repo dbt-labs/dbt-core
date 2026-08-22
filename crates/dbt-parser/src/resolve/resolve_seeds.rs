@@ -31,7 +31,9 @@ use dbt_schemas::state::{ModelStatus, NodeResolverTracker};
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -56,6 +58,7 @@ pub async fn resolve_seeds(
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashSet<PathBuf>,
     node_resolver: &mut NodeResolver,
 ) -> FsResult<(HashMap<String, Arc<DbtSeed>>, HashMap<String, Arc<DbtSeed>>)> {
     let mut seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
@@ -127,7 +130,7 @@ pub async fn resolve_seeds(
     // TODO: update this to be relative of the root project
     let mut duplicate_errors = Vec::new();
     // Track seed names seen so far (name → relative path) to detect duplicates across subdirs
-    let mut seen_seed_names: HashMap<String, std::path::PathBuf> = HashMap::new();
+    let mut seen_seed_names: HashMap<String, PathBuf> = HashMap::new();
     for seed_file in package.seed_files.iter() {
         // Validate that path extension is one of csv, parquet, or json
         let path = seed_file.path.clone();
@@ -435,6 +438,7 @@ pub async fn resolve_seeds(
                         &root_package.dbt_project.name,
                         collected_generic_tests,
                         test_name_truncations,
+                        seen_generic_test_paths,
                         adapter_type,
                         io_args,
                         patch_path.as_ref().unwrap_or(&path),

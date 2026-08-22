@@ -183,6 +183,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         root_project_name: &str,
         collected_generic_tests: &mut Vec<GenericTestAsset>,
         test_name_truncations: &mut HashMap<String, String>,
+        seen_generic_test_paths: &mut HashSet<PathBuf>,
         adapter_type: AdapterType,
         io_args: &IoArgs,
         original_file_path: &Path,
@@ -214,6 +215,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         original_file_path,
                         &mut seen_tests,
                         test_name_truncations,
+                        seen_generic_test_paths,
                         &[],
                         suppress_deprecated_test_validation,
                         raw_config,
@@ -252,6 +254,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             original_file_path,
                             &mut seen_tests,
                             test_name_truncations,
+                            seen_generic_test_paths,
                             &entry.tags,
                             suppress_deprecated_test_validation,
                             raw_config,
@@ -266,6 +269,26 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
     }
 }
 
+/// Path for a generated generic-test SQL asset. Distinct tests can flatten to the
+/// same generated name (e.g. `not_null` on `orders.status_code` vs `orders_status.code`),
+/// and the name-keyed default path would let the second test overwrite the first one's
+/// SQL file and silently drop it from the manifest. On collision, suffix the kwargs
+/// hash (already unique per test, mirroring the `unique_id`) to keep the assets apart.
+fn generic_test_asset_path(
+    seen_generic_test_paths: &mut HashSet<PathBuf>,
+    full_name: &str,
+    test_hash: &str,
+) -> PathBuf {
+    let default_path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
+    if seen_generic_test_paths.insert(default_path.clone()) {
+        return default_path;
+    }
+    let hashed_path =
+        PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}_{test_hash}.sql"));
+    seen_generic_test_paths.insert(hashed_path.clone());
+    hashed_path
+}
+
 #[allow(clippy::ptr_arg)]
 #[allow(clippy::too_many_arguments)]
 fn persist_inner(
@@ -278,6 +301,7 @@ fn persist_inner(
     original_file_path: &Path,
     seen_tests: &mut HashSet<String>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashSet<PathBuf>,
     column_tags: &[String],
     suppress_deprecated_test_validation: bool,
     raw_config: RawTestConfig,
@@ -336,7 +360,7 @@ fn persist_inner(
     );
     let unique_id = format!("{}.{}", full_name, test_hash);
 
-    let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
+    let path = generic_test_asset_path(seen_generic_test_paths, &full_name, &test_hash);
     let test_file = io_args.out_dir.join(&path);
     let generated_test_sql = generate_test_macro(
         test_macro_name.as_str(),
@@ -1730,6 +1754,32 @@ mod tests {
     use dbt_schemas::schemas::data_tests::{CustomTestInner, CustomTestMultiKey};
     use serde_json::Value;
     use std::collections::{BTreeMap, HashMap};
+
+    #[test]
+    fn test_generic_test_asset_path_disambiguates_name_collisions() {
+        // `not_null` on `orders.status_code` and on `orders_status.code` both flatten
+        // to the same generated name; the second asset must not reuse the first path.
+        let mut seen = HashSet::new();
+        let first = generic_test_asset_path(&mut seen, "not_null_orders_status_code", "aaaaaaaaaa");
+        let second =
+            generic_test_asset_path(&mut seen, "not_null_orders_status_code", "bbbbbbbbbb");
+        assert_eq!(
+            first,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join("not_null_orders_status_code.sql")
+        );
+        assert_eq!(
+            second,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME)
+                .join("not_null_orders_status_code_bbbbbbbbbb.sql")
+        );
+
+        // Non-colliding names keep the plain (hash-free) path.
+        let other = generic_test_asset_path(&mut seen, "not_null_orders_id", "cccccccccc");
+        assert_eq!(
+            other,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join("not_null_orders_id.sql")
+        );
+    }
 
     #[test]
     fn test_format_node_unique_id_shapes() {
