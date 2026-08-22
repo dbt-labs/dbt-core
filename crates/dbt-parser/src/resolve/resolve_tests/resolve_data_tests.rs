@@ -726,10 +726,18 @@ pub async fn resolve_data_tests(
                         ))
                     }
                 });
-                let group = attached_node
-                    .as_deref()
-                    .and_then(|id| models.get(id))
-                    .and_then(|m| m.__model_attr__.group.clone());
+                let group = if attached_node.is_some() {
+                    // Generic tests on models/seeds/snapshots inherit the parent's group
+                    // (which may be None even if an explicit config.group is set).
+                    attached_node
+                        .as_deref()
+                        .and_then(|id| models.get(id))
+                        .and_then(|m| m.__model_attr__.group.clone())
+                } else {
+                    // Source tests and singular tests have no attached node; fall back to
+                    // the explicit config.group, matching dbt-core 1.x behavior.
+                    test_config.group.clone()
+                };
                 DbtTestAttr {
                     column_name: test_asset.and_then(|ta| ta.test_metadata_column_name.clone()),
                     attached_node,
