@@ -1024,7 +1024,12 @@ jobs:
       - name: Open or update pull request
         if: steps.backport.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Not GITHUB_TOKEN: a pull request opened with it delivers no
+          # `opened` event, so the reverse-sync dispatcher in
+          # auto-public-pr-copybara.yml never fires and the backported
+          # changelog is stranded in the public repo. Opening as the service
+          # account gets the event delivered.
+          GH_TOKEN: ${{ secrets.FS_SERVICE_PAT }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
           PR_BRANCH: ${{ steps.backport.outputs.pr_branch }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
