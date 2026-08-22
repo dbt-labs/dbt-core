@@ -212,7 +212,11 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthErro
     };
 
     let mut session_params = HashMap::new();
-    if let Some(ssp) = config.get("server_side_parameters") {
+    let server_side_parameters = config
+        .get("server_side_parameters")
+        .or_else(|| config.get("conf"));
+
+    if let Some(ssp) = server_side_parameters {
         let YmlValue::Mapping(ssp, _) = ssp else {
             return Err(AuthError::config(
                 "'server_side_parameters' must be mapping",
@@ -474,6 +478,29 @@ mod tests {
             ("auth".into(), "BASIC".into()),
             (
                 "server_side_parameters".into(),
+                Mapping::from_iter([("livy.server.session.ttl".into(), "1h".into())]).into(),
+            ),
+        ]);
+
+        let builder = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure")
+            .builder;
+
+        assert_eq!(
+            other_option_value(&builder, spark::livy::SESSION_TTL),
+            Some("1h")
+        );
+    }
+
+    #[test]
+    fn livy_ttl_conf_alias() {
+        let config = Mapping::from_iter([
+            ("host".into(), "myhost".into()),
+            ("method".into(), "livy".into()),
+            ("auth".into(), "BASIC".into()),
+            (
+                "conf".into(),
                 Mapping::from_iter([("livy.server.session.ttl".into(), "1h".into())]).into(),
             ),
         ]);
