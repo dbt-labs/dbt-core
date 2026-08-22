@@ -1024,11 +1024,9 @@ jobs:
       - name: Open or update pull request
         if: steps.backport.outputs.skip != 'true'
         env:
-          # Not GITHUB_TOKEN: a pull request opened with it delivers no
-          # `opened` event, so the reverse-sync dispatcher in
-          # auto-public-pr-copybara.yml never fires and the backported
-          # changelog is stranded in the public repo. Opening as the service
-          # account gets the event delivered.
+          # Not GITHUB_TOKEN: Actions won't trigger workflows from the
+          # events it creates, so the reverse sync in
+          # auto-public-pr-copybara.yml would never run for this PR.
           GH_TOKEN: ${{ secrets.FS_SERVICE_PAT }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
           PR_BRANCH: ${{ steps.backport.outputs.pr_branch }}
