@@ -3135,6 +3135,7 @@
           ]
         },
         "+column_types": {
+          "default": null,
           "type": [
             "object",
             "null"
@@ -3365,6 +3366,7 @@
           ]
         },
         "+event_time": {
+          "default": null,
           "type": [
             "string",
             "null"
@@ -5797,6 +5799,7 @@
           ]
         },
         "+event_time": {
+          "default": null,
           "type": [
             "string",
             "null"
@@ -6670,6 +6673,7 @@
           ]
         },
         "+event_time": {
+          "default": null,
           "type": [
             "string",
             "null"
