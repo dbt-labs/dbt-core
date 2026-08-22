@@ -3112,8 +3112,9 @@ fn write_warehouse_catalog_stats(
     let mut catalog_table_rows: Vec<Value> = Vec::new();
     let mut catalog_stat_rows: Vec<Value> = Vec::new();
     let mut last_epoch = 0u32;
+    let mut seen_uids: HashSet<String> = HashSet::new();
 
-    for (epoch_num, path) in &new_epochs {
+    for (epoch_num, path) in new_epochs.iter().rev() {
         let batches = read_parquet_batches(path)?;
         for batch in &batches {
             let uid_col = str_col(batch, "unique_id");
@@ -3130,6 +3131,9 @@ fn write_warehouse_catalog_stats(
                 let Some(uid) = get_str(uid_col, i) else {
                     continue;
                 };
+                if !seen_uids.insert(uid.clone()) {
+                    continue;
+                }
 
                 let table_type = get_str(tt_col, i);
                 let table_owner = get_str(owner_col, i);
@@ -3186,7 +3190,7 @@ fn write_warehouse_catalog_stats(
                 }
             }
         }
-        last_epoch = *epoch_num;
+        last_epoch = last_epoch.max(*epoch_num);
     }
 
     let count = catalog_stat_rows.len();
@@ -3199,4 +3203,91 @@ fn write_warehouse_catalog_stats(
     }
     state.set_epoch(RUN_CATALOG_STATS_SUBDIR, last_epoch);
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_array::{Int64Array, RecordBatch, StringArray};
+    use arrow_schema::{DataType, Field, Schema};
+    use parquet::arrow::ArrowWriter;
+    use std::sync::Arc;
+
+    fn write_catalog_stats_epoch(dir: &Path, epoch: u32, rows: &[(&str, i64)]) {
+        std::fs::create_dir_all(dir).unwrap();
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("unique_id", DataType::Utf8, false),
+            Field::new("row_count", DataType::Int64, true),
+        ]));
+        let uids: Vec<&str> = rows.iter().map(|(uid, _)| *uid).collect();
+        let counts: Vec<i64> = rows.iter().map(|(_, count)| *count).collect();
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(StringArray::from(uids)),
+                Arc::new(Int64Array::from(counts)),
+            ],
+        )
+        .unwrap();
+        let file = std::fs::File::create(dir.join(format!("v1_{epoch}.parquet"))).unwrap();
+        let mut writer = ArrowWriter::try_new(file, schema, None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+    }
+
+    fn row_counts(path: &Path) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for batch in read_parquet_batches(path).unwrap() {
+            let uid_col = str_col(&batch, "unique_id");
+            let stat_id_col = str_col(&batch, "stat_id");
+            let value_col = str_col(&batch, "stat_value");
+            for i in 0..batch.num_rows() {
+                if get_str(stat_id_col, i).as_deref() == Some("row_count") {
+                    out.push((
+                        get_str(uid_col, i).unwrap_or_default(),
+                        get_str(value_col, i).unwrap_or_default(),
+                    ));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn warehouse_catalog_stats_keeps_one_row_per_node() {
+        let root = tempfile::tempdir().unwrap();
+        let metadata_dir = root.path().join("metadata");
+        let index_dir = root.path().join("index");
+        let epoch_dir = metadata_dir.join(RUN_CATALOG_STATS_SUBDIR);
+        write_catalog_stats_epoch(&epoch_dir, 0, &[("model.p.a", 10), ("model.p.b", 20)]);
+        write_catalog_stats_epoch(&epoch_dir, 1, &[("model.p.a", 99)]);
+
+        let mut writer = IndexWriter::new(&index_dir).unwrap();
+        let mut state = IngestState::default();
+        write_warehouse_catalog_stats(
+            &mut writer,
+            &metadata_dir,
+            &mut state,
+            "2026-01-01T00:00:00Z",
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(
+            row_counts(&index_dir.join("dbt.catalog_stats.parquet")),
+            vec![
+                ("model.p.a".to_string(), "99".to_string()),
+                ("model.p.b".to_string(), "20".to_string()),
+            ]
+        );
+
+        let table_rows: usize = read_parquet_batches(&index_dir.join("dbt.catalog_tables.parquet"))
+            .unwrap()
+            .iter()
+            .map(|b| b.num_rows())
+            .sum();
+        assert_eq!(table_rows, 2);
+        assert_eq!(state.last_epoch_for(RUN_CATALOG_STATS_SUBDIR), 1);
+    }
 }
