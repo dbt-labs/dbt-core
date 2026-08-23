@@ -30,6 +30,7 @@ from dbt.contracts.graph.nodes import Exposure, HookNode, ModelNode
 from dbt.events.types import LogModelResult
 from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
+from dbt.materializations.incremental.executor import IncrementalMaterializationExecutor
 from dbt.task.run import MicrobatchModelRunner, ModelRunner, RunTask, _get_adapter_info
 from dbt.task.runnable import _rows_affected
 from dbt.tests.util import safe_set_invocation_context
@@ -158,6 +159,26 @@ class TestModelRunner:
         executor = model_runner._get_python_materialization_executor(model, materialization_macro)
 
         assert (executor is not None) is uses_python
+
+    def test_python_incremental_executor_requires_typed_adapter_contract(
+        self, model_runner: ModelRunner
+    ) -> None:
+        model = mock.Mock(language="sql")
+        materialization_macro = mock.Mock(
+            unique_id="macro.dbt.materialization_incremental_default"
+        )
+        model_runner.adapter = mock.Mock(spec=[])
+
+        assert (
+            model_runner._get_python_materialization_executor(model, materialization_macro) is None
+        )
+
+        model_runner.adapter = mock.Mock(
+            spec=list(IncrementalMaterializationExecutor.REQUIRED_ADAPTER_METHODS)
+        )
+        executor = model_runner._get_python_materialization_executor(model, materialization_macro)
+
+        assert executor is IncrementalMaterializationExecutor
 
     def test_print_result_line(
         self,

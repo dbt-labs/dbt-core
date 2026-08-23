@@ -138,13 +138,13 @@ class TableMaterializationExecutor:
             return None
         return getattr(planning, "CreateFromQueryRenderArguments", None)
 
-    def _legacy_build_sql(self, relation: BaseRelation, sql: str) -> str:
-        build_sql = self._call_macro("get_create_table_as_sql", False, relation, sql)
+    def _legacy_build_sql(self, relation: BaseRelation, sql: str, temporary: bool = False) -> str:
+        build_sql = self._call_macro("get_create_table_as_sql", temporary, relation, sql)
         if not isinstance(build_sql, str):
             raise DbtInternalError("Table create-from-query renderer must return SQL text")
         return build_sql
 
-    def _build_sql(self, relation: BaseRelation) -> str:
+    def _build_sql(self, relation: BaseRelation, temporary: bool = False) -> str:
         sql = self._context_value("sql")
         render_arguments_type = self._render_arguments_type()
         resolve_render = getattr(self.adapter, "resolve_create_from_query_render", None)
@@ -154,10 +154,10 @@ class TableMaterializationExecutor:
             or not callable(resolve_render)
             or not callable(plan_create)
         ):
-            return self._legacy_build_sql(relation, sql)
+            return self._legacy_build_sql(relation, sql, temporary)
 
-        create_plan = plan_create(False, relation, self.model)
-        relation_sql = str(relation.include(database=True, schema=True))
+        create_plan = plan_create(temporary, relation, self.model)
+        relation_sql = str(relation.include(database=not temporary, schema=not temporary))
         config = self._context_value("config")
         contract = config.get("contract")
         contract_enforced = (
@@ -185,7 +185,7 @@ class TableMaterializationExecutor:
                 raise DbtInternalError(
                     "Typed create-from-query renderer selected an unknown compatibility macro"
                 )
-            return self._legacy_build_sql(relation, sql)
+            return self._legacy_build_sql(relation, sql, temporary)
         raise DbtInternalError("Typed create-from-query renderer returned an unknown result kind")
 
     def execute(self) -> Dict[str, Any]:

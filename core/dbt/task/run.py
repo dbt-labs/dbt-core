@@ -68,6 +68,7 @@ from dbt.flags import get_flags
 from dbt.graph import ResourceTypeSelector
 from dbt.graph.thread_pool import DbtThreadPool
 from dbt.hooks import get_hook_dict
+from dbt.materializations.incremental.executor import IncrementalMaterializationExecutor
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.materializations.table import TableMaterializationExecutor
 from dbt.node_types import NodeType, RunHookType
@@ -236,6 +237,7 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
 
 class ModelRunner(CompileRunner[ModelNode]):
     _PYTHON_MATERIALIZATION_EXECUTORS = {
+        "macro.dbt.materialization_incremental_default": IncrementalMaterializationExecutor,
         "macro.dbt.materialization_table_default": TableMaterializationExecutor,
     }
 
@@ -247,7 +249,16 @@ class ModelRunner(CompileRunner[ModelNode]):
         unique_id = getattr(materialization_macro, "unique_id", None)
         if not isinstance(unique_id, str):
             return None
-        return self._PYTHON_MATERIALIZATION_EXECUTORS.get(unique_id)
+        executor_type = self._PYTHON_MATERIALIZATION_EXECUTORS.get(unique_id)
+        if executor_type is None:
+            return None
+        required_adapter_methods = getattr(executor_type, "REQUIRED_ADAPTER_METHODS", ())
+        if not all(
+            callable(getattr(self.adapter, method_name, None))
+            for method_name in required_adapter_methods
+        ):
+            return None
+        return executor_type
 
     def _relation_identifier(self, relation: BaseRelation) -> str:
         identifier = getattr(relation, "identifier", None)

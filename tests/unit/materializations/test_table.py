@@ -137,7 +137,8 @@ def _typed_renderer_context():
     return context, intermediate
 
 
-def test_table_executor_uses_typed_python_renderer(monkeypatch):
+@pytest.mark.parametrize("temporary,include_schema", [(False, True), (True, False)])
+def test_table_executor_uses_typed_python_renderer(monkeypatch, temporary, include_schema):
     context, intermediate = _typed_renderer_context()
     create_plan = SimpleNamespace(renderer_macro="render_create_from_query_ctas")
     render_result = SimpleNamespace(
@@ -150,11 +151,15 @@ def test_table_executor_uses_typed_python_renderer(monkeypatch):
     executor = TableMaterializationExecutor(adapter, MagicMock(), context)
     monkeypatch.setattr(executor, "_render_arguments_type", lambda: _RenderArguments)
 
-    sql = executor._build_sql(intermediate)
+    sql = executor._build_sql(intermediate, temporary=temporary)
 
     assert sql == "create table typed as select 1"
     context["get_create_table_as_sql"].assert_not_called()
-    adapter.plan_create_from_query.assert_called_once_with(False, intermediate, executor.model)
+    adapter.plan_create_from_query.assert_called_once_with(temporary, intermediate, executor.model)
+    intermediate.include.assert_called_once_with(
+        database=include_schema,
+        schema=include_schema,
+    )
     arguments = adapter.resolve_create_from_query_render.call_args.args[1]
     assert arguments.relation_sql == '"analytics"."intermediate"'
     assert arguments.query == context["sql"]
