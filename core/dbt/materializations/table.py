@@ -77,6 +77,13 @@ class TableMaterializationExecutor:
         response, table = self.adapter.execute(sql, auto_begin=True, fetch=False)
         self._call_macro("store_result", "main", response=response, agate_table=table)
 
+    def _commit(self) -> None:
+        runtime_adapter = self._context_value("adapter")
+        commit = getattr(runtime_adapter, "commit", None)
+        if not callable(commit):
+            raise DbtInternalError("Python materialization adapter boundary cannot commit")
+        commit()
+
     def execute(self) -> Dict[str, Any]:
         plan = self.plan()
 
@@ -115,7 +122,7 @@ class TableMaterializationExecutor:
             should_revoke=should_revoke,
         )
         self._call_macro("persist_docs", plan.target_relation, self._context_value("model"))
-        self.adapter.commit()
+        self._commit()
         self._call_macro("drop_relation_if_exists", plan.backup_relation)
         self._call_macro("run_hooks", self._context_value("post_hooks"), inside_transaction=False)
 

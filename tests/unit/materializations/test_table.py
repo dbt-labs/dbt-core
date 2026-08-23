@@ -22,6 +22,7 @@ def _executor_context(*, existing_relation=None, grant_config=None):
         side_effect=[existing_relation, None, None, existing_relation]
     )
     context = {
+        "adapter": MagicMock(),
         "this": this,
         "config": {"grants": grant_config},
         "model": {"unique_id": "model.test.orders"},
@@ -83,7 +84,7 @@ def test_table_executor_runs_builtin_lifecycle_in_python():
         should_revoke=True,
     )
     context["persist_docs"].assert_called_once_with(target, context["model"])
-    adapter.commit.assert_called_once_with()
+    context["adapter"].commit.assert_called_once_with()
     assert context["drop_relation_if_exists"].call_args_list == [
         call(None),
         call(None),
