@@ -654,3 +654,13 @@ fn test_check_schema_exists_tolerates_none_database() {
         "expected a macro-lookup failure past arg parsing, got: {message}"
     );
 }
+
+#[test]
+fn test_databricks_get_incremental_strategy_macro_accepts_delete_insert() {
+    dispatch_test(
+        &make_mock_adapter(AdapterType::Databricks),
+        "get_incremental_strategy_macro",
+        &[dict(&[]), Value::from("delete+insert")],
+    )
+    .unwrap();
+}
