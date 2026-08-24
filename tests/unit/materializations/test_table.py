@@ -49,6 +49,7 @@ def _executor_context(*, existing_relation=None, grant_config=None):
         "should_revoke": MagicMock(return_value=True),
         "apply_grants": MagicMock(),
         "persist_docs": MagicMock(),
+        "optimize": MagicMock(),
     }
     return context, target, intermediate, backup
 
@@ -154,6 +155,80 @@ class _RenderArguments:
 
 def _macro(unique_id):
     return SimpleNamespace(macro=SimpleNamespace(unique_id=unique_id))
+
+
+def _operation(kind, **kwargs):
+    return SimpleNamespace(kind=SimpleNamespace(value=kind), **kwargs)
+
+
+def test_table_executor_uses_resolved_operation_order_as_authority():
+    existing = _relation("existing")
+    context, target, intermediate, backup = _executor_context(existing_relation=existing)
+    operations = (
+        _operation(
+            "run_hooks",
+            name="pre",
+            inside_transaction=False,
+        ),
+        _operation(
+            "create_from_query",
+            relation=SimpleNamespace(value="intermediate"),
+            temporary=False,
+            auto_begin=False,
+        ),
+        _operation(
+            "rename_relation",
+            relation=SimpleNamespace(value="existing"),
+            destination=SimpleNamespace(value="backup"),
+        ),
+        _operation(
+            "rename_relation",
+            relation=SimpleNamespace(value="intermediate"),
+            destination=SimpleNamespace(value="target"),
+        ),
+        _operation(
+            "persist_documentation",
+            relation=SimpleNamespace(value="target"),
+        ),
+        _operation(
+            "optimize",
+            relation=SimpleNamespace(value="target"),
+        ),
+    )
+    lifecycle_plan = SimpleNamespace(
+        operations=operations,
+        # These intentionally conflict with the program and must not control execution.
+        hooks=SimpleNamespace(value="in_transaction"),
+        statement=SimpleNamespace(value="auto_begin"),
+    )
+    adapter = MagicMock(spec=["execute", "rename_relation", "resolve_table_lifecycle_plan"])
+    adapter.resolve_table_lifecycle_plan.return_value = lifecycle_plan
+    adapter.execute.return_value = (object(), object())
+
+    result = TableMaterializationExecutor(
+        adapter,
+        MagicMock(),
+        context,
+        lifecycle_plan=lifecycle_plan,
+    ).execute()
+
+    assert result == {"relations": [target]}
+    adapter.execute.assert_called_once_with(
+        "create table intermediate as select 1",
+        auto_begin=False,
+        fetch=False,
+    )
+    assert adapter.rename_relation.call_args_list == [
+        call(existing, backup),
+        call(intermediate, target),
+    ]
+    context["run_hooks"].assert_called_once_with(
+        context["pre_hooks"], inside_transaction=False
+    )
+    context["persist_docs"].assert_called_once_with(target, context["model"])
+    context["optimize"].assert_called_once_with(target)
+    context["apply_grants"].assert_not_called()
+    context["adapter"].commit.assert_not_called()
 
 
 def _typed_renderer_context():
@@ -299,12 +374,14 @@ def test_direct_replace_executor_consumes_typed_lifecycle_plan():
     adapter = MagicMock(
         spec=[
             "execute",
+            "resolve_table_lifecycle_plan",
             "resolve_table_materialization_existing_relation",
             "resolve_table_materialization_relation",
         ]
     )
     adapter.resolve_table_materialization_existing_relation.return_value = existing
     adapter.resolve_table_materialization_relation.return_value = target
+    adapter.resolve_table_lifecycle_plan.return_value = lifecycle_plan
     adapter.execute.return_value = (response, table)
     model = MagicMock()
 
@@ -328,3 +405,81 @@ def test_direct_replace_executor_consumes_typed_lifecycle_plan():
     context["set_query_tag"].assert_called_once_with()
     context["unset_query_tag"].assert_called_once_with("original-tag")
     context["adapter"].commit.assert_not_called()
+
+
+def test_direct_executor_resolves_v2_relation_roles_from_operation_program():
+    existing = _relation("existing")
+    target = _relation("target")
+    intermediate = _relation("intermediate")
+    staging = _relation("staging")
+    this = MagicMock(name="this")
+    context = {
+        "adapter": MagicMock(),
+        "this": this,
+        "config": {"grants": None},
+        "model": {"unique_id": "model.test.orders"},
+        "sql": "select 1 as id",
+        "pre_hooks": [],
+        "post_hooks": [],
+        "make_intermediate_relation": MagicMock(return_value=intermediate),
+        "make_staging_relation": MagicMock(return_value=staging),
+        "get_create_table_as_sql": MagicMock(return_value="create temporary view intermediate"),
+        "create_table_at": MagicMock(),
+        "write": MagicMock(),
+        "store_result": MagicMock(),
+    }
+    operations = (
+        _operation(
+            "create_from_query",
+            relation=SimpleNamespace(value="intermediate"),
+            source=None,
+            destination=None,
+            temporary=True,
+            auto_begin=False,
+        ),
+        _operation(
+            "create_from_relation",
+            relation=SimpleNamespace(value="staging"),
+            source=SimpleNamespace(value="intermediate"),
+            destination=None,
+        ),
+    )
+    lifecycle_plan = SimpleNamespace(
+        replacement=SimpleNamespace(value="direct_replace"),
+        indexes=SimpleNamespace(value="none"),
+        existing_indexes=SimpleNamespace(value="preserve"),
+        documentation=SimpleNamespace(value="before_commit"),
+        transaction=SimpleNamespace(value="adapter_managed"),
+        hooks=SimpleNamespace(value="in_transaction"),
+        statement=SimpleNamespace(value="no_auto_begin"),
+        operations=operations,
+    )
+    adapter = MagicMock(
+        spec=[
+            "execute",
+            "resolve_table_lifecycle_plan",
+            "resolve_table_materialization_existing_relation",
+            "resolve_table_materialization_relation",
+        ]
+    )
+    adapter.resolve_table_materialization_existing_relation.return_value = existing
+    adapter.resolve_table_materialization_relation.return_value = target
+    adapter.resolve_table_lifecycle_plan.return_value = lifecycle_plan
+    adapter.execute.return_value = (object(), object())
+
+    result = DirectReplaceTableMaterializationExecutor(
+        adapter,
+        MagicMock(),
+        context,
+        lifecycle_plan=lifecycle_plan,
+    ).execute()
+
+    assert result == {"relations": [target]}
+    context["make_intermediate_relation"].assert_called_once_with(target)
+    context["make_staging_relation"].assert_called_once_with(target)
+    adapter.execute.assert_called_once_with(
+        "create temporary view intermediate", auto_begin=False, fetch=False
+    )
+    context["create_table_at"].assert_called_once_with(
+        staging, intermediate, context["sql"]
+    )

@@ -71,6 +71,7 @@ class TableMaterializationExecutor:
                 lifecycle_plan,
                 self.model,
                 target_relation,
+                existing_relation,
                 self._context_value("config"),
             )
         intermediate_relation = self._call_macro("make_intermediate_relation", target_relation)
@@ -249,8 +250,152 @@ class TableMaterializationExecutor:
             )
         return values
 
+    @staticmethod
+    def _operation_value(operation: Any, name: str) -> Any:
+        value = getattr(operation, name, None)
+        return getattr(value, "value", value)
+
+    def _execute_operation_program(
+        self,
+        *,
+        operations: Any,
+        relations: Mapping[str, Optional[BaseRelation]],
+        existing_relation: Optional[BaseRelation],
+        grant_config: Mapping[str, Any],
+    ) -> None:
+        """Execute a resolved, serializable materialization program in order."""
+
+        envelope_context: Any = None
+        setup_macro = getattr(self.lifecycle_plan, "setup_macro", None)
+        teardown_macro = getattr(self.lifecycle_plan, "teardown_macro", None)
+
+        for operation in operations:
+            kind = self._operation_value(operation, "kind")
+            relation_role = self._operation_value(operation, "relation")
+            source_role = self._operation_value(operation, "source")
+            destination_role = self._operation_value(operation, "destination")
+            relation = relations.get(relation_role) if relation_role is not None else None
+
+            if kind == "invoke_callback":
+                name = getattr(operation, "name", None)
+                if name == setup_macro:
+                    envelope_context = self._call_macro(name)
+                elif name == teardown_macro:
+                    self._call_macro(name, envelope_context)
+                elif relation_role is not None:
+                    self._call_macro(name, relation)
+                else:
+                    self._call_macro(name)
+            elif kind == "drop_relation_if_exists":
+                self._call_macro("drop_relation_if_exists", relation)
+            elif kind == "run_hooks":
+                hook_name = getattr(operation, "name", None)
+                hooks = self._context_value(f"{hook_name}_hooks")
+                self._call_macro(
+                    "run_hooks",
+                    hooks,
+                    inside_transaction=getattr(operation, "inside_transaction", None),
+                )
+            elif kind == "create_from_query":
+                if relation is None:
+                    raise DbtInternalError(
+                        "Create-from-query operation resolved an empty relation"
+                    )
+                build_sql = self._build_sql(
+                    relation,
+                    temporary=bool(getattr(operation, "temporary", False)),
+                )
+                self._execute_main(
+                    build_sql,
+                    auto_begin=bool(getattr(operation, "auto_begin", False)),
+                )
+            elif kind == "create_from_relation":
+                source = relations.get(source_role)
+                if relation is None or source is None:
+                    raise DbtInternalError(
+                        "Create-from-relation operation resolved an empty relation"
+                    )
+                self._call_macro(
+                    "create_table_at",
+                    relation,
+                    source,
+                    self._context_value("sql"),
+                )
+            elif kind == "rename_relation":
+                destination = relations.get(destination_role)
+                if relation is None or destination is None:
+                    raise DbtInternalError("Rename operation resolved an empty relation")
+                self.adapter.rename_relation(relation, destination)
+            elif kind == "create_indexes":
+                self._call_macro("create_indexes", relation)
+            elif kind == "apply_grants":
+                should_revoke = self._call_macro(
+                    "should_revoke",
+                    existing_relation,
+                    full_refresh_mode=True,
+                )
+                self._call_macro(
+                    "apply_grants",
+                    relation,
+                    grant_config,
+                    should_revoke=should_revoke,
+                )
+            elif kind == "apply_tags":
+                self._call_macro(
+                    "apply_tags",
+                    relation,
+                    self._context_value("config").get("databricks_tags"),
+                )
+            elif kind == "apply_column_tags":
+                get_column_tags = getattr(
+                    self.adapter, "get_column_tags_from_model", None
+                )
+                if not callable(get_column_tags):
+                    raise DbtInternalError(
+                        "Column-tag operation requires an adapter column-tag resolver"
+                    )
+                column_tags = get_column_tags(self.model)
+                if column_tags is not None and getattr(
+                    column_tags, "set_column_tags", None
+                ):
+                    self._call_macro("apply_column_tags", relation, column_tags)
+            elif kind == "persist_documentation":
+                self._call_macro("persist_docs", relation, self._context_value("model"))
+            elif kind == "persist_constraints":
+                self._call_macro(
+                    "persist_constraints", relation, self._context_value("model")
+                )
+            elif kind == "optimize":
+                self._call_macro("optimize", relation)
+            elif kind == "commit":
+                self._commit()
+            else:
+                raise DbtInternalError(
+                    f"Materialization program contains unknown operation '{kind}'"
+                )
+
     def execute(self) -> Dict[str, Any]:
         state = self.resolve_execution_state()
+        operations = getattr(state.lifecycle_plan, "operations", ())
+        if operations:
+            existing_relation = state.existing_relation
+            if existing_relation is not None:
+                existing_relation = self._call_macro(
+                    "load_cached_relation", existing_relation
+                )
+            self._execute_operation_program(
+                operations=operations,
+                relations={
+                    "existing": existing_relation,
+                    "target": state.target_relation,
+                    "intermediate": state.intermediate_relation,
+                    "backup": state.backup_relation,
+                },
+                existing_relation=existing_relation,
+                grant_config=state.grant_config,
+            )
+            return {"relations": [state.target_relation]}
+
         lifecycle = self._stage_lifecycle_values(state.lifecycle_plan)
 
         self._call_macro("drop_relation_if_exists", state.preexisting_intermediate_relation)
@@ -272,7 +417,13 @@ class TableMaterializationExecutor:
             if existing_relation is not None:
                 if lifecycle["existing_indexes"] == "drop_before_swap":
                     self._call_macro("drop_indexes_on_relation", existing_relation)
-                self.adapter.rename_relation(existing_relation, state.backup_relation)
+                facts = getattr(state.lifecycle_plan, "facts", None)
+                existing_facts = getattr(facts, "existing", None)
+                can_be_renamed = getattr(existing_facts, "can_be_renamed", True)
+                if can_be_renamed:
+                    self.adapter.rename_relation(existing_relation, state.backup_relation)
+                else:
+                    self._call_macro("drop_relation_if_exists", existing_relation)
 
         self.adapter.rename_relation(state.intermediate_relation, state.target_relation)
         if lifecycle["indexes"] == "after_swap":
@@ -329,6 +480,18 @@ class DirectReplaceTableMaterializationExecutor(TableMaterializationExecutor):
         target_relation = self.adapter.resolve_table_materialization_relation(
             self.model, self._context_value("this")
         )
+        resolve_lifecycle = getattr(self.adapter, "resolve_table_lifecycle_plan", None)
+        if not callable(resolve_lifecycle):
+            raise DbtInternalError(
+                "Direct table executor requires a runtime lifecycle resolver"
+            )
+        self.lifecycle_plan = resolve_lifecycle(
+            self.lifecycle_plan,
+            self.model,
+            target_relation,
+            existing_relation,
+            self._context_value("config"),
+        )
         grant_config = self._context_value("config").get("grants") or {}
         if not isinstance(grant_config, Mapping):
             raise DbtInternalError("Table materialization grants config must be a mapping")
@@ -353,7 +516,6 @@ class DirectReplaceTableMaterializationExecutor(TableMaterializationExecutor):
             "documentation": "before_commit",
             "transaction": "adapter_managed",
             "hooks": "in_transaction",
-            "statement": "auto_begin",
         }
         for field_name, expected in expected_policies.items():
             if self._direct_plan_value(field_name) != expected:
@@ -361,18 +523,69 @@ class DirectReplaceTableMaterializationExecutor(TableMaterializationExecutor):
                     f"Direct table executor requires {field_name} policy '{expected}'"
                 )
 
+        state = self.resolve_direct_execution_state()
+        operations = getattr(self.lifecycle_plan, "operations", ())
+        if operations:
+            referenced_roles = {
+                self._operation_value(operation, field_name)
+                for operation in operations
+                for field_name in ("relation", "source", "destination")
+            }
+            relations: Dict[str, Optional[BaseRelation]] = {
+                "existing": state.existing_relation,
+                "target": state.target_relation,
+            }
+            if "intermediate" in referenced_roles:
+                relations["intermediate"] = self._call_macro(
+                    "make_intermediate_relation", state.target_relation
+                )
+            if "staging" in referenced_roles:
+                relations["staging"] = self._call_macro(
+                    "make_staging_relation", state.target_relation
+                )
+            if "backup" in referenced_roles:
+                backup_type = (
+                    "table"
+                    if state.existing_relation is None
+                    else state.existing_relation.type
+                )
+                relations["backup"] = self._call_macro(
+                    "make_backup_relation", state.target_relation, backup_type
+                )
+            self._execute_operation_program(
+                operations=operations,
+                relations=relations,
+                existing_relation=state.existing_relation,
+                grant_config=state.grant_config,
+            )
+            return {"relations": [state.target_relation]}
+
         setup_macro = getattr(self.lifecycle_plan, "setup_macro", None)
         teardown_macro = getattr(self.lifecycle_plan, "teardown_macro", None)
         envelope_context = self._call_macro(setup_macro) if setup_macro is not None else None
 
-        state = self.resolve_direct_execution_state()
         self._call_macro("run_hooks", self._context_value("pre_hooks"), inside_transaction=True)
 
-        needs_to_drop = getattr(state.target_relation, "needs_to_drop", None)
-        if callable(needs_to_drop) and needs_to_drop(state.existing_relation):
+        facts = getattr(self.lifecycle_plan, "facts", None)
+        existing_facts = getattr(facts, "existing", None)
+        requires_drop = getattr(existing_facts, "requires_drop_before_replace", None)
+        if requires_drop is None:
+            needs_to_drop = getattr(state.target_relation, "needs_to_drop", None)
+            requires_drop = bool(
+                callable(needs_to_drop) and needs_to_drop(state.existing_relation)
+            )
+        if requires_drop:
             self._call_macro("drop_relation_if_exists", state.existing_relation)
 
-        self._execute_main(self._build_sql(state.target_relation))
+        statement = self._direct_plan_value("statement")
+        if statement not in {"auto_begin", "no_auto_begin"}:
+            raise DbtInternalError(
+                "Direct table executor requires a typed statement transaction policy"
+            )
+        self._execute_main(
+            self._build_sql(state.target_relation),
+            auto_begin=statement == "auto_begin",
+        )
         self._call_macro("run_hooks", self._context_value("post_hooks"), inside_transaction=True)
 
         should_revoke = self._call_macro(
