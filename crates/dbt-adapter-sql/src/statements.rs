@@ -36,8 +36,8 @@ pub fn is_update_statement(sql: &str, adapter_type: AdapterType) -> bool {
 ///
 /// BigQuery's ADBC driver Storage-Reads the destination table for DML when
 /// `fetch=true` (e.g. `dbt.run_query` on `INSERT`). Callers must not drain
-/// those readers. Leading comments are stripped so Elementary's
-/// `/* --ELEMENTARY-METADATA-- */` prefix does not hide `INSERT`.
+/// those readers. Leading comments are stripped so a comment prefix cannot
+/// hide the statement keyword.
 pub fn statement_returns_result_rows(sql: &str, adapter_type: AdapterType) -> bool {
     match adapter_type {
         AdapterType::Bigquery => {
@@ -162,14 +162,14 @@ mod tests {
     #[test]
     fn bigquery_insert_does_not_return_result_rows() {
         assert!(!statement_returns_result_rows(
-            "INSERT INTO `proj`.`ds`.`dbt_run_results` (id) VALUES (1)",
+            "INSERT INTO `proj`.`ds`.`target` (id) VALUES (1)",
             AdapterType::Bigquery,
         ));
     }
 
     #[test]
-    fn bigquery_insert_with_elementary_leading_comment_does_not_return_result_rows() {
-        let sql = "/* --ELEMENTARY-METADATA-- {\"command\": \"build\"} --END-ELEMENTARY-METADATA-- */\ninsert into `proj`.`ds`.`dbt_run_results` values (1)";
+    fn bigquery_insert_with_leading_comment_does_not_return_result_rows() {
+        let sql = "/* metadata */\ninsert into `proj`.`ds`.`target` values (1)";
         assert!(!statement_returns_result_rows(sql, AdapterType::Bigquery));
     }
 

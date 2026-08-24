@@ -243,8 +243,8 @@ fn log_step_duration(label: &str, elapsed: std::time::Duration) {
 }
 
 /// Skip draining the Arrow reader. BigQuery DML/DDL readers can Storage-Read
-/// the destination table (`dbt.run_query` on `INSERT` into a large
-/// `dbt_run_results` table OOMs). Snowflake DML still needs the metadata row.
+/// the destination table (`dbt.run_query` on `INSERT` into a large table).
+/// Snowflake DML still needs the metadata row.
 pub(crate) fn skip_result_batch_consume(
     adapter_type: AdapterType,
     sql: &str,
@@ -491,7 +491,7 @@ pub(crate) fn adbc_execute_with_options(
         // with columns like "number of rows inserted". AdapterResponse needs that batch
         // to compute rows_affected correctly, so we must drain even when fetch=false.
         // BigQuery DML/DDL readers can Storage-Read the destination table; skip that
-        // drain even when fetch=true (dbt.run_query / Elementary INSERT).
+        // drain even when fetch=true (e.g. `dbt.run_query` on `INSERT`).
         if skip_result_batch_consume(engine.adapter_type(), sql.as_ref(), &schema, fetch) {
             drop(reader);
             let schema = attach_alt_warnings(&stmt, schema);
@@ -786,7 +786,7 @@ mod tests {
     #[test]
     fn skip_result_batch_consume_skips_bigquery_insert_even_when_fetch_true() {
         let schema = Schema::empty();
-        let sql = "/* --ELEMENTARY-METADATA-- {} --END-ELEMENTARY-METADATA-- */\nINSERT INTO t VALUES (1)";
+        let sql = "/* metadata */\nINSERT INTO t VALUES (1)";
         assert!(skip_result_batch_consume(
             AdapterType::Bigquery,
             sql,
