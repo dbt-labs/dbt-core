@@ -414,6 +414,7 @@ where
         Some(&project_dir),
         Some(&target_dir),
         &arg.io,
+        cli.common_args.get_quiet(),
         warn_error_options.as_ref(),
         cli.common_args.skip_fusion_only_upgrades(),
         "dbt-tests",
