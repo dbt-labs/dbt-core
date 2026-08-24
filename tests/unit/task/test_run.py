@@ -31,6 +31,7 @@ from dbt.events.types import LogModelResult
 from dbt.exceptions import DbtRuntimeError
 from dbt.flags import get_flags, set_from_args
 from dbt.materializations.incremental.executor import IncrementalMaterializationExecutor
+from dbt.materializations.table import DirectReplaceTableMaterializationExecutor
 from dbt.task.run import MicrobatchModelRunner, ModelRunner, RunTask, _get_adapter_info
 from dbt.task.runnable import _rows_affected
 from dbt.tests.util import safe_set_invocation_context
@@ -178,7 +179,35 @@ class TestModelRunner:
         )
         executor = model_runner._get_python_materialization_executor(model, materialization_macro)
 
-        assert executor is IncrementalMaterializationExecutor
+        assert executor.executor_type is IncrementalMaterializationExecutor
+
+    def test_adapter_lifecycle_plan_selects_direct_replace_executor(
+        self, model_runner: ModelRunner
+    ) -> None:
+        lifecycle_plan = mock.Mock()
+        lifecycle_plan.replacement.value = "direct_replace"
+        model_runner.adapter = mock.Mock(
+            spec=[
+                "plan_table_materialization",
+                "resolve_table_materialization_existing_relation",
+                "resolve_table_materialization_relation",
+            ]
+        )
+        model_runner.adapter.plan_table_materialization.return_value = lifecycle_plan
+        model = mock.Mock(language="sql")
+        materialization_macro = mock.Mock(
+            unique_id="macro.dbt_snowflake.materialization_table_snowflake"
+        )
+
+        execution = model_runner._get_python_materialization_executor(model, materialization_macro)
+
+        assert execution.executor_type is DirectReplaceTableMaterializationExecutor
+        assert execution.lifecycle_plan is lifecycle_plan
+        model_runner.adapter.plan_table_materialization.assert_called_once_with(
+            materialization_macro.unique_id,
+            "sql",
+            model,
+        )
 
     def test_print_result_line(
         self,

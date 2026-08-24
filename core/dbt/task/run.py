@@ -4,7 +4,7 @@ import functools
 import threading
 import time
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from dataclasses import replace as dataclass_replace
 from datetime import datetime, timezone
 from typing import (
@@ -70,7 +70,10 @@ from dbt.graph.thread_pool import DbtThreadPool
 from dbt.hooks import get_hook_dict
 from dbt.materializations.incremental.executor import IncrementalMaterializationExecutor
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
-from dbt.materializations.table import TableMaterializationExecutor
+from dbt.materializations.table import (
+    DirectReplaceTableMaterializationExecutor,
+    TableMaterializationExecutor,
+)
 from dbt.node_types import NodeType, RunHookType
 from dbt.task import group_lookup
 from dbt.task.base import BaseRunner
@@ -235,6 +238,12 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
     return relations
 
 
+@dataclass(frozen=True)
+class PythonMaterializationExecution:
+    executor_type: Type[TableMaterializationExecutor]
+    lifecycle_plan: Optional[Any] = None
+
+
 class ModelRunner(CompileRunner[ModelNode]):
     _PYTHON_MATERIALIZATION_EXECUTORS = {
         "macro.dbt.materialization_incremental_default": IncrementalMaterializationExecutor,
@@ -243,12 +252,44 @@ class ModelRunner(CompileRunner[ModelNode]):
 
     def _get_python_materialization_executor(
         self, model: ModelNode, materialization_macro: MacroProtocol
-    ) -> Optional[Type[TableMaterializationExecutor]]:
+    ) -> Optional[PythonMaterializationExecution]:
         if str(model.language) != "sql":
             return None
         unique_id = getattr(materialization_macro, "unique_id", None)
         if not isinstance(unique_id, str):
             return None
+
+        plan_table = getattr(self.adapter, "plan_table_materialization", None)
+        if callable(plan_table):
+            lifecycle_plan = plan_table(unique_id, str(model.language), model)
+            if lifecycle_plan is not None:
+                resolved_replacement = getattr(
+                    getattr(lifecycle_plan, "replacement", None), "value", None
+                )
+                replacement = (
+                    resolved_replacement if isinstance(resolved_replacement, str) else None
+                )
+                executor_types = {
+                    "stage_and_swap": TableMaterializationExecutor,
+                    "direct_replace": DirectReplaceTableMaterializationExecutor,
+                }
+                if replacement is None:
+                    raise DbtInternalError(
+                        "Table lifecycle planner selected an untyped replacement strategy"
+                    )
+                executor_type = executor_types.get(replacement)
+                if executor_type is None:
+                    raise DbtInternalError(
+                        "Table lifecycle planner selected an unknown replacement strategy"
+                    )
+                required_adapter_methods = getattr(executor_type, "REQUIRED_ADAPTER_METHODS", ())
+                if not all(
+                    callable(getattr(self.adapter, method_name, None))
+                    for method_name in required_adapter_methods
+                ):
+                    return None
+                return PythonMaterializationExecution(executor_type, lifecycle_plan)
+
         executor_type = self._PYTHON_MATERIALIZATION_EXECUTORS.get(unique_id)
         if executor_type is None:
             return None
@@ -258,7 +299,7 @@ class ModelRunner(CompileRunner[ModelNode]):
             for method_name in required_adapter_methods
         ):
             return None
-        return executor_type
+        return PythonMaterializationExecution(executor_type)
 
     def _relation_identifier(self, relation: BaseRelation) -> str:
         identifier = getattr(relation, "identifier", None)
@@ -463,13 +504,20 @@ class ModelRunner(CompileRunner[ModelNode]):
     ) -> RunResult:
         relations: List[BaseRelation] = []
         try:
-            executor_type = self._get_python_materialization_executor(model, materialization_macro)
-            if executor_type is None:
+            python_execution = self._get_python_materialization_executor(
+                model, materialization_macro
+            )
+            if python_execution is None:
                 result = MacroGenerator(
                     materialization_macro, context, stack=context["context_macro_stack"]
                 )()
             else:
-                result = executor_type(self.adapter, model, context).execute()
+                result = python_execution.executor_type(
+                    self.adapter,
+                    model,
+                    context,
+                    lifecycle_plan=python_execution.lifecycle_plan,
+                ).execute()
             relations = self._materialization_relations(result, model)
             relations.extend(
                 self._materialize_latest_version_pointer(manifest, model, context, relations)

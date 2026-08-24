@@ -4,7 +4,10 @@ from unittest.mock import MagicMock, call
 import pytest
 
 from dbt.exceptions import DbtInternalError
-from dbt.materializations.table import TableMaterializationExecutor
+from dbt.materializations.table import (
+    DirectReplaceTableMaterializationExecutor,
+    TableMaterializationExecutor,
+)
 
 
 def _relation(name, relation_type="table"):
@@ -42,6 +45,7 @@ def _executor_context(*, existing_relation=None, grant_config=None):
         "write": MagicMock(),
         "store_result": MagicMock(),
         "create_indexes": MagicMock(),
+        "drop_indexes_on_relation": MagicMock(),
         "should_revoke": MagicMock(return_value=True),
         "apply_grants": MagicMock(),
         "persist_docs": MagicMock(),
@@ -106,6 +110,41 @@ def test_table_executor_rejects_missing_or_untyped_context_boundaries():
     executor.context["load_cached_relation"] = "not callable"
     with pytest.raises(DbtInternalError, match="not callable"):
         executor.resolve_execution_state()
+
+
+def test_stage_and_swap_executor_consumes_runtime_lifecycle_policies():
+    existing = _relation("existing")
+    context, target, intermediate, _ = _executor_context(existing_relation=existing)
+    lifecycle_plan = SimpleNamespace(
+        hooks=SimpleNamespace(value="split"),
+        indexes=SimpleNamespace(value="after_swap"),
+        existing_indexes=SimpleNamespace(value="drop_before_swap"),
+        documentation=SimpleNamespace(value="after_commit"),
+        transaction=SimpleNamespace(value="explicit_commit"),
+        statement=SimpleNamespace(value="no_auto_begin"),
+    )
+    response = object()
+    table = object()
+    adapter = MagicMock(spec=["execute", "rename_relation", "resolve_table_lifecycle_plan"])
+    adapter.resolve_table_lifecycle_plan.return_value = lifecycle_plan
+    adapter.execute.return_value = (response, table)
+
+    TableMaterializationExecutor(
+        adapter,
+        MagicMock(),
+        context,
+        lifecycle_plan=lifecycle_plan,
+    ).execute()
+
+    adapter.execute.assert_called_once_with(
+        "create table intermediate as select 1",
+        auto_begin=False,
+        fetch=False,
+    )
+    context["drop_indexes_on_relation"].assert_called_once_with(existing)
+    context["create_indexes"].assert_called_once_with(target)
+    context["persist_docs"].assert_called_once_with(target, context["model"])
+    assert context["adapter"].commit.call_count == 2
 
 
 class _RenderArguments:
@@ -218,3 +257,74 @@ def test_table_executor_reports_adapter_dispatch_override():
     )
 
     assert override == "macro.adapter.adapter__get_create_table_as_sql"
+
+
+def test_direct_replace_executor_consumes_typed_lifecycle_plan():
+    existing = _relation("existing", "view")
+    target = _relation("target")
+    target.needs_to_drop.return_value = True
+    this = MagicMock(name="this")
+    context = {
+        "adapter": MagicMock(),
+        "this": this,
+        "config": {"grants": {"select": ["reporter"]}},
+        "model": {"unique_id": "model.test.orders"},
+        "sql": "select 1 as id",
+        "pre_hooks": ["pre"],
+        "post_hooks": ["post"],
+        "run_hooks": MagicMock(),
+        "drop_relation_if_exists": MagicMock(),
+        "get_create_table_as_sql": MagicMock(return_value="create or replace table target"),
+        "write": MagicMock(),
+        "store_result": MagicMock(),
+        "should_revoke": MagicMock(return_value=True),
+        "apply_grants": MagicMock(),
+        "persist_docs": MagicMock(),
+        "set_query_tag": MagicMock(return_value="original-tag"),
+        "unset_query_tag": MagicMock(),
+    }
+    lifecycle_plan = SimpleNamespace(
+        replacement=SimpleNamespace(value="direct_replace"),
+        indexes=SimpleNamespace(value="none"),
+        existing_indexes=SimpleNamespace(value="preserve"),
+        documentation=SimpleNamespace(value="before_commit"),
+        transaction=SimpleNamespace(value="adapter_managed"),
+        hooks=SimpleNamespace(value="in_transaction"),
+        statement=SimpleNamespace(value="auto_begin"),
+        setup_macro="set_query_tag",
+        teardown_macro="unset_query_tag",
+    )
+    response = object()
+    table = object()
+    adapter = MagicMock(
+        spec=[
+            "execute",
+            "resolve_table_materialization_existing_relation",
+            "resolve_table_materialization_relation",
+        ]
+    )
+    adapter.resolve_table_materialization_existing_relation.return_value = existing
+    adapter.resolve_table_materialization_relation.return_value = target
+    adapter.execute.return_value = (response, table)
+    model = MagicMock()
+
+    result = DirectReplaceTableMaterializationExecutor(
+        adapter,
+        model,
+        context,
+        lifecycle_plan=lifecycle_plan,
+    ).execute()
+
+    assert result == {"relations": [target]}
+    adapter.resolve_table_materialization_relation.assert_called_once_with(model, this)
+    target.needs_to_drop.assert_called_once_with(existing)
+    context["drop_relation_if_exists"].assert_called_once_with(existing)
+    context["run_hooks"].assert_has_calls(
+        [
+            call(context["pre_hooks"], inside_transaction=True),
+            call(context["post_hooks"], inside_transaction=True),
+        ]
+    )
+    context["set_query_tag"].assert_called_once_with()
+    context["unset_query_tag"].assert_called_once_with("original-tag")
+    context["adapter"].commit.assert_not_called()

@@ -18,6 +18,7 @@ class TableMaterializationExecutionState:
     preexisting_intermediate_relation: Optional[BaseRelation]
     preexisting_backup_relation: Optional[BaseRelation]
     grant_config: Mapping[str, Any]
+    lifecycle_plan: Optional[Any]
 
 
 class TableMaterializationExecutor:
@@ -27,10 +28,17 @@ class TableMaterializationExecutor:
     but control flow and database mutation ordering live here rather than in Jinja.
     """
 
-    def __init__(self, adapter: Any, model: ModelNode, context: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        adapter: Any,
+        model: ModelNode,
+        context: Dict[str, Any],
+        lifecycle_plan: Optional[Any] = None,
+    ) -> None:
         self.adapter = adapter
         self.model = model
         self.context = context
+        self.lifecycle_plan = lifecycle_plan
 
     def _context_value(self, name: str) -> Any:
         try:
@@ -50,7 +58,21 @@ class TableMaterializationExecutor:
 
     def resolve_execution_state(self) -> TableMaterializationExecutionState:
         existing_relation = self._call_macro("load_cached_relation", self._context_value("this"))
-        target_relation = self._context_value("this").incorporate(type="table")
+        resolve_target = getattr(self.adapter, "resolve_table_materialization_relation", None)
+        target_relation = (
+            resolve_target(self.model, self._context_value("this"))
+            if callable(resolve_target)
+            else self._context_value("this").incorporate(type="table")
+        )
+        lifecycle_plan = self.lifecycle_plan
+        resolve_lifecycle = getattr(self.adapter, "resolve_table_lifecycle_plan", None)
+        if lifecycle_plan is not None and callable(resolve_lifecycle):
+            lifecycle_plan = resolve_lifecycle(
+                lifecycle_plan,
+                self.model,
+                target_relation,
+                self._context_value("config"),
+            )
         intermediate_relation = self._call_macro("make_intermediate_relation", target_relation)
         backup_relation_type = "table" if existing_relation is None else existing_relation.type
         backup_relation = self._call_macro(
@@ -71,11 +93,12 @@ class TableMaterializationExecutor:
             ),
             preexisting_backup_relation=self._call_macro("load_cached_relation", backup_relation),
             grant_config=grant_config,
+            lifecycle_plan=lifecycle_plan,
         )
 
-    def _execute_main(self, sql: str) -> None:
+    def _execute_main(self, sql: str, *, auto_begin: bool = True) -> None:
         self._call_macro("write", sql)
-        response, table = self.adapter.execute(sql, auto_begin=True, fetch=False)
+        response, table = self.adapter.execute(sql, auto_begin=auto_begin, fetch=False)
         self._call_macro("store_result", "main", response=response, agate_table=table)
 
     def _commit(self) -> None:
@@ -188,25 +211,72 @@ class TableMaterializationExecutor:
             return self._legacy_build_sql(relation, sql, temporary)
         raise DbtInternalError("Typed create-from-query renderer returned an unknown result kind")
 
+    @staticmethod
+    def _plan_value(plan: Optional[Any], name: str, default: str) -> str:
+        value = getattr(plan, name, None)
+        return getattr(value, "value", value) or default
+
+    def _stage_lifecycle_values(self, plan: Optional[Any]) -> Dict[str, str]:
+        values = {
+            "replacement": self._plan_value(plan, "replacement", "stage_and_swap"),
+            "hooks": self._plan_value(plan, "hooks", "split"),
+            "indexes": self._plan_value(plan, "indexes", "before_swap"),
+            "existing_indexes": self._plan_value(plan, "existing_indexes", "preserve"),
+            "documentation": self._plan_value(plan, "documentation", "before_commit"),
+            "transaction": self._plan_value(plan, "transaction", "explicit_commit"),
+            "statement": self._plan_value(plan, "statement", "auto_begin"),
+        }
+        allowed = {
+            "replacement": {"stage_and_swap"},
+            "hooks": {"split", "in_transaction"},
+            "indexes": {"before_swap", "after_swap", "none"},
+            "existing_indexes": {"preserve", "drop_before_swap"},
+            "documentation": {"before_commit", "after_commit"},
+            "transaction": {"explicit_commit", "adapter_managed"},
+            "statement": {"auto_begin", "no_auto_begin"},
+        }
+        for field_name, value in values.items():
+            if value not in allowed[field_name]:
+                raise DbtInternalError(
+                    f"Table lifecycle planner selected unknown {field_name} policy '{value}'"
+                )
+        if (
+            values["documentation"] == "after_commit"
+            and values["transaction"] != "explicit_commit"
+        ):
+            raise DbtInternalError(
+                "Post-commit table documentation requires explicit transaction control"
+            )
+        return values
+
     def execute(self) -> Dict[str, Any]:
         state = self.resolve_execution_state()
+        lifecycle = self._stage_lifecycle_values(state.lifecycle_plan)
 
         self._call_macro("drop_relation_if_exists", state.preexisting_intermediate_relation)
         self._call_macro("drop_relation_if_exists", state.preexisting_backup_relation)
-        self._call_macro("run_hooks", self._context_value("pre_hooks"), inside_transaction=False)
+        if lifecycle["hooks"] == "split":
+            self._call_macro(
+                "run_hooks", self._context_value("pre_hooks"), inside_transaction=False
+            )
         self._call_macro("run_hooks", self._context_value("pre_hooks"), inside_transaction=True)
 
         build_sql = self._build_sql(state.intermediate_relation)
-        self._execute_main(build_sql)
-        self._call_macro("create_indexes", state.intermediate_relation)
+        self._execute_main(build_sql, auto_begin=lifecycle["statement"] == "auto_begin")
+        if lifecycle["indexes"] == "before_swap":
+            self._call_macro("create_indexes", state.intermediate_relation)
 
         existing_relation = state.existing_relation
         if existing_relation is not None:
             existing_relation = self._call_macro("load_cached_relation", existing_relation)
             if existing_relation is not None:
+                if lifecycle["existing_indexes"] == "drop_before_swap":
+                    self._call_macro("drop_indexes_on_relation", existing_relation)
                 self.adapter.rename_relation(existing_relation, state.backup_relation)
 
         self.adapter.rename_relation(state.intermediate_relation, state.target_relation)
+        if lifecycle["indexes"] == "after_swap":
+            self._call_macro("create_indexes", state.target_relation)
         self._call_macro("run_hooks", self._context_value("post_hooks"), inside_transaction=True)
 
         should_revoke = self._call_macro(
@@ -218,9 +288,104 @@ class TableMaterializationExecutor:
             state.grant_config,
             should_revoke=should_revoke,
         )
-        self._call_macro("persist_docs", state.target_relation, self._context_value("model"))
-        self._commit()
+        if lifecycle["documentation"] == "before_commit":
+            self._call_macro("persist_docs", state.target_relation, self._context_value("model"))
+        if lifecycle["transaction"] == "explicit_commit":
+            self._commit()
+        if lifecycle["documentation"] == "after_commit":
+            self._call_macro("persist_docs", state.target_relation, self._context_value("model"))
+            self._commit()
         self._call_macro("drop_relation_if_exists", state.backup_relation)
-        self._call_macro("run_hooks", self._context_value("post_hooks"), inside_transaction=False)
+        if lifecycle["hooks"] == "split":
+            self._call_macro(
+                "run_hooks", self._context_value("post_hooks"), inside_transaction=False
+            )
 
+        return {"relations": [state.target_relation]}
+
+
+@dataclass(frozen=True)
+class DirectTableMaterializationExecutionState:
+    """Late-bound relation and configuration for direct target replacement."""
+
+    existing_relation: Optional[BaseRelation]
+    target_relation: BaseRelation
+    grant_config: Mapping[str, Any]
+
+
+class DirectReplaceTableMaterializationExecutor(TableMaterializationExecutor):
+    """Execute a typed direct-replacement table lifecycle in Python."""
+
+    REQUIRED_ADAPTER_METHODS = (
+        "plan_table_materialization",
+        "resolve_table_materialization_existing_relation",
+        "resolve_table_materialization_relation",
+    )
+
+    def resolve_direct_execution_state(self) -> DirectTableMaterializationExecutionState:
+        existing_relation = self.adapter.resolve_table_materialization_existing_relation(
+            self._context_value("this")
+        )
+        target_relation = self.adapter.resolve_table_materialization_relation(
+            self.model, self._context_value("this")
+        )
+        grant_config = self._context_value("config").get("grants") or {}
+        if not isinstance(grant_config, Mapping):
+            raise DbtInternalError("Table materialization grants config must be a mapping")
+        return DirectTableMaterializationExecutionState(
+            existing_relation=existing_relation,
+            target_relation=target_relation,
+            grant_config=grant_config,
+        )
+
+    def _direct_plan_value(self, name: str) -> Optional[str]:
+        value = getattr(self.lifecycle_plan, name, None)
+        return getattr(value, "value", value)
+
+    def execute(self) -> Dict[str, Any]:
+        if self._direct_plan_value("replacement") != "direct_replace":
+            raise DbtInternalError(
+                "Direct table executor requires a direct-replace lifecycle plan"
+            )
+        expected_policies = {
+            "indexes": "none",
+            "existing_indexes": "preserve",
+            "documentation": "before_commit",
+            "transaction": "adapter_managed",
+            "hooks": "in_transaction",
+            "statement": "auto_begin",
+        }
+        for field_name, expected in expected_policies.items():
+            if self._direct_plan_value(field_name) != expected:
+                raise DbtInternalError(
+                    f"Direct table executor requires {field_name} policy '{expected}'"
+                )
+
+        setup_macro = getattr(self.lifecycle_plan, "setup_macro", None)
+        teardown_macro = getattr(self.lifecycle_plan, "teardown_macro", None)
+        envelope_context = self._call_macro(setup_macro) if setup_macro is not None else None
+
+        state = self.resolve_direct_execution_state()
+        self._call_macro("run_hooks", self._context_value("pre_hooks"), inside_transaction=True)
+
+        needs_to_drop = getattr(state.target_relation, "needs_to_drop", None)
+        if callable(needs_to_drop) and needs_to_drop(state.existing_relation):
+            self._call_macro("drop_relation_if_exists", state.existing_relation)
+
+        self._execute_main(self._build_sql(state.target_relation))
+        self._call_macro("run_hooks", self._context_value("post_hooks"), inside_transaction=True)
+
+        should_revoke = self._call_macro(
+            "should_revoke", state.existing_relation, full_refresh_mode=True
+        )
+        self._call_macro(
+            "apply_grants",
+            state.target_relation,
+            state.grant_config,
+            should_revoke=should_revoke,
+        )
+        self._call_macro("persist_docs", state.target_relation, self._context_value("model"))
+
+        if teardown_macro is not None:
+            self._call_macro(teardown_macro, envelope_context)
         return {"relations": [state.target_relation]}

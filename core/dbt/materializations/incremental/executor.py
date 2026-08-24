@@ -38,8 +38,14 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
         "plan_incremental_mutation",
     )
 
-    def __init__(self, adapter: Any, model: ModelNode, context: dict[str, Any]) -> None:
-        super().__init__(adapter, model, context)
+    def __init__(
+        self,
+        adapter: Any,
+        model: ModelNode,
+        context: dict[str, Any],
+        lifecycle_plan: Optional[Any] = None,
+    ) -> None:
+        super().__init__(adapter, model, context, lifecycle_plan=lifecycle_plan)
 
     def resolve_incremental_execution_state(self) -> IncrementalMaterializationExecutionState:
         existing_relation = self._call_macro("load_cached_relation", self._context_value("this"))
