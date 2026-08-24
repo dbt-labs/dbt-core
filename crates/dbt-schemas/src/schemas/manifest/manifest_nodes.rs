@@ -850,6 +850,8 @@ pub struct ManifestModelConfig {
     pub classifiers: Option<StringOrArrayOfStrings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog_sync: Option<String>,
     // Internal-only placement hint; never written to the manifest.
     #[serde(skip_serializing, default)]
     pub alt_compute: Option<ComputePlatform>,
@@ -1130,6 +1132,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             tags: config.tags.into_inner(),
             classifiers: config.classifiers.into_inner(),
             catalog_name: config.catalog_name,
+            catalog_sync: config.catalog_sync,
             alt_compute: config.alt_compute,
             meta: config.meta,
             group: config.group,
@@ -1204,6 +1207,7 @@ impl From<ManifestModelConfig> for ModelConfig {
                 config.classifiers,
             ),
             catalog_name: config.catalog_name,
+            catalog_sync: config.catalog_sync,
             alt_compute: config.alt_compute,
             compute: config.compute,
             meta: config.meta,
