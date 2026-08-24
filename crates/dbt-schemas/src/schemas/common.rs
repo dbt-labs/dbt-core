@@ -2219,17 +2219,15 @@ exclude: 3
     fn test_conform_normalized_snapshot_keeps_body_with_inner_whitespace_control() {
         let on_disk = "{% snapshot snap %}\n{{ config(unique_key='id', strategy='check', check_cols='all') }}\n{%- set x = 1 -%}\nselect 1 as id, 'alice' as first_name\n{% endsnapshot %}";
         let mantle_raw_code = "\n{{ config(unique_key='id', strategy='check', check_cols='all') }}\n{%- set x = 1 -%}\nselect 1 as id, 'alice' as first_name\n";
+        let expected = "{{ config(unique_key='id', strategy='check', check_cols='all') }} {%- set x = 1 -%} select 1 as id, 'alice' as first_name";
 
         let from_disk =
             conform_normalized_snapshot_raw_code_to_mantle_format(&normalize_sql(on_disk));
         let from_manifest =
             conform_normalized_snapshot_raw_code_to_mantle_format(&normalize_sql(mantle_raw_code));
 
-        assert_eq!(from_disk, from_manifest);
-        assert!(from_disk.contains("config("), "got: {from_disk:?}");
-        assert!(from_disk.contains("{%- set x = 1 -%}"), "got: {from_disk:?}");
-        assert!(!from_disk.contains("snapshot snap"), "got: {from_disk:?}");
-        assert!(!from_disk.contains("endsnapshot"), "got: {from_disk:?}");
+        assert_eq!(from_disk, expected);
+        assert_eq!(from_manifest, expected);
     }
 
     #[test]
