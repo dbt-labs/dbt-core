@@ -222,9 +222,7 @@ def test_table_executor_uses_resolved_operation_order_as_authority():
         call(existing, backup),
         call(intermediate, target),
     ]
-    context["run_hooks"].assert_called_once_with(
-        context["pre_hooks"], inside_transaction=False
-    )
+    context["run_hooks"].assert_called_once_with(context["pre_hooks"], inside_transaction=False)
     context["persist_docs"].assert_called_once_with(target, context["model"])
     context["optimize"].assert_called_once_with(target)
     context["apply_grants"].assert_not_called()
@@ -480,6 +478,4 @@ def test_direct_executor_resolves_v2_relation_roles_from_operation_program():
     adapter.execute.assert_called_once_with(
         "create temporary view intermediate", auto_begin=False, fetch=False
     )
-    context["create_table_at"].assert_called_once_with(
-        staging, intermediate, context["sql"]
-    )
+    context["create_table_at"].assert_called_once_with(staging, intermediate, context["sql"])

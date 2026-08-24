@@ -347,24 +347,18 @@ class TableMaterializationExecutor:
                     self._context_value("config").get("databricks_tags"),
                 )
             elif kind == "apply_column_tags":
-                get_column_tags = getattr(
-                    self.adapter, "get_column_tags_from_model", None
-                )
+                get_column_tags = getattr(self.adapter, "get_column_tags_from_model", None)
                 if not callable(get_column_tags):
                     raise DbtInternalError(
                         "Column-tag operation requires an adapter column-tag resolver"
                     )
                 column_tags = get_column_tags(self.model)
-                if column_tags is not None and getattr(
-                    column_tags, "set_column_tags", None
-                ):
+                if column_tags is not None and getattr(column_tags, "set_column_tags", None):
                     self._call_macro("apply_column_tags", relation, column_tags)
             elif kind == "persist_documentation":
                 self._call_macro("persist_docs", relation, self._context_value("model"))
             elif kind == "persist_constraints":
-                self._call_macro(
-                    "persist_constraints", relation, self._context_value("model")
-                )
+                self._call_macro("persist_constraints", relation, self._context_value("model"))
             elif kind == "optimize":
                 self._call_macro("optimize", relation)
             elif kind == "commit":
@@ -380,9 +374,7 @@ class TableMaterializationExecutor:
         if operations:
             existing_relation = state.existing_relation
             if existing_relation is not None:
-                existing_relation = self._call_macro(
-                    "load_cached_relation", existing_relation
-                )
+                existing_relation = self._call_macro("load_cached_relation", existing_relation)
             self._execute_operation_program(
                 operations=operations,
                 relations={
@@ -482,9 +474,7 @@ class DirectReplaceTableMaterializationExecutor(TableMaterializationExecutor):
         )
         resolve_lifecycle = getattr(self.adapter, "resolve_table_lifecycle_plan", None)
         if not callable(resolve_lifecycle):
-            raise DbtInternalError(
-                "Direct table executor requires a runtime lifecycle resolver"
-            )
+            raise DbtInternalError("Direct table executor requires a runtime lifecycle resolver")
         self.lifecycle_plan = resolve_lifecycle(
             self.lifecycle_plan,
             self.model,
@@ -545,9 +535,7 @@ class DirectReplaceTableMaterializationExecutor(TableMaterializationExecutor):
                 )
             if "backup" in referenced_roles:
                 backup_type = (
-                    "table"
-                    if state.existing_relation is None
-                    else state.existing_relation.type
+                    "table" if state.existing_relation is None else state.existing_relation.type
                 )
                 relations["backup"] = self._call_macro(
                     "make_backup_relation", state.target_relation, backup_type
