@@ -311,6 +311,15 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
     lifecycle_plan = SimpleNamespace(
         operations=operations,
         schema_change=SimpleNamespace(strategy=SimpleNamespace(value="append_new_columns")),
+        partition=SimpleNamespace(
+            to_dict=MagicMock(
+                return_value={
+                    "field": "event_date",
+                    "data_type": "date",
+                    "copy_partitions": False,
+                }
+            )
+        ),
     )
     state = IncrementalMaterializationExecutionState(
         existing_relation=existing,
@@ -371,9 +380,126 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
     )
     context["process_schema_changes"].assert_called_once_with("append_new_columns", temp, existing)
     strategy_macro.assert_called_once_with({"target_relation": target})
+    adapter.plan_incremental_arguments.assert_called_once_with(
+        target_relation=target,
+        temp_relation=temp,
+        unique_key="id",
+        dest_columns=["id"],
+        incremental_predicates=["id > 0"],
+        adapter_arguments={
+            "catalog_relation": None,
+            "incremental_plan": state.incremental_plan,
+            "partition_plan": {
+                "field": "event_date",
+                "data_type": "date",
+                "copy_partitions": False,
+            },
+        },
+    )
     context["apply_grants"].assert_called_once_with(
         target,
         {"select": ["reporter"]},
         should_revoke=False,
     )
     context["adapter"].commit.assert_called_once_with()
+
+
+def test_incremental_executor_dispatches_typed_partition_copy(monkeypatch):
+    existing = _relation("existing")
+    context, target, intermediate, backup, temp = _context(existing)
+    partition = object()
+    lifecycle_plan = SimpleNamespace(
+        operations=(
+            _operation(
+                "copy_incremental_partitions",
+                relation=SimpleNamespace(value="target"),
+                source=SimpleNamespace(value="temp"),
+            ),
+        ),
+        schema_change=SimpleNamespace(strategy=SimpleNamespace(value="ignore")),
+        partition=partition,
+    )
+    state = IncrementalMaterializationExecutionState(
+        existing_relation=existing,
+        target_relation=target,
+        intermediate_relation=intermediate,
+        backup_relation=backup,
+        temp_relation=temp,
+        preexisting_intermediate_relation=None,
+        preexisting_backup_relation=None,
+        incremental_plan=SimpleNamespace(),
+        strategy_macro=MagicMock(),
+        catalog_relation=None,
+        unique_key="id",
+        staging_is_temporary=True,
+        full_refresh_mode=False,
+        on_schema_change="ignore",
+        grant_config={},
+        lifecycle_plan=lifecycle_plan,
+    )
+    adapter = MagicMock()
+    executor = IncrementalMaterializationExecutor(adapter, _model(), context)
+    monkeypatch.setattr(
+        executor,
+        "resolve_incremental_execution_state",
+        MagicMock(return_value=state),
+    )
+
+    executor.execute()
+
+    adapter.execute_incremental_partition_copy.assert_called_once_with(temp, target, partition)
+
+
+def test_incremental_executor_dispatches_typed_insert_from_query(monkeypatch):
+    existing = _relation("existing")
+    context, target, intermediate, backup, temp = _context(existing)
+    partition = object()
+    lifecycle_plan = SimpleNamespace(
+        operations=(
+            _operation(
+                "insert_from_query",
+                relation=SimpleNamespace(value="temp"),
+            ),
+        ),
+        schema_change=SimpleNamespace(strategy=SimpleNamespace(value="ignore")),
+        partition=partition,
+    )
+    state = IncrementalMaterializationExecutionState(
+        existing_relation=existing,
+        target_relation=target,
+        intermediate_relation=intermediate,
+        backup_relation=backup,
+        temp_relation=temp,
+        preexisting_intermediate_relation=None,
+        preexisting_backup_relation=None,
+        incremental_plan=SimpleNamespace(),
+        strategy_macro=MagicMock(),
+        catalog_relation=None,
+        unique_key="id",
+        staging_is_temporary=True,
+        full_refresh_mode=False,
+        on_schema_change="ignore",
+        grant_config={},
+        lifecycle_plan=lifecycle_plan,
+    )
+    adapter = MagicMock()
+    adapter.render_incremental_insert_from_query.return_value = "insert into temp select 1"
+    adapter.execute.return_value = (object(), object())
+    executor = IncrementalMaterializationExecutor(adapter, _model(), context)
+    monkeypatch.setattr(
+        executor,
+        "resolve_incremental_execution_state",
+        MagicMock(return_value=state),
+    )
+
+    executor.execute()
+
+    adapter.render_incremental_insert_from_query.assert_called_once_with(
+        temp,
+        context["sql"],
+        partition,
+        None,
+    )
+    adapter.execute.assert_called_once_with(
+        "insert into temp select 1", auto_begin=False, fetch=False
+    )

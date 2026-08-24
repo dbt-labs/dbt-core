@@ -49,7 +49,9 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
     ) -> None:
         super().__init__(adapter, model, context, lifecycle_plan=lifecycle_plan)
 
-    def resolve_incremental_execution_state(self) -> IncrementalMaterializationExecutionState:
+    def resolve_incremental_execution_state(
+        self,
+    ) -> IncrementalMaterializationExecutionState:
         existing_relation = self._call_macro("load_cached_relation", self._context_value("this"))
         target_relation = self._context_value("this").incorporate(type="table")
         intermediate_relation = self._call_macro("make_intermediate_relation", target_relation)
@@ -141,6 +143,19 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
             return bool(contract.get("enforced"))
         return bool(getattr(contract, "enforced", False))
 
+    @staticmethod
+    def _adapter_mutation_facts(
+        state: IncrementalMaterializationExecutionState,
+    ) -> dict[str, Any]:
+        arguments = {
+            "catalog_relation": state.catalog_relation,
+            "incremental_plan": state.incremental_plan,
+        }
+        partition = getattr(state.lifecycle_plan, "partition", None)
+        if partition is not None:
+            arguments["partition_plan"] = partition.to_dict()
+        return arguments
+
     def _incremental_mutation_sql(self, state: IncrementalMaterializationExecutionState) -> str:
         staging_sql = self._build_sql(
             state.temp_relation,
@@ -171,10 +186,7 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
             unique_key=state.unique_key,
             dest_columns=dest_columns,
             incremental_predicates=incremental_predicates,
-            adapter_arguments={
-                "catalog_relation": state.catalog_relation,
-                "incremental_plan": state.incremental_plan,
-            },
+            adapter_arguments=self._adapter_mutation_facts(state),
         )
         build_sql = state.strategy_macro(strategy_arguments.to_macro_dict())
         if not isinstance(build_sql, str):
@@ -300,6 +312,22 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     source,
                     self._context_value("sql"),
                 )
+            elif kind == "insert_from_query":
+                render_insert = getattr(self.adapter, "render_incremental_insert_from_query", None)
+                partition = getattr(state.lifecycle_plan, "partition", None)
+                if relation is None or not callable(render_insert) or partition is None:
+                    raise DbtInternalError(
+                        "Insert-from-query operation requires adapter rendering and typed facts"
+                    )
+                build_sql = render_insert(
+                    relation,
+                    self._context_value("sql"),
+                    partition,
+                    self._context_value("config").get("sql_header"),
+                )
+                if not isinstance(build_sql, str):
+                    raise DbtInternalError("Insert-from-query renderer must return SQL text")
+                self._execute_main(build_sql, auto_begin=False)
             elif kind == "expand_target_column_types":
                 self.adapter.expand_target_column_types(
                     from_relation=source,
@@ -358,10 +386,7 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     unique_key=state.unique_key,
                     dest_columns=dest_columns,
                     incremental_predicates=predicates,
-                    adapter_arguments={
-                        "catalog_relation": state.catalog_relation,
-                        "incremental_plan": state.incremental_plan,
-                    },
+                    adapter_arguments=self._adapter_mutation_facts(state),
                 )
                 build_sql = state.strategy_macro(arguments.to_macro_dict())
                 if isinstance(build_sql, str):
@@ -376,6 +401,14 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     )
                 for statement in statements:
                     self._execute_main(statement)
+            elif kind == "copy_incremental_partitions":
+                copy_partitions = getattr(self.adapter, "execute_incremental_partition_copy", None)
+                partition = getattr(state.lifecycle_plan, "partition", None)
+                if not callable(copy_partitions) or partition is None:
+                    raise DbtInternalError(
+                        "Partition-copy operation requires adapter execution and typed facts"
+                    )
+                copy_partitions(source, relation, partition)
             elif kind == "create_indexes":
                 self._call_macro("create_indexes", relation)
             elif kind == "rename_relation":
