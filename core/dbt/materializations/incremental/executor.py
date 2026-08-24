@@ -26,6 +26,7 @@ class IncrementalMaterializationExecutionState:
     full_refresh_mode: bool
     on_schema_change: str
     grant_config: Mapping[str, Any]
+    lifecycle_plan: Optional[Any] = None
 
 
 class IncrementalMaterializationExecutor(TableMaterializationExecutor):
@@ -97,6 +98,20 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
         if not isinstance(grant_config, Mapping):
             raise DbtInternalError("Incremental materialization grants config must be a mapping")
 
+        lifecycle_plan = None
+        resolve_lifecycle = getattr(self.adapter, "resolve_incremental_lifecycle_plan", None)
+        if callable(resolve_lifecycle):
+            lifecycle_plan = resolve_lifecycle(
+                incremental_plan,
+                self.model,
+                target_relation,
+                existing_relation,
+                full_refresh=full_refresh_mode,
+                on_schema_change=on_schema_change,
+                staging_is_temporary=staging_is_temporary,
+                contract_enforced=self._contract_enforced(),
+            )
+
         return IncrementalMaterializationExecutionState(
             existing_relation=existing_relation,
             target_relation=target_relation,
@@ -115,6 +130,7 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
             full_refresh_mode=full_refresh_mode,
             on_schema_change=on_schema_change,
             grant_config=grant_config,
+            lifecycle_plan=lifecycle_plan,
         )
 
     def _contract_enforced(self) -> bool:
@@ -166,6 +182,11 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
     def execute(self) -> dict[str, Any]:
         state = self.resolve_incremental_execution_state()
 
+        operations = getattr(state.lifecycle_plan, "operations", ())
+        if operations:
+            self._execute_incremental_program(state, operations)
+            return {"relations": [state.target_relation]}
+
         self._call_macro("drop_relation_if_exists", state.preexisting_intermediate_relation)
         self._call_macro("drop_relation_if_exists", state.preexisting_backup_relation)
         self._call_macro("run_hooks", self._context_value("pre_hooks"), inside_transaction=False)
@@ -212,3 +233,116 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
 
         self._call_macro("run_hooks", self._context_value("post_hooks"), inside_transaction=False)
         return {"relations": [state.target_relation]}
+
+    def _execute_incremental_program(
+        self,
+        state: IncrementalMaterializationExecutionState,
+        operations: Any,
+    ) -> None:
+        relations = {
+            "existing": state.existing_relation,
+            "target": state.target_relation,
+            "intermediate": state.intermediate_relation,
+            "backup": state.backup_relation,
+            "temp": state.temp_relation,
+        }
+        dest_columns: Any = None
+        schema_change = getattr(state.lifecycle_plan, "schema_change", None)
+        schema_strategy = getattr(getattr(schema_change, "strategy", None), "value", None)
+
+        for operation in operations:
+            kind = self._operation_value(operation, "kind")
+            relation_role = self._operation_value(operation, "relation")
+            source_role = self._operation_value(operation, "source")
+            destination_role = self._operation_value(operation, "destination")
+            relation = relations.get(relation_role) if relation_role is not None else None
+            source = relations.get(source_role) if source_role is not None else None
+
+            if kind == "drop_relation_if_exists":
+                self._call_macro("drop_relation_if_exists", relation)
+            elif kind == "run_hooks":
+                hooks = self._context_value(f"{getattr(operation, 'name')}_hooks")
+                self._call_macro(
+                    "run_hooks",
+                    hooks,
+                    inside_transaction=getattr(operation, "inside_transaction"),
+                )
+            elif kind == "create_from_query":
+                if relation is None:
+                    raise DbtInternalError(
+                        "Incremental create operation resolved an empty relation"
+                    )
+                self._execute_main(
+                    self._build_sql(
+                        relation,
+                        temporary=bool(getattr(operation, "temporary", False)),
+                    ),
+                    auto_begin=bool(getattr(operation, "auto_begin", False)),
+                )
+            elif kind == "expand_target_column_types":
+                self.adapter.expand_target_column_types(
+                    from_relation=source,
+                    to_relation=relation,
+                )
+            elif kind == "process_schema_changes":
+                if schema_strategy is None:
+                    raise DbtInternalError(
+                        "Incremental operation program has no schema-change strategy"
+                    )
+                dest_columns = self._call_macro(
+                    "process_schema_changes",
+                    schema_strategy,
+                    source,
+                    relation,
+                )
+                if not dest_columns:
+                    dest_columns = self.adapter.get_columns_in_relation(relation)
+            elif kind == "execute_incremental_mutation":
+                if dest_columns is None:
+                    raise DbtInternalError(
+                        "Incremental mutation requires schema reconciliation first"
+                    )
+                config = self._context_value("config")
+                predicates = config.get("predicates") or config.get("incremental_predicates")
+                arguments = self.adapter.plan_incremental_arguments(
+                    target_relation=relation,
+                    temp_relation=source,
+                    unique_key=state.unique_key,
+                    dest_columns=dest_columns,
+                    incremental_predicates=predicates,
+                    adapter_arguments={
+                        "catalog_relation": state.catalog_relation,
+                        "incremental_plan": state.incremental_plan,
+                    },
+                )
+                build_sql = state.strategy_macro(arguments.to_macro_dict())
+                if not isinstance(build_sql, str):
+                    raise DbtInternalError("Incremental mutation renderer must return SQL text")
+                self._execute_main(build_sql)
+            elif kind == "create_indexes":
+                self._call_macro("create_indexes", relation)
+            elif kind == "rename_relation":
+                destination = relations.get(destination_role)
+                if relation is None or destination is None:
+                    raise DbtInternalError(
+                        "Incremental rename operation resolved an empty relation"
+                    )
+                self.adapter.rename_relation(relation, destination)
+            elif kind == "apply_grants":
+                should_revoke = self._call_macro(
+                    "should_revoke",
+                    state.existing_relation,
+                    state.full_refresh_mode,
+                )
+                self._call_macro(
+                    "apply_grants",
+                    relation,
+                    state.grant_config,
+                    should_revoke=should_revoke,
+                )
+            elif kind == "persist_documentation":
+                self._call_macro("persist_docs", relation, self._context_value("model"))
+            elif kind == "commit":
+                self._commit()
+            else:
+                raise DbtInternalError(f"Incremental program contains unknown operation '{kind}'")

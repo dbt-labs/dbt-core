@@ -62,6 +62,10 @@ def _model():
     return SimpleNamespace(language="sql")
 
 
+def _operation(kind, **kwargs):
+    return SimpleNamespace(kind=SimpleNamespace(value=kind), **kwargs)
+
+
 def test_incremental_executor_plans_before_constructing_typed_staging_relation():
     existing = _relation("existing")
     context, target, intermediate, backup, temp = _context(existing)
@@ -125,6 +129,7 @@ def test_incremental_executor_builds_staging_then_mutation_from_typed_arguments(
     strategy_arguments = MagicMock()
     strategy_arguments.to_macro_dict.return_value = {"target_relation": target}
     adapter = MagicMock()
+    adapter.execute.return_value = (object(), object())
     adapter.plan_incremental_arguments.return_value = strategy_arguments
     executor = IncrementalMaterializationExecutor(adapter, _model(), context)
     monkeypatch.setattr(executor, "_build_sql", MagicMock(return_value="create temp view"))
@@ -249,3 +254,97 @@ def test_incremental_executor_full_refresh_swaps_and_drops_backup(monkeypatch):
         call(intermediate, target),
     ]
     adapter.drop_relation.assert_called_once_with(backup)
+
+
+def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
+    existing = _relation("existing")
+    context, target, intermediate, backup, temp = _context(existing)
+    strategy_macro = MagicMock(return_value="merge into target")
+    operations = (
+        _operation(
+            "create_from_query",
+            relation=SimpleNamespace(value="temp"),
+            temporary=True,
+            auto_begin=True,
+        ),
+        _operation(
+            "expand_target_column_types",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="temp"),
+        ),
+        _operation(
+            "process_schema_changes",
+            relation=SimpleNamespace(value="existing"),
+            source=SimpleNamespace(value="temp"),
+        ),
+        _operation(
+            "execute_incremental_mutation",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="temp"),
+        ),
+        _operation(
+            "apply_grants",
+            relation=SimpleNamespace(value="target"),
+        ),
+        _operation(
+            "persist_documentation",
+            relation=SimpleNamespace(value="target"),
+        ),
+        _operation("commit"),
+    )
+    lifecycle_plan = SimpleNamespace(
+        operations=operations,
+        schema_change=SimpleNamespace(strategy=SimpleNamespace(value="append_new_columns")),
+    )
+    state = IncrementalMaterializationExecutionState(
+        existing_relation=existing,
+        target_relation=target,
+        intermediate_relation=intermediate,
+        backup_relation=backup,
+        temp_relation=temp,
+        preexisting_intermediate_relation=None,
+        preexisting_backup_relation=None,
+        incremental_plan=SimpleNamespace(),
+        strategy_macro=strategy_macro,
+        catalog_relation=None,
+        unique_key="id",
+        staging_is_temporary=True,
+        full_refresh_mode=False,
+        on_schema_change="append_new_columns",
+        grant_config={"select": ["reporter"]},
+        lifecycle_plan=lifecycle_plan,
+    )
+    strategy_arguments = MagicMock()
+    strategy_arguments.to_macro_dict.return_value = {"target_relation": target}
+    adapter = MagicMock()
+    adapter.execute.return_value = (object(), object())
+    adapter.plan_incremental_arguments.return_value = strategy_arguments
+    executor = IncrementalMaterializationExecutor(adapter, _model(), context)
+    monkeypatch.setattr(
+        executor,
+        "resolve_incremental_execution_state",
+        MagicMock(return_value=state),
+    )
+    monkeypatch.setattr(executor, "_build_sql", MagicMock(return_value="create temp view"))
+
+    result = executor.execute()
+
+    assert result == {"relations": [target]}
+    assert adapter.execute.call_args_list[0] == call(
+        "create temp view", auto_begin=True, fetch=False
+    )
+    assert adapter.execute.call_args_list[1] == call(
+        "merge into target", auto_begin=True, fetch=False
+    )
+    adapter.expand_target_column_types.assert_called_once_with(
+        from_relation=temp,
+        to_relation=target,
+    )
+    context["process_schema_changes"].assert_called_once_with("append_new_columns", temp, existing)
+    strategy_macro.assert_called_once_with({"target_relation": target})
+    context["apply_grants"].assert_called_once_with(
+        target,
+        {"select": ["reporter"]},
+        should_revoke=False,
+    )
+    context["adapter"].commit.assert_called_once_with()
