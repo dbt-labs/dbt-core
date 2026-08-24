@@ -290,6 +290,29 @@ class ModelRunner(CompileRunner[ModelNode]):
                     return None
                 return PythonMaterializationExecution(executor_type, lifecycle_plan)
 
+        plan_incremental = getattr(self.adapter, "plan_incremental_materialization", None)
+        if callable(plan_incremental):
+            incremental_plan = plan_incremental(
+                unique_id,
+                str(model.language),
+                model,
+            )
+            if incremental_plan is not None:
+                required_adapter_methods = getattr(
+                    IncrementalMaterializationExecutor,
+                    "REQUIRED_ADAPTER_METHODS",
+                    (),
+                )
+                if not all(
+                    callable(getattr(self.adapter, method_name, None))
+                    for method_name in required_adapter_methods
+                ):
+                    return None
+                return PythonMaterializationExecution(
+                    IncrementalMaterializationExecutor,
+                    incremental_plan,
+                )
+
         executor_type = self._PYTHON_MATERIALIZATION_EXECUTORS.get(unique_id)
         if executor_type is None:
             return None

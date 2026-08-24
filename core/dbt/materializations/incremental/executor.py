@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections.abc import Sequence
 from typing import Any, Mapping, Optional
 
 from dbt.adapters.base.relation import BaseRelation
@@ -110,6 +111,7 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                 on_schema_change=on_schema_change,
                 staging_is_temporary=staging_is_temporary,
                 contract_enforced=self._contract_enforced(),
+                materialization_plan=self.lifecycle_plan,
             )
 
         return IncrementalMaterializationExecutionState(
@@ -246,6 +248,13 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
             "backup": state.backup_relation,
             "temp": state.temp_relation,
         }
+        referenced_roles = {
+            self._operation_value(operation, field_name)
+            for operation in operations
+            for field_name in ("relation", "source", "destination")
+        }
+        if "staging" in referenced_roles:
+            relations["staging"] = self._call_macro("make_staging_relation", state.target_relation)
         dest_columns: Any = None
         schema_change = getattr(state.lifecycle_plan, "schema_change", None)
         schema_strategy = getattr(getattr(schema_change, "strategy", None), "value", None)
@@ -279,6 +288,17 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     ),
                     auto_begin=bool(getattr(operation, "auto_begin", False)),
                 )
+            elif kind == "create_from_relation":
+                if relation is None or source is None:
+                    raise DbtInternalError(
+                        "Incremental create-from-relation resolved an empty relation"
+                    )
+                self._call_macro(
+                    "create_table_at",
+                    relation,
+                    source,
+                    self._context_value("sql"),
+                )
             elif kind == "expand_target_column_types":
                 self.adapter.expand_target_column_types(
                     from_relation=source,
@@ -297,6 +317,10 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                 )
                 if not dest_columns:
                     dest_columns = self.adapter.get_columns_in_relation(relation)
+            elif kind == "process_config_changes":
+                self._call_macro("process_config_changes", relation, source)
+            elif kind == "set_incremental_overwrite_mode":
+                self._call_macro("set_overwrite_mode", getattr(operation, "name"))
             elif kind == "execute_incremental_mutation":
                 if dest_columns is None:
                     raise DbtInternalError(
@@ -316,9 +340,18 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     },
                 )
                 build_sql = state.strategy_macro(arguments.to_macro_dict())
-                if not isinstance(build_sql, str):
-                    raise DbtInternalError("Incremental mutation renderer must return SQL text")
-                self._execute_main(build_sql)
+                if isinstance(build_sql, str):
+                    statements = (build_sql,)
+                elif isinstance(build_sql, Sequence) and all(
+                    isinstance(statement, str) for statement in build_sql
+                ):
+                    statements = tuple(build_sql)
+                else:
+                    raise DbtInternalError(
+                        "Incremental mutation renderer must return SQL text or a SQL sequence"
+                    )
+                for statement in statements:
+                    self._execute_main(statement)
             elif kind == "create_indexes":
                 self._call_macro("create_indexes", relation)
             elif kind == "rename_relation":
@@ -342,6 +375,25 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                 )
             elif kind == "persist_documentation":
                 self._call_macro("persist_docs", relation, self._context_value("model"))
+            elif kind == "apply_tags":
+                self._call_macro(
+                    "apply_tags",
+                    relation,
+                    self._context_value("config").get("databricks_tags"),
+                )
+            elif kind == "apply_column_tags":
+                get_column_tags = getattr(self.adapter, "get_column_tags_from_model", None)
+                if not callable(get_column_tags):
+                    raise DbtInternalError(
+                        "Column-tag operation requires an adapter column-tag resolver"
+                    )
+                column_tags = get_column_tags(self.model)
+                if column_tags is not None and getattr(column_tags, "set_column_tags", None):
+                    self._call_macro("apply_column_tags", relation, column_tags)
+            elif kind == "persist_constraints":
+                self._call_macro("persist_constraints", relation, self._context_value("model"))
+            elif kind == "optimize":
+                self._call_macro("optimize", relation)
             elif kind == "commit":
                 self._commit()
             else:

@@ -48,6 +48,7 @@ def _context(existing_relation):
         "drop_relation_if_exists": MagicMock(),
         "run_hooks": MagicMock(),
         "process_schema_changes": MagicMock(return_value=["id"]),
+        "process_config_changes": MagicMock(),
         "write": MagicMock(),
         "store_result": MagicMock(),
         "create_indexes": MagicMock(),
@@ -259,7 +260,7 @@ def test_incremental_executor_full_refresh_swaps_and_drops_backup(monkeypatch):
 def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
     existing = _relation("existing")
     context, target, intermediate, backup, temp = _context(existing)
-    strategy_macro = MagicMock(return_value="merge into target")
+    strategy_macro = MagicMock(return_value=["delete from target", "insert into target"])
     operations = (
         _operation(
             "create_from_query",
@@ -276,6 +277,11 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
             "process_schema_changes",
             relation=SimpleNamespace(value="existing"),
             source=SimpleNamespace(value="temp"),
+        ),
+        _operation(
+            "process_config_changes",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="existing"),
         ),
         _operation(
             "execute_incremental_mutation",
@@ -333,9 +339,11 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
     assert adapter.execute.call_args_list[0] == call(
         "create temp view", auto_begin=True, fetch=False
     )
-    assert adapter.execute.call_args_list[1] == call(
-        "merge into target", auto_begin=True, fetch=False
-    )
+    assert adapter.execute.call_args_list[1:] == [
+        call("delete from target", auto_begin=True, fetch=False),
+        call("insert into target", auto_begin=True, fetch=False),
+    ]
+    context["process_config_changes"].assert_called_once_with(target, existing)
     adapter.expand_target_column_types.assert_called_once_with(
         from_relation=temp,
         to_relation=target,

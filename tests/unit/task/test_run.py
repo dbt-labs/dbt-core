@@ -209,6 +209,29 @@ class TestModelRunner:
             model,
         )
 
+    def test_adapter_incremental_plan_selects_incremental_executor(
+        self, model_runner: ModelRunner
+    ) -> None:
+        incremental_plan = mock.Mock()
+        model_runner.adapter = mock.Mock(
+            spec=[
+                "plan_table_materialization",
+                "plan_incremental_materialization",
+                *IncrementalMaterializationExecutor.REQUIRED_ADAPTER_METHODS,
+            ]
+        )
+        model_runner.adapter.plan_table_materialization.return_value = None
+        model_runner.adapter.plan_incremental_materialization.return_value = incremental_plan
+        model = mock.Mock(language="sql")
+        materialization_macro = mock.Mock(
+            unique_id="macro.dbt_databricks.materialization_incremental_databricks"
+        )
+
+        execution = model_runner._get_python_materialization_executor(model, materialization_macro)
+
+        assert execution.executor_type is IncrementalMaterializationExecutor
+        assert execution.lifecycle_plan is incremental_plan
+
     def test_print_result_line(
         self,
         log_model_result_catcher: EventCatcher,
