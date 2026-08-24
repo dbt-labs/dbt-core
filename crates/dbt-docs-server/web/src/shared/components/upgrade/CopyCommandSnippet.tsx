@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react';
 
-import { Button, Code, RyeconCheckmark, RyeconCopy, Sizes } from '@dbt-labs/sourdough';
+import { RyeconCheckmark, RyeconCopy, Sizes } from '@dbt-labs/sourdough';
+
+import { Button } from '../../../components/ui/Button';
+import { Code } from '../../../components/ui/Code';
 
 /** Inline `run: <code>` snippet with an icon-only copy button — the CTA
  *  pattern the Notion handoff specifies for the column-level-lineage row
@@ -25,7 +28,7 @@ export function CopyCommandSnippet({ command, className }: Props) {
       <span className="text-xs text-fgDecorative">run:</span>
       <Code>{command}</Code>
       <Button
-        type="tertiary"
+        variant="ghost"
         size={Sizes.xs}
         ariaLabel={copied ? 'Copied to clipboard' : `Copy ${command}`}
         ryecon={copied ? RyeconCheckmark : RyeconCopy}

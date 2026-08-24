@@ -339,6 +339,16 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
             .map(|root| !root.get_config_for_fqn(fqn).get_enabled_with_default())
             .unwrap_or(false)
     }
+
+    /// Returns true if the root overlay explicitly sets `enabled = true` for this FQN.
+    /// The root overlay has the highest precedence for dependency packages, so an inline
+    /// `{{ config(enabled=false) }}` must not short-circuit rendering in that case.
+    pub fn is_enabled_by_root_overlay(&self, fqn: &[String]) -> bool {
+        self.root
+            .as_ref()
+            .map(|root| root.get_config_for_fqn(fqn).get_enabled() == Some(true))
+            .unwrap_or(false)
+    }
 }
 
 /// Recursively build the [DbtProjectConfig] from a parent and child configuration.
@@ -1489,5 +1499,55 @@ my_project:
         assert_eq!(errors.len(), 1);
         let (_, msg) = &errors[0];
         assert!(msg.contains("Unrecognized key `my_project.staging.+contract`"));
+    }
+
+    /// The predicate must fire only on an explicit `+enabled: true`; an absent value must not be
+    /// read as `true`, or every dependency package node would be treated as force-enabled.
+    #[test]
+    fn test_is_enabled_by_root_overlay() {
+        let fqn = vec!["pkg".to_string(), "my_model".to_string()];
+        let cases = [
+            (
+                "exact model",
+                "pkg:\n  my_model:\n    +enabled: true\n",
+                true,
+            ),
+            ("inherited from package", "pkg:\n  +enabled: true\n", true),
+            ("global", "+enabled: true\n", true),
+            (
+                "absent",
+                "pkg:\n  my_model:\n    +materialized: view\n",
+                false,
+            ),
+            (
+                "explicitly disabled",
+                "pkg:\n  my_model:\n    +enabled: false\n",
+                false,
+            ),
+        ];
+
+        for (label, yml, expected) in cases {
+            let (root, errors, _) =
+                init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+            assert!(errors.is_empty(), "{label}: {errors:?}");
+            let root = root.expect("root overlay config builds");
+            let local = DbtProjectConfig::<ModelConfig> {
+                config: ModelConfig::default(),
+                children: IndexMap::new(),
+            };
+            let resolver = ProjectConfigResolver::for_dependency(local, root.clone());
+            assert_eq!(
+                resolver.is_enabled_by_root_overlay(&fqn),
+                expected,
+                "{label}"
+            );
+
+            // Root packages have no overlay, so their own inline disable keeps winning.
+            let root_resolver = ProjectConfigResolver::for_root(root);
+            assert!(
+                !root_resolver.is_enabled_by_root_overlay(&fqn),
+                "{label}: root package must never be force-enabled"
+            );
+        }
     }
 }

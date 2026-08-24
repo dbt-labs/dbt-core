@@ -153,7 +153,7 @@ fn from_local_config(
         .deprecated_config
         .table_format
         .as_ref()
-        .is_some_and(|s| s == "iceberg");
+        .is_some_and(|s| s.eq_ignore_ascii_case("iceberg"));
 
     if is_iceberg {
         tblproperties.insert(

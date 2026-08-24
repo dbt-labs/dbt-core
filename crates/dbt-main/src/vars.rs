@@ -1,4 +1,7 @@
-use dbt_common::{io_args::SKIP_REDUNDANT_TESTS_ENV, tracing::dbt_emit::emit_warn_log_message};
+use dbt_common::{
+    io_args::{BATCH_TESTS_ENV, SKIP_REDUNDANT_TESTS_ENV},
+    tracing::dbt_emit::emit_warn_log_message,
+};
 use dbt_init::{ErrorCode, FsResult, fs_err};
 
 const ENGINE_ENV_PREFIX: &str = "DBT_ENGINE_";
@@ -115,6 +118,7 @@ const KNOWN_UNUSED_ENGINE_ENV_VARS: &[&str] = &[
 /// Engine-specific environment variables that ARE used by fusion.
 /// These are NOT aliases of DBT_* vars - they are unique to the engine.
 const USED_ENGINE_ENV_VARS: &[&str] = &[
+    BATCH_TESTS_ENV,
     "DBT_ENGINE_BETA_PACKAGE_PARSING",
     "DBT_ENGINE_BETA_PARSING",
     "DBT_ENGINE_EXPERIMENTAL_LIST_UDFS",
@@ -309,11 +313,15 @@ mod tests {
         unsafe {
             #[allow(clippy::disallowed_methods)]
             std::env::set_var(SKIP_REDUNDANT_TESTS_ENV, "1");
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var(BATCH_TESTS_ENV, "1");
         }
         let result = validate_engine_env_vars();
         unsafe {
             #[allow(clippy::disallowed_methods)]
             std::env::remove_var(SKIP_REDUNDANT_TESTS_ENV);
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var(BATCH_TESTS_ENV);
         }
         assert!(
             result.is_ok(),

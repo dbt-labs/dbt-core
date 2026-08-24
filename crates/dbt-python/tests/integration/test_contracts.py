@@ -1,6 +1,5 @@
 """The artifact shapes callers get back from an invocation."""
 
-import pytest
 from dbt.artifacts.schemas.base import BaseArtifactMetadata
 from dbt.artifacts.schemas.catalog import CatalogTable
 from dbt.artifacts.schemas.manifest import ManifestMetadata
@@ -8,6 +7,7 @@ from dbt.artifacts.schemas.run import RunResultOutput
 from dbt.artifacts.schemas.sources import (
     FreshnessPeriod,
     FreshnessResultsArtifact,
+    FreshnessResultsNode,
     FreshnessStatus,
 )
 from dbt.contracts.graph.manifest import Manifest
@@ -62,8 +62,22 @@ def test_catalog_shape(tmp_project, invoke):
     assert isinstance(catalog.to_dict(), dict)
 
 
+def test_freshness_shape(built_project, invoke):
+    proj = built_project("freshness")
+    res = invoke(proj, "source", "freshness", "--select", "source:raw.fresh_events")
+    assert res.success, res.exception
+
+    freshness = res.result
+    assert isinstance(freshness, FreshnessResultsArtifact), type(freshness)
+    assert isinstance(freshness.metadata, BaseArtifactMetadata)
+    assert isinstance(freshness.results, list)
+    assert all(isinstance(r, FreshnessResultsNode) for r in freshness.results)
+    assert isinstance(freshness.elapsed_time, float)
+    assert isinstance(freshness.to_dict(), dict)
+
+
 def test_freshness_schema_decodes_a_sources_payload():
-    """The schema exists ahead of the wiring, so exercise it directly."""
+    """A hand-written payload, to pin the field names the engine has to emit."""
     artifact = FreshnessResultsArtifact.from_dict(
         {
             "metadata": {"dbt_schema_version": "https://schemas.getdbt.com/dbt/sources/v3.json"},
@@ -96,12 +110,10 @@ def test_freshness_schema_decodes_a_sources_payload():
     assert node.criteria.error_after.count == 24
 
 
-@pytest.mark.xfail(
-    reason="`source freshness` builds its artifact inside a hook that exits at a "
-    "phase checkpoint before any capture point runs, so the engine never hands it "
-    "back from invoke(); the schema above is ready for when it does",
-    strict=True,
-)
-def test_source_freshness_result_is_freshness_artifact(tmp_project, invoke):
+def test_source_freshness_without_sources_returns_an_empty_artifact(tmp_project, invoke):
+    """A project with nothing to check still reports the artifact, not None."""
     res = invoke(tmp_project("layered"), "source", "freshness")
+
+    assert res.success, res.exception
     assert isinstance(res.result, FreshnessResultsArtifact), type(res.result)
+    assert len(res.result) == 0

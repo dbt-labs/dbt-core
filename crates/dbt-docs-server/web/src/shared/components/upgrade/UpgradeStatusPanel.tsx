@@ -1,7 +1,9 @@
 import { twJoin } from 'tailwind-merge';
 
-import { Button, Icon, InvisibleButton, RyeconClose, Sizes } from '@dbt-labs/sourdough';
+import { Icon, RyeconClose, Sizes } from '@dbt-labs/sourdough';
 
+import { Button } from '../../../components/ui/Button';
+import { InvisibleButton } from '../../../components/ui/InvisibleButton';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { getUpgradeCopy, isUpgradeCopyVisible } from './copy';
 import {
@@ -148,7 +150,7 @@ export function UpgradeStatusPanel({
               Get more from dbt
             </h2>
             <Button
-              type="secondary"
+              variant="outline"
               size={Sizes.sm}
               text="Need Enterprise? Contact sales."
               onClick={() =>

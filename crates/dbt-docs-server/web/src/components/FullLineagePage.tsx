@@ -2,12 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { Dag } from '@dbt-labs/dbt-dag';
-import {
-  Button,
-  RyeconClose,
-  RyeconCrosshair,
-  RyeconLinkExternal,
-} from '@dbt-labs/sourdough';
+import { RyeconClose, RyeconCrosshair, RyeconLinkExternal } from '@dbt-labs/sourdough';
 
 import { useLineageData } from '../hooks/useLineageData';
 import { asToolbarItems, type LabelOnlyToolbarItem } from '../lib/dagToolbar';
@@ -18,6 +13,7 @@ import { paths } from '../routes';
 import { LineageEmptyState, Spinner } from '../shared';
 import { UNSUPPORTED_SURFACE_MESSAGE } from '../shared/hooks/unsupportedSurface';
 import { NodeLineagePanel } from './NodeLineagePanel';
+import { Button } from './ui/Button';
 
 export default function FullLineagePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -193,7 +189,7 @@ export default function FullLineagePage() {
           <div className="pointer-events-none absolute left-6 top-6 z-30 flex items-center gap-2">
             <div className="pointer-events-auto">
               <Button
-                type="secondary"
+                variant="outline"
                 ryecon={RyeconClose}
                 tooltip="Close full lineage"
                 onClick={onClose}

@@ -10,6 +10,7 @@ use crate::schemas::InternalDbtNodeAttributes;
 use crate::schemas::legacy_catalog::DbtCatalog;
 use crate::schemas::manifest::DbtManifest;
 use crate::schemas::serde::typed_struct_from_json_file;
+use crate::schemas::sources::FreshnessResultsArtifact;
 
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -220,6 +221,8 @@ pub struct DbtCommandExecutionArtifacts {
     pub manifest: Option<DbtManifest>,
     pub run_results: Option<RunResultsArtifact>,
     pub catalog: Option<DbtCatalog>,
+    /// `source freshness`'s results, as written to `sources.json`.
+    pub sources: Option<FreshnessResultsArtifact>,
     /// `list`'s selected nodes in selector format.
     pub list_items: Option<Vec<String>>,
     /// Rendered message of a real (non-exit-status) error, captured before it is

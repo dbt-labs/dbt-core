@@ -2,13 +2,7 @@ import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import {
-  Badge,
-  Icon,
-  RyeconColorDbt,
-  RyeconMagnifyingGlass,
-  Tooltip,
-} from '@dbt-labs/sourdough';
+import { RyeconMagnifyingGlass } from '@dbt-labs/sourdough';
 
 import { AnalysisFilterView } from './components/AnalysisFilterView';
 import FullLineagePage from './components/FullLineagePage';
@@ -28,6 +22,9 @@ import {
 import { SourceCollectionPage } from './components/SourceCollectionPage';
 import { SourceFilterView } from './components/SourceFilterView';
 import { TestFilterView } from './components/TestFilterView';
+import { Badge } from './components/ui/Badge';
+import { Input } from './components/ui/Input';
+import { Tooltip } from './components/ui/Tooltip';
 import { useAllNodes } from './hooks/useAllNodes';
 import { deriveUpgradeCapabilities } from './hooks/useCapabilities';
 import { useIdentity } from './hooks/useIdentity';
@@ -219,20 +216,6 @@ export default function App() {
     (detailFetchError && !detailNotFound ? detailFetchError.message : null) ??
     null;
 
-  // Spin the topbar dbt mark briefly whenever a "parent filter" changes —
-  // active view kind/type or the package filter. Detail navigations don't
-  // trigger; this is meant for orientation moments.
-  const [spinTrigger, setSpinTrigger] = useState(0);
-  const firstRender = useRef(true);
-  const parentKey = `${view.kind === 'list' ? filters.resourceType.slice().sort().join(',') || 'all' : view.kind}|${filters.pkg.slice().sort().join(',')}`;
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
-    setSpinTrigger((s) => s + 1);
-  }, [parentKey]);
-
   // URL → filters sync: when the route's `:resourceType` param changes
   // (e.g. back/forward, Asset-tab click), mirror it into filters.resourceType
   // so AssetListView's multi-select narrowing stays consistent with the URL.
@@ -408,7 +391,6 @@ export default function App() {
         search={search}
         onSearch={setSearch}
         onResetHome={onResetHome}
-        spinTrigger={spinTrigger}
         onSubmitSearch={onSubmitTopbarSearch}
       />
       <div
@@ -603,14 +585,12 @@ function Topbar({
   search,
   onSearch,
   onResetHome,
-  spinTrigger,
   onSubmitSearch,
 }: {
   project: Project | null;
   search: string;
   onSearch: (v: string) => void;
   onResetHome?: () => void;
-  spinTrigger?: number;
   onSubmitSearch?: () => void;
 }) {
   return (
@@ -618,49 +598,45 @@ function Topbar({
       <div className="topbar-v2__bg" aria-hidden />
       <div className="topbar-v2__left">
         <div className="topbar-v2__brand">
-          <button
-            type="button"
-            className="topbar-v2__brand-btn"
-            onClick={onResetHome}
-            aria-label="Overview — reset view"
-            title="Overview — reset view"
-          >
-            <span key={spinTrigger ?? 0} className="topbar-v2__brand-anim">
-              <Icon ryecon={RyeconColorDbt} size="xl" alt="dbt" />
-            </span>
-          </button>
           {project && (
-            <div className="topbar-v2__brand-text">
-              <div className="topbar-v2__brand-name">
-                {project.name}
-                <Tooltip content="This docs site is in beta." placement="bottom">
-                  <Badge text="beta" type="purple" size="xs" />
-                </Tooltip>
+            <button
+              type="button"
+              className="topbar-v2__brand-btn topbar-v2__brand-btn--text"
+              onClick={onResetHome}
+              aria-label="Overview — reset view"
+              title="Overview — reset view"
+            >
+              <div className="topbar-v2__brand-text">
+                <div className="topbar-v2__brand-name">
+                  {project.name}
+                  <Tooltip content="This docs site is in beta." placement="bottom">
+                    <Badge text="beta" variant="default" size="xs" />
+                  </Tooltip>
+                </div>
+                <div className="topbar-v2__brand-sub">
+                  {project.adapterType ?? ''}
+                  {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}
+                </div>
               </div>
-              <div className="topbar-v2__brand-sub">
-                {project.adapterType ?? ''}
-                {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}
-              </div>
-            </div>
+            </button>
           )}
         </div>
       </div>
-      <label className="topbar-v2__search">
-        <Icon ryecon={RyeconMagnifyingGlass} size="sm" alt="Search" />
-        <input
-          type="search"
-          placeholder="Search models, sources, tests, metrics…"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              onSubmitSearch?.();
-            }
-          }}
-          aria-label={project ? `Search ${project.name}` : 'Search project'}
-        />
-      </label>
+      <Input
+        type="search"
+        startIcon={{ ryecon: RyeconMagnifyingGlass }}
+        placeholder="Search models, sources, tests, metrics…"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSubmitSearch?.();
+          }
+        }}
+        aria-label={project ? `Search ${project.name}` : 'Search project'}
+        className="w-full"
+      />
     </header>
   );
 }

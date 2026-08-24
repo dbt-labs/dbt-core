@@ -1,7 +1,9 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
 import type { Ryecon } from '@dbt-labs/sourdough';
-import { Icon, Tooltip } from '@dbt-labs/sourdough';
+import { Icon } from '@dbt-labs/sourdough';
+
+import { Tooltip } from '../components/ui/Tooltip';
 
 /** Factory for the standard resource-list name column: icon + truncating tooltip + peek button.
  *  Replaces the 15-line inline cell block duplicated across every *FilterView.

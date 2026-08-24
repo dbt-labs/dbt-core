@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff, impl_loader,
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, impl_loader,
 };
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -53,15 +53,19 @@ fn normalized_keys_diff(
     desired_state: &IndexMap<String, String>,
     current_state: &IndexMap<String, String>,
 ) -> Option<IndexMap<String, String>> {
-    diff::changed_keys(
-        &normalized_keys(desired_state),
-        &normalized_keys(current_state),
-    )
-    .map(|v| {
-        v.iter()
-            .map(|(k, v)| (k.to_string(), (*v).to_string()))
-            .collect()
-    })
+    // Only emit COMMENT ON for columns present in the desired (model) state whose
+    // comment differs from the current warehouse comment. Columns that exist
+    // remotely but are undocumented in the model are left untouched, never cleared.
+    // Reference: https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/column_comments.py
+    let current = normalized_keys(current_state);
+
+    let diff: IndexMap<String, String> = normalized_keys(desired_state)
+        .into_iter()
+        .filter(|(k, v)| current.get(k) != Some(v))
+        .map(|(k, v)| (k, v.to_string()))
+        .collect();
+
+    if diff.is_empty() { None } else { Some(diff) }
 }
 
 fn new_component(column_comments: IndexMap<String, String>) -> ColumnComments {
@@ -408,6 +412,8 @@ email,string,\n\
 
     #[test]
     fn test_column_comments_diff_with_dropped_comment() {
+        // A comment present remotely but absent from the model is left untouched,
+        // so the diff is empty.
         let mut new_comments = IndexMap::new();
         new_comments.insert("id".to_string(), "Primary key".to_string());
         let new_config = new_component(new_comments);
@@ -418,6 +424,21 @@ email,string,\n\
         let old_config = new_component(old_comments);
 
         let diff = ColumnComments::diff_from(&new_config, Some(&old_config));
+        assert!(diff.is_none());
+    }
+
+    #[test]
+    fn test_column_comments_diff_explicit_clear() {
+        // Setting a documented column's comment to "" clears an existing remote comment.
+        let mut new_comments = IndexMap::new();
+        new_comments.insert("id".to_string(), "".to_string());
+        let new_config = new_component(new_comments);
+
+        let mut old_comments = IndexMap::new();
+        old_comments.insert("id".to_string(), "Primary key".to_string());
+        let old_config = new_component(old_comments);
+
+        let diff = ColumnComments::diff_from(&new_config, Some(&old_config));
         assert!(diff.is_some());
         let diff_config = diff.unwrap();
         let diff_config = diff_config
@@ -425,6 +446,6 @@ email,string,\n\
             .downcast_ref::<ColumnComments>()
             .unwrap();
         assert_eq!(diff_config.value.len(), 1);
-        assert_eq!(diff_config.value.get("name"), Some(&"".to_string()));
+        assert_eq!(diff_config.value.get("id"), Some(&"".to_string()));
     }
 }

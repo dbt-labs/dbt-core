@@ -1,11 +1,8 @@
 import { twMerge } from 'tailwind-merge';
 
-import {
-  Input,
-  InputProps,
-  RyeconInfoOutline,
-  RyeconMagnifyingGlass,
-} from '@dbt-labs/sourdough';
+import { RyeconInfoOutline, RyeconMagnifyingGlass } from '@dbt-labs/sourdough';
+
+import { Input, type InputProps } from '../../components/ui/Input';
 
 export interface SelectorInputProps extends InputProps {
   className?: string;

@@ -10,7 +10,7 @@ There are many ways to contribute to the ongoing development of dbt Core, includ
   * **For Postgres** - please see the [C Arrow Postgres Driver](https://github.com/dbt-labs/arrow-adbc/tree/main/c/driver/postgresql)
   
 * **Branches** - All pull requests from community contributors should target the main branch (default). If the change is needed as a patch for a minor version of dbt that has already been released (or is already a release candidate), a maintainer will backport the changes in your PR to the release branch.
-* **Releases** - While dbt Core v2.0 is in alpha, new releases will include fixes and new features. Versions will be labelled `2.0.0-alpha.1`, `2.0.0-alpha.2`, etc. Before filing a bug, please ensure that you have the latest release installed. 
+* **Releases** - While dbt Core v2.0 is in beta, new releases will include fixes and new features. Versions will be labelled `2.0.0-beta.1`, `2.0.0-beta.2`, etc. Before filing a bug, please ensure that you have the latest release installed. 
 
 ### Setting up an environment
 
@@ -27,7 +27,13 @@ dbt Core is written in Rust. Please make sure that you have the [rust toolchain 
 
 
 ## Making a Change to dbt Core
-Contribute by opening a pull request against the current development branch, `main`. A dbt Core maintainer will triage the PR and, once it's on the right track, assign a reviewer. They may suggest code revisions for style or clarity, or request that you add test(s).
+After you're done making your code change, make sure:
+- your code is formatted: `cargo fmt`
+- all tests pass: `cargo nextest run`
+- all lints pass: `cargo clippy --all-targets --all-features`.
+- you have manually verified it works with a local build of dbt against a real project
+
+Then, open a pull request against the current development branch, `main`. A dbt Core maintainer will triage the PR and, once it's on the right track, assign a reviewer. They may suggest code revisions for style or clarity, or request that you add test(s).
 
 Once your PR has been approved, a maintainer will take it from there and shepherd your changes into dbt Core. And that's it! Happy developing 🎉
 

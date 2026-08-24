@@ -460,11 +460,21 @@ describe('<LocatePane /> — shared chrome', () => {
     expect(onSelectMode).toHaveBeenCalledWith('filter');
   });
 
-  it('clicking the theme toggle calls onSetTheme', () => {
+  // Two independent tests rather than two clicks on one render: the toggle
+  // is a controlled radio group, so clicking an already-active segment is
+  // correctly a no-op (nothing changed) — a real re-render after a theme
+  // change would update the controlled value between clicks, which a single
+  // static render can't simulate.
+  it('clicking an inactive theme segment calls onSetTheme', () => {
     const onSetTheme = vi.fn();
     renderWithProviders(<LocatePane {...makeProps({ theme: 'dark', onSetTheme })} />);
     fireEvent.click(screen.getByRole('radio', { name: 'Light' }));
     expect(onSetTheme).toHaveBeenCalledWith('light');
+  });
+
+  it('clicking a different inactive theme segment also calls onSetTheme', () => {
+    const onSetTheme = vi.fn();
+    renderWithProviders(<LocatePane {...makeProps({ theme: 'light', onSetTheme })} />);
     fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(onSetTheme).toHaveBeenCalledWith('dark');
   });

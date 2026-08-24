@@ -2,15 +2,9 @@ import { FC, isValidElement, ReactElement } from 'react';
 import toast from 'react-hot-toast';
 import { twJoin } from 'tailwind-merge';
 
-import {
-  CellContext,
-  ColumnDef,
-  Icon,
-  RyeconCopy,
-  Sizes,
-  Tooltip,
-} from '@dbt-labs/sourdough';
+import { CellContext, ColumnDef, Icon, RyeconCopy, Sizes } from '@dbt-labs/sourdough';
 
+import { Tooltip } from '../../components/ui/Tooltip';
 import { formatAbsoluteLocalDate, formatDateCommon } from '../util/dateUtils';
 
 /**

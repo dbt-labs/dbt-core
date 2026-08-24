@@ -1499,6 +1499,11 @@ impl Adapter {
                             return Ok(RelationObject::new(cached_entry.relation()).into_value());
                         }
                     } else {
+                        if let Some(routine) =
+                            self.cache_routines_and_get_relation(state, temp_relation.as_ref())?
+                        {
+                            return Ok(routine);
+                        }
                         return Ok(cache_result);
                     }
                 }
@@ -2478,7 +2483,7 @@ impl Adapter {
     ///
     /// Accepts capability names as strings (e.g. 'replace_on', 'insert_by_name').
     ///
-    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L298-L315
     ///
     /// DEPRECATED: in favor of [`AdapterImpl::has_feature`]
     /// Use `has_feature(capability_name)` instead.
@@ -2488,25 +2493,69 @@ impl Adapter {
         state: &State,
         args: &[Value],
     ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("has_dbr_capability", &["capability_name"], args);
+        let capability_name = iter.next_arg::<&str>()?;
+        iter.finish()?;
+
         match &self.inner {
             Typed { adapter, .. } => {
-                let iter = ArgsIter::new("has_dbr_capability", &["capability_name"], args);
-                let capability_name = iter.next_arg::<&str>()?;
-                iter.finish()?;
-
                 match adapter.adapter_type() {
                     AdapterType::Databricks => {
-                        let has_feature = adapter.has_feature(state, capability_name, self.cancellation_token.clone())?;
+                        let has_feature = adapter.has_feature(
+                            state,
+                            capability_name,
+                            self.cancellation_token.clone(),
+                        )?;
                         Ok(Value::from(has_feature.unwrap_or(false)))
                     }
-                    _ => Err(AdapterError::new(
+                    AdapterType::Snowflake
+                    | AdapterType::Bigquery
+                    | AdapterType::Redshift
+                    | AdapterType::Spark
+                    | AdapterType::DuckDB
+                    | AdapterType::Postgres
+                    | AdapterType::Salesforce
+                    | AdapterType::Fabric
+                    | AdapterType::ClickHouse
+                    | AdapterType::Exasol
+                    | AdapterType::Athena
+                    | AdapterType::Starburst
+                    | AdapterType::Trino
+                    | AdapterType::Datafusion
+                    | AdapterType::Dremio
+                    | AdapterType::Oracle
+                    | AdapterType::Alt => Err(AdapterError::new(
                         AdapterErrorKind::NotSupported,
                         format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
                     )
                     .into()),
                 }
             }
-            Parse(_) => Ok(Value::from(false)),
+            Parse(parse_state) => match parse_state.adapter_type {
+                AdapterType::Databricks => Ok(Value::from(
+                    AdapterImpl::parse_has_dbr_capability(
+                        parse_state.engine.get_config(),
+                        capability_name,
+                    ),
+                )),
+                AdapterType::Snowflake
+                | AdapterType::Bigquery
+                | AdapterType::Redshift
+                | AdapterType::Spark
+                | AdapterType::DuckDB
+                | AdapterType::Postgres
+                | AdapterType::Salesforce
+                | AdapterType::Fabric
+                | AdapterType::ClickHouse
+                | AdapterType::Exasol
+                | AdapterType::Athena
+                | AdapterType::Starburst
+                | AdapterType::Trino
+                | AdapterType::Datafusion
+                | AdapterType::Dremio
+                | AdapterType::Oracle
+                | AdapterType::Alt => Ok(Value::from(false)),
+            },
         }
     }
 
@@ -4318,5 +4367,61 @@ impl Adapter {
         } else {
             None
         }
+    }
+
+    /// (state change) Lists the schema's routines and inserts each into
+    /// the relation cache. Returns `temp_relation` if it turns out to
+    /// be one of them
+    fn cache_routines_and_get_relation(
+        &self,
+        state: &State,
+        temp_relation: &dyn BaseRelation,
+    ) -> Result<Option<Value>, minijinja::Error> {
+        let Typed { adapter, .. } = &self.inner else {
+            return Ok(None);
+        };
+        if adapter.adapter_type() != AdapterType::Bigquery {
+            return Ok(None);
+        }
+        if !adapter.engine().relation_cache().project_has_functions() {
+            return Ok(None);
+        }
+        if temp_relation
+            .database_as_resolved_str()
+            .unwrap_or_default()
+            .is_empty()
+            && temp_relation
+                .schema_as_resolved_str()
+                .unwrap_or_default()
+                .is_empty()
+        {
+            return Ok(None);
+        }
+
+        let db_schema = CatalogAndSchema::from(temp_relation);
+        let mut conn = adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation > list_routines call");
+        let routines = match bigquery::list_routines(
+            adapter.engine().as_ref(),
+            &query_ctx,
+            conn.as_mut(),
+            &db_schema,
+            self.cancellation_token.clone(),
+        ) {
+            Ok(routines) => routines,
+            Err(e) => {
+                tracing::warn!("relation_cache: list_routines failed: {e}");
+                return Ok(None);
+            }
+        };
+
+        let relation_cache = adapter.engine().relation_cache();
+        for routine in routines {
+            relation_cache.insert_relation(routine, None);
+        }
+
+        Ok(relation_cache
+            .get_relation(temp_relation)
+            .map(|entry| RelationObject::new(entry.relation()).into_value()))
     }
 }

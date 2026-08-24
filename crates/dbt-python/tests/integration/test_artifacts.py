@@ -2,7 +2,7 @@
 
 import json
 
-from dbt.contracts.results import CatalogArtifact, RunResultsArtifact
+from dbt.contracts.results import CatalogArtifact, FreshnessResultsArtifact, RunResultsArtifact
 
 
 def _read(path):
@@ -60,6 +60,22 @@ def test_catalog_json_matches_returned_catalog(tmp_project, invoke):
 
     from_disk = CatalogArtifact.read(str(on_disk))
     assert set(from_disk.nodes) == set(res.catalog.nodes)
+
+
+def test_sources_json_matches_returned_artifact(built_project, invoke, unique_ids):
+    proj = built_project("freshness")
+    # Exits 1 on the stale source; the artifact is written and returned regardless.
+    res = invoke(proj, "source", "freshness")
+
+    on_disk = proj / "target" / "sources.json"
+    assert on_disk.is_file()
+
+    parsed = _read(on_disk)
+    assert {r["unique_id"] for r in parsed["results"]} == unique_ids(res.result)
+    assert [r["status"] for r in parsed["results"]] == [r.status for r in res.result]
+
+    from_disk = FreshnessResultsArtifact.read(str(on_disk))
+    assert unique_ids(from_disk) == unique_ids(res.result)
 
 
 def test_failing_run_still_writes_run_results(tmp_project, invoke, unique_ids):

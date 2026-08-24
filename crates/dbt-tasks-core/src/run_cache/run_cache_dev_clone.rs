@@ -25,14 +25,53 @@ use crate::run_cache::run_cache_service::{
     confirm_run_cache_service_execution, execute_run_cache_service_clone,
     run_cache_metadata_query_options,
 };
+use crate::run_cache::run_cache_service::{record_dev_clone_decision, replay_dev_clone_decision};
 
 pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     let Some(candidate) = dev_clone_candidate_for_node(ctx, node_id) else {
         return;
     };
+    let node = candidate.node();
+
+    if dbt_adapter::time_machine::is_replaying() {
+        let Some(clone) = replay_dev_clone_decision(node_id) else {
+            return;
+        };
+        match execute_run_cache_service_clone(
+            ctx,
+            node.as_ref(),
+            &clone,
+            ctx.adapter_type(),
+            ctx.dbt_profile().threads,
+            None,
+            false,
+        )
+        .await
+        {
+            Ok(_) => {
+                finish_dev_clone(
+                    ctx,
+                    node.as_ref(),
+                    &clone,
+                    clone.clone_source().to_string(),
+                    clone.clone_target().to_string(),
+                )
+                .await
+            }
+            Err(err) => emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "Time-machine dev clone failed for node {node_id}: {err}; executing normally"
+                ),
+            ),
+        }
+        return;
+    }
+
     let Some(policy) = dev_clone_policy(ctx, &candidate) else {
         return;
     };
+
     let Some(client) = ctx
         .inner
         .run_cache_ctx
@@ -82,7 +121,6 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     };
 
     let clone = RunCacheCloneDecision::from_response(&ready_to_clone, 0);
-    let node = candidate.node();
     match execute_run_cache_service_clone(
         ctx,
         node.as_ref(),
@@ -95,38 +133,16 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     .await
     {
         Ok(_) => {
-            let explain_dev_clone = StateExplainDevClone {
-                source_table_fqn: prepared.clone_source_table.clone(),
-                target_table_fqn: prepared.target_table.clone(),
-            };
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .invalidate_relation_metadata(&prepared.target_table);
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_metadata
-                .insert_relation_exists(prepared.target_table, true);
-            // Confirm the clone as a dbt State execution so the server-side
-            // `latest_metadata` for the dev relation points at the prod
-            // execution via `clone_from_execution_id`. This matches the
-            // dbt-core plugin (`run_cache.py:_try_clone` calls
-            // `confirm_execution` after a successful clone), and lets the
-            // subsequent materialization submit resolve a parent execution
-            // id, return a Skip decision, and surface "Cloned from cached
-            // relation" rather than re-running the incremental merge.
-            ctx.inner
-                .run_cache_ctx
-                .run_cache_dev_cloned_nodes
-                .insert(node_id.to_string(), explain_dev_clone);
-            confirm_run_cache_service_execution(
+            record_dev_clone_decision(node_id, &clone);
+            finish_dev_clone(
                 ctx,
                 node.as_ref(),
-                clone.success_confirmation(),
-                None,
+                &clone,
+                prepared.clone_source_table,
+                prepared.target_table,
             )
             .await;
-            let source = prepared.clone_source_table.clone();
+            let source = clone.clone_source().to_string();
             emit_trace_log_message(|| {
                 format!("dbt State dev clone completed for node {node_id} (source {source})")
             });
@@ -140,6 +156,32 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
             );
         }
     }
+}
+
+async fn finish_dev_clone(
+    ctx: &TaskRunnerCtx,
+    node: &dyn InternalDbtNodeAttributes,
+    clone: &RunCacheCloneDecision,
+    source_table: String,
+    target_table: String,
+) {
+    let explain_dev_clone = StateExplainDevClone {
+        source_table_fqn: source_table,
+        target_table_fqn: target_table.clone(),
+    };
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_metadata
+        .invalidate_relation_metadata(&target_table);
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_metadata
+        .insert_relation_exists(target_table, true);
+    ctx.inner
+        .run_cache_ctx
+        .run_cache_dev_cloned_nodes
+        .insert(node.unique_id(), explain_dev_clone);
+    confirm_run_cache_service_execution(ctx, node, clone.success_confirmation(), None).await;
 }
 
 fn dev_clone_candidate_for_node(ctx: &TaskRunnerCtx, node_id: &str) -> Option<DevCloneCandidate> {

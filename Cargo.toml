@@ -7,6 +7,7 @@ members = [
   "crates/dbt-agate",
   "crates/dbt-auth",
   "crates/dbt-base",
+  "crates/dbt-runtime",
   "crates/dbt-clap-core",
   "crates/dbt-goldie",
   "crates/dbt-docs-core",
@@ -87,6 +88,7 @@ members = [
   "crates/dbt-login",
   "crates/dbt-platform-auth",
 
+  # COPYBARA-END-PRIVATE
 ]
 exclude = [
   "wizard/wizard-app/src-tauri",
@@ -104,7 +106,7 @@ homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "Apache-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
-version = "2.0.0-beta.1"
+version = "2.0.0-beta.2"
 
 [patch.crates-io]
 
@@ -271,6 +273,7 @@ dbt-platform-auth = { path = "crates/dbt-platform-auth" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
+dbt-runtime = { path = "crates/dbt-runtime" }
 dbt-scheduler = { path = "crates/dbt-scheduler" }
 dbt-state = { path = "crates/dbt-state" }
 

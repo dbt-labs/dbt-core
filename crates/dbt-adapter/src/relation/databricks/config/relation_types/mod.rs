@@ -65,11 +65,10 @@ fn component_from_recorded(
                 comments,
             ))
         }
-        // {"set_column_tags": {col: {k: v}}}
+        // {"set_column_tags": {col: {k: v}}}.
         components::column_tags::TYPE_NAME => {
             let tags: IndexMap<String, IndexMap<String, String>> = val
                 .get("set_column_tags")
-                .or_else(|| val.get("tags"))
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
             Some(components::ColumnTagsLoader::new_component_type_erased(

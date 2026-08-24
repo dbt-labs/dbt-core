@@ -21,6 +21,39 @@ pub async fn check_version(current_version: &str, cdn_url: Option<&str>) -> Opti
     None
 }
 
+/// Checks for a newer release and, if one exists, builds the "new version
+/// available" hint text (including the upgrade command for the current
+/// install's channel, when it can be determined).
+///
+/// Resolving the channel (`dbt_dist::DistInfo::current`) can shell out to
+/// `brew`/package-manager probes, so it runs inside `spawn_blocking` and
+/// inside this same background task as the version check itself -- both run
+/// concurrently with the rest of the invocation, rather than adding that
+/// latency to the tail of every command that has an update available.
+pub async fn check_version_and_build_hint(
+    current_version: &str,
+    cdn_url: Option<&str>,
+    command_name: &'static str,
+) -> Option<String> {
+    let latest_version = check_version(current_version, cdn_url).await?;
+
+    let target_version = latest_version.clone();
+    let upgrade_cmd = tokio::task::spawn_blocking(move || {
+        dbt_dist::DistInfo::current(command_name)
+            .ok()
+            .and_then(|info| info.upgrade_command_for_version(Some(&target_version)))
+    })
+    .await
+    .unwrap_or(None);
+
+    Some(match upgrade_cmd {
+        Some(command) => format!("{latest_version} (run `{command}`)"),
+        None => {
+            format!("{latest_version} (upgrade via the package manager you installed dbt with)")
+        }
+    })
+}
+
 // Returns true if latest_version is newer than current_version
 fn compare_versions(current_version: &str, latest_version: &str) -> bool {
     let current_parts: Vec<&str> = current_version.split('.').collect();

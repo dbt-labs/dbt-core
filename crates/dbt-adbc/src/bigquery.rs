@@ -123,3 +123,13 @@ pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_REGION: &str =
 pub const COPY_TABLE_SOURCE: &str = "adbc.bigquery.copy_table.source";
 pub const COPY_TABLE_DESTINATION: &str = "adbc.bigquery.copy_table.destination";
 pub const COPY_TABLE_WRITE_DISPOSITION: &str = "adbc.bigquery.copy_table.write_disposition";
+
+pub mod schema_metadata {
+    pub const QUERY_ID: &str = "BIGQUERY:query_id";
+    pub const STATEMENT_TYPE: &str = "BIGQUERY:Statistics:Query:StatementType";
+    pub const TOTAL_BYTES_BILLED: &str = "BIGQUERY:Statistics:Query:TotalBytesBilled";
+    pub const QUERY_TOTAL_BYTES_PROCESSED: &str = "BIGQUERY:Statistics:Query:TotalBytesProcessed";
+    pub const JOB_TOTAL_BYTES_PROCESSED: &str = "BIGQUERY:Statistics:TotalBytesProcessed";
+    pub const SLOT_MILLIS: &str = "BIGQUERY:Statistics:Query:SlotMillis";
+    pub const NUM_DML_AFFECTED_ROWS: &str = "BIGQUERY:Statistics:Query:NumDMLAffectedRows";
+}

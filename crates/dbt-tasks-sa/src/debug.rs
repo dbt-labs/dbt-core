@@ -10,6 +10,7 @@ use dbt_common::tracing::dbt_emit::emit_info_progress_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_compilation::core::DbtLoadedProject;
 use dbt_schemas::schemas::profiles::{DbConfig, Execute};
+use dbt_tasks_core::alt_catalog_attach::{AltCatalogAttachChecker, AltCatalogAttachOutcome};
 use dbt_tasks_core::alt_propagation::{AltPropagationChecker, AltPropagationOutcome};
 use dbt_telemetry::ProgressMessage;
 
@@ -55,6 +56,10 @@ pub struct DebugArgs {
     /// Checker for verifying alt-compute-to-native propagation, if this
     /// build has one registered. `None` means the check is skipped.
     pub alt_propagation_checker: Option<Arc<dyn AltPropagationChecker>>,
+    /// Checker for verifying the catalogs declared in `catalogs.yml` are
+    /// reachable from the alt compute target, if this build has one
+    /// registered. `None` means the check is skipped.
+    pub alt_catalog_attach_checker: Option<Arc<dyn AltCatalogAttachChecker>>,
 }
 
 impl DebugArgs {
@@ -64,6 +69,7 @@ impl DebugArgs {
             connection: arg.connection,
             local_execution_backend: arg.local_execution_backend,
             alt_propagation_checker: None,
+            alt_catalog_attach_checker: None,
         }
     }
 }
@@ -275,7 +281,33 @@ async fn debug_lake_compute(
         ),
     ));
 
-    // 2. MDLS write + read-back, in an already-authorized namespace (the alt
+    // 2. Declared-catalog attach. Runs before the write tests below because it
+    // is the cheapest check that can fail on a misconfigured catalog, and a
+    // catalog that cannot be attached makes everything after it moot.
+    match &arg.alt_catalog_attach_checker {
+        None => {
+            emit_info_progress_message(create_progress_msg(
+                ACTION_SKIPPED,
+                "catalog attach test (unavailable in this build)",
+            ));
+        }
+        Some(checker) => {
+            let attach_started = Instant::now();
+            let outcome = checker
+                .check_catalog_attach(native_db_config, alt_db_config, token.clone())
+                .await?;
+            emit_info_progress_message(create_progress_msg(
+                ACTION_DEBUGGING,
+                &format!(
+                    "{}{}",
+                    format_catalog_attach_outcome(&outcome),
+                    duration_suffix(attach_started.elapsed())
+                ),
+            ));
+        }
+    }
+
+    // 3. MDLS write + read-back, in an already-authorized namespace (the alt
     // target's configured database/schema). Namespace-level DDL is
     // deliberately avoided: creating a new namespace is denied for the
     // Polaris principal used here and (confirmed empirically) can hang
@@ -354,7 +386,7 @@ async fn debug_lake_compute(
         &format!("MDLS read-back test: OK{}", duration_suffix(read_elapsed)),
     ));
 
-    // 3. Snowflake propagation / catalog-linking: only if the project
+    // 4. Snowflake propagation / catalog-linking: only if the project
     // declares a catalog-linked database, and a checker is registered.
     let linked_database = loaded_project
         .dbt_state()
@@ -415,6 +447,20 @@ fn qualify_probe_name(database: Option<&str>, schema: Option<&str>, table: &str)
         (Some(db), Some(schema)) => format!("{db}.{schema}.{table}"),
         (None, Some(schema)) => format!("{schema}.{table}"),
         _ => table.to_string(),
+    }
+}
+
+/// Renders an [`AltCatalogAttachOutcome`] as the `dbt debug` progress line.
+/// A failed attach never reaches here -- it comes back as an error, since a
+/// catalog that cannot be attached is a setup problem the user must fix.
+fn format_catalog_attach_outcome(outcome: &AltCatalogAttachOutcome) -> String {
+    match outcome {
+        AltCatalogAttachOutcome::NothingToCheck => {
+            "catalog attach test: skipped (no declared catalogs to check)".to_string()
+        }
+        AltCatalogAttachOutcome::Attached { catalogs } => {
+            format!("catalog attach test: OK ({})", catalogs.join(", "))
+        }
     }
 }
 
@@ -486,6 +532,20 @@ mod tests {
     #[test]
     fn qualify_probe_name_with_neither() {
         assert_eq!(qualify_probe_name(None, None, "t"), "t");
+    }
+
+    #[test]
+    fn format_catalog_attach_outcome_lists_checked_catalogs() {
+        let msg = format_catalog_attach_outcome(&AltCatalogAttachOutcome::Attached {
+            catalogs: vec!["mdls_horizon".to_string(), "native_db".to_string()],
+        });
+        assert_eq!(msg, "catalog attach test: OK (mdls_horizon, native_db)");
+    }
+
+    #[test]
+    fn format_catalog_attach_outcome_nothing_to_check() {
+        let msg = format_catalog_attach_outcome(&AltCatalogAttachOutcome::NothingToCheck);
+        assert!(msg.contains("no declared catalogs to check"));
     }
 
     #[test]

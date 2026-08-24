@@ -261,6 +261,7 @@ pub fn resolve_yaml_depends_on(
         let mut resolve_model_context = base_ctx.clone();
         resolve_model_context.extend(build_resolve_model_context(
             &exposure_config,
+            false,
             adapter_type,
             database,
             schema,

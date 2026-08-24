@@ -11,7 +11,8 @@ use tokio::sync::mpsc;
 
 use super::event::{
     AdapterCallEvent, CacheInvalidationEvent, CatalogSchema, CatalogSchemas, MetadataCallArgs,
-    MetadataCallEvent, RecordedEvent, RunRemoteAdhocEvent, SaoEvent, SaoStatus,
+    MetadataCallEvent, RecordedCachedTestResult, RecordedEvent, RecordedRunCacheCloneDecision,
+    RunCacheCloneEvent, RunRemoteAdhocEvent, SaoEvent, SaoStatus,
 };
 use super::semantic::SemanticCategory;
 use super::serializable_impls::batches_to_ipc_base64;
@@ -193,11 +194,24 @@ impl EventRecorder {
         message: impl Into<String>,
         stored_hash: impl Into<String>,
     ) {
+        self.record_sao_skip_with_test_result(node_id, status, message, stored_hash, None);
+    }
+
+    /// Record a cache skip with the cached data-test result needed for replay.
+    pub fn record_sao_skip_with_test_result(
+        &self,
+        node_id: impl Into<String>,
+        status: SaoStatus,
+        message: impl Into<String>,
+        stored_hash: impl Into<String>,
+        cached_test_result: Option<RecordedCachedTestResult>,
+    ) {
         self.emit_sync(RecordedEvent::Sao(SaoEvent {
             node_id: node_id.into(),
             status,
             message: message.into(),
             stored_hash: stored_hash.into(),
+            cached_test_result,
             timestamp_ns: self.elapsed_ns(),
         }));
     }
@@ -236,6 +250,42 @@ impl EventRecorder {
     pub fn record_cache_invalidation(&self, invalidated_nodes: Vec<String>) {
         self.emit_sync(RecordedEvent::CacheInvalidation(CacheInvalidationEvent {
             invalidated_nodes,
+            timestamp_ns: self.elapsed_ns(),
+        }));
+    }
+
+    /// Record a dbt State service "ready to clone" decision.
+    ///
+    /// This is called when a node's execution is satisfied by cloning an
+    /// existing relation, so replay can route the node back through the
+    /// same clone path instead of falling through to a normal Execute.
+    pub fn record_run_cache_clone(
+        &self,
+        node_id: impl Into<String>,
+        clone: RecordedRunCacheCloneDecision,
+    ) {
+        self.record_clone(node_id, clone, false);
+    }
+
+    /// Record a clone that runs before node rendering.
+    pub fn record_dev_clone(
+        &self,
+        node_id: impl Into<String>,
+        clone: RecordedRunCacheCloneDecision,
+    ) {
+        self.record_clone(node_id, clone, true);
+    }
+
+    fn record_clone(
+        &self,
+        node_id: impl Into<String>,
+        clone: RecordedRunCacheCloneDecision,
+        dev_clone: bool,
+    ) {
+        self.emit_sync(RecordedEvent::RunCacheClone(RunCacheCloneEvent {
+            node_id: node_id.into(),
+            dev_clone,
+            clone,
             timestamp_ns: self.elapsed_ns(),
         }));
     }

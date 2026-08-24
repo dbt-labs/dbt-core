@@ -568,6 +568,46 @@ fn test_typed_mode_execute_result_is_not_tainted() {
 }
 
 #[test]
+fn test_statement_macro_does_not_crash_in_symbolic_lint_mode() {
+    // Regression test: `JinjaRenderMode::Symbolic` forces `execute = true` so
+    // macros guarded by `{% if not execute %}`/`{% if execute %}` take their
+    // real (introspective) branch instead of a hardcoded default -- relying
+    // on `Adapter::call_method`'s Parse-mode taint-wrapping (see
+    // `test_parse_mode_execute_result_is_tainted`) plus tuple-unpack taint
+    // propagation (`IntrospectiveValue::unpack`) to keep that branch safe.
+    // dbt's own `statement()` macro is the canonical case this must handle:
+    // `{% set res, table = adapter.execute(...) %}` inside a real
+    // `{% if execute %}` block, invoked via `{% call statement() %}`.
+    // Before the taint/unpack fix, this failed with "cannot unpack: sequence
+    // of wrong length (expected 2, got 1)".
+    let adapter = make_duckdb_parse_adapter();
+    let env = minijinja::Environment::new();
+    let listener: Rc<dyn RenderingEventListener> = Rc::new(TaintGateListener);
+    let source = "\
+{%- macro statement(name=None, fetch_result=False, auto_begin=True, language='sql') -%}
+  {%- if execute -%}
+    {%- set compiled_code = caller() -%}
+    {%- if language == 'sql' -%}
+      {%- set res, table = adapter.execute(compiled_code, auto_begin=auto_begin, fetch=fetch_result) -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+{%- call statement('run_query_statement', fetch_result=true) -%}
+select 1
+{%- endcall -%}";
+    let result = env.render_str(
+        source,
+        minijinja::context! {
+            execute => true,
+            adapter => Value::from_object(adapter.as_ref().clone()),
+        },
+        &[listener],
+    );
+
+    assert!(result.is_ok(), "{:?}", result.err());
+}
+
+#[test]
 fn test_parse_mode_call_with_tainted_argument_short_circuits_instead_of_erroring() {
     // Regression test: `quote()` isn't itself introspective (it's a pure
     // string transform, not in `INTROSPECTIVE_METHODS`), but it's commonly

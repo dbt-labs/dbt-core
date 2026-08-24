@@ -6,7 +6,7 @@ use dbt_common::tracing::dbt_init::{
     InvocationTracingGuard, ProcessTracing, init_tracing_cli_reloadable,
 };
 use dbt_features::cli::DefaultCliParserFactory;
-use dbt_features::feature_stack::FeatureStack;
+use dbt_features::feature_stack::{FeatureStack, FeatureStackConfig};
 use dbt_features::feature_stack_builder::FeatureStackBuilder;
 use dbt_features::tracing::TracingFeature;
 use dbt_main::{print_trimmed_error, run_cli_with_code};
@@ -63,6 +63,7 @@ fn trace_config(cli: &Cli, cli_parser: &CliParser, arg: &SystemArgs) -> FsTraceC
         cli.target_path().as_ref(),
         &arg.io,
         Some(&cli.common_args().get_cli_warn_error_options()),
+        cli.common_args().skip_fusion_only_upgrades(),
         "dbt",
     )
     .with_command_name(cli_parser.command_name())
@@ -97,7 +98,7 @@ fn begin_invocation(
 struct DbtRunnerResult {
     success: bool,
     exit_code: u8,
-    /// `manifest`, `list` or `run_results`; `None` if nothing was captured.
+    /// `manifest`, `list`, `sources` or `run_results`; `None` if nothing was captured.
     result_kind: Option<String>,
     result_msgpack: Option<Py<PyBytes>>,
     /// Kept off `result` so that stays dbt-core-compatible; `--write-catalog` is
@@ -134,6 +135,12 @@ fn build_result_msgpack(
             .list_items
             .take()
             .map(|items| contracts::to_msgpack(py, &items).map(|b| ("list", b))),
+        // `source freshness` writes sources.json instead of run_results.json, so
+        // that artifact is what it reports.
+        FsCommand::Source => exec
+            .sources
+            .take()
+            .map(|s| contracts::to_msgpack(py, &s).map(|b| ("sources", b))),
         // Everything else reports run_results, as dbt-core does; the catalog is
         // surfaced separately.
         _ => exec
@@ -225,13 +232,8 @@ fn dbt_core_cli_parser() -> CliParser {
     DefaultCliParserFactory.create("dbt-core", env!("CARGO_PKG_VERSION"))
 }
 
-/// This distribution's feature set. Takes the invocation's tracing feature, which
-/// is installed per invocation rather than once per process.
-fn dbt_core_feature_stack(tracing: TracingFeature, arg: &SystemArgs) -> Arc<FeatureStack> {
-    FeatureStackBuilder::new(tracing)
-        .send_anonymous_usage_stats(arg.io.send_anonymous_usage_stats)
-        .build()
-        .into()
+fn dbt_core_feature_stack(tracing: TracingFeature) -> Box<FeatureStack> {
+    FeatureStackBuilder::new(tracing).build()
 }
 
 fn invoke_inner<F>(
@@ -245,7 +247,7 @@ fn invoke_inner<F>(
     Option<String>,
 )>
 where
-    F: FnOnce(TracingFeature, &SystemArgs) -> Arc<FeatureStack>,
+    F: FnOnce(TracingFeature) -> Box<FeatureStack>,
 {
     let cli = cli_parser
         .try_parse_from(argv)
@@ -271,7 +273,13 @@ where
         &mut arg,
     )?;
 
-    let feature_stack = feature_stack_builder(tracing, &arg);
+    let feature_stack: Arc<FeatureStack> = {
+        let feature_stack = feature_stack_builder(tracing);
+        let config = FeatureStackConfig {
+            send_anonymous_usage_stats: arg.io.send_anonymous_usage_stats,
+        };
+        feature_stack.configure(&config).into()
+    };
 
     // Apply ANTLR parser config from common args, as run_cli does (main_impl.rs);
     // skipping it diverges in-process parsing from the CLI.
@@ -311,9 +319,10 @@ where
             let error = failure.error;
             let artifacts = failure.artifacts;
             let exit_code = error.exit_status().unwrap_or(1) as u8;
-            // A handled failure (a failing test, an errored node) is fully
-            // accounted for by run_results, so it carries no exception.
-            let exception = if artifacts.run_results.is_some() {
+            // A handled failure (a failing test, an errored node, a stale source) is
+            // fully accounted for by the command's result artifact, so it carries no
+            // exception.
+            let exception = if artifacts.run_results.is_some() || artifacts.sources.is_some() {
                 None
             } else {
                 Some(describe_engine_error(
@@ -352,7 +361,7 @@ fn run_cli(py: Python<'_>, argv: Vec<String>) -> PyResult<()> {
 
 fn run_cli_inner<F>(argv: Vec<String>, cli_parser: &CliParser, feature_stack_builder: F) -> u8
 where
-    F: FnOnce(TracingFeature, &SystemArgs) -> Arc<FeatureStack>,
+    F: FnOnce(TracingFeature) -> Box<FeatureStack>,
 {
     // TODO: ensure .env loading is handled similarly to rust main entry point
     // argv is Python's sys.argv; parse it explicitly since the process is the
@@ -389,7 +398,13 @@ where
         arg.io.log_path = Some(resolved_file_log_path.to_path_buf());
     }
 
-    let feature_stack = feature_stack_builder(tracing, &arg);
+    let feature_stack: Arc<FeatureStack> = {
+        let feature_stack = feature_stack_builder(tracing);
+        let config = FeatureStackConfig {
+            send_anonymous_usage_stats: arg.io.send_anonymous_usage_stats,
+        };
+        feature_stack.configure(&config).into()
+    };
 
     run_cli_with_code(cli, arg, feature_stack)
 }

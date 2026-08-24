@@ -1,8 +1,6 @@
 import { FC } from 'react';
 
 import {
-  Badge,
-  BadgeType,
   Ryecon,
   RyeconDuotoneStale,
   RyeconDuotoneUnknown,
@@ -11,53 +9,54 @@ import {
   RyeconStatusSkipped,
   RyeconStatusSuccess,
   RyeconStatusWarning,
-  Tooltip,
 } from '@dbt-labs/sourdough';
 
+import { Badge, type BadgeVariant } from '../../components/ui/Badge';
+import { Tooltip } from '../../components/ui/Tooltip';
 import type { RunStatus } from '../typings/domain/executionInfo';
 import type { FreshnessStatusValue, TestStatusValue } from '../typings/domain/status';
 import { toTitleCase } from '../util/string';
 
 type BadgeSpec = {
-  type: BadgeType;
+  variant: BadgeVariant;
   ryecon?: Ryecon;
   decorative?: boolean;
 };
 
 const RUN: Record<RunStatus, BadgeSpec> = {
-  success: { type: 'success', ryecon: RyeconStatusSuccess },
-  error: { type: 'error', ryecon: RyeconStatusError },
-  running: { type: 'default' },
-  queued: { type: 'default' },
-  skipped: { type: 'default', ryecon: RyeconStatusSkipped },
-  reused: { type: 'teal', ryecon: RyeconStatusReused },
+  success: { variant: 'secondary', ryecon: RyeconStatusSuccess },
+  error: { variant: 'destructive', ryecon: RyeconStatusError },
+  running: { variant: 'secondary' },
+  queued: { variant: 'secondary' },
+  skipped: { variant: 'secondary', ryecon: RyeconStatusSkipped },
+  reused: { variant: 'secondary', ryecon: RyeconStatusReused },
 };
 
 const TEST: Record<TestStatusValue, BadgeSpec> = {
-  pass: { type: 'success', ryecon: RyeconStatusSuccess },
-  fail: { type: 'error', ryecon: RyeconStatusError },
-  warn: { type: 'warning', ryecon: RyeconStatusWarning },
-  error: { type: 'error', ryecon: RyeconStatusError },
-  skipped: { type: 'default', ryecon: RyeconStatusSkipped },
-  unknown: { type: 'default', ryecon: RyeconDuotoneUnknown, decorative: true },
+  pass: { variant: 'secondary', ryecon: RyeconStatusSuccess },
+  fail: { variant: 'destructive', ryecon: RyeconStatusError },
+  warn: { variant: 'secondary', ryecon: RyeconStatusWarning },
+  error: { variant: 'destructive', ryecon: RyeconStatusError },
+  skipped: { variant: 'secondary', ryecon: RyeconStatusSkipped },
+  unknown: { variant: 'secondary', ryecon: RyeconDuotoneUnknown, decorative: true },
 };
 
 const FRESH: Record<FreshnessStatusValue, BadgeSpec> = {
-  pass: { type: 'success', ryecon: RyeconStatusSuccess },
-  warn: { type: 'warning', ryecon: RyeconStatusWarning },
-  error: { type: 'error', ryecon: RyeconStatusError },
-  outdated: { type: 'default', ryecon: RyeconDuotoneStale, decorative: true },
+  pass: { variant: 'secondary', ryecon: RyeconStatusSuccess },
+  warn: { variant: 'secondary', ryecon: RyeconStatusWarning },
+  error: { variant: 'destructive', ryecon: RyeconStatusError },
+  outdated: { variant: 'secondary', ryecon: RyeconDuotoneStale, decorative: true },
   unconfigured: {
-    type: 'default',
+    variant: 'secondary',
     ryecon: RyeconDuotoneStale,
     decorative: true,
   },
-  skipped: { type: 'default', ryecon: RyeconStatusSkipped },
-  unknown: { type: 'default', ryecon: RyeconDuotoneUnknown, decorative: true },
+  skipped: { variant: 'secondary', ryecon: RyeconStatusSkipped },
+  unknown: { variant: 'secondary', ryecon: RyeconDuotoneUnknown, decorative: true },
 };
 
-const NONE: BadgeSpec = { type: 'default' };
-const RUNTIME_ERROR: BadgeSpec = { type: 'error', ryecon: RyeconStatusError };
+const NONE: BadgeSpec = { variant: 'secondary' };
+const RUNTIME_ERROR: BadgeSpec = { variant: 'destructive', ryecon: RyeconStatusError };
 
 // Union of every vocabulary. Typed as possibly-undefined because a caller can pass a
 // status outside the requested kind at runtime (e.g. a test's lastRunStatus cast
@@ -130,7 +129,7 @@ export const NodeStatusIconBadge: FC<NodeStatusIconBadgeProps> = (props) => {
     <Tooltip content={tooltip}>
       <Badge
         size={sizeToBadgeSize(size ?? 'standard')}
-        type={spec.type}
+        variant={spec.variant}
         ryecon={spec.ryecon}
         className={`${decorativeClass} ${className ?? ''}`.trim()}
         text={text}

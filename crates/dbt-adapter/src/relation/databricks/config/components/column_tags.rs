@@ -20,7 +20,7 @@ pub type ColumnTags = SimpleComponentConfigImpl<IndexMap<String, IndexMap<String
 
 fn to_jinja(v: &IndexMap<String, IndexMap<String, String>>) -> Value {
     Value::from(ValueMap::from([(
-        Value::from("tags"),
+        Value::from("set_column_tags"),
         Value::from_serialize(v),
     )]))
 }

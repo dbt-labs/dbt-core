@@ -62,7 +62,9 @@ pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
             !dbtignore.unwrap().matched(rel_path, true).is_ignore()
         }) {
             let entry = entry_result?;
-            if entry.file_type().is_file() {
+            if entry.file_type().is_file()
+                || (entry.file_type().is_symlink() && entry.path().is_file())
+            {
                 // Skip macOS AppleDouble resource fork files (._*) — they are never dbt assets
                 // and contain binary metadata that causes UTF-8 read failures on Linux.
                 if entry
@@ -230,4 +232,35 @@ pub fn identify_package_dependencies(
     }
 
     Ok(dependencies)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::collect_file_info;
+    use std::os::unix::fs::symlink;
+
+    #[test]
+    fn collect_file_info_includes_symlinked_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let models_dir = temp_dir.path().join("models");
+        std::fs::create_dir(&models_dir).unwrap();
+        std::fs::write(models_dir.join("shared.sql"), "select 1").unwrap();
+        symlink("shared.sql", models_dir.join("linked.sql")).unwrap();
+
+        let mut paths = Vec::new();
+        collect_file_info(
+            temp_dir.path(),
+            &["models".to_string()],
+            &mut paths,
+            None,
+            |_| true,
+        )
+        .unwrap();
+
+        assert!(
+            paths
+                .iter()
+                .any(|(path, _)| path.as_path() == models_dir.join("linked.sql"))
+        );
+    }
 }

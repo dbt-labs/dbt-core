@@ -639,18 +639,6 @@ impl StateArtifacts {
             return true;
         };
 
-        // For models, treat "modified content" as a *body* comparison (checksum/raw_code),
-        // not a full same_contents comparison. Config/relation/persisted-description diffs
-        // are handled by dedicated checks in `state:modified` selection.
-        if current_node.resource_type() == NodeType::Model
-            && previous_node.resource_type() == NodeType::Model
-        {
-            // Fast path: identical checksums => body is unchanged.
-            if current_node.common().checksum == previous_node.common().checksum {
-                return false;
-            }
-        }
-
         if current_node.has_same_content(previous_node, adapter_type) {
             return false;
         }
@@ -1354,6 +1342,56 @@ mod tests {
 
         assert!(!state.is_new(&current));
         assert!(!state.is_modified(&current, None, None, AdapterType::Bigquery));
+    }
+
+    fn state_with_previous_model(previous_model: DbtModel) -> StateArtifacts {
+        let mut prev_nodes = Nodes::default();
+        prev_nodes.models.insert(
+            previous_model.__common_attr__.unique_id.clone(),
+            Arc::new(previous_model),
+        );
+
+        StateArtifacts {
+            nodes: Some(prev_nodes),
+            run_results: None,
+            source_freshness_results: None,
+            state_path: PathBuf::from("/tmp/fake_state"),
+            target_path: None,
+            test_sig_index: Default::default(),
+            test_full_name_index: Default::default(),
+            truncated_name_to_state_uid: std::sync::OnceLock::new(),
+        }
+    }
+
+    /// Regression guard for the `NodeType::Model` checksum fast path that `check_modified_content`
+    /// used to carry: it returned "unmodified" as soon as the checksums matched, which made every
+    /// non-body conjunct of `DbtModel::has_same_content` — dbt-core's `ParsedNode.same_contents` —
+    /// unreachable whenever the body was unchanged. `latest_version` is the sharpest witness: it is
+    /// not a `ModelConfig` key, so no config comparison can see it, and
+    /// `DbtModel::same_ref_representation` is the only check that does. If the fast path is ever
+    /// reintroduced, this fails.
+    #[test]
+    fn model_latest_version_change_is_modified_with_an_unchanged_body() {
+        use crate::schemas::serde::StringOrInteger;
+
+        let mut previous = DbtModel::default();
+        previous.__common_attr__.unique_id = "model.pkg.my_model.v1".to_string();
+        previous.__common_attr__.name = "my_model".to_string();
+        previous.__common_attr__.package_name = "pkg".to_string();
+        previous.__model_attr__.version = Some(StringOrInteger::Integer(1));
+        previous.__model_attr__.latest_version = Some(StringOrInteger::Integer(1));
+
+        // Identical body (same default checksum), only `latest_version` moves 1 -> 2.
+        let mut current = previous.clone();
+        current.__model_attr__.latest_version = Some(StringOrInteger::Integer(2));
+
+        let state = state_with_previous_model(previous);
+        assert!(!state.is_new(&current));
+        assert!(
+            state.is_modified(&current, None, None, AdapterType::DuckDB),
+            "a `latest_version` bump with an unchanged body must still be state:modified — \
+             `check_modified_content` must not short-circuit on matching checksums"
+        );
     }
 
     /// The fallback keys on the table name both engines store verbatim, not on the sanitized
@@ -2838,6 +2876,13 @@ mod tests {
         // deliberately not compared there) — outside this drift guard's scope, which only
         // transcribes the comparator's actual active field list. `warehouse_config` is nested
         // adapter-specific config with its own dedicated test coverage.
+        //
+        // Out of scope by ownership, not by omission: `latest_version` and `deprecation_date` are
+        // not `ModelConfig` keys at all, and the `access` *node attribute* (`__model_attr__.access`,
+        // as distinct from the `access` config key exercised above) is not either. All three are
+        // owned by `DbtModel::same_ref_representation` (nodes.rs), dbt-core's
+        // `ModelNode.same_ref_representation` — so they need no entry here, and if you are looking
+        // for "who compares `deprecation_date`", that is the answer.
         assert_denylist_keys_agree_across_stage1_and_stage2::<DbtModel>(
             NodeType::Model,
             "ModelConfig::same_config",

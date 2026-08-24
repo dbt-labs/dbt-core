@@ -1,8 +1,10 @@
 import type { FC, ReactNode } from 'react';
 
 import { resourceNameMap, ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-import { Icon, Link, type Ryecon, Tooltip } from '@dbt-labs/sourdough';
+import { Icon, type Ryecon } from '@dbt-labs/sourdough';
 
+import { Link } from '../../components/ui/Link';
+import { Tooltip } from '../../components/ui/Tooltip';
 import { useResourceLink } from '../links/useResourceLink';
 import { DataPlatformChip } from './DataPlatformChip';
 import { PageHeading } from './PageHeading';

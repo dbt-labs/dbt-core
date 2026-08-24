@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
+pub mod alt_catalog_attach;
 pub mod alt_propagation;
 pub mod context;
 pub mod context_factory;

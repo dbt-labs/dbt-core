@@ -5,25 +5,32 @@
 //! act as ordering barriers that must match in sequence, but reads between two barriers
 //! (a "segment") can match in any order, so minor read reordering doesn't break replay.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 use flate2::read::GzDecoder;
 use parking_lot::RwLock;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 
 use super::event::{
     AdapterCallEvent, CacheInvalidationEvent, MetadataCallArgs, MetadataCallEvent, RecordedEvent,
-    RecordingHeader, RunRemoteAdhocEvent, SaoEvent,
+    RecordingHeader, RunCacheCloneEvent, RunRemoteAdhocEvent, SaoEvent,
 };
 use super::semantic::SemanticCategory;
 use super::serde::values_match;
-use super::validation::{SqlSanitizer, UuidSanitizer};
+use super::validation::{SqlSanitizer, TmpSuffixSanitizer, UuidSanitizer};
 use crate::AdapterType;
 use crate::sql::diff::compare_sql;
+
+/// Marker for temp-relation identifiers, which carry a non-deterministic suffix.
+static TMP_MARKER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)__dbt_tmp").expect("valid regex"));
 
 /// Extract the SQL string from args (first string in array, or the string itself).
 ///
@@ -84,6 +91,16 @@ pub(crate) fn is_read_only_execute_call(method: &str, args: &serde_json::Value) 
 /// This compares the structured arguments to ensure we match the correct
 /// recorded event when replaying.
 fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -> bool {
+    fn relations_match(recorded_relations: &[String], actual_relations: &[String]) -> bool {
+        let recorded_set: HashSet<String> = recorded_relations
+            .iter()
+            .map(|r| r.to_ascii_uppercase())
+            .collect();
+        actual_relations
+            .iter()
+            .all(|rel| recorded_set.contains(&rel.to_ascii_uppercase()))
+    }
+
     match (recorded, actual) {
         // For ListRelationsSchemas, check if recorded is a superset of actual.
         // If recorded contains all the relations requested in actual, we have
@@ -101,13 +118,26 @@ fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -
             // Case-insensitive superset check: semantic_fqn strings may differ
             // only in casing due to identifier normalization (e.g. Snowflake
             // uppercasing unquoted identifiers), so we compare uppercased forms.
-            let recorded_set: HashSet<String> = recorded_relations
-                .iter()
-                .map(|r| r.to_ascii_uppercase())
-                .collect();
-            actual_relations
-                .iter()
-                .all(|rel| recorded_set.contains(&rel.to_ascii_uppercase()))
+            relations_match(recorded_relations, actual_relations)
+        }
+        (
+            MetadataCallArgs::FreshnessAllInSchema {
+                database: recorded_database,
+                schema: recorded_schema,
+                relations: recorded_relations,
+                warehouse: recorded_warehouse,
+            },
+            MetadataCallArgs::FreshnessAllInSchema {
+                database: actual_database,
+                schema: actual_schema,
+                relations: actual_relations,
+                warehouse: actual_warehouse,
+            },
+        ) => {
+            recorded_database.eq_ignore_ascii_case(actual_database)
+                && recorded_schema.eq_ignore_ascii_case(actual_schema)
+                && recorded_warehouse == actual_warehouse
+                && relations_match(recorded_relations, actual_relations)
         }
         // For other types, use exact value matching
         _ => {
@@ -127,6 +157,12 @@ pub(crate) fn adapter_args_match_for_type(
     actual: &serde_json::Value,
     adapter_type: AdapterType,
 ) -> bool {
+    // Temp-relation identifiers embed a non-deterministic suffix, so normalize both
+    // sides before any per-method comparison.
+    let recorded_norm = normalized_tmp_suffixes(recorded);
+    let actual_norm = normalized_tmp_suffixes(actual);
+    let (recorded, actual) = (recorded_norm.as_ref(), actual_norm.as_ref());
+
     match method {
         "get_relation" => match (
             GetRelationArgs::try_from(recorded),
@@ -153,6 +189,46 @@ pub(crate) fn adapter_args_match_for_type(
             ),
         "submit_python_job" => python_job_args_match(recorded, actual),
         _ => values_match(recorded, actual),
+    }
+}
+
+/// Normalize `__dbt_tmp<suffix>` in every string, borrowing when no marker is present.
+///
+/// The sanitizer is the identity without a marker, so the gate only avoids the clone.
+fn normalized_tmp_suffixes(value: &serde_json::Value) -> Cow<'_, serde_json::Value> {
+    if has_tmp_marker(value) {
+        Cow::Owned(normalize_tmp_suffixes(value))
+    } else {
+        Cow::Borrowed(value)
+    }
+}
+
+/// True if any string in the JSON tree mentions `__dbt_tmp` (case-insensitive).
+fn has_tmp_marker(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::String(s) => TMP_MARKER_RE.is_match(s),
+        serde_json::Value::Array(arr) => arr.iter().any(has_tmp_marker),
+        serde_json::Value::Object(obj) => obj.values().any(has_tmp_marker),
+        _ => false,
+    }
+}
+
+/// Recursively normalize `__dbt_tmp<suffix>` substrings in every string value.
+///
+/// Temp-relation identifiers carry a non-deterministic suffix; normalize both sides like
+/// `TmpSuffixSanitizer` does for SQL text, or replay false-fails.
+fn normalize_tmp_suffixes(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::String(s) => serde_json::Value::String(TmpSuffixSanitizer.sanitize(s)),
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(normalize_tmp_suffixes).collect())
+        }
+        serde_json::Value::Object(obj) => serde_json::Value::Object(
+            obj.iter()
+                .map(|(k, v)| (k.clone(), normalize_tmp_suffixes(v)))
+                .collect(),
+        ),
+        other => other.clone(),
     }
 }
 
@@ -377,6 +453,10 @@ pub struct Recording {
     metadata_events_by_caller: BTreeMap<String, Vec<MetadataCallEvent>>,
     /// SAO skip events indexed by node_id
     sao_events: BTreeMap<String, SaoEvent>,
+    /// dbt State service clone-decision events indexed by node_id.
+    ///
+    /// A node can have both a pre-render dev clone and a run-phase clone.
+    clone_events: BTreeMap<String, Vec<RunCacheCloneEvent>>,
     /// Run-remote-adhoc events in order
     run_remote_adhoc_events: Vec<RunRemoteAdhocEvent>,
     /// Cache invalidation events in order
@@ -454,6 +534,7 @@ impl Recording {
         let mut metadata_events_by_caller: BTreeMap<String, Vec<MetadataCallEvent>> =
             BTreeMap::new();
         let mut sao_events: BTreeMap<String, SaoEvent> = BTreeMap::new();
+        let mut clone_events: BTreeMap<String, Vec<RunCacheCloneEvent>> = BTreeMap::new();
         let mut run_remote_adhoc_events: Vec<RunRemoteAdhocEvent> = Vec::new();
         let mut cache_invalidation_events: Vec<CacheInvalidationEvent> = Vec::new();
 
@@ -482,6 +563,12 @@ impl Recording {
                 RecordedEvent::CacheInvalidation(event) => {
                     cache_invalidation_events.push(event);
                 }
+                RecordedEvent::RunCacheClone(clone_event) => {
+                    clone_events
+                        .entry(clone_event.node_id.clone())
+                        .or_default()
+                        .push(clone_event);
+                }
             }
         }
 
@@ -501,6 +588,7 @@ impl Recording {
             adapter_events_by_node,
             metadata_events_by_caller,
             sao_events,
+            clone_events,
             run_remote_adhoc_events,
             cache_invalidation_events,
             adapter_positions: RwLock::new(HashMap::new()),
@@ -532,6 +620,29 @@ impl Recording {
 
     pub fn total_sao_events(&self) -> usize {
         self.sao_events.len()
+    }
+
+    // -------------------------------------------------------------------------
+    // dbt State service clone-decision methods
+    // -------------------------------------------------------------------------
+
+    /// Present only when the node's execution was satisfied by a clone
+    /// decision from the dbt State service during recording.
+    pub fn get_run_cache_clone_event(&self, node_id: &str) -> Option<&RunCacheCloneEvent> {
+        self.get_run_cache_clone_event_for_phase(node_id, false)
+            .or_else(|| self.clone_events.get(node_id)?.first())
+    }
+
+    /// Get the recorded clone decision for a node and clone phase.
+    pub fn get_run_cache_clone_event_for_phase(
+        &self,
+        node_id: &str,
+        dev_clone: bool,
+    ) -> Option<&RunCacheCloneEvent> {
+        self.clone_events
+            .get(node_id)?
+            .iter()
+            .find(|event| event.dev_clone == dev_clone)
     }
 
     // -------------------------------------------------------------------------
@@ -1003,7 +1114,8 @@ impl Recording {
     // Statistics and reset
     // -------------------------------------------------------------------------
 
-    /// Get the total number of events (adapter, metadata, SAO, and run_remote_adhoc).
+    /// Get the total number of events (adapter, metadata, SAO, run-cache clone,
+    /// and run_remote_adhoc).
     pub fn total_events(&self) -> usize {
         self.adapter_events_by_node
             .values()
@@ -1015,6 +1127,7 @@ impl Recording {
                 .map(|v| v.len())
                 .sum::<usize>()
             + self.sao_events.len()
+            + self.clone_events.len()
             + self.run_remote_adhoc_events.len()
     }
 
@@ -1335,6 +1448,7 @@ mod tests {
             adapter_events_by_node,
             metadata_events_by_caller: BTreeMap::new(),
             sao_events: BTreeMap::new(),
+            clone_events: BTreeMap::new(),
             run_remote_adhoc_events: Vec::new(),
             cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
@@ -1878,6 +1992,7 @@ mod tests {
             adapter_events_by_node,
             metadata_events_by_caller: BTreeMap::new(),
             sao_events: BTreeMap::new(),
+            clone_events: BTreeMap::new(),
             run_remote_adhoc_events: Vec::new(),
             cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
@@ -2112,6 +2227,265 @@ mod tests {
             &explicit_true,
             &positional_true,
             AdapterType::Snowflake,
+        ));
+    }
+
+    /// Minimal `RelationObject`-shaped arg, per `RelationObject::to_time_machine_json`.
+    fn relation_arg(database: &str, schema: &str, identifier: &str) -> serde_json::Value {
+        relation_arg_for("bigquery", database, schema, identifier)
+    }
+
+    fn relation_arg_for(
+        adapter_type: &str,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "__type__": "RelationObject",
+            "adapter_type": adapter_type,
+            "database": database,
+            "schema": schema,
+            "identifier": identifier,
+            "is_table": true,
+        })
+    }
+
+    fn bare_staging_relation() -> serde_json::Value {
+        relation_arg("my_project", "my_schema", "my_snapshot__dbt_tmp")
+    }
+
+    fn suffixed_staging_relation() -> serde_json::Value {
+        relation_arg(
+            "my_project",
+            "my_schema",
+            "my_snapshot__dbt_tmp152555838935494",
+        )
+    }
+
+    fn target_relation() -> serde_json::Value {
+        relation_arg("my_project", "my_schema", "my_snapshot")
+    }
+
+    fn assert_args_match_both_ways(
+        method: &str,
+        recorded: &serde_json::Value,
+        actual: &serde_json::Value,
+    ) {
+        assert_args_match_both_ways_for(AdapterType::Bigquery, method, recorded, actual);
+    }
+
+    fn assert_args_match_both_ways_for(
+        adapter_type: AdapterType,
+        method: &str,
+        recorded: &serde_json::Value,
+        actual: &serde_json::Value,
+    ) {
+        assert!(
+            adapter_args_match_for_type(method, recorded, actual, adapter_type),
+            "{adapter_type} args should match recorded -> actual"
+        );
+        assert!(
+            adapter_args_match_for_type(method, actual, recorded, adapter_type),
+            "{adapter_type} args should match actual -> recorded"
+        );
+    }
+
+    #[test]
+    fn test_get_missing_columns_matches_bare_and_suffixed_tmp_relation() {
+        // A bare staging identifier on one side and a clock-suffixed one on the other must
+        // still compare equal; every other relation field is identical.
+        let recorded = serde_json::json!([bare_staging_relation(), target_relation()]);
+        let actual = serde_json::json!([suffixed_staging_relation(), target_relation()]);
+
+        assert_args_match_both_ways("get_missing_columns", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_get_columns_in_relation_matches_bare_and_suffixed_tmp_relation() {
+        let recorded = serde_json::json!([bare_staging_relation()]);
+        let actual = serde_json::json!([suffixed_staging_relation()]);
+
+        assert_args_match_both_ways("get_columns_in_relation", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_drop_relation_matches_bare_and_suffixed_tmp_relation() {
+        let recorded = serde_json::json!([bare_staging_relation()]);
+        let actual = serde_json::json!([suffixed_staging_relation()]);
+
+        assert_args_match_both_ways("drop_relation", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_tmp_suffix_normalization_still_rejects_different_relations() {
+        let recorded = serde_json::json!([
+            relation_arg("my_project", "my_schema", "snapshot_a__dbt_tmp"),
+            target_relation()
+        ]);
+        let different_base = serde_json::json!([
+            relation_arg("my_project", "my_schema", "snapshot_b__dbt_tmp111"),
+            target_relation()
+        ]);
+        assert!(!adapter_args_match_for_type(
+            "get_missing_columns",
+            &recorded,
+            &different_base,
+            AdapterType::Bigquery
+        ));
+
+        let different_schema = serde_json::json!([
+            relation_arg("my_project", "my_other_schema", "snapshot_a__dbt_tmp111"),
+            target_relation()
+        ]);
+        assert!(!adapter_args_match_for_type(
+            "get_missing_columns",
+            &recorded,
+            &different_schema,
+            AdapterType::Bigquery
+        ));
+    }
+
+    #[test]
+    fn test_expand_target_column_types_still_matches_after_arm_removal() {
+        let recorded = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "from_relation": bare_staging_relation(),
+                "to_relation": target_relation(),
+            }
+        ]);
+        let actual = serde_json::json!([
+            {
+                "__type__": "minijinja::value::argtypes::KwargsMutableMap",
+                "from_relation": suffixed_staging_relation(),
+                "to_relation": target_relation(),
+            }
+        ]);
+
+        assert_args_match_both_ways("expand_target_column_types", &recorded, &actual);
+    }
+
+    #[test]
+    fn test_get_columns_in_select_sql_matches_suffixed_tmp_relation_in_sql() {
+        let recorded =
+            serde_json::json!(["select * from `my_project`.`my_schema`.`my_snapshot__dbt_tmp`"]);
+        let actual = serde_json::json!([
+            "select * from `my_project`.`my_schema`.`my_snapshot__dbt_tmp152555838935494`"
+        ]);
+        assert_args_match_both_ways("get_columns_in_select_sql", &recorded, &actual);
+
+        let other_table = serde_json::json!([
+            "select * from `my_project`.`my_schema`.`my_other_snapshot__dbt_tmp152555838935494`"
+        ]);
+        assert!(!adapter_args_match_for_type(
+            "get_columns_in_select_sql",
+            &recorded,
+            &other_table,
+            AdapterType::Bigquery
+        ));
+    }
+
+    /// Normalization runs before the per-method comparison, so it must hold for every
+    /// adapter, not just the BigQuery snapshots that motivated it.
+    #[test]
+    fn test_tmp_suffix_normalization_covers_other_adapters() {
+        // Postgres and Redshift append strftime("%H%M%S%f") with no separator, as BigQuery
+        // does; Snowflake and Spark reuse the bare identifier.
+        let cases = [
+            (AdapterType::Postgres, "my_snapshot__dbt_tmp152555838935494"),
+            (AdapterType::Redshift, "my_snapshot__dbt_tmp152555838935494"),
+            (AdapterType::Snowflake, "my_snapshot__dbt_tmp"),
+            (AdapterType::Spark, "my_snapshot__dbt_tmp"),
+        ];
+
+        for (adapter_type, identifier) in cases {
+            let serialized = adapter_type.to_string();
+            let recorded = serde_json::json!([relation_arg_for(
+                &serialized,
+                "my_db",
+                "my_schema",
+                "my_snapshot__dbt_tmp"
+            )]);
+            let actual = serde_json::json!([relation_arg_for(
+                &serialized,
+                "my_db",
+                "my_schema",
+                identifier
+            )]);
+            assert_args_match_both_ways_for(
+                adapter_type,
+                "get_columns_in_relation",
+                &recorded,
+                &actual,
+            );
+
+            // A different base name must still be rejected on every adapter.
+            let other = serde_json::json!([relation_arg_for(
+                &serialized,
+                "my_db",
+                "my_schema",
+                "my_other_snapshot__dbt_tmp"
+            )]);
+            assert!(
+                !adapter_args_match_for_type(
+                    "get_columns_in_relation",
+                    &recorded,
+                    &other,
+                    adapter_type
+                ),
+                "{adapter_type} must not match a different base relation"
+            );
+        }
+    }
+
+    /// Pins a known over-match: microbatch appends `_<batch.id>`, which `TmpSuffixSanitizer`
+    /// consumes, so two batches of one node compare equal. Tightening the regex flips this.
+    #[test]
+    fn test_microbatch_batch_ids_currently_collapse() {
+        let batch_a = serde_json::json!([relation_arg_for(
+            "snowflake",
+            "my_db",
+            "my_schema",
+            "my_model__dbt_tmp_20240115"
+        )]);
+        let batch_b = serde_json::json!([relation_arg_for(
+            "snowflake",
+            "my_db",
+            "my_schema",
+            "my_model__dbt_tmp_20240116"
+        )]);
+
+        assert!(adapter_args_match_for_type(
+            "get_columns_in_relation",
+            &batch_a,
+            &batch_b,
+            AdapterType::Snowflake
+        ));
+    }
+
+    /// Pins a known gap: Databricks `unique_tmp_table_suffix` and duckdb build the suffix
+    /// from a UUID, which `TmpSuffixSanitizer` never matches, so it is compared verbatim.
+    #[test]
+    fn test_uuid_tmp_suffix_is_not_normalized() {
+        let recorded = serde_json::json!([relation_arg_for(
+            "databricks",
+            "my_catalog",
+            "my_schema",
+            "my_snapshot__dbt_tmp"
+        )]);
+        let actual = serde_json::json!([relation_arg_for(
+            "databricks",
+            "my_catalog",
+            "my_schema",
+            "my_snapshot__dbt_tmp_3f2a1b4c_a0ba_4708_a0b1_813316032bfb"
+        )]);
+
+        assert!(!adapter_args_match_for_type(
+            "get_columns_in_relation",
+            &recorded,
+            &actual,
+            AdapterType::Databricks
         ));
     }
 
@@ -2382,7 +2756,7 @@ mod tests {
     // SAO (State Aware Orchestration) tests
     // -------------------------------------------------------------------------
 
-    use super::super::event::SaoStatus;
+    use super::super::event::{RecordedRunCacheCloneDecision, RunCacheCloneEvent, SaoStatus};
 
     /// Helper to create a test Recording with SAO events
     fn make_recording_with_sao(
@@ -2418,6 +2792,7 @@ mod tests {
             adapter_events_by_node,
             metadata_events_by_caller: BTreeMap::new(),
             sao_events: sao_events_map,
+            clone_events: BTreeMap::new(),
             run_remote_adhoc_events: Vec::new(),
             cache_invalidation_events: Vec::new(),
             adapter_positions: RwLock::new(HashMap::new()),
@@ -2438,6 +2813,7 @@ mod tests {
                 status: SaoStatus::ReusedNoChanges,
                 message: "No new changes on any upstreams".to_string(),
                 stored_hash: "abc123".to_string(),
+                cached_test_result: None,
                 timestamp_ns: 1000,
             },
             SaoEvent {
@@ -2448,6 +2824,7 @@ mod tests {
                 },
                 message: "Still within freshness period".to_string(),
                 stored_hash: "def456".to_string(),
+                cached_test_result: None,
                 timestamp_ns: 2000,
             },
         ];
@@ -2482,6 +2859,7 @@ mod tests {
             status: SaoStatus::ReusedNoChanges,
             message: "No new changes".to_string(),
             stored_hash: "abc123".to_string(),
+            cached_test_result: None,
             timestamp_ns: 1000,
         }];
         let recording = make_recording_with_sao(vec![], sao_events);
@@ -2498,6 +2876,7 @@ mod tests {
                 status: SaoStatus::ReusedNoChanges,
                 message: "No new changes".to_string(),
                 stored_hash: "abc123".to_string(),
+                cached_test_result: None,
                 timestamp_ns: 1000,
             },
             SaoEvent {
@@ -2505,6 +2884,7 @@ mod tests {
                 status: SaoStatus::ReusedStillFreshNoChanges,
                 message: "Still fresh".to_string(),
                 stored_hash: "def456".to_string(),
+                cached_test_result: None,
                 timestamp_ns: 2000,
             },
         ];
@@ -2524,6 +2904,7 @@ mod tests {
                 status: SaoStatus::ReusedNoChanges,
                 message: "No new changes".to_string(),
                 stored_hash: "abc123".to_string(),
+                cached_test_result: None,
                 timestamp_ns: 1000,
             },
             SaoEvent {
@@ -2531,6 +2912,7 @@ mod tests {
                 status: SaoStatus::ReusedNoChanges,
                 message: "No new changes".to_string(),
                 stored_hash: "def456".to_string(),
+                cached_test_result: None,
                 timestamp_ns: 2000,
             },
         ];
@@ -2547,12 +2929,32 @@ mod tests {
             status: SaoStatus::ReusedNoChanges,
             message: "No new changes".to_string(),
             stored_hash: "abc123".to_string(),
+            cached_test_result: None,
             timestamp_ns: 1000,
         }];
-        let recording = make_recording_with_sao(adapter_events, sao_events);
+        let mut recording = make_recording_with_sao(adapter_events, sao_events);
+        recording.clone_events.insert(
+            "model.test.cloned".to_string(),
+            vec![RunCacheCloneEvent {
+                node_id: "model.test.cloned".to_string(),
+                dev_clone: false,
+                clone: RecordedRunCacheCloneDecision {
+                    request_id: "request-1".to_string(),
+                    clone_sqls: vec!["CREATE TABLE target CLONE source".to_string()],
+                    clone_source: "db.schema.source".to_string(),
+                    clone_target: "db.schema.target".to_string(),
+                    required_source_epoch: None,
+                    execution_runtime_ms: None,
+                    freshness_tolerance_seconds: 0,
+                    is_stale: false,
+                    execution_decision_id: None,
+                },
+                timestamp_ns: 3000,
+            }],
+        );
 
-        // Total should include both adapter events and SAO events
-        assert_eq!(recording.total_events(), 2);
+        // Total should include adapter, SAO, and run-cache clone events.
+        assert_eq!(recording.total_events(), 3);
         assert_eq!(recording.total_adapter_events(), 1);
         assert_eq!(recording.total_sao_events(), 1);
     }
@@ -2571,6 +2973,7 @@ mod tests {
             status: SaoStatus::ReusedNoChanges,
             message: "No new changes".to_string(),
             stored_hash: "abc123".to_string(),
+            cached_test_result: None,
             timestamp_ns: 1000,
         }];
         let recording = make_recording_with_sao(adapter_events, sao_events);
@@ -2622,5 +3025,23 @@ mod tests {
             !metadata_args_match(&recorded, &actual_missing),
             "should not match a relation that was never recorded"
         );
+    }
+
+    #[test]
+    fn test_metadata_args_match_schema_freshness_case_insensitive() {
+        let recorded = MetadataCallArgs::FreshnessAllInSchema {
+            database: "my_database".to_string(),
+            schema: "public".to_string(),
+            relations: vec!["my_database.public.table_a".to_string()],
+            warehouse: None,
+        };
+        let actual = MetadataCallArgs::FreshnessAllInSchema {
+            database: "MY_DATABASE".to_string(),
+            schema: "PUBLIC".to_string(),
+            relations: vec!["MY_DATABASE.PUBLIC.TABLE_A".to_string()],
+            warehouse: None,
+        };
+
+        assert!(metadata_args_match(&recorded, &actual));
     }
 }

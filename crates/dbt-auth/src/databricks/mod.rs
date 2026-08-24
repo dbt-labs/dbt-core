@@ -175,6 +175,19 @@ fn apply_connection_args(
     builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
     builder.with_named_option(databricks::HTTP_PATH, http_path)?;
 
+    // `connect_timeout` (seconds) is the documented Databricks connection timeout. Pass it to the
+    // driver as a real connection-establishment deadline so a cold-starting warehouse has time to
+    // come up instead of failing once the driver's fixed retry budget is exhausted. Formatted as a
+    // Go duration string the driver parses (e.g. "600s").
+    if let Some(secs) = config.get("connect_timeout").and_then(|v| v.as_i64()) {
+        if secs <= 0 {
+            return Err(AuthError::config(format!(
+                "connect_timeout must be a positive number of seconds, got {secs}"
+            )));
+        }
+        builder.with_named_option(databricks::CONNECT_TIMEOUT, format!("{secs}s"))?;
+    }
+
     // Azure SP: the tenant is a connection detail, not an auth credential, so it lives here
     // rather than in the auth IR. Resolve it (explicit `azure_tenant_id`, else discover from
     // the workspace) and pass it to the driver, which requires it.
@@ -357,6 +370,62 @@ mod tests {
             (databricks::AUTH_TYPE, databricks::auth_type::PAT),
         ];
         run_config_test(config, &expected).unwrap();
+    }
+
+    #[test]
+    fn test_connect_timeout_maps_to_driver_option() {
+        // `connect_timeout` (seconds) becomes the driver connect-timeout option as a Go duration.
+        let mut config = base_config();
+        config.insert("token".into(), "T".into());
+        config.insert("connect_timeout".into(), YmlValue::from(600i64));
+
+        let expected = vec![
+            (databricks::TOKEN, "T"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (databricks::HTTP_PATH, "/sql/1.0/warehouses/warehouse-id"),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (databricks::CONNECT_TIMEOUT, "600s"),
+            (databricks::AUTH_TYPE, databricks::auth_type::PAT),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    #[test]
+    fn test_connect_timeout_absent_sets_no_option() {
+        // No `connect_timeout` in the profile => no connect-timeout option is emitted.
+        let mut config = base_config();
+        config.insert("token".into(), "T".into());
+
+        let expected = vec![
+            (databricks::TOKEN, "T"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (databricks::HTTP_PATH, "/sql/1.0/warehouses/warehouse-id"),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (databricks::AUTH_TYPE, databricks::auth_type::PAT),
+        ];
+        // run_config_test asserts the option count matches exactly, so CONNECT_TIMEOUT being
+        // absent from `expected` also proves the option was not set.
+        run_config_test(config, &expected).unwrap();
+    }
+
+    #[test]
+    fn test_connect_timeout_zero_or_negative_errors() {
+        for bad in [0i64, -5i64] {
+            let mut config = base_config();
+            config.insert("token".into(), "T".into());
+            config.insert("connect_timeout".into(), YmlValue::from(bad));
+
+            match run_config_test(config, &[]) {
+                Err(AuthError::Config(_)) => {}
+                other => {
+                    panic!("expected AuthError::Config for connect_timeout={bad}, got {other:?}")
+                }
+            }
+        }
     }
 
     #[test]

@@ -21,7 +21,7 @@ use tokio::sync::mpsc;
 use crate::context::TaskRunnerCtx;
 use crate::task::{TaskOp, TaskResult};
 use dbt_adapter::AdapterResult;
-use dbt_adapter::errors::{Cancellable, into_fs_error};
+use dbt_adapter::errors::{AdapterErrorKind, Cancellable, into_fs_error};
 use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
 use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
@@ -405,7 +405,65 @@ impl RunCacheCloneDecision {
         RunCacheExecutionConfirmation::new(self.request_id.clone(), true)
     }
 
-    fn success_status(&self) -> NodeStatus {
+    pub fn clone_source(&self) -> &str {
+        &self.clone_source
+    }
+
+    pub fn clone_target(&self) -> &str {
+        &self.clone_target
+    }
+
+    /// Project this decision into a serializable form for time-machine recording.
+    ///
+    /// Only carries the fields that actually drive clone execution/confirmation
+    /// (see `execute_run_cache_service_clone`, `success_status`, `success_confirmation`);
+    /// the full protobuf `execution_results`/`transformed_nodes_by_query` are
+    /// telemetry-only and dropped, and `explained_decision` is reduced to the
+    /// single `is_stale` flag consumers actually read.
+    pub fn to_recorded(&self) -> dbt_adapter::time_machine::RecordedRunCacheCloneDecision {
+        dbt_adapter::time_machine::RecordedRunCacheCloneDecision {
+            request_id: self.request_id.clone(),
+            clone_sqls: self.clone_sqls.clone(),
+            clone_source: self.clone_source.clone(),
+            clone_target: self.clone_target.clone(),
+            required_source_epoch: self.required_source_epoch,
+            execution_runtime_ms: self.execution_runtime_ms,
+            freshness_tolerance_seconds: self.freshness_tolerance_seconds,
+            is_stale: self
+                .explained_decision
+                .as_ref()
+                .is_some_and(|decision| decision.is_stale),
+            execution_decision_id: self.execution_decision_id.clone(),
+        }
+    }
+
+    /// Reconstruct a decision from a time-machine recording during replay.
+    ///
+    /// `execution_results` and `transformed_nodes_by_query` are reset to their
+    /// empty defaults since replay never confirms back to the live service
+    /// (see `confirm_run_cache_service_execution`'s client-absent early return).
+    pub fn from_recorded(
+        recorded: dbt_adapter::time_machine::RecordedRunCacheCloneDecision,
+    ) -> Self {
+        Self {
+            request_id: recorded.request_id,
+            clone_sqls: recorded.clone_sqls,
+            clone_source: recorded.clone_source,
+            clone_target: recorded.clone_target,
+            required_source_epoch: recorded.required_source_epoch,
+            execution_results: None,
+            execution_runtime_ms: recorded.execution_runtime_ms,
+            freshness_tolerance_seconds: recorded.freshness_tolerance_seconds,
+            explained_decision: Some(ExplainedDecision {
+                is_stale: recorded.is_stale,
+                ..Default::default()
+            }),
+            transformed_nodes_by_query: HashMap::new(),
+            execution_decision_id: recorded.execution_decision_id,
+        }
+    }
+
+    pub fn replay_status(&self) -> NodeStatus {
         if self
             .explained_decision
             .as_ref()
@@ -416,6 +474,36 @@ impl RunCacheCloneDecision {
             NodeStatus::ReusedCloned(None)
         }
     }
+
+    fn success_status(&self) -> NodeStatus {
+        self.replay_status()
+    }
+}
+
+pub fn record_run_cache_clone_decision(node_id: &str, clone: &RunCacheCloneDecision) {
+    let Some(recorder) = dbt_adapter::time_machine::global_recorder() else {
+        return;
+    };
+    recorder.record_run_cache_clone(node_id, clone.to_recorded());
+}
+
+pub fn record_dev_clone_decision(node_id: &str, clone: &RunCacheCloneDecision) {
+    let Some(recorder) = dbt_adapter::time_machine::global_recorder() else {
+        return;
+    };
+    recorder.record_dev_clone(node_id, clone.to_recorded());
+}
+
+pub fn replay_run_cache_clone_decision(node_id: &str) -> Option<RunCacheCloneDecision> {
+    let replayer = dbt_adapter::time_machine::global_replayer()?;
+    let event = replayer.get_run_cache_clone_event_for_phase(node_id, false)?;
+    Some(RunCacheCloneDecision::from_recorded(event.clone.clone()))
+}
+
+pub fn replay_dev_clone_decision(node_id: &str) -> Option<RunCacheCloneDecision> {
+    let replayer = dbt_adapter::time_machine::global_replayer()?;
+    let event = replayer.get_run_cache_clone_event_for_phase(node_id, true)?;
+    Some(RunCacheCloneDecision::from_recorded(event.clone.clone()))
 }
 
 /// If the node is a selected (non-deferred) view model, insert its
@@ -862,6 +950,22 @@ async fn bulk_prefetch_last_modified_by_schema(
         .await
     {
         Ok(freshness) => freshness,
+        Err(Cancellable::Error(err)) if err.kind() == AdapterErrorKind::ReplayDataMissing => {
+            // Older recordings may not contain the new schema-bulk event, but
+            // they can contain the existing per-table freshness event.
+            match metadata_adapter
+                .freshness(&relation_values, adapter.cancellation_token())
+                .await
+            {
+                Ok(freshness) => freshness,
+                Err(Cancellable::Error(err))
+                    if err.kind() == AdapterErrorKind::ReplayDataMissing =>
+                {
+                    return Ok(());
+                }
+                Err(err) => return Err(into_fs_error(err)),
+            }
+        }
         Err(err) => {
             let err = into_fs_error(err);
             emit_warn_log_message(
@@ -1596,6 +1700,12 @@ pub async fn confirm_run_cache_service_execution(
             }
         }
     };
+
+    // Replay must consume the recorded final freshness event and clear the
+    // cached pre-build value, but it must not contact the live dbt State service.
+    if dbt_adapter::time_machine::is_replaying() {
+        return;
+    }
 
     let Some(client) = ctx.inner.run_cache_ctx.run_cache_service_client.as_ref() else {
         emit_warn_log_message(
@@ -3649,21 +3759,35 @@ async fn refresh_last_modified_epochs(
     };
 
     for grouped_relations in group_relations_by_database_and_schema(relations).into_values() {
+        let grouped_names = grouped_relations.keys().collect::<BTreeSet<_>>();
+        let grouped_overrides = overrides
+            .iter()
+            .filter(|(name, _)| grouped_names.contains(name))
+            .map(|(name, override_)| (name.clone(), override_.clone()))
+            .collect::<BTreeMap<_, _>>();
         let semantic_to_name = grouped_relations
             .iter()
             .map(|(name, relation)| (relation.semantic_fqn(), name.clone()))
             .collect::<BTreeMap<_, _>>();
         let relation_values = grouped_relations.values().cloned().collect::<Vec<_>>();
         let metadata_options = run_cache_metadata_query_options(ctx);
-        let freshness = metadata_adapter
+        let freshness = match metadata_adapter
             .freshness_with_overrides_and_options(
                 &relation_values,
-                overrides,
+                &grouped_overrides,
                 &metadata_options,
                 adapter.cancellation_token(),
             )
             .await
-            .map_err(into_fs_error)?;
+        {
+            Ok(freshness) => freshness,
+            Err(Cancellable::Error(err)) if err.kind() == AdapterErrorKind::ReplayDataMissing => {
+                // Older recordings do not contain this override-prefetch event.
+                // Leave entries absent so the per-node freshness events can replay.
+                continue;
+            }
+            Err(err) => return Err(into_fs_error(err)),
+        };
 
         for (semantic_fqn, name) in semantic_to_name {
             let epoch = freshness

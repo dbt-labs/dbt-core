@@ -1405,6 +1405,24 @@ pub fn hooks_equal(a: &Verbatim<Option<Hooks>>, b: &Verbatim<Option<Hooks>>) -> 
     }
 }
 
+/// Serializes hooks in dbt-core's manifest shape: always a `List[Hook]`, and `[]` rather
+/// than `null` when unset, whatever form the user authored (bare string, list of strings,
+/// or `{sql, transaction}` mapping). For config structs that are serialized straight into
+/// the manifest; the ones with a dedicated `Manifest*Config` normalize in `From` instead.
+pub fn serialize_hooks_as_list<S>(
+    hooks: &Verbatim<Option<Hooks>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let normalized = match &**hooks {
+        Some(hooks) => hooks.to_hook_config_array(),
+        None => Vec::new(),
+    };
+    normalized.serialize(serializer)
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct HookConfig {
@@ -1540,13 +1558,17 @@ pub struct Versions {
     pub constraints: Option<Vec<crate::schemas::properties::model_properties::ModelConstraint>>,
     pub data_tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
     pub tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
-    // Schema-only stub: exposes `columns` as a named typed property so the JSON Schema validator
-    // accepts array values. At runtime serde skips this field and `columns` arrives via
-    // __additional_properties__ as a raw YmlValue.
-    // TODO: remove skip_deserializing and delete the __additional_properties__ path for `columns`
-    // once ColumnInheritanceRules::from_version_columns is refactored to accept
-    // &[VersionColumnProperties] instead of &YmlValue.
-    #[serde(skip_deserializing, default)]
+    // NOTE: this doc comment is surfaced as the JSON Schema `description` (editor hover text), so
+    // keep it user-facing. Implementation rationale goes in the plain comment below.
+    /// Columns for this version. Each entry is either a column definition or the single optional
+    /// `include`/`exclude` directive controlling which model-level columns this version inherits.
+    /// When no directive is given, every model-level column is inherited.
+    //
+    // Deliberately a normal field -- neither `skip_deserializing` nor `Verbatim` -- so that
+    // `into_typed_with_jinja` walks it and renders `description: '{{ doc(...) }}'` on a version
+    // column exactly like it does on a model-level column (dbt-labs/fs#13334). Moving it back
+    // into `__additional_properties__` would silently reintroduce that bug.
+    #[serde(default)]
     pub columns: Option<Vec<crate::schemas::dbt_column::VersionColumnProperties>>,
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
@@ -2817,13 +2839,13 @@ period: hour
         );
     }
 
-    // Regression: `columns:` inside a version block must survive deserialization and land in
-    // `__additional_properties__`, where `process_versioned_columns` reads it. The schema-only
-    // stub field (`#[serde(skip_deserializing)]`) must NOT cause serde to silently consume and
-    // discard the value before dbt_yaml's flatten-dunder mechanism can capture it.
+    // Regression (dbt-labs/fs#13334): `columns:` inside a version block must deserialize into the
+    // typed `Versions::columns` field, NOT into the `Verbatim` `__additional_properties__` bag.
+    // Only the typed field is walked by `into_typed_with_jinja`, which is what renders
+    // `description: '{{ doc(...) }}'` on a version column.
     #[test]
-    fn test_versions_columns_land_in_additional_properties() {
-        let yaml = "v: 2\ncolumns:\n  - name: id\n    description: primary key\n";
+    fn test_versions_columns_deserialize_into_typed_field() {
+        let yaml = "v: 2\ncolumns:\n  - name: id\n    description: primary key\n  - include: all\n    exclude:\n      - dropped\n";
         let value: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
         // Use into_typed (the same path as into_typed_with_jinja) so dbt_yaml's
         // dunder-flatten mechanism is active.
@@ -2838,16 +2860,23 @@ period: hour
             .unwrap();
 
         assert!(
-            versions.__additional_properties__.contains_key("columns"),
-            "`columns` must reach __additional_properties__, but it was dropped. \
-             Check that serde's skip_deserializing does not prevent the value from \
-             falling through to the dbt_yaml flatten-dunder catch-all."
+            !versions.__additional_properties__.contains_key("columns"),
+            "`columns` must not fall through to the Verbatim __additional_properties__ catch-all; \
+             values there are never Jinja-rendered (fs#13334)"
         );
 
-        // Also confirm the schema-only `columns` field itself is always None at runtime.
-        assert!(
-            versions.columns.is_none(),
-            "`columns` schema-stub field must always be None after deserialization"
+        let columns = versions
+            .columns
+            .as_deref()
+            .expect("`columns` must populate the typed Versions::columns field");
+        assert_eq!(columns.len(), 2, "both entries must be preserved");
+        assert_eq!(columns[0].name.as_deref(), Some("id"));
+        assert_eq!(columns[0].description.as_deref(), Some("primary key"));
+        // The include/exclude directive entry has no `name`.
+        assert!(columns[1].name.is_none());
+        assert_eq!(
+            columns[1].exclude.as_deref(),
+            Some(["dropped".to_string()].as_slice())
         );
     }
 

@@ -10,6 +10,9 @@ use crate::metadata::{CatalogAndSchema, *};
 use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
 use crate::sql_types::{TypeOps, make_arrow_field};
+use crate::time_machine::{
+    args_freshness, args_freshness_with_overrides, with_time_machine_metadata_wrapper,
+};
 use crate::{AdapterEngine, AdapterResult, AdapterType};
 use dbt_adapter_sql::ident::{escape_string_literal, quote_identifier};
 
@@ -1649,11 +1652,20 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         overrides: &'a BTreeMap<String, FreshnessOverride>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        self.freshness_with_overrides_inner_with_options(
-            relations,
-            overrides,
-            &MetadataQueryOptions::default(),
-            token,
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_with_overrides",
+            args_freshness_with_overrides(
+                relations.iter().map(|r| r.semantic_fqn()),
+                overrides,
+                None,
+            ),
+            self.freshness_with_overrides_inner_with_options(
+                relations,
+                overrides,
+                &MetadataQueryOptions::default(),
+                token,
+            ),
         )
     }
 
@@ -1664,14 +1676,23 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         options: &'a MetadataQueryOptions,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        self.freshness_with_overrides_inner_with_options(relations, overrides, options, token)
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_with_overrides",
+            args_freshness_with_overrides(
+                relations.iter().map(|r| r.semantic_fqn()),
+                overrides,
+                options.warehouse.clone(),
+            ),
+            self.freshness_with_overrides_inner_with_options(relations, overrides, options, token),
+        )
     }
 
     fn supports_bulk_freshness_dump(&self) -> bool {
         true
     }
 
-    fn freshness_all_in_schema<'a>(
+    fn freshness_all_in_schema_inner<'a>(
         &'a self,
         database: &'a str,
         schema: &'a str,
@@ -1765,73 +1786,80 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         options: &'a MetadataQueryOptions,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
-        Box::pin(async move {
-            // Group by resolved database, then resolved schema, so the strategy
-            // decision (per database) and the `table_schema` predicates line up
-            // with `find_matching_relation`'s schema resolution.
-            let mut by_database: BTreeMap<String, BTreeMap<String, Vec<Arc<dyn BaseRelation>>>> =
-                BTreeMap::new();
-            for relation in relations {
-                let database = relation.database_as_resolved_str().unwrap_or_default();
-                let schema = relation.schema_as_resolved_str().unwrap_or_default();
-                by_database
-                    .entry(database)
-                    .or_default()
-                    .entry(schema)
-                    .or_default()
-                    .push(Arc::clone(relation));
-            }
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_all_in_schemas",
+            args_freshness(relations.iter().map(|r| r.semantic_fqn())),
+            async move {
+                // Group by resolved database, then resolved schema, so the strategy
+                // decision (per database) and the `table_schema` predicates line up
+                // with `find_matching_relation`'s schema resolution.
+                let mut by_database: BTreeMap<
+                    String,
+                    BTreeMap<String, Vec<Arc<dyn BaseRelation>>>,
+                > = BTreeMap::new();
+                for relation in relations {
+                    let database = relation.database_as_resolved_str().unwrap_or_default();
+                    let schema = relation.schema_as_resolved_str().unwrap_or_default();
+                    by_database
+                        .entry(database)
+                        .or_default()
+                        .entry(schema)
+                        .or_default()
+                        .push(Arc::clone(relation));
+                }
 
-            // With a dedicated metadata warehouse the per-schema dumps run on the
-            // isolated warehouse, so fanning them out is a clear win. Without one
-            // they contend on the main warehouse, so the sequential/broad choice
-            // (below) keeps concurrency at one query at a time.
-            let has_metadata_warehouse = options
-                .warehouse
-                .as_deref()
-                .is_some_and(|warehouse| !warehouse.is_empty());
+                // With a dedicated metadata warehouse the per-schema dumps run on the
+                // isolated warehouse, so fanning them out is a clear win. Without one
+                // they contend on the main warehouse, so the sequential/broad choice
+                // (below) keeps concurrency at one query at a time.
+                let has_metadata_warehouse = options
+                    .warehouse
+                    .as_deref()
+                    .is_some_and(|warehouse| !warehouse.is_empty());
 
-            let mut result: BTreeMap<String, MetadataFreshness> = BTreeMap::new();
-            for (database, schemas) in by_database {
-                let db_result = if has_metadata_warehouse {
-                    self.freshness_by_schema_fanout(&database, &schemas, options, token.clone())
-                        .await
-                } else {
-                    let use_broad = if options.adaptive_metadata_fetch {
-                        !self
-                            .should_fetch_schemas_sequentially(
+                let mut result: BTreeMap<String, MetadataFreshness> = BTreeMap::new();
+                for (database, schemas) in by_database {
+                    let db_result = if has_metadata_warehouse {
+                        self.freshness_by_schema_fanout(&database, &schemas, options, token.clone())
+                            .await
+                    } else {
+                        let use_broad = if options.adaptive_metadata_fetch {
+                            !self
+                                .should_fetch_schemas_sequentially(
+                                    &database,
+                                    schemas.len(),
+                                    token.clone(),
+                                )
+                                .await
+                        } else {
+                            true
+                        };
+                        if use_broad {
+                            let db_relations: Vec<Arc<dyn BaseRelation>> =
+                                schemas.values().flatten().cloned().collect();
+                            self.freshness_all_in_schemas_broad(
                                 &database,
-                                schemas.len(),
+                                &db_relations,
+                                options,
                                 token.clone(),
                             )
                             .await
-                    } else {
-                        true
+                        } else {
+                            self.freshness_by_schema_sequential(
+                                &database,
+                                &schemas,
+                                options,
+                                token.clone(),
+                            )
+                            .await
+                        }
                     };
-                    if use_broad {
-                        let db_relations: Vec<Arc<dyn BaseRelation>> =
-                            schemas.values().flatten().cloned().collect();
-                        self.freshness_all_in_schemas_broad(
-                            &database,
-                            &db_relations,
-                            options,
-                            token.clone(),
-                        )
-                        .await
-                    } else {
-                        self.freshness_by_schema_sequential(
-                            &database,
-                            &schemas,
-                            options,
-                            token.clone(),
-                        )
-                        .await
-                    }
-                };
-                result.extend(db_result);
-            }
-            Ok(result)
-        })
+                    result.extend(db_result);
+                }
+                Ok(result)
+            },
+        )
     }
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-snowflake/src/dbt/include/snowflake/macros/metadata/list_relations_without_caching.sql

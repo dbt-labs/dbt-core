@@ -13,6 +13,7 @@ use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::JinjaFactory;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
+use dbt_jinja_utils::invocation_graph::reset_invocation_graph;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{
     NodeResolver, check_for_model_deprecations, resolve_dependencies,
@@ -108,6 +109,12 @@ pub async fn resolve(
     resolver_hooks: Arc<dyn ResolverHooks>,
     jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
+    // Hand this invocation a fresh `graph` mapping before any Jinja renders.
+    // Macros use `graph` as scratch state (Elementary's `set_cache`), and in a
+    // long-lived process (LSP, service) one invocation's scratch state must not
+    // be visible to the next. dbt-labs/fs#13454.
+    reset_invocation_graph();
+
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
 
@@ -999,6 +1006,9 @@ pub async fn resolve_inner(
         &base_ctx,
         &min_properties.models,
         &nodes.models,
+        &dbt_state.packages,
+        adapter_type,
+        &node_resolver,
     )?;
 
     nodes.unit_tests.extend(unit_tests);

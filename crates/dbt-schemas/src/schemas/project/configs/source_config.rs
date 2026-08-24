@@ -20,8 +20,8 @@ use crate::schemas::project::configs::config_merge::Tags;
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, StringOrInteger,
-    bool_or_string_bool, f64_or_string_f64, hours_to_expiration_or_string_omissible,
-    u64_or_string_u64,
+    bool_or_string_bool, event_time_or_map_to_string, f64_or_string_f64,
+    hours_to_expiration_or_string_omissible, u64_or_string_u64,
 };
 use dbt_proc_macros::DefaultTo;
 
@@ -30,7 +30,11 @@ use dbt_proc_macros::DefaultTo;
 pub struct ProjectSourceConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(rename = "+event_time")]
+    #[serde(
+        default,
+        rename = "+event_time",
+        deserialize_with = "event_time_or_map_to_string"
+    )]
     pub event_time: Option<String>,
     #[serde(rename = "+meta")]
     pub meta: Option<IndexMap<String, YmlValue>>,
@@ -310,6 +314,7 @@ pub struct SourceConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(default, deserialize_with = "event_time_or_map_to_string")]
     pub event_time: Option<String>,
     #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
@@ -423,6 +428,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
+                zorder: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -438,6 +444,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                unique_tmp_table_suffix: None,
                 schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,

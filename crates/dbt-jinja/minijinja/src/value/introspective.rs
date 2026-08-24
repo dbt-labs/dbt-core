@@ -481,6 +481,61 @@ mod tests {
     }
 
     #[test]
+    fn and_short_circuit_respects_a_real_always_false_rhs() {
+        // Regression test: `is_incremental() and flags.WHICH != "lint"`. The
+        // LHS is a tainted stub whose fake default is falsy (Parse-mode: the
+        // relation doesn't exist), and the RHS is a *real*, always-false
+        // comparison (flags.WHICH really is "lint" during lint). In every
+        // real invocation this `and` is false, so a guarded
+        // `{% call statement() %}` must never run during lint.
+        //
+        // Before the fix, `and`'s short-circuit point (`JumpIfFalseOrPop`)
+        // decided whether to short-circuit purely from the tainted LHS's fake
+        // (falsy) value, without ever consulting branch-override -- so when a
+        // later exploration pass wanted to treat the LHS as truthy (to check
+        // the "is_incremental() is true" branch for real parse errors), it
+        // short-circuited on the LHS's *original* fake-falsy value regardless,
+        // and the real RHS was never evaluated as part of that exploration.
+        let env = test_env();
+        let out = env
+            .render_str(
+                "{% if incr and which != 'lint' %}RAN{% endif %}",
+                context! {
+                    incr => IntrospectiveValue::wrap(Value::from(false)),
+                    which => Value::from("lint"),
+                },
+                &taint_gate(),
+            )
+            .unwrap();
+        assert_eq!(out, "");
+    }
+
+    #[test]
+    fn or_short_circuit_takes_the_explored_branch_over_a_real_false_rhs() {
+        // Mirrors `and_short_circuit_respects_a_real_always_false_rhs` for
+        // `or`'s short-circuit point (`JumpIfTrueOrPop`). The tainted LHS's
+        // fake default is falsy, but exploration (`TaintGateListener`, like
+        // the production Symbolic listener) wants to check the "LHS is true"
+        // branch. `or` short-circuits once its LHS is true regardless of the
+        // RHS, so this must render as if the LHS really were true -- without
+        // this fix, the short-circuit point ignored exploration and used the
+        // fake-falsy value directly, continuing on to (and being decided by)
+        // a real, always-false RHS instead.
+        let env = test_env();
+        let out = env
+            .render_str(
+                "{% if incr or which == 'lint' %}RAN{% endif %}",
+                context! {
+                    incr => IntrospectiveValue::wrap(Value::from(false)),
+                    which => Value::from("nope"),
+                },
+                &taint_gate(),
+            )
+            .unwrap();
+        assert_eq!(out, "RAN");
+    }
+
+    #[test]
     fn unpack_preserves_real_items_when_arity_matches() {
         // Review follow-up on `tuple_unpack_of_tainted_value_yields_
         // tainted_items_instead_of_erroring`: substituting bare `undefined`

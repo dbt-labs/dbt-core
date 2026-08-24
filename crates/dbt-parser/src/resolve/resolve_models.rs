@@ -52,6 +52,8 @@ use dbt_schemas::schemas::NodeBaseAttributes;
 use dbt_schemas::schemas::TimeSpine;
 use dbt_schemas::schemas::TimeSpinePrimaryColumn;
 use dbt_schemas::schemas::common::Access;
+use indexmap::IndexMap;
+
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
@@ -61,6 +63,7 @@ use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
+use dbt_schemas::schemas::dbt_column::VersionColumnProperties;
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::manifest::semantic_model::NodeRelation;
@@ -228,6 +231,7 @@ pub async fn resolve_models(
             config_resolver: config_resolver.clone(),
             package_quoting,
             uses_snapshot_fqn: false,
+            defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -348,6 +352,7 @@ pub async fn resolve_models(
         macro_spans,
         properties: maybe_properties,
         status,
+        render_error_deferred,
         patch_path,
         macro_dependencies,
     } in model_sql_resources_map.into_iter()
@@ -479,6 +484,15 @@ pub async fn resolve_models(
                 raw,
             );
             emit_error_log_from_fs_error(*err);
+        }
+
+        if resolved_versioned.sibling_access.is_some() {
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                format!(
+                    "Model '{model_name}': the `access` field on a `versions` entry has no effect and is ignored (matching dbt-core). Set `versions[].config.access` instead."
+                ),
+            );
         }
 
         // Iterate over metrics and construct the dependencies
@@ -623,6 +637,21 @@ pub async fn resolve_models(
             .update_unique_id(&format!("{package_name}.{model_name}"), &unique_id);
 
         // TODO: In Core, each merge completely overwrites existing keys. We are matching this behavior, but this seems like a bug in Core.
+        //
+        // For a versioned model the schema.yml snapshot holds the model-level and version-level
+        // `config:` blocks deep-merged, both unrendered. dbt-core keeps only the version level
+        // unrendered (`core/dbt/contracts/files.py:331-338`) and the model level rendered; we
+        // deliberately diverge — see `.agents/state-modified-conformance.md` § "Versioned models".
+        //
+        // TODO (deferred, not a bug here): a real dbt-core manifest also DOUBLE-APPLIES a
+        // version-level list value in this same block — `deep_merge(patch_config_dict,
+        // unrendered_version_config)` (dbt-mantle `core/dbt/parser/base.py:421-426`) prepends the
+        // version's unrendered hooks/tags onto a list that already contains them. We deliberately
+        // do not replicate that duplication. See the `#[ignore]`d marker test
+        // `test_versioned_config_hook_duplication_not_replicated_state_modified`
+        // (`crates/dbt-cli/tests/dbt_conformance/list/defer_state/test_modified_state.rs`), which
+        // pins that Stage 1/Stage 2 already handle a Mantle-produced manifest with the duplicate
+        // correctly (suppress-only phantom diff, cleared by Stage 2).
         let unrendered_config = build_unrendered_config(
             &fqn,
             &raw_local_project_config,
@@ -807,11 +836,9 @@ pub async fn resolve_models(
                 deprecation_date,
                 primary_key: vec![], // applied in resolver.rs -> primary_key_inference.rs
                 time_spine,
-                access: resolved_versioned
-                    .access
-                    .clone()
-                    .or_else(|| model_config.access.clone())
-                    .unwrap_or_default(),
+                // versions[].access has no effect on the resolved node — see ResolvedVersionedFields'
+                // doc comment (GT2: dbt-mantle validates it, then unconditionally discards it).
+                access: model_config.access.clone().unwrap_or_default(),
                 group: model_config.group.clone(),
                 contract: model_config.contract.clone(),
                 incremental_strategy: model_config.incremental_strategy.clone(),
@@ -834,7 +861,13 @@ pub async fn resolve_models(
         };
 
         let components = RelationComponents {
-            database: model_config.database.clone().into_inner().unwrap_or(None),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && model_config.__warehouse_specific_config__.catalog.is_some()
+            {
+                model_config.__warehouse_specific_config__.catalog.clone()
+            } else {
+                model_config.database.clone().into_inner().unwrap_or(None)
+            },
             schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
@@ -916,7 +949,26 @@ pub async fn resolve_models(
                     )?;
                 }
             }
-            ModelStatus::ParsingFailed => {}
+            ModelStatus::ParsingFailed => {
+                if render_error_deferred {
+                    models.insert(unique_id.to_owned(), Arc::new(dbt_model));
+                    node_names.insert(model_name.to_owned());
+
+                    if !arg.skip_creating_generic_tests {
+                        properties.as_testable().persist(
+                            package_name,
+                            &root_package.dbt_project.name,
+                            collected_generic_tests,
+                            test_name_truncations,
+                            adapter_type,
+                            &arg.io,
+                            patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                            false,
+                            &raw_test_configs.get(ref_name).cloned().unwrap_or_default(),
+                        )?;
+                    }
+                }
+            }
         }
     }
 
@@ -1011,17 +1063,26 @@ pub async fn resolve_models(
 ///   - `config`  -> `VersionInfo.version_config` (deep merge)
 ///   - `meta`    -> top-level only, no per-version semantics
 ///   - `data_tests` -> not yet wired (flow through other pipelines)
+///
+/// `access` is deliberately absent from this struct: dbt-core parses and validates
+/// `unparsed_version.access`, then unconditionally discards it — `patch_node_config` always
+/// overwrites `node.access` from the config dict, which is never empty because
+/// `ModelConfig.access` defaults to `protected` (dbt-mantle `schemas.py:1094`, `base.py:380-383`,
+/// `model.py:88-90`). Only the validation survives; see `invalid_access` below.
 struct ResolvedVersionedFields {
     description: String,
     constraints: Vec<ModelConstraint>,
     /// Per-version only; no fallback to top-level (dbt-core parity).
     deprecation_date: Option<String>,
-    access: Option<Access>,
-    /// Non-empty, non-parseable access string supplied at the version level. Kept separate from
-    /// `access` rather than typed as `Option<Access>` in `Versions` because serde would reject
-    /// `access: ""` as an unknown variant before we can apply dbt-core's empty-string-is-None
-    /// fallthrough semantics.
+    /// Non-empty, non-parseable access string supplied at the version level. `Versions::access`
+    /// (`common.rs`) is typed `Option<String>` rather than `Option<Access>` for the same reason:
+    /// serde would reject `access: ""` as an unknown variant before we can apply dbt-core's
+    /// empty-string-is-None fallthrough semantics.
     invalid_access: Option<String>,
+    /// Non-empty version-level `access:` string, valid or not. dbt-core discards this value (see
+    /// struct doc above), so its only use here is driving a Fusion-only warning pointing authors
+    /// at `versions[].config.access`, the form dbt-core actually honors.
+    sibling_access: Option<String>,
 }
 
 fn resolve_versioned_fields(
@@ -1062,23 +1123,20 @@ fn resolve_versioned_fields(
     }
     .map(|raw| dbt_schemas::schemas::common::normalize_deprecation_date(&raw));
 
-    // dbt-core: `unparsed_version.access or target.access`. Empty string is
-    // falsy in Python -> fall through to the top-level (config) value.
+    // dbt-core validates `unparsed_version.access` (raising `InvalidAccessTypeError` on a bad
+    // value) and then discards it unconditionally (GT2 — see the struct doc above). Fusion parses
+    // it here only to reproduce that validation; the valid value, if any, is never applied.
     let raw_access = version_match.and_then(|v| v.access.clone().filter(|s| !s.is_empty()));
-    let (access, invalid_access) = match raw_access {
-        Some(raw) => match raw.parse::<Access>() {
-            Ok(a) => (Some(a), None),
-            Err(()) => (None, Some(raw)),
-        },
-        None => (None, None),
-    };
+    let invalid_access = raw_access
+        .as_deref()
+        .and_then(|raw| raw.parse::<Access>().err().map(|()| raw.to_string()));
 
     ResolvedVersionedFields {
         description,
         constraints,
         deprecation_date,
-        access,
         invalid_access,
+        sibling_access: raw_access,
     }
 }
 
@@ -1090,36 +1148,38 @@ fn process_versioned_columns(
 ) -> Result<Vec<DbtColumnRef>, Box<dbt_common::FsError>> {
     for version in versions.iter() {
         if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref())
-            && let Some(column_props) = version.__additional_properties__.get("columns")
+            // Typed and already Jinja-rendered -- see the doc comment on `Versions::columns`.
+            && let Some(version_columns) = version.columns.as_deref()
         {
-            let column_map: Vec<ColumnProperties> = column_props
-                .as_sequence()
-                .map(|cols| {
-                    cols.iter()
-                        .filter_map(|col| col.as_mapping())
-                        .filter(|map| !(map.contains_key("include") || map.contains_key("exclude")))
-                        .filter_map(|map| {
-                            dbt_yaml::from_value::<ColumnProperties>(map.clone().into()).ok()
-                        })
-                        .collect()
-                })
+            // dbt-core: a version with no include/exclude directive defaults to
+            // `IncludeExclude(include="*")`, i.e. inherit every model-level column.
+            let rules = ColumnInheritanceRules::from_version_column_props(version_columns)
                 .unwrap_or_default();
 
-            let mut versioned_columns = process_columns(
-                Some(&column_map),
+            let version_column_props: Vec<ColumnProperties> = version_columns
+                .iter()
+                .filter_map(VersionColumnProperties::to_column_properties)
+                .collect();
+            let version_columns = process_columns(
+                Some(&version_column_props),
                 model_config.meta.clone(),
                 model_config.tags.inner().clone().map(|tags| tags.into()),
             )?;
 
-            if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
-                columns
-                    .iter()
-                    .filter(|col| rules.should_include_column(&col.name))
-                    .for_each(|col| {
-                        versioned_columns.push(col.clone());
-                    });
+            // dbt-core `UnparsedModelUpdate.get_columns_for_version`: filtered model-level columns
+            // first, then the version-local ones. `ParserRef.from_versioned_target` then folds that
+            // list into a name-keyed dict, so a version column shadowing a model-level column takes
+            // the model-level column's *position* and the version's *value* -- which is exactly what
+            // `IndexMap::insert` on an existing key does.
+            let mut merged: IndexMap<String, DbtColumnRef> = columns
+                .into_iter()
+                .filter(|col| rules.should_include_column(&col.name))
+                .map(|col| (col.name.clone(), col))
+                .collect();
+            for col in version_columns {
+                merged.insert(col.name.clone(), col);
             }
-            return Ok(versioned_columns);
+            return Ok(merged.into_values().collect());
         }
     }
 
@@ -1280,6 +1340,7 @@ fn process_python_models(
             macro_spans: Default::default(),
             properties: maybe_properties,
             status,
+            render_error_deferred: false,
             patch_path,
             macro_dependencies: Vec::new(),
         };

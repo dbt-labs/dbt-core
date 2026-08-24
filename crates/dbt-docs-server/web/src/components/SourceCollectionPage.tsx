@@ -4,14 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 
 import { resourceIconMap, type ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-import {
-  Button,
-  Icon,
-  RyeconClock,
-  RyeconShare,
-  RyeconTable,
-  Tooltip,
-} from '@dbt-labs/sourdough';
+import { Icon, RyeconClock, RyeconShare, RyeconTable } from '@dbt-labs/sourdough';
 
 import type { FreshnessStatusValue, SourceAsset } from '../shared';
 import {
@@ -28,6 +21,8 @@ import {
 } from '../shared';
 import { type NodeSummary } from '../types';
 import { ResourceFilterTable } from './ResourceFilterTable';
+import { Button } from './ui/Button';
+import { Tooltip } from './ui/Tooltip';
 
 interface Props {
   nodes: NodeSummary[];
@@ -174,7 +169,7 @@ export function SourceCollectionPage({ nodes, onSelect }: Props) {
         headerIcons={headerIcons}
         actions={
           <Button
-            type="secondary"
+            variant="outline"
             ryecon={RyeconShare}
             tooltip="Copy link"
             onClick={() => void navigator.clipboard.writeText(window.location.href)}

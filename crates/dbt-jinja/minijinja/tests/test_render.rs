@@ -85,6 +85,20 @@ fn test_set_append() {
 }
 
 #[test]
+fn test_if_condition_implied_tuple() {
+    let env = Environment::new();
+    let rv = env
+        .render_str(
+            r#"{% if target_name == "default","np" %}matched{% else %}missed{% endif %}"#,
+            context! { target_name => "other" },
+            &[],
+        )
+        .unwrap();
+
+    assert_eq!(rv, "matched");
+}
+
+#[test]
 fn test_macro_namespace_lookup() {
     let mut env = Environment::new();
     let mut macro_namespace_registry = ValueMap::new();

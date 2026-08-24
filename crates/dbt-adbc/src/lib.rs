@@ -83,17 +83,17 @@ pub fn str_from_sqlstate(sqlstate: &[c_char; 5]) -> &str {
     res.unwrap_or("")
 }
 
-pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.16";
+pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.17";
 /// Legacy driver built from `dbt-labs/arrow-adbc` repository
 pub const BIGQUERY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.17";
 /// Built from `dbt-labs/bigquery-adbc repository
-pub const BIGQUERY_FOUNDRY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.1.1";
+pub const BIGQUERY_FOUNDRY_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.1.2";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.21.0+dbt0.21.0";
-pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.11";
+pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.21.12";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.18.6";
 pub const DUCKDB_DRIVER_VERSION: &str = "1.5.4";
 pub const DUCKDB_EXTENDED_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.0.28";
-pub const ALT_DRIVER_VERSION: &str = "0.4.0+dbt0.1.0.ga3f6df3";
+pub const ALT_DRIVER_VERSION: &str = "0.4.0+dbt0.1.2.gd85701a";
 pub const CLICKHOUSE_DRIVER_VERSION: &str = "0.1.0";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.22.1";
 pub const SPARK_DRIVER_VERSION: &str = "0.21.0.dev+dbt0.1.2";

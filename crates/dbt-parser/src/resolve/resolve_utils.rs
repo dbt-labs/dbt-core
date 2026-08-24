@@ -82,6 +82,44 @@ fn merge_config_source(
     }
 }
 
+/// Deep-merges `source` into `destination`, transcribing `deep_merge_item` in dbt_common
+/// `utils/dict.py:69-79`: mappings recurse, sequences concatenate with `source` first, everything
+/// else `source` replaces. Spans come from whichever side supplied the value.
+///
+/// Where dbt-core raises or splats a string into characters, `source` wins instead — except a
+/// sequence `source` over a scalar `destination`, which keeps the scalar as a one-element tail.
+pub(crate) fn deep_merge_yaml(destination: &mut dbt_yaml::Value, source: &dbt_yaml::Value) {
+    match source {
+        dbt_yaml::Value::Mapping(source_map, _) if destination.is_mapping() => {
+            let destination_map = destination
+                .as_mapping_mut()
+                .expect("destination is a mapping");
+            for (key, source_value) in source_map.iter() {
+                match destination_map.get_mut(key) {
+                    Some(destination_value) => deep_merge_yaml(destination_value, source_value),
+                    None => {
+                        destination_map.insert(key.clone(), source_value.clone());
+                    }
+                }
+            }
+        }
+        dbt_yaml::Value::Sequence(source_items, _) => {
+            let mut merged = source_items.clone();
+            match destination {
+                dbt_yaml::Value::Sequence(destination_items, _) => {
+                    merged.append(destination_items);
+                    *destination_items = merged;
+                }
+                other => {
+                    merged.push(other.clone());
+                    *other = dbt_yaml::Value::Sequence(merged, source.span().clone());
+                }
+            }
+        }
+        _ => *destination = source.clone(),
+    }
+}
+
 /// Builds `unrendered_config` by merging config sources in hierarchical order:
 /// project < root < schema.yml < inline. Each source is merged independently so
 /// that hook key normalization (pre_hook → pre-hook, etc.) applies per-source
@@ -515,5 +553,111 @@ mod tests {
             Some("b")
         );
         assert!(!unrendered.contains_key("post-hook"));
+    }
+
+    fn yaml(text: &str) -> dbt_yaml::Value {
+        dbt_yaml::from_str(text).unwrap()
+    }
+
+    /// Deep-merges two YAML documents given as source text. Parsing rather than hand-constructing
+    /// the values keeps the spans real.
+    fn deep_merged(destination: &str, source: &str) -> dbt_yaml::Value {
+        let mut destination = yaml(destination);
+        deep_merge_yaml(&mut destination, &yaml(source));
+        destination
+    }
+
+    #[test]
+    fn deep_merge_recurses_into_nested_mappings() {
+        // A mapping set at both levels merges key-wise instead of the source replacing it.
+        assert_eq!(
+            deep_merged(
+                "persist_docs:\n  relation: true\n",
+                "persist_docs:\n  columns: true\n",
+            ),
+            yaml("persist_docs:\n  relation: true\n  columns: true\n"),
+        );
+    }
+
+    #[test]
+    fn deep_merge_concatenates_sequences_with_source_first() {
+        // `list(source) + list(destination)`: source items first. Not a union, not a replace.
+        assert_eq!(
+            deep_merged("tags: [model_tag]\n", "tags: [version_tag]\n"),
+            yaml("tags: [version_tag, model_tag]\n"),
+        );
+    }
+
+    #[test]
+    fn deep_merge_replaces_other_values_with_source() {
+        // Note the asymmetry: a scalar source over a sequence destination replaces, not appends.
+        assert_eq!(
+            deep_merged("alias: model_alias\n", "alias: version_alias\n"),
+            yaml("alias: version_alias\n"),
+        );
+        assert_eq!(
+            deep_merged("tags: [model_tag]\n", "tags: version_tag\n"),
+            yaml("tags: version_tag\n"),
+        );
+    }
+
+    #[test]
+    fn deep_merge_handles_keys_present_on_only_one_side() {
+        // Source-only keys are added; destination-only keys survive untouched.
+        assert_eq!(
+            deep_merged("alias: model_alias\n", "materialized: table\n"),
+            yaml("alias: model_alias\nmaterialized: table\n"),
+        );
+        // ... including when the destination has no sub-mapping to recurse into.
+        assert_eq!(
+            deep_merged("alias: model_alias\n", "persist_docs:\n  columns: true\n"),
+            yaml("alias: model_alias\npersist_docs:\n  columns: true\n"),
+        );
+    }
+
+    #[test]
+    fn deep_merge_lets_source_win_over_a_type_mismatch() {
+        // dbt-core raises on mapping-over-scalar; we let the source win in both directions.
+        assert_eq!(
+            deep_merged("persist_docs: true\n", "persist_docs:\n  columns: true\n"),
+            yaml("persist_docs:\n  columns: true\n"),
+        );
+        assert_eq!(
+            deep_merged("persist_docs:\n  relation: true\n", "persist_docs: false\n"),
+            yaml("persist_docs: false\n"),
+        );
+    }
+
+    #[test]
+    fn deep_merge_coerces_a_scalar_destination_under_a_sequence_source() {
+        // A lone hook string plus a hook list: keep both, source first.
+        assert_eq!(
+            deep_merged("pre-hook: model_hook\n", "pre-hook: [version_hook]\n"),
+            yaml("pre-hook: [version_hook, model_hook]\n"),
+        );
+    }
+
+    #[test]
+    fn deep_merge_preserves_spans_from_the_supplying_side() {
+        // Parse errors must still point at the line the user authored.
+        let mut destination = yaml("alias: model_alias\npersist_docs:\n  relation: true\n");
+        let source = yaml("persist_docs:\n  columns: true\ntags: [version_tag]\n");
+        deep_merge_yaml(&mut destination, &source);
+
+        let line_of = |path: &[&str]| {
+            let mut value = &destination;
+            for key in path {
+                value = value.get(*key).expect("expected key to be present");
+            }
+            value.span().start.line
+        };
+
+        // Untouched destination values keep their line; source-supplied values carry the source's.
+        assert_eq!(line_of(&["persist_docs", "relation"]), 3);
+        assert_eq!(line_of(&["persist_docs", "columns"]), 2);
+        assert_eq!(line_of(&["tags"]), 3);
+        // The merged container keeps the destination's line (a mapping's span starts at its
+        // first entry, hence 3 rather than the key's 2).
+        assert_eq!(line_of(&["persist_docs"]), 3);
     }
 }

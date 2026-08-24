@@ -6,12 +6,14 @@ from dbt._core import DbtRunner as _DbtRunner
 from dbt.artifacts.schemas.catalog import CatalogArtifact
 from dbt.artifacts.schemas.manifest import Manifest
 from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.artifacts.schemas.sources import FreshnessResultsArtifact
 
 # Keyed on the engine's `result_kind` tag. `list` is plain strings, so it skips
 # the dataclass layer.
 _DECODERS: Dict[str, Callable[[bytes], Any]] = {
     "manifest": Manifest.from_msgpack,
     "run_results": RunResultsArtifact.from_msgpack,
+    "sources": FreshnessResultsArtifact.from_msgpack,
     "list": lambda blob: msgpack.unpackb(blob, raw=False),
 }
 
@@ -34,13 +36,15 @@ class dbtRunnerResult:
 
     success: exited 0.
     result: command artifact — Manifest for parse, list[str] for list,
-        RunResultsArtifact otherwise. Present even on a failure when the engine
-        got far enough to build it (e.g. a partial manifest for a parse error);
-        None only when nothing was captured.
+        FreshnessResultsArtifact for source freshness, RunResultsArtifact
+        otherwise. Present even on a failure when the engine got far enough to
+        build it (e.g. a partial manifest for a parse error); None only when
+        nothing was captured.
     catalog: CatalogArtifact when --write-catalog produced one, else None. Kept
         off `result` so that stays dbt-core-compatible.
-    exception: set on an engine error or a caught panic; a handled failure with
-        run results has success=False and no exception.
+    exception: set on an engine error or a caught panic; a handled failure that its
+        result artifact accounts for (a failing test, a stale source) has
+        success=False and no exception.
     exit_code: engine exit code — 0 ok, 1 failure, 2 completed with elevated
         warnings. Not reconstructible from (success, exception); read it directly.
     """

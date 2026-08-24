@@ -108,12 +108,10 @@ impl StaticBaseRelation for RelationStatic {
                     })
                     .unwrap_or(self.quoting);
 
-                let table_format =
-                    if table_format.is_some_and(|s| s.eq_ignore_ascii_case("iceberg")) {
-                        TableFormat::Iceberg
-                    } else {
-                        TableFormat::Default
-                    };
+                let table_format = match table_format.as_deref() {
+                    Some(s) if s.eq_ignore_ascii_case("iceberg") => TableFormat::Iceberg,
+                    _ => TableFormat::Default,
+                };
 
                 let relation = Relation::new(AdapterType::Snowflake, database, schema, identifier)
                     .with_relation_type(relation_type.map(|s| RelationType::from(s.as_str())))
@@ -1412,7 +1410,10 @@ mod tests {
                 sample: None,
             };
             let result = filter_relation().render_with_run_filter(&run_filter, &None);
-            assert_eq!(result, "(select * from my_db.my_schema.my_table limit 0)");
+            assert_eq!(
+                result,
+                "(select * from my_db.my_schema.my_table where false limit 0)"
+            );
         }
 
         #[test]
@@ -1568,7 +1569,7 @@ mod tests {
             let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
             assert_eq!(
                 result,
-                "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
+                "(select * from (select * from my_db.my_schema.my_table where false limit 0) where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
             );
         }
 
@@ -1616,7 +1617,7 @@ mod tests {
             let rendered = format!("{}", Value::from_object(filtered));
             assert_eq!(
                 rendered,
-                "(select * from (select * from my_db.my_schema.my_table limit 0) where event_date >= '2026-07-13T00:00:00+00:00' and event_date < '2026-07-14T00:00:00+00:00')"
+                "(select * from (select * from my_db.my_schema.my_table where false limit 0) where event_date >= '2026-07-13T00:00:00+00:00' and event_date < '2026-07-14T00:00:00+00:00')"
             );
         }
     }

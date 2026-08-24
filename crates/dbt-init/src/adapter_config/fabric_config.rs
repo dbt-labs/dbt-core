@@ -18,10 +18,10 @@ const AUTH_METHODS: &[(&str, &str)] = &[
         "environment",
         "Environment (DefaultAzureCredential env vars, see https://learn.microsoft.com/en-us/python/api/azure-identity/azure.identity.environmentcredential, explain the available combinations of environment variables you can use to authenticate.)",
     ),
-    // (
-    //     "ActiveDirectoryAccessToken",
-    //     "Active Directory Access Token",
-    // ),
+    (
+        "ActiveDirectoryAccessToken",
+        "Active Directory Access Token",
+    ),
     // ("CLI", "Azure CLI"),
     // (
     //     "ActiveDirectoryInteractive",
@@ -40,6 +40,7 @@ impl InteractiveSetup for FabricDbConfig {
 
         // Index lookups for auth-dependent fields.
         let sp_idx = auth_index("ActiveDirectoryServicePrincipal").unwrap_or(0);
+        let token_idx = auth_index("ActiveDirectoryAccessToken").unwrap_or(0);
         // let adpw_idx = auth_index("ActiveDirectoryPassword").unwrap_or(0);
 
         vec![
@@ -64,6 +65,9 @@ impl InteractiveSetup for FabricDbConfig {
                 .when_field_equals("auth_method", FieldValue::Integer(sp_idx)),
             ConfigField::password("client_secret", "Client secret")
                 .when_field_equals("auth_method", FieldValue::Integer(sp_idx)),
+            // Access Token field
+            ConfigField::password("access_token", "Access token")
+                .when_field_equals("auth_method", FieldValue::Integer(token_idx)),
             // TODO: this is supported in `dbt-auth`
             // but it is disabled for now since I didn't find the right credentials to test it
             // Active Directory Password
@@ -115,6 +119,11 @@ impl InteractiveSetup for FabricDbConfig {
                     self.client_secret = Some(s);
                 }
             }
+            "access_token" => {
+                if let FieldValue::String(s) = value {
+                    self.access_token = Some(s);
+                }
+            }
             "user_adpw" => {
                 if let FieldValue::String(s) = value
                     && !s.is_empty()
@@ -157,6 +166,10 @@ impl InteractiveSetup for FabricDbConfig {
                 .client_secret
                 .as_ref()
                 .map(|s| FieldValue::String(s.clone())),
+            "access_token" => self
+                .access_token
+                .as_ref()
+                .map(|s| FieldValue::String(s.clone())),
             "user_adpw" => self.user.as_ref().map(|s| FieldValue::String(s.clone())),
             "password_adpw" => self
                 .password
@@ -179,6 +192,7 @@ impl InteractiveSetup for FabricDbConfig {
             "tenant_id" => self.tenant_id.is_some(),
             "client_id" => self.client_id.is_some(),
             "client_secret" => self.client_secret.is_some(),
+            "access_token" => self.access_token.is_some(),
             "user_adpw" => self.user.is_some(),
             "password_adpw" => self.password.is_some(),
             _ => false,

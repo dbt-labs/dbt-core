@@ -6,9 +6,9 @@ use crate::macro_exec::execute_macro;
 use crate::relation::{RelationObject, create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::time_machine::{
-    args_fetch_view_definitions, args_freshness, args_list_relations_in_parallel,
-    args_list_relations_schemas, args_list_relations_schemas_by_patterns, args_list_udfs,
-    with_time_machine_metadata_wrapper,
+    args_fetch_view_definitions, args_freshness, args_freshness_all_in_schema,
+    args_list_relations_in_parallel, args_list_relations_schemas,
+    args_list_relations_schemas_by_patterns, args_list_udfs, with_time_machine_metadata_wrapper,
 };
 use crate::{AdapterEngine, metadata::*};
 
@@ -358,7 +358,7 @@ pub trait MetadataAdapter: Send + Sync {
     /// The default implementation returns an empty map; it is only reached by
     /// adapters that do not implement a bulk dump, which never route through this
     /// method (see `supports_bulk_freshness_dump`).
-    fn freshness_all_in_schema<'a>(
+    fn freshness_all_in_schema_inner<'a>(
         &'a self,
         _database: &'a str,
         _schema: &'a str,
@@ -367,6 +367,27 @@ pub trait MetadataAdapter: Send + Sync {
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
         Box::pin(async move { Ok(BTreeMap::new()) })
+    }
+
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        database: &'a str,
+        schema: &'a str,
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_all_in_schema",
+            args_freshness_all_in_schema(
+                database,
+                schema,
+                relations.iter().map(|r| r.semantic_fqn()),
+                options.warehouse.clone(),
+            ),
+            self.freshness_all_in_schema_inner(database, schema, relations, options, token),
+        )
     }
 
     /// Whether this adapter implements a bulk per-schema freshness dump
@@ -682,4 +703,216 @@ pub fn flatten_catalog_schemas(
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::time_machine::{
+        EventReplayer, MetadataCallArgs, RecordedEvent, get_or_init_recording,
+        get_or_init_replayer, reset_time_machine_globals,
+    };
+    use chrono::{TimeZone, Utc};
+    use dbt_schemas::schemas::common::ResolvedQuoting;
+    use flate2::read::GzDecoder;
+    use std::io::{BufRead, BufReader};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    struct MockMetadataAdapter {
+        freshness_all_in_schema_calls: AtomicUsize,
+    }
+
+    impl MockMetadataAdapter {
+        fn new() -> Self {
+            Self {
+                freshness_all_in_schema_calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl MetadataAdapter for MockMetadataAdapter {
+        fn adapter_type(&self) -> AdapterType {
+            AdapterType::Snowflake
+        }
+
+        fn build_schemas_from_stats_sql(
+            &self,
+            _: Arc<RecordBatch>,
+        ) -> AdapterResult<BTreeMap<String, CatalogTable>> {
+            Ok(BTreeMap::new())
+        }
+
+        fn build_columns_from_get_columns(
+            &self,
+            _: Arc<RecordBatch>,
+        ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
+            Ok(BTreeMap::new())
+        }
+
+        fn create_schemas_if_not_exists(
+            &self,
+            _: &State<'_, '_>,
+            _: Vec<(String, String, String)>,
+        ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
+            Ok(Vec::new())
+        }
+
+        fn list_relations_schemas_inner(
+            &self,
+            _: Option<String>,
+            _: Option<ExecutionPhase>,
+            _: &[Arc<dyn BaseRelation>],
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
+            Box::pin(async { Ok(HashMap::new()) })
+        }
+
+        fn list_relations_schemas_by_patterns_inner(
+            &self,
+            _: &[RelationPattern],
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn freshness_inner(
+            &self,
+            _: &[Arc<dyn BaseRelation>],
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
+            Box::pin(async { Ok(BTreeMap::new()) })
+        }
+
+        fn freshness_all_in_schema_inner<'a>(
+            &'a self,
+            _database: &'a str,
+            _schema: &'a str,
+            relations: &'a [Arc<dyn BaseRelation>],
+            _options: &'a MetadataQueryOptions,
+            _token: CancellationToken,
+        ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+            Box::pin(async move {
+                self.freshness_all_in_schema_calls
+                    .fetch_add(1, Ordering::SeqCst);
+                Ok(BTreeMap::from([(
+                    relations[0].semantic_fqn(),
+                    MetadataFreshness {
+                        last_altered: Utc.timestamp_millis_opt(1_234_000).unwrap(),
+                        is_view: false,
+                    },
+                )]))
+            })
+        }
+
+        fn list_relations_in_parallel_inner(
+            &self,
+            _: &[CatalogAndSchema],
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>
+        {
+            Box::pin(async { Ok(BTreeMap::new()) })
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_wide_freshness_records_and_replays_without_calling_inner() {
+        let _guard = TIME_MACHINE_TEST_LOCK.lock().await;
+        reset_time_machine_globals().await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let handle = get_or_init_recording(
+            dir.path(),
+            "snowflake",
+            "test-invocation",
+            None,
+            CancellationToken::never_cancels(),
+        );
+
+        let relation: Arc<dyn BaseRelation> = create_relation(
+            AdapterType::Snowflake,
+            "db".to_string(),
+            "schema".to_string(),
+            Some("table".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap()
+        .into();
+        let relations = vec![relation];
+        let adapter = MockMetadataAdapter::new();
+
+        let recorded = adapter
+            .freshness_all_in_schema(
+                "db",
+                "schema",
+                &relations,
+                &MetadataQueryOptions::default(),
+                CancellationToken::never_cancels(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            adapter.freshness_all_in_schema_calls.load(Ordering::SeqCst),
+            1
+        );
+
+        handle.shutdown().await.unwrap();
+
+        let events = read_recorded_events(dir.path());
+        let RecordedEvent::MetadataCall(event) = &events[0] else {
+            panic!("expected metadata event");
+        };
+        assert_eq!(event.caller_id, "global");
+        assert_eq!(event.method, "freshness_all_in_schema");
+        assert!(matches!(
+            &event.args,
+            MetadataCallArgs::FreshnessAllInSchema {
+                database,
+                schema,
+                relations: args,
+                warehouse,
+            } if database == "db"
+                && schema == "schema"
+                && args == &vec![relations[0].semantic_fqn()]
+                && warehouse.is_none()
+        ));
+
+        reset_time_machine_globals().await.unwrap();
+        get_or_init_replayer(|| Ok(Arc::new(EventReplayer::load(dir.path())?))).unwrap();
+
+        let replay_adapter = MockMetadataAdapter::new();
+        let replayed = replay_adapter
+            .freshness_all_in_schema(
+                "db",
+                "schema",
+                &relations,
+                &MetadataQueryOptions::default(),
+                CancellationToken::never_cancels(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            replay_adapter
+                .freshness_all_in_schema_calls
+                .load(Ordering::SeqCst),
+            0
+        );
+        assert_eq!(recorded.len(), replayed.len());
+        let key = relations[0].semantic_fqn();
+        assert_eq!(recorded[&key].last_altered, replayed[&key].last_altered);
+        assert_eq!(recorded[&key].is_view, replayed[&key].is_view);
+
+        reset_time_machine_globals().await.unwrap();
+    }
+
+    fn read_recorded_events(path: &std::path::Path) -> Vec<RecordedEvent> {
+        let file = std::fs::File::open(path.join("events.ndjson.gz")).unwrap();
+        BufReader::new(GzDecoder::new(file))
+            .lines()
+            .map(|line| serde_json::from_str(&line.unwrap()).unwrap())
+            .collect()
+    }
 }

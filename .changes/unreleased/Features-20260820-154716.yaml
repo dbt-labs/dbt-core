@@ -1,0 +1,7 @@
+kind: Features
+body: Add parse-safe views (dbt.graph_nodes, dbt.models, dbt.seeds, dbt.tests, dbt.snapshots, dbt.sources, dbt.analyses, dbt.operations, dbt.functions, dbt.columns) so standalone querying of an exported index (views.sql) never silently exposes a compile-only or never-populated column at parse time.
+time: 2026-08-20T15:47:16.200684+05:30
+custom:
+    author: "aahel"
+    issue: ""
+    project: dbt-core

@@ -1,7 +1,8 @@
 import { FC, ReactNode, useMemo, useState } from 'react';
 
-import { Input, RyeconMagnifyingGlass } from '@dbt-labs/sourdough';
+import { RyeconMagnifyingGlass } from '@dbt-labs/sourdough';
 
+import { Input } from '../../components/ui/Input';
 import { ColumnCardShell } from './ColumnCardShell';
 
 export type ColumnItem = {

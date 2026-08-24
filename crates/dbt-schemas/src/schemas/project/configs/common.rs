@@ -151,6 +151,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_liquid_cluster: Option<bool>,
+    pub zorder: Option<StringOrArrayOfStrings>,
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
@@ -176,6 +177,8 @@ pub struct WarehouseSpecificNodeConfig {
     pub use_safer_relation_operations: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub view_update_via_alter: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub unique_tmp_table_suffix: Option<bool>,
 
     // Snowflake
     pub table_tag: Option<String>,
@@ -429,6 +432,7 @@ pub fn same_warehouse_config(
         self_wh.include_full_name_in_path == other_wh.include_full_name_in_path;
     let liquid_clustered_by_eq = self_wh.liquid_clustered_by == other_wh.liquid_clustered_by;
     let auto_liquid_cluster_eq = self_wh.auto_liquid_cluster == other_wh.auto_liquid_cluster;
+    let zorder_eq = self_wh.zorder == other_wh.zorder;
     let clustered_by_eq = self_wh.clustered_by == other_wh.clustered_by;
     let buckets_eq = self_wh.buckets == other_wh.buckets;
     let catalog_eq = self_wh.catalog == other_wh.catalog;
@@ -447,6 +451,8 @@ pub fn same_warehouse_config(
         self_wh.merge_with_schema_evolution == other_wh.merge_with_schema_evolution;
     let skip_matched_step_eq = self_wh.skip_matched_step == other_wh.skip_matched_step;
     let skip_not_matched_step_eq = self_wh.skip_not_matched_step == other_wh.skip_not_matched_step;
+    let unique_tmp_table_suffix_eq =
+        self_wh.unique_tmp_table_suffix == other_wh.unique_tmp_table_suffix;
     let schedule_eq = self_wh.schedule == other_wh.schedule;
     let adapter_properties_eq = self_wh.adapter_properties == other_wh.adapter_properties;
     let table_tag_eq = self_wh.table_tag == other_wh.table_tag;
@@ -525,6 +531,7 @@ pub fn same_warehouse_config(
         && include_full_name_in_path_eq
         && liquid_clustered_by_eq
         && auto_liquid_cluster_eq
+        && zorder_eq
         && clustered_by_eq
         && buckets_eq
         && catalog_eq
@@ -540,6 +547,7 @@ pub fn same_warehouse_config(
         && merge_with_schema_evolution_eq
         && skip_matched_step_eq
         && skip_not_matched_step_eq
+        && unique_tmp_table_suffix_eq
         && schedule_eq
         && adapter_properties_eq
         && table_tag_eq
@@ -776,6 +784,14 @@ pub fn same_warehouse_config(
                     )),
                 ),
                 (
+                    "zorder",
+                    zorder_eq,
+                    Some((
+                        format!("{:?}", &self_wh.zorder),
+                        format!("{:?}", &other_wh.zorder),
+                    )),
+                ),
+                (
                     "clustered_by",
                     clustered_by_eq,
                     Some((
@@ -893,6 +909,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.skip_not_matched_step),
                         format!("{:?}", &other_wh.skip_not_matched_step),
+                    )),
+                ),
+                (
+                    "unique_tmp_table_suffix",
+                    unique_tmp_table_suffix_eq,
+                    Some((
+                        format!("{:?}", &self_wh.unique_tmp_table_suffix),
+                        format!("{:?}", &other_wh.unique_tmp_table_suffix),
                     )),
                 ),
                 (

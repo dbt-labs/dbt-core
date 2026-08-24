@@ -365,6 +365,7 @@ pub struct SelectorEntry {
     pub include: SelectExpression, // the include expression (which may contain nested excludes)
     pub is_default: bool,          // original `default: true`
     pub description: Option<String>, // docs string from YAML
+    pub definition: SelectorDefinitionValue, // original parsed YAML definition for manifest parity
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
