@@ -184,6 +184,7 @@ impl VersionColumnProperties {
             databricks_tags: self.databricks_tags.clone(),
             column_mask: self.column_mask.clone(),
             quote: self.quote,
+            codec: self.codec.clone(),
             config: self.config.clone(),
             entity: self.entity.clone(),
             dimension: self.dimension.clone(),
