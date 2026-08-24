@@ -1,6 +1,5 @@
 import {
   Icon,
-  Link,
   Ryecon,
   RyeconFreshnessError,
   RyeconFreshnessPassed,
@@ -12,9 +11,10 @@ import {
   RyeconStatusSkipped,
   RyeconStatusSuccess,
   RyeconStatusWarning,
-  Tooltip,
 } from '@dbt-labs/sourdough';
 
+import { Link } from '../../components/ui/Link';
+import { Tooltip } from '../../components/ui/Tooltip';
 import { CollapsibleSection } from './CollapsibleSection';
 import { DetailsSection } from './SectionWithCard';
 import { TimestampDisplay } from './Timestamp';

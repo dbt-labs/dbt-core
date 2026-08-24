@@ -956,12 +956,34 @@ pub fn freshness_results_to_context(
         .collect()
 }
 
-pub fn write_sources_json(
-    out_dir: &Path,
-    in_dir: &Path,
+/// Builds the `sources.json` artifact. Kept separate from the write so callers can
+/// hand it back in memory even when the write fails.
+pub fn build_sources_artifact(
     invocation_id: &uuid::Uuid,
     resolver_state: &ResolverState,
     results: &BTreeMap<String, FreshnessResult>,
+) -> FreshnessResultsArtifact {
+    let generated_at: DateTime<Utc> = Utc::now();
+    let metadata = FreshnessResultsMetadata {
+        dbt_schema_version: "https://schemas.getdbt.com/dbt/sources/v3.json".to_string(),
+        dbt_version: env!("CARGO_PKG_VERSION").to_string(),
+        generated_at,
+        invocation_id: invocation_id.to_string(),
+        invocation_started_at: None,
+        env: dbt_common::constants::collect_dbt_custom_envs(),
+    };
+
+    FreshnessResultsArtifact {
+        metadata,
+        results: freshness_results_to_nodes(resolver_state, results),
+        elapsed_time: 0.0,
+    }
+}
+
+pub fn write_sources_json(
+    out_dir: &Path,
+    in_dir: &Path,
+    sources_artifact: &FreshnessResultsArtifact,
 ) -> FsResult<()> {
     let results_path = out_dir.join(DBT_SOURCES_JSON);
 
@@ -978,25 +1000,7 @@ pub fn write_sources_json(
 
     let results_file = File::create(results_path)?;
 
-    let generated_at: DateTime<Utc> = Utc::now();
-    let metadata = FreshnessResultsMetadata {
-        dbt_schema_version: "https://schemas.getdbt.com/dbt/sources/v3.json".to_string(),
-        dbt_version: env!("CARGO_PKG_VERSION").to_string(),
-        generated_at,
-        invocation_id: invocation_id.to_string(),
-        invocation_started_at: None,
-        env: dbt_common::constants::collect_dbt_custom_envs(),
-    };
-
-    let result_nodes = freshness_results_to_nodes(resolver_state, results);
-
-    let sources_artifact = FreshnessResultsArtifact {
-        metadata,
-        results: result_nodes,
-        elapsed_time: 0.0,
-    };
-
-    serde_json::to_writer(results_file, &sources_artifact)?;
+    serde_json::to_writer(results_file, sources_artifact)?;
     emit_info_log_message("Successfully wrote sources.json");
     Ok(())
 }

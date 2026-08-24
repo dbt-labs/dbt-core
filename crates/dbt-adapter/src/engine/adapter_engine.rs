@@ -29,7 +29,8 @@ use crate::engine::concat_batches::concat_batches_widened;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::engine::sidecar_client::SidecarClient;
 use crate::errors::adbc_error_to_adapter_error;
-use crate::record_batch::{RecordBatchExt, SchemaExt};
+use crate::record_batch::{ROWS_AFFECTED_META, RecordBatchExt, SchemaExt};
+use crate::response::query_id_from_record_batch;
 use crate::sql::normalize::strip_sql_comments;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
@@ -193,6 +194,13 @@ pub trait AdapterEngine: Send + Sync {
         0
     }
 
+    /// Fingerprints the connection `config` would open, without opening one.
+    /// The pool reuses a connection only when this matches the connection's
+    /// own fingerprint; a mismatch forces a new connection.
+    fn fingerprint_for_config(&self, _config: &AdapterConfig) -> AdapterResult<u64> {
+        Ok(self.fingerprint())
+    }
+
     /// Get the physical execution backend for sidecar engines.
     ///
     /// Returns the actual database backend (DuckDB, Snowflake, etc.) that SQL
@@ -283,8 +291,9 @@ pub(crate) fn adbc_execute_with_options(
         ));
     }
 
+    type ExecuteOutput = (Arc<Schema>, Vec<RecordBatch>, Option<i64>);
     let do_execute = |conn: &'_ mut dyn Connection| -> Result<
-        (Arc<Schema>, Vec<RecordBatch>),
+        ExecuteOutput,
         Cancellable<adbc_core::error::Error>,
     > {
         use dbt_adbc::statement::Statement as _;
@@ -348,9 +357,9 @@ pub(crate) fn adbc_execute_with_options(
         if adapter_type == AdapterType::ClickHouse
             && is_update_statement(sql.as_ref(), adapter_type)
         {
-            stmt.execute_update()?;
+            let rows_affected = stmt.execute_update()?;
             token.check_cancellation()?;
-            return Ok((Arc::new(Schema::empty()), Vec::new()));
+            return Ok((Arc::new(Schema::empty()), Vec::new(), rows_affected));
         }
 
         // Alt compute: every statement compute_platform.rs sends is DDL/DML
@@ -366,9 +375,17 @@ pub(crate) fn adbc_execute_with_options(
         // needs its result rows, so a future test-execution path over Alt must
         // pass fetch=true and must not hit this branch.
         if adapter_type == AdapterType::Alt && !fetch {
-            stmt.execute_update()?;
+            let rows_affected = stmt.execute_update()?;
             token.check_cancellation()?;
-            return Ok((Arc::new(Schema::empty()), Vec::new()));
+            return Ok((Arc::new(Schema::empty()), Vec::new(), rows_affected));
+        }
+
+        // Redshift-only: other adapters need execute()'s schema metadata
+        // (query_id, BigQuery row counts) that this path drops.
+        if adapter_type == AdapterType::Redshift && !fetch {
+            let rows_affected = stmt.execute_update()?;
+            token.check_cancellation()?;
+            return Ok((Arc::new(Schema::empty()), Vec::new(), rows_affected));
         }
 
         let t_exec = std::time::Instant::now();
@@ -386,7 +403,7 @@ pub(crate) fn adbc_execute_with_options(
         // with columns like "number of rows inserted". AdapterResponse needs that batch
         // to compute rows_affected correctly, so we must drain even when fetch=false.
         if !fetch && !schema.has_dml_columns(engine.adapter_type()) {
-            return Ok((schema, batches));
+            return Ok((schema, batches, None));
         }
 
         // This loop has been discovered to inexplicably hang in some circumstances
@@ -400,7 +417,7 @@ pub(crate) fn adbc_execute_with_options(
             token.check_cancellation()?;
         }
         log_step_duration("batch-consume loop (for res in reader)", t_loop.elapsed());
-        Ok((schema, batches))
+        Ok((schema, batches, None))
     };
     let _span = span!("SqlEngine::execute");
 
@@ -417,7 +434,7 @@ pub(crate) fn adbc_execute_with_options(
     log_step_duration("create_debug_span(...).entered()", t_span_create.elapsed());
 
     let t_do_execute = std::time::Instant::now();
-    let (schema, batches) = match do_execute(conn) {
+    let (schema, batches, rows_affected) = match do_execute(conn) {
         Ok(res) => res,
         Err(err @ (Cancellable::Cancelled | Cancellable::Error(_))) => {
             let cancelled = || {
@@ -464,6 +481,14 @@ pub(crate) fn adbc_execute_with_options(
         t_do_execute.elapsed(),
     );
     let t_post = std::time::Instant::now();
+    let schema = match rows_affected {
+        Some(rows) => {
+            let mut metadata = schema.metadata().clone();
+            metadata.insert(ROWS_AFFECTED_META.to_string(), rows.to_string());
+            Arc::new(Schema::new_with_metadata(schema.fields().clone(), metadata))
+        }
+        None => schema,
+    };
     let total_batch = concat_batches_widened(schema, batches)?;
     let total_batch = normalize_result_column_names(adapter_type, sql.as_ref(), total_batch);
     log_step_duration(
@@ -476,7 +501,7 @@ pub(crate) fn adbc_execute_with_options(
         if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
             attrs.dbt_core_event_code = "E017".to_string();
             attrs.set_query_outcome(QueryOutcome::Success);
-            attrs.query_id = total_batch.query_id(adapter_type)
+            attrs.query_id = query_id_from_record_batch(&total_batch, adapter_type);
         }
     });
     log_step_duration("record_current_span_status_from_attrs", t_status.elapsed());

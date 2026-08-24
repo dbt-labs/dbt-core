@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { Badge, Icon, RyeconClose, RyeconLinkExternal } from '@dbt-labs/sourdough';
+import { Icon, RyeconClose, RyeconLinkExternal } from '@dbt-labs/sourdough';
 
 import {
   RESOURCE_TYPE_LABEL,
@@ -10,6 +10,7 @@ import {
 import type { Project } from '../shared';
 import { type Asset, PageHeading } from '../shared';
 import type { NodeSummary } from '../types';
+import { Badge } from './ui/Badge';
 
 interface Props {
   project: Project;
@@ -92,7 +93,7 @@ export function PreviewDrawer({
           className="preview-drawer__title-row"
           additional={{
             left: <Icon ryecon={ryeconForType(resourceType)} size="sm" alt="" />,
-            right: <Badge text={singular} type="default" size="xs" />,
+            right: <Badge text={singular} variant="secondary" size="xs" />,
           }}
         >
           <button

@@ -81,6 +81,7 @@ pub(crate) mod diff {
     /// 2. whose value in the desired state does not match the current state.
     /// 3. whose value is not present in the desired state but it is in current state,
     ///    (new state assumes Default).
+    #[allow(dead_code)]
     pub(crate) fn changed_keys<K, V>(
         desired_state: &IndexMap<K, V>,
         current_state: &IndexMap<K, V>,

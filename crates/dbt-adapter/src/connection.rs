@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -154,12 +155,17 @@ pub fn sort_for_recycling(conn: Box<dyn Connection>) {
     let _ = RECYCLING_POOL.sort_for_recycling(conn);
 }
 
-/// Try to get a recycled connection for reuse.
-pub fn recycle_connection(node_id: Option<&String>) -> Option<Box<dyn Connection>> {
-    RECYCLING_POOL.recycle().map(|mut conn| {
-        conn.update_node_id(node_id.cloned());
-        conn
-    })
+/// Try to get a recycled connection matching `fingerprint` for reuse.
+pub fn recycle_connection(
+    node_id: Option<&String>,
+    fingerprint: u64,
+) -> Option<Box<dyn Connection>> {
+    RECYCLING_POOL
+        .recycle_matching(fingerprint)
+        .map(|mut conn| {
+            conn.update_node_id(node_id.cloned());
+            conn
+        })
 }
 
 /// Clears the global connection recycling pool.
@@ -182,11 +188,19 @@ pub(crate) fn borrow_tlocal_connection<'a>(
     state: Option<&State>,
     node_id: Option<String>,
 ) -> AdapterResult<ConnectionGuard<'a>> {
+    let config =
+        crate::engine::resolve_connection_config(engine.adapter_type(), engine.get_config(), state);
+    // Default (no override): reuse the cached fingerprint instead of a real
+    // `Auth::configure()` pass.
+    let fingerprint = match &config {
+        Cow::Borrowed(_) => engine.fingerprint(),
+        Cow::Owned(_) => engine.fingerprint_for_config(config.as_ref())?,
+    };
     borrow_tlocal_connection_impl(
         engine.adapter_type(),
         state,
         node_id,
-        engine.fingerprint(),
+        fingerprint,
         |state, node_id| engine.new_connection(state, node_id),
     )
 }
@@ -199,17 +213,10 @@ pub(crate) fn borrow_tlocal_connection_impl<'a>(
     new_connection_fn: impl Fn(Option<&State>, Option<String>) -> AdapterResult<Box<dyn Connection>>,
 ) -> AdapterResult<ConnectionGuard<'a>> {
     let conn = match CONNECTION.with(|c| c.take()) {
-        None => {
-            // No connection in thread-local, try to get one from the recycling pool.
-            // Only reuse a pooled connection whose config fingerprint matches this
-            // engine's; otherwise create a new one. The pool is shared across
-            // engines, so a non-matching connection belongs to an engine with a
-            // different connection configuration.
-            match recycle_connection(node_id.as_ref()) {
-                Some(conn) if conn.fingerprint() == engine_fingerprint => conn,
-                _ => new_connection_fn(state, node_id)?,
-            }
-        }
+        None => match recycle_connection(node_id.as_ref(), engine_fingerprint) {
+            Some(conn) => conn,
+            None => new_connection_fn(state, node_id)?,
+        },
         Some(mut c) => {
             // Discard a cached connection whose config fingerprint doesn't match
             // the current engine, so connections are reused only among identical
@@ -645,6 +652,31 @@ mod pri {
             }
         }
 
+        pub(super) fn recycle_matching(&self, fingerprint: u64) -> Option<Box<dyn Connection>> {
+            let max_attempts = self.connection_set.len();
+            for _ in 0..max_attempts {
+                let mut found_id: Option<u64> = None;
+                self.connection_set.iter_sync(|id, stored| {
+                    if stored.conn.fingerprint() == fingerprint {
+                        found_id = Some(*id);
+                        false
+                    } else {
+                        true
+                    }
+                });
+                let id = found_id?;
+                match self
+                    .connection_set
+                    .remove_sync(&id)
+                    .map(|(_, c)| c.into_inner())
+                {
+                    Some(conn) => return Some(conn),
+                    None => continue, // taken by another thread, re-scan
+                }
+            }
+            None
+        }
+
         pub(super) fn sort_for_recycling(&self, conn: Box<dyn Connection>) -> Result<(), ()> {
             let conn_id = CONN_SEQ_NUM.fetch_add(1, Ordering::Acquire);
             self.connection_set
@@ -680,7 +712,7 @@ impl ConnectionFactory for AdapterConnectionFactory {
 
     fn new_connection(&self, node_id: Option<&str>) -> Result<Box<dyn Connection>, Self::Error> {
         let node_id_string = node_id.map(|s| s.to_string());
-        if let Some(conn) = recycle_connection(node_id_string.as_ref()) {
+        if let Some(conn) = recycle_connection(node_id_string.as_ref(), self.engine.fingerprint()) {
             Ok(conn)
         } else {
             self.engine
@@ -690,7 +722,11 @@ impl ConnectionFactory for AdapterConnectionFactory {
     }
 
     fn recycle_connection(&self, conn: Box<dyn Connection>) {
-        sort_for_recycling(conn);
+        // DuckDB connections must not outlive this call. Dropping `conn` here closes
+        // it immediately instead of parking it in the process-lifetime RECYCLING_POOL.
+        if self.engine.adapter_type() != AdapterType::DuckDB {
+            sort_for_recycling(conn);
+        }
     }
 
     /// Dynamic limit queried by [MapReduce] when deciding to create more connections for tasks.
@@ -709,10 +745,76 @@ impl ConnectionFactory for AdapterConnectionFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::adapter_impl::AdapterImpl;
     use crate::engine::NoopConnection;
+    use crate::sql_types::DefaultTypeOps;
+    use crate::stmt_splitter::DefaultStmtSplitter;
+    use dbt_adbc::Statement;
+    use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+    use std::collections::BTreeMap;
 
     fn make_conn() -> Box<dyn Connection> {
         Box::new(NoopConnection)
+    }
+
+    fn mock_engine(adapter_type: AdapterType) -> Arc<dyn AdapterEngine> {
+        let adapter = AdapterImpl::new_mock(
+            adapter_type,
+            BTreeMap::new(),
+            DEFAULT_RESOLVED_QUOTING,
+            Arc::new(DefaultTypeOps::new(adapter_type)),
+            Arc::new(DefaultStmtSplitter),
+        );
+        Arc::clone(adapter.engine())
+    }
+
+    #[test]
+    fn borrow_tlocal_connection_no_override_uses_cached_fingerprint() {
+        run_on_fresh_thread(|| {
+            CONNECTION.with(|c| assert!(c.take().is_none()));
+            let engine = mock_engine(AdapterType::Databricks);
+
+            let guard = borrow_tlocal_connection(engine.as_ref(), None, None).unwrap();
+            drop(guard);
+            drop_thread_local_connection();
+        });
+    }
+
+    #[test]
+    fn borrow_tlocal_connection_databricks_override_uses_fingerprint_for_config() {
+        run_on_fresh_thread(|| {
+            CONNECTION.with(|c| assert!(c.take().is_none()));
+            let backend = crate::adapter::adapter_factory::backend_of(AdapterType::Databricks);
+            let auth: Arc<dyn dbt_auth::Auth> =
+                dbt_auth::auth_for_backend(Box::new(dbt_auth::NoopAuthWarningPrinter), backend)
+                    .into();
+            let config = dbt_auth::AdapterConfig::new(dbt_yaml::Mapping::from_iter([(
+                "compute".into(),
+                true.into(),
+            )]));
+            let engine: Arc<dyn AdapterEngine> = Arc::new(crate::engine::AdbcEngine::new_mock(
+                AdapterType::Databricks,
+                auth,
+                config,
+                DEFAULT_RESOLVED_QUOTING,
+                Arc::new(DefaultTypeOps::new(AdapterType::Databricks)),
+                Arc::new(DefaultStmtSplitter),
+                Arc::new(crate::cache::RelationCache::default()),
+                BTreeMap::new(),
+            ));
+
+            let mut env = minijinja::Environment::new();
+            let databricks_attr = BTreeMap::from([("databricks_compute", "large_warehouse")]);
+            let model = BTreeMap::from([("databricks_attr", databricks_attr)]);
+            env.add_global("model", minijinja::value::Value::from_serialize(&model));
+            let state = State::new_for_env(&env);
+
+            // `compute` block + matching override: exercises `fingerprint_for_config`,
+            // which must short-circuit in mock mode (no real auth data in `config`).
+            let guard = borrow_tlocal_connection(engine.as_ref(), Some(&state), None).unwrap();
+            drop(guard);
+            drop_thread_local_connection();
+        });
     }
 
     fn _assert_sync<T: Sync>() {}
@@ -838,6 +940,121 @@ mod tests {
             });
 
             // Ensure the connection was dropped, not recycled into the pool
+            assert!(RECYCLING_POOL.recycle().is_none());
+        });
+    }
+
+    // A fingerprint mismatch must discard and recreate the connection — this is
+    // what routes a model to a different `databricks_compute`.
+    #[test]
+    fn mismatched_fingerprint_forces_new_connection() {
+        run_on_fresh_thread(|| {
+            CONNECTION.with(|c| assert!(c.take().is_none()));
+            assert!(RECYCLING_POOL.recycle().is_none());
+
+            let calls = AtomicU64::new(0);
+            let new_connection_fn = |_: Option<&State>, _: Option<String>| {
+                calls.fetch_add(1, Ordering::Relaxed);
+                Ok(make_conn())
+            };
+            // `make_conn()` fingerprints as 0, so any non-zero value here is a
+            // deliberate mismatch — reused across both scenarios below.
+            let mismatched_fingerprint = 42;
+
+            CONNECTION.with(|c| c.replace(Some(make_conn())));
+            let guard = borrow_tlocal_connection_impl(
+                AdapterType::Databricks,
+                None,
+                None,
+                mismatched_fingerprint,
+                new_connection_fn,
+            )
+            .unwrap();
+            assert_eq!(
+                calls.load(Ordering::Relaxed),
+                1,
+                "non-matching thread-local connection should be discarded"
+            );
+            drop(guard);
+            drop_thread_local_connection();
+
+            // Same fingerprint, but now the recycling-pool discard path.
+            RECYCLING_POOL.sort_for_recycling(make_conn()).unwrap();
+            let guard = borrow_tlocal_connection_impl(
+                AdapterType::Databricks,
+                None,
+                None,
+                mismatched_fingerprint,
+                new_connection_fn,
+            )
+            .unwrap();
+            assert_eq!(
+                calls.load(Ordering::Relaxed),
+                2,
+                "non-matching pooled connection should be discarded"
+            );
+            drop(guard);
+            drop_thread_local_connection();
+
+            // A matching fingerprint (0) reuses the pooled connection instead.
+            RECYCLING_POOL.sort_for_recycling(make_conn()).unwrap();
+            let guard = borrow_tlocal_connection_impl(
+                AdapterType::Databricks,
+                None,
+                None,
+                0,
+                new_connection_fn,
+            )
+            .unwrap();
+            assert_eq!(
+                calls.load(Ordering::Relaxed),
+                2,
+                "matching pooled connection should be reused, not recreated"
+            );
+            drop(guard);
+        });
+    }
+
+    struct FingerprintedConnection(u64);
+
+    impl Connection for FingerprintedConnection {
+        fn new_statement(&mut self) -> adbc_core::error::Result<Box<dyn Statement>> {
+            unimplemented!()
+        }
+        fn cancel(&mut self) -> adbc_core::error::Result<()> {
+            Ok(())
+        }
+        fn commit(&mut self) -> adbc_core::error::Result<()> {
+            Ok(())
+        }
+        fn rollback(&mut self) -> adbc_core::error::Result<()> {
+            Ok(())
+        }
+        fn fingerprint(&self) -> u64 {
+            self.0
+        }
+    }
+
+    #[test]
+    fn recycle_finds_a_matching_connection_behind_a_mismatched_one() {
+        run_on_fresh_thread(|| {
+            drain_recycling_pool();
+
+            RECYCLING_POOL
+                .sort_for_recycling(Box::new(FingerprintedConnection(999)))
+                .unwrap();
+            RECYCLING_POOL
+                .sort_for_recycling(Box::new(FingerprintedConnection(7)))
+                .unwrap();
+
+            let conn = recycle_connection(None, 7).expect("a matching connection is pooled");
+            assert_eq!(conn.fingerprint(), 7);
+
+            let remaining = RECYCLING_POOL
+                .recycle()
+                .expect("the mismatched connection must still be pooled, not evicted");
+            assert_eq!(remaining.fingerprint(), 999);
+
             assert!(RECYCLING_POOL.recycle().is_none());
         });
     }

@@ -191,7 +191,11 @@ pub(crate) struct ReplayStatement {
 }
 
 impl ReplayStatement {
-    fn new(recordings_path: PathBuf, config: SharedConfig, ctx: RecordingContext) -> Self {
+    pub(crate) fn new(
+        recordings_path: PathBuf,
+        config: SharedConfig,
+        ctx: RecordingContext,
+    ) -> Self {
         Self {
             recordings_path,
             config,
@@ -269,10 +273,48 @@ impl Statement for ReplayStatement {
         }
     }
 
+    #[allow(deprecated)]
     fn execute_update(&mut self) -> AdbcResult<Option<i64>> {
-        // DDL/DML statements (e.g. ClickHouse CREATE TABLE) are not stored in
-        // the recording, so replay just returns success with no row-count.
-        Ok(None)
+        let replay_sql = match &self.sql {
+            Some(sql) => sql,
+            None => "none",
+        };
+
+        let path = self.recordings_path.clone();
+        let unique_id = compute_file_name(
+            &path,
+            self.ctx.node_id.as_ref(),
+            Some(replay_sql),
+            self.ctx.metadata,
+        )?;
+
+        let storage_type = crate::storage::detect_storage_type(&path, &unique_id);
+
+        match storage_type {
+            StorageType::Sqlite => {
+                let sqlite_handler = SqliteHandler::new(&path);
+                let entry = sqlite_handler
+                    .read_execute(&unique_id, replay_sql)
+                    .map_err(|e| to_adbc_error(e, Some(&path)))?;
+
+                let record_sql = entry.sql.as_deref().unwrap_or("none");
+                if self.config.normalize_sql(record_sql) != self.config.normalize_sql(replay_sql) {
+                    panic!(
+                        "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match (unique_id: {unique_id})"
+                    );
+                }
+
+                if let Some(msg) = entry.error {
+                    return Err(AdbcError::with_message_and_status(
+                        msg,
+                        AdbcStatus::Internal,
+                    ));
+                }
+
+                Ok(None)
+            }
+            StorageType::FileArrowIpc | StorageType::FileParquet => Ok(None),
+        }
     }
 
     fn execute_schema(&mut self) -> AdbcResult<Schema> {

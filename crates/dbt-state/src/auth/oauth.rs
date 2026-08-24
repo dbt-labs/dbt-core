@@ -138,10 +138,12 @@ impl OAuthTokenSource {
             return Ok(token);
         }
 
-        let token = self.acquire_fresh_token().await?;
-        let stored: StoredToken = (&token).into_stored(&self.token_type_or_default());
-        if let Err(err) = self.store.save(&stored).await {
-            tracing::warn!("failed to persist dbt State auth token: {err}");
+        let (token, cache_to_disk) = self.acquire_fresh_token().await?;
+        if cache_to_disk {
+            let stored: StoredToken = (&token).into_stored(&self.token_type_or_default());
+            if let Err(err) = self.store.save(&stored).await {
+                tracing::warn!("failed to persist dbt State auth token: {err}");
+            }
         }
         *guard = Some(token.clone());
         Ok(token)
@@ -193,22 +195,33 @@ impl OAuthTokenSource {
         }
     }
 
-    async fn acquire_fresh_token(&self) -> Result<CachedToken, RunCacheServiceError> {
-        let response = if self.client_secret.is_some() {
-            self.fetch_client_credentials().await?
+    /// Acquire a freshly minted token along with whether it should be persisted
+    /// to disk. Tokens minted from re-derivable credentials (client credentials
+    /// or platform token exchange) are not cached in headless environments (no
+    /// interactive user present, e.g. CI), where the cache offers no reuse
+    /// benefit and would leave credentials behind on ephemeral runners.
+    /// Interactively-minted tokens are always cached so the user isn't
+    /// re-prompted on the next run.
+    async fn acquire_fresh_token(&self) -> Result<(CachedToken, bool), RunCacheServiceError> {
+        let interactive = self.interactive_flow.is_available();
+        let (response, cache_to_disk) = if self.client_secret.is_some() {
+            (self.fetch_client_credentials().await?, interactive)
         } else {
             match self.auth_chain.resolve().await {
-                Ok(credential) => self.fetch_platform_token_exchange(&credential).await?,
+                Ok(credential) => (
+                    self.fetch_platform_token_exchange(&credential).await?,
+                    interactive,
+                ),
                 // No platform credentials available — fall back to dbt State
                 // standalone authentication via the interactive browser flow,
                 // unless there's nobody around to complete a browser login
                 // (CI, batch replay). Checking this up front avoids waiting
                 // out the full interactive timeout just to fail anyway.
                 Err(AuthError::NotAuthenticated) => {
-                    if !self.interactive_flow.is_available() {
+                    if !interactive {
                         return Err(RunCacheServiceError::NoInteractiveTerminal);
                     }
-                    self.interactive_flow.run().await?
+                    (self.interactive_flow.run().await?, true)
                 }
                 Err(err) => {
                     return Err(RunCacheServiceError::Auth(format!(
@@ -217,7 +230,7 @@ impl OAuthTokenSource {
                 }
             }
         };
-        self.process_response(response)
+        Ok((self.process_response(response)?, cache_to_disk))
     }
 
     /// Whether a token whose scope is `scope_str` can serve the configured org_id.
@@ -1056,5 +1069,100 @@ projects:
 
         let err = source.token().await.unwrap_err();
         assert!(matches!(err, RunCacheServiceError::AuthRequest(_)));
+    }
+
+    #[tokio::test]
+    async fn headless_mint_does_not_cache_token_to_disk() {
+        // Tokens minted from re-derivable client credentials are usable in memory but are
+        // never written to disk in a headless environment (no interactive user present, e.g.
+        // CI), where the cache offers no reuse benefit and would leave credentials behind on
+        // ephemeral runners. A flow that reports itself unavailable models that environment.
+        let server = MockServer::start().await;
+        let scope = "runcache:scope:org:dev:admin";
+        let token_resp = serde_json::json!({
+            "id_token": make_jwt(scope),
+            "scope": scope,
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        });
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .and(body_string_contains("grant_type=client_credentials"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(token_resp))
+            .mount(&server)
+            .await;
+
+        let dir = TempDir::new().unwrap();
+        let config = config_with(&server.uri(), Some("secret-x"), Some("dev"));
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::unavailable(),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
+        assert!(token_store_in(&dir).load().await.unwrap().is_none());
+        // Skipping the write must also skip creating the auth directory, so nothing is
+        // left behind on the runner.
+        assert!(!dir.path().join(".dbt").exists());
+    }
+
+    #[tokio::test]
+    async fn headless_refresh_from_disk_persists_rotated_token() {
+        // A token provisioned on disk (no client credentials) is the only auth path in a
+        // headless environment once the browser flow is disabled. Refresh tokens rotate on
+        // use, so a headless refresh must write the new token back or the next run would
+        // refresh with an already-invalidated token and then delete the provisioned cache.
+        // The unavailable flow models the headless environment; the refresh path persists
+        // regardless.
+        let server = MockServer::start().await;
+        let scope = "runcache:scope:org:dev:admin";
+        let token_resp = serde_json::json!({
+            "id_token": make_jwt(scope),
+            "scope": scope,
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "refresh_token": "new-refresh",
+        });
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .and(body_string_contains("grant_type=refresh_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(token_resp))
+            .mount(&server)
+            .await;
+
+        let dir = TempDir::new().unwrap();
+        let store = token_store_in(&dir);
+        // Seed disk with a stale token carrying a refresh token.
+        store
+            .save(&StoredToken {
+                scope: scope.to_string(),
+                token_type: "Bearer".to_string(),
+                id_token: make_jwt(scope),
+                expires_at: Some(1.0), // ancient
+                access_token: None,
+                refresh_token: Some("old-refresh".to_string()),
+            })
+            .await
+            .unwrap();
+
+        let config = config_with(&server.uri(), None, Some("dev"));
+        let source = OAuthTokenSource::with_components(
+            &config,
+            store,
+            FakeFlow::unavailable(),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        assert_eq!(token.refresh_token.as_deref(), Some("new-refresh"));
+
+        // The rotated refresh token must have been written back to disk.
+        let saved = token_store_in(&dir).load().await.unwrap().unwrap();
+        assert_eq!(saved.refresh_token.as_deref(), Some("new-refresh"));
     }
 }

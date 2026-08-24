@@ -11,6 +11,7 @@ expression: schema
     "MACRO_DISPATCH_ORDER",
     "TARGET_PACKAGE_NAME",
     "connection_name",
+    "context",
     "doc",
     "execute",
     "load_result",
@@ -37,6 +38,14 @@ expression: schema
       "description": "`{{ connection_name }}` — empty string at base scope.",
       "type": "string"
     },
+    "context": {
+      "description": "`{{ context }}` — `MacroLookupContext` used by naming macros for root-project metadata and macro dispatch.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>"
+        }
+      ]
+    },
     "doc": {
       "description": "`{{ doc(package, name) }}` — `DocMacro` Object lookup.\n\nTyped `MinijinjaValue` while `DocMacro` lives in `dbt-jinja-utils`; a future PR moves it here and tightens to `JinjaObject<DocMacro>`."
     },
@@ -57,5 +66,13 @@ expression: schema
       "description": "`{{ store_result(...) }}` — `ResultStore`-backed closure.\n\nPresent at *base* scope, not just on [`ResolveModelCtx`], because `generate_{database,schema,alias}_name` macros are invoked with the bare base ctx (see `dbt_jinja_utils::utils::generate_component_name`). dbt-core runs those through `generate_generate_name_macro_context`, which builds a `MacroContext(ProviderContext)` and therefore always exposes the three result-store functions. Omitting them here made a customer macro that calls `run_query(...)` inside `generate_schema_name` blow up on `load_result`, and the caller's `unwrap_or_else` silently fell back to the profile schema.\n\n[`crate::CompileBaseCtx`] already carries these at base scope for the same reason."
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "definitions": {
+    "JinjaObject<dbt_jinja_ctx::objects::lookup::MacroLookupContext>": {
+      "description": "Opaque Jinja-callable object backed by `dbt_jinja_ctx::objects::lookup::MacroLookupContext`.",
+      "type": "object",
+      "x-jinja-object": true,
+      "x-jinja-object-type": "dbt_jinja_ctx::objects::lookup::MacroLookupContext"
+    }
+  }
 }

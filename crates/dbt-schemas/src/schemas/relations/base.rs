@@ -501,7 +501,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         let rendered = self.render_self_as_str();
 
         let rendered = if run_filter.empty {
-            format!("(select * from {rendered} limit 0)")
+            format!("(select * from {rendered} where false limit 0)")
         } else {
             rendered
         };

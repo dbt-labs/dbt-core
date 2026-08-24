@@ -106,6 +106,7 @@ pub async fn resolve_functions(
             config_resolver,
             package_quoting,
             uses_snapshot_fqn: false,
+            defer_render_errors_to_compile: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -454,13 +455,21 @@ pub async fn resolve_functions(
                 entry_point: model_config.entry_point.clone(),
                 packages: model_config.packages.clone(),
                 snowflake: model_config.snowflake.clone(),
+                pre_hook: model_config.pre_hook.clone(),
+                post_hook: model_config.post_hook.clone(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),
         };
 
         let components = RelationComponents {
-            database: model_config.database.clone().into_inner().unwrap_or(None),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && model_config.__warehouse_specific_config__.catalog.is_some()
+            {
+                model_config.__warehouse_specific_config__.catalog.clone()
+            } else {
+                model_config.database.clone().into_inner().unwrap_or(None)
+            },
             schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,

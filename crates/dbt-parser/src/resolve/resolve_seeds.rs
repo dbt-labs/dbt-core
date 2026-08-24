@@ -201,8 +201,12 @@ pub async fn resolve_seeds(
             package.dbt_project.seed_paths.as_ref().unwrap_or(&vec![]),
         );
 
-        // TODO: dbt-core deep_merges the rendered and unrendered schema.yml configs, which
-        // doubles list fields (e.g. tags), likely a bug. If state:modified parity requires it:
+        // TODO (deferred, not a bug here): dbt-core deep_merges the rendered and unrendered
+        // schema.yml configs, which doubles list fields (e.g. tags) — the same class of issue as
+        // the versioned-model `unrendered_config` divergence documented at
+        // `.agents/state-modified-conformance.md` § "Versioned models" (GT4). Seeds have no
+        // `versions:`, so there is nothing version-level to double-apply here today, but if seeds
+        // ever grow one, do not replicate the duplication for the same reason models don't:
         // https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/parser/base.py#L424-L426
         let unrendered_config = build_unrendered_config(
             &fqn,
@@ -380,7 +384,19 @@ pub async fn resolve_seeds(
         };
 
         let components = RelationComponents {
-            database: properties_config.database.clone(),
+            database: if matches!(adapter_type, AdapterType::Databricks)
+                && properties_config
+                    .__warehouse_specific_config__
+                    .catalog
+                    .is_some()
+            {
+                properties_config
+                    .__warehouse_specific_config__
+                    .catalog
+                    .clone()
+            } else {
+                properties_config.database.clone()
+            },
             schema: properties_config.schema.clone(),
             alias: properties_config.alias.clone(),
             store_failures: None,

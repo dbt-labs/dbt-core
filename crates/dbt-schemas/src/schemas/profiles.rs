@@ -711,6 +711,10 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub workload_identity_provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workload_identity_entra_resource: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub s3_stage_vpce_dns_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
@@ -1578,6 +1582,8 @@ pub struct SnowflakeTargetEnv {
     pub role: Option<String>,
     pub authenticator: Option<String>,
     pub oauth_client_id: Option<String>,
+    pub workload_identity_provider: Option<String>,
+    pub workload_identity_entra_resource: Option<String>,
     pub query_tag: Option<QueryTag>,
     pub client_session_keep_alive: bool, // Default: false
     pub host: Option<String>,
@@ -1858,6 +1864,8 @@ impl TryFrom<DbConfig> for TargetContext {
                     role: config.role.clone(),
                     authenticator: config.authenticator,
                     oauth_client_id: config.oauth_client_id,
+                    workload_identity_provider: config.workload_identity_provider,
+                    workload_identity_entra_resource: config.workload_identity_entra_resource,
                     query_tag: config.query_tag,
                     client_session_keep_alive: config.client_session_keep_alive.unwrap_or(false),
                     host: config.host,

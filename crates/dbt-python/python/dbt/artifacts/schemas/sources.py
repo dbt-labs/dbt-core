@@ -1,6 +1,6 @@
 """`sources.json` — mirrors the Rust `FreshnessResultsArtifact`.
 
-`invoke()` does not hand this back yet; reach it with
+`invoke(["source", "freshness"])` returns this on `result`; it is also on disk, at
 `FreshnessResultsArtifact.read("target/sources.json")`.
 """
 

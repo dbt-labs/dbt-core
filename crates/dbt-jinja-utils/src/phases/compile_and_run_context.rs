@@ -7,6 +7,7 @@ use std::sync::{Arc, OnceLock};
 use chrono::{DateTime, Utc};
 
 use crate::functions::build_flat_graph;
+use crate::invocation_graph::invocation_graph;
 use crate::jinja_environment::JinjaEnv;
 use crate::phases::compile::DependencyValidationConfig;
 use dbt_adapter::Adapter;
@@ -19,7 +20,7 @@ use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use dbt_telemetry::NodeType;
 use minijinja::arg_utils::ArgParser;
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::Object;
+use minijinja::value::{Object, ValueMap};
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value as MinijinjaValue,
 };
@@ -916,7 +917,15 @@ impl LazyFlatGraph {
 
     fn get_graph(&self) -> &MinijinjaValue {
         self.graph.get_or_init(|| {
-            MinijinjaValue::from(build_flat_graph(&self.nodes, self.defer_nodes.as_ref()))
+            // Seed the flat graph into the invocation-wide `graph` mapping
+            // rather than into a private map, so scratch state written by
+            // macros during parsing (and by other base contexts) survives.
+            // `update` merges, so only the derived flat-graph keys (`nodes`,
+            // `sources`, `macros`, …) are overwritten. dbt-labs/fs#13454.
+            let shared = invocation_graph();
+            let flat = build_flat_graph(&self.nodes, self.defer_nodes.as_ref());
+            shared.update(&ValueMap::from(flat));
+            MinijinjaValue::from_dyn_object(shared)
         })
     }
 }

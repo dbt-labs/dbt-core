@@ -193,6 +193,12 @@ fn int_as_value(val: i128) -> Value {
 }
 
 fn impossible_op(op: &str, lhs: &Value, rhs: &Value) -> Error {
+    if let Some(name) = lhs.undefined_name().or(rhs.undefined_name()) {
+        let mut error = Error::from(ErrorKind::UndefinedError);
+        error.set_detail(format!("`{name}` is undefined"));
+        return error;
+    }
+
     Error::new(
         ErrorKind::InvalidOperation,
         format!(

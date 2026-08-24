@@ -9,25 +9,24 @@ use dbt_adapter_core::AdapterType;
 use dbt_adbc::semaphore::Semaphore;
 use dbt_adbc::*;
 use dbt_agate::hashers::IdentityBuildHasher;
-use dbt_auth::{AdapterConfig, Auth};
+use dbt_auth::{AdapterConfig, Auth, AuthError};
 use dbt_common::AdapterResult;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_trace_event;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use dbt_telemetry::AdapterConnectionOpen;
 use minijinja::State;
 use parking_lot::RwLock;
-use serde::Deserialize;
 
 use crate::cache::RelationCache;
 use crate::engine::query_comment::QueryCommentConfig;
-use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
+use crate::errors::{AdapterError, adbc_error_to_adapter_error};
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
 
 use super::adapter_engine::*;
+use super::databricks;
 use super::make_behavior;
 use super::noop_connection::NoopConnection;
 use super::retry::ConnectionRetryPolicy;
@@ -205,32 +204,19 @@ impl AdbcEngine {
         let use_cloud_credentials = config.use_dbt_cloud_credentials();
         let backend = self.auth.backend();
 
-        let (database_builder, load_strategy) = if use_cloud_credentials {
-            // Cloud credentials are used to connect to a service that manages
-            // drivers and warehouse credentials for us. The "flock" driver takes
-            // these credentials and behaves as a proxy to the actual warehouse.
-            let builder = Self::configure_cloud_database(backend)?;
-            (builder, LoadStrategy::Remote)
-        } else {
-            // Delegate configuration to the Auth implementation configuring
-            // the warehouse driver locally.
-            let auth_result = self
-                .auth
-                .configure(config)
-                .map_err(crate::errors::auth_error_to_adapter_error)?;
-
-            for warning in &auth_result.warnings {
-                dbt_common::tracing::dbt_emit::emit_warn_log_message(
-                    dbt_common::ErrorCode::InvalidConfig,
-                    warning,
-                );
-            }
-
-            let load_strategy = match self.adapter_type {
-                AdapterType::DuckDB => LoadStrategy::SystemThenCdnCache,
-                _ => LoadStrategy::CdnCache,
-            };
-            (auth_result.builder, load_strategy)
+        let (database_builder, warnings) = config
+            .build_connection_builder(self.auth.as_ref(), Self::configure_cloud_database)
+            .map_err(crate::errors::auth_error_to_adapter_error)?;
+        for warning in &warnings {
+            dbt_common::tracing::dbt_emit::emit_warn_log_message(
+                dbt_common::ErrorCode::InvalidConfig,
+                warning,
+            );
+        }
+        let load_strategy = match (use_cloud_credentials, self.adapter_type) {
+            (true, _) => LoadStrategy::Remote,
+            (false, AdapterType::DuckDB) => LoadStrategy::SystemThenCdnCache,
+            (false, _) => LoadStrategy::CdnCache,
         };
 
         // This will load the "flock" driver if load_strategy is Remote.
@@ -265,29 +251,6 @@ impl AdbcEngine {
                 Ok((database, fingerprint))
             }
         }
-    }
-
-    /// Build a [database::Builder] configured with dbt Cloud credentials
-    /// read from `~/.dbt/dbt_cloud.yml` (with env-var overrides applied).
-    fn configure_cloud_database(backend: Backend) -> AdapterResult<database::Builder> {
-        let mut builder = database::Builder::new(backend);
-        let cloud_config_path = dbt_cloud_config::get_cloud_project_path()
-            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
-        let cloud_yml = dbt_cloud_config::parse_cloud_config(&cloud_config_path)
-            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
-        let resolved = dbt_cloud_config::resolve_cloud_config(cloud_yml.as_ref(), None);
-        if let Some(credentials) = resolved.and_then(|r| r.credentials) {
-            builder
-                .with_named_option("dbt_cloud.token", credentials.token)
-                .map_err(adbc_error_to_adapter_error)?;
-            builder
-                .with_named_option("dbt_cloud.host", credentials.host)
-                .map_err(adbc_error_to_adapter_error)?;
-            builder
-                .with_named_option("dbt_cloud.account_id", credentials.account_id)
-                .map_err(adbc_error_to_adapter_error)?;
-        }
-        Ok(builder)
     }
 
     /// Apply DuckDB init SQL (extensions, settings, secrets, attachments)
@@ -351,6 +314,45 @@ impl AdbcEngine {
         };
         super::duckdb_attach::compose_v2_catalog_attach_stmts(&view, platform)
     }
+
+    /// Build a [database::Builder] configured with dbt Cloud credentials
+    /// read from `~/.dbt/dbt_cloud.yml` (with env-var overrides applied).
+    fn configure_cloud_database(backend: Backend) -> Result<database::Builder, AuthError> {
+        let mut builder = database::Builder::new(backend);
+        let cloud_config_path =
+            dbt_cloud_config::get_cloud_project_path().map_err(AuthError::config)?;
+        let cloud_yml =
+            dbt_cloud_config::parse_cloud_config(&cloud_config_path).map_err(AuthError::config)?;
+        let resolved = dbt_cloud_config::resolve_cloud_config(cloud_yml.as_ref(), None);
+        if let Some(credentials) = resolved.and_then(|r| r.credentials) {
+            builder.with_named_option("dbt_cloud.token", credentials.token)?;
+            builder.with_named_option("dbt_cloud.host", credentials.host)?;
+            builder.with_named_option("dbt_cloud.account_id", credentials.account_id)?;
+        }
+        Ok(builder)
+    }
+}
+
+/// Ignored under dbt-platform brokered credentials — per-model routing
+/// doesn't apply there.
+pub(crate) fn resolve_connection_config<'a>(
+    adapter_type: AdapterType,
+    base_config: &'a AdapterConfig,
+    state: Option<&State>,
+) -> Cow<'a, AdapterConfig> {
+    match adapter_type {
+        AdapterType::Databricks if base_config.contains_key("compute") => {
+            match state.and_then(databricks::compute_from_state) {
+                Some(databricks_compute) => {
+                    let mut mapping = base_config.repr().clone();
+                    mapping.insert("databricks_compute".into(), databricks_compute.into());
+                    Cow::Owned(AdapterConfig::new(mapping))
+                }
+                None => Cow::Borrowed(base_config),
+            }
+        }
+        _ => Cow::Borrowed(base_config),
+    }
 }
 
 impl AdapterEngine for AdbcEngine {
@@ -409,29 +411,6 @@ impl AdapterEngine for AdbcEngine {
         state: Option<&State>,
         _node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        let do_create_connection =
-            |adapter_type: AdapterType| -> AdapterResult<Box<dyn Connection>> {
-                let config = match adapter_type {
-                    AdapterType::Databricks => {
-                        if let Some(databricks_compute) =
-                            state.and_then(databricks_compute_from_state)
-                        {
-                            let augmented_config = {
-                                let mut mapping = self.config.repr().clone();
-                                mapping
-                                    .insert("databricks_compute".into(), databricks_compute.into());
-                                AdapterConfig::new(mapping)
-                            };
-                            Cow::Owned(augmented_config)
-                        } else {
-                            Cow::Borrowed(&self.config)
-                        }
-                    }
-                    _ => Cow::Borrowed(&self.config),
-                };
-                self.new_connection_with_config(config.as_ref())
-            };
-
         match &self.mode {
             EngineMode::Mock => {
                 emit_trace_event(|| {
@@ -446,7 +425,26 @@ impl AdapterEngine for AdbcEngine {
                 });
                 Ok(Box::new(NoopConnection))
             }
-            EngineMode::Live => do_create_connection(self.adapter_type),
+            EngineMode::Live => {
+                let config = resolve_connection_config(self.adapter_type, &self.config, state);
+                self.new_connection_with_config(config.as_ref())
+            }
+        }
+    }
+
+    /// Fingerprints `config` without opening a connection, so the pool can
+    /// decide reuse before creating one. Must stay I/O-free.
+    fn fingerprint_for_config(&self, config: &AdapterConfig) -> AdapterResult<u64> {
+        match self.mode {
+            // Mock mode never connects, so mock configs don't need real auth data.
+            EngineMode::Mock => Ok(self.fingerprint()),
+            EngineMode::Live => {
+                let (builder, _warnings) = config
+                    .build_connection_builder(self.auth.as_ref(), Self::configure_cloud_database)
+                    .map_err(crate::errors::auth_error_to_adapter_error)?;
+                let opts = builder.into_iter().collect::<Vec<_>>();
+                Ok(database::Builder::fingerprint(opts.iter()).as_u64())
+            }
         }
     }
 
@@ -522,29 +520,6 @@ impl AdapterEngine for AdbcEngine {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Get the Databricks compute engine configured for this model/snapshot
-///
-/// https://docs.getdbt.com/reference/resource-configs/databricks-configs#selecting-compute-per-model
-fn databricks_compute_from_state(state: &State) -> Option<String> {
-    let yaml_node = dbt_yaml::to_value(state.lookup("model", &[]).as_ref()?).ok()?;
-
-    if let Ok(model) = DbtModel::deserialize(&yaml_node) {
-        if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr {
-            databricks_attr.databricks_compute.clone()
-        } else {
-            None
-        }
-    } else if let Ok(snapshot) = DbtSnapshot::deserialize(&yaml_node) {
-        if let Some(databricks_attr) = &snapshot.__adapter_attr__.databricks_attr {
-            databricks_attr.databricks_compute.clone()
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 /// Enrich connection errors with adapter-specific hints where possible.
 fn enrich_connection_error(
     adapter_type: AdapterType,
@@ -584,5 +559,81 @@ Original error: {}",
             AdapterError::new(adbc_error_to_adapter_error(err).kind(), message)
         }
         _ => adbc_error_to_adapter_error(err),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_yaml::Mapping;
+    use minijinja::Environment;
+    use minijinja::value::Value;
+    use std::collections::BTreeMap;
+
+    fn config_with_compute_block() -> AdapterConfig {
+        AdapterConfig::new(Mapping::from_iter([("compute".into(), true.into())]))
+    }
+
+    /// dbt_yaml's dunder-key flatten mechanism wants `databricks_attr` as a
+    /// sibling at the model's top level, not nested under `__adapter_attr__`.
+    fn model_with_databricks_compute(compute: &str) -> Value {
+        let databricks_attr = BTreeMap::from([("databricks_compute", compute)]);
+        let model = BTreeMap::from([("databricks_attr", databricks_attr)]);
+        Value::from_serialize(&model)
+    }
+
+    #[test]
+    fn resolve_connection_config_non_databricks_ignores_compute_override() {
+        let config = config_with_compute_block();
+        let mut env = Environment::new();
+        env.add_global("model", model_with_databricks_compute("large_warehouse"));
+        let state = State::new_for_env(&env);
+
+        let resolved = resolve_connection_config(AdapterType::Snowflake, &config, Some(&state));
+
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn resolve_connection_config_databricks_without_compute_block_returns_borrowed() {
+        let config = AdapterConfig::new(Mapping::new());
+        let mut env = Environment::new();
+        env.add_global("model", model_with_databricks_compute("large_warehouse"));
+        let state = State::new_for_env(&env);
+
+        let resolved = resolve_connection_config(AdapterType::Databricks, &config, Some(&state));
+
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn resolve_connection_config_databricks_with_compute_block_no_state_returns_borrowed() {
+        let config = config_with_compute_block();
+
+        let resolved = resolve_connection_config(AdapterType::Databricks, &config, None);
+
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn resolve_connection_config_databricks_with_compute_override_returns_owned() {
+        let config = config_with_compute_block();
+        let mut env = Environment::new();
+        env.add_global("model", model_with_databricks_compute("large_warehouse"));
+        let state = State::new_for_env(&env);
+
+        let resolved = resolve_connection_config(AdapterType::Databricks, &config, Some(&state));
+
+        match resolved {
+            Cow::Owned(overridden) => {
+                assert_eq!(
+                    overridden.get_string("databricks_compute").as_deref(),
+                    Some("large_warehouse")
+                );
+            }
+            Cow::Borrowed(_) => {
+                panic!("expected an overridden config with the compute override applied")
+            }
+        }
     }
 }

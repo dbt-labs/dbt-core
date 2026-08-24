@@ -41,9 +41,9 @@ use crate::schemas::properties::model_properties::ModelConstraint;
 use crate::schemas::properties::{ModelFreshness, ModelState};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, default_type,
-    f64_or_string_f64, hours_to_expiration_or_string_omissible, string_or_number_to_string,
-    u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, column_types_map,
+    default_type, event_time_or_map_to_string, f64_or_string_f64,
+    hours_to_expiration_or_string_omissible, string_or_number_to_string, u64_or_string_u64,
 };
 use dbt_proc_macros::{DefaultTo, Resolvable};
 use dbt_yaml::ShouldBe;
@@ -119,7 +119,11 @@ pub struct ProjectModelConfig {
     pub cluster_by: Option<ClusterConfig>,
     #[serde(rename = "+clustered_by")]
     pub clustered_by: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+column_types")]
+    #[serde(
+        default,
+        rename = "+column_types",
+        deserialize_with = "column_types_map"
+    )]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(rename = "+compute")]
     pub compute: Option<ComputeArg>,
@@ -195,6 +199,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub view_update_via_alter: Option<bool>,
+    #[serde(
+        default,
+        rename = "+unique_tmp_table_suffix",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unique_tmp_table_suffix: Option<bool>,
 
     // NOTE: This is only for BigQuery materialized views
     #[serde(rename = "+description")]
@@ -211,7 +221,11 @@ pub struct ProjectModelConfig {
     pub enable_refresh: Option<bool>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(rename = "+event_time")]
+    #[serde(
+        default,
+        rename = "+event_time",
+        deserialize_with = "event_time_or_map_to_string"
+    )]
     pub event_time: Option<String>,
     #[serde(rename = "+external_volume")]
     pub external_volume: Option<String>,
@@ -283,6 +297,8 @@ pub struct ProjectModelConfig {
     pub labels_from_meta: Option<bool>,
     #[serde(rename = "+liquid_clustered_by")]
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+zorder")]
+    pub zorder: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+location")]
     pub location: Option<String>,
     #[serde(rename = "+location_root")]
@@ -395,9 +411,9 @@ pub struct ProjectModelConfig {
     pub partitions: Option<PartitionsConfig>,
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(rename = "+post-hook")]
+    #[serde(rename = "+post-hook", alias = "+post_hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
-    #[serde(rename = "+pre-hook")]
+    #[serde(rename = "+pre-hook", alias = "+pre_hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(rename = "+predicates")]
     pub predicates: Option<Vec<String>>,
@@ -786,10 +802,13 @@ pub struct ModelConfig {
     pub lookback: Option<i32>,
     pub begin: Option<String>,
     pub persist_docs: Option<PersistDocsConfig>,
+    #[serde(alias = "post-hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[resolved(promote, expect = "apply_package_defaults guarantees quoting is set")]
     pub quoting: Option<DbtQuoting>,
+    #[serde(default, deserialize_with = "column_types_map")]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     pub compute: Option<ComputeArg>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -810,6 +829,7 @@ pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_anonymous_sproc: Option<bool>,
     pub contract: Option<DbtContract>,
+    #[serde(default, deserialize_with = "event_time_or_map_to_string")]
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub concurrent_batches: Option<bool>,
@@ -990,6 +1010,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
+                zorder: config.zorder,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -1005,6 +1026,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
 
                 auto_refresh: config.auto_refresh,
@@ -1191,6 +1213,7 @@ impl From<ModelConfig> for ProjectModelConfig {
                 .include_full_name_in_path,
             liquid_clustered_by: config.__warehouse_specific_config__.liquid_clustered_by,
             auto_liquid_cluster: config.__warehouse_specific_config__.auto_liquid_cluster,
+            zorder: config.__warehouse_specific_config__.zorder,
             clustered_by: config.__warehouse_specific_config__.clustered_by,
             buckets: config.__warehouse_specific_config__.buckets,
             catalog: config.__warehouse_specific_config__.catalog,
@@ -1231,6 +1254,7 @@ impl From<ModelConfig> for ProjectModelConfig {
                 .__warehouse_specific_config__
                 .use_safer_relation_operations,
             view_update_via_alter: config.__warehouse_specific_config__.view_update_via_alter,
+            unique_tmp_table_suffix: config.__warehouse_specific_config__.unique_tmp_table_suffix,
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             sync: config.sync,
@@ -1272,6 +1296,10 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
 
     fn get_enabled_with_default(&self) -> bool {
         self.enabled.unwrap_or(true)
+    }
+
+    fn get_enabled(&self) -> Option<bool> {
+        self.enabled
     }
 
     fn disable(&mut self) {
@@ -1872,6 +1900,43 @@ mod tests {
     use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
+    use crate::schemas::serde::StringOrArrayOfStrings;
+
+    #[test]
+    fn test_model_clustered_by_accepts_ordered_list() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  clustered_by: [nation, region]
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.__warehouse_specific_config__.clustered_by,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "nation".to_string(),
+                "region".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_project_model_clustered_by_accepts_ordered_list() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++clustered_by: [nation, region]
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.clustered_by,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "nation".to_string(),
+                "region".to_string(),
+            ]))
+        );
+    }
 
     #[test]
     fn test_classifiers_merge_in_default_to() {
@@ -1960,6 +2025,46 @@ __warehouse_specific_config__: {}
         assert_eq!(state.evaluate_volatile_sql, Some(true));
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
         assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
+    }
+
+    /// Regression for fs#13343: Core accepts a sequence-valued `column_types` entry
+    /// (e.g. produced by a templated macro); Fusion must not reject it during YAML load.
+    #[test]
+    fn test_model_config_column_types_accepts_sequence_value() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+column_types:
+  id:
+    - integer
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        let column_types = config.column_types.expect("column_types should parse");
+        assert_eq!(
+            column_types.get(&dbt_yaml::Spanned::from("id".to_string())),
+            Some(&"integer".to_string())
+        );
+    }
+
+    /// Regression for fs#13343: Core accepts a mapping-valued `event_time`; Fusion
+    /// must not reject it during YAML load.
+    #[test]
+    fn test_model_config_event_time_accepts_mapping_value() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+event_time:
+  column: event_at
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.event_time.as_deref(),
+            Some(r#"{"column":"event_at"}"#)
+        );
     }
 
     #[test]

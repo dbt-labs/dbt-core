@@ -4073,7 +4073,7 @@ mod selector_method_tests {
         common::{Access, DbtMaterialization, ResolvedQuoting},
         nodes::AdapterAttr,
         project::ModelConfig,
-        selectors::SelectorEntry,
+        selectors::{SelectorDefinitionValue, SelectorEntry},
     };
     use indexmap::IndexMap;
     use std::sync::Arc;
@@ -4181,6 +4181,15 @@ mod selector_method_tests {
         ))
     }
 
+    fn selector_entry(include: SelectExpression) -> SelectorEntry {
+        SelectorEntry {
+            include,
+            is_default: false,
+            description: None,
+            definition: SelectorDefinitionValue::String(String::new()),
+        }
+    }
+
     #[test]
     fn test_selector_method_basic_resolution() {
         let nodes = tagged_nodes();
@@ -4188,11 +4197,7 @@ mod selector_method_tests {
         let mut sel_defs = HashMap::new();
         sel_defs.insert(
             "nightly_models".to_string(),
-            SelectorEntry {
-                include: tag_selector("nightly"),
-                is_default: false,
-                description: None,
-            },
+            selector_entry(tag_selector("nightly")),
         );
 
         let mut stack = Vec::new();
@@ -4222,11 +4227,7 @@ mod selector_method_tests {
         // "core_models" selects tag:core → {model.a, model.c}
         sel_defs.insert(
             "core_models".to_string(),
-            SelectorEntry {
-                include: tag_selector("core"),
-                is_default: false,
-                description: None,
-            },
+            selector_entry(tag_selector("core")),
         );
 
         let mut stack = Vec::new();
@@ -4281,22 +4282,8 @@ mod selector_method_tests {
         let deps = make_deps();
         let mut sel_defs = HashMap::new();
         // alpha references beta, beta references alpha
-        sel_defs.insert(
-            "alpha".to_string(),
-            SelectorEntry {
-                include: selector_atom("beta"),
-                is_default: false,
-                description: None,
-            },
-        );
-        sel_defs.insert(
-            "beta".to_string(),
-            SelectorEntry {
-                include: selector_atom("alpha"),
-                is_default: false,
-                description: None,
-            },
-        );
+        sel_defs.insert("alpha".to_string(), selector_entry(selector_atom("beta")));
+        sel_defs.insert("beta".to_string(), selector_entry(selector_atom("alpha")));
 
         let mut stack = Vec::new();
         let result = eval_selector(
@@ -4322,19 +4309,11 @@ mod selector_method_tests {
         let mut sel_defs = HashMap::new();
         sel_defs.insert(
             "nightly_models".to_string(),
-            SelectorEntry {
-                include: tag_selector("nightly"),
-                is_default: false,
-                description: None,
-            },
+            selector_entry(tag_selector("nightly")),
         );
         sel_defs.insert(
             "nightly_seeds".to_string(),
-            SelectorEntry {
-                include: tag_selector("core"),
-                is_default: false,
-                description: None,
-            },
+            selector_entry(tag_selector("core")),
         );
 
         let mut stack = Vec::new();
@@ -4363,23 +4342,9 @@ mod selector_method_tests {
         let nodes = tagged_nodes();
         let deps = make_deps();
         let mut sel_defs = HashMap::new();
-        sel_defs.insert(
-            "base".to_string(),
-            SelectorEntry {
-                include: tag_selector("nightly"),
-                is_default: false,
-                description: None,
-            },
-        );
+        sel_defs.insert("base".to_string(), selector_entry(tag_selector("nightly")));
         // "derived" references "base"
-        sel_defs.insert(
-            "derived".to_string(),
-            SelectorEntry {
-                include: selector_atom("base"),
-                is_default: false,
-                description: None,
-            },
-        );
+        sel_defs.insert("derived".to_string(), selector_entry(selector_atom("base")));
 
         let mut stack = Vec::new();
         let result = eval_selector(

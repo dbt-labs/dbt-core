@@ -4,8 +4,9 @@ failure is distinguished from a real error.
 Asserts on the returned objects, never on stdout.
 """
 
+from dbt.artifacts.schemas.sources import FreshnessStatus
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.results import CatalogArtifact, RunResultsArtifact
+from dbt.contracts.results import CatalogArtifact, FreshnessResultsArtifact, RunResultsArtifact
 
 
 def test_parse_returns_manifest(tmp_project, invoke):
@@ -70,6 +71,37 @@ def test_failing_test_is_a_handled_failure(tmp_project, invoke):
     assert len(failed) == 1, res.result.results
     assert failed[0].unique_id.startswith("test.failing_test.unique_dupes_id")
     assert failed[0].failures == 1
+
+
+def test_source_freshness_returns_freshness_results(built_project, invoke):
+    """`source freshness` reports sources.json, not run_results.json."""
+    proj = built_project("freshness")
+
+    res = invoke(proj, "source", "freshness", "--select", "source:raw.fresh_events")
+
+    assert res.success, res.exception
+    assert res.exit_code == 0
+    assert isinstance(res.result, FreshnessResultsArtifact), type(res.result)
+    assert [r.unique_id for r in res.result] == ["source.freshness.raw.fresh_events"]
+    # Capitalised, unlike run_results' statuses.
+    assert res.result[0].status == FreshnessStatus.PASS
+    assert res.result[0].criteria.warn_after.count == 1
+
+
+def test_stale_source_is_a_handled_failure(built_project, invoke):
+    """A stale source is accounted for by the artifact, so it sets no exception."""
+    proj = built_project("freshness")
+
+    res = invoke(proj, "source", "freshness")
+
+    assert res.success is False
+    assert res.exception is None, res.exception
+    assert res.exit_code == 1
+    statuses = {r.unique_id: r.status for r in res.result}
+    assert statuses == {
+        "source.freshness.raw.fresh_events": FreshnessStatus.PASS,
+        "source.freshness.raw.stale_events": FreshnessStatus.ERROR,
+    }
 
 
 def test_unresolvable_ref_returns_partial_manifest_with_error(tmp_project, invoke):

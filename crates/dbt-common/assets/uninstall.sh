@@ -30,6 +30,9 @@ help() {
     echo ""
     echo "Options:"
     echo "  --installLocation, -i     Install location of dbt"
+    echo "  --binaryPath              Exact path to the dbt binary to remove,"
+    echo "                            overriding installLocation/dbt for the"
+    echo "                            main binary only (e.g. a renamed copy)"
     echo "  --package PACKAGE         Uninstall package PACKAGE [dbt|dbt-lsp|all]"
     echo "  --help, -h                Show this help text"
 }
@@ -42,6 +45,10 @@ while test $# -gt 0; do
         ;;
     --installLocation | -i)
         installLocation=$2
+        shift
+        ;;
+    --binaryPath)
+        binaryPath=$2
         shift
         ;;
     --package | -p)
@@ -65,6 +72,17 @@ else
     dbtInstallLocation="$installLocation/dbt"
     runnerInstallLocation="$installLocation/dbt-db-runner"
     lspInstallLocation="$installLocation/dbt-lsp"
+fi
+
+# --binaryPath overrides the main dbt binary's location only -- it may be
+# named something other than "dbt" (e.g. dbtf, as the VS Code extension
+# names it to avoid colliding with a separate OSS dbt on PATH). Optional and
+# additive: older callers that only pass --installLocation, or nothing at
+# all, keep the exact behavior above. The runner/lsp locations are
+# unaffected, since those companions always keep their literal names
+# regardless of what the main binary is named.
+if [ -n "${binaryPath:-}" ]; then
+    dbtInstallLocation="$binaryPath"
 fi
 
 # check if package is valid

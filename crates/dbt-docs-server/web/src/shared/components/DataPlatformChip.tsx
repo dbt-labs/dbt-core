@@ -2,7 +2,7 @@ import { FC } from 'react';
 import { twMerge } from 'tailwind-merge';
 
 import { WarehouseType, WarehouseTypeIcon } from '@dbt-labs/dbt-dag';
-import { Icon, RyeconColorDbt, SizeType } from '@dbt-labs/sourdough';
+import { SizeType } from '@dbt-labs/sourdough';
 
 import { toTitleCase } from '../util/string';
 
@@ -21,31 +21,26 @@ export const DataPlatformChip: FC<DataPlatformChipProps> = ({
   className,
   ...props
 }) => {
-  const isDbt = platform === 'dbt';
-  const platformName = isDbt ? 'dbt' : platform;
+  if (platform === 'dbt') {
+    // dbt-native resources (no specific warehouse) have no chip to show —
+    // there's no dbt brand icon here (white-labeled for OSS) and no other
+    // platform to name.
+    return null;
+  }
 
   const borderClasses = bordered ? ' border p-2 border-borderMuted' : '';
   const classes = `flex w-fit space-x-2 rounded text-xs${borderClasses}`;
 
   return (
     <div className={twMerge(classes, className)} {...props}>
-      {isDbt ? (
-        <Icon
-          ryecon={RyeconColorDbt}
-          className="mt-0.5 align-middle"
-          size={size}
-          alt="dbt"
-        />
-      ) : (
-        <WarehouseTypeIcon
-          warehouse={platform}
-          className="mt-0.5 align-middle"
-          size={size}
-        />
-      )}
+      <WarehouseTypeIcon
+        warehouse={platform}
+        className="mt-0.5 align-middle"
+        size={size}
+      />
       {showText && (
         <span className="align-middle font-normal leading-5 text-fgMain">
-          {platformName === 'dbt' ? 'dbt' : toTitleCase(platformName)}
+          {toTitleCase(platform)}
         </span>
       )}
     </div>

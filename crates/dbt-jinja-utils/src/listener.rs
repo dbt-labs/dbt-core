@@ -946,6 +946,20 @@ impl SymbolicRenderingEventListener {
         }
     }
 
+    /// Creates a new listener with a shared output tracker location. Use this
+    /// when the output position needs to be observable by another listener at
+    /// the same time (e.g. a `SqlfluffTemplatedFileListener` built with
+    /// `owns_output_tracker: false`, so the two can be combined in one render
+    /// pass without fighting over which one attaches the tracker).
+    pub fn with_tracker(quiet: bool, output_tracker_location: Rc<OutputTrackerLocation>) -> Self {
+        Self {
+            inner: DefaultRenderingEventListener::with_tracker(quiet, output_tracker_location),
+            introspective_branch_overrides: HashMap::new(),
+            introspective_branch_ordinal: Cell::new(0),
+            introspective_macro_registry: None,
+        }
+    }
+
     /// The macro spans accumulated by the wrapped
     /// [`DefaultRenderingEventListener`] during this render.
     pub fn macro_spans(&self) -> std::cell::Ref<'_, MacroSpans> {

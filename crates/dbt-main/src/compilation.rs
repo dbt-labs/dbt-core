@@ -43,6 +43,7 @@ use dbt_tasks_core::{
     local_schema_builder::{init_data_store, init_schema_store},
     metricflow::MetricflowClient,
     run_cache::run_cache_service::run_cache_service_after_run_failed,
+    run_cache_lifecycle::RunCacheLifecycle,
     static_analysis_buckets::{StaticAnalysisBuckets, build_refresh_intervals},
     utils::{build_run_results_artifact, write_run_results_json, write_run_results_json_or_warn},
 };
@@ -280,6 +281,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             config,
             self.arg.local_execution_backend,
             !feature_stack.version_check_enabled,
+            feature_stack.cli.command_name,
         );
         self.token.check_cancellation()?;
 
@@ -294,7 +296,9 @@ impl<'a> CompilationPhasesExecutor<'a> {
         // Handle 'debug' or 'init' commands to run debug.
         if let FsCommand::Debug | FsCommand::Init = self.arg.command {
             let mut debug_args = DebugArgs::from_eval_args(self.arg.as_ref());
-            debug_args.alt_propagation_checker = feature_stack.cli.hooks.alt_propagation_checker();
+            debug_args.alt_propagation_checker = feature_stack.alt.propagation_checker.clone();
+            debug_args.alt_catalog_attach_checker =
+                feature_stack.alt.catalog_attach_checker.clone();
             compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
                 .await?;
             self.token.check_cancellation()?;
@@ -1538,6 +1542,7 @@ impl DbtProjectCompilation {
         task_runner_hooks_factory: &dyn TaskRunnerHooksFactory,
         token: &CancellationToken,
         previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
+        artifacts_sink: &mut DbtCommandExecutionArtifacts,
     ) -> FsResult<DbtRunTasksResult> {
         token.check_cancellation()?;
 
@@ -1889,6 +1894,12 @@ impl DbtProjectCompilation {
 
         // Initialize Deferral State
         let mut defer_state = if arg.defer {
+            // we need to clone these to prevent the create_run_cache() closure below
+            // from capturing them and preventing their use elsewhere
+            let run_task_args_copy = run_task_args.clone();
+            let adapter_type = resolved_state.adapter_type;
+            let cloud_config = resolved_state.cloud_config.clone();
+
             DeferState::load(
                 arg,
                 adapter.clone(),
@@ -1897,6 +1908,16 @@ impl DbtProjectCompilation {
                 &jinja_env,
                 maybe_previous_state.clone(),
                 root_project_quoting,
+                // note: async move is required to prevent a lifetime issue with #[async_trait] in driver.rs
+                async move || {
+                    RunCacheLifecycle::get_or_initialize(
+                        run_task_args_copy.as_ref(),
+                        execute_mode,
+                        adapter_type,
+                        cloud_config.as_ref(),
+                    )
+                    .await
+                },
             )
             .await?
         } else {
@@ -2001,6 +2022,7 @@ impl DbtProjectCompilation {
                 &schedule,
                 Arc::clone(&adapter),
                 &base_context,
+                artifacts_sink,
             )
             .await?
         } else {
@@ -2135,6 +2157,15 @@ impl DbtProjectCompilation {
             data_store.clone(),
             metricflow_server_client,
         );
+
+        let run_cache = RunCacheLifecycle::get_or_initialize(
+            run_task_args.as_ref(),
+            execute_mode,
+            resolved_state.adapter_type,
+            resolved_state.cloud_config.as_ref(),
+        )
+        .await?;
+
         let task_runner = TaskRunner::new(
             hooks,
             adapter.clone(),
@@ -2145,6 +2176,7 @@ impl DbtProjectCompilation {
             compiled_sql_cache.clone(),
             Arc::clone(&feature_stack.task_runner.task_runner_ctx_factory),
             static_analysis_buckets,
+            run_cache,
         );
         let run_task_results = {
             if run_task_args.command == FsCommand::Extension("jinja-check")
@@ -2402,6 +2434,7 @@ fn spawn_version_check_if_possible(
     config: &CompilationConfig,
     compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
     version_check_disabled: bool,
+    command_name: &'static str,
 ) -> Option<tokio::task::JoinHandle<Option<String>>> {
     if version_check_disabled {
         return None;
@@ -2416,7 +2449,8 @@ fn spawn_version_check_if_possible(
         let current_version = env!("CARGO_PKG_VERSION");
         if !disable_version_check {
             return Some(tokio::spawn(
-                version_check::check_version(current_version, None).in_current_span(),
+                version_check::check_version_and_build_hint(current_version, None, command_name)
+                    .in_current_span(),
             ));
         }
     }

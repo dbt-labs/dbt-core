@@ -6,6 +6,7 @@ use crate::metadata::freshness_overrides::{
     FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
 };
 use crate::metadata::*;
+use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch::{RecordBatchExt, StructArrayExt};
 use crate::relation::Relation;
 use crate::time_machine::{args_freshness_with_overrides, with_time_machine_metadata_wrapper};
@@ -84,6 +85,53 @@ fn list_relations_via_information_schema(
     table_type
 FROM 
     {db_schema}.INFORMATION_SCHEMA.TABLES"
+    );
+
+    let batch = engine.execute(None, conn, ctx, &sql, token)?;
+    let table_names = batch.column_values::<StringArray>("table_name")?;
+    let table_schemas = batch.column_values::<StringArray>("table_schema")?;
+    let table_catalogs = batch.column_values::<StringArray>("table_catalog")?;
+    let table_types = batch.column_values::<StringArray>("table_type")?;
+
+    let mut result = Vec::with_capacity(batch.num_rows());
+    for i in 0..batch.num_rows() {
+        let database = table_catalogs.value(i);
+        let schema = table_schemas.value(i);
+        let identifier = table_names.value(i);
+        let relation_type =
+            RelationType::from_adapter_type(AdapterType::Bigquery, table_types.value(i));
+
+        result.push(Arc::new(
+            Relation::new(
+                AdapterType::Bigquery,
+                database.to_string(),
+                schema.to_string(),
+                identifier.to_string(),
+            )
+            .with_relation_type(relation_type)
+            .with_quoting(engine.quoting()),
+        ) as Arc<dyn BaseRelation>);
+    }
+    Ok(result)
+}
+
+pub fn list_routines(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+    token: CancellationToken,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let sql = format!(
+        "SELECT
+    routine_catalog AS table_catalog,
+    routine_schema AS table_schema,
+    routine_name AS table_name,
+    routine_type AS table_type
+FROM
+    {db_schema}.INFORMATION_SCHEMA.ROUTINES
+WHERE
+    routine_type != 'PROCEDURE'"
     );
 
     let batch = engine.execute(None, conn, ctx, &sql, token)?;
@@ -1616,6 +1664,71 @@ pub fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
         || msg.contains("notFound:")
 }
 
+/// Fallback when object is not found in `INFORMATION_SCHEMA.TABLES`
+#[allow(clippy::too_many_arguments)]
+pub fn get_relation_routine_fallback(
+    adapter: &AdapterImpl,
+    state: &State,
+    conn: &'_ mut dyn Connection,
+    database: &str,
+    schema: &str,
+    identifier: &str,
+    token: CancellationToken,
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
+    let query_database = if adapter.quoting().database {
+        adapter.quote(database)
+    } else {
+        database.to_string()
+    };
+    let query_schema = if adapter.quoting().schema {
+        adapter.quote(schema)
+    } else {
+        schema.to_string()
+    };
+    let query_identifier = if adapter.quoting().identifier {
+        identifier.to_string()
+    } else {
+        identifier.to_lowercase()
+    };
+
+    let escaped_identifier =
+        dbt_adapter_sql::ident::escape_string_literal(&query_identifier, AdapterType::Bigquery);
+    let routines_sql = format!(
+        "SELECT routine_catalog AS table_catalog,
+                    routine_schema AS table_schema,
+                    routine_name AS table_name,
+                    routine_type AS table_type
+                FROM {query_database}.{query_schema}.INFORMATION_SCHEMA.ROUTINES
+                 WHERE routine_name = '{escaped_identifier}'
+                    AND routine_type != 'PROCEDURE';"
+    );
+
+    let ctx = query_ctx_from_state(state)?.with_desc("get_relation routines fallback");
+    let result = adapter
+        .engine()
+        .execute(Some(state), conn, &ctx, &routines_sql, token.clone());
+    let batch = match result {
+        Ok(batch) => batch,
+        Err(err)
+            if err.message().contains("Dataset") && err.message().contains("was not found") =>
+        {
+            return Ok(None);
+        }
+        Err(err) => return Err(err),
+    };
+
+    let Some(mut relation) =
+        get_relation::relation_from_routines_batch(adapter, database, schema, identifier, &batch)?
+    else {
+        return Ok(None);
+    };
+
+    // BigQuery-only metadata not covered by the generic fallback.
+    let location = adapter.get_dataset_location(state, conn, &relation, token)?;
+    relation.location = location;
+    Ok(Some(Box::new(relation)))
+}
+
 /// BigQuery surfaces access-control failures as googleapi HTTP 403 errors.
 /// This covers both plain IAM denials (e.g. the executing identity lacks
 /// `bigquery.datasets.create`) and VPC Service Controls policy violations.
@@ -2085,5 +2198,49 @@ mod tests {
             "[bq] Could not complete job: invalidQuery: Syntax error (query)",
         );
         assert!(!is_bigquery_not_found_error(&invalid));
+    }
+
+    fn routine_batch(routine_type: &str) -> RecordBatch {
+        let schema = Schema::new(vec![
+            Field::new("table_catalog", DataType::Utf8, false),
+            Field::new("table_schema", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+        ]);
+        RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["my-proj"])),
+                Arc::new(StringArray::from(vec!["my_schema"])),
+                Arc::new(StringArray::from(vec!["add_one"])),
+                Arc::new(StringArray::from(vec![routine_type])),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn routine_batch_maps_function_type_to_relation_type_function() {
+        let batch = routine_batch("FUNCTION");
+        assert!(batch.num_rows() > 0);
+
+        let column = batch.column_by_name("table_type").unwrap();
+        let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+        let relation_type_name = string_array.value(0).to_uppercase();
+        let relation_type =
+            RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
+
+        assert_eq!(relation_type, RelationType::Function);
+    }
+
+    #[test]
+    fn empty_routine_batch_signals_not_found() {
+        let schema = Schema::new(vec![Field::new("table_type", DataType::Utf8, false)]);
+        let empty_batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![Arc::new(StringArray::from(Vec::<&str>::new()))],
+        )
+        .unwrap();
+        assert_eq!(empty_batch.num_rows(), 0);
     }
 }

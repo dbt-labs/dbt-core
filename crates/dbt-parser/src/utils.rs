@@ -2,6 +2,7 @@
 use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_adapter_core::AdapterType;
+use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
@@ -193,11 +194,13 @@ pub fn get_snapshot_fqn(
         .is_some_and(|ext| ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml"));
 
     if is_yaml_defined {
+        // We've already normalized the yaml snapshots here under snapshots/,
+        // so we strip the normalized snapshots path instead of the original.
         get_node_fqn(
             package_name,
             path.to_path_buf(),
             vec![snapshot_name.to_string()],
-            snapshot_paths,
+            &[DBT_SNAPSHOTS_DIR_NAME.into()],
         )
     } else {
         let original_file_stem = strip_resource_paths_from_ref_path(original_path, snapshot_paths)

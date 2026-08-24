@@ -66,13 +66,14 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
 use dbt_schemas::schemas::common::{ConstraintType, normalize_quote};
+use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::profiles::DuckDBPathInfo;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName, Policy};
-use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
+use dbt_schemas::schemas::serde::{StringOrMap, minijinja_value_to_typed_struct};
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
@@ -1167,14 +1168,8 @@ impl AdapterImpl {
 
         let last_batch = last_batch.expect("last_batch should never be None");
 
-        let rows_affected = last_batch.rows_affected(self.adapter_type());
-        let mut response = AdapterResponse::new()
-            .with_message(format!("SUCCESS {}", rows_affected))
-            .with_code("SUCCESS")
-            .with_rows_affected(rows_affected);
-        if let Some(query_id) = last_batch.query_id(self.adapter_type()) {
-            response = response.with_query_id(query_id);
-        }
+        let response = AdapterResponse::from_record_batch(&last_batch, self.adapter_type())
+            .with_connection_info(self.adapter_type(), engine.as_ref());
 
         // Deduplicate column names to match dbt-core's behavior, which renames
         // duplicate columns to `col_2`, `col_3`, etc.
@@ -2115,6 +2110,33 @@ impl AdapterImpl {
         }
     }
 
+    /// is_cluster_http_path https://github.com/databricks/dbt-databricks/blob/34642904170066825cd4f02a4c5f9b2c3d2d547c/dbt/adapters/databricks/utils.py
+    fn is_cluster_http_path(config: &AdapterConfig) -> Option<bool> {
+        let http_path = config.get_string("http_path")?;
+        let normalized = http_path.trim().to_ascii_lowercase();
+
+        Some(if normalized.contains("/warehouses/") {
+            false
+        } else {
+            normalized.contains("/protocolv1/")
+        })
+    }
+
+    /// Parse has no connection to read the DBR version from, so only a config
+    /// that positively identifies a SQL warehouse can answer true.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/34642904170066825cd4f02a4c5f9b2c3d2d547c/dbt/adapters/databricks/impl.py#L306-L315
+    pub(crate) fn parse_has_dbr_capability(config: &AdapterConfig, capability_name: &str) -> bool {
+        let Ok(capability) = dbr_capabilities::DbrCapability::from_str(capability_name) else {
+            return false;
+        };
+        let Some(is_cluster) = Self::is_cluster_http_path(config) else {
+            return false;
+        };
+
+        dbr_capabilities::has_capability(capability, EngineVersion::Unset, !is_cluster)
+    }
+
     /// Determine if the current Databricks connection points to a classic
     /// cluster (as opposed to a SQL warehouse).
     ///
@@ -2127,25 +2149,12 @@ impl AdapterImpl {
             ));
         }
 
-        let http_path = self
-            .engine()
-            .get_config()
-            .get_string("http_path")
-            .ok_or_else(|| {
-                AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    "http_path is required to determine Databricks compute type",
-                )
-            })?;
-
-        let normalized = http_path.trim().to_ascii_lowercase();
-        if normalized.contains("/warehouses/") {
-            return Ok(false);
-        }
-        if normalized.contains("/protocolv1/") {
-            return Ok(true);
-        }
-        Ok(false)
+        Self::is_cluster_http_path(self.engine().get_config()).ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "http_path is required to determine Databricks compute type",
+            )
+        })
     }
 
     pub fn has_feature(
@@ -2871,12 +2880,23 @@ impl AdapterImpl {
                     })
                     .collect::<BTreeMap<String, String>>();
 
+                // BigQuery policy tags are taxonomy resource-path strings, so mapping entries (e.g. Snowflake masking-policy config) are dropped here rather than sent to the REST API.
+                // If a column's tags are all mapping-valued, omit it entirely rather than
+                // sending an empty list, which BigQuery would interpret as clearing any
+                // existing policy tags on that column.
                 let column_to_policy_tags = nested_columns
                     .iter()
                     .filter_map(|(name, col)| {
-                        col.policy_tags
-                            .as_ref()
-                            .map(|tags| (name.to_string(), tags.clone()))
+                        col.policy_tags.as_ref().and_then(|tags| {
+                            let string_tags = tags
+                                .iter()
+                                .filter_map(|tag| match tag {
+                                    StringOrMap::StringValue(s) => Some(s.clone()),
+                                    StringOrMap::MapValue(_) => None,
+                                })
+                                .collect::<Vec<String>>();
+                            (!string_tags.is_empty()).then(|| (name.to_string(), string_tags))
+                        })
                     })
                     .collect::<BTreeMap<String, Vec<String>>>();
 
@@ -4786,7 +4806,9 @@ impl AdapterImpl {
                     .get_value(&Value::from("use_managed_iceberg"))
                     .is_some_and(|flag| flag.is_true());
 
-                if use_managed_iceberg && catalog_relation.catalog_type != "unity" {
+                if use_managed_iceberg
+                    && !matches!(catalog_relation.catalog_type, CatalogType::Unity)
+                {
                     return Err(AdapterError::new(
                         AdapterErrorKind::Configuration,
                         "Managed Iceberg tables are only supported in Unity Catalog. Set 'use_uniform' adapter property to true for Hive Metastore.",
@@ -6689,6 +6711,60 @@ mod tests {
             )
             .unwrap();
         assert_eq!(result, Some(true));
+    }
+
+    fn databricks_config(pairs: &[(&str, &str)]) -> AdapterConfig {
+        AdapterConfig::new(Mapping::from_iter(
+            pairs.iter().map(|(k, v)| ((*k).into(), (*v).into())),
+        ))
+    }
+
+    #[test]
+    fn test_is_cluster_http_path() {
+        let is_cluster = |http_path: &str| {
+            AdapterImpl::is_cluster_http_path(&databricks_config(&[("http_path", http_path)]))
+        };
+
+        assert_eq!(is_cluster("/sql/1.0/warehouses/abc"), Some(false));
+        assert_eq!(is_cluster("sql/protocolv1/o/1/0101-abc"), Some(true));
+        assert_eq!(is_cluster("/custom"), Some(false));
+        assert_eq!(is_cluster("  /SQL/1.0/WAREHOUSES/abc  "), Some(false));
+
+        assert_eq!(
+            AdapterImpl::is_cluster_http_path(&databricks_config(&[])),
+            None
+        );
+    }
+
+    #[test]
+    fn test_parse_has_dbr_capability() {
+        let warehouse = databricks_config(&[("http_path", "/sql/1.0/warehouses/abc")]);
+        let cluster = databricks_config(&[("http_path", "sql/protocolv1/o/1/0101-abc")]);
+
+        assert!(AdapterImpl::parse_has_dbr_capability(
+            &warehouse,
+            "timestampdiff"
+        ));
+        assert!(!AdapterImpl::parse_has_dbr_capability(
+            &cluster,
+            "timestampdiff"
+        ));
+
+        // `streaming_table_json_metadata` is the one capability warehouses do
+        // not support, so this fails if the capability is never consulted.
+        assert!(!AdapterImpl::parse_has_dbr_capability(
+            &warehouse,
+            "streaming_table_json_metadata"
+        ));
+
+        assert!(!AdapterImpl::parse_has_dbr_capability(
+            &warehouse,
+            "not_a_capability"
+        ));
+        assert!(!AdapterImpl::parse_has_dbr_capability(
+            &databricks_config(&[]),
+            "timestampdiff"
+        ));
     }
 
     fn record_batch_with_string_column(name: &str, values: Vec<&str>) -> Arc<RecordBatch> {

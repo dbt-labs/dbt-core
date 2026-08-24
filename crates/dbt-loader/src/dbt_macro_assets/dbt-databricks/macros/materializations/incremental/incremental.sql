@@ -115,7 +115,7 @@
       {% do apply_tags(target_relation, tags) %}
       {#-- DIVERGENCE START: Core does not set column tags for incremental #}
       {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
-      {% if column_tags and column_tags.tags %}
+      {% if column_tags and column_tags.set_column_tags %}
         {% do apply_column_tags(target_relation, column_tags) %}
       {% endif %}
       {#-- DIVERGENCE END #}
@@ -138,7 +138,7 @@
       {% endif %}
       {% do apply_tags(target_relation, tags) %}
       {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
-      {% if column_tags and column_tags.tags %}
+      {% if column_tags and column_tags.set_column_tags %}
         {% do apply_column_tags(target_relation, column_tags) %}
       {% endif %}
       {% do persist_docs(target_relation, model, for_relation=language=='python') %}

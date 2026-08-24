@@ -9,9 +9,9 @@ import {
   RyeconFreshnessUnknown,
   RyeconStatusSkipped,
   RyeconStatusWarning,
-  Tooltip,
 } from '@dbt-labs/sourdough';
 
+import { Tooltip } from '../../components/ui/Tooltip';
 import { truthy } from '../util/array';
 import { CollapsibleSection } from './CollapsibleSection';
 

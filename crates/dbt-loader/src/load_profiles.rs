@@ -158,7 +158,10 @@ fn profile_defer_to_target(credentials: &dbt_yaml::Mapping) -> Option<String> {
 /// Reads the active target's `allow_clones` setting straight from its
 /// `outputs.<target>` block in profiles.yml, ahead of typed `DbConfig` parsing.
 fn target_allow_clones(credentials: &dbt_yaml::Mapping) -> bool {
-    match credentials.get("allow_clones") {
+    match credentials
+        .get("allow_clones")
+        .or_else(|| credentials.get("run_cache_allow_clones"))
+    {
         Some(dbt_yaml::Value::Bool(allow_clones, _)) => *allow_clones,
         Some(dbt_yaml::Value::String(value, _)) => {
             matches!(value.to_ascii_lowercase().as_str(), "true")
@@ -232,6 +235,15 @@ mod tests {
     fn target_allow_clones_reads_bool_value() {
         let credentials = dbt_yaml::Mapping::from_iter([(
             "allow_clones".into(),
+            dbt_yaml::Value::Bool(false, Span::default()),
+        )]);
+        assert!(!target_allow_clones(&credentials));
+    }
+
+    #[test]
+    fn target_allow_clones_reads_legacy_run_cache_value() {
+        let credentials = dbt_yaml::Mapping::from_iter([(
+            "run_cache_allow_clones".into(),
             dbt_yaml::Value::Bool(false, Span::default()),
         )]);
         assert!(!target_allow_clones(&credentials));

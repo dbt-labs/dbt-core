@@ -4,7 +4,7 @@ import {
   type ResourceTypeExplorer,
   resourceTypesWithColumns,
 } from '@dbt-labs/dbt-dag';
-import { Button, Card, RyeconShare, RyeconTable } from '@dbt-labs/sourdough';
+import { RyeconShare, RyeconTable } from '@dbt-labs/sourdough';
 
 import { getColumns, toRelationshipItem } from '../lib/assetView';
 import { filterConfig } from '../lib/configView';
@@ -46,6 +46,8 @@ import {
 import { ColumnLineageMini, useColumnLineage } from './ColumnLineageView';
 import { LineageView } from './LineageView';
 import { NoColumnMetadataFallback } from './NoColumnMetadataFallback';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
 
 interface Props {
   asset: Asset;
@@ -199,7 +201,7 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
   const actions = (
     <div className="flex items-center gap-2">
       <Button
-        type="secondary"
+        variant="outline"
         ryecon={RyeconShare}
         tooltip="Copy link"
         onClick={() => {

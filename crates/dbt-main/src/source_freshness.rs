@@ -7,10 +7,12 @@ use dbt_common::io_args::{EvalArgs, Phases};
 use dbt_common::io_utils::checkpoint_maybe_exit;
 use dbt_dag::schedule::Schedule;
 use dbt_freshness::freshness::{
-    FreshnessTimestamps, emit_freshness_stats, freshness_results_to_context, run_freshness,
-    write_freshness_results_parquet, write_sources_json,
+    FreshnessTimestamps, build_sources_artifact, emit_freshness_stats,
+    freshness_results_to_context, run_freshness, write_freshness_results_parquet,
+    write_sources_json,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::schemas::DbtCommandExecutionArtifacts;
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::PreTaskRunData;
 use dbt_tasks_sa::run_operation::run_operation_on_run;
@@ -26,6 +28,8 @@ use minijinja::Value;
 ///
 /// `dbt source freshness` sets `phase` to [`Phases::Freshness`], so the
 /// checkpoint ends the invocation and the returned value is rarely observed.
+/// `artifacts_sink` is how the artifact reaches library callers instead: it is filled
+/// in before the checkpoint, so it survives that early exit.
 pub async fn run_source_freshness(
     arg: &EvalArgs,
     jinja_env: &JinjaEnv,
@@ -33,6 +37,7 @@ pub async fn run_source_freshness(
     schedule: &Schedule<String>,
     adapter: Arc<Adapter>,
     base_context: &BTreeMap<String, Value>,
+    artifacts_sink: &mut DbtCommandExecutionArtifacts,
 ) -> FsResult<Option<Box<dyn PreTaskRunData>>> {
     let empty_results: Vec<()> = vec![];
     for operation in resolved_state.operations.on_run_start.iter() {
@@ -61,13 +66,12 @@ pub async fn run_source_freshness(
     .await?;
     emit_freshness_stats(&arg.io, &results);
 
-    write_sources_json(
-        &arg.io.out_dir,
-        &arg.io.in_dir,
+    let sources_artifact = artifacts_sink.sources.insert(build_sources_artifact(
         &arg.io.invocation_id,
         resolved_state,
         &results,
-    )?;
+    ));
+    write_sources_json(&arg.io.out_dir, &arg.io.in_dir, sources_artifact)?;
     if arg.write_metadata {
         write_freshness_results_parquet(&arg.io, resolved_state, &results);
     }

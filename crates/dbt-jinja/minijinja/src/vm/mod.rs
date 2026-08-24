@@ -973,10 +973,25 @@ impl<'env> Vm<'env> {
                     }
                 }
                 Instruction::JumpIfFalseOrPop(jump_target, span) => {
-                    if !undefined_behavior
-                        .is_true(stack.peek())
-                        .map_err(|e| state.with_span_error(e, span))?
-                    {
+                    // `and`'s short-circuit point: on a tainted LHS, deciding
+                    // "truthy" purely from the fabricated fake value (as plain
+                    // `is_true` would) can short-circuit away a *real*,
+                    // non-tainted RHS that would have deterministically made
+                    // the whole expression false regardless of the LHS's real
+                    // value (e.g. `is_incremental() and flags.WHICH != "lint"`
+                    // during lint, where the RHS is always false). Consulting
+                    // `override_branch` here mirrors `JumpIfFalse` below: when
+                    // exploration wants to treat the tainted LHS as truthy, it
+                    // must actually continue on to evaluate the RHS for real
+                    // instead of blindly short-circuiting on the fake value.
+                    let treat_as_true =
+                        match override_listener.and_then(|l| l.override_branch(stack.peek())) {
+                            Some(overridden) => overridden,
+                            None => undefined_behavior
+                                .is_true(stack.peek())
+                                .map_err(|e| state.with_span_error(e, span))?,
+                        };
+                    if !treat_as_true {
                         pc = *jump_target;
                         continue;
                     } else {
@@ -984,10 +999,16 @@ impl<'env> Vm<'env> {
                     }
                 }
                 Instruction::JumpIfTrueOrPop(jump_target, span) => {
-                    if undefined_behavior
-                        .is_true(stack.peek())
-                        .map_err(|e| state.with_span_error(e, span))?
-                    {
+                    // `or`'s short-circuit point; see `JumpIfFalseOrPop` above
+                    // for why this must also be taint/override-aware.
+                    let treat_as_true =
+                        match override_listener.and_then(|l| l.override_branch(stack.peek())) {
+                            Some(overridden) => overridden,
+                            None => undefined_behavior
+                                .is_true(stack.peek())
+                                .map_err(|e| state.with_span_error(e, span))?,
+                        };
+                    if treat_as_true {
                         pc = *jump_target;
                         continue;
                     } else {

@@ -153,12 +153,6 @@ fn load_simplified_project_only(arg: &LoadArgs) -> FsResult<DbtProjectSimplified
     let simplified_dbt_project: DbtProjectSimplified =
         into_typed_with_jinja(raw, true, &env, &ctx, &[], None, true)?;
 
-    if simplified_dbt_project.data_paths.is_some() {
-        return Err(fs_err!(
-            ErrorCode::InvalidConfig,
-            "'data-paths' cannot be specified in dbt_project.yml",
-        ));
-    }
     if simplified_dbt_project.source_paths.is_some() {
         return Err(fs_err!(
             ErrorCode::InvalidConfig,

@@ -2,13 +2,13 @@ import { FC, ReactNode } from 'react';
 
 import {
   Icon,
-  IconButton,
   RyeconCaretDown,
   RyeconCaretRight,
   RyeconKey,
   RyeconLineage,
 } from '@dbt-labs/sourdough';
 
+import { Button } from '../../components/ui/Button';
 import { truthy } from '../util/array';
 import { Badge, Badges } from './Badge';
 
@@ -99,13 +99,13 @@ export const ColumnCardShell: FC<ColumnCardShellProps> = ({
             </button>
           )}
           {expandable && (
-            <IconButton
+            <Button
+              variant="ghost"
               onClick={onToggleExpanded}
               className="flex-2 not-sr-only pb-0.5 align-middle"
               testId={`toggle-column-card-${name}`}
               ryecon={ryecon}
-              size="xs"
-              trackingId={trackingId}
+              size="icon-xs"
               tooltip={expanded ? toggleTooltip?.open : toggleTooltip?.closed}
             />
           )}

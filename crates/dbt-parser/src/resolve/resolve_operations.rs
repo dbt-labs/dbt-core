@@ -161,6 +161,7 @@ fn new_operation(
             let mut operation_ctx = BTreeMap::new();
             operation_ctx.extend(build_resolve_model_context(
                 &NoOpConfig {},
+                false,
                 adapter_type,
                 database,
                 schema,

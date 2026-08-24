@@ -17,6 +17,7 @@ use dbt_state::service_client::{
 };
 use dbt_state::service_config::RunCacheServiceConfig;
 use std::sync::Arc;
+use tokio::sync::OnceCell;
 
 use crate::RunTasksArgs;
 
@@ -32,6 +33,8 @@ pub struct RunCacheLifecycle {
     pub(crate) service: RunCacheServiceLifecycle,
     pub(crate) metadata: Arc<RunCacheMetadataCache>,
 }
+
+static SINGLETON: OnceCell<Arc<RunCacheLifecycle>> = OnceCell::const_new();
 
 impl RunCacheLifecycle {
     pub async fn initialize(
@@ -56,8 +59,30 @@ impl RunCacheLifecycle {
         })
     }
 
+    pub async fn get_or_initialize(
+        arg: &RunTasksArgs,
+        execute: Execute,
+        adapter_type: AdapterType,
+        cloud_config: Option<&ResolvedCloudConfig>,
+    ) -> FsResult<Arc<RunCacheLifecycle>> {
+        let run_cache_lifecycle = SINGLETON
+            .get_or_try_init(async || {
+                Self::initialize(arg, execute, adapter_type, cloud_config)
+                    .await
+                    .map(Arc::new)
+            })
+            .await?
+            .clone();
+
+        Ok(run_cache_lifecycle)
+    }
+
     pub fn is_requested(&self) -> bool {
         self.service.requested
+    }
+
+    pub fn service_client(&self) -> Option<SharedRunCacheServiceClient> {
+        self.service.client.clone()
     }
 }
 
@@ -290,22 +315,25 @@ pub fn run_cache_auto_defer_command(command: FsCommand) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        RunCacheLifecycle, RunCacheServiceLifecycle, RunTasksArgs, adapter_supports_dbt_state,
+        disconnected_run_cache_service, should_initialize_run_cache_service,
+        validate_client_version_for_initialization,
+    };
     use async_trait::async_trait;
     use dbt_adapter_core::AdapterType;
     use dbt_common::ErrorCode;
     use dbt_schemas::schemas::profiles::Execute;
+    use dbt_state::metadata_cache::RunCacheMetadataCache;
     use dbt_state::proto::query_cache::{
         ConfirmExecutionRequest, ConfirmExecutionResponse, SubmitSqlResponse, SubmitValuesRequest,
     };
+    use dbt_state::service_client::shared_run_cache_service_client;
     use dbt_state::service_client::{
         ClientVersionStatus, RunCacheServiceClient, RunCacheServiceError,
     };
     use dbt_state::service_config::RunCacheServiceConfig;
-
-    use super::{
-        RunTasksArgs, adapter_supports_dbt_state, disconnected_run_cache_service,
-        should_initialize_run_cache_service, validate_client_version_for_initialization,
-    };
+    use std::sync::Arc;
 
     fn args() -> RunTasksArgs {
         RunTasksArgs::default()
@@ -395,7 +423,7 @@ mod tests {
         );
         handle.shutdown().await.unwrap();
         reset_time_machine_globals().await.unwrap();
-        get_or_init_replayer(|| Ok(std::sync::Arc::new(EventReplayer::load(dir.path())?))).unwrap();
+        get_or_init_replayer(|| Ok(Arc::new(EventReplayer::load(dir.path())?))).unwrap();
 
         assert!(!should_initialize_run_cache_service(
             &requested_args(),
@@ -531,5 +559,91 @@ mod tests {
         let client = ValidationClient(RunCacheServiceError::Disabled);
 
         assert!(super::validation_skipped_service_requested(&client));
+    }
+
+    #[test]
+    fn test_service_client_returns_none_without_a_client() {
+        let lifecycle = RunCacheLifecycle {
+            service: RunCacheServiceLifecycle {
+                requested: true,
+                config: Some(RunCacheServiceConfig::disabled()),
+                client: None,
+            },
+            metadata: Arc::new(RunCacheMetadataCache::with_ttl_seconds(0)),
+        };
+
+        assert!(lifecycle.service_client().is_none());
+    }
+
+    #[test]
+    fn test_service_client_returns_client() {
+        let client = shared_run_cache_service_client(DisabledValidationClient);
+        let lifecycle = RunCacheLifecycle {
+            service: RunCacheServiceLifecycle {
+                requested: true,
+                config: Some(RunCacheServiceConfig::disabled()),
+                client: Some(client),
+            },
+            metadata: Arc::new(RunCacheMetadataCache::with_ttl_seconds(0)),
+        };
+
+        assert!(lifecycle.service_client().is_some());
+    }
+    #[tokio::test]
+    async fn get_or_initialize_reuses_lifecycle() {
+        // initialize a run cache lifecycle when one currently does not exist
+        let first = RunCacheLifecycle::get_or_initialize(
+            &args(),
+            Execute::Sidecar,
+            AdapterType::Snowflake,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // second call to get_or_initialize
+        let second = RunCacheLifecycle::get_or_initialize(
+            &args(),
+            Execute::Sidecar,
+            AdapterType::Snowflake,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "get_or_initialize must return the cached singleton, not re-initialize"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_or_initialize_concurrent_callers() {
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                tokio::spawn(async move {
+                    let arg = args();
+                    RunCacheLifecycle::get_or_initialize(
+                        &arg,
+                        Execute::Sidecar,
+                        AdapterType::Snowflake,
+                        None,
+                    )
+                    .await
+                    .unwrap()
+                })
+            })
+            .collect();
+
+        let mut results = Vec::with_capacity(handles.len());
+        for handle in handles {
+            results.push(handle.await.unwrap());
+        }
+
+        let first = &results[0];
+        assert!(
+            results.iter().all(|r| Arc::ptr_eq(r, first)),
+            "concurrent callers must observe same singleton instance, not separate initializations"
+        )
     }
 }

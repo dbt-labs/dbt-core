@@ -26,6 +26,7 @@ use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::TaskRunnerStats;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
+use dbt_tasks_core::run_cache_lifecycle::RunCacheLifecycle;
 use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooks;
@@ -88,6 +89,7 @@ pub struct TaskRunner {
     compiled_sql_cache: Arc<dyn CompiledSqlCache>,
     ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
     static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+    run_cache: Arc<RunCacheLifecycle>,
 }
 
 impl TaskRunner {
@@ -101,6 +103,7 @@ impl TaskRunner {
         compiled_sql_cache: Arc<dyn CompiledSqlCache>,
         ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
         static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+        run_cache: Arc<RunCacheLifecycle>,
     ) -> Self {
         Self {
             hooks,
@@ -112,6 +115,7 @@ impl TaskRunner {
             compiled_sql_cache,
             ctx_factory,
             static_analysis_buckets,
+            run_cache,
         }
     }
 
@@ -201,6 +205,7 @@ impl TaskRunner {
                 freshness_results,
                 Arc::clone(&self.static_analysis_buckets),
                 Arc::clone(&self.adapter),
+                self.run_cache.clone(),
             )
             .await
     }

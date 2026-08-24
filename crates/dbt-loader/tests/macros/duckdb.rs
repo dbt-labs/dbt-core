@@ -84,6 +84,93 @@ fn build_harness(
 }
 
 #[test]
+fn create_table_as_quotes_only_columns_marked_quote_true() {
+    let harness = build_harness("iceberg_demo", "ducklake_demo");
+    harness.mock().on("build_catalog_relation", |_| {
+        Ok(catalog_relation("direct_create"))
+    });
+    // `quoted` mirrors real `Column::quoted()` under DuckDB's default resolved
+    // quoting (identifier quoting on): always pre-quoted, regardless of any
+    // per-column `quote` config.
+    harness.mock().on("get_column_schema_from_query", |_| {
+        Ok(Value::from_serialize(vec![
+            BTreeMap::from([
+                ("name", Value::from("id")),
+                ("quoted", Value::from("\"id\"")),
+                ("dtype", Value::from("integer")),
+            ]),
+            BTreeMap::from([
+                ("name", Value::from("MixedCase")),
+                ("quoted", Value::from("\"MixedCase\"")),
+                ("dtype", Value::from("varchar")),
+            ]),
+        ]))
+    });
+    harness.mock().on("quote", |args| {
+        let identifier = args.first().and_then(|v| v.as_str()).unwrap_or_default();
+        Ok(Value::from(format!("\"{identifier}\"")))
+    });
+
+    let model = Value::from_serialize(BTreeMap::from([
+        ("alias".to_string(), Value::from("orders")),
+        (
+            "unique_id".to_string(),
+            Value::from("model.test_project.orders"),
+        ),
+        (
+            "columns".to_string(),
+            Value::from_serialize(BTreeMap::from([(
+                "MixedCase",
+                BTreeMap::from([
+                    ("name", Value::from("MixedCase")),
+                    ("quote", Value::from(true)),
+                ]),
+            )])),
+        ),
+    ]));
+
+    let ctx = harness
+        .materialization_context("orders", "select 1 as id, 2 as mixedcase")
+        .relation_type(RelationType::Table)
+        .with("model", model)
+        .with("dbt_version", Value::from("2.0.0"))
+        .build();
+
+    let rendered = harness
+        .render(
+            "{{ duckdb__create_table_as(false, this, compiled_code) }}",
+            ctx,
+        )
+        .expect("render should succeed");
+
+    // `compiled_code` (the select statement) is passed through verbatim by the
+    // macro, so assert only on the column lists the macro itself generates
+    // (the `create table (...)` and `insert into (...)` clauses), not on
+    // anything that could leak in from the query body.
+    assert!(
+        rendered.contains("\"MixedCase\" varchar"),
+        "column configured with quote: true should be quoted in the create-table column list, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("id integer") && !rendered.contains("\"id\" integer"),
+        "column without quote: true should remain unquoted in the create-table column list, got: {rendered}"
+    );
+
+    let insert_clause = rendered
+        .split("insert into")
+        .nth(1)
+        .expect("rendered SQL should contain an insert into clause");
+    assert!(
+        insert_clause.contains("\"MixedCase\""),
+        "column configured with quote: true should be quoted in the insert column list, got: {insert_clause}"
+    );
+    assert!(
+        !insert_clause.contains("\"id\""),
+        "column without quote: true should remain unquoted in the insert column list, got: {insert_clause}"
+    );
+}
+
+#[test]
 fn get_columns_in_relation_uses_describe_for_iceberg_relations() {
     let harness = build_harness("iceberg_demo", "ducklake_demo");
     let relation = harness.relation("iceberg_demo", "main", "orders", Some(RelationType::Table));

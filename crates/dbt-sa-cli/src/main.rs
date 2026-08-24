@@ -1,7 +1,7 @@
 use dbt_clap_core::{CliParserFactory as _, from_main};
 use dbt_common::tracing::FsTraceConfig;
 use dbt_features::cli::DefaultCliParserFactory;
-use dbt_features::feature_stack::FeatureStack;
+use dbt_features::feature_stack::{FeatureStack, FeatureStackConfig};
 use dbt_features::tracing::TracingFeature;
 use dbt_main::print_trimmed_error;
 
@@ -43,11 +43,14 @@ fn main() -> ExitCode {
         arg.io.log_path = Some(resolved_file_log_path.to_path_buf());
     }
 
-    let feature_stack: Arc<FeatureStack> =
-        dbt_features::feature_stack_builder::FeatureStackBuilder::new(tracing)
-            .send_anonymous_usage_stats(arg.io.send_anonymous_usage_stats)
-            .build()
-            .into();
+    let feature_stack: Arc<FeatureStack> = {
+        let feature_stack =
+            dbt_features::feature_stack_builder::FeatureStackBuilder::new(tracing).build();
+        let config = FeatureStackConfig {
+            send_anonymous_usage_stats: arg.io.send_anonymous_usage_stats,
+        };
+        feature_stack.configure(&config).into()
+    };
 
     dbt_main::run_cli(cli, arg, feature_stack)
 }

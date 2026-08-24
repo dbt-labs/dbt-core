@@ -2186,6 +2186,7 @@ fn get_unique_id(
 fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
+        .flexible(true)
         .from_reader(Cursor::new(data));
 
     let headers = reader
@@ -2197,22 +2198,47 @@ fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     for result in reader.records() {
         let record = result
             .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "Failed to read record: {}", e))?;
+        if record.len() > headers.len() {
+            let error = record.position().map_or_else(
+                || {
+                    format!(
+                        "CSV error: found record with {} fields, but the previous record has {} fields",
+                        record.len(),
+                        headers.len()
+                    )
+                },
+                |position| {
+                    format!(
+                        "CSV error: record {} (line: {}, byte: {}): found record with {} fields, but the previous record has {} fields",
+                        position.record(),
+                        position.line(),
+                        position.byte(),
+                        record.len(),
+                        headers.len()
+                    )
+                },
+            );
+            return err!(ErrorCode::InvalidConfig, "Failed to read record: {}", error);
+        }
         let mut row = BTreeMap::new();
-        for (i, field) in record.iter().enumerate() {
-            let value = if field.is_empty() {
-                YmlValue::null()
-            } else if let Ok(v) = field.parse::<i64>() {
-                YmlValue::number(v.into())
-            } else if let Ok(v) = field.parse::<f64>() {
-                YmlValue::number(v.into())
-            } else if field.eq_ignore_ascii_case("true") {
-                YmlValue::bool(true)
-            } else if field.eq_ignore_ascii_case("false") {
-                YmlValue::bool(false)
-            } else {
-                YmlValue::string(field.to_string())
+        for (i, header) in headers.iter().enumerate() {
+            let value = match record.get(i) {
+                None | Some("") => YmlValue::null(),
+                Some(field) => {
+                    if let Ok(v) = field.parse::<i64>() {
+                        YmlValue::number(v.into())
+                    } else if let Ok(v) = field.parse::<f64>() {
+                        YmlValue::number(v.into())
+                    } else if field.eq_ignore_ascii_case("true") {
+                        YmlValue::bool(true)
+                    } else if field.eq_ignore_ascii_case("false") {
+                        YmlValue::bool(false)
+                    } else {
+                        YmlValue::string(field.to_string())
+                    }
+                }
             };
-            row.insert(headers[i].to_string(), value);
+            row.insert(header.to_string(), value);
         }
         rows.push(row);
     }
@@ -2257,6 +2283,27 @@ mod tests {
     use dbt_test_primitives::assert_contains;
 
     type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn test_parse_csv_rows_fills_missing_trailing_fields_with_null() {
+        let rows = parse_csv_rows(b"id,name,note\n1,alpha\n")
+            .expect("a short CSV record should match Python DictReader semantics");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("note"), Some(&YmlValue::null()));
+        assert_eq!(rows[0].len(), 3);
+    }
+
+    #[test]
+    fn test_parse_csv_rows_rejects_fields_beyond_the_header() {
+        let error = parse_csv_rows(b"id,name\n1,alpha,extra\n")
+            .expect_err("an extra CSV field must not be silently discarded");
+
+        assert_contains!(
+            error.to_string(),
+            "found record with 3 fields, but the previous record has 2 fields"
+        );
+    }
 
     /// Binds `value` as the `run_started_at` override and renders `template`,
     /// exercising the same path unit tests use.

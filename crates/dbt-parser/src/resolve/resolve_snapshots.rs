@@ -301,6 +301,7 @@ pub async fn resolve_snapshots(
             config_resolver,
             package_quoting,
             uses_snapshot_fqn: true,
+            defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
             adapter_type,
@@ -351,6 +352,7 @@ pub async fn resolve_snapshots(
         macro_spans: _macro_spans,
         properties: maybe_properties,
         status,
+        render_error_deferred,
         patch_path,
         ..
     } in snapshot_sql_resources_map.into_iter()
@@ -583,6 +585,16 @@ pub async fn resolve_snapshots(
                 // For backwards compatibility with target_schema and target_database configs
                 database: if snapshot_config.target_database.is_some() {
                     snapshot_config.target_database.clone()
+                } else if matches!(adapter_type, AdapterType::Databricks)
+                    && snapshot_config
+                        .__warehouse_specific_config__
+                        .catalog
+                        .is_some()
+                {
+                    snapshot_config
+                        .__warehouse_specific_config__
+                        .catalog
+                        .clone()
                 } else {
                     snapshot_config.database.clone()
                 },
@@ -651,7 +663,28 @@ pub async fn resolve_snapshots(
                 ModelStatus::Disabled => {
                     disabled_snapshots.insert(unique_id, Arc::new(dbt_snapshot));
                 }
-                ModelStatus::ParsingFailed => {}
+                ModelStatus::ParsingFailed => {
+                    if render_error_deferred {
+                        snapshots.insert(unique_id, Arc::new(dbt_snapshot));
+
+                        if !arg.skip_creating_generic_tests {
+                            properties.as_testable().persist(
+                                package_name.as_str(),
+                                &root_package.dbt_project.name,
+                                collected_generic_tests,
+                                test_name_truncations,
+                                adapter_type,
+                                &arg.io,
+                                patch_path.as_ref().unwrap_or(&dbt_asset.path),
+                                false,
+                                &raw_test_configs
+                                    .get(snapshot_name)
+                                    .cloned()
+                                    .unwrap_or_default(),
+                            )?;
+                        }
+                    }
+                }
             }
         }
     }

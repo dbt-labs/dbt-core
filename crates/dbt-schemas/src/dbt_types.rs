@@ -48,6 +48,7 @@ impl RelationType {
                 "VIEW" => RelationType::View,
                 "MATERIALIZED VIEW" | "MATERIALIZED_VIEW" => RelationType::MaterializedView,
                 "EXTERNAL" => RelationType::External,
+                "FUNCTION" | "AGGREGATE FUNCTION" => RelationType::Function,
                 _ => panic!("unknown table type: {type_string}"),
             },
             // https://docs.databricks.com/aws/en/sql/language-manual/information-schema/tables#table-types
@@ -119,6 +120,7 @@ impl From<&str> for RelationType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn dictionary_relation_type_round_trips() {
@@ -169,5 +171,48 @@ mod tests {
             RelationType::from_adapter_type(AdapterType::Databricks, "MANAGED"),
             RelationType::Table
         );
+    }
+
+    #[test]
+    fn bigquery_table_types_resolve_correctly() {
+        let map = HashMap::from([
+            ("BASE TABLE", (RelationType::Table, "table")),
+            ("CLONE", (RelationType::Table, "table")),
+            ("SNAPSHOT", (RelationType::Table, "table")),
+            ("TABLE", (RelationType::Table, "table")),
+            ("VIEW", (RelationType::View, "view")),
+            ("EXTERNAL", (RelationType::External, "external")),
+            ("FunCTion", (RelationType::Function, "function")),
+            (
+                "materialized view",
+                (RelationType::MaterializedView, "materialized_view"),
+            ),
+            (
+                "MATERIALIZED_VIEW",
+                (RelationType::MaterializedView, "materialized_view"),
+            ),
+        ]);
+
+        for (key, (rel_type, name)) in map {
+            let rt = RelationType::from_adapter_type(AdapterType::Bigquery, key);
+            assert_eq!(rt, rel_type);
+            assert_eq!(rt.to_string(), name);
+        }
+
+        let list = ["PROCEDURE", "foobar"];
+        for item in list.iter() {
+            let result = std::panic::catch_unwind(|| {
+                RelationType::from_adapter_type(AdapterType::Bigquery, item)
+            });
+            assert!(result.is_err());
+
+            let panic_payload = result.unwrap_err();
+            assert!(
+                panic_payload
+                    .downcast_ref::<String>()
+                    .unwrap()
+                    .contains("unknown table type")
+            );
+        }
     }
 }

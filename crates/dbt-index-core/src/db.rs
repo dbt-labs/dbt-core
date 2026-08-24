@@ -162,6 +162,36 @@ LEFT JOIN dbt.nodes target ON tm.attached_node = target.unique_id
 LEFT JOIN dbt_rt.run_results_latest r ON n.unique_id = r.unique_id
 LEFT JOIN dbt_rt.test_failures tf ON n.unique_id = tf.unique_id AND r.invocation_id = tf.invocation_id
 WHERE n.resource_type IN ('test');
+
+-- Parse-safe views: columns are enumerated (never `SELECT *`) so a
+-- dbt.nodes column that is never populated at parse cannot leak into
+-- these views as a silent NULL. Per-resource-type views select from
+-- dbt.graph_nodes, not dbt.nodes directly, so they inherit the guarantee.
+CREATE OR REPLACE VIEW dbt.graph_nodes AS
+SELECT
+    unique_id, name, resource_type, package_name, file_path, original_file_path,
+    fqn, alias, checksum, description, raw_code, database_name, schema_name,
+    relation_name, identifier, enabled, materialized, config, access_level,
+    group_name, contract_enforced, version, latest_version, deprecation_date,
+    primary_key, patch_path, tags, meta, source_name, source_description,
+    loader, loaded_at_field, ingested_at
+FROM dbt.nodes;
+
+CREATE OR REPLACE VIEW dbt.models AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'model';
+CREATE OR REPLACE VIEW dbt.seeds AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'seed';
+CREATE OR REPLACE VIEW dbt.tests AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'test';
+CREATE OR REPLACE VIEW dbt.snapshots AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'snapshot';
+CREATE OR REPLACE VIEW dbt.sources AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'source';
+CREATE OR REPLACE VIEW dbt.analyses AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'analysis';
+CREATE OR REPLACE VIEW dbt.operations AS SELECT * FROM dbt.graph_nodes WHERE resource_type IN ('operation', 'sql_operation');
+CREATE OR REPLACE VIEW dbt.functions AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'function';
+
+-- dbt.columns: dbt.node_columns restricted to columns populated at parse
+-- (catalog/inferred-type/expression columns require static analysis or
+-- `dbt docs generate` and are NULL until then).
+CREATE OR REPLACE VIEW dbt.columns AS
+SELECT unique_id, column_name, declared_type, description, tags, ingested_at
+FROM dbt.node_columns;
 ";
 
 /// Manages an in-memory DuckDB connection via the ADBC adapter.

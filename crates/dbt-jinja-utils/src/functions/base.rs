@@ -102,6 +102,8 @@ pub fn register_base_functions(env: &mut Environment, warn_error_options: WarnEr
     env.add_global("True", Value::from(true));
     env.add_global("False", Value::from(false));
 
+    env.add_function("otel_trace_id", otel_trace_id_fn());
+    env.add_func_func("otel_span_id", otel_span_id);
     env.add_func_func("fromjson", fromjson);
     env.add_func_func("tojson", tojson);
     env.add_func_func("fromyaml", fromyaml);
@@ -341,6 +343,46 @@ pub fn env_var(
         state,
         args,
     )
+}
+
+/// Builds the `otel_trace_id()` Jinja function. Must be a callable, not a
+/// plain global, to match how dbt Core v1 exposes it. Captures the trace id
+/// once (unlike `otel_span_id()`, which re-reads live since span id does
+/// change within an invocation).
+pub fn otel_trace_id_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
+    let trace_id = dbt_common::tracing::span_info::read_current_span_start_info(|info| {
+        format!("{:032x}", info.trace_id)
+    });
+    let trace_id = Value::from(trace_id.unwrap_or_else(|| "0".repeat(32)));
+
+    move |args: &[Value], _kwargs: Kwargs| -> Result<Value, Error> {
+        if !args.is_empty() {
+            return Err(Error::new(
+                ErrorKind::InvalidOperation,
+                "otel_trace_id() takes no arguments",
+            ));
+        }
+        Ok(trace_id.clone())
+    }
+}
+
+/// Returns the current span's OTEL id (16-char hex).
+///
+/// Real code always runs inside a tracing dispatcher, so a missing span is a
+/// bug, not a supported state: debug builds assert, release builds fall back
+/// to the OTEL-standard invalid span id (all zeros).
+pub fn otel_span_id(_state: &State, args: &[Value]) -> Result<Value, Error> {
+    let iter = ArgsIter::nullary("otel_span_id", args);
+    iter.finish()?;
+
+    let span_id = dbt_common::tracing::span_info::read_current_span_start_info(|info| {
+        format!("{:016x}", info.span_id)
+    });
+    debug_assert!(
+        span_id.is_some(),
+        "otel_span_id() called with no active span"
+    );
+    Ok(Value::from(span_id.unwrap_or_else(|| "0".repeat(16))))
 }
 
 /// Deserialize a JSON string into a Python object primitive (e.g., a dict or list).
@@ -1556,6 +1598,89 @@ mod tests {
     use dbt_common::path::DbtPath;
     use minijinja::{Environment, Value};
     use minijinja_contrib::pycompat::unknown_method_callback;
+
+    #[test]
+    fn otel_trace_id_and_span_id_are_callable_with_nothing_bound_in_scope() {
+        // Must work even with nothing bound in the render context at all
+        // (e.g. connection-level queries with no `node`).
+        use dbt_tracing::emit::create_debug_span;
+        use dbt_tracing::test_support::mocks::{MockDynSpanEvent, test_data_layer};
+        use tracing::level_filters::LevelFilter;
+
+        let trace_id: u128 = 0xabc;
+        let subscriber = dbt_tracing::init::create_tracing_subcriber_with_layer(
+            LevelFilter::TRACE,
+            test_data_layer(
+                trace_id,
+                None,
+                false,
+                std::iter::empty(),
+                std::iter::empty(),
+            ),
+            &[],
+        )
+        .expect("subscriber should build");
+
+        tracing::subscriber::with_default(subscriber, || {
+            let span = create_debug_span(MockDynSpanEvent::default());
+            let _guard = span.enter();
+
+            let mut env = Environment::new();
+            register_base_functions(&mut env, WarnErrorOptions::default());
+
+            let tmpl = env
+                .template_from_str("{{ otel_trace_id() }}|{{ otel_span_id()|length }}")
+                .unwrap();
+            let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+            assert_eq!(output, format!("{trace_id:032x}|16"));
+        });
+    }
+
+    #[test]
+    fn otel_trace_id_is_captured_once_and_does_not_track_later_spans() {
+        use dbt_tracing::emit::create_debug_span;
+        use dbt_tracing::test_support::mocks::{MockDynSpanEvent, test_data_layer};
+        use tracing::level_filters::LevelFilter;
+
+        let registered_trace_id: u128 = 0x1111;
+        let subscriber = dbt_tracing::init::create_tracing_subcriber_with_layer(
+            LevelFilter::TRACE,
+            test_data_layer(
+                registered_trace_id,
+                None,
+                false,
+                std::iter::empty(),
+                std::iter::empty(),
+            ),
+            &[],
+        )
+        .expect("subscriber should build");
+
+        let mut env = Environment::new();
+        tracing::subscriber::with_default(subscriber, || {
+            let span = create_debug_span(MockDynSpanEvent::default());
+            let _guard = span.enter();
+            register_base_functions(&mut env, WarnErrorOptions::default());
+        });
+
+        // A later, unrelated trace is active now; otel_trace_id() must still
+        // report the one captured above, not this one.
+        let other_subscriber = dbt_tracing::init::create_tracing_subcriber_with_layer(
+            LevelFilter::TRACE,
+            test_data_layer(0x2222, None, false, std::iter::empty(), std::iter::empty()),
+            &[],
+        )
+        .expect("subscriber should build");
+
+        tracing::subscriber::with_default(other_subscriber, || {
+            let span = create_debug_span(MockDynSpanEvent::default());
+            let _guard = span.enter();
+
+            let tmpl = env.template_from_str("{{ otel_trace_id() }}").unwrap();
+            let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+            assert_eq!(output, format!("{registered_trace_id:032x}"));
+        });
+    }
 
     #[test]
     fn test_set_union_integration() {

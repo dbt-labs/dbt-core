@@ -361,8 +361,16 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn get_node_path_abs(&self, path_kind: NodePathKind, in_dir: &Path, out_dir: &Path) -> PathBuf {
         let common = self.common();
         let executable_filename = || {
-            // Mirror write_file's filename rule: alias if non-empty, else name. This avoids
-            // ENAMETOOLONG on Linux for generic tests with names exceeding 255 bytes.
+            // Generic test paths are synthesized and bounded before relation aliases are
+            // rendered. Keep the bounded path filename separate from the relation alias.
+            if self.resource_type() == NodeType::Test && self.defined_at().is_some() {
+                if let Some(file_stem) = common.path.file_stem() {
+                    return file_stem.to_string_lossy().into_owned();
+                }
+            }
+
+            // Mirror write_file's filename rule for other node types: alias if non-empty,
+            // else name.
             let alias = &self.base().alias;
             if alias.is_empty() {
                 common.name.clone()
@@ -1071,6 +1079,55 @@ fn same_database_representation_model(
     self_config.same_database_representation(other_config)
 }
 
+/// `latest_version` equality, tolerant of the two ways one version can be spelled.
+///
+/// `StringOrInteger` derives `PartialEq` *structurally*, so `String("1") != Integer(1)`. Real
+/// dbt-core writes `latest_version` as a JSON **number** and Fusion's `From<String>` parses a
+/// numeric string into `Integer`, so a current run against a dbt-core manifest happens to match —
+/// but a manifest written by an older Fusion, or a hand-authored fixture using `"1"`, would not,
+/// and every versioned model in the project would read as modified. Compare the canonical
+/// (`Display`) spelling instead, which is also the spelling a pinned `ref()` uses.
+fn latest_version_eq(a: &Option<StringOrInteger>, b: &Option<StringOrInteger>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a.to_string() == b.to_string(),
+        _ => false,
+    }
+}
+
+/// `deprecation_date` equality, compared as a **date** rather than as a string.
+///
+/// dbt-core compares `datetime` objects, so date semantics — not spelling — is the faithful
+/// transcription here. The two sides can legitimately disagree on spelling in two ways:
+///
+/// - Fusion normalizes an authored date to RFC 3339 on the parse side
+///   (`normalize_deprecation_date`), so an authored `2099-01-01` faces a manifest's
+///   `2099-01-01T00:00:00+00:00`.
+/// - The normalizations do not agree on the *offset* of a naive authored date: Fusion reads it as
+///   UTC, while dbt-core's `normalize_date` re-interprets it in the **system** time zone
+///   (dbt-mantle `core/dbt/contracts/graph/unparsed.py:1012-1024`). A Mantle-produced previous
+///   manifest can therefore carry `2020-01-01T00:00:00-05:00` where this run parses
+///   `2020-01-01T00:00:00+00:00` from the same authored `2020-01-01`.
+///
+/// So two parseable values are equal when they name the same instant *or* the same wall-clock
+/// time. String equality is the fast path, and the fallback when either side fails to parse.
+fn deprecation_date_eq(a: &Option<String>, b: &Option<String>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            a == b
+                || match (
+                    crate::schemas::common::parse_deprecation_date(a),
+                    crate::schemas::common::parse_deprecation_date(b),
+                ) {
+                    (Some(a), Some(b)) => a == b || a.naive_local() == b.naive_local(),
+                    _ => false,
+                }
+        }
+        _ => false,
+    }
+}
+
 fn same_database_representation_seed(self_config: &SeedConfig, other_config: &SeedConfig) -> bool {
     // Compare database, schema, alias from the deprecated_config
     /*self_config.database == other_config.database
@@ -1240,12 +1297,14 @@ impl InternalDbtNode for DbtModel {
                 &other_model.deprecated_config,
             );
             let same_contract_result = self.same_contract(other_model);
+            let same_ref_repr_result = self.same_ref_representation(other_model);
 
             let result = same_body_result
                 && same_persisted_desc_result
                 && same_fqn_result
                 && same_db_repr_result
-                && same_contract_result;
+                && same_contract_result
+                && same_ref_repr_result;
 
             if !result {
                 log_state_mod_diff(
@@ -1268,6 +1327,7 @@ impl InternalDbtNode for DbtModel {
                         ),
                         ("same_database_representation", same_db_repr_result, None),
                         ("same_contract", same_contract_result, None),
+                        ("same_ref_representation", same_ref_repr_result, None),
                     ],
                 );
             }
@@ -5053,6 +5113,79 @@ pub struct DbtModel {
 }
 
 impl DbtModel {
+    /// Transcribes dbt-core's `ModelNode.same_ref_representation` (dbt-mantle
+    /// `core/dbt/contracts/graph/nodes.py:684-691`), which is ANDed into `ModelNode.same_contents`
+    /// at `:677-682`:
+    ///
+    /// ```python
+    /// def same_ref_representation(self, old: "ModelNode") -> bool:
+    ///     return (
+    ///         self.latest_version == old.latest_version   # changing it may break downstream unpinned refs
+    ///         and self.access == old.access               # changes may lead to ref-related parsing errors
+    ///         and self.deprecation_date == old.deprecation_date
+    ///     )
+    /// ```
+    ///
+    /// All three are node attributes (`__model_attr__`), compared rendered and ungated by
+    /// `state_modified_compare_more_unrendered_values` — a change to any of them changes what a
+    /// downstream `ref()` resolves to, independently of any config comparison.
+    ///
+    /// **This is not a double-count with `check_configs_modified`**, even though `access` is also
+    /// compared there (Stage 1 via `unrendered_config`, Stage 2 via `deprecated_config.access`), and
+    /// it must not be "fixed": here we compare `__model_attr__.access` — the **node attribute** —
+    /// while `check_configs_modified` compares `ModelConfig.access` — the **config key**. dbt-core
+    /// compares both too: `access` is a `ModelConfig` field with no `CompareBehavior.Exclude`, so
+    /// `BaseConfig.same_contents` sees it *and* `same_ref_representation` sees the node attribute.
+    /// The redundancy is transcribed deliberately.
+    pub fn same_ref_representation(&self, old: &DbtModel) -> bool {
+        let current = &self.__model_attr__;
+        let previous = &old.__model_attr__;
+
+        let same_latest_version =
+            latest_version_eq(&current.latest_version, &previous.latest_version);
+        // Non-`Option` on both sides: `manifest_model_to_dbt_model` already resolved
+        // config key / node attribute / `Protected` default, so no `access_eq`-style tolerance
+        // belongs here. `test_versioned_ref_representation_sparse_state_state_modified` and
+        // `manifest_model_access_falls_back_to_node_attribute` guard that.
+        let same_access = current.access == previous.access;
+        let same_deprecation_date =
+            deprecation_date_eq(&current.deprecation_date, &previous.deprecation_date);
+
+        let result = same_latest_version && same_access && same_deprecation_date;
+
+        if !result {
+            log_state_mod_diff(
+                &self.__common_attr__.unique_id,
+                "model_ref_representation",
+                [
+                    (
+                        "latest_version",
+                        same_latest_version,
+                        Some((
+                            format!("{:?}", &current.latest_version),
+                            format!("{:?}", &previous.latest_version),
+                        )),
+                    ),
+                    (
+                        "access",
+                        same_access,
+                        Some((current.access.to_string(), previous.access.to_string())),
+                    ),
+                    (
+                        "deprecation_date",
+                        same_deprecation_date,
+                        Some((
+                            format!("{:?}", &current.deprecation_date),
+                            format!("{:?}", &previous.deprecation_date),
+                        )),
+                    ),
+                ],
+            );
+        }
+
+        result
+    }
+
     pub fn same_contract(&self, old: &DbtModel) -> bool {
         match (&self.__model_attr__.contract, &old.__model_attr__.contract) {
             (Some(current_contract), Some(old_contract)) => {
@@ -5548,6 +5681,7 @@ impl AdapterAttr {
                     include_full_name_in_path: config.include_full_name_in_path,
                     liquid_clustered_by: config.liquid_clustered_by.clone(),
                     auto_liquid_cluster: config.auto_liquid_cluster,
+                    zorder: config.zorder.clone(),
                     clustered_by: config.clustered_by.clone(),
                     buckets: config.buckets,
                     catalog: config.catalog.clone(),
@@ -5563,6 +5697,7 @@ impl AdapterAttr {
                     merge_with_schema_evolution: config.merge_with_schema_evolution,
                     skip_matched_step: config.skip_matched_step,
                     skip_not_matched_step: config.skip_not_matched_step,
+                    unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                     schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                 })))
             }
@@ -5651,6 +5786,7 @@ impl AdapterAttr {
                         include_full_name_in_path: config.include_full_name_in_path,
                         liquid_clustered_by: config.liquid_clustered_by.clone(),
                         auto_liquid_cluster: config.auto_liquid_cluster,
+                        zorder: config.zorder.clone(),
                         clustered_by: config.clustered_by.clone(),
                         buckets: config.buckets,
                         catalog: config.catalog.clone(),
@@ -5668,6 +5804,7 @@ impl AdapterAttr {
                         merge_with_schema_evolution: config.merge_with_schema_evolution,
                         skip_matched_step: config.skip_matched_step,
                         skip_not_matched_step: config.skip_not_matched_step,
+                        unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                         schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                     })))
             }
@@ -5723,6 +5860,7 @@ pub struct DatabricksAttr {
     pub include_full_name_in_path: Option<bool>,
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     pub auto_liquid_cluster: Option<bool>,
+    pub zorder: Option<StringOrArrayOfStrings>,
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
@@ -5738,6 +5876,7 @@ pub struct DatabricksAttr {
     pub merge_with_schema_evolution: Option<bool>,
     pub skip_matched_step: Option<bool>,
     pub skip_not_matched_step: Option<bool>,
+    pub unique_tmp_table_suffix: Option<bool>,
     pub schedule: Option<ScheduleConfig>,
 }
 
@@ -5883,7 +6022,7 @@ mod tests {
 
     use super::{
         AbsorbedOverload, DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtSeed, DbtSnapshot,
-        DbtSource, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind,
+        DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind,
         hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
         test_alias_config_equal,
     };
@@ -5945,6 +6084,40 @@ mod tests {
         analysis.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         analysis.__base_attr__.alias = name.to_string();
         analysis
+    }
+
+    #[test]
+    fn generic_test_executable_path_uses_bounded_path_filename() {
+        let mut test = DbtTest::default();
+        test.__common_attr__.name = "full_generic_test_name".to_string();
+        test.__common_attr__.package_name = "pkg".to_string();
+        test.__common_attr__.path = DbtPath::from(
+            "generic_tests/not_null_model_column_4f8cc80baaff29183132758d312c335a.sql",
+        );
+        test.__common_attr__.original_file_path = DbtPath::from("models/schema.yml");
+        test.__base_attr__.alias = "full_generic_test_name_expanded_by_project_macro".to_string();
+        test.defined_at = Some(dbt_common::CodeLocationWithFile::new(
+            1,
+            1,
+            0,
+            "models/schema.yml",
+        ));
+
+        let actual = test.get_node_path_abs(
+            NodePathKind::Executable,
+            Path::new("/workspace"),
+            Path::new("/workspace/target"),
+        );
+
+        let expected = Path::new("/workspace")
+            .join("target")
+            .join("run")
+            .join("pkg")
+            .join("models")
+            .join("schema.yml")
+            .join("generic_tests")
+            .join("not_null_model_column_4f8cc80baaff29183132758d312c335a.sql");
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -7523,5 +7696,195 @@ mod seed_has_same_content_tests {
             "data-test `state` is not a `state:modified` modifier; see the note on \
              DBTTEST_CONFIG_MODIFIERS for the conformance rationale."
         );
+    }
+}
+
+/// Tolerance tests for the three comparators behind `DbtModel::same_ref_representation`
+/// (dbt-core's `ModelNode.same_ref_representation`, dbt-mantle
+/// `core/dbt/contracts/graph/nodes.py:684-691`). Each tolerance exists because the previous
+/// manifest can come from a producer we do not control (real dbt-core, an older Fusion), so naive
+/// `==` on the three fields would report phantom modifications.
+#[cfg(test)]
+mod model_same_ref_representation_tests {
+    use super::{
+        Access, DbtModel, InternalDbtNode, StringOrInteger, deprecation_date_eq, latest_version_eq,
+    };
+    use dbt_adapter_core::AdapterType;
+
+    fn model() -> DbtModel {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.test.table_model.v1".to_string();
+        model.__common_attr__.name = "table_model".to_string();
+        model.__common_attr__.package_name = "test".to_string();
+        model
+    }
+
+    fn same_content(a: &DbtModel, b: &DbtModel) -> bool {
+        a.has_same_content(b as &dyn InternalDbtNode, AdapterType::Snowflake)
+    }
+
+    // --- comparator 1: `latest_version` (StringOrInteger, structurally compared) ---
+
+    /// All four cross combinations of the two spellings of version `1`. Real dbt-core writes a JSON
+    /// number; a hand-authored fixture or an older Fusion manifest can carry a string.
+    #[test]
+    fn latest_version_eq_normalizes_across_string_and_integer() {
+        let int = || Some(StringOrInteger::Integer(1));
+        let str_ = || Some(StringOrInteger::String("1".to_string()));
+
+        assert!(latest_version_eq(&int(), &int()));
+        assert!(latest_version_eq(&str_(), &str_()));
+        assert!(
+            latest_version_eq(&int(), &str_()),
+            "`Integer(1)` and `String(\"1\")` are the same version; \
+             `StringOrInteger` only derives `PartialEq` structurally"
+        );
+        assert!(latest_version_eq(&str_(), &int()));
+    }
+
+    #[test]
+    fn latest_version_eq_still_sees_a_real_bump() {
+        assert!(!latest_version_eq(
+            &Some(StringOrInteger::Integer(2)),
+            &Some(StringOrInteger::Integer(1))
+        ));
+        assert!(
+            !latest_version_eq(
+                &Some(StringOrInteger::Integer(2)),
+                &Some(StringOrInteger::String("1".to_string()))
+            ),
+            "the normalization must not swallow a genuine version change"
+        );
+    }
+
+    #[test]
+    fn latest_version_eq_handles_absence() {
+        assert!(latest_version_eq(&None, &None));
+        assert!(!latest_version_eq(
+            &Some(StringOrInteger::Integer(1)),
+            &None
+        ));
+        assert!(!latest_version_eq(
+            &None,
+            &Some(StringOrInteger::Integer(1))
+        ));
+    }
+
+    // --- comparator 3: `deprecation_date` (date semantics, not string equality) ---
+
+    /// Fusion normalizes an authored date to RFC 3339 on the parse side, so the authored and
+    /// manifest spellings of one date routinely differ.
+    #[test]
+    fn deprecation_date_eq_tolerates_authored_vs_normalized_spelling() {
+        assert!(deprecation_date_eq(
+            &Some("2099-01-01".to_string()),
+            &Some("2099-01-01T00:00:00+00:00".to_string())
+        ));
+        assert!(deprecation_date_eq(
+            &Some("2099-01-01T00:00:00Z".to_string()),
+            &Some("2099-01-01T00:00:00+00:00".to_string())
+        ));
+    }
+
+    /// dbt-core's `normalize_date` re-interprets a naive authored date in the **system** time zone,
+    /// while Fusion reads it as UTC — so the same authored `2020-01-01` reaches this comparator as
+    /// two different offsets whenever the previous manifest was produced by dbt-core outside UTC.
+    #[test]
+    fn deprecation_date_eq_tolerates_a_mantle_local_offset() {
+        assert!(deprecation_date_eq(
+            &Some("2020-01-01T00:00:00+00:00".to_string()),
+            &Some("2020-01-01T00:00:00-05:00".to_string())
+        ));
+    }
+
+    /// dbt-core compares `datetime` objects, so two spellings of one instant are not a change.
+    #[test]
+    fn deprecation_date_eq_tolerates_equal_instants() {
+        assert!(deprecation_date_eq(
+            &Some("2020-01-01T05:00:00+00:00".to_string()),
+            &Some("2020-01-01T00:00:00-05:00".to_string())
+        ));
+    }
+
+    #[test]
+    fn deprecation_date_eq_still_sees_a_real_change() {
+        assert!(!deprecation_date_eq(
+            &Some("2099-01-01".to_string()),
+            &Some("2098-01-01".to_string())
+        ));
+        assert!(!deprecation_date_eq(&Some("2099-01-01".to_string()), &None));
+        assert!(!deprecation_date_eq(&None, &Some("2099-01-01".to_string())));
+        assert!(deprecation_date_eq(&None, &None));
+    }
+
+    /// Unparseable values fall back to string equality rather than comparing equal by accident.
+    #[test]
+    fn deprecation_date_eq_falls_back_to_string_equality() {
+        assert!(deprecation_date_eq(
+            &Some("not-a-date".to_string()),
+            &Some("not-a-date".to_string())
+        ));
+        assert!(!deprecation_date_eq(
+            &Some("not-a-date".to_string()),
+            &Some("2099-01-01".to_string())
+        ));
+    }
+
+    // --- the conjunct as wired into `has_same_content` ---
+
+    #[test]
+    fn latest_version_change_is_state_modified() {
+        let mut current = model();
+        current.__model_attr__.version = Some(StringOrInteger::Integer(1));
+        current.__model_attr__.latest_version = Some(StringOrInteger::Integer(2));
+        let mut previous = current.clone();
+        previous.__model_attr__.latest_version = Some(StringOrInteger::Integer(1));
+
+        assert!(
+            !same_content(&current, &previous),
+            "a `latest_version` bump changes what an unpinned `ref()` resolves to; \
+             dbt-core's `same_ref_representation` reports it as modified"
+        );
+    }
+
+    #[test]
+    fn access_change_is_state_modified() {
+        let current = model();
+        let mut previous = current.clone();
+        previous.__model_attr__.access = Access::Public;
+
+        assert!(
+            !same_content(&current, &previous),
+            "the `access` node attribute is compared by `same_ref_representation`, \
+             independently of the `access` config key owned by `check_configs_modified`"
+        );
+    }
+
+    #[test]
+    fn deprecation_date_change_is_state_modified() {
+        let mut current = model();
+        current.__model_attr__.deprecation_date = Some("2099-01-01T00:00:00+00:00".to_string());
+        let previous = model();
+
+        assert!(
+            !same_content(&current, &previous),
+            "adding a `deprecation_date` is a modification"
+        );
+    }
+
+    /// The migration-path shape: a previous manifest that omits `access`, `latest_version` and
+    /// `deprecation_date` deserializes to the same defaults the current node carries, so nothing
+    /// here may report modified. `manifest_model_to_dbt_model` applies dbt-core's `Protected`
+    /// default when neither `config.access` nor the node-level `access` is present, which is why
+    /// the node-attribute comparison needs no `access_eq`-style tolerance of its own.
+    #[test]
+    fn sparse_previous_manifest_is_not_state_modified() {
+        let current = model();
+        let previous = model();
+
+        assert_eq!(current.__model_attr__.access, Access::Protected);
+        assert!(current.__model_attr__.latest_version.is_none());
+        assert!(current.__model_attr__.deprecation_date.is_none());
+        assert!(same_content(&current, &previous));
     }
 }

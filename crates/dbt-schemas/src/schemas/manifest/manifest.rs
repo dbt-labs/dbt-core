@@ -1972,7 +1972,16 @@ pub fn manifest_model_to_dbt_model(
             unrendered_config: model.__base_attr__.unrendered_config,
         },
         __model_attr__: DbtModelAttr {
-            access: model.config.access.clone().unwrap_or_default(),
+            // `config.access` first, node-level `access` as a fallback: dbt-core mirrors the two
+            // on write but lets the config key win, and `same_ref_representation` compares this
+            // field against its `self.access` — the node attribute, which a manifest may carry
+            // alone.
+            access: model
+                .config
+                .access
+                .clone()
+                .or_else(|| model.access.clone())
+                .unwrap_or_default(),
             group: model.config.group.clone(),
             contract: model.config.contract.clone(),
             incremental_strategy: model.config.incremental_strategy.clone(),
@@ -2110,6 +2119,7 @@ pub fn recalculate_checksum(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::manifest::operation::DbtOperation;
     use crate::schemas::{CommonAttributes, Nodes};
     use crate::state::Operations;
@@ -2175,6 +2185,54 @@ mod tests {
             },
             __other__: BTreeMap::new(),
         })
+    }
+
+    /// dbt-core's `ModelNode.same_ref_representation` (dbt-mantle
+    /// `core/dbt/contracts/graph/nodes.py:684-691`) compares `self.access` — the NODE attribute —
+    /// so a manifest carrying only that one must not read back as `Protected`, which
+    /// `DbtModel::same_ref_representation` would report as modified against an unchanged project.
+    #[test]
+    fn manifest_model_access_falls_back_to_node_attribute() {
+        let quoting = DbtQuoting {
+            database: Some(false),
+            identifier: Some(false),
+            schema: Some(false),
+            snowflake_ignore_case: Some(false),
+        };
+        let manifest = DbtManifest {
+            metadata: ManifestMetadata {
+                adapter_type: "snowflake".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let to_dbt_model = |model: ManifestModel| {
+            manifest_model_to_dbt_model(model, &manifest, quoting)
+                .__model_attr__
+                .access
+        };
+
+        // Node-level only: the fallback carries it through.
+        let node_only = ManifestModel {
+            access: Some(Access::Public),
+            ..Default::default()
+        };
+        assert_eq!(to_dbt_model(node_only), Access::Public);
+
+        // Both present: `config.access` wins, matching dbt-core, where
+        // `update_parsed_node_config` overwrites `node.access` from the config dict.
+        let both = ManifestModel {
+            access: Some(Access::Public),
+            config: ManifestModelConfig {
+                access: Some(Access::Private),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(to_dbt_model(both), Access::Private);
+
+        // Neither: dbt-core's `protected` default.
+        assert_eq!(to_dbt_model(ManifestModel::default()), Access::Protected);
     }
 
     #[test]

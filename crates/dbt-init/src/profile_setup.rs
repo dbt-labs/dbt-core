@@ -58,7 +58,6 @@ fn load_profile_with_loader(
         profile: Some(profile_name.to_string()).into(),
         dbt_cloud: None,
         flags: None,
-        data_paths: Default::default(),
         source_paths: Default::default(),
         log_path: Default::default(),
         target_path: Default::default(),

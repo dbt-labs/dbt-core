@@ -1,7 +1,9 @@
 import { FC, PropsWithChildren } from 'react';
 import { twMerge } from 'tailwind-merge';
 
-import { Icon, RyeconInfoOutline, Tooltip } from '@dbt-labs/sourdough';
+import { Icon, RyeconInfoOutline } from '@dbt-labs/sourdough';
+
+import { Tooltip } from '../../components/ui/Tooltip';
 
 interface PropertyCardProps extends PropsWithChildren<{}> {
   title: string;

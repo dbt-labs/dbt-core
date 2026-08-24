@@ -127,7 +127,16 @@ fn build_model_context_fields<S: Serialize>(
 
     let config_yml = dbt_yaml::to_value(deprecated_config).expect("Failed to serialize object");
 
-    let pre_hooks = config_yml.get("pre_hook").map(|pre_hook| {
+    // `ModelConfig`/`SeedConfig`/`SnapshotConfig` serialize hooks under the underscored
+    // name; `FunctionConfig` doubles as its own manifest type and so uses dbt-core's
+    // hyphenated key. Accept either.
+    let hooks_of = |underscored: &str, hyphenated: &str| {
+        config_yml
+            .get(underscored)
+            .or_else(|| config_yml.get(hyphenated))
+    };
+
+    let pre_hooks = hooks_of("pre_hook", "pre-hook").map(|pre_hook| {
         let values: Vec<HookConfig> = match pre_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(pre_hook).into_iter().collect()
@@ -149,7 +158,7 @@ fn build_model_context_fields<S: Serialize>(
             .into()
     });
 
-    let post_hooks = config_yml.get("post_hook").map(|post_hook| {
+    let post_hooks = hooks_of("post_hook", "post-hook").map(|post_hook| {
         let values: Vec<HookConfig> = match post_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(post_hook).into_iter().collect()

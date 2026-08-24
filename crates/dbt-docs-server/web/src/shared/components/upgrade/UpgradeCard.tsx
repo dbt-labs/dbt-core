@@ -1,17 +1,11 @@
 import { FC, useEffect, useRef } from 'react';
 import { twJoin } from 'tailwind-merge';
 
-import {
-  Button,
-  Icon,
-  InvisibleButton,
-  Link,
-  RyeconCaretUp,
-  RyeconClose,
-  RyeconColorDbt,
-  Sizes,
-} from '@dbt-labs/sourdough';
+import { Icon, RyeconCaretUp, RyeconClose, Sizes } from '@dbt-labs/sourdough';
 
+import { Button } from '../../../components/ui/Button';
+import { InvisibleButton } from '../../../components/ui/InvisibleButton';
+import { Link } from '../../../components/ui/Link';
 import { getUpgradeCopy, isUpgradeCopyVisible } from './copy';
 import { CopyCommandSnippet } from './CopyCommandSnippet';
 import {
@@ -375,7 +369,6 @@ function RailCard({
           className="flex !w-auto min-w-0 flex-1 items-center gap-2 text-left text-fgMain"
           testId={testId ? `${testId}-toggle` : undefined}
         >
-          <Icon ryecon={RyeconColorDbt} size="xs" alt="" />
           <span className="min-w-0 flex-1 text-[13px] font-bold leading-[18px] text-fgMain">
             {spec.title}
           </span>
@@ -449,7 +442,7 @@ function CtaForSpec({ spec, emit, decorate, fullWidth, testId }: CtaProps) {
   const { label, href } = spec.cta;
   return (
     <Button
-      type="primary"
+      variant="default"
       size={Sizes.sm}
       text={label}
       className={fullWidth ? 'w-full justify-center' : undefined}

@@ -695,11 +695,26 @@ pub mod bigquery {
         let type_key = get_field_sql_type_metadata_key(AdapterType::Bigquery);
 
         if let Some(original_ctype) = field.metadata().get(type_key) {
+            // REPEATED - this is an Array type
+            let is_array = field
+                .metadata()
+                .get("Repeated")
+                .is_some_and(|v| v == "true");
+
             let inner_sql_type = match original_ctype.as_str() {
                 "RECORD" => {
-                    // STRUCT/RECORD type, recurse and build original type
-                    match field.data_type() {
-                        DataType::Struct(fields) => {
+                    // STRUCT/RECORD type, recurse and build original type.
+                    let struct_fields = match field.data_type() {
+                        DataType::Struct(fields) => Some(fields),
+                        DataType::List(element) if is_array => match element.data_type() {
+                            DataType::Struct(fields) => Some(fields),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+
+                    match struct_fields {
+                        Some(fields) => {
                             let field_strings: Vec<String> = fields
                                 .iter()
                                 .map(|nested_field| {
@@ -710,7 +725,7 @@ pub mod bigquery {
                                 .collect::<Option<Vec<_>>>()?;
                             Cow::Owned(format!("STRUCT<{}>", field_strings.join(", ")))
                         }
-                        _ => Cow::Borrowed(original_ctype.as_str()),
+                        None => Cow::Borrowed(original_ctype.as_str()),
                     }
                 }
                 "INTEGER" => Cow::Borrowed("INT64"),
@@ -720,11 +735,6 @@ pub mod bigquery {
                 other => Cow::Borrowed(other),
             };
 
-            // REPEATED - this is an Array type
-            let is_array = field
-                .metadata()
-                .get("Repeated")
-                .is_some_and(|v| v == "true");
             let sql_type = if is_array {
                 Cow::Owned(format!("ARRAY<{}>", inner_sql_type))
             } else {
@@ -1404,5 +1414,63 @@ mod tests {
         assert_eq!(convert_text_type(Postgres), "text");
         assert_eq!(convert_text_type(Snowflake), "text");
         assert_eq!(convert_text_type(Redshift), "text");
+    }
+
+    fn bq(ty: &str, repeated: bool) -> HashMap<String, String> {
+        HashMap::from([
+            ("Type".to_string(), ty.to_string()),
+            ("Repeated".to_string(), repeated.to_string()),
+        ])
+    }
+
+    #[test]
+    fn bigquery_field_to_string_recovers_nested_types_of_repeated_records() {
+        // pois ARRAY<STRUCT<poi_name STRING, location STRUCT<poi_type STRING, point_geom GEOGRAPHY>>>
+        // A REPEATED RECORD arrives as a list wrapping the struct.
+        let poi_name =
+            Field::new("poi_name", DataType::Utf8, true).with_metadata(bq("STRING", false));
+        let poi_type =
+            Field::new("poi_type", DataType::Utf8, true).with_metadata(bq("STRING", false));
+        let point_geom =
+            Field::new("point_geom", DataType::Utf8, true).with_metadata(bq("GEOGRAPHY", false));
+
+        let location = Field::new(
+            "location",
+            DataType::Struct(vec![poi_type, point_geom].into()),
+            true,
+        )
+        .with_metadata(bq("RECORD", false));
+        let element = Field::new(
+            "item",
+            DataType::Struct(vec![poi_name, location].into()),
+            true,
+        );
+        let pois = Field::new("pois", DataType::List(Arc::new(element)), true)
+            .with_metadata(bq("RECORD", true));
+
+        assert_eq!(
+            bigquery::field_to_string(&pois).unwrap(),
+            "ARRAY<STRUCT<`poi_name` STRING, `location` STRUCT<`poi_type` STRING, `point_geom` GEOGRAPHY>>>"
+        );
+    }
+
+    #[test]
+    fn bigquery_field_to_string_recurses_through_repeated_records_at_every_level() {
+        // outer ARRAY<STRUCT<inner ARRAY<STRUCT<point_geom GEOGRAPHY>>>>
+        let point_geom =
+            Field::new("point_geom", DataType::Utf8, true).with_metadata(bq("GEOGRAPHY", false));
+
+        let inner_element = Field::new("item", DataType::Struct(vec![point_geom].into()), true);
+        let inner = Field::new("inner", DataType::List(Arc::new(inner_element)), true)
+            .with_metadata(bq("RECORD", true));
+
+        let outer_element = Field::new("item", DataType::Struct(vec![inner].into()), true);
+        let outer = Field::new("outer", DataType::List(Arc::new(outer_element)), true)
+            .with_metadata(bq("RECORD", true));
+
+        assert_eq!(
+            bigquery::field_to_string(&outer).unwrap(),
+            "ARRAY<STRUCT<`inner` ARRAY<STRUCT<`point_geom` GEOGRAPHY>>>>"
+        );
     }
 }

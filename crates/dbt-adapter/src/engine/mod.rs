@@ -22,8 +22,10 @@ pub mod query_comment;
 pub mod retry;
 
 mod adbc;
+mod databricks;
 pub mod duckdb_attach;
 pub use adbc::AdbcEngine;
+pub(crate) use adbc::resolve_connection_config;
 
 mod noop_connection;
 pub use noop_connection::NoopConnection;

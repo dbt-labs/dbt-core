@@ -514,6 +514,10 @@ pub async fn run_operation(
             packages,
         )),
     );
+    run_operation_context.insert(
+        "connection_name".to_owned(),
+        Value::from(format!("macro_{macro_name}")),
+    );
 
     let template = jinja_env.get_template(&template_name)?;
     let state = template.eval_to_state(run_operation_context, &[])?;

@@ -13,6 +13,7 @@ use minijinja::State;
 use crate::adapter::adapter_impl::AdapterImpl;
 use crate::errors::adbc_error_to_adapter_error;
 use crate::formatter::SqlLiteralFormatter;
+use crate::metadata::bigquery;
 use crate::metadata::bigquery::is_bigquery_not_found_error;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
@@ -89,6 +90,37 @@ pub fn get_relation(
         AdapterType::Oracle => todo!("Oracle"),
         AdapterType::Datafusion => todo!("Datafusion"),
     }
+}
+
+/// Parses an `INFORMATION_SCHEMA.ROUTINES`-shaped result batch into a
+/// [`Relation`].
+pub(crate) fn relation_from_routines_batch(
+    adapter: &AdapterImpl,
+    database: &str,
+    schema: &str,
+    identifier: &str,
+    batch: &arrow::record_batch::RecordBatch,
+) -> AdapterResult<Option<Relation>> {
+    if batch.num_rows() == 0 {
+        return Ok(None);
+    }
+
+    let column = batch.column_by_name("table_type").unwrap();
+    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+    let relation_type_name = string_array.value(0).to_uppercase();
+    let relation_type =
+        RelationType::from_adapter_type(adapter.adapter_type(), &relation_type_name);
+
+    Ok(Some(
+        Relation::new(
+            adapter.adapter_type(),
+            database.to_string(),
+            schema.to_string(),
+            identifier.to_string(),
+        )
+        .with_relation_type(relation_type)
+        .with_quoting(adapter.quoting()),
+    ))
 }
 
 // https://github.com/dbt-labs/dbt-adapters/blob/ace1709df001df4232a66f9d5f331a5fda4d3389/dbt-snowflake/src/dbt/include/snowflake/macros/adapters.sql#L138
@@ -243,6 +275,11 @@ fn bigquery_get_relation_via_adbc(
         Err(e) => {
             let adapter_err = adbc_error_to_adapter_error(e);
             if is_bigquery_not_found_error(&adapter_err) {
+                if adapter.engine().relation_cache().project_has_functions() {
+                    return bigquery::get_relation_routine_fallback(
+                        adapter, state, conn, database, schema, identifier, token,
+                    );
+                }
                 return Ok(None);
             } else {
                 return Err(adapter_err);
@@ -1101,5 +1138,69 @@ mod tests {
         let (relation_type, _, _) =
             parse_describe_table_extended(AdapterType::Spark, &batch).unwrap();
         assert_eq!(relation_type, RelationType::Table);
+    }
+
+    fn mock_bigquery_adapter() -> AdapterImpl {
+        AdapterImpl::new_mock(
+            AdapterType::Bigquery,
+            BTreeMap::new(),
+            dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING,
+            Arc::new(crate::sql_types::DefaultTypeOps::new(AdapterType::Bigquery)),
+            Arc::new(crate::stmt_splitter::DefaultStmtSplitter),
+        )
+    }
+
+    fn routines_batch(routine_type: &str) -> RecordBatch {
+        let schema = Schema::new(vec![
+            Field::new("table_catalog", DataType::Utf8, false),
+            Field::new("table_schema", DataType::Utf8, false),
+            Field::new("table_name", DataType::Utf8, false),
+            Field::new("table_type", DataType::Utf8, false),
+        ]);
+        RecordBatch::try_new(
+            Arc::new(schema),
+            vec![
+                Arc::new(StringArray::from(vec!["my-proj"])),
+                Arc::new(StringArray::from(vec!["my_schema"])),
+                Arc::new(StringArray::from(vec!["add_one"])),
+                Arc::new(StringArray::from(vec![routine_type])),
+            ],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn relation_from_routines_batch_resolves_function_row() {
+        let adapter = mock_bigquery_adapter();
+        let batch = routines_batch("FUNCTION");
+
+        let relation =
+            relation_from_routines_batch(&adapter, "my-proj", "my_schema", "add_one", &batch)
+                .unwrap()
+                .expect("a non-empty ROUTINES batch should resolve to Some(relation)");
+
+        assert_eq!(relation.relation_type(), Some(RelationType::Function));
+        assert_eq!(relation.database_as_resolved_str().unwrap(), "my-proj");
+        assert_eq!(relation.schema_as_resolved_str().unwrap(), "my_schema");
+        assert_eq!(relation.identifier_as_resolved_str().unwrap(), "add_one");
+    }
+
+    #[test]
+    fn relation_from_routines_batch_returns_none_when_batch_is_empty() {
+        let adapter = mock_bigquery_adapter();
+        let schema = Schema::new(vec![Field::new("table_type", DataType::Utf8, false)]);
+        let empty_batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![Arc::new(StringArray::from(Vec::<&str>::new()))],
+        )
+        .unwrap();
+
+        // No matching row means the object truly doesn't exist (it's not a
+        // table/view either, since this is only reached as a fallback after
+        // that lookup already failed).
+        let result =
+            relation_from_routines_batch(&adapter, "my-proj", "my_schema", "add_one", &empty_batch)
+                .unwrap();
+        assert!(result.is_none());
     }
 }

@@ -2,6 +2,7 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{
     ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
 };
+use crate::resolve::resolve_utils::deep_merge_yaml;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message};
@@ -87,6 +88,14 @@ impl MinimalProperties {
                             .duplicate_paths
                             .push(properties_path.to_path_buf());
                     } else {
+                        // Each version gets its own clone, so merging per version affects no sibling.
+                        let mut schema_value = model_value.clone();
+                        if let Some(version_info) = maybe_version_info.as_ref() {
+                            merge_version_config_into_schema_value(
+                                &mut schema_value,
+                                &version_info.version_config,
+                            );
+                        }
                         self.models.insert(
                             key,
                             MinimalPropertiesEntry {
@@ -94,7 +103,7 @@ impl MinimalProperties {
                                 name_span: Span::default(),
                                 relative_path: properties_path.to_path_buf(),
                                 version_info: maybe_version_info,
-                                schema_value: model_value.clone(),
+                                schema_value,
                                 table_value: None,
                                 duplicate_paths: vec![],
                             },
@@ -700,9 +709,39 @@ pub struct VersionInfo {
     pub version: String,
     pub latest_version: String,
     pub versioned_name: String,
+    /// This version's raw `config:` mapping. Consumed only by
+    /// [`merge_version_config_into_schema_value`]; a second merge would apply it twice.
     pub version_config: Verbatim<Option<dbt_yaml::Value>>,
     // TODO: Remove this and figure out more efficient way to handle this
     pub all_versions: BTreeMap<String, String>,
+}
+
+/// Deep-merges a version's `config:` onto the model-level `config:` in that version's own clone of
+/// the schema.yml entry, per `deep_merge(target.config, unparsed_version.config)` in dbt-mantle
+/// `core/dbt/parser/schemas.py:1093`. Both the rendered and unrendered pipelines read
+/// `mpe.schema_value`, so merging here keeps them from disagreeing.
+fn merge_version_config_into_schema_value(
+    schema_value: &mut dbt_yaml::Value,
+    version_config: &Verbatim<Option<dbt_yaml::Value>>,
+) {
+    let Some(version_config) = (*version_config).as_ref() else {
+        return;
+    };
+    if !version_config.is_mapping() {
+        return;
+    }
+    let Some(schema_mapping) = schema_value.as_mapping_mut() else {
+        return;
+    };
+    match schema_mapping.get_mut("config") {
+        Some(model_config) => deep_merge_yaml(model_config, version_config),
+        None => {
+            schema_mapping.insert(
+                dbt_yaml::Value::string("config".to_string()),
+                version_config.clone(),
+            );
+        }
+    }
 }
 
 // Collect and build a properites config for all versions of a model

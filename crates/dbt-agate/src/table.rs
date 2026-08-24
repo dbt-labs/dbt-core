@@ -1408,10 +1408,10 @@ mod tests {
     use arrow::record_batch::RecordBatch;
     use arrow_array::{Array, ListArray, RecordBatchOptions, UInt64Array};
     use arrow_schema::Fields;
-    use minijinja::Environment;
     use minijinja::value::Kwargs;
     use minijinja::value::ValueMap;
     use minijinja::value::mutable_map::MutableMap;
+    use minijinja::{Environment, context};
     use minijinja_contrib::testing::jinja_assert;
     use std::io;
     use std::sync::Arc;
@@ -1429,6 +1429,39 @@ mod tests {
         ]));
         let batch = RecordBatch::try_new(schema, vec![id_array, country_array]).unwrap();
         Arc::new(batch)
+    }
+
+    #[test]
+    fn jinja_sequence_value_matrix() {
+        let table = Arc::new(main_table(&[1, 2], &["a", "b"], &[None, Some(1)]));
+        let columns = Value::from_object(table.columns());
+        let rows = Value::from_object(table.rows());
+        let values = [
+            ("columns", columns.clone(), 3),
+            ("column", columns.get_item(&Value::from(0)).unwrap(), 2),
+            ("rows", rows.clone(), 2),
+            ("row", rows.get_item(&Value::from(0)).unwrap(), 3),
+            (
+                "tuple",
+                Value::from_object(table.column_names_as_tuple().into_tuple()),
+                3,
+            ),
+        ];
+        let env = Environment::new();
+
+        for (name, value, expected_len) in values {
+            assert_eq!(value.kind(), minijinja::value::ValueKind::Seq, "{name}");
+            assert_eq!(
+                env.render_str(
+                    "{{ value | list | length }}",
+                    context! { value => value },
+                    &[],
+                )
+                .unwrap(),
+                expected_len.to_string(),
+                "{name}",
+            );
+        }
     }
 
     #[test]
