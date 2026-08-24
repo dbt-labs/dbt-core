@@ -185,6 +185,12 @@
     "AnalysesConfig": {
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -709,25 +715,6 @@
         }
       ]
     },
-    "ComputePlatform": {
-      "description": "Selects the compute target a model's DML is executed against.\n\n`Default` uses the profile's adapter. A run implementation may honor an alternate target for other variants; parse/compile/render and introspection are unaffected by this selection.",
-      "oneOf": [
-        {
-          "description": "Execute on the profile's (default) adapter.",
-          "type": "string",
-          "enum": [
-            "default"
-          ]
-        },
-        {
-          "description": "Execute on the alternate compute target.",
-          "type": "string",
-          "enum": [
-            "alt"
-          ]
-        }
-      ]
-    },
     "ConstantProperty": {
       "type": "object",
       "required": [
@@ -958,6 +945,12 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -3269,6 +3262,12 @@
             }
           ]
         },
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -5476,6 +5475,12 @@
             }
           ]
         },
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -5498,16 +5503,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "alt_compute": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComputePlatform"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "as_columnstore": {
@@ -8025,6 +8020,12 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -8038,16 +8039,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "alt_compute": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComputePlatform"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "as_columnstore": {
@@ -9389,6 +9380,12 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
