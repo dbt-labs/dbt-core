@@ -48,6 +48,11 @@ def _executor_context(*, existing_relation=None, grant_config=None):
         "drop_indexes_on_relation": MagicMock(),
         "should_revoke": MagicMock(return_value=True),
         "apply_grants": MagicMock(),
+        "create_table_structure_at": MagicMock(),
+        "apply_alter_constraints": MagicMock(),
+        "apply_tags": MagicMock(),
+        "apply_column_tags": MagicMock(),
+        "insert_from_relation": MagicMock(),
         "persist_docs": MagicMock(),
         "optimize": MagicMock(),
     }
@@ -227,6 +232,69 @@ def test_table_executor_uses_resolved_operation_order_as_authority():
     context["optimize"].assert_called_once_with(target)
     context["apply_grants"].assert_not_called()
     context["adapter"].commit.assert_not_called()
+
+
+def test_table_executor_expands_typed_create_and_populate_operations():
+    context, target, intermediate, _ = _executor_context()
+    enriched = _relation("enriched_target")
+    context["create_table_structure_at"].return_value = enriched
+    column_tags = SimpleNamespace(set_column_tags={"id": "sensitive"})
+    adapter = MagicMock()
+    adapter.get_column_tags_from_model.return_value = column_tags
+    format_facts = {"table_provider": "delta"}
+    lifecycle_plan = SimpleNamespace(
+        facts=SimpleNamespace(
+                create=SimpleNamespace(
+                    catalog=SimpleNamespace(
+                        to_dict=lambda: {"catalog_type": "unity"},
+                    ),
+                    format=SimpleNamespace(to_dict=lambda: format_facts),
+            )
+        )
+    )
+    executor = TableMaterializationExecutor(
+        adapter,
+        MagicMock(),
+        context,
+        lifecycle_plan=lifecycle_plan,
+    )
+    operations = (
+        _operation(
+            "create_structure_from_relation",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="intermediate"),
+        ),
+        _operation(
+            "apply_alter_constraints",
+            relation=SimpleNamespace(value="target"),
+        ),
+        _operation("apply_tags", relation=SimpleNamespace(value="target")),
+        _operation("apply_column_tags", relation=SimpleNamespace(value="target")),
+        _operation(
+            "insert_from_relation",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="intermediate"),
+        ),
+    )
+
+    executor._execute_operation_program(
+        operations=operations,
+        relations={"target": target, "intermediate": intermediate},
+        existing_relation=None,
+        grant_config={},
+    )
+
+    context["create_table_structure_at"].assert_called_once_with(
+            target,
+            intermediate,
+            context["sql"],
+            format_facts,
+            {"catalog_type": "unity"},
+        )
+    context["apply_alter_constraints"].assert_called_once_with(enriched)
+    context["apply_tags"].assert_called_once_with(enriched, None)
+    context["apply_column_tags"].assert_called_once_with(enriched, column_tags)
+    context["insert_from_relation"].assert_called_once_with(enriched, intermediate)
 
 
 def _typed_renderer_context():

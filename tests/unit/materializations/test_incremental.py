@@ -55,6 +55,12 @@ def _context(existing_relation):
         "create_indexes": MagicMock(),
         "should_revoke": MagicMock(return_value=False),
         "apply_grants": MagicMock(),
+        "create_table_structure_at": MagicMock(),
+        "apply_alter_constraints": MagicMock(),
+        "apply_tags": MagicMock(),
+        "apply_column_tags": MagicMock(),
+        "insert_from_relation": MagicMock(),
+        "set_overwrite_mode": MagicMock(),
         "persist_docs": MagicMock(),
     }
     return context, target, intermediate, backup, temp
@@ -157,6 +163,42 @@ def test_incremental_executor_builds_staging_then_mutation_from_typed_arguments(
         },
     )
     strategy_macro.assert_called_once_with({"target_relation": target})
+
+
+def test_incremental_overwrite_mode_uses_planned_runtime_engine():
+    existing = _relation("existing")
+    context, target, intermediate, backup, temp = _context(existing)
+    state = IncrementalMaterializationExecutionState(
+        existing_relation=existing,
+        target_relation=target,
+        intermediate_relation=intermediate,
+        backup_relation=backup,
+        temp_relation=temp,
+        preexisting_intermediate_relation=None,
+        preexisting_backup_relation=None,
+        incremental_plan=SimpleNamespace(
+            facts=SimpleNamespace(
+                runtime=SimpleNamespace(engine="databricks_sql_warehouse")
+            )
+        ),
+        strategy_macro=MagicMock(),
+        catalog_relation=None,
+        unique_key="id",
+        staging_is_temporary=True,
+        full_refresh_mode=False,
+        on_schema_change="ignore",
+        grant_config={},
+    )
+    executor = IncrementalMaterializationExecutor(MagicMock(), _model(), context)
+
+    executor._execute_incremental_program(
+        state,
+        (_operation("set_incremental_overwrite_mode", name="DYNAMIC"),),
+    )
+
+    context["set_overwrite_mode"].assert_called_once_with(
+        "DYNAMIC", "databricks_sql_warehouse"
+    )
 
 
 def test_incremental_executor_runs_python_lifecycle_and_mutation(monkeypatch):
@@ -402,6 +444,82 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
         should_revoke=False,
     )
     context["adapter"].commit.assert_called_once_with()
+
+
+def test_incremental_executor_expands_typed_create_and_populate_operations():
+    existing = _relation("existing")
+    context, target, intermediate, backup, temp = _context(existing)
+    enriched = _relation("enriched_target")
+    context["create_table_structure_at"].return_value = enriched
+    column_tags = SimpleNamespace(set_column_tags={"id": "sensitive"})
+    operations = (
+        _operation(
+            "create_structure_from_relation",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="intermediate"),
+        ),
+        _operation(
+            "apply_alter_constraints",
+            relation=SimpleNamespace(value="target"),
+        ),
+        _operation("apply_tags", relation=SimpleNamespace(value="target")),
+        _operation("apply_column_tags", relation=SimpleNamespace(value="target")),
+        _operation(
+            "insert_from_relation",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="intermediate"),
+        ),
+    )
+    lifecycle_plan = SimpleNamespace(
+        operations=operations,
+        schema_change=SimpleNamespace(strategy=SimpleNamespace(value="ignore")),
+        partition=None,
+        facts=SimpleNamespace(
+                create=SimpleNamespace(
+                    catalog=SimpleNamespace(
+                        to_dict=lambda: {"catalog_type": "unity"},
+                    ),
+                    format=SimpleNamespace(
+                    to_dict=lambda: {"table_provider": "iceberg"},
+                )
+            )
+        ),
+    )
+    state = IncrementalMaterializationExecutionState(
+        existing_relation=existing,
+        target_relation=target,
+        intermediate_relation=intermediate,
+        backup_relation=backup,
+        temp_relation=temp,
+        preexisting_intermediate_relation=None,
+        preexisting_backup_relation=None,
+        incremental_plan=SimpleNamespace(),
+        strategy_macro=MagicMock(),
+        catalog_relation=None,
+        unique_key="id",
+        staging_is_temporary=True,
+        full_refresh_mode=True,
+        on_schema_change="ignore",
+        grant_config={},
+        lifecycle_plan=lifecycle_plan,
+    )
+    adapter = MagicMock()
+    adapter.get_column_tags_from_model.return_value = column_tags
+    executor = IncrementalMaterializationExecutor(adapter, _model(), context)
+
+    executor._execute_incremental_program(state, operations)
+
+    context["create_table_structure_at"].assert_called_once_with(
+        target,
+        intermediate,
+            context["sql"],
+            {"table_provider": "iceberg"},
+            {"catalog_type": "unity"},
+        )
+    context["apply_alter_constraints"].assert_called_once_with(enriched)
+    context["apply_tags"].assert_called_once_with(enriched, None)
+    context["apply_column_tags"].assert_called_once_with(enriched, column_tags)
+    context["insert_from_relation"].assert_called_once_with(enriched, intermediate)
 
 
 def test_incremental_executor_dispatches_typed_partition_copy(monkeypatch):

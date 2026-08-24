@@ -259,7 +259,7 @@ class TableMaterializationExecutor:
         self,
         *,
         operations: Any,
-        relations: Mapping[str, Optional[BaseRelation]],
+        relations: dict[str, Optional[BaseRelation]],
         existing_relation: Optional[BaseRelation],
         grant_config: Mapping[str, Any],
     ) -> None:
@@ -268,6 +268,16 @@ class TableMaterializationExecutor:
         envelope_context: Any = None
         setup_macro = getattr(self.lifecycle_plan, "setup_macro", None)
         teardown_macro = getattr(self.lifecycle_plan, "teardown_macro", None)
+        lifecycle_facts = getattr(self.lifecycle_plan, "facts", None)
+        create_facts = getattr(lifecycle_facts, "create", None)
+        format_facts = getattr(create_facts, "format", None)
+        catalog_facts = getattr(create_facts, "catalog", None)
+        serialized_format_facts = (
+            format_facts.to_dict() if callable(getattr(format_facts, "to_dict", None)) else None
+        )
+        serialized_catalog_facts = (
+            catalog_facts.to_dict() if callable(getattr(catalog_facts, "to_dict", None)) else None
+        )
 
         for operation in operations:
             kind = self._operation_value(operation, "kind")
@@ -321,6 +331,34 @@ class TableMaterializationExecutor:
                     source,
                     self._context_value("sql"),
                 )
+            elif kind == "create_structure_from_relation":
+                source = relations.get(source_role)
+                if relation is None or source is None or relation_role is None:
+                    raise DbtInternalError(
+                        "Create-structure operation resolved an empty relation"
+                    )
+                enriched_relation = self._call_macro(
+                    "create_table_structure_at",
+                    relation,
+                    source,
+                    self._context_value("sql"),
+                    serialized_format_facts,
+                    serialized_catalog_facts,
+                )
+                if enriched_relation is None:
+                    raise DbtInternalError(
+                        "Create-structure operation did not return its enriched relation"
+                    )
+                relations[relation_role] = enriched_relation
+            elif kind == "apply_alter_constraints":
+                self._call_macro("apply_alter_constraints", relation)
+            elif kind == "insert_from_relation":
+                source = relations.get(source_role)
+                if relation is None or source is None:
+                    raise DbtInternalError(
+                        "Insert-from-relation operation resolved an empty relation"
+                    )
+                self._call_macro("insert_from_relation", relation, source)
             elif kind == "rename_relation":
                 destination = relations.get(destination_role)
                 if relation is None or destination is None:

@@ -271,6 +271,16 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
         configuration_changes: Any = None
         schema_change = getattr(state.lifecycle_plan, "schema_change", None)
         schema_strategy = getattr(getattr(schema_change, "strategy", None), "value", None)
+        lifecycle_facts = getattr(state.lifecycle_plan, "facts", None)
+        create_facts = getattr(lifecycle_facts, "create", None)
+        format_facts = getattr(create_facts, "format", None)
+        catalog_facts = getattr(create_facts, "catalog", None)
+        serialized_format_facts = (
+            format_facts.to_dict() if callable(getattr(format_facts, "to_dict", None)) else None
+        )
+        serialized_catalog_facts = (
+            catalog_facts.to_dict() if callable(getattr(catalog_facts, "to_dict", None)) else None
+        )
 
         for operation in operations:
             kind = self._operation_value(operation, "kind")
@@ -312,6 +322,33 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     source,
                     self._context_value("sql"),
                 )
+            elif kind == "create_structure_from_relation":
+                if relation is None or source is None or relation_role is None:
+                    raise DbtInternalError(
+                        "Incremental create-structure resolved an empty relation"
+                    )
+                enriched_relation = self._call_macro(
+                    "create_table_structure_at",
+                    relation,
+                    source,
+                    self._context_value("sql"),
+                    serialized_format_facts,
+                    serialized_catalog_facts,
+                )
+                if enriched_relation is None:
+                    raise DbtInternalError(
+                        "Incremental create-structure did not return its enriched relation"
+                    )
+                relations[relation_role] = enriched_relation
+                relation = enriched_relation
+            elif kind == "apply_alter_constraints":
+                self._call_macro("apply_alter_constraints", relation)
+            elif kind == "insert_from_relation":
+                if relation is None or source is None:
+                    raise DbtInternalError(
+                        "Incremental insert-from-relation resolved an empty relation"
+                    )
+                self._call_macro("insert_from_relation", relation, source)
             elif kind == "insert_from_query":
                 render_insert = getattr(self.adapter, "render_incremental_insert_from_query", None)
                 partition = getattr(state.lifecycle_plan, "partition", None)
@@ -372,7 +409,11 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                         source,
                     )
             elif kind == "set_incremental_overwrite_mode":
-                self._call_macro("set_overwrite_mode", getattr(operation, "name"))
+                self._call_macro(
+                    "set_overwrite_mode",
+                    getattr(operation, "name"),
+                    state.incremental_plan.facts.runtime.engine,
+                )
             elif kind == "execute_incremental_mutation":
                 if dest_columns is None:
                     raise DbtInternalError(
