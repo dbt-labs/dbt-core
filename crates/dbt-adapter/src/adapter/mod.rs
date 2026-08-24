@@ -3879,13 +3879,12 @@ impl Adapter {
                 };
                 // TODO(harry): add iter.finish() and fix the tests
 
-                // NOTE(serramatutu): this is a hacky fix for: https://github.com/dbt-labs/dbt-fusion/issues/1332
-                // It is possible this still fails for other things that return large result sets
-                // unnecessarily. Without users explicitly running with `fetch=False`, we'd need full SQL
-                // parsing to determine whether to fetch or not.
-                if self.adapter_type() == AdapterType::Bigquery
-                    && sql.trim().to_lowercase().starts_with("alter table")
-                {
+                // dbt.run_query always passes fetch=true. BigQuery DML/DDL
+                // readers Storage-Read the destination table (dbt-fusion#1332).
+                if !dbt_adapter_sql::statements::statement_returns_result_rows(
+                    sql,
+                    self.adapter_type(),
+                ) {
                     fetch = false;
                 }
 
