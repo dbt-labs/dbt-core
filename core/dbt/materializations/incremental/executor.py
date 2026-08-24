@@ -348,7 +348,16 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     raise DbtInternalError(
                         "Incremental insert-from-relation resolved an empty relation"
                     )
-                self._call_macro("insert_from_relation", relation, source)
+                insert_variant = getattr(operation, "renderer_variant", None)
+                if insert_variant in {"by_name", "positional"}:
+                    self._call_macro(
+                        "insert_from_relation",
+                        relation,
+                        source,
+                        insert_variant == "by_name",
+                    )
+                else:
+                    self._call_macro("insert_from_relation", relation, source)
             elif kind == "insert_from_query":
                 render_insert = getattr(self.adapter, "render_incremental_insert_from_query", None)
                 partition = getattr(state.lifecycle_plan, "partition", None)
@@ -384,21 +393,20 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                 if not dest_columns:
                     dest_columns = self.adapter.get_columns_in_relation(relation)
             elif kind == "process_config_changes":
-                self._call_macro("process_config_changes", relation, source)
+                if getattr(operation, "renderer_variant", None) == "enabled":
+                    self._call_macro("process_config_changes_from_plan", relation, source)
+                else:
+                    self._call_macro("process_config_changes", relation, source)
             elif kind == "capture_config_changes":
-                apply_changes = self._context_value("config").get(
-                    "incremental_apply_config_changes", True
-                )
-                if str(apply_changes).casefold() not in {"0", "false", "no", "off"}:
-                    get_model_config = getattr(self.adapter, "get_config_from_model", None)
-                    get_relation_config = getattr(self.adapter, "get_relation_config", None)
-                    if not callable(get_model_config) or not callable(get_relation_config):
-                        raise DbtInternalError(
-                            "Config-change capture requires adapter config resolvers"
-                        )
-                    model_config = get_model_config(self.model)
-                    existing_config = get_relation_config(relation, model_config)
-                    configuration_changes = model_config.get_changeset(existing_config)
+                get_model_config = getattr(self.adapter, "get_config_from_model", None)
+                get_relation_config = getattr(self.adapter, "get_relation_config", None)
+                if not callable(get_model_config) or not callable(get_relation_config):
+                    raise DbtInternalError(
+                        "Config-change capture requires adapter config resolvers"
+                    )
+                model_config = get_model_config(self.model)
+                existing_config = get_relation_config(relation, model_config)
+                configuration_changes = model_config.get_changeset(existing_config)
             elif kind == "apply_config_changes":
                 if configuration_changes is not None:
                     self._call_macro(
@@ -477,6 +485,9 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     if getattr(operation, "name", None) == "for_relation"
                     else {}
                 )
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                if renderer_variant is not None:
+                    kwargs["column_comment_renderer_variant"] = renderer_variant
                 self._call_macro(
                     "persist_docs",
                     relation,
@@ -484,11 +495,14 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     **kwargs,
                 )
             elif kind == "apply_tags":
-                self._call_macro(
-                    "apply_tags",
-                    relation,
-                    self._context_value("config").get("databricks_tags"),
-                )
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                set_tags = self._context_value("config").get("databricks_tags")
+                if renderer_variant is None:
+                    self._call_macro("apply_tags", relation, set_tags)
+                else:
+                    self._call_macro(
+                        "apply_tags_from_plan", relation, set_tags, renderer_variant
+                    )
             elif kind == "apply_column_tags":
                 get_column_tags = getattr(self.adapter, "get_column_tags_from_model", None)
                 if not callable(get_column_tags):
@@ -497,11 +511,33 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     )
                 column_tags = get_column_tags(self.model)
                 if column_tags is not None and getattr(column_tags, "set_column_tags", None):
-                    self._call_macro("apply_column_tags", relation, column_tags)
+                    renderer_variant = getattr(operation, "renderer_variant", None)
+                    if renderer_variant is None:
+                        self._call_macro("apply_column_tags", relation, column_tags)
+                    else:
+                        self._call_macro(
+                            "apply_column_tags_from_plan",
+                            relation,
+                            column_tags,
+                            renderer_variant,
+                        )
             elif kind == "persist_constraints":
-                self._call_macro("persist_constraints", relation, self._context_value("model"))
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                if renderer_variant is None:
+                    self._call_macro("persist_constraints", relation, self._context_value("model"))
+                else:
+                    self._call_macro(
+                        "persist_constraints_from_plan",
+                        relation,
+                        self._context_value("model"),
+                        renderer_variant,
+                    )
             elif kind == "optimize":
-                self._call_macro("optimize", relation)
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                if renderer_variant is None:
+                    self._call_macro("optimize", relation)
+                else:
+                    self._call_macro("optimize_from_plan", relation, renderer_variant)
             elif kind == "commit":
                 self._commit()
             else:

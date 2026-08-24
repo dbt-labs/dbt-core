@@ -51,10 +51,13 @@ def _executor_context(*, existing_relation=None, grant_config=None):
         "create_table_structure_at": MagicMock(),
         "apply_alter_constraints": MagicMock(),
         "apply_tags": MagicMock(),
+        "apply_tags_from_plan": MagicMock(),
         "apply_column_tags": MagicMock(),
+        "apply_column_tags_from_plan": MagicMock(),
         "insert_from_relation": MagicMock(),
         "persist_docs": MagicMock(),
         "optimize": MagicMock(),
+        "optimize_from_plan": MagicMock(),
     }
     return context, target, intermediate, backup
 
@@ -194,10 +197,12 @@ def test_table_executor_uses_resolved_operation_order_as_authority():
         _operation(
             "persist_documentation",
             relation=SimpleNamespace(value="target"),
+            renderer_variant="comment_on_column",
         ),
         _operation(
             "optimize",
             relation=SimpleNamespace(value="target"),
+            renderer_variant="zorder",
         ),
     )
     lifecycle_plan = SimpleNamespace(
@@ -228,8 +233,13 @@ def test_table_executor_uses_resolved_operation_order_as_authority():
         call(intermediate, target),
     ]
     context["run_hooks"].assert_called_once_with(context["pre_hooks"], inside_transaction=False)
-    context["persist_docs"].assert_called_once_with(target, context["model"])
-    context["optimize"].assert_called_once_with(target)
+    context["persist_docs"].assert_called_once_with(
+        target,
+        context["model"],
+        column_comment_renderer_variant="comment_on_column",
+    )
+    context["optimize_from_plan"].assert_called_once_with(target, "zorder")
+    context["optimize"].assert_not_called()
     context["apply_grants"].assert_not_called()
     context["adapter"].commit.assert_not_called()
 
@@ -244,11 +254,11 @@ def test_table_executor_expands_typed_create_and_populate_operations():
     format_facts = {"table_provider": "delta"}
     lifecycle_plan = SimpleNamespace(
         facts=SimpleNamespace(
-                create=SimpleNamespace(
-                    catalog=SimpleNamespace(
-                        to_dict=lambda: {"catalog_type": "unity"},
-                    ),
-                    format=SimpleNamespace(to_dict=lambda: format_facts),
+            create=SimpleNamespace(
+                catalog=SimpleNamespace(
+                    to_dict=lambda: {"catalog_type": "unity"},
+                ),
+                format=SimpleNamespace(to_dict=lambda: format_facts),
             )
         )
     )
@@ -268,12 +278,21 @@ def test_table_executor_expands_typed_create_and_populate_operations():
             "apply_alter_constraints",
             relation=SimpleNamespace(value="target"),
         ),
-        _operation("apply_tags", relation=SimpleNamespace(value="target")),
-        _operation("apply_column_tags", relation=SimpleNamespace(value="target")),
+        _operation(
+            "apply_tags",
+            relation=SimpleNamespace(value="target"),
+            renderer_variant="unity",
+        ),
+        _operation(
+            "apply_column_tags",
+            relation=SimpleNamespace(value="target"),
+            renderer_variant="unity",
+        ),
         _operation(
             "insert_from_relation",
             relation=SimpleNamespace(value="target"),
             source=SimpleNamespace(value="intermediate"),
+            renderer_variant="positional",
         ),
     )
 
@@ -285,16 +304,18 @@ def test_table_executor_expands_typed_create_and_populate_operations():
     )
 
     context["create_table_structure_at"].assert_called_once_with(
-            target,
-            intermediate,
-            context["sql"],
-            format_facts,
-            {"catalog_type": "unity"},
-        )
+        target,
+        intermediate,
+        context["sql"],
+        format_facts,
+        {"catalog_type": "unity"},
+    )
     context["apply_alter_constraints"].assert_called_once_with(enriched)
-    context["apply_tags"].assert_called_once_with(enriched, None)
-    context["apply_column_tags"].assert_called_once_with(enriched, column_tags)
-    context["insert_from_relation"].assert_called_once_with(enriched, intermediate)
+    context["apply_tags_from_plan"].assert_called_once_with(enriched, None, "unity")
+    context["apply_column_tags_from_plan"].assert_called_once_with(
+        enriched, column_tags, "unity"
+    )
+    context["insert_from_relation"].assert_called_once_with(enriched, intermediate, False)
 
 
 def _typed_renderer_context():

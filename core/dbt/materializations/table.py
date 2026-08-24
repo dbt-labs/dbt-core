@@ -358,7 +358,16 @@ class TableMaterializationExecutor:
                     raise DbtInternalError(
                         "Insert-from-relation operation resolved an empty relation"
                     )
-                self._call_macro("insert_from_relation", relation, source)
+                insert_variant = getattr(operation, "renderer_variant", None)
+                if insert_variant in {"by_name", "positional"}:
+                    self._call_macro(
+                        "insert_from_relation",
+                        relation,
+                        source,
+                        insert_variant == "by_name",
+                    )
+                else:
+                    self._call_macro("insert_from_relation", relation, source)
             elif kind == "rename_relation":
                 destination = relations.get(destination_role)
                 if relation is None or destination is None:
@@ -379,11 +388,14 @@ class TableMaterializationExecutor:
                     should_revoke=should_revoke,
                 )
             elif kind == "apply_tags":
-                self._call_macro(
-                    "apply_tags",
-                    relation,
-                    self._context_value("config").get("databricks_tags"),
-                )
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                set_tags = self._context_value("config").get("databricks_tags")
+                if renderer_variant is None:
+                    self._call_macro("apply_tags", relation, set_tags)
+                else:
+                    self._call_macro(
+                        "apply_tags_from_plan", relation, set_tags, renderer_variant
+                    )
             elif kind == "apply_column_tags":
                 get_column_tags = getattr(self.adapter, "get_column_tags_from_model", None)
                 if not callable(get_column_tags):
@@ -392,13 +404,44 @@ class TableMaterializationExecutor:
                     )
                 column_tags = get_column_tags(self.model)
                 if column_tags is not None and getattr(column_tags, "set_column_tags", None):
-                    self._call_macro("apply_column_tags", relation, column_tags)
+                    renderer_variant = getattr(operation, "renderer_variant", None)
+                    if renderer_variant is None:
+                        self._call_macro("apply_column_tags", relation, column_tags)
+                    else:
+                        self._call_macro(
+                            "apply_column_tags_from_plan",
+                            relation,
+                            column_tags,
+                            renderer_variant,
+                        )
             elif kind == "persist_documentation":
-                self._call_macro("persist_docs", relation, self._context_value("model"))
+                kwargs = {}
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                if renderer_variant is not None:
+                    kwargs["column_comment_renderer_variant"] = renderer_variant
+                self._call_macro(
+                    "persist_docs",
+                    relation,
+                    self._context_value("model"),
+                    **kwargs,
+                )
             elif kind == "persist_constraints":
-                self._call_macro("persist_constraints", relation, self._context_value("model"))
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                if renderer_variant is None:
+                    self._call_macro("persist_constraints", relation, self._context_value("model"))
+                else:
+                    self._call_macro(
+                        "persist_constraints_from_plan",
+                        relation,
+                        self._context_value("model"),
+                        renderer_variant,
+                    )
             elif kind == "optimize":
-                self._call_macro("optimize", relation)
+                renderer_variant = getattr(operation, "renderer_variant", None)
+                if renderer_variant is None:
+                    self._call_macro("optimize", relation)
+                else:
+                    self._call_macro("optimize_from_plan", relation, renderer_variant)
             elif kind == "commit":
                 self._commit()
             else:

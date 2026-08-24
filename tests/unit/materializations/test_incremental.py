@@ -49,6 +49,7 @@ def _context(existing_relation):
         "run_hooks": MagicMock(),
         "process_schema_changes": MagicMock(return_value=["id"]),
         "process_config_changes": MagicMock(),
+        "process_config_changes_from_plan": MagicMock(),
         "apply_config_changeset": MagicMock(),
         "write": MagicMock(),
         "store_result": MagicMock(),
@@ -329,6 +330,7 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
             "process_config_changes",
             relation=SimpleNamespace(value="target"),
             source=SimpleNamespace(value="existing"),
+            renderer_variant="enabled",
         ),
         _operation(
             "execute_incremental_mutation",
@@ -409,7 +411,8 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
         call("delete from target", auto_begin=True, fetch=False),
         call("insert into target", auto_begin=True, fetch=False),
     ]
-    context["process_config_changes"].assert_called_once_with(target, existing)
+    context["process_config_changes_from_plan"].assert_called_once_with(target, existing)
+    context["process_config_changes"].assert_not_called()
     context["apply_config_changeset"].assert_called_once_with(
         target,
         context["model"],
@@ -468,6 +471,7 @@ def test_incremental_executor_expands_typed_create_and_populate_operations():
             "insert_from_relation",
             relation=SimpleNamespace(value="target"),
             source=SimpleNamespace(value="intermediate"),
+            renderer_variant="by_name",
         ),
     )
     lifecycle_plan = SimpleNamespace(
@@ -519,7 +523,7 @@ def test_incremental_executor_expands_typed_create_and_populate_operations():
     context["apply_alter_constraints"].assert_called_once_with(enriched)
     context["apply_tags"].assert_called_once_with(enriched, None)
     context["apply_column_tags"].assert_called_once_with(enriched, column_tags)
-    context["insert_from_relation"].assert_called_once_with(enriched, intermediate)
+    context["insert_from_relation"].assert_called_once_with(enriched, intermediate, True)
 
 
 def test_incremental_executor_dispatches_typed_partition_copy(monkeypatch):
