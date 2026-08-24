@@ -256,6 +256,7 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
         if "staging" in referenced_roles:
             relations["staging"] = self._call_macro("make_staging_relation", state.target_relation)
         dest_columns: Any = None
+        configuration_changes: Any = None
         schema_change = getattr(state.lifecycle_plan, "schema_change", None)
         schema_strategy = getattr(getattr(schema_change, "strategy", None), "value", None)
 
@@ -319,6 +320,29 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     dest_columns = self.adapter.get_columns_in_relation(relation)
             elif kind == "process_config_changes":
                 self._call_macro("process_config_changes", relation, source)
+            elif kind == "capture_config_changes":
+                apply_changes = self._context_value("config").get(
+                    "incremental_apply_config_changes", True
+                )
+                if str(apply_changes).casefold() not in {"0", "false", "no", "off"}:
+                    get_model_config = getattr(self.adapter, "get_config_from_model", None)
+                    get_relation_config = getattr(self.adapter, "get_relation_config", None)
+                    if not callable(get_model_config) or not callable(get_relation_config):
+                        raise DbtInternalError(
+                            "Config-change capture requires adapter config resolvers"
+                        )
+                    model_config = get_model_config(self.model)
+                    existing_config = get_relation_config(relation, model_config)
+                    configuration_changes = model_config.get_changeset(existing_config)
+            elif kind == "apply_config_changes":
+                if configuration_changes is not None:
+                    self._call_macro(
+                        "apply_config_changeset",
+                        relation,
+                        self._context_value("model"),
+                        configuration_changes,
+                        source,
+                    )
             elif kind == "set_incremental_overwrite_mode":
                 self._call_macro("set_overwrite_mode", getattr(operation, "name"))
             elif kind == "execute_incremental_mutation":
@@ -374,7 +398,17 @@ class IncrementalMaterializationExecutor(TableMaterializationExecutor):
                     should_revoke=should_revoke,
                 )
             elif kind == "persist_documentation":
-                self._call_macro("persist_docs", relation, self._context_value("model"))
+                kwargs = (
+                    {"for_relation": True}
+                    if getattr(operation, "name", None) == "for_relation"
+                    else {}
+                )
+                self._call_macro(
+                    "persist_docs",
+                    relation,
+                    self._context_value("model"),
+                    **kwargs,
+                )
             elif kind == "apply_tags":
                 self._call_macro(
                     "apply_tags",

@@ -49,6 +49,7 @@ def _context(existing_relation):
         "run_hooks": MagicMock(),
         "process_schema_changes": MagicMock(return_value=["id"]),
         "process_config_changes": MagicMock(),
+        "apply_config_changeset": MagicMock(),
         "write": MagicMock(),
         "store_result": MagicMock(),
         "create_indexes": MagicMock(),
@@ -263,6 +264,10 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
     strategy_macro = MagicMock(return_value=["delete from target", "insert into target"])
     operations = (
         _operation(
+            "capture_config_changes",
+            relation=SimpleNamespace(value="existing"),
+        ),
+        _operation(
             "create_from_query",
             relation=SimpleNamespace(value="temp"),
             temporary=True,
@@ -287,6 +292,11 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
             "execute_incremental_mutation",
             relation=SimpleNamespace(value="target"),
             source=SimpleNamespace(value="temp"),
+        ),
+        _operation(
+            "apply_config_changes",
+            relation=SimpleNamespace(value="target"),
+            source=SimpleNamespace(value="existing"),
         ),
         _operation(
             "apply_grants",
@@ -325,6 +335,11 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
     adapter = MagicMock()
     adapter.execute.return_value = (object(), object())
     adapter.plan_incremental_arguments.return_value = strategy_arguments
+    model_config = MagicMock()
+    configuration_changes = object()
+    model_config.get_changeset.return_value = configuration_changes
+    adapter.get_config_from_model.return_value = model_config
+    adapter.get_relation_config.return_value = object()
     executor = IncrementalMaterializationExecutor(adapter, _model(), context)
     monkeypatch.setattr(
         executor,
@@ -344,6 +359,12 @@ def test_incremental_executor_uses_ordered_mutation_program(monkeypatch):
         call("insert into target", auto_begin=True, fetch=False),
     ]
     context["process_config_changes"].assert_called_once_with(target, existing)
+    context["apply_config_changeset"].assert_called_once_with(
+        target,
+        context["model"],
+        configuration_changes,
+        existing,
+    )
     adapter.expand_target_column_types.assert_called_once_with(
         from_relation=temp,
         to_relation=target,
