@@ -141,6 +141,8 @@ impl SemanticCategory {
             | "get_clickhouse_local_db_prefix"
             | "clickhouse_db_engine_clause"
             | "is_before_version"
+            | "is_at_or_after_version"
+            | "format_columns"
             | "supports_atomic_exchange"
             | "can_exchange"
             | "should_on_cluster"

@@ -1756,7 +1756,11 @@ impl Adapter {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new("get_column_schema_from_query", &["sql"], args);
                 let sql = iter.next_arg::<&str>()?;
+                // dbt-clickhouse: column_spec_ddl.sql passes the model's
+                // query_settings so introspected types match runtime settings.
+                let query_settings = iter.next_kwarg::<Option<&Value>>("query_settings")?;
                 iter.finish()?;
+                let settings_clause = clickhouse::query_settings_clause(query_settings);
 
                 let ctx = query_ctx_from_state(state)?
                     .with_desc("get_column_schema_from_query adapter call");
@@ -1767,6 +1771,7 @@ impl Adapter {
                     conn.as_mut(),
                     &ctx,
                     sql,
+                    &settings_clause,
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from(result))
@@ -3286,6 +3291,77 @@ impl Adapter {
         }
     }
 
+    /// ClickHouse: see [AdapterImpl::get_model_settings].
+    pub fn get_model_settings(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_model_settings", &["model", "engine"], args);
+        let model = iter.next_arg::<&Value>()?;
+        let engine = iter.next_arg::<Option<&str>>()?.unwrap_or("MergeTree");
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_settings(model, engine))),
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::get_model_query_settings].
+    pub fn get_model_query_settings(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_model_query_settings", &["model"], args);
+        let model = iter.next_arg::<&Value>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => {
+                Ok(Value::from(adapter.get_model_query_settings(model)))
+            }
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::is_before_version].
+    pub fn is_before_version(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("is_before_version", &["version"], args);
+        let version = iter.next_arg::<&str>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.is_before_version(
+                state,
+                version,
+                self.cancellation_token.clone(),
+            )?)),
+            Parse(_) => Ok(Value::from(false)),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::is_at_or_after_version].
+    pub fn is_at_or_after_version(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("is_at_or_after_version", &["version"], args);
+        let version = iter.next_arg::<&str>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.is_at_or_after_version(
+                state,
+                version,
+                self.cancellation_token.clone(),
+            )?)),
+            Parse(_) => Ok(Value::from(true)),
+        }
+    }
+
     /// Get configuration from a model node.
     ///
     /// Given a model, parse and build its configurations.
@@ -4087,21 +4163,15 @@ impl Adapter {
                 // (no args) -> None (no ON CLUSTER usage)
                 Ok(Value::from(()))
             }
-            "get_model_settings" => {
-                // model: dict, engine: str = "MergeTree"  -> "" (no settings)
-                Ok(Value::from(""))
-            }
-            "get_model_query_settings" => {
-                // model: dict -> SETTINGS clause appended to CREATE TABLE ... AS (SELECT ...)
-                // Default join_use_nulls=1 makes unmatched LEFT JOIN rows produce NULL
-                // instead of ClickHouse's default type-zero values (0 for Int64, etc.),
-                // restoring standard SQL semantics.
-                // Users can override via model config `query_settings`.
-                Ok(Value::from("SETTINGS join_use_nulls = 1"))
-            }
-            "is_before_version" => {
-                // version: str -> false (assume modern server)
-                Ok(Value::from(false))
+            "get_model_settings" => self.get_model_settings(state, args),
+            "get_model_query_settings" => self.get_model_query_settings(state, args),
+            "is_before_version" => self.is_before_version(state, args),
+            "is_at_or_after_version" => self.is_at_or_after_version(state, args),
+            "format_columns" => {
+                let iter = ArgsIter::new("format_columns", &["columns"], args);
+                let columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                Ok(clickhouse::format_columns(columns))
             }
             "can_exchange" => {
                 // schema: str, type: str -> false (don't use EXCHANGE TABLES)
