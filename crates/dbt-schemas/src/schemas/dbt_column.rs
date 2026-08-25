@@ -54,6 +54,7 @@ pub struct DbtColumn {
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub codec: Option<String>,
+    pub ttl: Option<String>,
     #[serde(default, rename = "config")]
     pub deprecated_config: ColumnConfig,
     pub dimension: Option<ColumnPropertiesDimension>,
@@ -129,6 +130,7 @@ pub struct ColumnProperties {
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub codec: Option<String>,
+    pub ttl: Option<String>,
     pub config: Option<ColumnConfig>,
 
     pub entity: Option<Entity>,
@@ -158,6 +160,7 @@ pub struct VersionColumnProperties {
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub codec: Option<String>,
+    pub ttl: Option<String>,
     pub config: Option<ColumnConfig>,
     pub entity: Option<Entity>,
     pub dimension: Option<ColumnPropertiesDimension>,
@@ -185,6 +188,7 @@ impl VersionColumnProperties {
             column_mask: self.column_mask.clone(),
             quote: self.quote,
             codec: self.codec.clone(),
+            ttl: self.ttl.clone(),
             config: self.config.clone(),
             entity: self.entity.clone(),
             dimension: self.dimension.clone(),
@@ -369,6 +373,7 @@ pub fn process_columns(
                     column_mask: cp.column_mask.clone(),
                     quote: cp.quote,
                     codec: cp.codec.clone(),
+                    ttl: cp.ttl.clone(),
                     deprecated_config: cp.config.clone().unwrap_or_default(),
                     dimension: normalize_dimension(
                         cp.dimension.clone(),
@@ -409,6 +414,7 @@ mod tests {
             column_mask: None,
             quote: None,
             codec: None,
+            ttl: None,
             config: None,
             entity: None,
             dimension: None,
@@ -469,16 +475,20 @@ mod tests {
         }
     }
 
-    /// ClickHouse `codec:` on a schema.yml column must survive into `DbtColumn`
-    /// (the manifest/Jinja-visible column) — dbt-clickhouse's schema_changes macro
-    /// reads it from `model['columns']` to render the CODEC clause.
+    /// ClickHouse `codec:`/`ttl:` on a schema.yml column must survive into
+    /// `DbtColumn` — contract DDL rendering and schema_changes read them there.
     #[test]
-    fn test_process_columns_preserves_codec() {
+    fn test_process_columns_preserves_codec_and_ttl() {
         let mut col = make_col("col_3", "Compressed column.");
         col.codec = Some("ZSTD".to_string());
+        col.ttl = Some("created_at + INTERVAL 1 DAY".to_string());
 
         let result = process_columns(Some(&vec![col]), None, None).unwrap();
         assert_eq!(result[0].codec.as_deref(), Some("ZSTD"));
+        assert_eq!(
+            result[0].ttl.as_deref(),
+            Some("created_at + INTERVAL 1 DAY")
+        );
     }
 
     /// Bare-string `dimension: time` must pass through untouched — dbt-core

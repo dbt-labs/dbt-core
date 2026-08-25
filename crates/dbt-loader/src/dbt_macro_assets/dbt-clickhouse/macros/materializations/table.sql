@@ -1,30 +1,59 @@
 {% materialization table, adapter='clickhouse' %}
 
+  {%- set existing_relation = load_cached_relation(this) -%}
   {%- set target_relation = this.incorporate(type='table') -%}
+  {%- set backup_relation = none -%}
+  {%- set preexisting_backup_relation = none -%}
+  {%- set preexisting_intermediate_relation = none -%}
+
+  {% if existing_relation is not none %}
+    {%- set backup_relation_type = existing_relation.type -%}
+    {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
+    {%- set preexisting_backup_relation = load_cached_relation(backup_relation) -%}
+    {# v2: no can_exchange/EXCHANGE TABLES support yet — every rebuild takes
+       upstream's intermediate+rename fallback. #}
+    {%- set intermediate_relation = make_intermediate_relation(target_relation) -%}
+    {%- set preexisting_intermediate_relation = load_cached_relation(intermediate_relation) -%}
+  {% endif %}
+
   {% set grant_config = config.get('grants') %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
+
+  -- drop the temp relations if they exist already in the database
+  {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
+  {{ drop_relation_if_exists(preexisting_backup_relation) }}
+
+  -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {# MVP: use CREATE OR REPLACE TABLE which is atomic in ClickHouse 22.9+.
-     This handles new tables, existing tables, and full-refresh identically. #}
-  {% call statement('main') -%}
-    create or replace table {{ target_relation }}
-    {{ on_cluster_clause(target_relation) }}
-    {{ engine_clause() }}
-    {{ order_cols(label='order by') }}
-    {{ primary_key_clause(label='primary key') }}
-    {{ partition_cols(label='partition by') }}
-    {{ ttl_config(label='ttl') }}
-    {{ adapter.get_model_settings(model, config.get('engine', default='MergeTree')) }}
-    as (
-      {{ sql }}
-    )
-    {{ adapter.get_model_query_settings(model) }}
-  {%- endcall %}
+  {# If there is not existing relation, we can just create a new one #}
+  {% if existing_relation is none %}
+    {{ log('Creating new relation ' + target_relation.name )}}
+    {% call statement('main') -%}
+      {{ get_create_table_as_sql(False, target_relation, sql) }}
+    {%- endcall %}
+  {% else %}
+    -- We have to use an intermediate and rename accordingly
+    {% call statement('main') -%}
+      {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
+    {%- endcall %}
+    {{ adapter.rename_relation(existing_relation, backup_relation) }}
+    {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+  {% endif %}
+
+  -- cleanup
+  {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
+  {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
+
+  {% do persist_docs(target_relation, model) %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
+
   {{ adapter.commit() }}
+
+  {{ drop_relation_if_exists(backup_relation) }}
+
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 
   {{ return({'relations': [target_relation]}) }}

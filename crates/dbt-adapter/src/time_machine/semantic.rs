@@ -153,6 +153,7 @@ impl SemanticCategory {
             | "filter_settings_by_engine"
             | "get_ch_database"
             | "get_credentials"
+            | "s3source_clause"
             | "get_csv_data"
             | "table_format" => SemanticCategory::Pure,
 

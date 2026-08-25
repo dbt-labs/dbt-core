@@ -239,6 +239,15 @@ impl ColumnStatic {
                 "BINARY" => "BINARY(1)",
                 _ => column_type,
             },
+            // ClickHouseColumn.TYPE_LABELS; unmatched types pass through verbatim.
+            // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/adapters/clickhouse/column.py#L13-L18
+            AdapterType::ClickHouse => match column_type.to_uppercase().as_str() {
+                "STRING" => "String",
+                "TIMESTAMP" => "DateTime",
+                "FLOAT" => "Float32",
+                "INTEGER" => "Int32",
+                _ => column_type,
+            },
             // https://github.com/dbt-labs/dbt-adapters/blob/fed0e2e7a2e252175dcc9caccbdd91d354ac6a9d/dbt-adapters/src/dbt/adapters/base/column.py#L24
             _ => match column_type.to_uppercase().as_str() {
                 "STRING" => "TEXT",
@@ -266,10 +275,9 @@ impl ColumnStatic {
                 Some(size) => format!("STRING({size})"),
                 _ => "STRING".to_string(),
             },
-            AdapterType::ClickHouse => match size {
-                Some(size) => format!("FixedString({size})"),
-                _ => "String".to_string(),
-            },
+            // ClickHouseColumn.string_type ignores the size: always plain String,
+            // never FixedString (would break contract comparisons and ALTERs).
+            AdapterType::ClickHouse => "String".to_string(),
             _ => match size {
                 Some(size) => format!("character varying({size})"),
                 _ => "character varying".to_string(),
@@ -1233,6 +1241,26 @@ impl Into<Value> for Column {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ClickHouseColumn.TYPE_LABELS mapping (the array macros build
+    /// `emptyArray{type}` from it); unmatched types pass through.
+    #[test]
+    fn test_translate_type_clickhouse_type_labels() {
+        let col = ColumnStatic(AdapterType::ClickHouse);
+        assert_eq!(col.translate_type("string"), "String");
+        assert_eq!(col.translate_type("timestamp"), "DateTime");
+        assert_eq!(col.translate_type("float"), "Float32");
+        assert_eq!(col.translate_type("integer"), "Int32");
+        assert_eq!(col.translate_type("UInt64"), "UInt64");
+    }
+
+    /// string_type must never manufacture FixedString for ClickHouse.
+    #[test]
+    fn test_string_type_clickhouse_ignores_size() {
+        let col = ColumnStatic(AdapterType::ClickHouse);
+        assert_eq!(col.string_type(Some(256)), "String");
+        assert_eq!(col.string_type(None), "String");
+    }
 
     #[test]
     fn test_stripping_of_not_null_constraint() {

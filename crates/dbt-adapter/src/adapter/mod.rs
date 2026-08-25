@@ -800,7 +800,7 @@ impl Adapter {
                         constraint.warn_unenforced,
                     );
                     let rendered =
-                        render_model_constraint(adapter.adapter_type(), constraint.clone());
+                        render_model_constraint(adapter.adapter_type(), constraint.clone())?;
                     if let Some(rendered) = rendered {
                         result.push(rendered)
                     }
@@ -3359,6 +3359,70 @@ impl Adapter {
         }
     }
 
+    /// ClickHouse: see [AdapterImpl::s3source_clause].
+    pub fn s3source_clause(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new(
+            "s3source_clause",
+            &[
+                "config_name",
+                "s3_model_config",
+                "bucket",
+                "path",
+                "fmt",
+                "structure",
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "role_arn",
+                "compression",
+                "external_id",
+            ],
+            args,
+        );
+        let config_name = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let s3_model_config = iter.next_arg::<Option<&Value>>()?;
+        let bucket = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let path = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let fmt = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let structure = iter.next_arg::<Option<&Value>>()?;
+        let aws_access_key_id = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let aws_secret_access_key = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let role_arn = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let compression = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let external_id = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        iter.finish()?;
+
+        match &self.inner {
+            Typed { adapter, .. } => {
+                // impl.py's `self.config.vars` is the Jinja `var(...)` function here.
+                let vars_config = if config_name.is_empty() {
+                    None
+                } else {
+                    state
+                        .lookup("var", &[])
+                        .and_then(|f| f.call(state, &[Value::from(config_name)], &[]).ok())
+                };
+                Ok(Value::from(adapter.s3source_clause(
+                    vars_config.as_ref(),
+                    s3_model_config,
+                    structure.unwrap_or(&Value::UNDEFINED),
+                    bucket,
+                    path,
+                    fmt,
+                    aws_access_key_id,
+                    aws_secret_access_key,
+                    role_arn,
+                    compression,
+                    external_id,
+                )?))
+            }
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
     /// Get configuration from a model node.
     ///
     /// Given a model, parse and build its configurations.
@@ -4175,6 +4239,13 @@ impl Adapter {
             "is_at_or_after_version" => {
                 // version: str -> bool (server version >= given version)
                 self.is_at_or_after_version(state, args)
+            }
+            "s3source_clause" => {
+                // config_name: str, s3_model_config: dict, bucket: str, path: str, fmt: str,
+                // structure: str|list|dict, aws_access_key_id: str, aws_secret_access_key: str,
+                // role_arn: str, compression: str = '', external_id: str = ''
+                // -> s3(...) table function clause
+                self.s3source_clause(state, args)
             }
             "format_columns" => {
                 // columns: List[Column] -> List[dict] of {name, data_type}

@@ -22,6 +22,7 @@ use dbt_schemas::schemas::{
 use indexmap::IndexMap;
 use minijinja::State;
 use minijinja::Value;
+use minijinja::value::ValueKind;
 use std::collections::btree_map::Entry;
 
 use std::collections::{BTreeMap, HashMap};
@@ -574,6 +575,157 @@ pub(crate) fn format_columns(columns: &Value) -> Value {
     Value::from(out)
 }
 
+/// impl.py: `s3config = {**self.config.vars.vars.get(config_name, {}), **s3_model_config}`
+pub(crate) fn merge_s3_config(vars_config: Option<&Value>, model_config: Option<&Value>) -> Value {
+    let mut merged: BTreeMap<String, Value> = BTreeMap::new();
+    for config in [vars_config, model_config].into_iter().flatten() {
+        if let Ok(keys) = config.try_iter() {
+            for key in keys {
+                if let (Some(name), Ok(value)) = (key.as_str(), config.get_item(&key)) {
+                    merged.insert(name.to_string(), value);
+                }
+            }
+        }
+    }
+    Value::from(merged)
+}
+
+/// Mirrors dbt-clickhouse impl.py `s3source_clause`: build the `s3(...)` table function.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn s3source_clause(
+    s3config: &Value,
+    structure: &Value,
+    bucket: &str,
+    path: &str,
+    fmt: &str,
+    aws_access_key_id: &str,
+    aws_secret_access_key: &str,
+    role_arn: &str,
+    compression: &str,
+    external_id: &str,
+) -> AdapterResult<String> {
+    let cfg_str = |key: &str| -> String {
+        match s3config.get_attr(key) {
+            // Python `s3config.get(key, '')` stringifies non-string values too.
+            Ok(v) if !v.is_undefined() && !v.is_none() => match v.as_str() {
+                Some(s) => s.to_string(),
+                None => v.to_string(),
+            },
+            _ => String::new(),
+        }
+    };
+    // impl.py: `arg or s3config.get(key, '')`
+    let or_cfg = |arg: &str, key: &str| -> String {
+        if arg.is_empty() {
+            cfg_str(key)
+        } else {
+            arg.to_string()
+        }
+    };
+
+    // impl.py-exact shapes: dict -> ", 'name type,...'"; list -> ", 'a,b'";
+    // plain string -> ",'...'" (no space).
+    let structure = if structure.is_true() {
+        structure.clone()
+    } else {
+        s3config.get_attr("structure").unwrap_or_default()
+    };
+    let mut struct_clause = if structure.is_true() {
+        match structure.kind() {
+            ValueKind::Map => {
+                let mut cols = Vec::new();
+                if let Ok(keys) = structure.try_iter() {
+                    for key in keys {
+                        let col_type = structure
+                            .get_item(&key)
+                            .ok()
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        cols.push(format!("{key} {col_type}"));
+                    }
+                }
+                format!(", '{}'", cols.join(","))
+            }
+            ValueKind::Seq => {
+                let mut cols = Vec::new();
+                if let Ok(items) = structure.try_iter() {
+                    for item in items {
+                        cols.push(item.to_string());
+                    }
+                }
+                format!(", '{}'", cols.join(","))
+            }
+            _ => format!(",'{structure}'"),
+        }
+    } else {
+        String::new()
+    };
+
+    let fmt = or_cfg(fmt, "fmt");
+
+    let bucket = or_cfg(bucket, "bucket");
+    let mut path = or_cfg(path, "path");
+    let mut url = bucket.replace("https://", "");
+    if !path.is_empty() {
+        if !bucket.is_empty() && !bucket.ends_with('/') && !bucket.starts_with('/') {
+            path = format!("/{path}");
+        }
+        url = format!("{url}{path}").replace("//", "/");
+    }
+    let url = format!("https://{url}");
+
+    let aws_access_key_id = or_cfg(aws_access_key_id, "aws_access_key_id");
+    let aws_secret_access_key = or_cfg(aws_secret_access_key, "aws_secret_access_key");
+    if !aws_access_key_id.is_empty() && aws_secret_access_key.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "S3 aws_access_key_id specified without aws_secret_access_key",
+        ));
+    }
+    if !aws_secret_access_key.is_empty() && aws_access_key_id.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "S3 aws_secret_access_key specified without aws_access_key_id",
+        ));
+    }
+    let access = if aws_access_key_id.is_empty() {
+        String::new()
+    } else {
+        format!(", '{aws_access_key_id}', '{aws_secret_access_key}'")
+    };
+
+    // impl.py: compression forces an empty structure placeholder (s3() args are positional).
+    let comp = or_cfg(compression, "compression");
+    let comp = if comp.is_empty() {
+        String::new()
+    } else {
+        if struct_clause.is_empty() {
+            struct_clause = ", ''".to_string();
+        }
+        format!(", '{comp}'")
+    };
+
+    let role_arn = or_cfg(role_arn, "role_arn");
+    let external_id = or_cfg(external_id, "external_id");
+    if !external_id.is_empty() && role_arn.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "S3 external_id specified without role_arn",
+        ));
+    }
+    let extra_credentials = if role_arn.is_empty() {
+        String::new()
+    } else if external_id.is_empty() {
+        format!(", extra_credentials(role_arn='{role_arn}')")
+    } else {
+        format!(", extra_credentials(role_arn='{role_arn}', external_id='{external_id}')")
+    };
+
+    Ok(format!(
+        "s3('{url}'{access}, '{fmt}'{struct_clause}{comp}{extra_credentials})"
+    ))
+}
+
 /// Render a `query_settings` map (from macro kwargs) into a `" SETTINGS k=v, ..."`
 /// suffix for introspection queries; empty string when absent or empty.
 pub(crate) fn query_settings_clause(query_settings: Option<&Value>) -> String {
@@ -680,6 +832,186 @@ mod tests {
         assert!(model_config_map(&model, "not_there").is_empty());
         // model without config -> empty
         assert!(model_config_map(&Value::from(()), "settings").is_empty());
+    }
+
+    /// Mirrors impl.py rendering, incl. the TestS3* fixture shapes and URL join.
+    #[test]
+    fn test_s3source_clause_mirrors_python() {
+        let s3config = Value::from_serialize(serde_json::json!({
+            "bucket": "https://datasets-documentation.s3.eu-west-3.amazonaws.com/nyc-taxi/",
+            "fmt": "TabSeparatedWithNames",
+        }));
+        let structure = Value::from_serialize(serde_json::json!([
+            "trip_id UInt32",
+            "pickup_datetime DateTime"
+        ]));
+        let clause = s3source_clause(
+            &s3config,
+            &structure,
+            "",
+            "/trips_5.gz",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://datasets-documentation.s3.eu-west-3.amazonaws.com/nyc-taxi/trips_5.gz', \
+             'TabSeparatedWithNames', 'trip_id UInt32,pickup_datetime DateTime')"
+        );
+
+        // dict structure -> "name type,..."; plain string -> ",'...'" (no space)
+        let dict_structure =
+            Value::from_serialize(serde_json::json!({"fare": "Float64", "trip_id": "UInt32"}));
+        let clause = s3source_clause(
+            &s3config,
+            &dict_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://bucket.com', 'CSV', 'fare Float64,trip_id UInt32')"
+        );
+        let string_structure = Value::from("a UInt32, b String");
+        let clause = s3source_clause(
+            &s3config,
+            &string_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://bucket.com', 'CSV','a UInt32, b String')"
+        );
+    }
+
+    /// Access keys come in pairs; compression forces the empty structure
+    /// placeholder; external_id requires role_arn.
+    #[test]
+    fn test_s3source_clause_credentials_and_compression() {
+        let empty = Value::from_serialize(serde_json::json!({}));
+        let no_structure = Value::from(());
+
+        let clause = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "KEY",
+            "SECRET",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(clause, "s3('https://bucket.com', 'KEY', 'SECRET', 'CSV')");
+
+        let err = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "KEY",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap_err();
+        assert!(
+            err.message()
+                .contains("S3 aws_access_key_id specified without aws_secret_access_key")
+        );
+        let err = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "SECRET",
+            "",
+            "",
+            "",
+        )
+        .unwrap_err();
+        assert!(
+            err.message()
+                .contains("S3 aws_secret_access_key specified without aws_access_key_id")
+        );
+
+        let clause = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "gzip",
+            "",
+        )
+        .unwrap();
+        assert_eq!(clause, "s3('https://bucket.com', 'CSV', '', 'gzip')");
+
+        let clause = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "arn:aws:iam::123456789012:role/my-role",
+            "",
+            "my-external-id",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://bucket.com', 'CSV', extra_credentials(\
+             role_arn='arn:aws:iam::123456789012:role/my-role', external_id='my-external-id'))"
+        );
+
+        let err = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "",
+            "my-external-id",
+        )
+        .unwrap_err();
+        assert!(
+            err.message()
+                .contains("S3 external_id specified without role_arn")
+        );
     }
 
     #[test]

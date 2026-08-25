@@ -1,5 +1,6 @@
 use dbt_common::ErrorCode;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_common::{AdapterError, AdapterErrorKind};
 use dbt_schemas::schemas::common::{Constraint, ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::properties::ModelConstraint;
 
@@ -73,7 +74,22 @@ fn constraint_support_warning(
 pub fn render_model_constraint(
     adapter_type: AdapterType,
     constraint: ModelConstraint,
-) -> Option<String> {
+) -> Result<Option<String>, AdapterError> {
+    // dbt-clickhouse impl.py: only named CHECK constraints render; an unnamed
+    // CHECK errors, everything else is dropped.
+    if adapter_type == AdapterType::ClickHouse {
+        return match (constraint.type_, constraint.expression, constraint.name) {
+            (ConstraintType::Check, Some(expr), Some(name)) => {
+                Ok(Some(format!("CONSTRAINT {name} CHECK ({expr})")))
+            }
+            (ConstraintType::Check, Some(_), None) => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "CHECK Constraint 'name' is required",
+            )),
+            _ => Ok(None),
+        };
+    }
+
     let constraint_prefix = if let Some(name) = constraint.name {
         format!("constraint {name} ")
     } else {
@@ -117,7 +133,7 @@ pub fn render_model_constraint(
         ConstraintType::NotNull => None,
     };
 
-    rendered.and_then(|rendered| match adapter_type {
+    Ok(rendered.and_then(|rendered| match adapter_type {
         AdapterType::Bigquery => match constraint.type_ {
             ConstraintType::PrimaryKey | ConstraintType::ForeignKey => {
                 Some(format!("{rendered} not enforced"))
@@ -125,7 +141,7 @@ pub fn render_model_constraint(
             _ => None,
         },
         _ => Some(rendered),
-    })
+    }))
 }
 
 /// Render the given constraint as DDL text. Should be overridden by adapters which need custom constraint

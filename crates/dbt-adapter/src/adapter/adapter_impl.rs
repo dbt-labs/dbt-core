@@ -2972,9 +2972,37 @@ impl AdapterImpl {
         columns_map: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Vec<String>> {
         match self.adapter_type() {
+            // dbt-clickhouse impl.py override: column constraints warn as
+            // unsupported and never render; codec/ttl ride after the type.
+            ClickHouse => {
+                let mut result = vec![];
+                for (_, column) in columns_map {
+                    let mut rendered = format!(
+                        "`{}` {}",
+                        column.name,
+                        column.data_type.as_deref().unwrap_or_default()
+                    );
+                    if let Some(codec) = column.codec.as_deref().filter(|c| !c.is_empty()) {
+                        rendered.push_str(&format!(" CODEC({codec})"));
+                    }
+                    if let Some(ttl) = column.ttl.as_deref().filter(|t| !t.is_empty()) {
+                        rendered.push_str(&format!(" TTL {ttl}"));
+                    }
+                    for constraint in column.constraints {
+                        warn_constraint_support(
+                            ClickHouse,
+                            constraint.type_,
+                            ConstraintSupport::NotSupported,
+                            constraint.warn_unsupported,
+                            constraint.warn_unenforced,
+                        );
+                    }
+                    result.push(rendered);
+                }
+                Ok(result)
+            }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            | Fabric | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
                 let mut result = vec![];
                 for (_, column) in columns_map {
                     let col_name = if column.quote.unwrap_or(false) {
@@ -3175,12 +3203,12 @@ impl AdapterImpl {
             (Exasol, Check) => NotSupported,
             (Exasol, Custom) => NotSupported,
 
+            // ClickHouse (dbt-clickhouse impl.py CONSTRAINT_SUPPORT)
+            (ClickHouse, Check) => Enforced,
+            (ClickHouse, NotNull | Unique | PrimaryKey | ForeignKey | Custom) => NotSupported,
+
             // Salesforce
-            (
-                Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio
-                | Oracle,
-                _,
-            ) => {
+            (Salesforce | Spark | Starburst | Athena | Trino | Datafusion | Dremio | Oracle, _) => {
                 unimplemented!("constraint support not implemented")
             }
         }
@@ -5837,6 +5865,37 @@ impl AdapterImpl {
         }
     }
 
+    /// ClickHouse: see [metadata::clickhouse::s3source_clause].
+    #[allow(clippy::too_many_arguments)]
+    pub fn s3source_clause(
+        &self,
+        vars_config: Option<&Value>,
+        model_config: Option<&Value>,
+        structure: &Value,
+        bucket: &str,
+        path: &str,
+        fmt: &str,
+        aws_access_key_id: &str,
+        aws_secret_access_key: &str,
+        role_arn: &str,
+        compression: &str,
+        external_id: &str,
+    ) -> AdapterResult<String> {
+        let s3config = metadata::clickhouse::merge_s3_config(vars_config, model_config);
+        metadata::clickhouse::s3source_clause(
+            &s3config,
+            structure,
+            bucket,
+            path,
+            fmt,
+            aws_access_key_id,
+            aws_secret_access_key,
+            role_arn,
+            compression,
+            external_id,
+        )
+    }
+
     pub fn engine(&self) -> &Arc<dyn AdapterEngine> {
         match self.inner_adapter() {
             Impl(_, engine) => engine,
@@ -7387,6 +7446,81 @@ mod tests {
             warn_unenforced: None,
         };
         assert!(adapter.render_column_constraint(constraint).is_none());
+    }
+
+    fn clickhouse_mock_adapter() -> AdapterImpl {
+        AdapterImpl::new_mock(
+            AdapterType::ClickHouse,
+            BTreeMap::new(),
+            DEFAULT_RESOLVED_QUOTING,
+            Arc::new(DefaultTypeOps::new(AdapterType::ClickHouse)),
+            Arc::new(DefaultStmtSplitter),
+        )
+    }
+
+    /// impl.py CONSTRAINT_SUPPORT: only CHECK is enforced.
+    #[test]
+    fn test_constraint_support_clickhouse() {
+        let adapter = clickhouse_mock_adapter();
+        assert_eq!(
+            adapter.get_constraint_support(ConstraintType::Check),
+            ConstraintSupport::Enforced
+        );
+        for ct in [
+            ConstraintType::NotNull,
+            ConstraintType::Unique,
+            ConstraintType::PrimaryKey,
+            ConstraintType::ForeignKey,
+            ConstraintType::Custom,
+        ] {
+            assert_eq!(
+                adapter.get_constraint_support(ct),
+                ConstraintSupport::NotSupported
+            );
+        }
+    }
+
+    /// Column constraints never render (warn only); codec/ttl ride after the
+    /// type, codec first, like impl.py.
+    #[test]
+    fn test_render_raw_columns_constraints_clickhouse() {
+        let adapter = clickhouse_mock_adapter();
+        let mut columns: IndexMap<String, DbtColumn> = IndexMap::new();
+        columns.insert(
+            "id".to_string(),
+            DbtColumn {
+                name: "id".to_string(),
+                data_type: Some("Int32".to_string()),
+                constraints: vec![Constraint {
+                    type_: ConstraintType::NotNull,
+                    expression: None,
+                    name: None,
+                    to: None,
+                    to_columns: None,
+                    warn_unsupported: None,
+                    warn_unenforced: None,
+                }],
+                ..Default::default()
+            },
+        );
+        columns.insert(
+            "payload".to_string(),
+            DbtColumn {
+                name: "payload".to_string(),
+                data_type: Some("String".to_string()),
+                codec: Some("ZSTD".to_string()),
+                ttl: Some("created_at + INTERVAL 1 DAY".to_string()),
+                ..Default::default()
+            },
+        );
+        let rendered = adapter.render_raw_columns_constraints(columns).unwrap();
+        assert_eq!(
+            rendered,
+            vec![
+                "`id` Int32",
+                "`payload` String CODEC(ZSTD) TTL created_at + INTERVAL 1 DAY",
+            ]
+        );
     }
 
     /// Build a single-column `show databases` style result with the given column
