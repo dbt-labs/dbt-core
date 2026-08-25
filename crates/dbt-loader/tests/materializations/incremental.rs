@@ -238,6 +238,174 @@ mod databricks {
     mod append;
 }
 
+mod databricks_strategies {
+    use super::*;
+
+    fn build_harness(
+        use_replace_on_for_insert_overwrite: bool,
+    ) -> (MacroTestHarness, Arc<MockJinjaObject>) {
+        let exceptions = Arc::new(MockJinjaObject::new());
+        exceptions.on("warn", |_| Ok(Value::UNDEFINED));
+
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .load_all_macros()
+            .with_stub_functions()
+            .with_behavior_flag(
+                "use_replace_on_for_insert_overwrite",
+                use_replace_on_for_insert_overwrite,
+            )
+            .with_global(
+                "exceptions",
+                Value::from_dyn_object(Arc::clone(&exceptions)),
+            )
+            .build()
+            .expect("harness should build");
+
+        harness.mock().on("quote", |args| {
+            let identifier = args
+                .first()
+                .and_then(Value::as_str)
+                .expect("quote requires an identifier");
+            Ok(Value::from(format!("`{}`", identifier.replace('`', "``"))))
+        });
+
+        (harness, exceptions)
+    }
+
+    fn relation_value(harness: &MacroTestHarness, identifier: &str) -> Value {
+        RelationObject::new(harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            identifier,
+            Some(RelationType::Table),
+        ))
+        .into_value()
+    }
+
+    fn normalize_sql(sql: &str) -> String {
+        sql.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    }
+
+    #[test]
+    fn replace_where_emits_by_name_only_when_by_name_plus_replace_where_is_supported() {
+        for (has_combination_capability, expected_by_name) in [(true, true), (false, false)] {
+            let (harness, _) = build_harness(false);
+            harness.mock().on("has_dbr_capability", move |args| {
+                let capability = args.first().and_then(Value::as_str);
+                Ok(Value::from(match capability {
+                    Some("insert_by_name") => true,
+                    Some("insert_by_name_replace_where") => has_combination_capability,
+                    _ => false,
+                }))
+            });
+
+            let args = Value::from_serialize(BTreeMap::from([
+                (
+                    "target_relation".to_string(),
+                    relation_value(&harness, "target_table"),
+                ),
+                (
+                    "temp_relation".to_string(),
+                    relation_value(&harness, "temp_table"),
+                ),
+                ("incremental_predicates".to_string(), Value::from("id >= 2")),
+            ]));
+
+            let sql = harness
+                .render(
+                    "{{ get_replace_where_sql(args) }}",
+                    BTreeMap::from([("args", args)]),
+                )
+                .expect("replace_where SQL should render");
+            assert_eq!(
+                normalize_sql(&sql).contains(" by name replace where "),
+                expected_by_name,
+                "unexpected replace_where SQL: {sql}",
+            );
+        }
+    }
+
+    #[test]
+    fn insert_overwrite_warns_only_when_an_old_cluster_cannot_honor_opt_in() {
+        const FALLBACK_WARNING: &str = "insert_overwrite: use_replace_on_for_insert_overwrite is enabled but this cluster's DBR version does not support REPLACE ON (requires DBR 17.1+). Falling back to legacy INSERT OVERWRITE.";
+
+        // partition_by is required so the REPLACE ON path emits `replace on` instead of
+        // falling back to INSERT OVERWRITE when no replace columns are configured.
+        for (is_cluster, has_replace_on, behavior_enabled, expect_warning, expect_replace_on) in [
+            (true, false, false, false, false),
+            (true, false, true, true, false),
+            (true, true, true, false, true),
+            (false, true, true, false, true),
+            (false, false, false, false, false),
+        ] {
+            let (harness, exceptions) = build_harness(behavior_enabled);
+            harness
+                .mock()
+                .on("is_cluster", move |_| Ok(Value::from(is_cluster)));
+            harness.mock().on("has_dbr_capability", move |args| {
+                let capability = args.first().and_then(Value::as_str);
+                Ok(Value::from(match capability {
+                    Some("replace_on") => has_replace_on,
+                    Some("insert_by_name") => true,
+                    _ => false,
+                }))
+            });
+            harness.mock().on("get_columns_in_relation", |_| {
+                Ok(Value::from_serialize(vec![BTreeMap::from([(
+                    "name",
+                    Value::from("dt"),
+                )])]))
+            });
+
+            let config = default_mock_config();
+            config.on("get", |args| {
+                let key = args.first().and_then(Value::as_str);
+                let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
+                Ok(match key {
+                    Some("partition_by") => Value::from(vec![Value::from("dt")]),
+                    Some("liquid_clustered_by") => Value::UNDEFINED,
+                    _ => default,
+                })
+            });
+
+            let sql = harness
+                .render(
+                    "{{ get_insert_overwrite_sql('source_table', 'target_table') }}",
+                    BTreeMap::from([("config", Value::from_dyn_object(config))]),
+                )
+                .expect("insert_overwrite SQL should render");
+            let sql = normalize_sql(&sql);
+            assert_eq!(
+                sql.contains("replace on"),
+                expect_replace_on,
+                "unexpected REPLACE ON usage: {sql}",
+            );
+            assert_eq!(
+                sql.contains("insert overwrite"),
+                !expect_replace_on,
+                "unexpected INSERT OVERWRITE usage: {sql}",
+            );
+
+            let warnings: Vec<String> = exceptions
+                .observed_calls()
+                .to("warn")
+                .filter_map(|call| call.args.first().and_then(Value::as_str).map(str::to_owned))
+                .collect();
+            if expect_warning {
+                assert_eq!(warnings, [FALLBACK_WARNING], "unexpected warning for {sql}");
+            } else {
+                assert!(
+                    warnings.is_empty(),
+                    "expected no warnings, got {warnings:?} for {sql}",
+                );
+            }
+        }
+    }
+}
+
 mod spark {
     use super::*;
     const ADAPTER: AdapterType = AdapterType::Spark;

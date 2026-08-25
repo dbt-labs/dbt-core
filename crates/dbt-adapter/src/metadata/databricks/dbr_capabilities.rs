@@ -18,6 +18,7 @@ pub enum DbrCapability {
     JsonColumnMetadata,
     StreamingTableJsonMetadata,
     InsertByName,
+    InsertByNameReplaceWhere,
     ReplaceOn,
 }
 
@@ -30,6 +31,7 @@ impl DbrCapability {
             Self::JsonColumnMetadata => "json_column_metadata",
             Self::StreamingTableJsonMetadata => "streaming_table_json_metadata",
             Self::InsertByName => "insert_by_name",
+            Self::InsertByNameReplaceWhere => "insert_by_name_replace_where",
             Self::ReplaceOn => "replace_on",
         }
     }
@@ -42,6 +44,7 @@ impl DbrCapability {
             "json_column_metadata",
             "streaming_table_json_metadata",
             "insert_by_name",
+            "insert_by_name_replace_where",
             "replace_on",
         ]
     }
@@ -58,6 +61,7 @@ impl FromStr for DbrCapability {
             "json_column_metadata" => Ok(Self::JsonColumnMetadata),
             "streaming_table_json_metadata" => Ok(Self::StreamingTableJsonMetadata),
             "insert_by_name" => Ok(Self::InsertByName),
+            "insert_by_name_replace_where" => Ok(Self::InsertByNameReplaceWhere),
             "replace_on" => Ok(Self::ReplaceOn),
             _ => Err(format!(
                 "Unknown DBR capability: '{}'. Valid capabilities are: {}",
@@ -104,6 +108,13 @@ fn capability_spec(capability: DbrCapability) -> CapabilitySpec {
             min_version: (12, 2),
             sql_warehouse_supported: true,
         },
+        // `BY NAME REPLACE WHERE` was added in DBR 18.0 (SPARK-54803); plain
+        // `BY NAME` retains its DBR 12.2 floor. v1 reference:
+        // https://github.com/databricks/dbt-databricks/blob/45351e11517d3f37c5ac7a736b5fcba453d3f368/dbt/adapters/databricks/dbr_capabilities.py#L63-L68
+        DbrCapability::InsertByNameReplaceWhere => CapabilitySpec {
+            min_version: (18, 0),
+            sql_warehouse_supported: true,
+        },
         DbrCapability::ReplaceOn => CapabilitySpec {
             min_version: (17, 1),
             sql_warehouse_supported: true,
@@ -138,4 +149,34 @@ pub fn has_capability(
 
     let min_version = EngineVersion::Full(spec.min_version.0, spec.min_version.1);
     dbr_version >= min_version
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_insert_by_name_replace_where() {
+        assert_eq!(
+            DbrCapability::from_str("insert_by_name_replace_where"),
+            Ok(DbrCapability::InsertByNameReplaceWhere)
+        );
+    }
+
+    #[test]
+    fn insert_by_name_replace_where_requires_dbr_18_on_clusters() {
+        let capability = DbrCapability::InsertByNameReplaceWhere;
+
+        assert!(!has_capability(
+            capability,
+            EngineVersion::Full(17, 3),
+            false
+        ));
+        assert!(has_capability(
+            capability,
+            EngineVersion::Full(18, 0),
+            false
+        ));
+        assert!(has_capability(capability, EngineVersion::Unset, true));
+    }
 }
