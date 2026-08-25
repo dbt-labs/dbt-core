@@ -1760,7 +1760,6 @@ impl Adapter {
                 // query_settings so introspected types match runtime settings.
                 let query_settings = iter.next_kwarg::<Option<&Value>>("query_settings")?;
                 iter.finish()?;
-                let settings_clause = clickhouse::query_settings_clause(query_settings);
 
                 let ctx = query_ctx_from_state(state)?
                     .with_desc("get_column_schema_from_query adapter call");
@@ -1771,7 +1770,7 @@ impl Adapter {
                     conn.as_mut(),
                     &ctx,
                     sql,
-                    &settings_clause,
+                    query_settings,
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from(result))

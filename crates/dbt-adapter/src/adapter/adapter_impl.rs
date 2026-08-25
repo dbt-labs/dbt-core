@@ -3938,8 +3938,8 @@ impl AdapterImpl {
         conn: &mut dyn Connection,
         ctx: &QueryCtx,
         sql: &str,
-        // ClickHouse only, empty = none: see metadata::clickhouse::describe_query_columns.
-        settings_clause: &str,
+        // ClickHouse only: see metadata::clickhouse::describe_query_columns.
+        query_settings: Option<&Value>,
         token: CancellationToken,
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
@@ -3967,14 +3967,14 @@ impl AdapterImpl {
             Impl(ClickHouse, engine) => {
                 // Server-typed schema via DESCRIBE; the rationale lives on
                 // metadata::clickhouse::describe_query_columns.
-                let engine = Arc::clone(engine);
+                let settings_clause = metadata::clickhouse::query_settings_clause(query_settings);
                 let pairs = metadata::clickhouse::describe_query_columns(
                     engine.as_ref(),
                     Some(state),
                     conn,
                     ctx,
                     sql,
-                    settings_clause,
+                    &settings_clause,
                     token,
                 )?;
                 Ok(pairs
@@ -4015,7 +4015,7 @@ impl AdapterImpl {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_get_columns_in_select_sql(state),
             Impl(Bigquery, _) => {
-                self.get_column_schema_from_query(state, conn, ctx, sql, "", token)
+                self.get_column_schema_from_query(state, conn, ctx, sql, None, token)
             }
             Impl(_, _) => unimplemented!("only available with BigQuery adapter"),
         }
