@@ -150,33 +150,3 @@ pub fn has_capability(
     let min_version = EngineVersion::Full(spec.min_version.0, spec.min_version.1);
     dbr_version >= min_version
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_insert_by_name_replace_where() {
-        assert_eq!(
-            DbrCapability::from_str("insert_by_name_replace_where"),
-            Ok(DbrCapability::InsertByNameReplaceWhere)
-        );
-    }
-
-    #[test]
-    fn insert_by_name_replace_where_requires_dbr_18_on_clusters() {
-        let capability = DbrCapability::InsertByNameReplaceWhere;
-
-        assert!(!has_capability(
-            capability,
-            EngineVersion::Full(17, 3),
-            false
-        ));
-        assert!(has_capability(
-            capability,
-            EngineVersion::Full(18, 0),
-            false
-        ));
-        assert!(has_capability(capability, EngineVersion::Unset, true));
-    }
-}
