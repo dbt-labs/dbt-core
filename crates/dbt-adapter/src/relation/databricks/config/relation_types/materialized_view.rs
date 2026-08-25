@@ -110,12 +110,12 @@ mod tests {
 </partitioned_by>
 <tblproperties>
     <tblproperties>
-        <custom.key>
-            new
-        </custom.key>
         <delta.enableRowTracking>
             true
         </delta.enableRowTracking>
+        <custom.key>
+            new
+        </custom.key>
     </tblproperties>
     <pipeline_id>
         my_old_pipeline

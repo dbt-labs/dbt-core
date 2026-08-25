@@ -1,0 +1,7 @@
+kind: Fixes
+body: Preserve declaration order when rendering Databricks table properties
+time: 2026-08-24T23:48:01.091558+05:30
+custom:
+    author: sd-db
+    issue: "16036"
+    project: dbt-core

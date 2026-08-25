@@ -2889,7 +2889,7 @@ impl Adapter {
 
                 let mut tblproperties = match tblproperties_val {
                     Some(v) if !v.is_none() => minijinja_value_to_typed_struct::<
-                        BTreeMap<String, Value>,
+                        IndexMap<String, Value>,
                     >(v)
                     .map_err(|e| {
                         minijinja::Error::new(
@@ -2902,6 +2902,7 @@ impl Adapter {
                         .tblproperties
                         .clone()
                         .unwrap_or_default()
+                        .0
                         .into_iter()
                         .map(|(k, v)| (k, yml_value_to_minijinja(v)))
                         .collect(),

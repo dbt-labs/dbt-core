@@ -18,7 +18,7 @@ use crate::schemas::common::{
 };
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::properties::DataTestState;
 use dbt_proc_macros::DefaultTo;
 use dbt_proc_macros::Resolvable;
@@ -218,7 +218,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",

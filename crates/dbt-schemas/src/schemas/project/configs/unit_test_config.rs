@@ -16,7 +16,9 @@ use crate::schemas::{
     project::{
         ResolvableConfig, TypedRecursiveConfig,
         configs::{
-            common::WarehouseSpecificNodeConfig, config_keys::ConfigKeys, config_merge::Tags,
+            common::WarehouseSpecificNodeConfig,
+            config_keys::ConfigKeys,
+            config_merge::{Tags, TblProperties},
         },
     },
     serde::{
@@ -169,7 +171,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",

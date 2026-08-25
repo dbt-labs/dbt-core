@@ -95,12 +95,12 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
     };
 
     let wh_config = WarehouseSpecificNodeConfig {
-        tblproperties: Some(
+        tblproperties: Some(TblProperties(
             cfg.tbl_properties
                 .into_iter()
                 .map(|(k, v)| (k, dbt_yaml::Value::from(v)))
                 .collect(),
-        ),
+        )),
         partition_by: Some(PartitionConfig::List(cfg.partition_by)),
         schedule: Some(Schedule::ScheduleConfig(ScheduleConfig {
             cron: cfg.cron,

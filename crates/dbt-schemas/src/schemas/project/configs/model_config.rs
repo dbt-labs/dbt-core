@@ -34,7 +34,7 @@ use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_equal, meta_eq, omissible_option_eq,
     same_warehouse_config,
 };
-use crate::schemas::project::configs::config_merge::{Classifiers, Packages, Tags};
+use crate::schemas::project::configs::config_merge::{Classifiers, Packages, Tags, TblProperties};
 use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::model_properties::ModelConstraint;
@@ -487,7 +487,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+target_file_size")]
     pub target_file_size: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(rename = "+tmp_relation_type")]
     pub tmp_relation_type: Option<String>,
     #[serde(
@@ -1938,6 +1938,104 @@ __additional_properties__: {}
                 "region".to_string(),
             ]))
         );
+    }
+
+    #[test]
+    fn test_tblproperties_order_survives_project_to_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++tblproperties:
+  zeta: last
+  alpha: first
+  middle: center
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let model_config: ModelConfig = project_config.into();
+        let keys = model_config
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("tblproperties should parse")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+
+        assert_eq!(keys, ["zeta", "alpha", "middle"]);
+    }
+
+    #[test]
+    fn test_tblproperties_default_to_clobbers_or_inherits_without_reordering() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+
+        let parent: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  tblproperties:
+    parent_zeta: last
+    parent_alpha: first
+"#,
+        )
+        .unwrap();
+        let mut configured_child: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  tblproperties:
+    child_zeta: last
+    child_alpha: first
+"#,
+        )
+        .unwrap();
+
+        configured_child.default_to(&parent);
+        let configured_keys = configured_child
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("configured child should retain tblproperties")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(configured_keys, ["child_zeta", "child_alpha"]);
+
+        let mut empty_child: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  tblproperties: {}
+"#,
+        )
+        .unwrap();
+        empty_child.default_to(&parent);
+        let empty_keys = empty_child
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("empty tblproperties should remain Some, not inherit")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert!(
+            empty_keys.is_empty(),
+            "empty tblproperties should clobber parent, got {empty_keys:?}"
+        );
+
+        let mut unset_child = ModelConfig::default();
+        unset_child.default_to(&parent);
+        let inherited_keys = unset_child
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("unset child should inherit tblproperties")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(inherited_keys, ["parent_zeta", "parent_alpha"]);
     }
 
     #[test]

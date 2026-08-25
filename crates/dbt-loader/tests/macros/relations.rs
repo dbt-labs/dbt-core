@@ -4,7 +4,9 @@ use dbt_adapter::catalog_relation::CatalogRelation;
 use dbt_adapter_core::AdapterType;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
+use dbt_schemas::schemas::project::{ModelConfig, ProjectModelConfig};
 use dbt_schemas::schemas::relations::base::TableFormat;
+use indexmap::IndexMap;
 use minijinja::Value;
 
 use crate::macro_test_harness::MacroTestHarness;
@@ -32,6 +34,60 @@ mod databricks {
             )
             .build()
             .expect("harness should build")
+    }
+
+    #[test]
+    fn tblproperties_clause_preserves_project_declaration_order() {
+        let databricks_tblproperties_sql = include_str!(
+            "../../src/dbt_macro_assets/dbt-databricks/macros/relations/tblproperties.sql"
+        );
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_macro_at_path(
+                "dbt_databricks",
+                "databricks__tblproperties_clause",
+                databricks_tblproperties_sql,
+                "dbt-databricks/macros/relations/tblproperties.sql",
+            )
+            .build()
+            .expect("tblproperties harness should build");
+        harness.mock().on("is_uniform", |_| Ok(Value::from(false)));
+
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++tblproperties:
+  zeta: last
+  alpha: first
+  middle: center
+__additional_properties__: {}
+"#,
+        )
+        .expect("project config should parse");
+        let model_config: ModelConfig = project_config.into();
+        let tblproperties = model_config
+            .__warehouse_specific_config__
+            .tblproperties
+            .expect("tblproperties should be present");
+        let config = IndexMap::from([(
+            "tblproperties".to_string(),
+            Value::from_serialize(tblproperties),
+        )]);
+
+        let rendered = harness
+            .render(
+                "{{ databricks__tblproperties_clause() }}",
+                BTreeMap::from([("config".to_string(), Value::from_serialize(config))]),
+            )
+            .expect("tblproperties clause should render");
+
+        let zeta = rendered.find("'zeta' = 'last'").expect("zeta property");
+        let alpha = rendered.find("'alpha' = 'first'").expect("alpha property");
+        let middle = rendered
+            .find("'middle' = 'center'")
+            .expect("middle property");
+        assert!(
+            zeta < alpha && alpha < middle,
+            "rendered clause: {rendered}"
+        );
     }
 
     // `databricks__create_table_as` calls these clause helpers (defined in other asset files)

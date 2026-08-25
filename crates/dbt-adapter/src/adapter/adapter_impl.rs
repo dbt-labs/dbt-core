@@ -4659,7 +4659,7 @@ impl AdapterImpl {
         conn: &mut dyn Connection,
         config: ModelConfig,
         node: &InternalDbtNodeWrapper,
-        tblproperties: &mut BTreeMap<String, Value>,
+        tblproperties: &mut IndexMap<String, Value>,
         token: CancellationToken,
     ) -> AdapterResult<()> {
         match self.adapter_type() {

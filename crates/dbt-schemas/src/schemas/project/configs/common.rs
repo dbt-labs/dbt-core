@@ -13,6 +13,7 @@ use dbt_telemetry::StateModifiedDiff;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::{ClusterConfig, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
+use crate::schemas::project::configs::config_merge::TblProperties;
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::{ResolvableConfig, ResolvedConfig};
 use crate::schemas::serde::PartitionsConfig;
@@ -144,7 +145,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub location_root: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_uniform: Option<bool>,
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub include_full_name_in_path: Option<bool>,
