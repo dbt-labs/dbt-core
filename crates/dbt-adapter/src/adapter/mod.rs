@@ -4162,11 +4162,24 @@ impl Adapter {
                 // (no args) -> None (no ON CLUSTER usage)
                 Ok(Value::from(()))
             }
-            "get_model_settings" => self.get_model_settings(state, args),
-            "get_model_query_settings" => self.get_model_query_settings(state, args),
-            "is_before_version" => self.is_before_version(state, args),
-            "is_at_or_after_version" => self.is_at_or_after_version(state, args),
+            "get_model_settings" => {
+                // model: dict, engine: str = "MergeTree" -> SETTINGS section of CREATE DDL
+                self.get_model_settings(state, args)
+            }
+            "get_model_query_settings" => {
+                // model: dict -> SETTINGS clause appended to CREATE TABLE ... AS (SELECT ...)
+                self.get_model_query_settings(state, args)
+            }
+            "is_before_version" => {
+                // version: str -> bool (server version < given version)
+                self.is_before_version(state, args)
+            }
+            "is_at_or_after_version" => {
+                // version: str -> bool (server version >= given version)
+                self.is_at_or_after_version(state, args)
+            }
             "format_columns" => {
+                // columns: List[Column] -> List[dict] of {name, data_type}
                 let iter = ArgsIter::new("format_columns", &["columns"], args);
                 let columns = iter.next_arg::<&Value>()?;
                 iter.finish()?;
