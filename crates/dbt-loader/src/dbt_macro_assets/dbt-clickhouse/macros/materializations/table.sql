@@ -90,17 +90,27 @@
 
 {% macro primary_key_clause(label) %}
   {%- set primary_key = config.get('primary_key', validator=validation.any[list, basestring]) -%}
-  {#- An empty value ('' or []) would emit "PRIMARY KEY" with no columns,
+  {#- An empty value ('', '   ' or []) would emit "PRIMARY KEY" with no columns,
       which is invalid DDL - treat it as unset instead. -#}
+  {%- if primary_key is string -%}
+    {%- set primary_key = primary_key | trim -%}
+  {%- endif -%}
   {%- if primary_key is not none and primary_key | length == 0 -%}
     {%- set primary_key = none -%}
   {%- endif -%}
   {#- v2 compatibility: v2's typed primary_key config arrives as a list
       (scalar inputs are listified). Render it as a single parenthesized
       expression, since bare "PRIMARY KEY a, b" is a ClickHouse syntax error.
+      Whitespace-only entries are dropped like the scalar case above.
       Guarded like the incremental macros' unique_key handling. -#}
   {%- if primary_key is not none and primary_key is iterable and (primary_key is not string and primary_key is not mapping) -%}
-    {%- set primary_key = '(' ~ (primary_key | join(', ')) ~ ')' -%}
+    {%- set pk_cols = [] -%}
+    {%- for col in primary_key -%}
+      {%- if col | trim | length > 0 -%}
+        {%- do pk_cols.append(col | trim) -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- set primary_key = '(' ~ (pk_cols | join(', ')) ~ ')' if pk_cols else none -%}
   {%- endif %}
 
   {%- if primary_key is not none %}
