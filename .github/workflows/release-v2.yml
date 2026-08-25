@@ -58,11 +58,9 @@
 # `py3`/`none` tags are for the binary-CLI wheel, used for the parser publish
 # step instead).
 #
-# `dbt-oss` is the identical rebrand of `dbt-core` — same compiled
-# extension, same maturin invocation, only `crates/dbt-python/pyproject.
-# toml`'s `[project].name` differs — built by a second `maturin build` in
-# the `build` job (see "Build maturin wheel (dbt-oss)") and published with
-# the same `cp311`/`abi3` tags as `dbt-core`.
+# `dbt-oss` is the identical rebrand of `dbt-core` — same extension, only
+# `[project].name` differs — built by a second `maturin build` in the
+# `build` job and published with the same `cp311`/`abi3` tags.
 #
 # **Homebrew publishing**
 # `publish-homebrew` renders `Formula/dbt-core.rb` from the SHA256SUMS the
@@ -428,11 +426,8 @@ jobs:
       # install anything, unlike `maturin develop`), so the venv only needs
       # to hold the `maturin` CLI itself — `--interpreter "$PY"` is what
       # actually controls which Python's ABI the wheel targets.
-      # rust-cache (above) restores the whole `target/` dir, and these wheel
-      # output dirs aren't cargo-managed, so nothing prunes them — a stale
-      # wheel from a previous cached run (e.g. re-running this job without a
-      # version bump) could otherwise sit alongside this run's and get
-      # uploaded/published too.
+      # rust-cache restores `target/`; these wheel dirs aren't cargo-managed
+      # so nothing else prunes stale wheels left from a prior cached run.
       - name: Clean stale wheel output dirs
         run: rm -rf target/wheels target/wheels-oss
 
@@ -489,19 +484,13 @@ jobs:
           path: target/wheels/*.whl
           if-no-files-found: error
 
-      # dbt-oss is an identical rebrand of dbt-core, published as a separate
-      # PyPI distribution — same crate, same compiled extension, only
-      # [project].name in crates/dbt-python/pyproject.toml differs. maturin
-      # reads that file to name the wheel, so swap it, rebuild (cargo/sccache
-      # cache hits mean this recompiles nothing, just repackages), and
-      # restore it. Python does the in-place edit rather than `sed -i` since
-      # this step runs across Linux/macOS/Windows and BSD sed (macOS) and
-      # GNU sed take incompatible `-i` syntax. Uses `$MATURIN_PY` (exported
-      # above), not a bare `python3` — the manylinux container legs of this
-      # matrix don't put any Python on PATH by default. `grep -qx` asserts
-      # the exact expected line landed, since a silent no-op replace (grep
-      # would otherwise still match the unchanged `dbt-core` line) would
-      # mean the "oss" wheel gets built and uploaded under the wrong name.
+      # dbt-oss is an identical rebrand of dbt-core (same compiled extension,
+      # only [project].name differs) — swap it, rebuild (cache hits mean this
+      # just repackages, no recompile), restore. Python, not `sed -i`: BSD
+      # sed (macOS) and GNU sed disagree on `-i`. `$MATURIN_PY`, not `python3`:
+      # the manylinux container legs don't put Python on PATH by default.
+      # `grep -qx` asserts the swap actually landed, not just that some
+      # `name =` line exists.
       - name: Rename pyproject for oss wheel
         run: |
           "$MATURIN_PY" -c 'import pathlib; p = pathlib.Path("crates/dbt-python/pyproject.toml"); p.write_text(p.read_text().replace("name = \"dbt-core\"", "name = \"dbt-oss\"", 1))'
@@ -683,16 +672,10 @@ jobs:
       - name: List binaries
         run: ls -la binaries/
 
-      # Three distributions are produced, two mechanisms:
-      #   - dbt-core                     → maturin abi3 wheel, built in `build`
-      #                                    (artifact `wheel-<target>`) and
-      #                                    downloaded here into target/wheels.
-      #   - dbt-oss                      → identical rebrand of dbt-core, same
-      #                                    maturin mechanism (artifact
-      #                                    `wheel-oss-<target>`), also matched
-      #                                    by the `wheel-*` pattern below.
-      #   - dbt-core-experimental-parser → packed from the binary via
-      #                                    `cargo ci pypi pack` (unchanged).
+      # dbt-core and dbt-oss are maturin wheels built in `build` (artifacts
+      # `wheel-<target>`/`wheel-oss-<target>`, both matched below);
+      # dbt-core-experimental-parser is packed from the binary further down
+      # via `cargo ci pypi pack`.
       - name: Download all wheels (dbt-core, dbt-oss, maturin)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
         with:
@@ -901,13 +884,9 @@ jobs:
           sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
           grep '^name = ' pyproject.toml
 
-      # dbt-oss is the identical rebrand of dbt-core (see the `build` job) —
-      # published as its own PyPI distribution from the same maturin abi3
-      # wheels (cp311-abi3), so it uses the same tags as the dbt-core publish
-      # step above. `grep -qx` asserts the exact expected line landed —
-      # `sed -i` exits 0 even on a no-op match, which would otherwise let
-      # this silently publish dbt-core's sdist a second time under the
-      # dbt-oss step.
+      # dbt-oss is the identical rebrand of dbt-core (see the `build` job),
+      # so it uses the same cp311/abi3 tags. `grep -qx` guards against a
+      # silent no-op `sed` (exits 0 either way).
       - name: Rename pyproject for oss publish
         if: inputs.release_target == 'all' || inputs.release_target == 'oss'
         run: |
