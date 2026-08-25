@@ -3316,9 +3316,7 @@ impl Adapter {
         let model = iter.next_arg::<&Value>()?;
         iter.finish()?;
         match &self.inner {
-            Typed { adapter, .. } => {
-                Ok(Value::from(adapter.get_model_query_settings(model)))
-            }
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_query_settings(model))),
             Parse(_) => Ok(empty_string_value()),
         }
     }

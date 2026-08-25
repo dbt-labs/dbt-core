@@ -1,7 +1,7 @@
 use crate::AdapterEngine;
 use crate::adapter::adapter_impl::{AdapterImpl, InnerAdapter};
-use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::connection::AdapterConnectionFactory;
+use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::record_batch::RecordBatchExt;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
