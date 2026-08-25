@@ -185,6 +185,12 @@
     "AnalysesConfig": {
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -455,6 +461,12 @@
             "type": "string"
           }
         },
+        "codec": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "column_mask": {
           "anyOf": [
             {
@@ -709,25 +721,6 @@
         }
       ]
     },
-    "ComputePlatform": {
-      "description": "Selects the compute target a model's DML is executed against.\n\n`Default` uses the profile's adapter. A run implementation may honor an alternate target for other variants; parse/compile/render and introspection are unaffected by this selection.",
-      "oneOf": [
-        {
-          "description": "Execute on the profile's (default) adapter.",
-          "type": "string",
-          "enum": [
-            "default"
-          ]
-        },
-        {
-          "description": "Execute on the alternate compute target.",
-          "type": "string",
-          "enum": [
-            "alt"
-          ]
-        }
-      ]
-    },
     "ConstantProperty": {
       "type": "object",
       "required": [
@@ -958,6 +951,12 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -1256,6 +1255,12 @@
             "null"
           ]
         },
+        "definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -1453,6 +1458,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "inserts_only": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "intermediate_format": {
@@ -1709,6 +1728,15 @@
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
+        "projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "query_settings": {
           "type": [
             "object",
@@ -1831,6 +1859,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "schedule": {
@@ -1957,6 +1995,12 @@
           ]
         },
         "sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_security": {
           "type": [
             "string",
             "null"
@@ -3269,6 +3313,12 @@
             }
           ]
         },
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -3557,6 +3607,12 @@
             "null"
           ]
         },
+        "definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -3745,6 +3801,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "inserts_only": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "intermediate_format": {
@@ -4014,6 +4084,15 @@
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
+        "projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "query_settings": {
           "type": [
             "object",
@@ -4136,6 +4215,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "runtime_version": {
@@ -4262,6 +4351,12 @@
           ]
         },
         "source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_security": {
           "type": [
             "string",
             "null"
@@ -5476,6 +5571,12 @@
             }
           ]
         },
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -5498,16 +5599,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "alt_compute": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComputePlatform"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "as_columnstore": {
@@ -5884,6 +5975,12 @@
             "null"
           ]
         },
+        "definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -6150,6 +6247,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "inserts_only": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "intermediate_format": {
@@ -6531,6 +6642,15 @@
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
+        "projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "python_job_config": {
           "type": [
             "object",
@@ -6670,6 +6790,16 @@
             "null"
           ]
         },
+        "row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "schedule": {
           "anyOf": [
             {
@@ -6793,6 +6923,12 @@
           ]
         },
         "sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_security": {
           "type": [
             "string",
             "null"
@@ -7772,6 +7908,28 @@
       },
       "additionalProperties": false
     },
+    "RowFilterConfig": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "function": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "Rows": {
       "anyOf": [
         {
@@ -8025,6 +8183,12 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -8038,16 +8202,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "alt_compute": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComputePlatform"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "as_columnstore": {
@@ -8333,6 +8487,12 @@
             "null"
           ]
         },
+        "definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "delimiter": {
           "type": [
             "string",
@@ -8548,6 +8708,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "inserts_only": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "intermediate_format": {
@@ -8819,6 +8993,15 @@
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
+        "projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "query_settings": {
           "type": [
             "object",
@@ -8958,6 +9141,16 @@
             "null"
           ]
         },
+        "row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "schedule": {
           "anyOf": [
             {
@@ -9066,6 +9259,12 @@
           ]
         },
         "source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_security": {
           "type": [
             "string",
             "null"
@@ -9389,6 +9588,12 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "adapter_properties": {
           "type": [
             "object",
@@ -9703,6 +9908,12 @@
             "null"
           ]
         },
+        "definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -9923,6 +10134,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "inserts_only": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "intermediate_format": {
@@ -10209,6 +10434,15 @@
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
+        "projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "query_settings": {
           "type": [
             "object",
@@ -10348,6 +10582,16 @@
             "null"
           ]
         },
+        "row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "schedule": {
           "anyOf": [
             {
@@ -10466,6 +10710,12 @@
           ]
         },
         "source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_security": {
           "type": [
             "string",
             "null"
@@ -11139,6 +11389,12 @@
             "null"
           ]
         },
+        "definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -11333,6 +11589,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "inserts_only": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "intermediate_format": {
@@ -11576,6 +11846,15 @@
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
+        "projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "query_settings": {
           "type": [
             "object",
@@ -11688,6 +11967,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "schedule": {
@@ -11803,6 +12092,12 @@
           ]
         },
         "source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_security": {
           "type": [
             "string",
             "null"
@@ -12748,6 +13043,12 @@
             "null"
           ]
         },
+        "definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -12911,6 +13212,20 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "inserts_only": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "intermediate_format": {
@@ -13142,6 +13457,15 @@
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
+        "projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "query_settings": {
           "type": [
             "object",
@@ -13256,6 +13580,16 @@
             "null"
           ]
         },
+        "row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "schedule": {
           "anyOf": [
             {
@@ -13358,6 +13692,12 @@
           ]
         },
         "source_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_security": {
           "type": [
             "string",
             "null"
@@ -13716,6 +14056,12 @@
           "items": {
             "type": "string"
           }
+        },
+        "codec": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "column_mask": {
           "anyOf": [

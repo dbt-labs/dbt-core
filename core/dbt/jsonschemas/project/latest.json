@@ -6,6 +6,16 @@
     "name"
   ],
   "properties": {
+    "adapters": {
+      "description": "`AdapterType` has no `JsonSchema` impl -- it lives in `dbt-adapter-core`, which has no `schemars` dependency and must not gain one -- so the schema describes the key as the string it is in YAML.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/AdapterProjectConfig"
+      }
+    },
     "analyses": {
       "anyOf": [
         {
@@ -410,6 +420,24 @@
         "public"
       ]
     },
+    "AdapterProjectConfig": {
+      "description": "Project-level config scoped to one adapter, keyed by adapter type:\n\n```yaml adapters: snowflake: quoting: identifier: false ```\n\nA map rather than a list because the key *is* the identity — a node selects an adapter by type, so there is no separate name to carry and no way to declare the same adapter twice.\n\nRoot-project only, read from the root project and ignored elsewhere exactly as `dispatch:` is. Settings here belong to the project, not the connection, which is why they are not in `profiles.yml`: that file is per-user and its concern is connectivity, while identifier rendering is a project semantic that has to be versioned and reviewed alongside the code depending on it.",
+      "type": "object",
+      "properties": {
+        "quoting": {
+          "description": "Identifier quoting for nodes running on this adapter. Overrides the top-level `quoting:` block; still overridden by `models:` and model-level `+quoting:`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "AnyValue": true,
     "BigqueryPartitionConfig": {
       "description": "reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L12-L13",
@@ -516,25 +544,6 @@
           "type": "string",
           "enum": [
             "service"
-          ]
-        }
-      ]
-    },
-    "ComputePlatform": {
-      "description": "Selects the compute target a model's DML is executed against.\n\n`Default` uses the profile's adapter. A run implementation may honor an alternate target for other variants; parse/compile/render and introspection are unaffected by this selection.",
-      "oneOf": [
-        {
-          "description": "Execute on the profile's (default) adapter.",
-          "type": "string",
-          "enum": [
-            "default"
-          ]
-        },
-        {
-          "description": "Execute on the alternate compute target.",
-          "type": "string",
-          "enum": [
-            "alt"
           ]
         }
       ]
@@ -1540,6 +1549,12 @@
     "ProjectAnalysisConfig": {
       "type": "object",
       "properties": {
+        "+adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+docs": {
           "anyOf": [
             {
@@ -1608,6 +1623,12 @@
     "ProjectDataTestConfig": {
       "type": "object",
       "properties": {
+        "+adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+adapter_properties": {
           "type": [
             "object",
@@ -2641,6 +2662,12 @@
             }
           ]
         },
+        "+adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+alias": {
           "type": [
             "string",
@@ -2880,6 +2907,12 @@
             }
           ]
         },
+        "+adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+adapter_properties": {
           "type": [
             "object",
@@ -2902,16 +2935,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "+alt_compute": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComputePlatform"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "+as_columnstore": {
@@ -3292,6 +3315,12 @@
             "null"
           ]
         },
+        "+definer": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+description": {
           "type": [
             "string",
@@ -3570,6 +3599,21 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+inserts_only": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
           ]
         },
         "+intermediate_format": {
@@ -3961,6 +4005,15 @@
             }
           ]
         },
+        "+projections": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+python_job_config": {
           "type": [
             "object",
@@ -4103,6 +4156,16 @@
             "null"
           ]
         },
+        "+row_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RowFilterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+schedule": {
           "anyOf": [
             {
@@ -4230,6 +4293,12 @@
           ]
         },
         "+sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+sql_security": {
           "type": [
             "string",
             "null"
@@ -4611,6 +4680,12 @@
     "ProjectSeedConfig": {
       "type": "object",
       "properties": {
+        "+adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+adapter_properties": {
           "type": [
             "object",
@@ -4624,16 +4699,6 @@
           "type": [
             "string",
             "null"
-          ]
-        },
-        "+alt_compute": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ComputePlatform"
-            },
-            {
-              "type": "null"
-            }
           ]
         },
         "+as_columnstore": {
@@ -5505,6 +5570,12 @@
     "ProjectSnapshotConfig": {
       "type": "object",
       "properties": {
+        "+adapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+adapter_properties": {
           "type": [
             "object",
@@ -7922,6 +7993,28 @@
       "properties": {
         "range": {
           "$ref": "#/definitions/Range"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RowFilterConfig": {
+      "type": "object",
+      "properties": {
+        "columns": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "function": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
