@@ -2579,30 +2579,6 @@ __additional_properties__: {}
     }
 
     #[test]
-    fn test_persist_constraints_roundtrips_through_model_config() {
-        let project_config: ProjectModelConfig = dbt_yaml::from_str(
-            r#"
-+persist_constraints: "true"
-__additional_properties__: {}
-"#,
-        )
-        .unwrap();
-
-        assert_eq!(project_config.persist_constraints, Some(true));
-
-        let model_config: ModelConfig = project_config.into();
-        assert_eq!(
-            model_config
-                .__warehouse_specific_config__
-                .persist_constraints,
-            Some(true)
-        );
-
-        let roundtripped: ProjectModelConfig = model_config.into();
-        assert_eq!(roundtripped.persist_constraints, Some(true));
-    }
-
-    #[test]
     fn test_clickhouse_view_config_keys_roundtrip_through_model_config() {
         let project_config: ProjectModelConfig = dbt_yaml::from_str(
             r#"

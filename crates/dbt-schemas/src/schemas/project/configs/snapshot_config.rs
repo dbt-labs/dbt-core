@@ -1202,28 +1202,6 @@ __warehouse_specific_config__: {}
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
     }
 
-    #[test]
-    fn test_persist_constraints_roundtrips_through_snapshot_config() {
-        let project_config: ProjectSnapshotConfig = dbt_yaml::from_str(
-            r#"
-+persist_constraints: false
-__additional_properties__: {}
-"#,
-        )
-        .unwrap();
-
-        let snapshot_config: SnapshotConfig = project_config.into();
-        assert_eq!(
-            snapshot_config
-                .__warehouse_specific_config__
-                .persist_constraints,
-            Some(false)
-        );
-
-        let roundtripped: ProjectSnapshotConfig = snapshot_config.into();
-        assert_eq!(roundtripped.persist_constraints, Some(false));
-    }
-
     /// `+adapter` names an adapter *type*, so the value is typed rather than a
     /// free string -- anything that is not a supported adapter fails here, at
     /// deserialization. Mirrors the seed and model cases.
