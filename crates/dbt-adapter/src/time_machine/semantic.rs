@@ -64,7 +64,8 @@ impl SemanticCategory {
             | "has_dbr_capability"
             | "get_missing_columns"
             | "is_replaceable"
-            | "location_exists" => SemanticCategory::MetadataRead,
+            | "location_exists"
+            | "check_incremental_schema_changes" => SemanticCategory::MetadataRead,
 
             // Mutate database state (DDL/DML)
             "execute"

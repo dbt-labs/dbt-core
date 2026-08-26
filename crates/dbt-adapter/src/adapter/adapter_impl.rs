@@ -5825,16 +5825,130 @@ impl AdapterImpl {
 
     /// ClickHouse: render the model's `query_settings` config as a query-level
     /// `SETTINGS ...` clause appended to the SELECT; empty string when unset.
-    /// The lightweight-delete query-settings injection arrives with the
-    /// incremental-strategies port.
-    pub fn get_model_query_settings(&self, model: &Value) -> String {
-        let settings = metadata::clickhouse::model_config_map(model, "query_settings");
+    pub fn get_model_query_settings(
+        &self,
+        state: &State,
+        model: &Value,
+        token: CancellationToken,
+    ) -> String {
+        let mut settings = metadata::clickhouse::model_config_map(model, "query_settings");
+
+        // Lightweight-delete strategies carry the probed
+        // `lw_deletes_query_settings` per query; explicit query_settings win.
+        let config = model.get_attr("config").ok();
+        let materialized = config
+            .as_ref()
+            .and_then(|c| c.get_attr("materialized").ok())
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default();
+        if materialized == "incremental" {
+            let strategy = config
+                .and_then(|c| c.get_attr("incremental_strategy").ok())
+                .and_then(|v| v.as_str().map(str::to_string));
+            let resolved =
+                self.calculate_incremental_strategy(state, strategy.as_deref(), token.clone());
+            if matches!(resolved.as_str(), "delete_insert" | "microbatch") {
+                let caps = metadata::clickhouse::server_capabilities(self, state, token);
+                for (setting, value) in &caps.lw_deletes_query_settings {
+                    if !settings.iter().any(|(key, _)| key == setting) {
+                        settings.push((setting.clone(), value.clone()));
+                    }
+                }
+            }
+        }
+
         let settings_str = metadata::clickhouse::build_settings_str(&settings);
         if settings_str.is_empty() {
             String::new()
         } else {
             format!("\n-- settings_section\n{settings_str}\n")
         }
+    }
+
+    /// ClickHouse `adapter.calculate_incremental_strategy(strategy)` — see
+    /// [`metadata::clickhouse::calculate_incremental_strategy`].
+    pub fn calculate_incremental_strategy(
+        &self,
+        state: &State,
+        strategy: Option<&str>,
+        token: CancellationToken,
+    ) -> String {
+        metadata::clickhouse::calculate_incremental_strategy(
+            strategy,
+            metadata::clickhouse::server_capabilities(self, state, token).use_lw_deletes,
+        )
+    }
+
+    /// ClickHouse `adapter.validate_incremental_strategy(strategy, predicates,
+    /// unique_key, partition_by)` — see
+    /// [`metadata::clickhouse::validate_incremental_strategy`].
+    pub fn validate_incremental_strategy(
+        &self,
+        state: &State,
+        strategy: &str,
+        has_predicates: bool,
+        has_unique_key: bool,
+        has_partition_by: bool,
+        token: CancellationToken,
+    ) -> AdapterResult<()> {
+        metadata::clickhouse::validate_incremental_strategy(
+            strategy,
+            has_predicates,
+            has_unique_key,
+            has_partition_by,
+            metadata::clickhouse::server_capabilities(self, state, token).has_lw_deletes,
+        )
+    }
+
+    /// ClickHouse `adapter.check_incremental_schema_changes(...)` — see
+    /// [`metadata::clickhouse::column_changes_value`]. Returns none when the
+    /// relation does not exist yet.
+    #[allow(clippy::too_many_arguments)]
+    pub fn check_incremental_schema_changes(
+        &self,
+        state: &State,
+        on_schema_change: &str,
+        existing: Option<Arc<dyn BaseRelation>>,
+        target_sql: &str,
+        materialization: &str,
+        // dbt-clickhouse #689: applied to the DESCRIBE probe so introspected
+        // types match runtime (e.g. join_use_nulls).
+        query_settings: Option<&Value>,
+        token: CancellationToken,
+    ) -> AdapterResult<Value> {
+        if !matches!(
+            on_schema_change,
+            "fail" | "ignore" | "append_new_columns" | "sync_all_columns"
+        ) {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Only `fail`, `ignore`, `append_new_columns`, and `sync_all_columns` supported for `on_schema_change`.",
+            ));
+        }
+        let Some(existing) = existing else {
+            return Ok(none_value());
+        };
+
+        let source = self.get_columns_in_relation(state, existing.as_ref())?;
+        let target = {
+            let ctx = query_ctx_from_state(state)?.with_desc("check_incremental_schema_changes");
+            let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+            self.get_column_schema_from_query(
+                state,
+                conn.as_mut(),
+                &ctx,
+                target_sql,
+                query_settings,
+                token,
+            )?
+        };
+
+        metadata::clickhouse::column_changes_value(
+            on_schema_change,
+            source,
+            target,
+            materialization,
+        )
     }
 
     pub fn engine(&self) -> &Arc<dyn AdapterEngine> {

@@ -266,10 +266,9 @@ impl ColumnStatic {
                 Some(size) => format!("STRING({size})"),
                 _ => "STRING".to_string(),
             },
-            AdapterType::ClickHouse => match size {
-                Some(size) => format!("FixedString({size})"),
-                _ => "String".to_string(),
-            },
+            // ClickHouseColumn.string_type ignores the size: always plain String,
+            // never FixedString (would break contract comparisons and ALTERs).
+            AdapterType::ClickHouse => "String".to_string(),
             _ => match size {
                 Some(size) => format!("character varying({size})"),
                 _ => "character varying".to_string(),
@@ -1233,6 +1232,14 @@ impl Into<Value> for Column {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// string_type must never manufacture FixedString for ClickHouse.
+    #[test]
+    fn test_string_type_clickhouse_ignores_size() {
+        let col = ColumnStatic(AdapterType::ClickHouse);
+        assert_eq!(col.string_type(Some(256)), "String");
+        assert_eq!(col.string_type(None), "String");
+    }
 
     #[test]
     fn test_stripping_of_not_null_constraint() {

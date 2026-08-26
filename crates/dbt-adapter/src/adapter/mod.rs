@@ -3309,15 +3309,55 @@ impl Adapter {
     /// ClickHouse: see [AdapterImpl::get_model_query_settings].
     pub fn get_model_query_settings(
         &self,
-        _state: &State,
+        state: &State,
         args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new("get_model_query_settings", &["model"], args);
         let model = iter.next_arg::<&Value>()?;
         iter.finish()?;
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_query_settings(model))),
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_query_settings(
+                state,
+                model,
+                self.cancellation_token.clone(),
+            ))),
             Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::check_incremental_schema_changes].
+    pub fn check_incremental_schema_changes(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new(
+            "check_incremental_schema_changes",
+            &["on_schema_change", "existing_relation", "target_sql"],
+            args,
+        );
+        let on_schema_change = iter.next_arg::<&str>()?;
+        let existing_relation = iter.next_arg::<&Value>()?;
+        let target_sql = iter.next_arg::<&str>()?;
+        let materialization = iter
+            .next_kwarg::<Option<&str>>("materialization")?
+            .unwrap_or("incremental");
+        let query_settings = iter.next_kwarg::<Option<&Value>>("query_settings")?;
+        iter.finish()?;
+        let existing = existing_relation
+            .downcast_object::<RelationObject>()
+            .map(|ro| ro.inner());
+        match &self.inner {
+            Typed { adapter, .. } => Ok(adapter.check_incremental_schema_changes(
+                state,
+                on_schema_change,
+                existing,
+                target_sql,
+                materialization,
+                query_settings,
+                self.cancellation_token.clone(),
+            )?),
+            Parse(_) => Ok(none_value()),
         }
     }
 
@@ -4192,23 +4232,51 @@ impl Adapter {
                 Ok(Value::from(false))
             }
             "calculate_incremental_strategy" => {
-                // strategy: Optional[str] -> str (default to "append" if not set)
-                let strategy = args
-                    .first()
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("append");
-                Ok(Value::from(strategy))
+                // strategy: str -> str (''/'default' resolves to delete_insert or legacy; '+' -> '_')
+                let iter = ArgsIter::new("calculate_incremental_strategy", &["strategy"], args);
+                let strategy = iter.next_arg::<Option<&str>>()?;
+                iter.finish()?;
+                match &self.inner {
+                    Typed { adapter, .. } => {
+                        Ok(Value::from(adapter.calculate_incremental_strategy(
+                            state,
+                            strategy,
+                            self.cancellation_token.clone(),
+                        )))
+                    }
+                    Parse(_) => Ok(Value::from("legacy")),
+                }
             }
             "validate_incremental_strategy" => {
-                // strategy: str, predicates: list, unique_key: ?, partition_by: ? -> None
-                // Stub: all strategies accepted for MVP
-                Ok(Value::from(()))
+                // strategy: str, predicates: list, unique_key: str, partition_by: str -> None (raises on invalid combos)
+                let iter = ArgsIter::new(
+                    "validate_incremental_strategy",
+                    &["strategy", "predicates", "unique_key", "partition_by"],
+                    args,
+                );
+                let strategy = iter.next_arg::<&str>()?;
+                let predicates = iter.next_arg::<&Value>()?;
+                let unique_key = iter.next_arg::<&Value>()?;
+                let partition_by = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                match &self.inner {
+                    Typed { adapter, .. } => {
+                        adapter.validate_incremental_strategy(
+                            state,
+                            strategy,
+                            predicates.is_true(),
+                            unique_key.is_true(),
+                            partition_by.is_true(),
+                            self.cancellation_token.clone(),
+                        )?;
+                        Ok(none_value())
+                    }
+                    Parse(_) => Ok(none_value()),
+                }
             }
             "check_incremental_schema_changes" => {
-                // on_schema_change: str, existing_relation: Relation, sql: str -> None
-                // Stub: return None (no schema changes tracked); only reached when on_schema_change != 'ignore'
-                Ok(Value::from(()))
+                // on_schema_change: str, existing: Relation, target_sql: str, materialization: str = 'incremental', query_settings: dict = None -> ClickHouseColumnChanges | none
+                self.check_incremental_schema_changes(state, args)
             }
             "filter_settings_by_engine" => {
                 // model: dict, settings: str -> str
