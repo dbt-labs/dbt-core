@@ -56,26 +56,16 @@
 
   {% else %}
     {% set column_changes = none %}
-    {#-
-      Divergence from Python adapter: the upstream dbt-clickhouse Python adapter calls
-      adapter.calculate_incremental_strategy() (defaulting None→'legacy') and
-      adapter.validate_incremental_strategy() (ClickHouse-specific cross-config checks).
-      In Fusion those methods don't exist; instead we:
-        1. Apply the 'legacy' default directly in Jinja.
-        2. Validate the supported ClickHouse strategy names in Jinja.
-      Cross-config validation (e.g. insert_overwrite requires partition_by) is deferred to a
-      future Rust-layer validator; invalid combos will currently fail at SQL execution time.
-    -#}
-    {% set incremental_strategy = config.get('incremental_strategy') or 'legacy' %}
-    {% set incremental_strategy = incremental_strategy | replace('+', '_') %}
-    {% set valid_incremental_strategies = ['legacy', 'append', 'delete_insert', 'insert_overwrite', 'microbatch'] %}
-    {% if incremental_strategy not in valid_incremental_strategies %}
-      {% do exceptions.raise_compiler_error("Invalid ClickHouse incremental strategy '" ~ incremental_strategy ~ "'") %}
-    {% endif %}
+    {% set incremental_strategy = adapter.calculate_incremental_strategy(config.get('incremental_strategy'))  %}
     {% set incremental_predicates = config.get('predicates', []) or config.get('incremental_predicates', []) %}
     {% set partition_by = config.get('partition_by') %}
+    {% do adapter.validate_incremental_strategy(incremental_strategy, incremental_predicates, unique_key, partition_by) %}
     {%- if on_schema_change != 'ignore' %}
-      {% do exceptions.raise_compiler_error("ClickHouse on_schema_change != 'ignore' is not yet supported in Fusion") %}
+      {%- set column_changes = adapter.check_incremental_schema_changes(on_schema_change, existing_relation, sql, query_settings=config.get('query_settings', {})) -%}
+      {% if column_changes and incremental_strategy != 'legacy' %}
+        {% do clickhouse__apply_column_changes(column_changes, existing_relation) %}
+        {% set existing_relation = load_cached_relation(this) %}
+      {% endif %}
     {% endif %}
     {% if incremental_strategy == 'legacy' %}
       {% do clickhouse__incremental_legacy(existing_relation, intermediate_relation, column_changes, unique_key) %}
