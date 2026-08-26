@@ -1273,6 +1273,16 @@
             "null"
           ]
         },
+        "distribute_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "enable_list_inference": {
           "anyOf": [
             {
@@ -1699,6 +1709,16 @@
             }
           ]
         },
+        "partition_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_expiration_days": {
           "anyOf": [
             {
@@ -1727,6 +1747,16 @@
         },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
+        },
+        "primary_key_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projections": {
           "type": [
@@ -3625,6 +3655,16 @@
             "null"
           ]
         },
+        "distribute_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "docs": {
           "anyOf": [
             {
@@ -4033,6 +4073,16 @@
             }
           ]
         },
+        "partition_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_expiration_days": {
           "anyOf": [
             {
@@ -4083,6 +4133,16 @@
         },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
+        },
+        "primary_key_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projections": {
           "type": [
@@ -5993,6 +6053,16 @@
             "null"
           ]
         },
+        "distribute_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "docs": {
           "anyOf": [
             {
@@ -6365,6 +6435,18 @@
             }
           ]
         },
+        "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "location": {
           "type": [
             "string",
@@ -6574,6 +6656,16 @@
             }
           ]
         },
+        "partition_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_expiration_days": {
           "anyOf": [
             {
@@ -6641,6 +6733,16 @@
         },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
+        },
+        "primary_key_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projections": {
           "type": [
@@ -7318,6 +7420,44 @@
           "anyOf": [
             {
               "$ref": "#/definitions/ModelFreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warn_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
             },
             {
               "type": "null"
@@ -8511,6 +8651,16 @@
             "null"
           ]
         },
+        "distribute_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "docs": {
           "anyOf": [
             {
@@ -8934,6 +9084,16 @@
             }
           ]
         },
+        "partition_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_expiration_days": {
           "anyOf": [
             {
@@ -8992,6 +9152,16 @@
         },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
+        },
+        "primary_key_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projections": {
           "type": [
@@ -9926,6 +10096,16 @@
             "null"
           ]
         },
+        "distribute_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "docs": {
           "anyOf": [
             {
@@ -10375,6 +10555,16 @@
             }
           ]
         },
+        "partition_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_expiration_days": {
           "anyOf": [
             {
@@ -10433,6 +10623,16 @@
         },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
+        },
+        "primary_key_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projections": {
           "type": [
@@ -11407,6 +11607,16 @@
             "null"
           ]
         },
+        "distribute_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "enable_list_inference": {
           "anyOf": [
             {
@@ -11817,6 +12027,16 @@
             }
           ]
         },
+        "partition_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_expiration_days": {
           "anyOf": [
             {
@@ -11845,6 +12065,16 @@
         },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
+        },
+        "primary_key_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projections": {
           "type": [
@@ -13061,6 +13291,16 @@
             "null"
           ]
         },
+        "distribute_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "enable_list_inference": {
           "anyOf": [
             {
@@ -13428,6 +13668,16 @@
             }
           ]
         },
+        "partition_by_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "partition_expiration_days": {
           "anyOf": [
             {
@@ -13456,6 +13706,16 @@
         },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
+        },
+        "primary_key_config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "projections": {
           "type": [
