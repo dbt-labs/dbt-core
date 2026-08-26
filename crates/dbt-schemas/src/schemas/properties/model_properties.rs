@@ -21,8 +21,11 @@ use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::string_or_array;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_yaml::{DbtSchema, Spanned};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
+
+type YmlValue = dbt_yaml::Value;
 
 /// Model level contraint
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, DbtSchema)]
@@ -61,6 +64,7 @@ pub struct ModelProperties {
     pub description: Option<String>,
     pub identifier: Option<String>,
     pub latest_version: Option<FloatOrString>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub name: String,
     #[serde(skip_deserializing, default)]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
@@ -119,6 +123,7 @@ impl ModelProperties {
             description: None,
             identifier: None,
             latest_version: None,
+            meta: None,
             static_analysis_off_reason: None,
             tests: None,
             time_spine: None,
@@ -129,6 +134,18 @@ impl ModelProperties {
             derived_semantics: None,
             primary_entity: None,
         }
+    }
+
+    /// Merge legacy top-level model metadata with resolved config metadata.
+    /// dbt Core gives `config.meta` precedence when the same key appears in both.
+    pub fn merged_meta(
+        &self,
+        config_meta: Option<IndexMap<String, YmlValue>>,
+    ) -> Option<IndexMap<String, YmlValue>> {
+        let has_meta = self.meta.is_some() || config_meta.is_some();
+        let mut merged = self.meta.clone().unwrap_or_default();
+        merged.extend(config_meta.unwrap_or_default());
+        has_meta.then_some(merged)
     }
 }
 
@@ -501,5 +518,81 @@ warn_unenforced: false
         assert_eq!(spanned.as_str(), "source('raw', 'users')");
         assert!(spanned.span().is_valid(), "span should be valid");
         assert_eq!(spanned.span().start.line, 2, "to: should be on line 2");
+    }
+
+    #[test]
+    fn legacy_model_and_column_meta_deserialize_and_config_meta_wins() {
+        let properties: ModelProperties = dbt_yaml::from_str(
+            r#"
+name: constrained_model
+meta:
+  constraints:
+    model_legacy: legacy
+  winner: legacy
+config:
+  meta:
+    winner: config
+  __warehouse_specific_config__:
+    persist_constraints: true
+columns:
+  - name: id
+    meta:
+      constraint: legacy
+      legacy_only: retained
+    config:
+      meta:
+        constraint: config
+        config_only: retained
+"#,
+        )
+        .unwrap();
+
+        assert!(
+            properties
+                .meta
+                .as_ref()
+                .unwrap()
+                .contains_key("constraints")
+        );
+        assert_eq!(
+            properties
+                .config
+                .as_ref()
+                .unwrap()
+                .__warehouse_specific_config__
+                .persist_constraints,
+            Some(true)
+        );
+
+        let merged_model_meta = properties.merged_meta(
+            properties
+                .config
+                .as_ref()
+                .and_then(|config| config.meta.clone()),
+        );
+        assert!(
+            merged_model_meta
+                .as_ref()
+                .unwrap()
+                .contains_key("constraints"),
+            "yaml-only meta keys must survive the merge"
+        );
+        assert_eq!(
+            merged_model_meta
+                .as_ref()
+                .and_then(|meta| meta.get("winner"))
+                .and_then(|value| value.as_str()),
+            Some("config")
+        );
+
+        let column = &properties.columns.as_ref().unwrap()[0];
+        assert_eq!(
+            column
+                .meta
+                .as_ref()
+                .and_then(|meta| meta.get("constraint"))
+                .and_then(|value| value.as_str()),
+            Some("legacy")
+        );
     }
 }

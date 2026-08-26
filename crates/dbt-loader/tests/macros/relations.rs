@@ -1,16 +1,182 @@
 use std::collections::BTreeMap;
 
 use dbt_adapter::catalog_relation::CatalogRelation;
+use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 use dbt_schemas::schemas::relations::base::TableFormat;
 use minijinja::Value;
 
-use crate::macro_test_harness::MacroTestHarness;
+use crate::macro_test_harness::{MacroTestHarness, default_mock_config};
 
 mod databricks {
     use super::*;
+
+    fn render_primary_key_constraint(expression: Option<&str>) -> String {
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .load_all_macros()
+            .with_stub_functions()
+            .build()
+            .expect("constraint harness should build");
+        harness.mock().on("quote", |args| {
+            let identifier = args
+                .first()
+                .and_then(Value::as_str)
+                .expect("quote expects a string identifier");
+            Ok(Value::from(format!("`{identifier}`")))
+        });
+
+        let relation = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "constrained_model",
+            Some(RelationType::Table),
+        );
+        let mut constraint = BTreeMap::from([
+            ("type".to_string(), Value::from("primary_key")),
+            ("columns".to_string(), Value::from(vec![Value::from("id")])),
+        ]);
+        if let Some(expression) = expression {
+            constraint.insert("expression".to_string(), Value::from(expression));
+        }
+
+        let columns = BTreeMap::from([(
+            "id".to_string(),
+            BTreeMap::from([("name".to_string(), "id".to_string())]),
+        )]);
+        let ctx = BTreeMap::from([
+            (
+                "relation".to_string(),
+                RelationObject::new(relation).into_value(),
+            ),
+            ("constraint".to_string(), Value::from_serialize(constraint)),
+            (
+                "model".to_string(),
+                Value::from_serialize(BTreeMap::from([("columns", columns)])),
+            ),
+        ]);
+
+        harness
+            .render(
+                "{{ get_constraint_sql(relation, constraint, model) | join('\\n') }}",
+                ctx,
+            )
+            .expect("primary-key constraint should render")
+    }
+
+    fn generated_constraint_name(sql: &str) -> &str {
+        sql.split_once("add constraint ")
+            .and_then(|(_, suffix)| suffix.split_once(" primary key"))
+            .map(|(name, _)| name)
+            .expect("rendered SQL should contain a primary-key constraint name")
+    }
+
+    #[test]
+    fn primary_key_expression_is_rendered_and_changes_generated_name() {
+        let without_expression = render_primary_key_constraint(None);
+        let with_expression = render_primary_key_constraint(Some("timeseries"));
+
+        assert!(
+            with_expression.contains("primary key(`id`) timeseries;"),
+            "primary-key expression should be appended to the DDL: {with_expression}"
+        );
+        assert_eq!(
+            generated_constraint_name(&without_expression),
+            "f82f3cec0489fd1683773f6573fdf556"
+        );
+        assert_eq!(
+            generated_constraint_name(&with_expression),
+            "c5a2df3443aff7d5b8c474aea39c6265",
+            "the generated name must match the current-v1 hash input"
+        );
+    }
+
+    fn constraint_config(persist_constraints: bool) -> Value {
+        let config = default_mock_config();
+        config.on("get", move |args| {
+            let key = args.first().and_then(Value::as_str);
+            let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
+            match key {
+                Some("persist_constraints") => Ok(Value::from(persist_constraints)),
+                Some("contract") => Ok(Value::from_serialize(BTreeMap::from([(
+                    "enforced".to_string(),
+                    Value::from(false),
+                )]))),
+                _ => Ok(default),
+            }
+        });
+        Value::from_dyn_object(config)
+    }
+
+    fn render_legacy_constraint_macro(
+        expression: &str,
+        context: BTreeMap<String, Value>,
+    ) -> dbt_common::FsResult<String> {
+        MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .load_all_macros()
+            .with_stub_functions()
+            .build()
+            .expect("constraint harness should build")
+            .render(expression, context)
+    }
+
+    #[test]
+    fn legacy_constraint_metadata_respects_persist_constraints_and_validates_shape() {
+        let model = Value::from_serialize(BTreeMap::from([(
+            "meta".to_string(),
+            BTreeMap::from([(
+                "constraints".to_string(),
+                vec![BTreeMap::from([
+                    ("name".to_string(), "positive_id".to_string()),
+                    ("condition".to_string(), "id > 0".to_string()),
+                ])],
+            )]),
+        )]));
+
+        let enabled = render_legacy_constraint_macro(
+            "{{ get_model_constraints(model) | tojson }}",
+            BTreeMap::from([
+                ("config".to_string(), constraint_config(true)),
+                ("model".to_string(), model.clone()),
+            ]),
+        )
+        .expect("valid legacy model constraint should render");
+        let disabled = render_legacy_constraint_macro(
+            "{{ get_model_constraints(model) | tojson }}",
+            BTreeMap::from([
+                ("config".to_string(), constraint_config(false)),
+                ("model".to_string(), model),
+            ]),
+        )
+        .expect("disabled legacy constraints should render an empty list");
+
+        assert!(
+            enabled.contains("positive_id") && enabled.contains("expression"),
+            "enabled legacy constraints should be translated: {enabled:?}"
+        );
+        assert_eq!(disabled.trim(), "[]");
+
+        let invalid_model = Value::from_serialize(BTreeMap::from([(
+            "meta".to_string(),
+            BTreeMap::from([(
+                "constraints".to_string(),
+                vec![BTreeMap::from([(
+                    "condition".to_string(),
+                    "id > 0".to_string(),
+                )])],
+            )]),
+        )]));
+        let error = render_legacy_constraint_macro(
+            "{{ get_model_constraints(model) | tojson }}",
+            BTreeMap::from([
+                ("config".to_string(), constraint_config(true)),
+                ("model".to_string(), invalid_model),
+            ]),
+        )
+        .expect_err("legacy check constraints without a name must fail");
+        assert!(error.to_string().contains("Invalid check constraint name"));
+    }
 
     fn build_comment_clause_harness() -> MacroTestHarness {
         let databricks_comment_sql =

@@ -310,6 +310,12 @@ pub struct ProjectSnapshotConfig {
     pub skip_not_matched_step: Option<bool>,
     #[serde(
         default,
+        rename = "+persist_constraints",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub persist_constraints: Option<bool>,
+    #[serde(
+        default,
         rename = "+unique_tmp_table_suffix",
         deserialize_with = "bool_or_string_bool"
     )]
@@ -463,6 +469,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
             || self.not_matched_condition.is_some()
             || self.skip_matched_step.is_some()
             || self.skip_not_matched_step.is_some()
+            || self.persist_constraints.is_some()
             || self.unique_tmp_table_suffix.is_some()
             || self.source_alias.is_some()
             || self.target_alias.is_some()
@@ -769,6 +776,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                persist_constraints: config.persist_constraints,
                 unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
                 incremental_apply_config_changes: None,
@@ -929,6 +937,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             target_alias: config.__warehouse_specific_config__.target_alias,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            persist_constraints: config.__warehouse_specific_config__.persist_constraints,
             unique_tmp_table_suffix: config.__warehouse_specific_config__.unique_tmp_table_suffix,
             // Redshift fields
             auto_refresh: config.__warehouse_specific_config__.auto_refresh,
@@ -1166,5 +1175,27 @@ __warehouse_specific_config__: {}
         assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
         assert_eq!(state.evaluate_volatile_sql, Some(true));
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
+    }
+
+    #[test]
+    fn test_persist_constraints_roundtrips_through_snapshot_config() {
+        let project_config: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++persist_constraints: false
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let snapshot_config: SnapshotConfig = project_config.into();
+        assert_eq!(
+            snapshot_config
+                .__warehouse_specific_config__
+                .persist_constraints,
+            Some(false)
+        );
+
+        let roundtripped: ProjectSnapshotConfig = snapshot_config.into();
+        assert_eq!(roundtripped.persist_constraints, Some(false));
     }
 }

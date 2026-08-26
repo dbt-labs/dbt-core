@@ -185,6 +185,12 @@ pub struct ProjectModelConfig {
     pub incremental_apply_config_changes: Option<bool>,
     #[serde(
         default,
+        rename = "+persist_constraints",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub persist_constraints: Option<bool>,
+    #[serde(
+        default,
         rename = "+use_safer_relation_operations",
         deserialize_with = "bool_or_string_bool"
     )]
@@ -639,6 +645,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.additional_libs.is_some()
             || self.user_folder_for_python.is_some()
             || self.incremental_apply_config_changes.is_some()
+            || self.persist_constraints.is_some()
             || self.use_safer_relation_operations.is_some()
             || self.view_update_via_alter.is_some()
             || self.description.is_some()
@@ -989,6 +996,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 intermediate_format: config.intermediate_format,
                 storage_uri: config.storage_uri,
                 incremental_apply_config_changes: config.incremental_apply_config_changes,
+                persist_constraints: config.persist_constraints,
                 use_safer_relation_operations: config.use_safer_relation_operations,
                 view_update_via_alter: config.view_update_via_alter,
 
@@ -1240,6 +1248,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             incremental_apply_config_changes: config
                 .__warehouse_specific_config__
                 .incremental_apply_config_changes,
+            persist_constraints: config.__warehouse_specific_config__.persist_constraints,
             use_safer_relation_operations: config
                 .__warehouse_specific_config__
                 .use_safer_relation_operations,
@@ -2430,5 +2439,29 @@ __additional_properties__: {}
             roundtripped.repopulate_from_mvs_on_full_refresh,
             project_config.repopulate_from_mvs_on_full_refresh
         );
+    }
+
+    #[test]
+    fn test_persist_constraints_roundtrips_through_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++persist_constraints: "true"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(project_config.persist_constraints, Some(true));
+
+        let model_config: ModelConfig = project_config.into();
+        assert_eq!(
+            model_config
+                .__warehouse_specific_config__
+                .persist_constraints,
+            Some(true)
+        );
+
+        let roundtripped: ProjectModelConfig = model_config.into();
+        assert_eq!(roundtripped.persist_constraints, Some(true));
     }
 }

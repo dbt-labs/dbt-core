@@ -174,6 +174,8 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub incremental_apply_config_changes: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub persist_constraints: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_safer_relation_operations: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub view_update_via_alter: Option<bool>,
@@ -444,6 +446,7 @@ pub fn same_warehouse_config(
         self_wh.merge_with_schema_evolution == other_wh.merge_with_schema_evolution;
     let skip_matched_step_eq = self_wh.skip_matched_step == other_wh.skip_matched_step;
     let skip_not_matched_step_eq = self_wh.skip_not_matched_step == other_wh.skip_not_matched_step;
+    let persist_constraints_eq = self_wh.persist_constraints == other_wh.persist_constraints;
     let unique_tmp_table_suffix_eq =
         self_wh.unique_tmp_table_suffix == other_wh.unique_tmp_table_suffix;
     let schedule_eq = self_wh.schedule == other_wh.schedule;
@@ -540,6 +543,7 @@ pub fn same_warehouse_config(
         && merge_with_schema_evolution_eq
         && skip_matched_step_eq
         && skip_not_matched_step_eq
+        && persist_constraints_eq
         && unique_tmp_table_suffix_eq
         && schedule_eq
         && adapter_properties_eq
@@ -902,6 +906,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.skip_not_matched_step),
                         format!("{:?}", &other_wh.skip_not_matched_step),
+                    )),
+                ),
+                (
+                    "persist_constraints",
+                    persist_constraints_eq,
+                    Some((
+                        format!("{:?}", &self_wh.persist_constraints),
+                        format!("{:?}", &other_wh.persist_constraints),
                     )),
                 ),
                 (

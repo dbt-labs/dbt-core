@@ -1490,4 +1490,42 @@ my_project:
         let (_, msg) = &errors[0];
         assert!(msg.contains("Unrecognized key `my_project.staging.+contract`"));
     }
+
+    #[test]
+    fn persist_constraints_is_valid_and_inherits_with_nested_override() {
+        let yml = r#"
++persist_constraints: true
+my_project:
+  inherited:
+    +enabled: true
+  disabled:
+    +persist_constraints: false
+"#;
+
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+        assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+
+        let config = result.unwrap();
+        let inherited = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "inherited".to_string(),
+            "model".to_string(),
+        ]);
+        assert_eq!(
+            inherited.__warehouse_specific_config__.persist_constraints,
+            Some(true)
+        );
+
+        let disabled = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "disabled".to_string(),
+            "model".to_string(),
+        ]);
+        assert_eq!(
+            disabled.__warehouse_specific_config__.persist_constraints,
+            Some(false)
+        );
+    }
 }
