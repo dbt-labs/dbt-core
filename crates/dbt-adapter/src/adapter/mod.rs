@@ -4240,7 +4240,9 @@ impl Adapter {
                             self.cancellation_token.clone(),
                         )))
                     }
-                    Parse(_) => Ok(Value::from("legacy")),
+                    Parse(_) => Ok(Value::from(clickhouse::calculate_incremental_strategy(
+                        strategy, false,
+                    ))),
                 }
             }
             "validate_incremental_strategy" => {
