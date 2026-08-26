@@ -308,6 +308,17 @@ impl DatabricksMetadataAdapter {
                         &identifier,
                         state,
                         &mut *conn,
+                        token.clone(),
+                    )?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::RowFilters,
+                    self.fetch_row_filters(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
                         token,
                     )?,
                 );
@@ -347,7 +358,19 @@ impl DatabricksMetadataAdapter {
                     )?,
                 );
             }
-            RelationType::StreamingTable => {}
+            RelationType::StreamingTable => {
+                metadata.insert(
+                    DatabricksRelationMetadataKey::RowFilters,
+                    self.fetch_row_filters(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token,
+                    )?,
+                );
+            }
             RelationType::Table => {
                 // Tags, constraints and column masks all live in `information_schema`, which
                 // Hive Metastore does not have.
@@ -410,6 +433,17 @@ impl DatabricksMetadataAdapter {
                     metadata.insert(
                         DatabricksRelationMetadataKey::ColumnMasks,
                         self.fetch_column_masks(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::RowFilters,
+                        self.fetch_row_filters(
                             &database,
                             &schema,
                             &identifier,
@@ -622,6 +656,36 @@ impl DatabricksMetadataAdapter {
         );
         let (_, result) =
             self.execute_sql_with_context(&sql, state, "Fetch column masks", conn, token)?;
+        Ok(result)
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/f65356ef59a5996bebf2c86296f32295815a7bb3/dbt/include/databricks/macros/relations/components/row_filter.sql
+    fn fetch_row_filters(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+        token: CancellationToken,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT
+                table_catalog,
+                table_schema,
+                table_name,
+                filter_name,
+                target_columns
+            FROM `{database}`.`information_schema`.`row_filters`
+            WHERE table_catalog = '{}'
+                AND table_schema = '{}'
+                AND table_name = '{}';",
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Fetch row filters", conn, token)?;
         Ok(result)
     }
 

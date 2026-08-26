@@ -2,6 +2,9 @@ use std::collections::HashMap;
 use std::collections::btree_map::Iter;
 use std::fmt::Debug;
 
+use indexmap::IndexMap;
+
+use dbt_adapter_core::AdapterType;
 use dbt_yaml::DbtSchema;
 
 // Type aliases for clarity
@@ -84,8 +87,6 @@ pub struct DbtProjectSimplified {
 
     // Deprecated paths
     // When present in the db_project.yml file we will raise an error
-    #[serde(rename = "data-paths")]
-    pub data_paths: Verbatim<Option<Vec<String>>>,
     #[serde(rename = "source-paths")]
     pub source_paths: Verbatim<Option<Vec<String>>>,
     #[serde(rename = "log-path")]
@@ -133,7 +134,7 @@ pub struct DbtProject {
     pub model_paths: Option<Vec<String>>,
     #[serde(rename = "function-paths")]
     pub function_paths: Option<Vec<String>>,
-    #[serde(rename = "seed-paths")]
+    #[serde(rename = "seed-paths", alias = "data-paths")]
     pub seed_paths: Option<Vec<String>>,
     #[serde(rename = "snapshot-paths")]
     pub snapshot_paths: Option<Vec<String>>,
@@ -170,6 +171,11 @@ pub struct DbtProject {
     pub config_version: Option<i32>,
     #[serde(rename = "dbt-cloud")]
     pub dbt_cloud: Option<ProjectDbtCloudConfig>,
+    /// `AdapterType` has no `JsonSchema` impl -- it lives in `dbt-adapter-core`,
+    /// which has no `schemars` dependency and must not gain one -- so the schema
+    /// describes the key as the string it is in YAML.
+    #[schemars(with = "Option<std::collections::BTreeMap<String, AdapterProjectConfig>>")]
+    pub adapters: Option<IndexMap<AdapterType, AdapterProjectConfig>>,
     pub dispatch: Option<Vec<_Dispatch>>,
     pub flags: Option<YmlValue>,
     #[serde(rename = "on-run-end")]
@@ -221,6 +227,7 @@ impl Default for DbtProject {
             clean_targets: None,
             config_version: None,
             dbt_cloud: None,
+            adapters: None,
             dispatch: None,
             flags: None,
             on_run_end: Verbatim::from(None),
@@ -282,6 +289,33 @@ impl DbtProject {
 pub struct _Dispatch {
     pub macro_namespace: String,
     pub search_order: Vec<String>,
+}
+
+/// Project-level config scoped to one adapter, keyed by adapter type:
+///
+/// ```yaml
+/// adapters:
+///   snowflake:
+///     quoting:
+///       identifier: false
+/// ```
+///
+/// A map rather than a list because the key *is* the identity — a node selects an
+/// adapter by type, so there is no separate name to carry and no way to declare
+/// the same adapter twice.
+///
+/// Root-project only, read from the root project and ignored elsewhere exactly as
+/// `dispatch:` is. Settings here belong to the project, not the connection, which
+/// is why they are not in `profiles.yml`: that file is per-user and its concern is
+/// connectivity, while identifier rendering is a project semantic that has to be
+/// versioned and reviewed alongside the code depending on it.
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
+pub struct AdapterProjectConfig {
+    /// Identifier quoting for nodes running on this adapter. Overrides the
+    /// top-level `quoting:` block; still overridden by `models:` and model-level
+    /// `+quoting:`.
+    pub quoting: Option<DbtQuoting>,
 }
 
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
@@ -355,6 +389,12 @@ pub trait ResolvableConfig<T>:
     /// Returns whether this node is enabled, defaulting to `true` if unset.
     fn get_enabled_with_default(&self) -> bool;
 
+    /// The explicitly-configured `enabled` value, or `None` when unset. Unlike
+    /// `get_enabled_with_default`, this distinguishes unset from an explicit `true`.
+    fn get_enabled(&self) -> Option<bool> {
+        None
+    }
+
     fn apply_package_defaults(&mut self, defaults: Self::PackageDefaults);
 
     /// Called after all config layers (project, properties, inline) are merged and the root
@@ -423,6 +463,7 @@ mod tests {
             clean_targets: None,
             config_version: None,
             dbt_cloud: None,
+            adapters: None,
             dispatch: None,
             flags: None,
             on_run_end: Verbatim::from(None),
@@ -435,6 +476,89 @@ mod tests {
             vars: Verbatim::from(None),
         };
         assert_eq!(project.get_project_id(), "92c907bdbc0c4f27451b9b9fdb1bc8ec");
+    }
+
+    /// `adapters:` is keyed by adapter type, because the key *is* the identity —
+    /// a node selects an adapter by type, so there is no separate name to carry.
+    #[test]
+    fn project_parses_the_adapters_block() {
+        let project: DbtProject = dbt_yaml::from_str(
+            r#"
+name: test
+quoting:
+  database: false
+  schema: false
+  identifier: false
+adapters:
+  lake_compute:
+    quoting:
+      database: true
+      schema: true
+      identifier: true
+  snowflake: {}
+"#,
+        )
+        .expect("adapters block should parse");
+
+        let adapters = project.adapters.expect("adapters");
+        assert_eq!(
+            adapters.keys().copied().collect::<Vec<_>>(),
+            vec![AdapterType::Alt, AdapterType::Snowflake],
+            "declaration order is preserved"
+        );
+        assert_eq!(
+            adapters[&AdapterType::Alt]
+                .quoting
+                .expect("lake_compute quoting")
+                .identifier,
+            Some(true)
+        );
+        assert!(
+            adapters[&AdapterType::Snowflake].quoting.is_none(),
+            "an entry may omit `quoting:` entirely"
+        );
+        assert_eq!(
+            project.quoting.as_ref().expect("top-level").identifier,
+            Some(false),
+            "the top-level block is unaffected"
+        );
+    }
+
+    /// `lake_compute` is the only name for `AdapterType::Alt`. `alt` was the
+    /// external name before the rename and is not kept as an alias, so it has to
+    /// be rejected here like any other unknown adapter.
+    #[test]
+    fn the_adapters_block_rejects_the_retired_alt_name() {
+        let result: Result<DbtProject, _> = dbt_yaml::from_str(
+            r#"
+name: test
+adapters:
+  alt: {}
+"#,
+        );
+
+        assert!(result.is_err(), "`alt` is not an adapter type any more");
+    }
+
+    /// A key that is not an adapter type is rejected at deserialization, against
+    /// the full set of supported adapters -- so there is no bespoke validation for
+    /// it, and no way to name an adapter that cannot exist.
+    #[test]
+    fn an_adapters_key_that_is_not_an_adapter_type_is_rejected() {
+        let err = dbt_yaml::from_str::<DbtProject>(
+            r#"
+name: test
+adapters:
+  warehouse:
+    quoting:
+      database: true
+"#,
+        )
+        .expect_err("`warehouse` is not an adapter type");
+        assert!(
+            format!("{err}").contains("warehouse"),
+            "error should name the offending key: {err}"
+        );
     }
 
     #[test]
@@ -452,6 +576,38 @@ dbt-cloud:
 
         let dbt_cloud = project.dbt_cloud.expect("dbt-cloud config");
         assert_eq!(dbt_cloud.state_org_id, Some(StringOrInteger::Integer(789)));
+    }
+
+    /// Regression for fs#13343: Core accepts the legacy `data-paths` key as an
+    /// alias for `seed-paths`; Fusion must not reject it during YAML load.
+    #[test]
+    fn project_accepts_legacy_data_paths_as_seed_paths_alias() {
+        let project: DbtProject = dbt_yaml::from_str(
+            r#"
+name: test
+data-paths: ["data"]
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(project.seed_paths, Some(vec!["data".to_string()]));
+    }
+
+    /// Regression for fs#13343: the pre-profile-load `DbtProjectSimplified` pass
+    /// must not reject a `data-paths` project either (it no longer tracks the
+    /// key at all — the alias is resolved on the full `DbtProject` above).
+    #[test]
+    fn simplified_project_ignores_legacy_data_paths() {
+        let project: DbtProjectSimplified = dbt_yaml::from_str(
+            r#"
+name: test
+data-paths: ["data"]
+__ignored__: {}
+"#,
+        )
+        .unwrap();
+
+        assert!(project.source_paths.is_none());
     }
 
     #[test]

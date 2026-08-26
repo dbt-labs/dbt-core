@@ -536,7 +536,11 @@ pub fn save_parse_state(
         version: INCREMENTAL_STATE_VERSION,
         dbt_version: &current_dbt_version(),
         project_name: packages.first().map_or("", |p| p.package_name.as_str()),
-        adapter_type: dbt_state.dbt_profile.db_config.adapter_type().into(),
+        adapter_type: dbt_state
+            .dbt_profile
+            .default_db_config()
+            .adapter_type()
+            .into(),
         profile_hash: &dbt_state.dbt_profile.blake3_hash(),
         profile_file_hash: &hash_file_at_path(&profile_file_path),
         project_file_hash: &hash_file_at_path(&project_file_path),
@@ -904,6 +908,13 @@ pub fn load_parse_state_filtered_with_unique_ids(
 
     // Deserialise the JSON meta fields back into their typed forms.
     let dbt_profile: DbtProfile = serde_json::from_str(&loaded.dbt_profile_json).ok()?;
+    // A profile persisted by an older build, or a hand-edited artifact, can
+    // deserialize yet still violate the `default_adapter` ∈ `adapters` invariant
+    // that `db_config()` relies on. Treat that as a cache miss rather than
+    // letting it panic later.
+    if !dbt_profile.has_valid_adapters() {
+        return None;
+    }
     let vars: BTreeMap<String, IndexMap<String, DbtVars>> =
         serde_json::from_str(&loaded.vars_json).unwrap_or_default();
     let env_vars: HashMap<String, String> =
@@ -1110,19 +1121,23 @@ mod tests {
 
     use super::*;
     use dbt_schemas::schemas::profiles::{DatafusionDbConfig, DbConfig};
+    use dbt_schemas::state::ProfileAdapter;
 
     fn test_profile() -> DbtProfile {
+        let db_config = DbConfig::Datafusion(Box::new(DatafusionDbConfig {
+            database: Some("testdb".into()),
+            schema: Some("public".into()),
+            execute: None,
+        }));
+        let default_adapter = db_config.adapter_type();
+        let adapters = IndexMap::from([(default_adapter, ProfileAdapter::single(db_config))]);
         DbtProfile {
             profile: "test".into(),
             target: "dev".into(),
             defer_to_target: None,
             allow_clones: true,
-            db_config: DbConfig::Datafusion(Box::new(DatafusionDbConfig {
-                database: Some("testdb".into()),
-                schema: Some("public".into()),
-                execute: None,
-            })),
-            alt_target_db_config: None,
+            adapters,
+            default_adapter,
             schema: "public".into(),
             database: "testdb".into(),
             relative_profile_path: PathBuf::from("profiles.yml"),
@@ -3837,7 +3852,7 @@ mod tests {
                 .first()
                 .map(|p| p.dbt_project.name.clone())
                 .unwrap_or_default(),
-            adapter_type: dbt_state.dbt_profile.db_config.adapter_type(),
+            adapter_type: dbt_state.dbt_profile.default_db_config().adapter_type(),
             nodes: Nodes::default(),
             disabled_nodes: Nodes::default(),
             macros: Macros::default(),

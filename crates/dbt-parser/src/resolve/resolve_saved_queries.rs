@@ -7,6 +7,7 @@ use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{
     extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
 };
+use dbt_adapter_core::AdapterType;
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::DbtPath;
@@ -46,6 +47,7 @@ fn extract_raw_export_configs(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_saved_queries(
+    adapter_type: AdapterType,
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_package: &DbtPackage,
@@ -272,6 +274,8 @@ pub async fn resolve_saved_queries(
                     meta: saved_query_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    // Not executed against a warehouse; records the target it parsed under.
+                    adapter: adapter_type,
                     database: database.unwrap_or_default(),
                     schema: schema.unwrap_or_default(),
                     alias: alias.unwrap_or_default(),

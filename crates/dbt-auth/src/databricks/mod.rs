@@ -954,6 +954,49 @@ mod tests {
     }
 
     #[test]
+    fn test_configure_fingerprint_differs_per_compute() {
+        // Each named compute must produce a distinct fingerprint, or the pool
+        // could reuse another compute's connection.
+        fn fingerprint_with(compute: Option<&str>) -> u64 {
+            let compute_config = Mapping::from_iter([
+                (
+                    "small".into(),
+                    Mapping::from_iter([("http_path".into(), "/sql/1.0/warehouses/small".into())])
+                        .into(),
+                ),
+                (
+                    "large".into(),
+                    Mapping::from_iter([("http_path".into(), "/sql/1.0/warehouses/large".into())])
+                        .into(),
+                ),
+            ]);
+            let mut mapping = base_config();
+            mapping.insert("token".into(), "T".into());
+            mapping.insert("compute".into(), compute_config.into());
+            if let Some(name) = compute {
+                mapping.insert("databricks_compute".into(), name.into());
+            }
+            let builder = DatabricksAuth {}
+                .configure(&AdapterConfig::new(mapping))
+                .expect("configure should succeed")
+                .builder;
+            let opts = builder.into_iter().collect::<Vec<_>>();
+            DatabaseBuilder::fingerprint(opts.iter()).as_u64()
+        }
+
+        let default_fp = fingerprint_with(None);
+        let small_fp = fingerprint_with(Some("small"));
+        let large_fp = fingerprint_with(Some("large"));
+
+        assert_ne!(
+            small_fp, large_fp,
+            "different named compute must yield different connection fingerprints"
+        );
+        assert_ne!(default_fp, small_fp);
+        assert_ne!(default_fp, large_fp);
+    }
+
+    #[test]
     fn test_resolve_http_path_uses_databricks_compute() {
         let compute1_config =
             Mapping::from_iter([("http_path".into(), "/sql/warehouse/specific_compute".into())]);

@@ -50,7 +50,9 @@ use dbt_jinja_ctx::{
     JinjaObject, ParseExecute, ResolveModelCtx, to_jinja_btreemap, to_model_context_map,
 };
 
-use crate::{phases::MacroLookupContext, serde::into_typed_with_error};
+use crate::{
+    invocation_graph::invocation_graph, phases::MacroLookupContext, serde::into_typed_with_error,
+};
 
 use super::sql_resource::SqlResource;
 
@@ -58,6 +60,7 @@ use super::sql_resource::SqlResource;
 #[allow(clippy::too_many_arguments)]
 pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>(
     config: &T,
+    root_overlay_forces_enabled: bool,
     adapter_type: AdapterType,
     database: &str,
     schema: &str,
@@ -174,6 +177,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
     let is_enabled = config.get_enabled_with_default();
     let config_value = MinijinjaValue::from_object(ParseConfig {
         enabled: is_enabled,
+        root_overlay_forces_enabled,
         sql_resources: sql_resources.clone(),
         package_dependency: package_dependency.clone(),
         error_path: Some(display_path.to_path_buf()),
@@ -182,6 +186,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         "config".to_string(),
         MinijinjaValue::from_object(ParseConfig {
             enabled: is_enabled,
+            root_overlay_forces_enabled,
             sql_resources,
             package_dependency,
             error_path: Some(display_path.to_path_buf()),
@@ -212,6 +217,9 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             schema: schema.to_string(),
             alias: model_name.to_string(),
             relation_name: None,
+            // A placeholder node built during parse, before `+adapter` is resolved;
+            // the target default is the only answer available here.
+            adapter: adapter_type,
             materialized: ModelConfig::default_materialized(),
             static_analysis: global_static_analysis.unwrap_or_default().into(),
             static_analysis_off_reason: None,
@@ -249,7 +257,6 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             contract: None,
             event_time: None,
             catalog_name: None,
-            alt_compute: None,
             table_format: None,
             sync: None,
             compiled_code: None,
@@ -296,7 +303,13 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         config: config_value,
         model: MinijinjaValue::from_dyn_object(to_model_context_map(model_map)),
         builtins: MinijinjaValue::from_object(builtins),
-        graph: MinijinjaValue::UNDEFINED,
+        // The invocation-wide `graph` mapping, empty at this point — matching
+        // dbt-core, where parse-time `graph` is `manifest.flat_graph` before
+        // `build_flat_graph()` has filled it in. Handing out the shared
+        // mapping (rather than `UNDEFINED`) is what lets a macro stash scratch
+        // state on `graph` during parsing and read it back from a later parse
+        // render or from a hook. dbt-labs/fs#13454.
+        graph: MinijinjaValue::from_dyn_object(invocation_graph()),
         store_result: MinijinjaValue::from_function(result_store.store_result()),
         load_result: MinijinjaValue::from_function(result_store.load_result()),
         store_raw_result: MinijinjaValue::from_function(result_store.store_raw_result()),
@@ -638,6 +651,8 @@ pub struct ParseConfig<T: ResolvableConfig<T> + 'static> {
     pub sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     /// Whether the model is enabled (based on upstream config)
     pub enabled: bool,
+    /// Whether the root project's config overlay explicitly sets `enabled: true` for this node.
+    pub root_overlay_forces_enabled: bool,
     // Current package name
     pub package_dependency: Option<String>,
     /// Error path to be used for error reporting
@@ -734,7 +749,9 @@ impl<T: ResolvableConfig<T>> ParseConfig<T> {
             .lock()
             .unwrap()
             .push(SqlResource::ConfigCall(Box::new(config)));
-        if !enabled {
+        // The root project's overlay outranks this inline config, so skipping the rest of the
+        // render would drop refs, rendered SQL and macro spans the enabled node still needs.
+        if !enabled && !self.root_overlay_forces_enabled {
             return Err(MinijinjaError::new(
                 MinijinjaErrorKind::DisabledModel,
                 "Model is disabled".to_string(),
@@ -962,6 +979,7 @@ mod test {
         ParseConfig {
             sql_resources: Arc::new(Mutex::new(Vec::new())),
             enabled: true,
+            root_overlay_forces_enabled: false,
             package_dependency: None,
             error_path: None,
         }

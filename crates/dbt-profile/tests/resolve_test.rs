@@ -628,3 +628,213 @@ my_project:
         "Error should mention the missing variable: {err}"
     );
 }
+
+// ── Multi-adapter targets ────────────────────────────────────────────
+// A target's output block may be a mapping of adapter type to a list of
+// connections instead of one flat mapping. These exercise the shape end-to-end
+// through `resolve`, not just the parser, so the wiring in
+// `resolve_with_env_ext` is covered.
+
+#[test]
+fn test_resolve_target_as_a_connection_list() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: prod
+  outputs:
+    prod:
+      - type: snowflake
+        account: test_account
+        user: test_user
+        password: test_pass
+        warehouse: COMPUTE_WH
+        database: MY_DB
+        schema: PUBLIC
+      - type: duckdb
+        default: true
+        path: ./scratch.db
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+
+    assert_eq!(result.target_name, "prod");
+    let types: Vec<&str> = result
+        .adapters
+        .iter()
+        .map(|a| a.adapter_type.as_str())
+        .collect();
+    assert_eq!(types, vec!["snowflake", "duckdb"]);
+
+    // `adapter_type`/`credentials` describe the *default* adapter, which here is
+    // the second entry -- proving the marker is honoured rather than "first wins".
+    assert_eq!(result.adapter_type, "duckdb");
+    assert_eq!(
+        result.credentials.get("path").and_then(|v| v.as_str()),
+        Some("./scratch.db")
+    );
+
+    for adapter in &result.adapters {
+        let credentials = &adapter.default_connection().credentials;
+        // Bookkeeping keys must not leak into connection config.
+        assert!(
+            credentials.get("name").is_none(),
+            "`name` leaked into credentials for {}",
+            adapter.adapter_type
+        );
+        assert!(
+            credentials.get("default").is_none(),
+            "`default` leaked into credentials for {}",
+            adapter.adapter_type
+        );
+        // ...but `type` must be present, taken from the key, since that is what
+        // `DbConfig` deserialization is tagged by.
+        assert_eq!(
+            credentials.get("type").and_then(|v| v.as_str()),
+            Some(adapter.adapter_type.as_str()),
+            "`type` should be injected from the adapter key"
+        );
+    }
+}
+
+/// The legacy single-mapping shape must keep resolving identically, and now also
+/// surface as one adapter with one connection.
+#[test]
+fn test_resolve_legacy_target_yields_single_default_adapter() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ./dev.db
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let result = resolve(&args).unwrap();
+
+    assert_eq!(result.adapter_type, "duckdb");
+    assert_eq!(result.adapters.len(), 1);
+    assert_eq!(result.adapters[0].adapter_type, "duckdb");
+    assert_eq!(result.adapters[0].connections.len(), 1);
+    assert!(result.adapters[0].default_connection().is_default);
+}
+
+/// Which adapter every unannotated node runs on must not depend on YAML ordering.
+#[test]
+fn test_resolve_several_adapters_without_default_is_rejected() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: prod
+  outputs:
+    prod:
+      - type: duckdb
+        path: ./a.db
+      - type: snowflake
+        account: acc
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    let err = format!("{}", resolve(&args).unwrap_err());
+    assert!(
+        err.contains("default: true") && err.contains("duckdb") && err.contains("snowflake"),
+        "error should name the candidates: {err}"
+    );
+}
+
+/// The alternate compute target is not a separate `x_alt_target` output -- it is
+/// an `alt` adapter in the active target. This is the seam `dbt-loader` reads to
+/// build `DbtProfile::adapters`.
+#[test]
+fn test_resolve_surfaces_alt_adapter_as_non_default() {
+    let tmp = tempfile::tempdir().unwrap();
+    let profiles_dir = tmp.path();
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: prod
+  outputs:
+    prod: []
+"#,
+    );
+
+    let args = ResolveArgs {
+        profiles_dir: Some(profiles_dir.to_path_buf()),
+        profile: Some("my_project".to_owned()),
+        ..Default::default()
+    };
+
+    // A target must declare at least one connection.
+    let err = format!("{}", resolve(&args).unwrap_err());
+    assert!(err.contains("empty list of connections"), "got: {err}");
+
+    write_file(
+        profiles_dir,
+        "profiles.yml",
+        r#"
+my_project:
+  target: prod
+  outputs:
+    prod:
+      - type: snowflake
+        default: true
+        account: test_account
+        database: MY_DB
+        schema: PUBLIC
+      - type: lake_compute
+"#,
+    );
+
+    let result = resolve(&args).unwrap();
+
+    // The default stays the warehouse, so every existing consumer of
+    // `adapter_type`/`credentials` is unaffected.
+    assert_eq!(result.adapter_type, "snowflake");
+    assert_eq!(result.default_adapter().adapter_type, "snowflake");
+
+    let non_default: Vec<&str> = result
+        .non_default_adapters()
+        .map(|a| a.adapter_type.as_str())
+        .collect();
+    assert_eq!(non_default, vec!["lake_compute"]);
+    assert!(result.adapter_by_type("lake_compute").is_some());
+    assert!(result.adapter_by_type("nope").is_none());
+}

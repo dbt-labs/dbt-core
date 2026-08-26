@@ -18,6 +18,7 @@ use dbt_df_providers::seed_io::{
 use dbt_frontend_common::Dialect;
 use dbt_schema_store::{CanonicalFqn, DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::schemas::DbtSeed;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_yaml::Spanned;
 
 /// Result of registering a single seed: the canonical FQN, adapted schema, and unique_id.
@@ -30,7 +31,6 @@ pub struct RegisteredSeed {
 
 /// Shared context for seed registration, avoiding a dependency on TaskRunnerCtx.
 struct SeedRegistrationCtx {
-    adapter_type: AdapterType,
     schema_cache: Arc<dyn SchemaStoreTrait>,
     data_store: Arc<dyn DataStoreTrait>,
     in_dir: PathBuf,
@@ -53,7 +53,8 @@ fn register_seed_csv(
     ctx: Arc<SeedRegistrationCtx>,
     type_ops: Arc<dyn TypeOps>,
 ) -> FsResult<RegisteredSeed> {
-    let relation = create_relation_from_node(ctx.adapter_type, seed.as_ref(), None)?;
+    let adapter_type = seed.node_adapter();
+    let relation = create_relation_from_node(adapter_type, seed.as_ref(), None)?;
     let canonical_fqn = relation.get_canonical_fqn()?;
     let delimiter = seed
         .__seed_attr__
@@ -66,7 +67,7 @@ fn register_seed_csv(
         dbt_common::seed_path_registry::register(relation_name, seed_path.clone());
     }
     let infer_column_name_strategy =
-        infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, ctx.adapter_type);
+        infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 
     let text_columns: Vec<String> = seed
         .__seed_attr__
@@ -115,11 +116,12 @@ fn register_seed_json(
     ctx: Arc<SeedRegistrationCtx>,
     type_ops: Arc<dyn TypeOps>,
 ) -> FsResult<RegisteredSeed> {
-    let relation = create_relation_from_node(ctx.adapter_type, seed.as_ref(), None)?;
+    let adapter_type = seed.node_adapter();
+    let relation = create_relation_from_node(adapter_type, seed.as_ref(), None)?;
     let canonical_fqn = relation.get_canonical_fqn()?;
     let seed_path = resolve_seed_path(&ctx.in_dir, &seed);
     let infer_column_name_strategy =
-        infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, ctx.adapter_type);
+        infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 
     let (source_schema, maybe_batches) = read_json_seed(&seed_path, true)?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
@@ -152,11 +154,12 @@ async fn register_seed_parquet_async(
     ctx: Arc<SeedRegistrationCtx>,
     type_ops: Arc<dyn TypeOps>,
 ) -> FsResult<RegisteredSeed> {
-    let relation = create_relation_from_node(ctx.adapter_type, seed.as_ref(), None)?;
+    let adapter_type = seed.node_adapter();
+    let relation = create_relation_from_node(adapter_type, seed.as_ref(), None)?;
     let canonical_fqn = relation.get_canonical_fqn()?;
     let seed_path = resolve_seed_path(&ctx.in_dir, &seed);
     let infer_column_name_strategy =
-        infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, ctx.adapter_type);
+        infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 
     let (source_schema, maybe_batches) = read_parquet_seed_view(&seed_path, true).await?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
@@ -197,14 +200,12 @@ async fn register_seed_parquet_async(
 pub async fn pre_register_seeds(
     sorted_nodes: &[&String],
     seeds: &BTreeMap<String, Arc<DbtSeed>>,
-    adapter_type: AdapterType,
     schema_cache: Arc<dyn SchemaStoreTrait>,
     data_store: Arc<dyn DataStoreTrait>,
     type_ops: Arc<dyn TypeOps>,
     in_dir: &Path,
 ) -> Vec<RegisteredSeed> {
     let ctx = Arc::new(SeedRegistrationCtx {
-        adapter_type,
         schema_cache,
         data_store,
         in_dir: in_dir.to_path_buf(),

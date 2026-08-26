@@ -19,12 +19,12 @@ dbt-adapter-sql = { workspace = true }
 dbt-adbc = { workspace = true }
 dbt-agate = { workspace = true }
 dbt-auth = { workspace = true }
-dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-csv = { workspace = true }
 dbt-env = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-handles = { workspace = true }
+dbt-platform-auth = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-sql-utils = { workspace = true }

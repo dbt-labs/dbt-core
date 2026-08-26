@@ -246,6 +246,12 @@ pub enum ErrorCode {
     SelectorError = 1600,
     NoNodesSelected = 1601,
     InvalidColumnSelector = 1602,
+    /// An externally supplied node set replaced the computed selection.
+    SelectionOverrideActive = 1603,
+    /// An externally supplied node set was available but not applicable to this command.
+    SelectionOverrideSkipped = 1604,
+    /// The nodes actually reported by the run differ from the externally supplied node set.
+    SelectionOverrideDivergence = 1605,
 
     // --------------------------------------------------------------------------------------------
     // CLI errors

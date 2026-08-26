@@ -4,7 +4,7 @@ use crate::dbt_project_config::{
 };
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
-    validate_compute_platform,
+    validate_node_adapter,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -21,6 +21,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::dbt_utils::validate_delimiter;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -28,6 +29,7 @@ use dbt_schemas::schemas::properties::SeedProperties;
 use dbt_schemas::schemas::{CommonAttributes, DbtSeed, DbtSeedAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset};
 use dbt_schemas::state::{ModelStatus, NodeResolverTracker};
+use indexmap::IndexMap;
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -45,12 +47,16 @@ pub async fn resolve_seeds(
     arg: &ResolveArgs,
     mut seed_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
-    package_quoting: DbtQuoting,
+    // Authored quoting per declared adapter name. See `resolve_models`.
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
+    // Every adapter the active target declares, for resolving `+adapter`.
+    // The target's default adapter.
+    default_adapter: AdapterType,
     package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
@@ -117,7 +123,7 @@ pub async fn resolve_seeds(
         ProjectConfigResolver::build(root_project_configs.seeds.clone(), is_dependency, || {
             init_project_config(
                 &package.dbt_project.seeds,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
@@ -306,8 +312,9 @@ pub async fn resolve_seeds(
 
         validate_delimiter(&properties_config.delimiter)?;
 
-        validate_compute_platform(
-            properties_config.alt_compute,
+        let resolved_node_adapter = validate_node_adapter(
+            properties_config.adapter,
+            default_adapter,
             &DbtMaterialization::Table,
             properties_config.catalog_name.as_deref(),
             adapter_type,
@@ -320,6 +327,18 @@ pub async fn resolve_seeds(
         // if necessary for large seeds
         let original_file_path =
             stdfs::diff_paths(seed_file.base_path.join(&path), &io_args.in_dir)?;
+
+        // See `resolve_models`: both remaining layers depend on the node's
+        // `+adapter`, which the config merge cannot know. Written back so
+        // `deprecated_config` carries the resolved value too.
+        let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+        properties_config.quoting = resolve_package_quoting(
+            Some(match adapter_quoting.get(&selected_adapter) {
+                Some(authored) => properties_config.quoting.filled_from(authored),
+                None => properties_config.quoting,
+            }),
+            resolved_node_adapter.unwrap_or(adapter_type),
+        );
 
         // Create initial seed with default values
         let mut dbt_seed = DbtSeed {
@@ -353,6 +372,7 @@ pub async fn resolve_seeds(
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -377,7 +397,6 @@ pub async fn resolve_seeds(
                 delimiter: properties_config.delimiter.clone().map(|d| d.into_inner()),
                 root_path: Some(seed_file.base_path.clone()),
                 catalog_name: properties_config.catalog_name.clone(),
-                alt_compute: properties_config.alt_compute,
             },
             __other__: BTreeMap::new(),
             deprecated_config: properties_config.clone().into(),

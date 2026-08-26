@@ -14,6 +14,7 @@ use crate::resolve::resolve_tests::persist_generic_data_tests::{
 };
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map, validate_compute,
+    validate_node_adapter,
 };
 use crate::resolve::yaml_field_utils;
 use crate::sql_file_info::SqlFileInfo;
@@ -35,8 +36,9 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
+use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::{
-    DbtChecksum, DbtQuoting, ModelFreshnessRules, NodeDependsOn,
+    DbtChecksum, DbtMaterialization, DbtQuoting, ModelFreshnessRules, NodeDependsOn,
     conform_normalized_snapshot_raw_code_to_mantle_format, normalize_sql,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -52,6 +54,7 @@ use dbt_schemas::schemas::{
 use dbt_schemas::state::{
     DbtAsset, DbtPackage, DbtRuntimeConfig, GenericTestAsset, ModelStatus, NodeResolverTracker,
 };
+use indexmap::IndexMap;
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -71,6 +74,8 @@ pub async fn resolve_snapshots(
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
+    default_adapter: AdapterType,
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     jinja_env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -283,7 +288,7 @@ pub async fn resolve_snapshots(
         || {
             init_project_config(
                 &package.dbt_project.snapshots,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
@@ -427,6 +432,35 @@ pub async fn resolve_snapshots(
                 dependency_package_name,
             );
             validate_compute(snapshot_config.compute, error_path)?;
+            // Resolved here rather than in the config merge, for the reason given in
+            // `resolve_models`: the merge cannot see the target's adapter list. A
+            // snapshot selects explicitly -- it has no attached node to inherit from --
+            // and an `alt` selection is rejected by the materialization rule, since
+            // `alt` does not materialize snapshots in v1.
+            let resolved_node_adapter = validate_node_adapter(
+                snapshot_config.adapter,
+                default_adapter,
+                &DbtMaterialization::Snapshot,
+                snapshot_config
+                    .__warehouse_specific_config__
+                    .catalog_name
+                    .as_deref(),
+                adapter_type,
+                dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+                false,
+                error_path,
+            )?;
+
+            // See `resolve_models`: both remaining quoting layers depend on which
+            // adapter the node runs on, which is only known after the config merge.
+            let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+            snapshot_config.quoting = resolve_package_quoting(
+                Some(match adapter_quoting.get(&selected_adapter) {
+                    Some(authored) => snapshot_config.quoting.filled_from(authored),
+                    None => snapshot_config.quoting,
+                }),
+                selected_adapter,
+            );
 
             if let Some(state) = &snapshot_config.state {
                 ModelFreshnessRules::validate(state.lag_tolerance.as_ref()).map_err(|e| {
@@ -503,6 +537,7 @@ pub async fn resolve_snapshots(
                     meta: snapshot_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: selected_adapter,
                     database: "".to_owned(), // will be updated below
                     schema: "".to_owned(),   // will be updated below
                     alias: "".to_owned(),    // will be updated below

@@ -1294,7 +1294,6 @@ mod tests {
                 deprecation_date: None,
                 event_time: None,
                 catalog_name: None,
-                alt_compute: None,
                 table_format: None,
                 sync: None,
                 compiled_code: None,

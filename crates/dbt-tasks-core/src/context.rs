@@ -222,7 +222,6 @@ impl TaskRunnerCtxInner {
 
         let materialization_resolver = MaterializationResolver::new(
             &resolver_state.macros.macros,
-            resolver_state.adapter_type,
             &resolver_state.root_project_name,
         );
 

@@ -3,8 +3,9 @@ import { intersection } from 'lodash';
 import { twMerge } from 'tailwind-merge';
 
 import { ResourceType } from '@dbt-labs/dbt-dag';
-import { Popover, SizeType } from '@dbt-labs/sourdough';
+import { SizeType } from '@dbt-labs/sourdough';
 
+import { Popover } from '../../components/ui/Popover';
 import {
   ExposureHealthIssueType,
   HealthIssueType,
@@ -56,7 +57,6 @@ const TrustSignalsBadgeDisplay: FC<TrustSignalsBadgeDisplayProps> = ({
             size={size}
           />
         }
-        shouldShowOnHover={true}
         zIndex={50}
       >
         <div

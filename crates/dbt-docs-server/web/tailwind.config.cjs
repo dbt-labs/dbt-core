@@ -1,6 +1,7 @@
 const sourdoughConfig = require('@dbt-labs/sourdough/tailwind.config');
 const dbtDagPreset = require('@dbt-labs/dbt-dag/tailwind.config');
-const { tokens: bigaTokens } = require('@dbt-labs/biga');
+// Vendored copy of @dbt-labs/biga's tokens.js — see src/styles/tokens.js.
+const { tokens: bigaTokens } = require('./src/styles/tokens.js');
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {

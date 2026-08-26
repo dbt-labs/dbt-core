@@ -24,6 +24,8 @@ const CONNECTION_PARAMS_STR: [&str; 9] = [
 
 const CONNECTION_PARAMS: [&str; 2] = ["port", "client_session_keep_alive"];
 
+const ACCEPTED_WORKLOAD_IDENTITY_PROVIDERS: [&str; 4] = ["OIDC", "AZURE", "GCP", "AWS"];
+
 /// Configuration values that are needed for an auth method in a dbt-snowflake profile.
 ///
 /// dbt snowflake only formalized `method` later in it's lifetime. For profiles without
@@ -83,6 +85,38 @@ fn validate_warehouse_auth_fields(config: &AdapterConfig) -> Result<(), AuthErro
     Ok(())
 }
 
+fn parse_workload_identity<'a>(
+    config: &'a AdapterConfig,
+) -> Result<SnowflakeAuthIR<'a>, AuthError> {
+    let provider = config.get_str("workload_identity_provider");
+    let provider_valid = provider.is_some_and(|p| {
+        ACCEPTED_WORKLOAD_IDENTITY_PROVIDERS
+            .iter()
+            .any(|accepted| accepted.eq_ignore_ascii_case(p))
+    });
+    if !provider_valid {
+        return Err(AuthError::config(format!(
+            "workload_identity_provider must be set to one of the following values if authenticator='workload_identity'!:\n{}\n\nProvided workload_identity_provider was '{}'",
+            ACCEPTED_WORKLOAD_IDENTITY_PROVIDERS.join(", "),
+            provider.unwrap_or_default(),
+        )));
+    }
+    let provider = provider.expect("validated above");
+
+    let entra_resource = config.get_str("workload_identity_entra_resource");
+    if entra_resource.is_some() && !provider.eq_ignore_ascii_case("AZURE") {
+        return Err(AuthError::config(
+            "workload_identity_entra_resource can only be set if workload_identity_provider is Azure",
+        ));
+    }
+
+    Ok(SnowflakeAuthIR::WorkloadIdentity {
+        provider,
+        entra_resource,
+        token: config.get_str("token"),
+    })
+}
+
 fn warn_ignored_auth_field(warnings: &mut Vec<String>, auth_method: &str, field: &str) {
     warnings.push(format!(
         "For Snowflake {auth_method} authentication, '{field}' will be ignored and can be safely removed from your profile."
@@ -129,6 +163,12 @@ enum SnowflakeAuthIR<'a> {
     Pat {
         user: &'a str,
         token: &'a str,
+    },
+    // AWS/GCP/AZURE fetch their own attestation from the local cloud metadata service.
+    WorkloadIdentity {
+        provider: &'a str,
+        entra_resource: Option<&'a str>,
+        token: Option<&'a str>,
     },
 }
 
@@ -236,6 +276,26 @@ impl<'a> SnowflakeAuthIR<'a> {
                     snowflake::auth_type::PROGRAMMATIC_ACCESS_TOKEN,
                 )?;
                 builder.with_named_option(snowflake::AUTH_TOKEN, token)?;
+            }
+            Self::WorkloadIdentity {
+                provider,
+                entra_resource,
+                token,
+            } => {
+                builder.with_named_option(
+                    snowflake::AUTH_TYPE,
+                    snowflake::auth_type::WORKLOAD_IDENTITY,
+                )?;
+                builder.with_named_option(snowflake::WORKLOAD_IDENTITY_PROVIDER, provider)?;
+                if let Some(entra_resource) = entra_resource {
+                    builder.with_named_option(
+                        snowflake::WORKLOAD_IDENTITY_ENTRA_RESOURCE,
+                        entra_resource,
+                    )?;
+                }
+                if let Some(token) = token {
+                    builder.with_named_option(snowflake::AUTH_TOKEN, token)?;
+                }
             }
         }
 
@@ -383,6 +443,7 @@ fn parse_auth_inner<'a>(
                 }
                 Ok(SnowflakeAuthIR::Pat { user, token })
             }
+            "workload_identity" => parse_workload_identity(config),
             unsupported_method => Err(AuthError::config(format!(
                 "Profile has unsupported authentication method {unsupported_method}"
             ))),
@@ -562,6 +623,8 @@ fn parse_auth_inner<'a>(
                                 warn_ignored_auth_field(warnings, "PAT", "password");
                             }
                             Ok(SnowflakeAuthIR::Pat { user, token })
+                        } else if value == "workload_identity" {
+                            parse_workload_identity(config)
                         } else {
                             Err(AuthError::config(format!(
                                 "Unsupported authenticator: {value}"
@@ -1833,6 +1896,94 @@ mod tests {
             (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_workload_identity_authenticator() {
+        let mut config = base_config_without_user_password();
+        config.insert("authenticator".into(), "workload_identity".into());
+        config.insert("workload_identity_provider".into(), "azure".into());
+        config.insert(
+            "workload_identity_entra_resource".into(),
+            "app://123".into(),
+        );
+        config.insert("token".into(), "test_token".into());
+        let expected = [
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (
+                snowflake::AUTH_TYPE,
+                snowflake::auth_type::WORKLOAD_IDENTITY,
+            ),
+            (snowflake::WORKLOAD_IDENTITY_PROVIDER, "azure"),
+            (snowflake::WORKLOAD_IDENTITY_ENTRA_RESOURCE, "app://123"),
+            (snowflake::AUTH_TOKEN, "test_token"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_workload_identity_method() {
+        let mut config = base_config_without_user_password();
+        config.insert("method".into(), "workload_identity".into());
+        config.insert("workload_identity_provider".into(), "OIDC".into());
+        let expected = [
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (
+                snowflake::AUTH_TYPE,
+                snowflake::auth_type::WORKLOAD_IDENTITY,
+            ),
+            (snowflake::WORKLOAD_IDENTITY_PROVIDER, "OIDC"),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_workload_identity_fails_without_provider() {
+        let mut config = base_config_without_user_password();
+        config.insert("authenticator".into(), "workload_identity".into());
+        assert_parse_auth_config_error(
+            config,
+            "workload_identity_provider must be set to one of the following values if authenticator='workload_identity'!:\nOIDC, AZURE, GCP, AWS\n\nProvided workload_identity_provider was ''",
+        );
+    }
+
+    #[test]
+    fn test_workload_identity_fails_with_invalid_provider() {
+        let mut config = base_config_without_user_password();
+        config.insert("authenticator".into(), "workload_identity".into());
+        config.insert(
+            "workload_identity_provider".into(),
+            "some_non_existent_cloud_provider".into(),
+        );
+        assert_parse_auth_config_error(
+            config,
+            "workload_identity_provider must be set to one of the following values if authenticator='workload_identity'!:\nOIDC, AZURE, GCP, AWS\n\nProvided workload_identity_provider was 'some_non_existent_cloud_provider'",
+        );
+    }
+
+    #[test]
+    fn test_workload_identity_fails_with_entra_resource_and_non_azure_provider() {
+        let mut config = base_config_without_user_password();
+        config.insert("authenticator".into(), "workload_identity".into());
+        config.insert("workload_identity_provider".into(), "aws".into());
+        config.insert(
+            "workload_identity_entra_resource".into(),
+            "app://123".into(),
+        );
+        assert_parse_auth_config_error(
+            config,
+            "workload_identity_entra_resource can only be set if workload_identity_provider is Azure",
+        );
     }
 
     #[test]

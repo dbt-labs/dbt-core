@@ -1,8 +1,7 @@
 import { FC } from 'react';
 
-import { Link } from '@dbt-labs/sourdough';
-
 import { Badge } from '../../../components/ui/Badge';
+import { Link } from '../../../components/ui/Link';
 import { Tooltip } from '../../../components/ui/Tooltip';
 import { toTitleCase } from '../../util/string';
 import { BOLD_TAG_REGEX, SanitizeBoldText } from './BoldedText';

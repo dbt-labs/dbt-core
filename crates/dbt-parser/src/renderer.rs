@@ -364,9 +364,14 @@ where
     // package-relative asset path so config-block reads of `model.path` match.
     let model_path = dbt_common::path::strip_resource_paths(&dbt_asset.path, resource_paths);
 
+    // A dependency package's inline `config(enabled=false)` must not abort rendering when the
+    // root project re-enables the node; the overlay outranks it.
+    let root_overlay_forces_enabled = config_resolver.is_enabled_by_root_overlay(&fqn);
+
     let mut resolve_model_context = base_ctx.clone();
     resolve_model_context.extend(build_resolve_model_context(
         &properties_config,
+        root_overlay_forces_enabled,
         *adapter_type,
         database,
         schema,
@@ -403,7 +408,7 @@ where
             jinja_type_checking_event_listener_factory.clone(),
             None,
             &jinja_env.env.get_root_package_name(),
-            MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+            MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespaces()),
             &display_path,
             &sql,
             &dbt_common::CodeLocationWithFile::new(1, 1, 0, display_path.clone()),
@@ -1029,7 +1034,7 @@ pub fn collect_hook_dependencies_from_config(
                 jinja_type_checking_event_listener_factory,
                 None,
                 &jinja_env.env.get_root_package_name(),
-                MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+                MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespaces()),
                 resource_path,
                 sql,
                 &dbt_common::CodeLocationWithFile::new(1, 1, 0, resource_path.to_path_buf()),

@@ -185,6 +185,7 @@ pub async fn resolve_exposures(
                     meta: exposure_properties_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: adapter_type,
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -261,6 +262,7 @@ pub fn resolve_yaml_depends_on(
         let mut resolve_model_context = base_ctx.clone();
         resolve_model_context.extend(build_resolve_model_context(
             &exposure_config,
+            false,
             adapter_type,
             database,
             schema,

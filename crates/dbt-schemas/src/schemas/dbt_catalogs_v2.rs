@@ -19,7 +19,15 @@ use dbt_common::serde_utils::try_get_bool;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
-const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duckdb", "alt"];
+// `lake_compute` is `AdapterType::Alt`'s external name; the Rust side still
+// says `Alt` (see `GLUE_ALT_FIELDS` and friends below).
+const ALL_V2_PLATFORMS: &[&str] = &[
+    "snowflake",
+    "databricks",
+    "bigquery",
+    "duckdb",
+    "lake_compute",
+];
 
 const TARGET_FILE_SIZES: &[&str] = &["AUTO", "16MB", "32MB", "64MB", "128MB"];
 const STORAGE_SERIALIZATION_POLICIES: &[&str] = &["COMPATIBLE", "OPTIMIZED"];
@@ -286,7 +294,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -297,7 +305,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", GLUE_ALT_FIELDS),
+            PlatformBlock::new("lake_compute", GLUE_ALT_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -308,7 +316,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -320,7 +328,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", UNITY_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -343,11 +351,11 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         catalog_type: CatalogType::DuckLake,
         table_format: "default",
-        description: "DuckLake metadata store catalog. Supports duckdb and/or alt connection blocks.",
+        description: "DuckLake metadata store catalog. Supports duckdb and/or lake_compute connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("duckdb", DUCKLAKE_DUCKDB_FIELDS),
-            PlatformBlock::new("alt", DUCKLAKE_DUCKDB_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKLAKE_DUCKDB_FIELDS),
         ],
     },
     CatalogTypeSchema {

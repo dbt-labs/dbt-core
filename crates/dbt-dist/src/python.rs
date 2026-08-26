@@ -49,7 +49,88 @@ impl PythonPackageManager {
             Self::Rye => "Rye",
         }
     }
+
+    /// Whether `self` is a package manager that could plausibly govern a
+    /// project whose manifest is `format`. Used to guard against trusting a
+    /// package-manager signal that was resolved independently of which
+    /// manifest a project actually has (see `dist::resolve_manager_for_manifest`).
+    ///
+    /// `Requirements`/`SetupCfg` are deliberately stricter than "everything
+    /// except Conda/Pipenv": `Uv`/`Poetry`/`Pdm`/`Rye` all imply a
+    /// `pyproject.toml`-based project (their `sync_command_for_manager`
+    /// commands -- `uv sync`, `poetry lock`/`install`, `pdm install`,
+    /// `rye sync` -- read `pyproject.toml`/their own lockfile, never a
+    /// `requirements.txt`/`setup.cfg`), so trusting one of them here would
+    /// reproduce the exact failure mode this function exists to prevent: a
+    /// command that looks successful but silently syncs from the wrong
+    /// file. Only managers whose sync command actually targets the given
+    /// manifest path (the pip-family and Hatch, which take `-r <path>`) or
+    /// that already decline to guess a command at all (Pipx, which returns
+    /// `None` regardless of format) are compatible here.
+    pub fn is_compatible_with(self, format: PythonManifestFormat) -> bool {
+        match format {
+            PythonManifestFormat::CondaEnvironment => matches!(self, Self::Conda),
+            PythonManifestFormat::Pipfile => matches!(self, Self::Pipenv),
+            PythonManifestFormat::Pyproject => !matches!(self, Self::Conda | Self::Pipenv),
+            PythonManifestFormat::Requirements | PythonManifestFormat::SetupCfg => {
+                matches!(
+                    self,
+                    Self::Pip | Self::Pipx | Self::Hatch | Self::Asdf | Self::Mise | Self::Pyenv
+                )
+            }
+        }
+    }
+
+    /// Every manager [`is_compatible_with`](Self::is_compatible_with) `format`,
+    /// in a fixed, deterministic order -- used to populate an interactive
+    /// picker when automatic detection can't pin down (or rejects) a manager
+    /// for a manifest of this format. Always non-empty: every format has at
+    /// least one compatible manager.
+    pub fn choices_for(format: PythonManifestFormat) -> Vec<Self> {
+        CLI_NAMES
+            .iter()
+            .map(|(_, m)| *m)
+            .filter(|m| m.is_compatible_with(format))
+            .collect()
+    }
+
+    /// Parses a `--package-manager <name>` CLI value, matching one of
+    /// [`cli_names`](Self::cli_names) case-insensitively. `None` if `s`
+    /// doesn't match any of them -- callers should list `cli_names()` in the
+    /// resulting error so the user can see the exact spelling expected.
+    pub fn parse_cli_name(s: &str) -> Option<Self> {
+        let s = s.trim().to_ascii_lowercase();
+        CLI_NAMES
+            .iter()
+            .find(|(name, _)| *name == s)
+            .map(|(_, m)| *m)
+    }
+
+    /// The canonical `--package-manager` spelling for every manager, in the
+    /// same fixed order [`choices_for`](Self::choices_for) filters from.
+    pub fn cli_names() -> impl Iterator<Item = &'static str> {
+        CLI_NAMES.iter().map(|(name, _)| *name)
+    }
 }
+
+/// Backing table for [`PythonPackageManager::choices_for`],
+/// [`PythonPackageManager::parse_cli_name`], and
+/// [`PythonPackageManager::cli_names`] -- one list so the flag's accepted
+/// spellings, its parser, and the picker's choices can't drift apart.
+const CLI_NAMES: [(&str, PythonPackageManager); 12] = [
+    ("uv", PythonPackageManager::Uv),
+    ("pipx", PythonPackageManager::Pipx),
+    ("poetry", PythonPackageManager::Poetry),
+    ("pdm", PythonPackageManager::Pdm),
+    ("pipenv", PythonPackageManager::Pipenv),
+    ("conda", PythonPackageManager::Conda),
+    ("hatch", PythonPackageManager::Hatch),
+    ("rye", PythonPackageManager::Rye),
+    ("pip", PythonPackageManager::Pip),
+    ("asdf", PythonPackageManager::Asdf),
+    ("mise", PythonPackageManager::Mise),
+    ("pyenv", PythonPackageManager::Pyenv),
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PackageVersion {
@@ -226,10 +307,16 @@ fn find_pipfile_matches(text: &str, package_name: &str) -> FsResult<Vec<Match>> 
         let Some(table) = doc.get(table_name).and_then(|t| t.as_table_like()) else {
             continue;
         };
-        for (key, item) in table.iter() {
+        for (key, _) in table.iter() {
             if normalize_package_name(key) != normalize_package_name(package_name) {
                 continue;
             }
+            let Some((key, item)) = table.get_key_value(key) else {
+                continue;
+            };
+            let Some(name_range) = key.span() else {
+                continue;
+            };
             let version_item = item
                 .as_table_like()
                 .and_then(|t| t.get("version"))
@@ -239,8 +326,10 @@ fn find_pipfile_matches(text: &str, package_name: &str) -> FsResult<Vec<Match>> 
             };
             if let Some(interior) = toml_string_interior_range(text, span) {
                 out.push(Match {
-                    range: interior,
+                    name_range,
+                    version_range: interior,
                     package_manager: Some(PythonPackageManager::Pipenv),
+                    extras_range: find_extras_range(item),
                 });
             }
         }
@@ -273,10 +362,13 @@ fn find_conda_matches(text: &str, package_name: &str) -> FsResult<Vec<Match>> {
 
     let mut out = Vec::new();
     for item in deps {
-        if let Some(range) = find_conda_scalar_match(text, item, package_name) {
+        if let Some((name_range, version_range)) = find_conda_scalar_match(text, item, package_name)
+        {
             out.push(Match {
-                range,
+                name_range,
+                version_range,
                 package_manager: Some(PythonPackageManager::Conda),
+                extras_range: None,
             });
             continue;
         }
@@ -289,10 +381,14 @@ fn find_conda_matches(text: &str, package_name: &str) -> FsResult<Vec<Match>> {
             continue;
         };
         for pip_item in pip_items {
-            if let Some(range) = find_conda_scalar_match(text, pip_item, package_name) {
+            if let Some((name_range, version_range)) =
+                find_conda_scalar_match(text, pip_item, package_name)
+            {
                 out.push(Match {
-                    range,
+                    name_range,
+                    version_range,
                     package_manager: Some(PythonPackageManager::Pip),
+                    extras_range: None,
                 });
             }
         }
@@ -300,20 +396,24 @@ fn find_conda_matches(text: &str, package_name: &str) -> FsResult<Vec<Match>> {
     Ok(out)
 }
 
-/// Locates `package_name`'s version specifier within a single conda
-/// dependency entry (a YAML string scalar such as `dbt-core=1.2.3` or the
-/// quoted `"dbt-core=1.2.3"`), returning its absolute byte range in `text`.
-/// Returns `None` if `item` isn't a string scalar, or doesn't mention
-/// `package_name`.
+/// Locates `package_name`'s name and version-specifier portions within a
+/// single conda dependency entry (a YAML string scalar such as
+/// `dbt-core=1.2.3` or the quoted `"dbt-core=1.2.3"`), returning their
+/// absolute byte ranges in `text`. Returns `None` if `item` isn't a string
+/// scalar, or doesn't mention `package_name`.
 fn find_conda_scalar_match(
     text: &str,
     item: &dbt_yaml::Value,
     package_name: &str,
-) -> Option<ops::Range<usize>> {
+) -> Option<(ops::Range<usize>, ops::Range<usize>)> {
     let decoded = item.as_str()?;
     let interior = yaml_scalar_interior_range(text, item.span().start.index, decoded)?;
-    let rel = find_specifier_span(&text[interior.clone()], package_name)?;
-    Some(interior.start + rel.start..interior.start + rel.end)
+    let (name_rel, version_rel) =
+        find_name_and_specifier_span(&text[interior.clone()], package_name)?;
+    Some((
+        interior.start + name_rel.start..interior.start + name_rel.end,
+        interior.start + version_rel.start..interior.start + version_rel.end,
+    ))
 }
 
 fn find_setup_cfg_matches(text: &str, package_name: &str) -> Vec<Match> {
@@ -342,11 +442,15 @@ fn find_setup_cfg_matches(text: &str, package_name: &str) -> Vec<Match> {
                 key_indent = indent;
                 let value = value.trim_start();
                 if !value.is_empty() {
-                    if let Some(rel) = find_specifier_span(value, package_name) {
+                    if let Some((name_rel, version_rel)) =
+                        find_name_and_specifier_span(value, package_name)
+                    {
                         let base = offset_of(text, value);
                         out.push(Match {
-                            range: base + rel.start..base + rel.end,
+                            name_range: base + name_rel.start..base + name_rel.end,
+                            version_range: base + version_rel.start..base + version_rel.end,
                             package_manager: Some(PythonPackageManager::Pip),
+                            extras_range: None,
                         });
                     }
                 }
@@ -362,11 +466,15 @@ fn find_setup_cfg_matches(text: &str, package_name: &str) -> Vec<Match> {
                 in_install_requires = false;
                 continue;
             }
-            if let Some(rel) = find_specifier_span(trimmed, package_name) {
+            if let Some((name_rel, version_rel)) =
+                find_name_and_specifier_span(trimmed, package_name)
+            {
                 let base = offset_of(text, trimmed);
                 out.push(Match {
-                    range: base + rel.start..base + rel.end,
+                    name_range: base + name_rel.start..base + name_rel.end,
+                    version_range: base + version_rel.start..base + version_rel.end,
                     package_manager: Some(PythonPackageManager::Pip),
+                    extras_range: None,
                 });
             }
         }
@@ -425,7 +533,6 @@ fn find_requirements_matches(text: &str, package_name: &str) -> FsResult<Vec<Mat
             // ...) — package names never start with `-`.
             continue;
         }
-
         if is_block {
             let declares_target = requirement_name(trimmed).is_some_and(|name| {
                 normalize_package_name(name) == normalize_package_name(package_name)
@@ -441,11 +548,13 @@ fn find_requirements_matches(text: &str, package_name: &str) -> FsResult<Vec<Mat
             continue;
         }
 
-        if let Some(rel) = find_specifier_span(trimmed, package_name) {
+        if let Some((name_rel, version_rel)) = find_name_and_specifier_span(trimmed, package_name) {
             let base = offset_of(text, trimmed);
             out.push(Match {
-                range: base + rel.start..base + rel.end,
+                name_range: base + name_rel.start..base + name_rel.end,
+                version_range: base + version_rel.start..base + version_rel.end,
                 package_manager: Some(PythonPackageManager::Pip),
+                extras_range: None,
             });
         }
     }
@@ -503,18 +612,29 @@ fn normalize_package_name(name: &str) -> String {
     out
 }
 
-/// Locates the version-specifier portion of a PEP 508 / conda-match-spec
-/// style requirement token (`name[extras]<specifier>`), returning its byte
-/// range within `text`. `text` is expected to hold a single requirement,
-/// e.g. one line of `requirements.txt` (leading `-` list markers already
-/// stripped) or one array/list entry.
+/// Locates the name and version-specifier portions of a PEP 508 /
+/// conda-match-spec style requirement token (`name[extras]<specifier>`),
+/// returning their byte ranges within `text`. `text` is expected to hold a
+/// single requirement, e.g. one line of `requirements.txt` (leading `-` list
+/// markers already stripped) or one array/list entry.
 ///
-/// Returns `None` if `text` doesn't name `package_name`, or if it names the
-/// package with no specifier to replace (a bare `dbt-core` entry).
+/// `name_range` covers the package name plus any trailing `[extras]` block,
+/// so replacing it wholesale (as a rename does) drops the extras along with
+/// the old name rather than leaving them dangling. `version_range` covers
+/// the specifier text after that; it's a **zero-length** range positioned
+/// right after `name_range` when the requirement has no specifier at all (a
+/// bare `dbt-core` entry) -- callers that only replace text within it get an
+/// insertion for free, since `ManifestReplacements::apply_locked`'s
+/// range-replace already treats a zero-length range that way.
+///
+/// Returns `None` if `text` doesn't name `package_name`.
 ///
 /// This is intentionally not a full PEP 508 parser: it does not validate
 /// environment markers or extras syntax, it just skips past them.
-fn find_specifier_span(text: &str, package_name: &str) -> Option<ops::Range<usize>> {
+fn find_name_and_specifier_span(
+    text: &str,
+    package_name: &str,
+) -> Option<(ops::Range<usize>, ops::Range<usize>)> {
     let leading_ws = text.len() - text.trim_start().len();
     let rest = &text[leading_ws..];
 
@@ -534,16 +654,14 @@ fn find_specifier_span(text: &str, package_name: &str) -> Option<ops::Range<usiz
         let close = text[spec_start..].find(']')?;
         spec_start += close + 1;
     }
+    let name_range = leading_ws..spec_start;
 
     let spec_region = &text[spec_start..];
     let spec_region = spec_region.trim_end_matches(['\r', '\n']);
     let spec_len = spec_region.find([';', '#']).unwrap_or(spec_region.len());
     let spec_end = spec_start + spec_region[..spec_len].trim_end().len();
 
-    if spec_start == spec_end {
-        return None;
-    }
-    Some(spec_start..spec_end)
+    Some((name_range, spec_start..spec_end))
 }
 
 /// Finds the byte range of `raw`'s interior — the contents between a
@@ -606,12 +724,39 @@ fn yaml_scalar_interior_range(
     }
 }
 
-/// One location within a manifest's raw text that needs to change, plus
-/// which tool's syntax applies there (needed to pick the right rendering
-/// for [`PythonManifestFormat::render_version`]).
+/// One location within a manifest's raw text that declares a package, split
+/// into the name (plus any extras) and the version-specifier portions, plus
+/// which tool's syntax applies there (needed to pick the right rendering for
+/// [`PythonManifestFormat::render_version`]).
+///
+/// `extras_range`, when present, is the byte range of a Poetry/Pipfile
+/// inline-table entry's `extras = [...]` array *value* (brackets included,
+/// not the whole `extras = [...]` key-value pair) -- a rename clears it back
+/// to `[]` so an extra that doesn't exist on the renamed package doesn't
+/// survive the rename. It's `None` for every other match shape: a PEP 508 /
+/// conda-match-spec style entry folds its extras into `name_range` instead
+/// (see `find_name_and_specifier_span`'s doc comment), and a plain
+/// (non-inline-table) Poetry/Pipfile entry has no `extras` key to clear in
+/// the first place.
 struct Match {
-    range: ops::Range<usize>,
+    name_range: ops::Range<usize>,
+    version_range: ops::Range<usize>,
     package_manager: Option<PythonPackageManager>,
+    extras_range: Option<ops::Range<usize>>,
+}
+
+/// Locates a Poetry/Pipfile inline-table dependency entry's `extras = [...]`
+/// array literal, returning the byte range of the array value itself (e.g.
+/// `["postgres"]`, brackets included) rather than the whole `extras = [...]`
+/// key-value pair -- replacing just the value in place avoids having to
+/// reason about surrounding commas or whitespace when another key comes
+/// before or after it in the same inline table. Returns `None` when `item`
+/// isn't an inline table, has no `extras` key, or that key's span can't be
+/// determined -- mirroring this file's other conservative-skip helpers
+/// (e.g. `toml_string_interior_range`, `yaml_scalar_interior_range`) rather
+/// than guessing at a range.
+fn find_extras_range(item: &toml_edit::Item) -> Option<ops::Range<usize>> {
+    item.as_table_like()?.get("extras")?.as_value()?.span()
 }
 
 /// Scans an array of PEP 508 requirement strings (a PEP 621
@@ -629,10 +774,14 @@ fn find_matches_in_requirement_array(
         let Some(interior) = toml_string_interior_range(text, span) else {
             continue;
         };
-        if let Some(rel) = find_specifier_span(&text[interior.clone()], package_name) {
+        if let Some((name_rel, version_rel)) =
+            find_name_and_specifier_span(&text[interior.clone()], package_name)
+        {
             out.push(Match {
-                range: interior.start + rel.start..interior.start + rel.end,
+                name_range: interior.start + name_rel.start..interior.start + name_rel.end,
+                version_range: interior.start + version_rel.start..interior.start + version_rel.end,
                 package_manager,
+                extras_range: None,
             });
         }
     }
@@ -651,10 +800,16 @@ fn find_matches_in_poetry_table(
     package_name: &str,
 ) -> Vec<Match> {
     let mut out = Vec::new();
-    for (key, item) in table.iter() {
+    for (key, _) in table.iter() {
         if normalize_package_name(key) != normalize_package_name(package_name) {
             continue;
         }
+        let Some((key, item)) = table.get_key_value(key) else {
+            continue;
+        };
+        let Some(name_range) = key.span() else {
+            continue;
+        };
         let version_item = item
             .as_table_like()
             .and_then(|t| t.get("version"))
@@ -664,8 +819,10 @@ fn find_matches_in_poetry_table(
         };
         if let Some(interior) = toml_string_interior_range(text, span) {
             out.push(Match {
-                range: interior,
+                name_range,
+                version_range: interior,
                 package_manager: Some(PythonPackageManager::Poetry),
+                extras_range: find_extras_range(item),
             });
         }
     }
@@ -843,6 +1000,21 @@ impl PythonManifest {
         &self.path
     }
 
+    /// Whether `package_name` is declared in a conda environment's
+    /// top-level `dependencies:` list -- conda's own match-spec syntax,
+    /// resolved from conda channels -- as opposed to its nested `pip:`
+    /// sub-list, which is a plain pip requirements list resolved from PyPI
+    /// instead. Always `false` for non-conda manifests.
+    pub fn has_top_level_conda_declaration(&self, package_name: &str) -> FsResult<bool> {
+        if self.format != PythonManifestFormat::CondaEnvironment {
+            return Ok(false);
+        }
+        let matches = self.format.find_matches(&self.contents, package_name)?;
+        Ok(matches
+            .iter()
+            .any(|m| m.package_manager == Some(PythonPackageManager::Conda)))
+    }
+
     /// Finds every place in the manifest that declares `spec.name`, and
     /// renders the replacement text each of them needs to pin
     /// `spec.version`. Returns `None` if the manifest doesn't declare the
@@ -861,14 +1033,90 @@ impl PythonManifest {
             .into_iter()
             .map(|m| ManifestReplacement {
                 range_replace: Range {
-                    start: m.range.start,
-                    end: m.range.end,
+                    start: m.version_range.start,
+                    end: m.version_range.end,
                 },
                 replacement: self
                     .format
                     .render_version(spec.version.clone(), m.package_manager),
             })
             .collect();
+
+        Ok(Some(ManifestReplacements {
+            replacements,
+            source_checksum: self.checksum_sha256,
+        }))
+    }
+
+    /// Finds every place in the manifest that declares `old_name`, and
+    /// renders the pair of replacements each needs to become `new_spec`
+    /// instead: one on the name (plus any extras), literally replacing it
+    /// with `new_spec.name` unquoted (valid for both a bare PEP 508 token
+    /// and an unquoted TOML key), and one on the version specifier, via the
+    /// same [`PythonManifestFormat::render_version`] rendering
+    /// [`Self::get_version_replacement`] uses. Returns `None` if the
+    /// manifest doesn't declare `old_name` at all.
+    ///
+    /// Errors if the manifest *also* already declares `new_spec.name`
+    /// somewhere -- applying the rename on top of that would leave the
+    /// dependency declared twice.
+    pub fn get_rename_replacement(
+        &self,
+        old_name: &str,
+        new_spec: &PackageSpec,
+    ) -> FsResult<Option<ManifestReplacements>> {
+        let matches = self.format.find_matches(&self.contents, old_name)?;
+        if matches.is_empty() {
+            return Ok(None);
+        }
+
+        let existing = self.format.find_matches(&self.contents, &new_spec.name)?;
+        if !existing.is_empty() {
+            return err!(
+                ErrorCode::DepsDuplicatePackage,
+                "{} already declares `{}` as a dependency; renaming `{}` to `{}` would create a \
+                 duplicate. Resolve this manually before retrying.",
+                self.path.display(),
+                new_spec.name,
+                old_name,
+                new_spec.name
+            );
+        }
+
+        let mut replacements = Vec::with_capacity(matches.len() * 3);
+        for m in matches {
+            replacements.push(ManifestReplacement {
+                range_replace: Range {
+                    start: m.name_range.start,
+                    end: m.name_range.end,
+                },
+                replacement: new_spec.name.clone(),
+            });
+            replacements.push(ManifestReplacement {
+                range_replace: Range {
+                    start: m.version_range.start,
+                    end: m.version_range.end,
+                },
+                replacement: self
+                    .format
+                    .render_version(new_spec.version.clone(), m.package_manager),
+            });
+            // A Poetry/Pipfile inline-table entry's `extras` aren't
+            // guaranteed to exist on the renamed package, so a rename clears
+            // them rather than carrying them over -- unlike
+            // `get_version_replacement`, which doesn't touch this range at
+            // all, since a plain version bump doesn't change the package
+            // identity and any existing extras are still valid.
+            if let Some(extras_range) = m.extras_range {
+                replacements.push(ManifestReplacement {
+                    range_replace: Range {
+                        start: extras_range.start,
+                        end: extras_range.end,
+                    },
+                    replacement: "[]".to_string(),
+                });
+            }
+        }
 
         Ok(Some(ManifestReplacements {
             replacements,
@@ -882,6 +1130,7 @@ impl PythonManifest {
 // multiple tables of dependencies, and we will occasionally want to update
 // more than one table. However, we always want to apply all replacements in
 // a single batch.
+#[derive(Debug)]
 pub struct ManifestReplacements {
     replacements: Vec<ManifestReplacement>,
     // Checksum of the manifest text the ranges in `replacements` were computed
@@ -1023,13 +1272,21 @@ impl ManifestReplacements {
     }
 
     /// Verifies `manifest.path` still holds the exact text these
-    /// replacements were computed from, and — only if so — splices in every
-    /// replacement and writes the result back.
+    /// replacements were computed from, and — only if so — backs up the
+    /// original contents, splices in every replacement, and writes the
+    /// result back. Returns the path of the backup file.
+    ///
+    /// The backup is unconditional and lives here — the one place that
+    /// overwrites a manifest — rather than at any particular caller, so
+    /// every caller (present or future) gets a real recovery path for what
+    /// is otherwise an irreversible overwrite (the tool has no way to know
+    /// whether the manifest is version-controlled, tracked, or has a clean
+    /// working tree).
     ///
     /// Reads and writes the path directly rather than through a handle held
     /// on `manifest` (see `write_atomic`'s doc comment for why); the
     /// checksum comparison below is what guards against a concurrent edit.
-    pub fn apply_to(&self, manifest: &mut PythonManifest) -> FsResult<()> {
+    pub fn apply_to(&self, manifest: &mut PythonManifest) -> FsResult<PathBuf> {
         let bytes = std::fs::read(&manifest.path).map_err(|e| {
             fs_err!(
                 ErrorCode::IoError,
@@ -1046,6 +1303,37 @@ impl ManifestReplacements {
                 manifest.path.display()
             );
         }
+
+        let permissions = std::fs::metadata(&manifest.path)
+            .map_err(|e| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "failed to write {}",
+                    manifest.path.display()
+                )
+                .with_cause(WrappedError::Io(e))
+            })?
+            .permissions();
+
+        // Back up the pre-edit bytes before they're overwritten below —
+        // this is the one place any manifest gets rewritten, so this is the
+        // one place that needs to guarantee a way back.
+        let backup_path = manifest.path.with_file_name(format!(
+            "{}.bak",
+            manifest
+                .path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+        ));
+        write_atomic(&backup_path, &bytes, permissions.clone()).map_err(|e| {
+            fs_err!(
+                ErrorCode::IoError,
+                "failed to write backup {}",
+                backup_path.display()
+            )
+            .with_cause(WrappedError::Io(e))
+        })?;
 
         let mut text = String::from_utf8(bytes).map_err(|_| {
             fs_err!(
@@ -1072,17 +1360,6 @@ impl ManifestReplacements {
             text.replace_range(range, &r.replacement);
         }
 
-        let permissions = std::fs::metadata(&manifest.path)
-            .map_err(|e| {
-                fs_err!(
-                    ErrorCode::IoError,
-                    "failed to write {}",
-                    manifest.path.display()
-                )
-                .with_cause(WrappedError::Io(e))
-            })?
-            .permissions();
-
         write_atomic(&manifest.path, text.as_bytes(), permissions).map_err(|e| {
             fs_err!(
                 ErrorCode::IoError,
@@ -1095,10 +1372,11 @@ impl ManifestReplacements {
         manifest.checksum_sha256 = sha256(text.as_bytes());
         manifest.contents = text;
 
-        Ok(())
+        Ok(backup_path)
     }
 }
 
+#[derive(Debug)]
 pub struct ManifestReplacement {
     // The half-open range of bytes to replace
     range_replace: Range<usize>,
@@ -1164,52 +1442,59 @@ mod tests {
         }
     }
 
-    mod find_specifier_span_tests {
+    mod find_name_and_specifier_span_tests {
         use super::*;
 
         #[test]
         fn finds_simple_range_specifier() {
             let text = "dbt-core>=1.2.3,<2.0";
-            let range = find_specifier_span(text, "dbt-core").unwrap();
-            assert_eq!(&text[range], ">=1.2.3,<2.0");
+            let (name, version) = find_name_and_specifier_span(text, "dbt-core").unwrap();
+            assert_eq!(&text[name], "dbt-core");
+            assert_eq!(&text[version], ">=1.2.3,<2.0");
         }
 
         #[test]
-        fn skips_extras() {
+        fn extras_are_folded_into_the_name_range() {
             let text = "dbt-core[extra]==1.2.3";
-            let range = find_specifier_span(text, "dbt-core").unwrap();
-            assert_eq!(&text[range], "==1.2.3");
+            let (name, version) = find_name_and_specifier_span(text, "dbt-core").unwrap();
+            assert_eq!(&text[name], "dbt-core[extra]");
+            assert_eq!(&text[version], "==1.2.3");
         }
 
         #[test]
         fn stops_at_environment_marker() {
             let text = "dbt-core>=1.2.3; python_version>='3.8'";
-            let range = find_specifier_span(text, "dbt-core").unwrap();
-            assert_eq!(&text[range], ">=1.2.3");
+            let (_, version) = find_name_and_specifier_span(text, "dbt-core").unwrap();
+            assert_eq!(&text[version], ">=1.2.3");
         }
 
         #[test]
         fn stops_at_comment() {
             let text = "dbt-core==1.2.3  # pinned for reasons";
-            let range = find_specifier_span(text, "dbt-core").unwrap();
-            assert_eq!(&text[range], "==1.2.3");
+            let (_, version) = find_name_and_specifier_span(text, "dbt-core").unwrap();
+            assert_eq!(&text[version], "==1.2.3");
         }
 
         #[test]
         fn returns_none_for_name_mismatch() {
-            assert!(find_specifier_span("other-package==1.2.3", "dbt-core").is_none());
+            assert!(find_name_and_specifier_span("other-package==1.2.3", "dbt-core").is_none());
         }
 
         #[test]
-        fn returns_none_for_bare_requirement_with_no_specifier() {
-            assert!(find_specifier_span("dbt-core", "dbt-core").is_none());
+        fn bare_requirement_with_no_specifier_gets_a_zero_length_version_range() {
+            let text = "dbt-core";
+            let (name, version) = find_name_and_specifier_span(text, "dbt-core").unwrap();
+            assert_eq!(&text[name], "dbt-core");
+            assert!(version.is_empty());
+            assert_eq!(version.start, text.len());
         }
 
         #[test]
         fn matches_are_name_normalized() {
             let text = "dbt_core==1.2.3";
-            let range = find_specifier_span(text, "dbt-core").unwrap();
-            assert_eq!(&text[range], "==1.2.3");
+            let (name, version) = find_name_and_specifier_span(text, "dbt-core").unwrap();
+            assert_eq!(&text[name], "dbt_core");
+            assert_eq!(&text[version], "==1.2.3");
         }
     }
 
@@ -1728,6 +2013,28 @@ mod tests {
             assert!(replacements.is_none());
         }
 
+        #[test]
+        fn bare_declaration_with_no_specifier_is_detected_not_invisible() {
+            // Regression test: a bare `dbt-core` entry with no version
+            // constraint used to be entirely invisible to
+            // `get_version_replacement` (and therefore to PR A's
+            // `declares_dbt_core` probe, which reuses it).
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "requirements.txt",
+                "other-package==0.1.0\ndbt-core\n",
+            );
+            let replacements = manifest
+                .get_version_replacement(&spec(PackageVersion::Exact("1.5.0".into())))
+                .unwrap()
+                .expect("bare dbt-core declaration must still be detected");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(after, "other-package==0.1.0\ndbt-core==1.5.0\n");
+        }
+
         /// Renders the diff with its coloring stripped. `diff` styles its
         /// output through `console`, which decides whether to emit ANSI
         /// escapes from the *process's* stdout, not from the sink it's handed
@@ -2035,14 +2342,18 @@ mod tests {
                 "dbt-core==1.5.0\n"
             );
 
-            let entries: Vec<_> = std::fs::read_dir(tmp.path())
+            let mut entries: Vec<_> = std::fs::read_dir(tmp.path())
                 .unwrap()
                 .map(|entry| entry.unwrap().file_name())
                 .collect();
+            entries.sort();
             assert_eq!(
                 entries,
-                vec![std::ffi::OsString::from("requirements.txt")],
-                "the staged file should not survive a successful apply"
+                vec![
+                    std::ffi::OsString::from("requirements.txt"),
+                    std::ffi::OsString::from("requirements.txt.bak"),
+                ],
+                "the staged file should not survive a successful apply, but the backup should"
             );
         }
 
@@ -2069,6 +2380,750 @@ mod tests {
                 .permissions()
                 .mode();
             assert_eq!(mode & 0o777, 0o640);
+        }
+
+        #[test]
+        fn apply_to_backs_up_the_pre_edit_manifest() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-core==1.2.3\n");
+
+            let replacements = manifest
+                .get_version_replacement(&spec(PackageVersion::Exact("1.5.0".into())))
+                .unwrap()
+                .expect("dbt-core is declared");
+            let backup_path = replacements.apply_to(&mut manifest).unwrap();
+
+            assert_eq!(backup_path, tmp.path().join("requirements.txt.bak"));
+            assert_eq!(
+                std::fs::read_to_string(&backup_path).unwrap(),
+                "dbt-core==1.2.3\n",
+                "the backup should hold the manifest's pre-edit contents"
+            );
+            assert_eq!(
+                std::fs::read_to_string(manifest.path()).unwrap(),
+                "dbt-core==1.5.0\n",
+                "the manifest itself should still hold the post-edit contents"
+            );
+        }
+    }
+
+    mod has_top_level_conda_declaration_tests {
+        use super::*;
+
+        fn manifest_with(dir: &Path, filename: &str, content: &str) -> PythonManifest {
+            std::fs::write(dir.join(filename), content).unwrap();
+            PythonManifest::detect(dir).unwrap().unwrap()
+        }
+
+        #[test]
+        fn true_for_a_top_level_conda_match_spec_entry() {
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "environment.yml",
+                "name: env\ndependencies:\n  - python=3.11\n  - dbt-core=1.2.3\n",
+            );
+            assert!(
+                manifest
+                    .has_top_level_conda_declaration("dbt-core")
+                    .unwrap()
+            );
+        }
+
+        #[test]
+        fn false_for_a_nested_pip_sub_list_entry() {
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "environment.yml",
+                "name: env\ndependencies:\n  - python=3.11\n  - pip:\n    - dbt-core==1.2.3\n",
+            );
+            assert!(
+                !manifest
+                    .has_top_level_conda_declaration("dbt-core")
+                    .unwrap()
+            );
+        }
+
+        #[test]
+        fn false_when_the_package_is_not_declared_at_all() {
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "environment.yml",
+                "name: env\ndependencies:\n  - python=3.11\n",
+            );
+            assert!(
+                !manifest
+                    .has_top_level_conda_declaration("dbt-core")
+                    .unwrap()
+            );
+        }
+
+        #[test]
+        fn false_for_non_conda_manifest_formats() {
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-core==1.2.3\n");
+            assert!(
+                !manifest
+                    .has_top_level_conda_declaration("dbt-core")
+                    .unwrap()
+            );
+        }
+    }
+
+    mod rename_replacement_tests {
+        use super::*;
+
+        fn manifest_with(dir: &Path, filename: &str, content: &str) -> PythonManifest {
+            std::fs::write(dir.join(filename), content).unwrap();
+            PythonManifest::detect(dir).unwrap().unwrap()
+        }
+
+        fn fusion_spec() -> PackageSpec {
+            PackageSpec {
+                name: "dbt".to_string(),
+                version: PackageVersion::Exact("2.0.0".to_string()),
+            }
+        }
+
+        #[test]
+        fn pyproject_pep621_array_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[project]\nname = \"x\"\ndependencies = [\"dbt-core>=1.2.3,<2\"]\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[project]\nname = \"x\"\ndependencies = [\"dbt==2.0.0\"]\n"
+            );
+        }
+
+        #[test]
+        fn pyproject_pep621_array_bare_declaration_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[project]\nname = \"x\"\ndependencies = [\"dbt-core\"]\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[project]\nname = \"x\"\ndependencies = [\"dbt==2.0.0\"]\n"
+            );
+        }
+
+        #[test]
+        fn pyproject_poetry_table_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.poetry.dependencies]\ndbt-core = \"^1.2.3\"\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(after, "[tool.poetry.dependencies]\ndbt = \"==2.0.0\"\n");
+        }
+
+        #[test]
+        fn pyproject_pdm_legacy_dev_dependencies_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.pdm.dev-dependencies]\ntest = [\"dbt-core>=1.2.3,<2\"]\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[tool.pdm.dev-dependencies]\ntest = [\"dbt==2.0.0\"]\n"
+            );
+        }
+
+        #[test]
+        fn pyproject_pdm_legacy_dev_dependencies_bare_declaration_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.pdm.dev-dependencies]\ntest = [\"dbt-core\"]\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[tool.pdm.dev-dependencies]\ntest = [\"dbt==2.0.0\"]\n"
+            );
+        }
+
+        #[test]
+        fn pyproject_uv_legacy_dev_dependencies_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.uv]\ndev-dependencies = [\"dbt-core>=1.2.3,<2\"]\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(after, "[tool.uv]\ndev-dependencies = [\"dbt==2.0.0\"]\n");
+        }
+
+        #[test]
+        fn pipfile_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "Pipfile",
+                "[packages]\ndbt-core = \"==1.2.3\"\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(after, "[packages]\ndbt = \"==2.0.0\"\n");
+        }
+
+        #[test]
+        fn conda_environment_top_level_rename_round_trips() {
+            // Exercises the rename mechanism itself, which doesn't know
+            // dbt (Fusion) isn't published on conda channels -- callers of
+            // `PythonManifest::has_top_level_conda_declaration` are
+            // responsible for refusing this case before it reaches here
+            // (see `upgrade::exec_upgrade_distribution`).
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "environment.yml",
+                "name: env\ndependencies:\n  - python=3.11\n  - dbt-core=1.2.3\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "name: env\ndependencies:\n  - python=3.11\n  - dbt=2.0.0\n"
+            );
+        }
+
+        #[test]
+        fn conda_environment_top_level_bare_declaration_rename_round_trips() {
+            // See the comment on `conda_environment_top_level_rename_round_trips`
+            // above -- same caveat applies.
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "environment.yml",
+                "name: env\ndependencies:\n  - python=3.11\n  - dbt-core\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "name: env\ndependencies:\n  - python=3.11\n  - dbt=2.0.0\n"
+            );
+        }
+
+        #[test]
+        fn conda_environment_nested_pip_list_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "environment.yml",
+                "name: env\ndependencies:\n  - python=3.11\n  - pip:\n    - dbt-core==1.2.3\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "name: env\ndependencies:\n  - python=3.11\n  - pip:\n    - dbt==2.0.0\n"
+            );
+        }
+
+        #[test]
+        fn conda_environment_nested_pip_list_bare_declaration_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "environment.yml",
+                "name: env\ndependencies:\n  - python=3.11\n  - pip:\n    - dbt-core\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "name: env\ndependencies:\n  - python=3.11\n  - pip:\n    - dbt==2.0.0\n"
+            );
+        }
+
+        #[test]
+        fn setup_cfg_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "setup.cfg",
+                "[options]\ninstall_requires =\n    other-package==0.1.0\n    dbt-core>=1.2.3\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[options]\ninstall_requires =\n    other-package==0.1.0\n    dbt==2.0.0\n"
+            );
+        }
+
+        #[test]
+        fn setup_cfg_bare_declaration_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "setup.cfg",
+                "[options]\ninstall_requires =\n    other-package==0.1.0\n    dbt-core\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[options]\ninstall_requires =\n    other-package==0.1.0\n    dbt==2.0.0\n"
+            );
+        }
+
+        #[test]
+        fn setup_cfg_rename_does_not_reach_past_install_requires_into_the_next_key() {
+            // The scanner treats any deeper-indented, non-blank line under
+            // `install_requires` as a continuation. Guard against it
+            // reaching into the next key once that key drops back to
+            // `install_requires`'s own indent -- even when the next key's
+            // value is itself named `dbt-core` and would otherwise match.
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "setup.cfg",
+                "[options]\ninstall_requires =\n    other-package==0.1.0\ndbt-core = 1\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap();
+            assert!(
+                replacements.is_none(),
+                "a same-indent following key must not be treated as part of install_requires"
+            );
+        }
+
+        #[test]
+        fn requirements_txt_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "requirements.txt",
+                "other-package==0.1.0\ndbt-core==1.2.3\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(after, "other-package==0.1.0\ndbt==2.0.0\n");
+        }
+
+        #[test]
+        fn requirements_txt_bare_declaration_rename_round_trips() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-core\n");
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(after, "dbt==2.0.0\n");
+        }
+
+        #[test]
+        fn extras_are_dropped_not_carried_over() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "requirements.txt",
+                "dbt-core[bigquery]==1.2.3\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(after, "dbt==2.0.0\n");
+        }
+
+        #[test]
+        fn returns_none_when_old_name_not_declared() {
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(tmp.path(), "requirements.txt", "other-package==0.1.0\n");
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap();
+            assert!(replacements.is_none());
+        }
+
+        #[test]
+        fn errors_when_new_name_is_already_declared() {
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "requirements.txt",
+                "dbt-core==1.2.3\ndbt==2.0.0\n",
+            );
+            let err = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap_err();
+            assert_eq!(err.code, ErrorCode::DepsDuplicatePackage);
+        }
+
+        #[test]
+        fn diff_shows_the_name_and_version_edit_as_one_combined_hunk() {
+            // A rename produces two `ManifestReplacement`s on the same
+            // line (name, then version); the diff should combine them into
+            // a single before/after pair rather than showing two hunks that
+            // each reflect only one of the two edits.
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "requirements.txt",
+                "other-package==0.1.0\ndbt-core==1.2.3\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+
+            let mut buf = Vec::new();
+            replacements.diff(&manifest, &mut buf).unwrap();
+            let diff = String::from_utf8(buf).unwrap();
+
+            assert!(diff.contains("- 2 | dbt-core==1.2.3"), "got: {diff}");
+            assert!(diff.contains("+ 2 | dbt==2.0.0"), "got: {diff}");
+            // Only one hunk should be emitted for line 2, not two: exactly
+            // one "-" line and one "+" line, each tagged with line number 2.
+            assert_eq!(diff.matches("- 2 | ").count(), 1, "got: {diff}");
+            assert_eq!(diff.matches("+ 2 | ").count(), 1, "got: {diff}");
+        }
+
+        #[test]
+        fn poetry_inline_table_extras_only_without_version_key_is_not_matched() {
+            // An inline-table entry with only `extras` (no `version` key)
+            // isn't found at all -- `find_matches_in_poetry_table`'s
+            // `version` lookup falls back to the whole item when there's no
+            // `version` key, and that item's span starts with `{`, which
+            // `toml_string_interior_range` rejects (not a quoted string).
+            // This is a pre-existing limitation of the version-detection
+            // fallback, not something this fix (extras-on-rename stripping)
+            // changes or needs to handle -- there's no match to strip
+            // extras from in the first place. Documented here so a future
+            // change to that fallback doesn't silently start mis-handling
+            // this shape.
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.poetry.dependencies]\ndbt-core = { extras = [\"postgres\"] }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap();
+            assert!(replacements.is_none());
+        }
+
+        #[test]
+        fn poetry_inline_table_version_then_extras_rename_drops_extras() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.poetry.dependencies]\ndbt-core = { version = \"^1.2.3\", extras = [\"postgres\"] }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[tool.poetry.dependencies]\ndbt = { version = \"==2.0.0\", extras = [] }\n"
+            );
+        }
+
+        #[test]
+        fn poetry_inline_table_extras_then_version_rename_drops_extras() {
+            // Same as the case above with `extras` and `version` swapped --
+            // `Match` is built from `table.get(...)` key lookups, not
+            // position, so the fix must not depend on which key comes
+            // first.
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.poetry.dependencies]\ndbt-core = { extras = [\"postgres\"], version = \"^1.2.3\" }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[tool.poetry.dependencies]\ndbt = { extras = [], version = \"==2.0.0\" }\n"
+            );
+        }
+
+        #[test]
+        fn poetry_inline_table_rename_preserves_unrelated_third_key() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.poetry.dependencies]\ndbt-core = { version = \"^1.2.3\", extras = [\"postgres\"], optional = true }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[tool.poetry.dependencies]\ndbt = { version = \"==2.0.0\", extras = [], optional = true }\n"
+            );
+        }
+
+        #[test]
+        fn poetry_inline_table_version_bump_leaves_extras_untouched() {
+            // `get_version_replacement` (a plain version bump, not a
+            // rename) must not consult `extras_range` -- the package
+            // identity isn't changing, so any existing extras are still
+            // valid.
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.poetry.dependencies]\ndbt-core = { version = \"^1.2.3\", extras = [\"postgres\"] }\n",
+            );
+            let spec = PackageSpec {
+                name: "dbt-core".to_string(),
+                version: PackageVersion::Exact("1.3.0".to_string()),
+            };
+            let replacements = manifest
+                .get_version_replacement(&spec)
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[tool.poetry.dependencies]\ndbt-core = { version = \"==1.3.0\", extras = [\"postgres\"] }\n"
+            );
+        }
+
+        #[test]
+        fn pipfile_inline_table_extras_only_without_version_key_is_not_matched() {
+            // Pipfile equivalent of
+            // `poetry_inline_table_extras_only_without_version_key_is_not_matched`
+            // above -- `find_pipfile_matches` shares the identical
+            // version-lookup fallback.
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "Pipfile",
+                "[packages]\ndbt-core = { extras = [\"postgres\"] }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap();
+            assert!(replacements.is_none());
+        }
+
+        #[test]
+        fn pipfile_inline_table_version_then_extras_rename_drops_extras() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "Pipfile",
+                "[packages]\ndbt-core = { version = \"==1.2.3\", extras = [\"postgres\"] }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[packages]\ndbt = { version = \"==2.0.0\", extras = [] }\n"
+            );
+        }
+
+        #[test]
+        fn pipfile_inline_table_extras_then_version_rename_drops_extras() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "Pipfile",
+                "[packages]\ndbt-core = { extras = [\"postgres\"], version = \"==1.2.3\" }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[packages]\ndbt = { extras = [], version = \"==2.0.0\" }\n"
+            );
+        }
+
+        #[test]
+        fn pipfile_inline_table_rename_preserves_unrelated_third_key() {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut manifest = manifest_with(
+                tmp.path(),
+                "Pipfile",
+                "[packages]\ndbt-core = { version = \"==1.2.3\", extras = [\"postgres\"], editable = true }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+            replacements.apply_to(&mut manifest).unwrap();
+
+            let after = std::fs::read_to_string(manifest.path()).unwrap();
+            assert_eq!(
+                after,
+                "[packages]\ndbt = { version = \"==2.0.0\", extras = [], editable = true }\n"
+            );
+        }
+
+        #[test]
+        fn diff_combines_name_version_and_extras_replacements_into_one_pair() {
+            // A rename of a Poetry/Pipfile inline-table entry with both
+            // `version` and `extras` produces *three* `ManifestReplacement`s
+            // sharing one source line (name, version, extras). `diff`
+            // renders each edited line as a single `-`/`+` pair regardless
+            // of how many replacements land on it, but that specific shape
+            // -- three replacements, one line -- wasn't covered by any
+            // existing test before this fix. This is what actually proves
+            // the confirmation-prompt path (which calls `diff` before
+            // `apply_to` ever runs) works end to end for the fix above,
+            // rather than just checking byte ranges in isolation.
+            let tmp = tempfile::tempdir().unwrap();
+            let manifest = manifest_with(
+                tmp.path(),
+                "pyproject.toml",
+                "[tool.poetry.dependencies]\ndbt-core = { version = \"^1.2.3\", extras = [\"postgres\"] }\n",
+            );
+            let replacements = manifest
+                .get_rename_replacement("dbt-core", &fusion_spec())
+                .unwrap()
+                .expect("dbt-core is declared");
+
+            let mut buf = Vec::new();
+            replacements.diff(&manifest, &mut buf).unwrap();
+            let diff = String::from_utf8(buf).unwrap();
+
+            assert!(
+                diff.contains("- 2 | dbt-core = { version = \"^1.2.3\", extras = [\"postgres\"] }"),
+                "got: {diff}"
+            );
+            assert!(
+                diff.contains("+ 2 | dbt = { version = \"==2.0.0\", extras = [] }"),
+                "got: {diff}"
+            );
+            // Exactly one hunk for line 2: one "-" line and one "+" line,
+            // not three (one per replacement).
+            assert_eq!(diff.matches("- 2 | ").count(), 1, "got: {diff}");
+            assert_eq!(diff.matches("+ 2 | ").count(), 1, "got: {diff}");
         }
     }
 }

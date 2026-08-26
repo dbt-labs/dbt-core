@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -66,13 +66,16 @@ use dbt_loader::{
 use dbt_login::{execute_login, execute_login_status};
 use dbt_schema_store::{DataStoreTrait, SchemaStoreTrait};
 use dbt_schemas::schemas::DbtCommandExecutionArtifacts;
+use dbt_schemas::schemas::selection_override::{
+    SAMPLE_CAP, format_sample, reconcile_reported_nodes, resolve_selection_override,
+};
 use dbt_schemas::{
     man::execute_man_command,
     schemas::legacy_catalog::{DbtCatalog, build_catalog},
 };
 use dbt_schemas::{
     schemas::{
-        DbtModel, InternalDbtNodeAttributes,
+        DbtModel, InternalDbtNodeAttributes, Nodes, RunResultsArtifact,
         common::{DbtMaterialization, ResolvedQuoting},
         relations::base::BaseRelation,
     },
@@ -1091,12 +1094,17 @@ impl<'a> AllPhasesExecutor<'a> {
         // so advising them to add some to a command they did not run is noise — and under
         // `--warn-error` it would fail the export. The export prints its own lineage hint,
         // which names the command that would produce it.
+        //
+        // Nor when the index came from a command default (`write_index_implied`), for exactly
+        // the same reason: a plain `dbt build` never mentioned the index, so telling it which
+        // flags would enrich one is noise on every invocation, and fails under `--warn-error`.
         let advise_index_flags = self.arg.write_metadata
             && matches!(
                 self.arg.command,
                 FsCommand::Compile | FsCommand::Build | FsCommand::Run
             )
-            && self.arg.command_entrypoint != FsCommand::Docs;
+            && self.arg.command_entrypoint != FsCommand::Docs
+            && !self.arg.write_index_implied;
         let strict_static_analysis = self
             .arg
             .static_analysis
@@ -1268,6 +1276,12 @@ impl<'a> AllPhasesExecutor<'a> {
             write_run_results_json_or_warn(&run_results_artifact, self.arg.as_ref());
         }
 
+        report_selection_override_reconciliation(
+            self.arg.as_ref(),
+            &run_results_artifact,
+            &resolved_state.nodes,
+        );
+
         // Save artifact for callers
         self.captured_artifacts.run_results = Some(run_results_artifact);
 
@@ -1355,6 +1369,14 @@ impl<'a> AllPhasesExecutor<'a> {
         // (write_json path) fetches independently via write_catalog_json — adding write_catalog
         // here would introduce a second DWH round-trip for that path.
         //
+        // Skipped entirely for an implied build/run: a plain `dbt build`/`dbt run` never asked
+        // for the index or the catalog, so it shouldn't pay for an extra warehouse round-trip,
+        // inherit every adapter's catalog-fetch code path, or risk a new --warn-error-eligible
+        // failure mode on every invocation. The defaulted index is therefore missing
+        // catalog_type/catalog_comment on node_columns and has empty catalog_tables/
+        // catalog_stats layers, same as it would be if the fetch failed outright — an explicit
+        // --write-index/--write-metadata/--write-catalog still gets the full fetch.
+        //
         // NOTE on resolved_state: for --write-index, write_json=true (clap-core forces
         // write_json=false only when self.write_metadata=true AND self.write_index=false;
         // --write-index has self.write_metadata=false raw, so write_json stays true and
@@ -1363,6 +1385,7 @@ impl<'a> AllPhasesExecutor<'a> {
         // schemas added by update_manifest.
         let catalog_data: Option<DbtCatalog> = if self.arg.write_metadata
             && (self.arg.write_catalog || self.arg.write_index)
+            && !self.arg.write_index_implied
             && matches!(self.arg.command, FsCommand::Run | FsCommand::Build)
         {
             try_fetch_catalog(
@@ -1574,9 +1597,12 @@ impl<'a> AllPhasesExecutor<'a> {
                 }
 
                 // Post-index hook: ingest the classifier registry and run the
-                // classifier "checks" gate. Returning `Err` aborts the build
-                // (a failing check is a policy violation). No-op in OSS.
-                self.feature_stack
+                // classifier "checks" gate. No-op in OSS.
+                //
+                // Recorded rather than propagated: a failing index write should not
+                // abort a build whose models already succeeded.
+                if let Err(e) = self
+                    .feature_stack
                     .index
                     .hooks
                     .did_write_index(
@@ -1585,7 +1611,10 @@ impl<'a> AllPhasesExecutor<'a> {
                         &run_task_results,
                         resolved_state.as_ref(),
                     )
-                    .await?;
+                    .await
+                {
+                    emit_error_log_from_fs_error(*e);
+                }
             }
         }
 
@@ -2245,6 +2274,11 @@ async fn try_fetch_catalog(
     {
         Ok(catalog) => Some(catalog),
         Err(e) => {
+            // Only reached for an explicit --write-index/--write-metadata/--write-catalog
+            // (an implied build/run never calls this at all, see the call site), so a failed
+            // fetch is worth a warning --warn-error can see, not a build-ending error: the
+            // caller asked for a nice-to-have index/catalog enrichment, not for the fetch
+            // itself to be load-bearing.
             emit_warn_log_message(
                 ErrorCode::Generic,
                 format!("Failed to fetch catalog data: {e}"),
@@ -2270,6 +2304,9 @@ async fn fetch_catalog_data(
     arg: &EvalArgs,
     batches: usize,
 ) -> FsResult<DbtCatalog> {
+    // Only reached for an explicit --write-index/--write-metadata/--write-catalog (an implied
+    // build/run skips catalog fetch entirely, see the call site), so progress/failure reporting
+    // here is expected feedback, not noise.
     emit_info_log_message("Fetching catalog from warehouse");
     let metadata_adapter = adapter
         .metadata_adapter()
@@ -2562,6 +2599,65 @@ pub async fn write_catalog_json(
     )?;
     emit_info_log_message("Successfully wrote catalog.json");
     Ok(catalog)
+}
+
+/// Report how the nodes this run reported compare against the externally supplied node set.
+///
+/// This is the actual invariant check, and the primary signal. The counters emitted when the
+/// schedule was built describe a different level: they can look clean while this one fails, because
+/// a node can be scheduled correctly and then never produce a result row.
+///
+/// Re-resolves the supplied set rather than threading it down from schedule time; the artifact is
+/// small, and a read failure here cannot happen without the run having already failed at schedule
+/// time.
+fn report_selection_override_reconciliation(
+    arg: &EvalArgs,
+    run_results: &RunResultsArtifact,
+    nodes: &Nodes,
+) {
+    let Ok(Some(over)) = resolve_selection_override(arg) else {
+        return;
+    };
+
+    let reported: BTreeSet<String> = run_results
+        .results
+        .iter()
+        .map(|result| result.unique_id.clone())
+        .collect();
+    let report = reconcile_reported_nodes(over.ids(), &reported, nodes);
+
+    let mut message = format!(
+        "Nodes reported by this run against the externally supplied node set: \
+         reported={} injected={} ran_not_injected={} injected_not_ran={}",
+        report.reported,
+        report.injected,
+        report.ran_not_injected.len(),
+        report.injected_not_ran.len(),
+    );
+    if !report.ran_not_injected.is_empty() {
+        message.push_str(&format!(
+            "; ran but not supplied: {}",
+            format_sample(
+                &report.ran_not_injected[..report.ran_not_injected.len().min(SAMPLE_CAP)],
+                report.ran_not_injected.len()
+            )
+        ));
+    }
+    if !report.injected_not_ran.is_empty() {
+        message.push_str(&format!(
+            "; supplied but not run: {}",
+            format_sample(
+                &report.injected_not_ran[..report.injected_not_ran.len().min(SAMPLE_CAP)],
+                report.injected_not_ran.len()
+            )
+        ));
+    }
+
+    if report.is_clean() {
+        emit_info_log_message(message);
+    } else {
+        emit_warn_log_message(ErrorCode::SelectionOverrideDivergence, message);
+    }
 }
 
 fn write_catalog_columns_epoch(catalog: &DbtCatalog, arg: &EvalArgs) {

@@ -1,6 +1,5 @@
-import { Link } from '@dbt-labs/sourdough';
-
 import { Button } from '../../components/ui/Button';
+import { Link } from '../../components/ui/Link';
 
 interface Props {
   selector: string;

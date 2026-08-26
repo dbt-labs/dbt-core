@@ -1,4 +1,5 @@
 use crate::schemas::serde::OmissibleGrantConfig;
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_yaml::DbtSchema;
@@ -53,6 +54,9 @@ pub struct FunctionSnowflakeConfig {
 pub struct ProjectFunctionConfig {
     #[serde(rename = "+access")]
     pub access: Option<Access>,
+    #[serde(rename = "+adapter")]
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
     #[serde(rename = "+database", alias = "+project")]
@@ -107,6 +111,7 @@ impl Default for ProjectFunctionConfig {
     fn default() -> Self {
         Self {
             access: None,
+            adapter: None,
             alias: None,
             database: Omissible::Omitted,
             description: None,
@@ -172,6 +177,7 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
 
     fn has_set_fields(&self) -> bool {
         self.access.is_some()
+            || self.adapter.is_some()
             || self.alias.is_some()
             || self.database.is_present()
             || self.description.is_some()
@@ -203,6 +209,10 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
 #[serde(rename_all = "snake_case")]
 pub struct FunctionConfig {
     pub access: Option<Access>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -261,6 +271,10 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
         self.enabled.unwrap_or(true)
     }
 
+    fn get_enabled(&self) -> Option<bool> {
+        self.enabled
+    }
+
     fn disable(&mut self) {
         self.enabled = Some(false);
     }
@@ -290,6 +304,7 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
     fn from(config: ProjectFunctionConfig) -> Self {
         Self {
             access: config.access,
+            adapter: config.adapter,
             enabled: config.enabled,
             alias: config.alias,
             database: config.database,
@@ -321,6 +336,7 @@ impl FunctionConfig {
     pub fn same_config(&self, other: &FunctionConfig) -> bool {
         // Compare all fields individually
         let enabled_eq = self.enabled == other.enabled;
+        let adapter_eq = self.adapter == other.adapter;
         let alias_eq = self.alias == other.alias;
         let schema_eq = omissible_option_eq(&self.schema, &other.schema); // Custom comparison for Omissible
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
@@ -349,6 +365,7 @@ impl FunctionConfig {
         // as a config modification anywhere, so this rendered fallback comparator must not either.
 
         let result = enabled_eq
+            && adapter_eq
             && alias_eq
             && schema_eq
             && meta_eq_result
@@ -376,6 +393,14 @@ impl FunctionConfig {
                         Some((
                             format!("{:?}", &self.enabled),
                             format!("{:?}", &other.enabled),
+                        )),
+                    ),
+                    (
+                        "adapter",
+                        adapter_eq,
+                        Some((
+                            format!("{:?}", &self.adapter),
+                            format!("{:?}", &other.adapter),
                         )),
                     ),
                     (
@@ -595,5 +620,38 @@ mod tests {
         };
 
         assert!(!a.same_config(&c));
+    }
+
+    /// `+adapter` names an adapter *type*, so the value is typed rather than a
+    /// free string -- anything that is not a supported adapter fails here, at
+    /// deserialization. Mirrors the seed and model cases.
+    #[test]
+    fn test_project_function_config_adapter_parses_and_round_trips() {
+        let project_config: ProjectFunctionConfig = dbt_yaml::from_str(
+            r#"
++adapter: bigquery
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.adapter, Some(AdapterType::Bigquery));
+
+        let config: FunctionConfig = project_config.into();
+        assert_eq!(config.adapter, Some(AdapterType::Bigquery));
+    }
+
+    #[test]
+    fn test_project_function_config_rejects_a_value_that_is_not_an_adapter() {
+        let err = dbt_yaml::from_str::<ProjectFunctionConfig>(
+            r#"
++adapter: compute
+__additional_properties__: {}
+"#,
+        )
+        .expect_err("`compute` is not an adapter type");
+        assert!(
+            format!("{err}").contains("compute"),
+            "error should name the offending value: {err}"
+        );
     }
 }

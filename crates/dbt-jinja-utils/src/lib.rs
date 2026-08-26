@@ -37,6 +37,9 @@ pub use phases::parse::init::{DefaultJinjaFactory, JinjaFactory};
 /// Module for the Invocation Args
 pub mod invocation_args;
 
+/// Module for the invocation-scoped Jinja `graph` mapping
+pub mod invocation_graph;
+
 /// Module for the Refs and Sources
 pub mod node_resolver;
 

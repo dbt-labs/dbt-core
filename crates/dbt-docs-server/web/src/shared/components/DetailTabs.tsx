@@ -1,8 +1,7 @@
 import { FC, memo, ReactNode, useState } from 'react';
 
-import { FloatingTabs } from '@dbt-labs/sourdough';
-
 import { Badge } from '../../components/ui/Badge';
+import { FloatingTabs } from '../../components/ui/FloatingTabs';
 
 export const tabTypes = [
   'general',
@@ -89,15 +88,15 @@ const DetailTabs: FC<TabsParams> = ({
     >
       {tabs.length > 1 && (
         <div className="overflow-x-auto">
-          <FloatingTabs testId="resource-view-tabs">
+          <FloatingTabs
+            testId="resource-view-tabs"
+            value={resolvedTab.type}
+            onValueChange={(value) => handleTabChange(value as TabType)}
+          >
             {tabs.map((tabDetails) => (
               <FloatingTabs.Tab
                 key={tabNameMap[tabDetails.type]}
                 id={tabDetails.type}
-                isActive={resolvedTab.type === tabDetails.type}
-                onClick={(tab: TabType) => {
-                  handleTabChange(tab);
-                }}
                 count={tabDetails.count}
                 testId={`resource-view-tabs-${tabDetails.type}`}
               >

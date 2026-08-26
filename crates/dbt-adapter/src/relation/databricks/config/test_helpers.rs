@@ -6,6 +6,7 @@ use arrow::csv::ReaderBuilder;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_agate::AgateTable;
 use dbt_schemas::schemas::dbt_column::ColumnMask;
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use dbt_schemas::schemas::{
     common::PartitionConfig, common::*, dbt_column::DbtColumn, nodes::*, project::*,
 };
@@ -40,6 +41,8 @@ pub(crate) struct TestModelConfig {
     /// definition.
     pub query: Option<String>,
     pub relation_comment: Option<String>,
+    pub row_filter_function: Option<String>,
+    pub row_filter_columns: Vec<String>,
     pub tags: IndexMap<String, String>,
     pub tbl_properties: IndexMap<String, String>,
     pub table_format: Option<String>,
@@ -53,6 +56,7 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
     };
 
     let base_attrs = NodeBaseAttributes {
+        adapter: AdapterType::Snowflake,
         unrendered_config: Default::default(),
         database: "test_db".to_string(),
         schema: "test_schema".to_string(),
@@ -111,6 +115,12 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
                 .map(|(k, v)| (k, YmlValue::from(v)))
                 .collect(),
         ),
+        row_filter: cfg.row_filter_function.map(|function| RowFilterConfig {
+            function: Some(function),
+            columns: Some(StringOrArrayOfStrings::ArrayOfStrings(
+                cfg.row_filter_columns,
+            )),
+        }),
         ..Default::default()
     };
 

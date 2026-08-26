@@ -84,10 +84,18 @@ pub(super) fn from_model_config_and_catalogs_v2(
                     return Ok(CatalogRelation::default_catalog_relation_databricks());
                 }
                 None => {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::Configuration,
-                        "On Databricks, table_format=iceberg requires a `catalog_name` to select a v2 catalog (unity or hive_metastore).",
-                    ));
+                    let use_uniform =
+                        parse_model_bool(model, FIELD_USE_UNIFORM, AdapterType::Databricks)?
+                            .unwrap_or(false);
+                    let relation = CatalogRelation::default_catalog_relation_databricks()
+                        .with_table_format(TableFormat::Iceberg)
+                        .with_file_format(if use_uniform {
+                            DELTA_TABLE_FORMAT
+                        } else {
+                            PARQUET_TABLE_FORMAT
+                        })
+                        .with_adapter_property(ADAPTER_PROP_USE_UNIFORM, use_uniform.to_string());
+                    return Ok(relation);
                 }
                 Some(catalog_name) => catalog_name,
             }
@@ -1142,6 +1150,122 @@ catalogs:
             assert_eq!(r.catalog_type, CatalogType::Unity);
             assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.file_format.as_deref(), Some("delta"));
+        }
+    }
+
+    #[test]
+    fn databricks_v2_iceberg_without_catalog_name_defaults_to_managed_iceberg() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: true
+"#,
+        );
+        let conf = json!({ "table_format": "iceberg" });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.catalog_type, CatalogType::Unity);
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.file_format.as_deref(), Some("parquet"));
+            assert!(r.external_volume.is_none());
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("false")
+            );
+        }
+    }
+
+    #[test]
+    fn databricks_v2_iceberg_use_uniform_false_without_catalog_name_succeeds() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: true
+"#,
+        );
+        let conf = json!({ "table_format": "iceberg", "use_uniform": false });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.file_format.as_deref(), Some("parquet"));
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("false")
+            );
+        }
+    }
+
+    #[test]
+    fn databricks_v2_iceberg_explicit_use_uniform_true_without_catalog_name_succeeds() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: true
+"#,
+        );
+        let conf = json!({ "table_format": "iceberg", "use_uniform": true });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.file_format.as_deref(), Some("delta"));
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("true")
+            );
         }
     }
 

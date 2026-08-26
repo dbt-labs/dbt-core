@@ -398,23 +398,6 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
     }
 }
 
-/// Selects the compute target a model's DML is executed against.
-///
-/// `Default` uses the profile's adapter. A run implementation may honor an
-/// alternate target for other variants; parse/compile/render and introspection
-/// are unaffected by this selection.
-#[derive(
-    Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ComputePlatform {
-    /// Execute on the profile's (default) adapter.
-    #[default]
-    Default,
-    /// Execute on the alternate compute target.
-    Alt,
-}
-
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {
@@ -682,6 +665,24 @@ impl DbtQuoting {
         self.database = self.database.or(other.database);
         self.identifier = self.identifier.or(other.identifier);
         self.schema = self.schema.or(other.schema);
+    }
+
+    /// A copy of `self` with every field it leaves unset taken from `fallback`.
+    ///
+    /// The layering primitive for quoting precedence: apply it once per layer,
+    /// most specific first, and the first layer to set a field wins. Unlike
+    /// [`Self::default_to`] this carries `snowflake_ignore_case` too, so a layer
+    /// that sets only that field is not silently dropped.
+    #[must_use]
+    pub fn filled_from(&self, fallback: &DbtQuoting) -> DbtQuoting {
+        DbtQuoting {
+            database: self.database.or(fallback.database),
+            schema: self.schema.or(fallback.schema),
+            identifier: self.identifier.or(fallback.identifier),
+            snowflake_ignore_case: self
+                .snowflake_ignore_case
+                .or(fallback.snowflake_ignore_case),
+        }
     }
 
     /// Shallow last-non-None-wins merge of two user-supplied quoting layers.
@@ -1208,7 +1209,7 @@ pub struct PersistDocsConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema, Default)]
 pub struct ScheduleConfig {
     pub cron: Option<String>,
     pub time_zone_value: Option<String>,
@@ -1236,6 +1237,13 @@ impl Schedule {
             Schedule::ScheduleConfig(config) => config.clone(),
         }
     }
+}
+
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
+pub struct RowFilterConfig {
+    pub function: Option<String>,
+    pub columns: Option<StringOrArrayOfStrings>,
 }
 
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
@@ -1558,13 +1566,17 @@ pub struct Versions {
     pub constraints: Option<Vec<crate::schemas::properties::model_properties::ModelConstraint>>,
     pub data_tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
     pub tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
-    // Schema-only stub: exposes `columns` as a named typed property so the JSON Schema validator
-    // accepts array values. At runtime serde skips this field and `columns` arrives via
-    // __additional_properties__ as a raw YmlValue.
-    // TODO: remove skip_deserializing and delete the __additional_properties__ path for `columns`
-    // once ColumnInheritanceRules::from_version_columns is refactored to accept
-    // &[VersionColumnProperties] instead of &YmlValue.
-    #[serde(skip_deserializing, default)]
+    // NOTE: this doc comment is surfaced as the JSON Schema `description` (editor hover text), so
+    // keep it user-facing. Implementation rationale goes in the plain comment below.
+    /// Columns for this version. Each entry is either a column definition or the single optional
+    /// `include`/`exclude` directive controlling which model-level columns this version inherits.
+    /// When no directive is given, every model-level column is inherited.
+    //
+    // Deliberately a normal field -- neither `skip_deserializing` nor `Verbatim` -- so that
+    // `into_typed_with_jinja` walks it and renders `description: '{{ doc(...) }}'` on a version
+    // column exactly like it does on a model-level column (dbt-labs/fs#13334). Moving it back
+    // into `__additional_properties__` would silently reintroduce that bug.
+    #[serde(default)]
     pub columns: Option<Vec<crate::schemas::dbt_column::VersionColumnProperties>>,
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
@@ -2835,13 +2847,13 @@ period: hour
         );
     }
 
-    // Regression: `columns:` inside a version block must survive deserialization and land in
-    // `__additional_properties__`, where `process_versioned_columns` reads it. The schema-only
-    // stub field (`#[serde(skip_deserializing)]`) must NOT cause serde to silently consume and
-    // discard the value before dbt_yaml's flatten-dunder mechanism can capture it.
+    // Regression (dbt-labs/fs#13334): `columns:` inside a version block must deserialize into the
+    // typed `Versions::columns` field, NOT into the `Verbatim` `__additional_properties__` bag.
+    // Only the typed field is walked by `into_typed_with_jinja`, which is what renders
+    // `description: '{{ doc(...) }}'` on a version column.
     #[test]
-    fn test_versions_columns_land_in_additional_properties() {
-        let yaml = "v: 2\ncolumns:\n  - name: id\n    description: primary key\n";
+    fn test_versions_columns_deserialize_into_typed_field() {
+        let yaml = "v: 2\ncolumns:\n  - name: id\n    description: primary key\n  - include: all\n    exclude:\n      - dropped\n";
         let value: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
         // Use into_typed (the same path as into_typed_with_jinja) so dbt_yaml's
         // dunder-flatten mechanism is active.
@@ -2856,16 +2868,23 @@ period: hour
             .unwrap();
 
         assert!(
-            versions.__additional_properties__.contains_key("columns"),
-            "`columns` must reach __additional_properties__, but it was dropped. \
-             Check that serde's skip_deserializing does not prevent the value from \
-             falling through to the dbt_yaml flatten-dunder catch-all."
+            !versions.__additional_properties__.contains_key("columns"),
+            "`columns` must not fall through to the Verbatim __additional_properties__ catch-all; \
+             values there are never Jinja-rendered (fs#13334)"
         );
 
-        // Also confirm the schema-only `columns` field itself is always None at runtime.
-        assert!(
-            versions.columns.is_none(),
-            "`columns` schema-stub field must always be None after deserialization"
+        let columns = versions
+            .columns
+            .as_deref()
+            .expect("`columns` must populate the typed Versions::columns field");
+        assert_eq!(columns.len(), 2, "both entries must be preserved");
+        assert_eq!(columns[0].name.as_deref(), Some("id"));
+        assert_eq!(columns[0].description.as_deref(), Some("primary key"));
+        // The include/exclude directive entry has no `name`.
+        assert!(columns[1].name.is_none());
+        assert_eq!(
+            columns[1].exclude.as_deref(),
+            Some(["dropped".to_string()].as_slice())
         );
     }
 

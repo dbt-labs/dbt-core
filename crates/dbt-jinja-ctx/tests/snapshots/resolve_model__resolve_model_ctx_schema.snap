@@ -64,7 +64,7 @@ expression: schema
       "description": "`{{ function(...) }}` — `ResolveFunctionFunction<T>` Object."
     },
     "graph": {
-      "description": "`{{ graph }}` — `Value::UNDEFINED` at parse-model scope; the real flat graph is set at compile time."
+      "description": "`{{ graph }}` — the invocation-wide mutable mapping, empty at parse-model scope; the flat graph is merged into that same mapping at compile time. Mirrors dbt-core, where `graph` is `manifest.flat_graph`: one dict for the whole invocation, `{}` until `build_flat_graph()` runs, so macros can use it as scratch state throughout. dbt-labs/fs#13454."
     },
     "load_result": {
       "description": "`{{ load_result(...) }}` — `ResultStore`-backed closure."

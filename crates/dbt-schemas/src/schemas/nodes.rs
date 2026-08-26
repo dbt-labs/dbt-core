@@ -15,7 +15,9 @@ use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_yaml::Value;
-use crate::schemas::common::{ExternalTable, PersistDocsConfig, hooks_equal, normalize_sql};
+use crate::schemas::common::{
+    ExternalTable, PersistDocsConfig, RowFilterConfig, hooks_equal, normalize_sql,
+};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
@@ -25,7 +27,7 @@ use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
-        Access, ClusterConfig, ComputePlatform, DbtChecksum, DbtContract, DbtIncrementalStrategy,
+        Access, ClusterConfig, DbtChecksum, DbtContract, DbtIncrementalStrategy,
         DbtMaterialization, Expect, FreshnessDefinition, Given, IncludeExclude, NodeDependsOn,
         PartitionConfig, ResolvedQuoting, ScheduleConfig, SchemaOrigin, SchemaRefreshInterval,
         SyncConfig,
@@ -588,6 +590,13 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 }
 
 pub trait InternalDbtNodeAttributes: InternalDbtNode {
+    /// The adapter this node runs on, fully resolved at parse. Reads
+    /// [`NodeBaseAttributes::adapter`], so every node type answers without the
+    /// caller reaching into its own attr struct or supplying a fallback.
+    fn node_adapter(&self) -> AdapterType {
+        self.base().adapter
+    }
+
     // Required Fields
     fn skip_generate_database_name_macro(&self) -> bool {
         false
@@ -4625,7 +4634,7 @@ pub struct CommonAttributes {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NodeBaseAttributes {
     // Identifiers
@@ -4640,6 +4649,15 @@ pub struct NodeBaseAttributes {
     // TODO: Potentially add ignore_case to ResolvedQuoting
     pub quoting_ignore_case: bool,
     pub materialized: DbtMaterialization,
+    /// The adapter this node runs on: its `+adapter` selection if it made one,
+    /// inherited from its subject if it is a test, and otherwise the target's
+    /// default. Resolved at parse like `quoting` and `materialized`, so nothing
+    /// downstream has to know the target default to answer "where does this run".
+    ///
+    /// Not part of `ManifestNodeBaseAttributes`, so it does not reach the manifest;
+    /// it is serialized only into the partial-parse cache, which a `dbt_version`
+    /// change invalidates.
+    pub adapter: AdapterType,
     pub static_analysis: Spanned<StaticAnalysisKind>,
     #[serde(skip_deserializing, default)]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
@@ -4685,6 +4703,40 @@ pub struct NodeBaseAttributes {
     pub unrendered_config: BTreeMap<String, YmlValue>,
 }
 
+/// Hand-written rather than derived because [`AdapterType`] has no `Default`, and
+/// deliberately so: this PR removed the implicit adapter defaults that let a caller
+/// resolve against the wrong warehouse by omission. Picking one here is a
+/// construction convenience for tests and nothing more -- every node built by the
+/// resolvers has its adapter set explicitly. Adding a field to the struct breaks
+/// this impl, which is the point: the new field needs a deliberate default too.
+impl Default for NodeBaseAttributes {
+    fn default() -> Self {
+        Self {
+            database: String::default(),
+            schema: String::default(),
+            alias: String::default(),
+            relation_name: None,
+            quoting: ResolvedQuoting::default(),
+            quoting_ignore_case: false,
+            materialized: DbtMaterialization::default(),
+            adapter: AdapterType::Snowflake,
+            static_analysis: Spanned::default(),
+            static_analysis_off_reason: None,
+            compute: None,
+            enabled: false,
+            extended_model: false,
+            persist_docs: None,
+            columns: Vec::new(),
+            refs: Vec::new(),
+            sources: Vec::new(),
+            functions: Vec::new(),
+            metrics: Vec::new(),
+            depends_on: NodeDependsOn::default(),
+            unrendered_config: BTreeMap::default(),
+        }
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -4712,7 +4764,6 @@ pub struct DbtSeedAttr {
     pub delimiter: Option<String>,
     pub root_path: Option<PathBuf>,
     pub catalog_name: Option<String>,
-    pub alt_compute: Option<ComputePlatform>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4819,6 +4870,8 @@ impl DbtUnitTest {
 #[derive(Default)]
 pub struct DbtUnitTestAttr {
     pub model: String,
+    /// The adapter of the model under test, so the unit test runs where its
+    /// subject runs. Inherited only -- a unit test has no `+adapter` of its own.
     pub given: Vec<Given>,
     pub expect: Expect,
     pub versions: Option<IncludeExclude>,
@@ -5698,6 +5751,7 @@ impl AdapterAttr {
                     skip_matched_step: config.skip_matched_step,
                     skip_not_matched_step: config.skip_not_matched_step,
                     unique_tmp_table_suffix: config.unique_tmp_table_suffix,
+                    row_filter: config.row_filter.clone(),
                     schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                 })))
             }
@@ -5805,6 +5859,7 @@ impl AdapterAttr {
                         skip_matched_step: config.skip_matched_step,
                         skip_not_matched_step: config.skip_not_matched_step,
                         unique_tmp_table_suffix: config.unique_tmp_table_suffix,
+                        row_filter: config.row_filter.clone(),
                         schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                     })))
             }
@@ -5876,6 +5931,7 @@ pub struct DatabricksAttr {
     pub merge_with_schema_evolution: Option<bool>,
     pub skip_matched_step: Option<bool>,
     pub skip_not_matched_step: Option<bool>,
+    pub row_filter: Option<RowFilterConfig>,
     pub unique_tmp_table_suffix: Option<bool>,
     pub schedule: Option<ScheduleConfig>,
 }
@@ -5943,7 +5999,6 @@ pub struct DbtModelAttr {
     pub event_time: Option<String>,
     // TODO(anna): See if we _need_ to put these here, or if they can somehow be added to AdapterAttr.
     pub catalog_name: Option<String>,
-    pub alt_compute: Option<ComputePlatform>,
     pub table_format: Option<String>,
     pub sync: Option<SyncConfig>,
     /// Compiled SQL, populated only by callers that need to diff it (see

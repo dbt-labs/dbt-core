@@ -1,8 +1,10 @@
-/* @dbt-labs/biga ships the design tokens (CSS custom properties for
-   every color, spacing, and typography value). Sourdough and dbt-dag
-   both reference these via `var(--bgBrand)` etc.; without them every
-   color renders as missing. Cloud-ui imports in the same order. */
-@import "@dbt-labs/biga/tokens.css";
+/* Vendored copy of @dbt-labs/biga's tokens.css (design tokens: CSS custom
+   properties for every color value). Sourdough and dbt-dag both reference
+   these via `var(--bgBrand)` etc.; without them every color renders as
+   missing. Vendored (not imported from the private package) so docs v2 can
+   build without it for OSS distribution — see the OSS Design Capability
+   plan. Re-copy from @dbt-labs/biga/tokens.css if biga's tokens change. */
+@import "./styles/tokens.css";
 /* @dbt-labs/dbt-dag bundles react-flow under the hood; its CSS provides
    node positioning, zoom transforms, and viewport styles. Without this
    import, nodes overlap in a tight cluster and zoom is broken. */
@@ -129,20 +131,10 @@ button {
   outline: none;
   box-shadow: 0 0 0 3px var(--focusHalo);
 }
-
-/* Brief spin when a parent-level filter changes. Element is remounted via
-   a React `key` change, replaying the animation each transition. */
-.topbar-v2__brand-anim {
-  display: inline-flex;
-  transform-origin: 50% 50%;
-  animation: brand-spin 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-@keyframes brand-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .topbar-v2__brand-anim { animation: none; }
+.topbar-v2__brand-btn--text {
+  justify-content: flex-start;
+  padding: 4px 8px;
+  text-align: left;
 }
 .topbar-v2__brand-name {
   font-size: 13px;
@@ -167,38 +159,6 @@ button {
     linear-gradient(179.59deg, rgba(255, 204, 37, 0) 67.02%, rgba(255, 204, 37, 0.20) 94.05%),
     /* dark base */
     var(--bgNavHeader);
-}
-.topbar-v2__search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  justify-self: center;
-  height: 32px;
-  padding: 0 10px 0 12px;
-  border-radius: 6px;
-  background: var(--bgMain);
-  border: 1px solid var(--borderMain);
-  color: var(--fgAlt);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
-}
-.topbar-v2__search:focus-within {
-  border-color: var(--borderBrand);
-  box-shadow: 0 0 0 3px var(--focusHalo);
-}
-.topbar-v2__search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--fgMain);
-  font-size: 13px;
-  font-family: inherit;
-}
-.topbar-v2__search input::placeholder {
-  color: var(--fgAlt);
 }
 .topbar {
   display: grid;

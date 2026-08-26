@@ -23,6 +23,7 @@ pub const DEFAULT_LOG_FILE_LIMIT: i64 = 20;
 pub const DEFAULT_LOG_PREFIX: &str = "responses_";
 pub const DEFAULT_METADATA_CACHE_TTL_SECONDS: i64 = 0;
 const STATE_MANAGE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
+const STATE_EMIT_REUSED_STATUS_ENV: &str = "DBT_ENGINE_STATE_EMIT_REUSED_STATUS";
 const STATE_OAUTH_CLIENT_ID_ENV: &str = "DBT_ENGINE_STATE_OAUTH_CLIENT_ID";
 const STATE_OAUTH_CLIENT_SECRET_ENV: &str = "DBT_ENV_SECRET_STATE_OAUTH_CLIENT_SECRET";
 
@@ -61,6 +62,7 @@ pub struct RunCacheServiceConfig {
     pub defer_log_level: String,
     pub enable_response_logging: bool,
     pub enable_data_tests: bool,
+    pub emit_reused_status: bool,
     pub log_file_limit: i64,
     pub log_dir_override: Option<String>,
     pub log_prefix: String,
@@ -164,6 +166,14 @@ impl RunCacheServiceConfig {
             Some(value) => parse_bool("ENABLE_DATA_TESTS", &value)?,
             None => true,
         };
+        let emit_reused_status = match state_config_value(
+            &mut get_env,
+            STATE_EMIT_REUSED_STATUS_ENV,
+            "EMIT_REUSED_STATUS",
+        ) {
+            Some(value) => parse_bool(STATE_EMIT_REUSED_STATUS_ENV, &value)?,
+            None => false,
+        };
         let log_file_limit = match config_value(&mut get_env, "LOG_FILE_LIMIT") {
             Some(value) => parse_i64("LOG_FILE_LIMIT", &value)?,
             None => DEFAULT_LOG_FILE_LIMIT,
@@ -232,6 +242,7 @@ impl RunCacheServiceConfig {
             defer_log_level,
             enable_response_logging,
             enable_data_tests,
+            emit_reused_status,
             log_file_limit,
             log_dir_override: config_value(&mut get_env, "LOG_DIR_OVERRIDE"),
             log_prefix,
@@ -280,6 +291,7 @@ impl RunCacheServiceConfig {
             defer_log_level: DEFAULT_DEFER_LOG_LEVEL.to_string(),
             enable_response_logging: true,
             enable_data_tests: true,
+            emit_reused_status: false,
             log_file_limit: DEFAULT_LOG_FILE_LIMIT,
             log_dir_override: None,
             log_prefix: DEFAULT_LOG_PREFIX.to_string(),
@@ -615,18 +627,23 @@ fn parse_seconds(name: &'static str, value: &str) -> Result<i64, RunCacheService
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::IndexMap;
     use dbt_schemas::schemas::profiles::{DbConfig, DuckDbConfig};
+    use dbt_schemas::state::ProfileAdapter;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 
     fn test_profile(target: &str, defer_to_target: Option<&str>) -> DbtProfile {
+        let db_config = DbConfig::DuckDB(Box::<DuckDbConfig>::default());
+        let default_adapter = db_config.adapter_type();
+        let adapters = IndexMap::from([(default_adapter, ProfileAdapter::single(db_config))]);
         DbtProfile {
             profile: "default".to_string(),
             target: target.to_string(),
             defer_to_target: defer_to_target.map(|target| target.to_string()),
             allow_clones: true,
-            db_config: DbConfig::DuckDB(Box::<DuckDbConfig>::default()),
-            alt_target_db_config: None,
+            adapters,
+            default_adapter,
             schema: "dbt_test".to_string(),
             database: "db".to_string(),
             relative_profile_path: PathBuf::new(),
@@ -672,6 +689,7 @@ mod tests {
         assert_eq!(config.defer_log_level, "off");
         assert!(config.enable_response_logging);
         assert!(config.enable_data_tests);
+        assert!(!config.emit_reused_status);
         assert_eq!(config.log_file_limit, 20);
         assert_eq!(config.log_dir_override, None);
         assert_eq!(config.log_prefix, "responses_");
@@ -886,6 +904,7 @@ mod tests {
             ("RUN_CACHE_ENABLE_LENIENT_DEPENDENCIES", "off"),
             ("RUN_CACHE_ENABLE_RESPONSE_LOGGING", "false"),
             ("RUN_CACHE_ENABLE_DATA_TESTS", "0"),
+            ("DBT_ENGINE_STATE_EMIT_REUSED_STATUS", "true"),
             ("RUN_CACHE_RUN_HOOKS_ON_NO_OP", "true"),
             ("RUN_CACHE_COMPARE_UNRENDERED_CODE", "true"),
         ])
@@ -899,8 +918,16 @@ mod tests {
         assert!(!config.enable_lenient_dependencies);
         assert!(!config.enable_response_logging);
         assert!(!config.enable_data_tests);
+        assert!(config.emit_reused_status);
         assert!(config.run_hooks_on_no_op);
         assert!(config.compare_unrendered_code);
+    }
+
+    #[test]
+    fn reused_status_legacy_env_is_supported() {
+        let config = config_from_pairs(&[("RUN_CACHE_EMIT_REUSED_STATUS", "true")]).unwrap();
+
+        assert!(config.emit_reused_status);
     }
 
     #[test]

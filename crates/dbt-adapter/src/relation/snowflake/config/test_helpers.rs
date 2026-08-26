@@ -58,6 +58,7 @@ pub(crate) fn make_remote_config(cfg: TestDynamicTableConfig) -> DescribeDynamic
 
 pub(crate) fn make_local_config(cfg: TestDynamicTableConfig) -> DbtModel {
     let base_attrs = NodeBaseAttributes {
+        adapter: AdapterType::Snowflake,
         unrendered_config: Default::default(),
         database: "test_db".to_string(),
         schema: "test_schema".to_string(),

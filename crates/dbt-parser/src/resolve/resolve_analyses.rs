@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::resolve::resolve_utils::err_resource_name_has_spaces;
+use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_node_adapter};
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
@@ -50,6 +50,7 @@ pub async fn resolve_analyses(
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
+    default_adapter: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
@@ -153,6 +154,20 @@ pub async fn resolve_analyses(
         // Each statement should get its own node with suffix: analysis.project.filename.0, analysis.project.filename.1, etc.
         // let statement_index = 0;
         let unique_id = get_unique_id(analysis_name, package_name, None, "analysis");
+        // An analysis is compiled rather than materialized, but it still renders
+        // refs and dispatches macros, so which adapter it renders *as* is a real
+        // choice. Resolved the same way every other node type resolves it.
+        let selected_adapter = validate_node_adapter(
+            analysis_config.adapter,
+            default_adapter,
+            &DbtMaterialization::Analysis,
+            None,
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            dbt_asset.is_python(),
+            &dbt_asset.path,
+        )?
+        .unwrap_or(adapter_type);
         // unique_id.push_str(&format!(".{statement_index}"));
 
         let fqn = get_node_fqn(
@@ -219,6 +234,7 @@ pub async fn resolve_analyses(
                 meta: analysis_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below

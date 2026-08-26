@@ -134,6 +134,20 @@ impl DbtCatalogs {
             .any(|d| d == db))
     }
 
+    /// The v2 catalog type behind a `catalog_name`, if that name is a v2 catalog.
+    ///
+    /// Callers use this to ask capability questions about storage — which engines
+    /// can read it, and whose credentials reaching it requires. Both are properties
+    /// of the catalog *type*, not of anything a project declares.
+    pub fn v2_catalog_type(&self, name: &str) -> FsResult<Option<CatalogType>> {
+        Ok(self
+            .view_v2()?
+            .catalogs
+            .iter()
+            .find(|catalog| catalog.name == name)
+            .map(|catalog| catalog.catalog_type))
+    }
+
     /// Returns `(catalog_name, catalog_database)` for every v2 `iceberg_rest`
     /// catalog that declares a Snowflake `catalog_database` (the linked
     /// database write support is gated on).

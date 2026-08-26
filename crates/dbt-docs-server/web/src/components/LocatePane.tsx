@@ -7,16 +7,12 @@ import {
   useState,
 } from 'react';
 
-import type { FileTreeItemType } from '@dbt-labs/sourdough';
 import {
-  Icon,
-  PaginatedFileTree,
   RyeconDataGeography,
   RyeconFile,
   RyeconThemeDark,
   RyeconThemeLight,
   RyeconThemeSystem,
-  SegmentedButton,
 } from '@dbt-labs/sourdough';
 
 import type { AssetFilters } from '../App';
@@ -40,6 +36,8 @@ import {
 } from '../shared';
 import type { NodeSummary } from '../types';
 import { SEARCHABLE_RESOURCE_TYPES } from '../types';
+import { type FileTreeItemType, PaginatedFileTree } from './ui/PaginatedFileTree';
+import { SegmentedButton } from './ui/SegmentedButton';
 
 export type LocatePaneMode = 'assets' | 'files' | 'filter';
 
@@ -412,8 +410,6 @@ function AssetMode({
     [setOpenDirectories],
   );
 
-  const loadChildren = useCallback(() => {}, []);
-
   const onFileSelect = useCallback(
     (relativePath: string) => {
       const t = relativePath.slice(ASSET_ALL_PATH.length + 1);
@@ -434,7 +430,7 @@ function AssetMode({
   );
 
   const onSort = useCallback((a: string, b: string) => {
-    const prefix = `1${ASSET_ALL_PATH}/2`;
+    const prefix = `${ASSET_ALL_PATH}/`;
     const aType = a.startsWith(prefix) ? a.slice(prefix.length) : null;
     const bType = b.startsWith(prefix) ? b.slice(prefix.length) : null;
     if (aType !== null && bType !== null) {
@@ -460,14 +456,11 @@ function AssetMode({
         rootNodeName="root"
         openDirectories={openDirectories}
         setOpenDirectories={setOpenDirectoriesAdapter}
-        loadChildren={loadChildren}
         onFileSelect={onFileSelect}
         onFolderSelect={onFolderSelect}
         selectedFile={selectedFile}
         selectedFolder={selectedFolder}
         enableCloseFolderOnSecondClick
-        showExpandButton
-        isReadOnly
         onSort={onSort}
       />
 
@@ -562,10 +555,6 @@ function TreeMode({
     [setOpenDirectories],
   );
 
-  // No-op: `items` already includes any opened folder's children via the
-  // reactive derivation above. Required prop on PaginatedFileTree.
-  const loadChildren = useCallback(() => {}, []);
-
   const onFileSelect = useCallback(
     (relativePath: string) => {
       if (relativePath === projectName) {
@@ -609,12 +598,9 @@ function TreeMode({
         rootNodeName="root"
         openDirectories={openDirectories}
         setOpenDirectories={setOpenDirectoriesAdapter}
-        loadChildren={loadChildren}
         onFileSelect={onFileSelect}
         selectedFile={selectedFile}
         maxHeight={maxHeight}
-        showExpandButton
-        isReadOnly
       />
     </div>
   );

@@ -288,9 +288,14 @@ impl JinjaEnv {
         Ok(JinjaTemplate(result))
     }
 
-    /// Get the dbt and adapters namespace.
-    pub fn get_dbt_and_adapters_namespace(&self) -> Arc<ValueMap> {
-        self.env.get_dbt_and_adapters_namespace()
+    /// Get the dbt and adapters namespace for `dialect`.
+    pub fn get_dbt_and_adapters_namespace(&self, dialect: &str) -> Arc<ValueMap> {
+        self.env.get_dbt_and_adapters_namespace(dialect)
+    }
+
+    /// The full `dialect -> namespace` map, for passing into a typecheck context.
+    pub fn get_dbt_and_adapters_namespaces(&self) -> Arc<ValueMap> {
+        self.env.get_dbt_and_adapters_namespaces()
     }
 
     /// Get the target context.

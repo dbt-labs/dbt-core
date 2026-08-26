@@ -454,11 +454,12 @@ impl CatalogSpecDuckDbExt for CatalogSpecV2View<'_> {
     }
 
     fn resolved_attach_alias(&self) -> Option<String> {
-        // The base DuckDB adapter uses the `duckdb` block; the alt compute engine
-        // uses `alt`. Fall back so a catalog configured for either resolves.
+        // The base DuckDB adapter uses the `duckdb` block; the lake compute engine
+        // uses `lake_compute`. Fall back so a catalog configured for either
+        // resolves.
         let duckdb_block = self
-            .config_block("duckdb")
-            .or_else(|| self.config_block("alt"))?;
+            .config_block(AdapterType::DuckDB.as_ref())
+            .or_else(|| self.config_block(AdapterType::Alt.as_ref()))?;
         let alias = duckdb_block
             .get(dbt_yaml::Value::from("attach_as"))
             .and_then(|value| value.as_str())

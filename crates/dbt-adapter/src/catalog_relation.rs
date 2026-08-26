@@ -60,6 +60,7 @@ const BIGQUERY_ATTR: &str = "bigquery_attr";
 const DBX_DEFAULT_TABLE_FORMAT: &str = "default";
 
 const DELTA_TABLE_FORMAT: &str = "delta";
+const PARQUET_TABLE_FORMAT: &str = "parquet";
 const DATABRICKS_UNITY_CATALOG: &str = "unity";
 const DATABRICKS_HIVE_METASTORE: &str = "hive_metastore";
 
@@ -81,6 +82,7 @@ const SNOWFLAKE_MANAGED_EXTERNAL_VOLUME: &str = "SNOWFLAKE_MANAGED";
 const SNOWFLAKE_ATTR: &str = "snowflake_attr";
 const DUCKDB_ATTR: &str = "duckdb_attr";
 const ADAPTER_PROP_CATALOG_LINKED_DATABASE_TYPE: &str = "catalog_linked_database_type";
+const ADAPTER_PROP_USE_UNIFORM: &str = "use_uniform";
 
 #[derive(Debug, Clone, Copy)]
 enum LinkedCatalogProvider {
@@ -148,6 +150,27 @@ impl PhysicalFormatResolver for CatalogRelation {
 }
 
 impl CatalogRelation {
+    // Builder pattern setters - prefer these over introducing a new named
+    // `default_catalog_relation_<adapter>_<variant>()` constructor
+    pub fn with_table_format(mut self, table_format: TableFormat) -> Self {
+        self.table_format = table_format;
+        self
+    }
+
+    pub fn with_file_format(mut self, file_format: impl Into<String>) -> Self {
+        self.file_format = Some(file_format.into());
+        self
+    }
+
+    pub fn with_adapter_property(
+        mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Self {
+        self.adapter_properties.insert(key.into(), value.into());
+        self
+    }
+
     fn linked_catalog_provider(&self) -> Option<LinkedCatalogProvider> {
         let catalog_name = self.catalog_name.as_deref()?;
         let catalogs = load_catalogs::fetch_catalogs()?;
@@ -470,16 +493,14 @@ impl CatalogRelation {
 
         match (model_catalog_name.as_deref(), catalogs.as_ref()) {
             (None, None) if !wants_iceberg => Ok(Self::default_catalog_relation_databricks()),
-            (None, None) => Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "On Databricks, table_format=iceberg requires catalogs.yml and a `catalog_name` that selects a write integration.",
-            )),
+            (None, None) => Ok(Self::default_catalog_relation_databricks()
+                .with_table_format(TableFormat::Iceberg)
+                .with_adapter_property(ADAPTER_PROP_USE_UNIFORM, "false")),
 
             (None, Some(_)) if !wants_iceberg => Ok(Self::default_catalog_relation_databricks()),
-            (None, Some(_)) => Err(AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "On Databricks, table_format=iceberg requires a `catalog_name` to select a write integration (unity or hive_metastore). Ensure the catalog_name you select points to a catalog in your project's catalogs.yml.",
-            )),
+            (None, Some(_)) => Ok(Self::default_catalog_relation_databricks()
+                .with_table_format(TableFormat::Iceberg)
+                .with_adapter_property(ADAPTER_PROP_USE_UNIFORM, "false")),
 
             (Some(catalog_name), None) => Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
@@ -2444,19 +2465,26 @@ mod tests {
     }
 
     #[test]
-    fn dbx_iceberg_without_catalogs_errors() {
+    fn dbx_iceberg_without_catalogs_returns_managed_default() {
         let conf = json!({ "table_format": "ICEBERG" });
         let ms = [
             model(AdapterType::Databricks, conf.clone()),
             model_deprecated_config(conf),
         ];
         for m in ms {
-            let err =
+            let r =
                 CatalogRelation::from_model_config_and_catalogs(AdapterType::Databricks, &m, None)
-                    .unwrap_err();
-            let msg = format!("{err}");
-            assert!(msg.contains("table_format=iceberg"));
-            assert!(msg.contains("requires catalogs.yml"));
+                    .unwrap();
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.catalog_type, CatalogType::Unity);
+            assert_eq!(r.file_format.as_deref(), Some("delta"));
+            assert!(r.external_volume.is_none());
+            assert!(r.base_location.is_none());
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("false")
+            );
         }
     }
 
@@ -2490,7 +2518,24 @@ mod tests {
     }
 
     #[test]
-    fn dbx_with_catalogs_but_no_catalog_name_iceberg_errors() {
+    fn dbx_iceberg_with_catalog_name_but_no_catalogs_yml_still_errors() {
+        let conf = json!({ "table_format": "ICEBERG", "catalog_name": "UC" });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let err =
+                CatalogRelation::from_model_config_and_catalogs(AdapterType::Databricks, &m, None)
+                    .unwrap_err();
+            let msg = format!("{err}");
+            assert!(msg.contains("catalog_name"));
+            assert!(msg.contains("catalogs.yml"));
+        }
+    }
+
+    #[test]
+    fn dbx_with_catalogs_but_no_catalog_name_iceberg_returns_managed_default() {
         let cats = catalogs_yaml_one(
             "CAT",
             "WIN",
@@ -2504,15 +2549,21 @@ mod tests {
             model_deprecated_config(conf),
         ];
         for m in ms {
-            let err = CatalogRelation::from_model_config_and_catalogs(
+            let r = CatalogRelation::from_model_config_and_catalogs(
                 AdapterType::Databricks,
                 &m,
                 Some(Arc::new(DbtCatalogs::new(cats.clone(), Default::default()))),
             )
-            .unwrap_err();
-            let msg = format!("{err}");
-            assert!(msg.contains("table_format=iceberg"));
-            assert!(msg.contains("requires a `catalog_name`"));
+            .unwrap();
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.catalog_type, CatalogType::Unity);
+            assert_eq!(r.file_format.as_deref(), Some("delta"));
+            assert!(r.external_volume.is_none());
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("false")
+            );
         }
     }
 

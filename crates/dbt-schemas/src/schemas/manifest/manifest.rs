@@ -143,7 +143,7 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             project_name: resolver_state.root_project_name.clone(),
             adapter_type: resolver_state
                 .dbt_profile
-                .db_config
+                .default_db_config()
                 .adapter_type()
                 .to_string(),
             project_id: Some(format!(
@@ -1229,6 +1229,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             meta: test.config.meta.clone().unwrap_or_default(),
                         },
                         __base_attr__: NodeBaseAttributes {
+                            adapter: adapter_type,
                             database: test.__common_attr__.database,
                             schema: test.__common_attr__.schema,
                             alias: test.__base_attr__.alias,
@@ -1322,6 +1323,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             meta: snapshot.config.meta.clone().unwrap_or_default(),
                         },
                         __base_attr__: NodeBaseAttributes {
+                            adapter: adapter_type,
                             database: snapshot.__common_attr__.database,
                             schema: snapshot.__common_attr__.schema,
                             alias: snapshot.__base_attr__.alias,
@@ -1400,6 +1402,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             meta: seed.config.meta.clone().unwrap_or_default(),
                         },
                         __base_attr__: NodeBaseAttributes {
+                            adapter: adapter_type,
                             database: seed.__common_attr__.database,
                             schema: seed.__common_attr__.schema,
                             alias: seed.__base_attr__.alias,
@@ -1436,7 +1439,6 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             delimiter: seed.config.delimiter.clone().map(|d| d.into_inner()),
                             root_path: seed.root_path,
                             catalog_name: seed.config.catalog_name.clone(),
-                            alt_compute: seed.config.alt_compute,
                         },
                         deprecated_config: seed.config.into(),
                         __other__: seed.__other__,
@@ -1447,7 +1449,11 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
             DbtNode::Function(function) => {
                 nodes.functions.insert(
                     unique_id,
-                    Arc::new(manifest_function_to_dbt_function(function, dbt_quoting)),
+                    Arc::new(manifest_function_to_dbt_function(
+                        function,
+                        dbt_quoting,
+                        adapter_type,
+                    )),
                 );
             }
             DbtNode::Analysis(analysis) => {
@@ -1491,6 +1497,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             meta,
                         },
                         __base_attr__: NodeBaseAttributes {
+                            adapter: adapter_type,
                             database: analysis.__common_attr__.database,
                             schema: analysis.__common_attr__.schema,
                             alias: analysis.__base_attr__.alias,
@@ -1557,6 +1564,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     meta: source.config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: adapter_type,
                     database: source.__common_attr__.database,
                     schema: source.__common_attr__.schema,
                     alias: source.identifier.clone(),
@@ -1628,6 +1636,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     meta: IndexMap::new(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: adapter_type,
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1690,6 +1699,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     meta: unit_test.config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: adapter_type,
                     database: unit_test.__common_attr__.database,
                     schema: unit_test.__common_attr__.schema,
                     alias: unit_test.__base_attr__.alias,
@@ -1769,6 +1779,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     meta: saved_query.config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: adapter_type,
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1827,6 +1838,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     meta: IndexMap::new(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: adapter_type,
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1857,7 +1869,11 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
     for (unique_id, function) in manifest.functions {
         nodes.functions.insert(
             unique_id,
-            Arc::new(manifest_function_to_dbt_function(function, dbt_quoting)),
+            Arc::new(manifest_function_to_dbt_function(
+                function,
+                dbt_quoting,
+                adapter_type,
+            )),
         );
     }
 
@@ -1875,6 +1891,15 @@ pub fn manifest_model_to_dbt_model(
     manifest: &DbtManifest,
     dbt_quoting: DbtQuoting,
 ) -> DbtModel {
+    // A manifest records no per-node adapter, so a loaded node runs where the run
+    // that produced the manifest ran.
+    let adapter_type =
+        AdapterType::from_str(&manifest.metadata.adapter_type).unwrap_or_else(|_| {
+            panic!(
+                "Invalid adapter_type in manifest {}",
+                &manifest.metadata.adapter_type
+            )
+        });
     let database = model.__common_attr__.database;
     let schema = model.__common_attr__.schema;
     let alias = model.__base_attr__.alias;
@@ -1942,6 +1967,7 @@ pub fn manifest_model_to_dbt_model(
             meta: model.config.meta.clone().unwrap_or_default(),
         },
         __base_attr__: NodeBaseAttributes {
+            adapter: adapter_type,
             database,
             schema,
             alias,
@@ -1996,7 +2022,6 @@ pub fn manifest_model_to_dbt_model(
             time_spine,
             event_time: model.config.event_time.clone(),
             catalog_name: model.config.catalog_name.clone(),
-            alt_compute: model.config.alt_compute,
             table_format: model.config.table_format.clone(),
             sync: model.config.sync.clone(),
             compiled_code: None,
@@ -2016,6 +2041,7 @@ pub fn manifest_model_to_dbt_model(
 pub fn manifest_function_to_dbt_function(
     function: ManifestFunction,
     dbt_quoting: DbtQuoting,
+    adapter_type: AdapterType,
 ) -> DbtFunction {
     let recalculated_checksum = match function.__base_attr__.raw_code.clone() {
         Some(raw_code) => {
@@ -2054,6 +2080,7 @@ pub fn manifest_function_to_dbt_function(
             meta: function.config.meta.clone().unwrap_or_default(),
         },
         __base_attr__: NodeBaseAttributes {
+            adapter: adapter_type,
             database: function.__common_attr__.database,
             schema: function.__common_attr__.schema,
             alias: function.__base_attr__.alias,
@@ -2156,6 +2183,7 @@ mod tests {
                 ..Default::default()
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: AdapterType::Snowflake,
                 database: "db".to_string(),
                 schema: "schema".to_string(),
                 depends_on: NodeDependsOn {

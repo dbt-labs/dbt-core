@@ -1,35 +1,38 @@
 //! `dbt system upgrade-distribution`: the OSS `dbt-core` -> Fusion `dbt`
 //! cross-distribution upgrade. See `upgrade-spec.md` (repo root) for the
-//! full design. This module implements the "global install" case only --
-//! a `standalone`/`unclaimed` native binary is upgraded in place at its own
-//! path, and every other channel (pip --user / pipx / uv tool / system pip)
-//! gets a fresh standalone install followed by uninstalling the old package.
-//! The "managed project" case (rewriting a project manifest's `dbt-core`
-//! dependency to `dbt`) is a fast-follow and is detected-but-refused here
-//! rather than silently mishandled.
+//! full design. Handles two cases: a "global install" (a `standalone`/
+//! `unclaimed` native binary upgraded in place at its own path, or every
+//! other channel -- pip --user / pipx / uv tool / system pip -- getting a
+//! fresh standalone install followed by uninstalling the old package), and
+//! a "managed project" (rewriting a project manifest's `dbt-core` dependency
+//! to `dbt`, then re-running the manager's install/lock command).
 
 use std::env;
 use std::path::{Path, PathBuf};
 
 use dbt_common::tracing::dbt_emit::println;
-use dbt_common::{ErrorCode, FsResult, err, fs_err};
+use dbt_common::{ErrorCode, FsError, FsResult, err, fs_err};
 
-use crate::confirm::confirm;
-use crate::dist::uninstall_command_for_package;
-use crate::python::{PackageSpec, PackageVersion, PythonManifest};
-use crate::{Channel, DistInfo, DistInfoDiscovery, Distribution};
-
-const DEFAULT_CDN_BASE_URL: &str = "https://public.cdn.getdbt.com/fs";
+use crate::confirm::{confirm, is_interactive};
+use crate::dist::{
+    ManagerResolution, resolve_manager_for_manifest, sync_command_for_manager,
+    uninstall_command_for_package,
+};
+use crate::probe_manager_for_manifest;
+use crate::python::{
+    ManifestReplacements, PackageSpec, PackageVersion, PythonManifest, PythonManifestFormat,
+    PythonPackageManager,
+};
+use crate::version::{ReqwestClient, VersionsHttpClient, cdn_base_url, resolve_target_version};
+use crate::{Channel, DiscoveryContext, DistInfo, DistInfoDiscovery, Distribution};
 
 /// The name under which `dbt-core` declares itself as a dependency in a
 /// Python project manifest, and the package name to uninstall from a global
 /// Python environment once Fusion has taken over.
 const OSS_PACKAGE_NAME: &str = "dbt-core";
 
-fn cdn_base_url() -> String {
-    #[allow(clippy::disallowed_methods)]
-    env::var("DBT_CDN_URL").unwrap_or_else(|_| DEFAULT_CDN_BASE_URL.to_string())
-}
+/// The name under which Fusion's PyPI package is declared.
+const FUSION_PACKAGE_NAME: &str = "dbt";
 
 fn install_script_name() -> &'static str {
     if cfg!(windows) {
@@ -54,7 +57,25 @@ fn standalone_target_path() -> Option<PathBuf> {
     Some(path)
 }
 
-pub async fn exec_upgrade_distribution(yes: bool, command_name: &str) -> FsResult<()> {
+pub async fn exec_upgrade_distribution(
+    yes: bool,
+    package_manager: Option<String>,
+    command_name: &str,
+) -> FsResult<()> {
+    let override_manager = package_manager
+        .map(|name| {
+            PythonPackageManager::parse_cli_name(&name).ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::InvalidArgument,
+                    "'{name}' isn't a recognized --package-manager value. Valid choices: {}",
+                    PythonPackageManager::cli_names()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })
+        })
+        .transpose()?;
+
     let dist_info = DistInfo::current(command_name)?;
 
     match dist_info.distribution {
@@ -82,7 +103,7 @@ pub async fn exec_upgrade_distribution(yes: bool, command_name: &str) -> FsResul
     }
 
     let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    if let Some(manifest) = PythonManifest::detect(&cwd)? {
+    if let Some(mut manifest) = PythonManifest::detect(&cwd)? {
         let declares_dbt_core = manifest
             .get_version_replacement(&PackageSpec {
                 name: OSS_PACKAGE_NAME.to_string(),
@@ -93,15 +114,47 @@ pub async fn exec_upgrade_distribution(yes: bool, command_name: &str) -> FsResul
             })?
             .is_some();
         if declares_dbt_core {
-            return err!(
-                ErrorCode::NotSupported,
-                "{} declares `dbt-core` as a dependency. Upgrading a managed Python project to \
-                 dbt (Fusion) isn't supported by this version of `dbt system \
-                 upgrade-distribution` yet -- edit the manifest to depend on `dbt` instead of \
-                 `dbt-core` and reinstall with your package manager, or run this command outside \
-                 the project directory to upgrade a global dbt-core install instead.",
-                manifest.path().display()
-            );
+            if manifest.has_top_level_conda_declaration(OSS_PACKAGE_NAME)? {
+                return err!(
+                    ErrorCode::NotSupported,
+                    "{} declares `dbt-core` in conda's top-level dependency list, but dbt \
+                     (Fusion) isn't published on conda channels. Move the dependency into the \
+                     `pip:` sub-list (which resolves from PyPI) and re-run this command, or edit \
+                     the manifest manually.",
+                    manifest.path().display()
+                );
+            }
+            // Verified live (2026-07-30): the CDN tag (`v2.0.0-preview.203`)
+            // and PyPI's published string for the same build
+            // (`2.0.0rc203`) are both valid PEP 440 spellings of the same
+            // pre-release and normalize equal, so pinning the raw tag below
+            // works as-is in a Python manifest -- no format conversion
+            // needed.
+            let target_version = resolve_target_version(None, &ReqwestClient).await?;
+            let replacements = manifest
+                .get_rename_replacement(
+                    OSS_PACKAGE_NAME,
+                    &PackageSpec {
+                        name: FUSION_PACKAGE_NAME.to_string(),
+                        version: PackageVersion::Exact(target_version),
+                    },
+                )?
+                .ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::Unexpected,
+                        "{} declared `dbt-core` a moment ago, but no longer does",
+                        manifest.path().display()
+                    )
+                })?;
+            return exec_managed_project_upgrade(
+                &mut manifest,
+                replacements,
+                &dist_info,
+                override_manager,
+                yes,
+                &DiscoveryContext::real(),
+            )
+            .await;
         }
     } else if dist_info.py_venv_root.is_some() {
         println(
@@ -113,6 +166,244 @@ pub async fn exec_upgrade_distribution(yes: bool, command_name: &str) -> FsResul
     }
 
     exec_global_install(&dist_info, yes, command_name).await
+}
+
+/// The shared "manifest was edited, but the environment can't be brought
+/// back in sync automatically" error -- covers both ways
+/// `exec_managed_project_upgrade` can fail to compute a sync command: the
+/// package manager itself couldn't be determined, or it was determined but
+/// [`sync_command_for_manager`] has no automatic command for it (e.g. Pipx --
+/// see that function's doc comment for why). `reason` fills in which
+/// of the two happened; the surrounding wording and the "re-run manually"
+/// instruction stay identical either way. `code` is threaded through rather
+/// than hardcoded because the two cases aren't the same *kind* of failure --
+/// "couldn't be determined" is a genuine `Unexpected` (discovery should have
+/// found something), while "no automatic command for this manager" is an
+/// enumerated, deliberate refusal to automate, the same shape as
+/// `ErrorCode::NotSupported`'s other use in this file (the conda-top-level-
+/// declaration case in `exec_upgrade_distribution`).
+///
+/// `backup_path` is repeated in the message (not just the one-time println
+/// emitted right after `apply_to` succeeds) since this is an error the user
+/// may be looking at well after that println has scrolled out of view.
+fn manual_sync_required_err(
+    manifest_path: &Path,
+    backup_path: &Path,
+    code: ErrorCode,
+    reason: &str,
+) -> Box<FsError> {
+    fs_err!(
+        code,
+        "{} was updated, but {reason}, so its lockfile/environment couldn't be brought back \
+         in sync automatically. A backup of the original manifest was saved to {} before this \
+         change -- restore from it if you need to undo the edit. Re-run your package manager's \
+         install/lock command manually.",
+        manifest_path.display(),
+        backup_path.display()
+    )
+}
+
+/// Determines the package manager to sync `format`'s manifest at
+/// `manifest_path` with.
+///
+/// `override_manager` (from `--package-manager`) wins outright if given --
+/// it's an explicit user answer, not a guess, so it's checked for
+/// compatibility with `format` and used directly, without consulting
+/// detection or a picker (and without needing an interactive terminal,
+/// unlike the paths below).
+///
+/// Otherwise, tries automatic detection (`resolve_manager_for_manifest`);
+/// when that can't pin one down, or rejects the only candidate it found as
+/// incompatible with this manifest, asks the user directly instead of
+/// refusing outright -- mirrors [`confirm`]'s tty/`--yes` gating (`-y` skips
+/// prompts it can answer with a fixed default; there's no such default
+/// here, so `-y` -- and any non-interactive terminal -- gets a hard error
+/// instead of a guess, unless `--package-manager` already answered it).
+///
+/// Called *before* the manifest is rewritten, unlike the detection this
+/// replaces used to be: a project whose manager can't be determined is left
+/// untouched, rather than edited on disk with no way to bring its
+/// lockfile/environment back in sync (see `exec_managed_project_upgrade`).
+///
+/// `ctx` is threaded in (rather than calling `DiscoveryContext::real()`
+/// internally) purely for testability: the presence-probe fallback below
+/// runs real subprocesses when given a real context, which would make any
+/// unit test asserting "no manager found" flaky against whatever happens to
+/// be installed on the machine running the tests.
+fn resolve_manager(
+    format: PythonManifestFormat,
+    manifest_path: &Path,
+    existing_hint: Option<PythonPackageManager>,
+    override_manager: Option<PythonPackageManager>,
+    yes: bool,
+    ctx: &DiscoveryContext<'_>,
+) -> FsResult<PythonPackageManager> {
+    if let Some(manager) = override_manager {
+        return if manager.is_compatible_with(format) {
+            Ok(manager)
+        } else {
+            err!(
+                ErrorCode::InvalidArgument,
+                "--package-manager {} doesn't manage a project in {}'s format. Valid choices \
+                 for this manifest: {}",
+                manager.label(),
+                manifest_path.display(),
+                PythonPackageManager::choices_for(format)
+                    .iter()
+                    .map(|m| m.label())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+    }
+
+    let resolution = resolve_manager_for_manifest(format, manifest_path, existing_hint);
+    if let Some(manager) = resolution.manager() {
+        return Ok(manager);
+    }
+
+    // `existing_hint` (`dist_info.py_package_manager`) reflects how *dbt's
+    // own binary* was installed, which is frequently unrelated to this
+    // project's dependencies -- e.g. Fusion shipped as a standalone binary
+    // dropped directly onto `PATH` has no venv/tool-dir signal at all, even
+    // though `manifest_dir` obviously has some real package manager
+    // governing it. Probe that directory (and `PATH`) directly before
+    // giving up to a picker/hard error.
+    let manifest_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    if let Some(manager) = probe_manager_for_manifest(ctx, manifest_dir, format) {
+        return Ok(manager);
+    }
+
+    let reason = match resolution {
+        ManagerResolution::Incompatible(manager) => format!(
+            "the only package manager discovery found ({}) doesn't manage a project in this \
+             manifest's format",
+            manager.label()
+        ),
+        // `resolution.manager()` above already returned for `Determined`.
+        ManagerResolution::Undetermined | ManagerResolution::Determined(_) => {
+            "the Python package manager for this project couldn't be determined".to_string()
+        }
+    };
+
+    if yes || !is_interactive() {
+        let cause = if yes {
+            "--yes was passed, so there's no prompt to ask which one to use"
+        } else {
+            "this isn't an interactive terminal to ask which one to use"
+        };
+        return err!(
+            ErrorCode::Unexpected,
+            "{reason}, and {cause} -- {} was left unchanged. Re-run interactively (without \
+             --yes) to pick one, pass --package-manager <name> to say which one non-\
+             interactively, or edit and re-sync the manifest yourself.",
+            manifest_path.display()
+        );
+    }
+
+    println(format!("{reason} for {}.", manifest_path.display()));
+    let choices = PythonPackageManager::choices_for(format);
+    let labels: Vec<&str> = choices.iter().map(|m| m.label()).collect();
+    let selection = dialoguer::Select::new()
+        .with_prompt("Which package manager manages this project?")
+        .items(&labels)
+        .default(0)
+        .interact()
+        .map_err(|e| {
+            fs_err!(
+                ErrorCode::IoError,
+                "failed to read package-manager selection: {e}"
+            )
+        })?;
+    Ok(choices[selection])
+}
+
+/// Rewrites a managed Python project's manifest to depend on `dbt` (Fusion)
+/// at a pinned exact version instead of `dbt-core`, then re-runs the
+/// project's package manager to bring its lockfile/environment back in sync
+/// with that edit -- editing the manifest alone can leave a lockfile stale.
+/// Two separate confirmations, matching the two distinct actions: one for
+/// the manifest edit (with a diff preview), one for the sync command(s)
+/// that follow it.
+async fn exec_managed_project_upgrade(
+    manifest: &mut PythonManifest,
+    replacements: ManifestReplacements,
+    dist_info: &DistInfo,
+    override_manager: Option<PythonPackageManager>,
+    yes: bool,
+    ctx: &DiscoveryContext<'_>,
+) -> FsResult<()> {
+    let mut diff = Vec::new();
+    replacements.diff(manifest, &mut diff)?;
+    let diff = String::from_utf8_lossy(&diff);
+    let edit_prompt = format!(
+        "This will rewrite {} to depend on `dbt` (Fusion) instead of `dbt-core`:\n\n{diff}\nProceed?",
+        manifest.path().display()
+    );
+    if !confirm(&edit_prompt, yes)? {
+        return err!(ErrorCode::Generic, "Aborted.");
+    }
+
+    // Resolved *before* the manifest is touched: a project whose manager
+    // can't be pinned down should be left exactly as it was, not edited with
+    // no way to bring its lockfile/environment back in sync. See
+    // `resolve_manager`'s doc comment.
+    let manager = resolve_manager(
+        manifest.format(),
+        manifest.path(),
+        dist_info.py_package_manager,
+        override_manager,
+        yes,
+        ctx,
+    )?;
+
+    let backup_path = replacements.apply_to(manifest)?;
+    println(format!(
+        "{} was rewritten to depend on `dbt` (Fusion). A backup of the original was saved to \
+         {} -- restore from it if you need to undo this edit.",
+        manifest.path().display(),
+        backup_path.display()
+    ));
+
+    let commands = sync_command_for_manager(manager, manifest.format(), manifest.path())
+        .ok_or_else(|| {
+            manual_sync_required_err(
+                manifest.path(),
+                &backup_path,
+                ErrorCode::NotSupported,
+                &format!("dbt has no automatic sync command for {}", manager.label()),
+            )
+        })?;
+    // `manifest.path()` may sit above the process's actual cwd --
+    // `PythonManifest::detect` walks up parent directories to find it -- so
+    // the sync command(s) must run from the manifest's own directory rather
+    // than inheriting whatever directory the user happened to invoke this
+    // command from.
+    let sync_dir = manifest.path().parent().unwrap_or_else(|| Path::new("."));
+    let sync_prompt = format!(
+        "This will bring {}'s environment back in sync with the manifest change by running the \
+         following in {}:\n\n    {}\n\nProceed?",
+        manager.label(),
+        sync_dir.display(),
+        commands.join("\n    "),
+    );
+    if !confirm(&sync_prompt, yes)? {
+        // Unlike the edit-confirmation abort above, `apply_to` has already
+        // run by this point -- the manifest is rewritten on disk even though
+        // the sync command never ran. Route through the same message used
+        // when no automatic sync command exists at all, so both "manifest
+        // changed, sync didn't happen" cases read consistently.
+        return Err(manual_sync_required_err(
+            manifest.path(),
+            &backup_path,
+            ErrorCode::Generic,
+            "the sync step was declined",
+        ));
+    }
+    for command in &commands {
+        run_shell_command(command, Some(sync_dir))?;
+    }
+    Ok(())
 }
 
 async fn exec_global_install(dist_info: &DistInfo, yes: bool, command_name: &str) -> FsResult<()> {
@@ -230,44 +521,48 @@ fn confirm_and_uninstall_old_package(dist_info: &DistInfo, yes: bool) -> FsResul
     if !confirm(&prompt, yes)? {
         return err!(ErrorCode::Generic, "Aborted.");
     }
-    run_shell_command(&uninstall_cmd)
+    // Not tied to any project manifest -- this uninstalls a globally-managed
+    // package, so it keeps inheriting the process's own cwd rather than
+    // needing an explicit directory.
+    run_shell_command(&uninstall_cmd, None)
 }
 
-fn run_shell_command(command: &str) -> FsResult<()> {
+/// Builds the `Command` `run_shell_command` will run: a `sh -c`/`cmd /C`
+/// wrapper around `command`, with `current_dir` set to `dir` when given.
+/// Split out as a pure, directly-testable builder (mirroring
+/// `install_sh_args`/`windows_ps_command` above) since `Command` itself
+/// can't be asserted against without actually running it, but its
+/// `current_dir` can be inspected via `get_current_dir()` before that.
+fn build_shell_command(command: &str, dir: Option<&Path>) -> std::process::Command {
     #[cfg(not(target_os = "windows"))]
-    let result = std::process::Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .status();
+    let mut cmd = std::process::Command::new("sh");
+    #[cfg(not(target_os = "windows"))]
+    cmd.arg("-c").arg(command);
+
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("cmd")
-        .args(["/C", command])
-        .status();
+    let mut cmd = std::process::Command::new("cmd");
+    #[cfg(target_os = "windows")]
+    cmd.args(["/C", command]);
+
+    if let Some(dir) = dir {
+        cmd.current_dir(dir);
+    }
+    cmd
+}
+
+/// Runs `command` through a shell. `dir` sets the working directory the
+/// command runs in -- pass the manifest's own directory for anything tied to
+/// a project manifest (see `exec_managed_project_upgrade`), or `None` to
+/// keep inheriting the process's own cwd (e.g. the global-uninstall path in
+/// `confirm_and_uninstall_old_package`, which isn't tied to any project).
+fn run_shell_command(command: &str, dir: Option<&Path>) -> FsResult<()> {
+    let result = build_shell_command(command, dir).status();
 
     match result {
         Ok(status) if status.success() => Ok(()),
         Ok(status) => err!(ErrorCode::IoError, "`{command}` failed with {status}"),
         Err(e) => err!(ErrorCode::IoError, "failed to run `{command}`: {e}"),
     }
-}
-
-async fn fetch_text(url: &str) -> FsResult<String> {
-    let response = reqwest::get(url)
-        .await
-        .map_err(|e| fs_err!(ErrorCode::IoError, "GET {url} failed: {e}"))?;
-    if !response.status().is_success() {
-        return err!(
-            ErrorCode::IoError,
-            "GET {url} returned {}",
-            response.status()
-        );
-    }
-    response.text().await.map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "failed to read response body from {url}: {e}"
-        )
-    })
 }
 
 /// Builds `install.sh`'s argv for `--update`/`--to <dir>`, in that order.
@@ -361,7 +656,7 @@ pub(crate) fn escape_ps_single_quoted(s: &str) -> String {
 /// different binary, so it runs synchronously to completion on every
 /// platform.
 async fn install_fusion_standalone(to: Option<&Path>, update: bool) -> FsResult<()> {
-    let script = fetch_text(&install_script_url()).await?;
+    let script = ReqwestClient.get_text(&install_script_url()).await?;
 
     #[cfg(not(target_os = "windows"))]
     {
@@ -468,15 +763,24 @@ async fn warn_if_path_shadowed(standalone_target: &Option<PathBuf>, command_name
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::proc::ProcessOutput;
 
-    #[test]
-    fn cdn_base_url_defaults_to_public_cdn() {
-        // SAFETY: test-only env mutation, not run concurrently with anything
-        // that reads DBT_CDN_URL outside this test.
-        unsafe {
-            env::remove_var("DBT_CDN_URL");
+    fn no_env(_: &str) -> Option<String> {
+        None
+    }
+
+    /// A [`DiscoveryContext`] that finds nothing on `PATH` or in any venv --
+    /// used by tests that need `resolve_manager`'s presence-probe fallback to
+    /// behave as "no manager found" deterministically, rather than reflecting
+    /// whatever happens to be installed on the machine running the tests.
+    fn empty_discovery_context() -> DiscoveryContext<'static> {
+        fn nothing_found(_: &str, _: &[&str]) -> Option<ProcessOutput> {
+            None
         }
-        assert_eq!(cdn_base_url(), DEFAULT_CDN_BASE_URL);
+        DiscoveryContext {
+            env: &no_env,
+            run: &nothing_found,
+        }
     }
 
     #[test]
@@ -565,6 +869,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn build_shell_command_sets_current_dir_when_given() {
+        let dir = Path::new("/tmp/some-project");
+        let cmd = build_shell_command("pip install -r requirements.txt", Some(dir));
+        assert_eq!(cmd.get_current_dir(), Some(dir));
+    }
+
+    #[test]
+    fn build_shell_command_leaves_current_dir_unset_when_none() {
+        let cmd = build_shell_command("pip install -r requirements.txt", None);
+        assert_eq!(cmd.get_current_dir(), None);
+    }
+
     fn dist_info_for_test(channel: Option<Channel>, path: &str) -> DistInfo {
         DistInfo {
             path: path.to_string(),
@@ -585,6 +902,303 @@ mod tests {
         let dist_info = dist_info_for_test(Some(Channel::Standalone), "/home/user/.local/bin/dbt");
         let target_dir = Path::new(&dist_info.path).parent().unwrap();
         assert_eq!(target_dir, Path::new("/home/user/.local/bin"));
+    }
+
+    fn managed_project_manifest_and_replacements(
+        dir: &Path,
+    ) -> (PythonManifest, ManifestReplacements) {
+        std::fs::write(
+            dir.join("requirements.txt"),
+            "other-package==0.1.0\ndbt-core==1.2.3\n",
+        )
+        .unwrap();
+        let manifest = PythonManifest::detect(dir).unwrap().unwrap();
+        let replacements = manifest
+            .get_rename_replacement(
+                OSS_PACKAGE_NAME,
+                &PackageSpec {
+                    name: FUSION_PACKAGE_NAME.to_string(),
+                    version: PackageVersion::Exact("2.0.0".to_string()),
+                },
+            )
+            .unwrap()
+            .expect("dbt-core is declared");
+        (manifest, replacements)
+    }
+
+    #[tokio::test]
+    async fn exec_managed_project_upgrade_aborts_before_editing_when_not_confirmed() {
+        // Not a TTY under `cargo test`, so `confirm(..., false)` errors
+        // before the manifest is touched -- this exercises the diff-preview
+        // construction without needing a real confirmation or any network
+        // access.
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut manifest, replacements) = managed_project_manifest_and_replacements(tmp.path());
+        let dist_info = dist_info_for_test(Some(Channel::Pypi), "/venv/bin/dbt");
+
+        let result = exec_managed_project_upgrade(
+            &mut manifest,
+            replacements,
+            &dist_info,
+            None,
+            false,
+            &empty_discovery_context(),
+        )
+        .await;
+        assert!(result.is_err());
+
+        let on_disk = std::fs::read_to_string(tmp.path().join("requirements.txt")).unwrap();
+        assert_eq!(on_disk, "other-package==0.1.0\ndbt-core==1.2.3\n");
+        assert!(
+            !tmp.path().join("requirements.txt.bak").exists(),
+            "aborting before the edit is confirmed must not touch the manifest, so no backup \
+             should be created either"
+        );
+    }
+
+    #[tokio::test]
+    async fn exec_managed_project_upgrade_errors_before_editing_when_manager_unknown() {
+        // `yes: true` skips the edit confirmation, but with no
+        // `py_package_manager` on `dist_info` and no local lockfile signal,
+        // there's no sensible default manager to assume non-interactively --
+        // `resolve_manager` must stop *before* the manifest is touched, not
+        // edit it and then fail with no way to bring it back in sync.
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut manifest, replacements) = managed_project_manifest_and_replacements(tmp.path());
+        let mut dist_info = dist_info_for_test(Some(Channel::Pypi), "/venv/bin/dbt");
+        dist_info.py_package_manager = None;
+
+        let result = exec_managed_project_upgrade(
+            &mut manifest,
+            replacements,
+            &dist_info,
+            None,
+            true,
+            &empty_discovery_context(),
+        )
+        .await;
+        assert!(result.is_err());
+
+        let on_disk = std::fs::read_to_string(tmp.path().join("requirements.txt")).unwrap();
+        assert_eq!(
+            on_disk, "other-package==0.1.0\ndbt-core==1.2.3\n",
+            "an undetermined manager must leave the manifest untouched"
+        );
+        assert!(
+            !tmp.path().join("requirements.txt.bak").exists(),
+            "no edit happened, so no backup should be created either"
+        );
+    }
+
+    #[tokio::test]
+    async fn exec_managed_project_upgrade_rejects_incompatible_manager_hint_before_editing() {
+        // `dist_info.py_package_manager` is resolved independently of the
+        // manifest (`manager_from_manifest_signals` walks ancestor
+        // directories for a fixed signal-file table), so it can disagree
+        // with the manifest `exec_managed_project_upgrade` actually detected
+        // and edited -- e.g. a stray `environment.yml` elsewhere in the
+        // ancestor chain resolving `Conda`, while the project's real
+        // manifest is a `requirements.txt`. `resolve_manager_for_manifest`
+        // must reject that incompatible hint rather than emit a nonsensical
+        // `conda env update` command for a project with no conda manifest;
+        // dispatch should stop -- before editing the manifest -- rather than
+        // silently trust `Conda`.
+        let tmp = tempfile::tempdir().unwrap();
+        let (mut manifest, replacements) = managed_project_manifest_and_replacements(tmp.path());
+        let mut dist_info = dist_info_for_test(Some(Channel::Pypi), "/venv/bin/dbt");
+        dist_info.py_package_manager = Some(PythonPackageManager::Conda);
+
+        let result = exec_managed_project_upgrade(
+            &mut manifest,
+            replacements,
+            &dist_info,
+            None,
+            true,
+            &empty_discovery_context(),
+        )
+        .await;
+        let err = result.expect_err("an incompatible manager hint must not be trusted");
+        assert!(
+            err.context
+                .contains("doesn't manage a project in this manifest's format"),
+            "expected the resolver to report the incompatible hint, got: {}",
+            err.context
+        );
+        assert!(
+            !err.context.to_lowercase().contains("conda env update"),
+            "must not have emitted a conda-flavored command for a requirements.txt project, \
+             got: {}",
+            err.context
+        );
+
+        let on_disk = std::fs::read_to_string(tmp.path().join("requirements.txt")).unwrap();
+        assert_eq!(
+            on_disk, "other-package==0.1.0\ndbt-core==1.2.3\n",
+            "an incompatible hint must leave the manifest untouched"
+        );
+        assert!(!tmp.path().join("requirements.txt.bak").exists());
+    }
+
+    #[test]
+    fn resolve_manager_non_interactive_reports_incompatible_hint_without_touching_manifest() {
+        // Under `cargo test`, stdin is never a tty, so this exercises the
+        // non-interactive branch of `resolve_manager` directly rather than
+        // needing to fake a `Select` prompt.
+        let manifest_path = Path::new("/project/requirements.txt");
+        let err = resolve_manager(
+            PythonManifestFormat::Requirements,
+            manifest_path,
+            Some(PythonPackageManager::Uv),
+            None,
+            false,
+            &empty_discovery_context(),
+        )
+        .expect_err("a non-interactive terminal can't answer a manager picker");
+        assert!(
+            err.context
+                .contains("doesn't manage a project in this manifest's format"),
+            "got: {}",
+            err.context
+        );
+        assert!(
+            err.context.contains("/project/requirements.txt"),
+            "got: {}",
+            err.context
+        );
+    }
+
+    #[test]
+    fn resolve_manager_assume_yes_errors_rather_than_guessing() {
+        // `--yes` has no sensible default answer for "which package manager
+        // manages this project" the way it does for a plain confirm, so it
+        // must still error rather than silently pick one.
+        let err = resolve_manager(
+            PythonManifestFormat::Requirements,
+            Path::new("/project/requirements.txt"),
+            None,
+            None,
+            true,
+            &empty_discovery_context(),
+        )
+        .expect_err("--yes must not bypass manager selection with a guess");
+        assert!(
+            err.context
+                .contains("the Python package manager for this project couldn't be determined")
+        );
+    }
+
+    #[test]
+    fn resolve_manager_falls_back_to_the_manifest_dir_probe_when_hint_is_none() {
+        // The exact scenario an unattended `-y` sweep hits when Fusion ships
+        // as a standalone binary with no venv/tool-dir signal of its own
+        // (`existing_hint: None`) against a Hatch-managed pyproject.toml
+        // (no uv.lock/poetry.lock/pdm.lock for the earlier lockfile check to
+        // find): this used to be undetermined/9002 even under `-y`. It must
+        // now resolve via the manifest-directory probe instead, with no
+        // picker and no error.
+        fn no_env(_: &str) -> Option<String> {
+            None
+        }
+        fn finds_hatch(cmd: &str, _: &[&str]) -> Option<ProcessOutput> {
+            if cmd == "hatch" {
+                Some(ProcessOutput {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            } else {
+                None
+            }
+        }
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &finds_hatch,
+        };
+
+        let manager = resolve_manager(
+            PythonManifestFormat::Pyproject,
+            Path::new("/project/pyproject.toml"),
+            None,
+            None,
+            true,
+            &ctx,
+        )
+        .expect("the manifest-dir probe should find hatch on PATH without needing a prompt");
+        assert_eq!(manager, PythonPackageManager::Hatch);
+    }
+
+    #[test]
+    fn resolve_manager_override_wins_without_detection_or_a_prompt() {
+        // `--package-manager` is an explicit answer, not a guess -- it must
+        // be used directly even though stdin isn't a tty and no hint/lockfile
+        // signal was given, and even under `--yes`.
+        let manager = resolve_manager(
+            PythonManifestFormat::Requirements,
+            Path::new("/project/requirements.txt"),
+            None,
+            Some(PythonPackageManager::Hatch),
+            true,
+            &empty_discovery_context(),
+        )
+        .expect("an explicit override needs no detection and no interactive terminal");
+        assert_eq!(manager, PythonPackageManager::Hatch);
+    }
+
+    #[test]
+    fn resolve_manager_override_incompatible_with_format_is_rejected() {
+        // `Uv` doesn't manage a `requirements.txt`-format project (see
+        // `PythonPackageManager::is_compatible_with`) -- an explicit
+        // `--package-manager uv` here is still wrong, and must be rejected
+        // with a clear message rather than emitting a nonsensical `uv sync`.
+        let err = resolve_manager(
+            PythonManifestFormat::CondaEnvironment,
+            Path::new("/project/environment.yml"),
+            None,
+            Some(PythonPackageManager::Uv),
+            true,
+            &empty_discovery_context(),
+        )
+        .expect_err("an incompatible --package-manager override must be rejected");
+        assert!(
+            err.context.contains("doesn't manage a project in"),
+            "got: {}",
+            err.context
+        );
+    }
+
+    #[test]
+    fn manual_sync_required_err_message_when_sync_declined() {
+        // The sync-command `confirm` in `exec_managed_project_upgrade` can't
+        // actually be driven to a declined `Ok(false)` under `cargo test`:
+        // `confirm` there only ever returns `Ok(true)` (`yes: true`) or an
+        // `Err` from the non-interactive check (`yes: false`), never
+        // `Ok(false)` -- so there's no way to reach that branch end-to-end
+        // in this environment. This instead asserts directly on the message
+        // `exec_managed_project_upgrade` constructs for that branch, i.e.
+        // that declining the sync step (unlike declining the earlier edit
+        // confirmation) says the manifest was already changed.
+        let manifest_path = Path::new("/project/requirements.txt");
+        let backup_path = Path::new("/project/requirements.txt.bak");
+        let err = manual_sync_required_err(
+            manifest_path,
+            backup_path,
+            ErrorCode::Generic,
+            "the sync step was declined",
+        );
+        assert!(
+            err.context
+                .contains("/project/requirements.txt was updated")
+        );
+        assert!(err.context.contains("the sync step was declined"));
+        assert!(
+            err.context.contains("/project/requirements.txt.bak"),
+            "expected the backup path to be repeated in the message, got: {}",
+            err.context
+        );
+        assert!(
+            err.context
+                .contains("Re-run your package manager's install/lock command manually")
+        );
     }
 
     #[tokio::test]

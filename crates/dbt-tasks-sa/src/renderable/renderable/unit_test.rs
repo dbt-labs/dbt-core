@@ -146,7 +146,7 @@ pub(crate) async fn run_unit_test_render(
             &given_relations.relations_to_fetch,
             &node.common().unique_id,
             &mut ctx,
-            task_hooks,
+            Arc::clone(&task_hooks),
         ))
         .await;
         if let Err(e) = fetch_outcome {
@@ -167,7 +167,7 @@ pub(crate) async fn run_unit_test_render(
             .as_any()
             .downcast_ref::<DbtUnitTest>()
             .expect("run_unit_test_render called on non-DbtUnitTest");
-        let res = render_unit_test(ut_ref, &mut ctx, given_relations);
+        let res = render_unit_test(ut_ref, &mut ctx, given_relations, task_hooks.as_ref());
         handle_render_result(
             res,
             &node.unique_id(),
@@ -404,6 +404,7 @@ fn populate_schema_from_empty_relation(
     compiled_model_sql: &str,
     subqueries: &[(String, String)],
     infer_with_query_schema: bool,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<SchemaRef> {
     let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -512,6 +513,18 @@ fn populate_schema_from_empty_relation(
         })
         .collect::<Vec<_>>()
         .join(",");
+
+    if infer_with_query_schema {
+        let sql = if ctes.is_empty() {
+            Cow::Borrowed(schema_sql.as_str())
+        } else {
+            Cow::Owned(format!("WITH {ctes} {schema_sql}"))
+        };
+        // Let distribution-specific hooks handle schemas that the adapter query path cannot bind.
+        if let Some(schema) = task_hooks.try_infer_unit_test_schema(ctx, unit_test, &sql)? {
+            return Ok(schema);
+        }
+    }
 
     let template = ctx.env.template_from_str(materialization).map_err(|e| {
         fs_err!(
@@ -1023,6 +1036,7 @@ fn render_unit_test(
     node: &DbtUnitTest,
     ctx: &mut TaskRunnerCtx,
     given_relations: DiscoveredGivenRelations,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<(SqlInstruction, Arc<DashMap<String, MinijinjaValue>>)> {
     let DiscoveredGivenRelations {
         given_relations,
@@ -1349,6 +1363,7 @@ fn render_unit_test(
                     compiled_model_sql.as_str(),
                     &subqueries,
                     infer_with_query_schema,
+                    task_hooks,
                 )?
             }
         }

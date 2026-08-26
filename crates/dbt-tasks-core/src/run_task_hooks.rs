@@ -26,7 +26,7 @@ pub trait RunTaskHooks: Send + Sync {
         node: Arc<dyn InternalDbtNodeAttributes>,
         task_result: Option<TaskResult>,
     ) -> FsResult<NodeStatus>;
-    /// Executes a node on the compute target selected by its `alt_compute`
+    /// Executes a node on the compute target selected by its `adapter`
     /// config (a non-`default` target), returning its run status. The default
     /// implementation is inert.
     async fn run_on_alt_compute(

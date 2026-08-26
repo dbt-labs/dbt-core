@@ -1988,7 +1988,7 @@ impl AdapterImpl {
         // Replay fast-path: consult trace-derived cache if available
         if let Replay(..) = self.inner_adapter() {
             // TODO: move this logic to the [ReplayAdapter]
-            if let Some(exists) = self.schema_exists_from_trace(database, schema) {
+            if let Some(exists) = self.schema_exists_from_trace(state, database, schema) {
                 return Ok(Value::from(exists));
             }
         }
@@ -2757,24 +2757,26 @@ impl AdapterImpl {
             _ => true,
         };
 
-        match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_convert_type(state, data_type),
-            Impl(Snowflake, _)
-                if matches!(
-                    data_type,
-                    DataType::Utf8 | DataType::Utf8View | DataType::LargeUtf8
-                ) =>
-            {
-                Ok("text".to_string())
-            }
-            Impl(_, engine) => {
-                let mut out = String::new();
-                engine
-                    .type_ops()
-                    .format_arrow_type_as_sql(data_type, nullable, &mut out)?;
-                Ok(out)
-            }
+        if let Replay(_, replay) = self.inner_adapter()
+            && let Some(recorded) = replay.replay_convert_type(state, data_type)?
+        {
+            return Ok(recorded);
         }
+
+        if self.adapter_type() == Snowflake
+            && matches!(
+                data_type,
+                DataType::Utf8 | DataType::Utf8View | DataType::LargeUtf8
+            )
+        {
+            return Ok("text".to_string());
+        }
+
+        let mut out = String::new();
+        self.engine()
+            .type_ops()
+            .format_arrow_type_as_sql(data_type, nullable, &mut out)?;
+        Ok(out)
     }
 
     /// Expand the to_relation table's column types to match the schema of from_relation
@@ -3941,7 +3943,7 @@ impl AdapterImpl {
         token: CancellationToken,
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx),
+            Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx, sql),
             Impl(Bigquery, engine) => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/f4dfd350942cce11ff25e3d22f2bee9e60b12b6d/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
                 let batch = engine.execute(Some(state), conn, ctx, sql, token)?;
@@ -5170,7 +5172,12 @@ impl AdapterImpl {
         }
 
         if let (Replay(_, replay), Some(state)) = (self.inner_adapter(), state) {
-            let recorded = replay.replay_describe_relation(state)?;
+            let recorded = match replay.replay_describe_relation(state)? {
+                // Nothing recorded for this call: report no relation config, the same answer
+                // the path below gives for a relation it cannot describe.
+                DescribeRelationReplay::NotRecorded => return Ok(None),
+                DescribeRelationReplay::Recorded(payload) => payload,
+            };
             return crate::relation::bigquery::config::relation_types::materialized_view::relation_config_from_recorded(
                 recorded.as_ref(),
             )
@@ -5337,9 +5344,14 @@ impl AdapterImpl {
     /// when available.
     ///
     /// Default is None for non-replay adapters.
-    pub fn schema_exists_from_trace(&self, database: &str, schema: &str) -> Option<bool> {
+    pub fn schema_exists_from_trace(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+    ) -> Option<bool> {
         match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_schema_exists_from_trace(database, schema),
+            Replay(_, replay) => replay.replay_schema_exists_from_trace(state, database, schema),
             Impl(_, _engine) => None,
         }
     }
@@ -5740,6 +5752,19 @@ impl fmt::Debug for AdapterImpl {
     }
 }
 
+/// Outcome of asking the recording for a `describe_relation` call.
+///
+/// Distinct from a plain `Option` so a recording with no record for this call (fall back to no
+/// relation config) can't be confused with a recording that has one whose payload is null (an
+/// error case `relation_config_from_recorded` already handles).
+#[derive(Debug, Clone)]
+pub enum DescribeRelationReplay {
+    /// No `describe_relation` record was at the replay cursor.
+    NotRecorded,
+    /// A record was present; its payload may itself be null.
+    Recorded(Option<serde_json::Value>),
+}
+
 /// Abstract interface for the functions that the adapter can call to perform replays
 /// consuming recorded runs instead of making real calls to the data warehouse.
 pub trait Replayer: fmt::Debug + Send + Sync {
@@ -5824,7 +5849,11 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         quote_config: Option<bool>,
     ) -> AdapterResult<String>;
 
-    fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
+    fn replay_convert_type(
+        &self,
+        state: &State,
+        data_type: &DataType,
+    ) -> AdapterResult<Option<String>>;
 
     fn replay_list_relations(
         &self,
@@ -5845,6 +5874,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         state: &State,
         _conn: &mut dyn Connection,
         _query_ctx: &QueryCtx,
+        sql: &str,
     ) -> AdapterResult<Vec<Column>>;
 
     fn replay_get_columns_in_select_sql(&self, state: &State) -> AdapterResult<Vec<Column>>;
@@ -5939,9 +5969,14 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         schema: &str,
     ) -> AdapterResult<Value>;
 
-    fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<serde_json::Value>>;
+    fn replay_describe_relation(&self, state: &State) -> AdapterResult<DescribeRelationReplay>;
 
-    fn replay_schema_exists_from_trace(&self, database: &str, schema: &str) -> Option<bool>;
+    fn replay_schema_exists_from_trace(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+    ) -> Option<bool>;
 
     fn replay_get_missing_columns(
         &self,
@@ -6072,6 +6107,7 @@ mod tests {
             Arc::new(DefaultStmtSplitter), // XXX: may cause bugs if these tests run SQL
             Arc::new(RelationCache::default()),
             behavior_flag_overrides,
+            None,
             None,
         ))
     }

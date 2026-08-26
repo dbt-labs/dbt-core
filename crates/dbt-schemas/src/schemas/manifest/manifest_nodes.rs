@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_common::path::DbtPath;
 use indexmap::IndexMap;
 use std::{collections::BTreeMap, path::PathBuf};
@@ -32,7 +33,7 @@ use crate::schemas::{
     AbsorbedOverload, CommonAttributes, DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed,
     DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, NodeBaseAttributes,
     common::{
-        Access, ComputePlatform, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
+        Access, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig, SyncConfig,
     },
     dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns},
@@ -446,6 +447,9 @@ pub struct ManifestSnapshotConfig {
     pub hard_deletes: Option<HardDeletes>,
     pub target_database: Option<String>,
     pub target_schema: Option<String>,
+    // Internal-only placement hint; never written to the manifest.
+    #[serde(skip_serializing, default)]
+    pub adapter: Option<AdapterType>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -512,6 +516,7 @@ impl From<SnapshotConfig> for ManifestSnapshotConfig {
             hard_deletes: config.hard_deletes,
             target_database: config.target_database,
             target_schema: config.target_schema,
+            adapter: config.adapter,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: config.tags.into_inner(),
@@ -557,6 +562,7 @@ impl From<ManifestSnapshotConfig> for SnapshotConfig {
             hard_deletes: config.hard_deletes,
             target_database: config.target_database,
             target_schema: config.target_schema,
+            adapter: config.adapter,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: crate::schemas::project::configs::config_merge::Tags(config.tags),
@@ -852,7 +858,8 @@ pub struct ManifestModelConfig {
     pub catalog_name: Option<String>,
     // Internal-only placement hint; never written to the manifest.
     #[serde(skip_serializing, default)]
-    pub alt_compute: Option<ComputePlatform>,
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     #[serde(
         default,
         deserialize_with = "crate::schemas::serde::default_type",
@@ -998,7 +1005,8 @@ pub struct ManifestSeedConfig {
     pub catalog_name: Option<String>,
     // Internal-only placement hint; never written to the manifest.
     #[serde(skip_serializing, default)]
-    pub alt_compute: Option<ComputePlatform>,
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     #[serde(
         default,
         serialize_with = "crate::schemas::serde::serialize_option_docs_with_nulls"
@@ -1054,7 +1062,7 @@ impl From<SeedConfig> for ManifestSeedConfig {
             database: config.database,
             schema: config.schema,
             catalog_name: config.catalog_name,
-            alt_compute: config.alt_compute,
+            adapter: config.adapter,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,
@@ -1090,7 +1098,7 @@ impl From<ManifestSeedConfig> for SeedConfig {
             database: config.database,
             schema: config.schema,
             catalog_name: config.catalog_name,
-            alt_compute: config.alt_compute,
+            adapter: config.adapter,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,
@@ -1130,7 +1138,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             tags: config.tags.into_inner(),
             classifiers: config.classifiers.into_inner(),
             catalog_name: config.catalog_name,
-            alt_compute: config.alt_compute,
+            adapter: config.adapter,
             meta: config.meta,
             group: config.group,
             materialized: config.materialized,
@@ -1204,7 +1212,7 @@ impl From<ManifestModelConfig> for ModelConfig {
                 config.classifiers,
             ),
             catalog_name: config.catalog_name,
-            alt_compute: config.alt_compute,
+            adapter: config.adapter,
             compute: config.compute,
             meta: config.meta,
             group: config.group,
@@ -2185,35 +2193,64 @@ mod manifest_model_config_null_omission_tests {
 }
 
 #[cfg(test)]
-mod alt_compute_manifest_round_trip_tests {
-    use super::{ManifestSeedConfig, SeedConfig};
-    use crate::schemas::common::ComputePlatform;
+mod node_adapter_manifest_round_trip_tests {
+    use super::{
+        AdapterType, ManifestSeedConfig, ManifestSnapshotConfig, SeedConfig, SnapshotConfig,
+    };
 
     #[test]
-    fn seed_config_alt_compute_round_trips_through_manifest_seed_config() {
+    fn seed_config_adapter_round_trips_through_manifest_seed_config() {
         let seed_config = SeedConfig {
-            alt_compute: Some(ComputePlatform::Alt),
+            adapter: Some(AdapterType::Alt),
             ..Default::default()
         };
 
         let manifest_config: ManifestSeedConfig = seed_config.into();
-        assert_eq!(manifest_config.alt_compute, Some(ComputePlatform::Alt));
+        assert_eq!(manifest_config.adapter, Some(AdapterType::Alt));
 
         let round_tripped: SeedConfig = manifest_config.into();
-        assert_eq!(round_tripped.alt_compute, Some(ComputePlatform::Alt));
+        assert_eq!(round_tripped.adapter, Some(AdapterType::Alt));
     }
 
     #[test]
-    fn manifest_seed_config_never_serializes_alt_compute() {
-        let manifest_config = ManifestSeedConfig {
-            alt_compute: Some(ComputePlatform::Alt),
+    fn snapshot_config_adapter_round_trips_through_manifest_snapshot_config() {
+        let snapshot_config = SnapshotConfig {
+            adapter: Some(AdapterType::Bigquery),
+            ..Default::default()
+        };
+
+        let manifest_config: ManifestSnapshotConfig = snapshot_config.into();
+        assert_eq!(manifest_config.adapter, Some(AdapterType::Bigquery));
+
+        let round_tripped: SnapshotConfig = manifest_config.into();
+        assert_eq!(round_tripped.adapter, Some(AdapterType::Bigquery));
+    }
+
+    #[test]
+    fn manifest_snapshot_config_never_serializes_adapter() {
+        let manifest_config = ManifestSnapshotConfig {
+            adapter: Some(AdapterType::Bigquery),
             ..Default::default()
         };
 
         let json = serde_json::to_value(&manifest_config).unwrap();
         assert!(
-            json.get("alt_compute").is_none(),
-            "alt_compute is an internal placement hint and must not appear in the manifest: {json}"
+            json.get("adapter").is_none(),
+            "adapter is an internal placement hint and must not appear in the manifest: {json}"
+        );
+    }
+
+    #[test]
+    fn manifest_seed_config_never_serializes_adapter() {
+        let manifest_config = ManifestSeedConfig {
+            adapter: Some(AdapterType::Alt),
+            ..Default::default()
+        };
+
+        let json = serde_json::to_value(&manifest_config).unwrap();
+        assert!(
+            json.get("adapter").is_none(),
+            "adapter is an internal placement hint and must not appear in the manifest: {json}"
         );
     }
 }

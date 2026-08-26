@@ -1,8 +1,8 @@
 import type { FC, ReactNode } from 'react';
 
 import { resourceNameMap, ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-import { Icon, Link, type Ryecon } from '@dbt-labs/sourdough';
 
+import { Link } from '../../components/ui/Link';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { useResourceLink } from '../links/useResourceLink';
 import { DataPlatformChip } from './DataPlatformChip';
@@ -10,7 +10,7 @@ import { PageHeading } from './PageHeading';
 import { SimpleLinkBreadcrumbs } from './SimpleLinkBreadcrumbs';
 
 export type AssetHeaderIconItem = {
-  ryecon: Ryecon;
+  icon: ReactNode;
   /** Text label. Ignored when `Contents` is provided. */
   text?: string;
   /** Custom inner content; takes precedence over `text` when set. */
@@ -101,16 +101,10 @@ export function AssetHeader({
   );
 }
 
-function AssetHeaderIcon({
-  ryecon,
-  text,
-  Contents,
-  tooltip,
-  href,
-}: AssetHeaderIconItem) {
+function AssetHeaderIcon({ icon, text, Contents, tooltip, href }: AssetHeaderIconItem) {
   const inner = (
     <span className="font-caption flex items-center gap-1 text-fgDecorative">
-      <Icon ryecon={ryecon} className="align-middle" alt="" />
+      {icon}
       <span className="align-middle">{Contents ? <Contents /> : text}</span>
     </span>
   );

@@ -440,6 +440,24 @@ got {:?}, expected an instance of {}",
         if arg.write_index && arg.static_analysis == Some(StaticAnalysisKind::Strict) {
             arg.write_lineage = true;
         }
+        // `build` and `run` write the index by default.
+        //
+        // After the lineage block above so a defaulted index does not turn on `write_lineage`.
+        // Explicit `--write-index` still does. Set on `EvalArgs`, not `Cli.common_args`:
+        // `effective_partial_parse()` / `effective_partial_load()` read the raw flag, so
+        // leaving it unset keeps partial parse/load off for a plain `dbt build`/`run`.
+        // Skip if the caller already set metadata, index, or catalog so `--write-metadata`
+        // stays epochs-without-index and `--write-catalog` stays explicit.
+        if matches!(arg.command, FsCommand::Build | FsCommand::Run)
+            && !common_args.write_index
+            && !common_args.write_metadata
+            && !common_args.write_catalog
+            && !common_args.no_write_index
+        {
+            arg.write_metadata = true;
+            arg.write_index = true;
+            arg.write_index_implied = true;
+        }
         Ok(arg)
     }
 
@@ -876,12 +894,19 @@ pub struct ShowArgs {
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
     #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
+
+    /// Run against a non-default adapter the target declares (e.g. `lake_compute`),
+    /// instead of the target's default adapter. Only meaningful for targets
+    /// declaring more than one adapter, and only with `--inline`.
+    #[arg(long)]
+    pub adapter: Option<String>,
 }
 
 impl ShowArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::Show;
+        eval_args.adapter_override = self.adapter.clone();
         if let Some(resource_type) = &self.resource_type {
             eval_args.resource_types = resource_type.clone();
         } else {
@@ -1360,6 +1385,12 @@ pub struct RunOperationArgs {
     #[arg(long, conflicts_with_all = ["MACRO", "args"])]
     pub sql: Option<String>,
 
+    /// Run against a non-default adapter the target declares (e.g. `lake_compute`),
+    /// instead of the target's default adapter. Only meaningful for targets
+    /// declaring more than one adapter.
+    #[arg(long)]
+    pub adapter: Option<String>,
+
     // Flattened IO args
     #[clap(flatten)]
     pub common_args: CommonArgs,
@@ -1371,6 +1402,7 @@ impl RunOperationArgs {
         eval_args.phase = Phases::RunOperation;
         eval_args.macro_name = self.macro_name.clone();
         eval_args.macro_sql = self.sql.clone();
+        eval_args.adapter_override = self.adapter.clone();
         if let Some(args) = &self.args {
             eval_args.macro_args = args.clone();
         }
@@ -1468,6 +1500,16 @@ pub struct SystemUpgradeDistributionArgs {
     /// Skip the confirmation prompt and proceed automatically.
     #[arg(short = 'y', long)]
     pub yes: bool,
+
+    /// For a managed-project upgrade, the Python package manager to sync
+    /// the rewritten manifest with (e.g. `uv`, `poetry`, `pdm`, `pipenv`,
+    /// `conda`, `hatch`, `pip`, `pipx`, `rye`, `asdf`, `mise`, `pyenv`).
+    /// Overrides automatic detection -- use this to answer non-interactively
+    /// when detection can't determine the manager on its own (it would
+    /// otherwise prompt for one interactively, or fail if run with --yes or
+    /// outside a terminal).
+    #[arg(long)]
+    pub package_manager: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
@@ -1678,16 +1720,6 @@ pub struct CommonArgs {
     )]
     pub target: Option<String>,
 
-    /// The profile output to use for models on the alternate compute target
-    #[arg(
-        global = true,
-        long,
-        env = "DBT_X_ALT_TARGET",
-        help_heading = help_headings::PROJECT,
-        hide_short_help = true
-    )]
-    pub x_alt_target: Option<String>,
-
     /// The directory to load the dbt project from
     #[arg(
         global = true,
@@ -1888,6 +1920,10 @@ pub struct CommonArgs {
     /// column schemas and column-level lineage.
     #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
     pub write_index: bool,
+    /// Opt out of the index that `build` writes by default. `--write-index` is `SetTrue` with
+    /// no negation, so without this flag defaulting it on would leave no way back.
+    #[arg(global = true, long, action = ArgAction::SetTrue, default_value_t=false, value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_write_index: bool,
 
     /// Directory for metadata parquet output (default: <target>/metadata/)
     #[arg(
@@ -2560,7 +2596,7 @@ impl CommonArgs {
     /// `--write-index` → `--write-metadata` → `--partial-parse`
     pub fn effective_partial_parse(&self) -> bool {
         self.write_metadata
-            || self.write_index
+            || self.effective_write_index()
             || self.partial_parse
             || self.partial_load
             || self.verify_partial_load
@@ -2571,7 +2607,21 @@ impl CommonArgs {
     /// `--verify-partial-load` implies `--partial-load`. `--write-metadata` implies both.
     /// `--write-index` implies `--write-metadata` implies both.
     pub fn effective_partial_load(&self) -> bool {
-        self.write_metadata || self.write_index || self.partial_load || self.verify_partial_load
+        self.write_metadata
+            || self.effective_write_index()
+            || self.partial_load
+            || self.verify_partial_load
+    }
+
+    /// `--write-index` after `--no-write-index` cancels it.
+    ///
+    /// Both `effective_partial_*` gates go through this rather than reading `write_index`
+    /// directly, because those implications exist only to serve the index. Cancelling the index
+    /// without cancelling them would leave the caller with no index *and* the partial-load fast
+    /// path, which cannot see files it has not already recorded — the worst of both. An explicit
+    /// `--write-metadata` still implies both on its own; `--no-write-index` only cancels the index.
+    pub fn effective_write_index(&self) -> bool {
+        self.write_index && !self.no_write_index
     }
 
     /// Resolve the effective value of `--quiet` / `--no-quiet`.
@@ -2616,6 +2666,7 @@ impl CommonArgs {
                 send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.log_format,
+                log_format_file: self.log_format_file,
                 log_level: self.log_level,
                 log_level_file: self.log_level_file,
                 log_file_max_bytes: self.log_file_max_bytes,
@@ -2637,7 +2688,6 @@ impl CommonArgs {
             lock: false,       // comes from DepsArgs
             profile: self.profile.clone(),
             target: self.target.clone(),
-            x_alt_target: self.x_alt_target.clone(),
             update_deps: false,
             vars: self.vars.clone().unwrap_or_default(),
             phase: self.phase.clone().unwrap_or(Phases::All),
@@ -2672,6 +2722,7 @@ impl CommonArgs {
             macro_name: None,
             macro_args: BTreeMap::new(),
             macro_sql: None,
+            adapter_override: None,
             selector: self.selector.clone(),
             resource_types: vec![],
             exclude_resource_types: vec![],
@@ -2715,8 +2766,14 @@ impl CommonArgs {
                 self.write_json
             },
             write_catalog: self.write_catalog,
-            write_metadata: self.write_metadata || self.write_index,
-            write_index: self.write_index,
+            // `--no-write-index` is authoritative over `--write-index`, the way
+            // `--no-write-json` is over `--write-json`. It cancels only the index, so
+            // `--write-metadata --no-write-index` still means epochs-without-index.
+            write_metadata: self.write_metadata || self.effective_write_index(),
+            write_index: self.effective_write_index(),
+            // Set by `Cli::to_eval_args` for the commands that default the index on; a
+            // per-command conversion cannot know it was a default rather than a request.
+            write_index_implied: false,
             classify_with_warehouse_tags: self.classify_with_warehouse_tags,
             index_dir: self.index_dir.clone(),
             metadata_dir: self.metadata_dir.clone(),
@@ -2753,6 +2810,7 @@ impl CommonArgs {
             skip_creating_generic_tests: false,
             write_lineage: self.write_lineage,
             force_enable_linter: false,
+            force_enable_formatter_diagnostics: false,
             maximum_seed_size_mib: self.resolve_maximum_seed_size_mib(in_dir),
             command_entrypoint: arg.command,
         }
@@ -2884,6 +2942,7 @@ impl InitArgs {
                 send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.common_args.log_format,
+                log_format_file: self.common_args.log_format_file,
                 log_level: self.common_args.log_level,
                 log_level_file: self.common_args.log_level_file,
                 log_file_max_bytes: self.common_args.log_file_max_bytes,
@@ -2932,6 +2991,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             send_anonymous_usage_stats: common_args.get_send_anonymous_usage_stats(),
             status_reporter: None,
             log_format: common_args.log_format,
+            log_format_file: common_args.log_format_file,
             log_level: match (common_args.debug, common_args.log_level) {
                 (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
                 (true, _) => Some(LogLevel::Debug),
@@ -2981,6 +3041,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             status_reporter: None,
             // should_cancel_compilation: None,
             log_format: common_args.log_format,
+            log_format_file: common_args.log_format_file,
             log_level: common_args.log_level,
             log_level_file: common_args.log_level_file,
             log_file_max_bytes: common_args.log_file_max_bytes,
@@ -3027,6 +3088,40 @@ mod tests {
             user_settings_path,
             default,
         )
+    }
+
+    #[test]
+    fn no_write_index_cancels_the_index_and_its_implications() {
+        // `--write-index` alone: index on, and it implies partial parse + partial load.
+        let mut args = CommonArgs {
+            write_index: true,
+            ..Default::default()
+        };
+        assert!(args.effective_write_index());
+        assert!(args.effective_partial_parse());
+        assert!(args.effective_partial_load());
+
+        // Adding `--no-write-index` must cancel all three together. Cancelling only the index
+        // would leave the caller with no index *and* the partial-load fast path, which cannot
+        // see files it has not already recorded.
+        args.no_write_index = true;
+        assert!(!args.effective_write_index());
+        assert!(!args.effective_partial_parse());
+        assert!(!args.effective_partial_load());
+    }
+
+    #[test]
+    fn no_write_index_leaves_explicit_write_metadata_alone() {
+        // `--write-metadata` implies partial parse/load on its own, so `--no-write-index`
+        // cancels only the index: this stays epochs-without-index.
+        let args = CommonArgs {
+            write_metadata: true,
+            no_write_index: true,
+            ..Default::default()
+        };
+        assert!(!args.effective_write_index());
+        assert!(args.effective_partial_parse());
+        assert!(args.effective_partial_load());
     }
 
     #[test]
@@ -3663,5 +3758,36 @@ mod tests {
     fn get_distribution_info_path_and_all_are_mutually_exclusive() {
         let result = parse_internal_args(&["get-distribution-info", "--all", "/some/dbt"]);
         assert!(result.is_err());
+    }
+
+    /// Regression test for dbt-core#15685: both entrypoints carry
+    /// `--log-format-file` from `CommonArgs` into `IoArgs`.
+    #[test]
+    fn cli_entrypoints_carry_log_format_file_into_io_args() {
+        // `Cli::common_args()` reads the subcommand's args, not the top-level field.
+        let cli = Cli {
+            command: Command::Core(CoreCommand::Run(RunArgs {
+                common_args: CommonArgs {
+                    log_format: LogFormat::Text,
+                    log_format_file: Some(LogFormat::Json),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
+            common_args: CommonArgs::default(),
+        };
+
+        for (entrypoint, args) in [("from_main", from_main(&cli)), ("from_lib", from_lib(&cli))] {
+            assert_eq!(
+                args.io.log_format_file,
+                Some(LogFormat::Json),
+                "expected `{entrypoint}` to carry log_format_file"
+            );
+            assert_eq!(
+                args.io.log_format,
+                LogFormat::Text,
+                "expected `{entrypoint}` to leave log_format alone"
+            );
+        }
     }
 }

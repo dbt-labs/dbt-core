@@ -11,7 +11,7 @@ use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
 use crate::resolve::resolve_utils::{
-    build_unrendered_config, err_resource_name_has_spaces, validate_compute,
+    build_unrendered_config, err_resource_name_has_spaces, validate_compute, validate_node_adapter,
 };
 use crate::utils::RelationComponents;
 use crate::utils::extract_resource_config_from_raw_project;
@@ -40,6 +40,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::IntrospectionKind;
@@ -52,6 +53,8 @@ use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::merge_vec;
 use dbt_schemas::schemas::nodes::DbtModel;
+use dbt_schemas::schemas::nodes::DbtSeed;
+use dbt_schemas::schemas::nodes::DbtSnapshot;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::project::ResolvableConfig;
@@ -69,6 +72,7 @@ use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::{DbtAsset, DbtPackage};
 use dbt_yaml::Spanned;
 use dbt_yaml::Value as YmlValue;
+use indexmap::IndexMap;
 use md5;
 use minijinja::Value;
 use serde::de;
@@ -354,8 +358,12 @@ pub async fn resolve_data_tests(
     node_resolver: &NodeResolver,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    default_adapter: AdapterType,
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     models: &BTreeMap<String, Arc<DbtModel>>,
     disabled_models: &BTreeMap<String, Arc<DbtModel>>,
+    seeds: &BTreeMap<String, Arc<DbtSeed>>,
+    snapshots: &BTreeMap<String, Arc<DbtSnapshot>>,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
@@ -410,7 +418,7 @@ pub async fn resolve_data_tests(
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref());
             init_project_config(
                 &tests_config,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix,
             )
@@ -458,7 +466,7 @@ pub async fn resolve_data_tests(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
-        config: test_config,
+        config: mut test_config,
         rendered_sql: _,
         macro_spans: _macro_spans,
         properties: maybe_properties,
@@ -559,6 +567,66 @@ pub async fn resolve_data_tests(
         );
         validate_compute(test_config.compute, &dbt_asset.path)?;
 
+        let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
+        // Match dbt-core's _lookup_attached_node: source tests get no attached_node;
+        // model/seed/snapshot tests get the parent's unique_id (with .v<version> for
+        // versioned models).
+        let attached_node = test_asset.and_then(|ta| {
+            if ta.resource_type == "source" {
+                None
+            } else {
+                Some(format_node_unique_id(
+                    &ta.resource_type,
+                    &ta.dbt_asset.package_name,
+                    &ta.resource_name,
+                    None,
+                    ta.version.as_deref(),
+                ))
+            }
+        });
+
+        // A test runs where its subject runs, so an unset `+adapter` is inherited
+        // from `attached_node` -- the same lookup the `group` inheritance below
+        // does. `alt` is deliberately not inherited: the compute-platform path
+        // materializes models and seeds only, so a test routed there would fail at
+        // run time. A test on an `alt` node therefore stays on the target default,
+        // which is what it did before `+adapter` existed.
+        let inherited_adapter = attached_node
+            .as_deref()
+            .and_then(|id| {
+                models
+                    .get(id)
+                    .map(|m| m.node_adapter())
+                    .or_else(|| seeds.get(id).map(|s| s.node_adapter()))
+                    .or_else(|| snapshots.get(id).map(|s| s.node_adapter()))
+            })
+            .filter(|adapter| *adapter != AdapterType::Alt);
+        // An explicit selection is validated like any other node's; `None` in gives
+        // `None` out, and inheritance fills the gap. An inherited adapter needs no
+        // validation -- it was already validated on the node that materializes.
+        let resolved_node_adapter = validate_node_adapter(
+            test_config.adapter,
+            default_adapter,
+            &DbtMaterialization::Test,
+            None,
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            false,
+            &dbt_asset.path,
+        )?
+        .or(inherited_adapter);
+
+        // See `resolve_models`: both remaining quoting layers depend on which
+        // adapter the node runs on, which is only known after the config merge.
+        let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+        test_config.quoting = resolve_package_quoting(
+            Some(match adapter_quoting.get(&selected_adapter) {
+                Some(authored) => test_config.quoting.filled_from(authored),
+                None => test_config.quoting,
+            }),
+            selected_adapter,
+        );
+
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
@@ -654,6 +722,7 @@ pub async fn resolve_data_tests(
                 meta: test_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),
@@ -709,23 +778,6 @@ pub async fn resolve_data_tests(
                 unrendered_config,
             },
             __test_attr__: {
-                let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
-                // Match dbt-core's _lookup_attached_node: source tests get no attached_node;
-                // model/seed/snapshot tests get the parent's unique_id (with .v<version> for
-                // versioned models).
-                let attached_node = test_asset.and_then(|ta| {
-                    if ta.resource_type == "source" {
-                        None
-                    } else {
-                        Some(format_node_unique_id(
-                            &ta.resource_type,
-                            &ta.dbt_asset.package_name,
-                            &ta.resource_name,
-                            None,
-                            ta.version.as_deref(),
-                        ))
-                    }
-                });
                 let group = attached_node
                     .as_deref()
                     .and_then(|id| models.get(id))

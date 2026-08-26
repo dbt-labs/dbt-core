@@ -58,7 +58,6 @@ fn load_profile_with_loader(
         profile: Some(profile_name.to_string()).into(),
         dbt_cloud: None,
         flags: None,
-        data_paths: Default::default(),
         source_paths: Default::default(),
         log_path: Default::default(),
         target_path: Default::default(),
@@ -66,7 +65,7 @@ fn load_profile_with_loader(
     };
 
     let dbt_profile = load_profiles(&load_args, &dbt_project)?;
-    Ok(dbt_profile.db_config)
+    Ok(dbt_profile.default_db_config().clone())
 }
 
 #[derive(Debug, Clone)]
@@ -393,10 +392,10 @@ impl ProfileSetup {
                 ));
             }
             AdapterType::Alt => {
-                // TODO: Create proper Alt profile setup
+                // TODO: Create proper lake compute profile setup
                 return Err(fs_err!(
                     ErrorCode::Generic,
-                    "Alt profile setup not yet implemented."
+                    "lake_compute profile setup not yet implemented."
                 ));
             }
             AdapterType::ClickHouse => {

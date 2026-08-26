@@ -28,7 +28,7 @@ use dbt_jinja_utils::{
     invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
     listener::JinjaTypeCheckingEventListenerFactory,
-    node_resolver::NodeResolver,
+    node_resolver::{NodeResolver, PackageSearchOrder},
     phases::{build_operation_context_btreemap, configure_compile_and_run_jinja_environment},
 };
 use dbt_loader::args::*;
@@ -38,6 +38,7 @@ use dbt_schema_store::{
     SchemaStoreTrait,
     store::{DataStore, SchemaStore},
 };
+use dbt_schemas::schemas::selection_override::resolve_selection_override;
 use dbt_tasks_core::{
     CompiledSqlCache, RunTaskResults,
     local_schema_builder::{init_data_store, init_schema_store},
@@ -418,7 +419,15 @@ impl<'a> CompilationPhasesExecutor<'a> {
         // delta epoch for the loaded+changed nodes; missing changed nodes get picked up on the
         // next full-load run. When nothing changed, changed_nodes is Some(empty) and save() is
         // a no-op (early return inside parquet_incremental::save).
-        if self.cli.common_args.effective_partial_parse() {
+        //
+        // Also when the index is being written, even if partial parse is off: these epochs are
+        // the input the index ingest converts into the `dbt.*` layers, so without them the
+        // ingest finds nothing to convert and leaves a half-built index (run_results only).
+        // Reading `EvalArgs` here rather than the raw `CommonArgs` is what lets `build` default
+        // the index on without also turning incremental reuse on — the two read sites below
+        // stay on `effective_partial_parse()`. Writing this state and *consuming* it to skip
+        // work are separable, and only the consuming side carries the staleness risk.
+        if self.cli.common_args.effective_partial_parse() || self.arg.write_index {
             let dbt_state = loaded_project.dbt_state();
             let env_vars = dbt_jinja_utils::utils::ENV_VARS
                 .lock()
@@ -666,6 +675,9 @@ impl<'a> CompilationPhasesExecutor<'a> {
                     RunFilter::try_from(self.arg.empty, self.arg.sample.clone())?,
                     BTreeMap::new(), // renaming
                     compile_or_test,
+                    PackageSearchOrder::resolve(
+                        loaded_project.dbt_state().root_project().flags.as_ref(),
+                    ),
                 )?;
                 Arc::new(node_resolver)
             };
@@ -1459,8 +1471,13 @@ impl DbtProjectCompilation {
 
         // For Pull command, use its select args for scheduling
         let pull_select = cli.sample_select();
+        let selection_override = resolve_selection_override(arg)?;
         let scheduler_args =
-            SchedulerArgs::from_eval_args_with_exclude_unique_ids(arg, exclude_unique_ids);
+            SchedulerArgs::from_eval_args_with_exclude_unique_ids_and_selection_override(
+                arg,
+                exclude_unique_ids,
+                selection_override,
+            );
 
         let schedule = if let Some(ref pull_select_args) = pull_select {
             let pull_exclude = cli.sample_exclude();
@@ -1820,16 +1837,41 @@ impl DbtProjectCompilation {
 
         // FEATURES: auth record_replay
         // Initialize adapter
-        let adapter = self.loaded_project().init_adapter(
-            &self.resolved_state,
-            arg.replay.clone(),
-            &jinja_env,
-            Some(schema_store.clone()),
-            token,
-            sidecar_client.clone(),
-            execute_mode,
-            arg.infer_schemas,
-        )?;
+        let adapter = if let Some(adapter_override) = arg
+            .adapter_override
+            .as_deref()
+            .filter(|_| matches!(arg.command, FsCommand::RunOperation | FsCommand::Show))
+        {
+            let adapter_type: AdapterType = adapter_override.parse().map_err(|_| {
+                fs_err!(
+                    ErrorCode::InvalidArgument,
+                    "--adapter '{adapter_override}' is not a recognized adapter type"
+                )
+            })?;
+            self.loaded_project()
+                .init_adapter_store(
+                    &self.resolved_state,
+                    arg.replay.clone(),
+                    &jinja_env,
+                    Some(schema_store.clone()),
+                    token,
+                    sidecar_client.clone(),
+                    execute_mode,
+                    arg.infer_schemas,
+                )?
+                .get(adapter_type)?
+        } else {
+            self.loaded_project().init_adapter(
+                &self.resolved_state,
+                arg.replay.clone(),
+                &jinja_env,
+                Some(schema_store.clone()),
+                token,
+                sidecar_client.clone(),
+                execute_mode,
+                arg.infer_schemas,
+            )?
+        };
         token.check_cancellation()?;
 
         if adapter.engine().has_query_cache() {
@@ -2462,7 +2504,7 @@ fn set_eval_args_threads_and_target(arg: &EvalArgs, dbt_state: &DbtState) -> Eva
         .with_additional(
             dbt_state.dbt_profile.target.to_string(),
             dbt_state.dbt_profile.threads,
-            dbt_state.dbt_profile.db_config.adapter_type(),
+            dbt_state.dbt_profile.default_db_config().adapter_type(),
         )
         .build()
 }
@@ -2489,10 +2531,14 @@ fn send_vortex_telemetry_if_possible(
         }
         adapter_info_event(
             arg.io.invocation_id.to_string(),
-            dbt_state.dbt_profile.db_config.adapter_type().to_string(),
             dbt_state
                 .dbt_profile
-                .db_config
+                .default_db_config()
+                .adapter_type()
+                .to_string(),
+            dbt_state
+                .dbt_profile
+                .default_db_config()
                 .get_adapter_unique_id()
                 .unwrap(),
         );

@@ -1,8 +1,10 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use crate::AdapterType;
+use chrono::{DateTime, NaiveDateTime};
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
-use dbt_sql_utils::sql_split_statements;
+use dbt_frontend_common::Dialect;
+use dbt_sql_utils::{SqlToken as DialectToken, sql_lex_tokens, sql_split_statements};
 
 use super::tokenizer::{AbstractToken, Token, abstract_tokenize, tokenize};
 use regex::Regex;
@@ -27,6 +29,8 @@ pub fn compare_sql(actual: &str, expected: &str, adapter_type: AdapterType) -> A
     let expected = canonicalize_uuid_literals(&expected);
     let actual = canonicalize_dbt_version_literal(&actual);
     let expected = canonicalize_dbt_version_literal(&expected);
+    let actual = canonicalize_compact_timestamp_predicate(&actual, adapter_type);
+    let expected = canonicalize_compact_timestamp_predicate(&expected, adapter_type);
     let actual = canonicalize_run_started_at_literal(&actual);
     let expected = canonicalize_run_started_at_literal(&expected);
     let actual = canonicalize_yyyymmdd_batch_literals(&actual);
@@ -2003,9 +2007,8 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 }
 
 // Replay-drift literal patterns: each matches a literal whose value is decided by the engine
-// build or the run's wall clock, never by the user's source, plus the alias that identifies it.
-// The alias requirement is the guardrail — it keeps these from rewriting literals that carry
-// real meaning.
+// build or the run's wall clock, never by the user's source, plus the SQL context that identifies
+// it. An alias or exact expression shape keeps these from rewriting unrelated literals.
 
 /// Matches a digit-leading quoted semver-ish literal, an optional `::type` cast, and the
 /// `as dbt_version` alias. The leading-digit requirement keeps it off unrelated string literals.
@@ -2046,6 +2049,143 @@ fn canonicalize_run_started_at_literal(sql: &str) -> String {
     RUN_STARTED_AT_LITERAL_RE
         .replace_all(sql, "'RUN_STARTED_AT'$cast as $alias")
         .to_string()
+}
+
+/// Replace the upper bound of the reported Snowflake temporary-view timestamp predicate when it
+/// equals the compact form of the statement's aliased `dbt_run_started_at` value.
+fn canonicalize_compact_timestamp_predicate(sql: &str, adapter_type: AdapterType) -> String {
+    match adapter_type {
+        AdapterType::Snowflake => {}
+        _ => return sql.to_string(),
+    }
+    if !contains_ignore_ascii_case(sql, "to_timestamp") {
+        return sql.to_string();
+    }
+
+    let Some(tokens) = sql_lex_tokens(sql, Dialect::Snowflake) else {
+        return sql.to_string();
+    };
+    let Some(view_body) = temporary_view_body_tokens(&tokens) else {
+        return sql.to_string();
+    };
+    let Some(compact_run_started_at) = compact_dbt_run_started_at(view_body) else {
+        return sql.to_string();
+    };
+
+    let mut rhs_spans = view_body
+        .windows(14)
+        .filter_map(|tokens| compact_timestamp_predicate_rhs(tokens, &compact_run_started_at))
+        .collect::<Vec<_>>();
+    if rhs_spans.is_empty() {
+        return sql.to_string();
+    }
+
+    let mut canonical = sql.to_string();
+    rhs_spans.sort_unstable();
+    for (start, end) in rhs_spans.into_iter().rev() {
+        canonical.replace_range(start..end, "'00000000000000'");
+    }
+    canonical
+}
+
+fn temporary_view_body_tokens(tokens: &[DialectToken]) -> Option<&[DialectToken]> {
+    const PREFIX: [&str; 5] = ["create", "or", "replace", "temporary", "view"];
+    if tokens.len() < PREFIX.len()
+        || !tokens
+            .iter()
+            .zip(PREFIX)
+            .all(|(token, expected)| token.text.eq_ignore_ascii_case(expected))
+    {
+        return None;
+    }
+
+    let as_index = tokens
+        .iter()
+        .enumerate()
+        .skip(PREFIX.len())
+        .find_map(|(index, token)| token.text.eq_ignore_ascii_case("as").then_some(index))?;
+    let open_index = as_index + 1;
+    if tokens.get(open_index)?.text != "(" {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().skip(open_index) {
+        match token.text.as_str() {
+            "(" => depth += 1,
+            ")" => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(&tokens[open_index + 1..index]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn compact_dbt_run_started_at(tokens: &[DialectToken]) -> Option<String> {
+    tokens.windows(3).find_map(|tokens| {
+        if !tokens[1].text.eq_ignore_ascii_case("as")
+            || !tokens[2].text.eq_ignore_ascii_case("dbt_run_started_at")
+        {
+            return None;
+        }
+        compact_iso_timestamp(single_quoted_literal(&tokens[0])?)
+    })
+}
+
+fn compact_iso_timestamp(value: &str) -> Option<String> {
+    let normalized = value.replacen(' ', "T", 1);
+    if let Ok(timestamp) = DateTime::parse_from_rfc3339(&normalized) {
+        return Some(timestamp.format("%Y%m%d%H%M%S").to_string());
+    }
+    NaiveDateTime::parse_from_str(&normalized, "%Y-%m-%dT%H:%M:%S%.f")
+        .ok()
+        .map(|timestamp| timestamp.format("%Y%m%d%H%M%S").to_string())
+}
+
+fn compact_timestamp_predicate_rhs(
+    tokens: &[DialectToken],
+    compact_run_started_at: &str,
+) -> Option<(usize, usize)> {
+    let punctuation = [
+        (2, "("),
+        (4, ","),
+        (6, ")"),
+        (7, "<"),
+        (9, "("),
+        (11, ","),
+        (13, ")"),
+    ];
+    if !tokens[0].text.eq_ignore_ascii_case("where")
+        || !tokens[1].text.eq_ignore_ascii_case("to_timestamp")
+        || !tokens[8].text.eq_ignore_ascii_case("to_timestamp")
+        || !punctuation
+            .iter()
+            .all(|(index, expected)| tokens[*index].text == *expected)
+    {
+        return None;
+    }
+
+    let lhs = single_quoted_literal(&tokens[3])?;
+    let lhs_format = single_quoted_literal(&tokens[5])?;
+    let rhs = single_quoted_literal(&tokens[10])?;
+    let rhs_format = single_quoted_literal(&tokens[12])?;
+    if lhs.len() != 14
+        || !lhs.bytes().all(|byte| byte.is_ascii_digit())
+        || rhs != compact_run_started_at
+        || !lhs_format.eq_ignore_ascii_case("YYYYMMDDHH24MISSFF3")
+        || !rhs_format.eq_ignore_ascii_case("YYYYMMDDHH24MISSFF3")
+    {
+        return None;
+    }
+    Some((tokens[10].start, tokens[10].end))
+}
+
+fn single_quoted_literal(token: &DialectToken) -> Option<&str> {
+    token.text.strip_prefix('\'')?.strip_suffix('\'')
 }
 
 /// Replace `YYYYMMDDHHMMSS`-derived batch id and archive path literals with fixed placeholders —
@@ -6269,6 +6409,184 @@ SELECT
         assert!(
             result.is_ok(),
             "etl_batch_id literal drift with a non-number cast should be ignored: {result:?}"
+        );
+    }
+
+    fn compact_timestamp_temp_view(
+        run_started_at: &str,
+        alias: &str,
+        lhs: &str,
+        rhs: &str,
+        format: &str,
+    ) -> String {
+        format!(
+            "create or replace temporary view timestamp_predicate as (\n\
+             select '{run_started_at}' as {alias}\n\
+             where TO_TIMESTAMP('{lhs}', '{format}')\n\
+             < TO_TIMESTAMP('{rhs}', '{format}')\n\
+             )"
+        )
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_literal_drift_ignored() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_ok(),
+            "unaliased TO_TIMESTAMP literal drift should be ignored: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_other_format_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101",
+            "20260824",
+            "YYYYMMDD",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101",
+            "20240101",
+            "YYYYMMDD",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "compact timestamp drift with another format should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_fixed_cutoff_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "19990101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "fixed TO_TIMESTAMP predicate cutoff drift should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_hardcoded_rhs_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20990101000000",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20980101000000",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "hardcoded TO_TIMESTAMP upper-bound drift should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_plain_alias_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "run_started_at",
+            "20000101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "TO_TIMESTAMP drift should bind only to dbt_run_started_at"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_drift_outside_temp_view_preserved() {
+        let actual = r#"
+select '2026-08-24T18:03:17+00:00' as dbt_run_started_at
+where TO_TIMESTAMP('20000101000000', 'YYYYMMDDHH24MISSFF3')
+  < TO_TIMESTAMP('20260824180317', 'YYYYMMDDHH24MISSFF3')"#;
+        let expected = r#"
+select '2024-01-01T01:01:01+00:00' as dbt_run_started_at
+where TO_TIMESTAMP('20000101000000', 'YYYYMMDDHH24MISSFF3')
+  < TO_TIMESTAMP('20240101010101', 'YYYYMMDDHH24MISSFF3')"#;
+
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "TO_TIMESTAMP drift outside temporary-view DDL should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_drift_for_other_adapter_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Databricks);
+        assert!(
+            result.is_err(),
+            "TO_TIMESTAMP drift for a non-Snowflake adapter should remain significant"
         );
     }
 

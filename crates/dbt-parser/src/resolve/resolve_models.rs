@@ -42,6 +42,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
@@ -52,6 +53,8 @@ use dbt_schemas::schemas::NodeBaseAttributes;
 use dbt_schemas::schemas::TimeSpine;
 use dbt_schemas::schemas::TimeSpinePrimaryColumn;
 use dbt_schemas::schemas::common::Access;
+use indexmap::IndexMap;
+
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::ModelFreshnessRules;
@@ -61,6 +64,7 @@ use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
+use dbt_schemas::schemas::dbt_column::VersionColumnProperties;
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::manifest::semantic_model::NodeRelation;
@@ -91,7 +95,7 @@ use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::resolve_tests::persist_generic_data_tests::{
     TestUnrenderedConfigs, extract_test_unrendered_configs,
 };
-use super::resolve_utils::{validate_compute, validate_compute_platform};
+use super::resolve_utils::{validate_compute, validate_node_adapter};
 use super::validate_models::validate_model;
 
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
@@ -159,6 +163,11 @@ pub async fn resolve_models(
     arg: &ResolveArgs,
     package: &DbtPackage,
     package_quoting: DbtQuoting,
+    // Authored quoting per declared adapter name: the adapter's `adapters:` entry
+    // in the root dbt_project.yml, plus the top-level `quoting:` block for the
+    // default adapter only. Unresolved, so a node's own `+quoting:` still wins.
+    // See `authored_quoting_per_adapter`.
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     models_properties: &BTreeMap<String, MinimalPropertiesEntry>,
@@ -166,6 +175,9 @@ pub async fn resolve_models(
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
+    // Every adapter the active target declares, for resolving `+adapter`.
+    // The target's default adapter.
+    default_adapter: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
@@ -191,7 +203,7 @@ pub async fn resolve_models(
     // built-in name (e.g. `table`, `incremental`) — so static analysis can be
     // skipped for the models that use them (see the per-model use below).
     let materialization_resolver =
-        MaterializationResolver::new(macros, adapter_type, root_package.dbt_project.name.as_str());
+        MaterializationResolver::new(macros, root_package.dbt_project.name.as_str());
 
     let is_dependency = dependency_package_name.is_some();
     // Best-effort raw parse of the root project's `models:` subtree, used only to hydrate
@@ -211,7 +223,7 @@ pub async fn resolve_models(
         ProjectConfigResolver::build(root_project_configs.models.clone(), is_dependency, || {
             init_project_config(
                 &package.dbt_project.models,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
@@ -219,6 +231,7 @@ pub async fn resolve_models(
         .with_resolve_defaults((
             arg.static_analysis.unwrap_or_default(),
             root_package.dbt_project.sync.clone(),
+            Some(default_adapter),
         ));
 
     let render_ctx = RenderCtx {
@@ -565,8 +578,12 @@ pub async fn resolve_models(
 
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
         validate_compute(model_config.compute, &dbt_asset.path)?;
-        validate_compute_platform(
-            model_config.alt_compute,
+        // Resolved here rather than in the config merge: the merge has no access
+        // to the target's adapter list, and the node needs the adapter's *type*
+        // to reach the run layer, which has no profile.
+        let resolved_node_adapter = validate_node_adapter(
+            model_config.adapter,
+            default_adapter,
             &materialized,
             model_config.catalog_name.as_deref(),
             adapter_type,
@@ -587,8 +604,10 @@ pub async fn resolve_models(
         // skipping static analysis avoids emitting malformed SQL when the
         // materialization guards `graph.nodes` introspection behind
         // `{% if execute %}` (dbt-core#14486).
-        let is_custom_materialization =
-            materialization_resolver.is_custom_materialization(&materialized.to_string());
+        let is_custom_materialization = materialization_resolver.is_custom_materialization(
+            &materialized.to_string(),
+            resolved_node_adapter.unwrap_or(adapter_type),
+        );
         let static_analysis = if is_custom_materialization {
             Spanned::new(StaticAnalysisKind::Off)
         } else {
@@ -660,6 +679,25 @@ pub async fn resolve_models(
             true,
         );
 
+        // Quoting is resolved here rather than at the package seed, because both
+        // remaining layers depend on which adapter the node runs on, and that is
+        // only known after the config merge. At this point `model_config.quoting`
+        // holds just the `models:`-subtree and model-level `+quoting:` values; the
+        // adapter's own config and the adapter type's default go underneath.
+        //
+        // Written back into the config rather than used locally, so everything
+        // downstream sees the same fully-resolved value -- notably
+        // `deprecated_config`, which reaches the manifest and the run-cache hash.
+        // Leaving unset fields as `None` there would change both.
+        let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+        model_config.quoting = resolve_package_quoting(
+            Some(match adapter_quoting.get(&selected_adapter) {
+                Some(authored) => model_config.quoting.filled_from(authored),
+                None => model_config.quoting,
+            }),
+            resolved_node_adapter.unwrap_or(adapter_type),
+        );
+
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
             __common_attr__: CommonAttributes {
@@ -695,6 +733,7 @@ pub async fn resolve_models(
                 meta: model_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -845,7 +884,6 @@ pub async fn resolve_models(
                 state: model_config.state.clone(),
                 event_time: model_config.event_time.clone(),
                 catalog_name: model_config.catalog_name.clone(),
-                alt_compute: model_config.alt_compute,
                 table_format: model_config.table_format.clone(),
                 sync: model_config.sync.clone(),
                 compiled_code: None,
@@ -1147,36 +1185,38 @@ fn process_versioned_columns(
 ) -> Result<Vec<DbtColumnRef>, Box<dbt_common::FsError>> {
     for version in versions.iter() {
         if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref())
-            && let Some(column_props) = version.__additional_properties__.get("columns")
+            // Typed and already Jinja-rendered -- see the doc comment on `Versions::columns`.
+            && let Some(version_columns) = version.columns.as_deref()
         {
-            let column_map: Vec<ColumnProperties> = column_props
-                .as_sequence()
-                .map(|cols| {
-                    cols.iter()
-                        .filter_map(|col| col.as_mapping())
-                        .filter(|map| !(map.contains_key("include") || map.contains_key("exclude")))
-                        .filter_map(|map| {
-                            dbt_yaml::from_value::<ColumnProperties>(map.clone().into()).ok()
-                        })
-                        .collect()
-                })
+            // dbt-core: a version with no include/exclude directive defaults to
+            // `IncludeExclude(include="*")`, i.e. inherit every model-level column.
+            let rules = ColumnInheritanceRules::from_version_column_props(version_columns)
                 .unwrap_or_default();
 
-            let mut versioned_columns = process_columns(
-                Some(&column_map),
+            let version_column_props: Vec<ColumnProperties> = version_columns
+                .iter()
+                .filter_map(VersionColumnProperties::to_column_properties)
+                .collect();
+            let version_columns = process_columns(
+                Some(&version_column_props),
                 model_config.meta.clone(),
                 model_config.tags.inner().clone().map(|tags| tags.into()),
             )?;
 
-            if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
-                columns
-                    .iter()
-                    .filter(|col| rules.should_include_column(&col.name))
-                    .for_each(|col| {
-                        versioned_columns.push(col.clone());
-                    });
+            // dbt-core `UnparsedModelUpdate.get_columns_for_version`: filtered model-level columns
+            // first, then the version-local ones. `ParserRef.from_versioned_target` then folds that
+            // list into a name-keyed dict, so a version column shadowing a model-level column takes
+            // the model-level column's *position* and the version's *value* -- which is exactly what
+            // `IndexMap::insert` on an existing key does.
+            let mut merged: IndexMap<String, DbtColumnRef> = columns
+                .into_iter()
+                .filter(|col| rules.should_include_column(&col.name))
+                .map(|col| (col.name.clone(), col))
+                .collect();
+            for col in version_columns {
+                merged.insert(col.name.clone(), col);
             }
-            return Ok(versioned_columns);
+            return Ok(merged.into_values().collect());
         }
     }
 

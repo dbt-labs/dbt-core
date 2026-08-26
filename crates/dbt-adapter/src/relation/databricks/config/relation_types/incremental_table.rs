@@ -14,7 +14,7 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
     // - liquid clustering
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 8] = [
         // TODO: column mask
         Box::new(components::ColumnCommentsLoader),
         Box::new(components::ColumnTagsLoader),
@@ -22,6 +22,7 @@ pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMe
         Box::new(components::ConstraintsLoader),
         // Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationTagsLoader),
+        Box::new(components::RowFilterLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::ColumnMasksLoader),
     ];
@@ -74,6 +75,8 @@ mod tests {
                         }),
                     },
                 ],
+                row_filter_function: Some("row_filter_fn".to_string()),
+                row_filter_columns: vec!["col1".to_string()],
                 tags: IndexMap::from_iter([
                     ("a_tag".to_string(), "old".to_string()),
                     ("b_tag".to_string(), "old".to_string()),
@@ -115,6 +118,8 @@ mod tests {
                         ..Default::default()
                     },
                 ],
+                row_filter_function: Some("row_filter_fn_2".to_string()),
+                row_filter_columns: vec!["col1".to_string(), "col2".to_string()],
                 tags: IndexMap::from_iter([
                     ("a_tag".to_string(), "new".to_string()),
                     ("b_tag".to_string(), "old".to_string()),
@@ -191,6 +196,15 @@ mod tests {
                                     ("a_tag".to_string(), "new".to_string()),
                                     ("b_tag".to_string(), "old".to_string()),
                                 ]),
+                            ),
+                        ),
+                    ),
+                    (
+                        components::RowFilterLoader.type_name(),
+                        ComponentConfigChange::Some(
+                            components::RowFilterLoader::new_component_type_erased(
+                                Some("test_db.test_schema.row_filter_fn_2".to_string()),
+                                vec!["col1".to_string(), "col2".to_string()],
                             ),
                         ),
                     ),
@@ -273,6 +287,21 @@ mod tests {
         </b_tag>
     </set_tags>
 </tags>
+<row_filter>
+    <function>
+        test_db.test_schema.row_filter_fn_2
+    </function>
+    <columns>
+        col1
+        col2
+    </columns>
+    <should_unset>
+        False
+    </should_unset>
+    <is_change>
+        True
+    </is_change>
+</row_filter>
 <tblproperties>
     <tblproperties>
         <customKey>

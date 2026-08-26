@@ -45,6 +45,7 @@ mod tests {
     ) -> BTreeMap<String, Value> {
         let mut context = build_resolve_model_context(
             init_config,
+            false,
             AdapterType::Postgres,
             "db",
             "schema",
@@ -98,6 +99,7 @@ mod tests {
                 ..Default::default()
             })
             .into(),
+            vec![AdapterType::Postgres],
             DEFAULT_DBT_QUOTING,
             BTreeMap::new(),
             BTreeMap::new(),

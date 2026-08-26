@@ -475,6 +475,7 @@ pub async fn resolve_sources(
                 language: None,
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: adapter_type,
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: identifier.to_owned(),

@@ -12,7 +12,8 @@ use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
-use dbt_schemas::schemas::common::{Access, DbtQuoting};
+use dbt_schemas::dbt_utils::resolve_package_quoting;
+use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::project::FunctionConfig;
 use dbt_schemas::schemas::project::ResolvedConfig;
 use dbt_schemas::schemas::{AbsorbedOverload, DbtFunctionAttr};
@@ -28,13 +29,16 @@ use dbt_schemas::{
     },
     state::{DbtPackage, DbtRuntimeConfig, NodeResolverTracker},
 };
+use indexmap::IndexMap;
 use minijinja::MacroSpans;
 
 use crate::dbt_project_config::{
     ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
 };
 use crate::renderer::{RenderCtx, RenderCtxInner};
-use crate::resolve::resolve_utils::{build_unrendered_config, extract_config_map};
+use crate::resolve::resolve_utils::{
+    build_unrendered_config, extract_config_map, validate_node_adapter,
+};
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, parse_unrendered_config,
     update_node_relation_components,
@@ -71,6 +75,8 @@ pub async fn resolve_functions(
     database: &str,
     schema: &str,
     adapter_type: AdapterType,
+    default_adapter: AdapterType,
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     package_name: &str,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
@@ -91,7 +97,7 @@ pub async fn resolve_functions(
         || {
             init_project_config(
                 &package.dbt_project.functions,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
             )
@@ -214,7 +220,7 @@ pub async fn resolve_functions(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
-        config: model_config,
+        config: mut model_config,
         raw_code,
         rendered_sql,
         macro_spans,
@@ -280,6 +286,29 @@ pub async fn resolve_functions(
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
 
         let unique_id = get_unique_id(function_name, package_name, None, "function");
+        // Resolved here rather than in the config merge, for the reason given in
+        // `resolve_models`: the merge cannot see the target's adapter list. A
+        // function selects explicitly; it has no attached node to inherit from.
+        let resolved_node_adapter = validate_node_adapter(
+            model_config.adapter,
+            default_adapter,
+            &DbtMaterialization::Function,
+            None,
+            adapter_type,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            dbt_asset.is_python(),
+            &dbt_asset.path,
+        )?;
+        // See `resolve_models`: both remaining quoting layers depend on which
+        // adapter the node runs on, which is only known after the config merge.
+        let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+        model_config.quoting = resolve_package_quoting(
+            Some(match adapter_quoting.get(&selected_adapter) {
+                Some(authored) => model_config.quoting.filled_from(authored),
+                None => model_config.quoting,
+            }),
+            selected_adapter,
+        );
         let static_analysis = model_config.static_analysis.clone();
         if let Some(spanned) = model_config.get_static_analysis() {
             let kind = spanned.into_inner();
@@ -370,15 +399,17 @@ pub async fn resolve_functions(
                 meta: model_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
-                materialized: dbt_schemas::schemas::common::DbtMaterialization::Function,
+                materialized: DbtMaterialization::Function,
                 static_analysis,
                 static_analysis_off_reason: None,
                 compute: None,
-                quoting: package_quoting
+                quoting: model_config
+                    .quoting
                     .try_into()
                     .expect("DbtQuoting should be set"),
                 quoting_ignore_case: false,

@@ -2,6 +2,7 @@ use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::QueryTag;
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
@@ -16,7 +17,6 @@ use std::collections::btree_map::Iter;
 use std::collections::{BTreeMap, HashSet};
 
 use super::config_keys::ConfigKeys;
-use crate::schemas::common::ComputePlatform;
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtContract;
 use crate::schemas::common::DbtIncrementalStrategy;
@@ -24,6 +24,7 @@ use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::PersistDocsConfig;
+use crate::schemas::common::RowFilterConfig;
 use crate::schemas::common::SyncConfig;
 use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange, OnError};
@@ -41,9 +42,9 @@ use crate::schemas::properties::model_properties::ModelConstraint;
 use crate::schemas::properties::{ModelFreshness, ModelState};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, default_type,
-    f64_or_string_f64, hours_to_expiration_or_string_omissible, string_or_number_to_string,
-    u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, column_types_map,
+    default_type, event_time_or_map_to_string, f64_or_string_f64,
+    hours_to_expiration_or_string_omissible, string_or_number_to_string, u64_or_string_u64,
 };
 use dbt_proc_macros::{DefaultTo, Resolvable};
 use dbt_yaml::ShouldBe;
@@ -113,13 +114,18 @@ pub struct ProjectModelConfig {
     pub catalog: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
-    #[serde(rename = "+alt_compute")]
-    pub alt_compute: Option<ComputePlatform>,
+    #[serde(rename = "+adapter")]
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     #[serde(rename = "+cluster_by")]
     pub cluster_by: Option<ClusterConfig>,
     #[serde(rename = "+clustered_by")]
     pub clustered_by: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+column_types")]
+    #[serde(
+        default,
+        rename = "+column_types",
+        deserialize_with = "column_types_map"
+    )]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(rename = "+compute")]
     pub compute: Option<ComputeArg>,
@@ -223,7 +229,11 @@ pub struct ProjectModelConfig {
     pub enable_refresh: Option<bool>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(rename = "+event_time")]
+    #[serde(
+        default,
+        rename = "+event_time",
+        deserialize_with = "event_time_or_map_to_string"
+    )]
     pub event_time: Option<String>,
     #[serde(rename = "+external_volume")]
     pub external_volume: Option<String>,
@@ -520,6 +530,10 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+schedule")]
     pub schedule: Option<Schedule>,
 
+    // Row filter (Databricks)
+    #[serde(rename = "+row_filter")]
+    pub row_filter: Option<RowFilterConfig>,
+
     // Primary Key (Salesforce)
     #[serde(default, rename = "+primary_key")]
     pub primary_key: PrimaryKeyConfig,
@@ -542,6 +556,16 @@ pub struct ProjectModelConfig {
     pub settings: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+query_settings")]
     pub query_settings: Option<BTreeMap<String, YmlValue>>,
+    // list of `{name, query}` maps rendered as `ADD PROJECTION` by table.sql
+    #[serde(rename = "+projections")]
+    pub projections: Option<Vec<YmlValue>>,
+    // incremental materialization
+    #[serde(
+        default,
+        rename = "+inserts_only",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub inserts_only: Option<bool>,
     // dictionary materialization
     #[serde(rename = "+connection_overrides")]
     pub connection_overrides: Option<BTreeMap<String, YmlValue>>,
@@ -565,6 +589,10 @@ pub struct ProjectModelConfig {
     pub update_field: Option<String>,
     #[serde(rename = "+update_lag")]
     pub update_lag: Option<YmlValue>,
+    #[serde(rename = "+definer")]
+    pub definer: Option<String>,
+    #[serde(rename = "+sql_security")]
+    pub sql_security: Option<String>,
     // materialized-view materialization
     #[serde(rename = "+refreshable")]
     pub refreshable: Option<BTreeMap<String, YmlValue>>,
@@ -622,7 +650,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.buckets.is_some()
             || self.catalog.is_some()
             || self.catalog_name.is_some()
-            || self.alt_compute.is_some()
+            || self.adapter.is_some()
             || self.cluster_by.is_some()
             || self.clustered_by.is_some()
             || self.column_types.is_some()
@@ -752,6 +780,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.indexes.is_some()
             || self.unlogged.is_some()
             || self.schedule.is_some()
+            || self.row_filter.is_some()
             || self.primary_key.is_some()
             || self.category.is_some()
             || self.sync.is_some()
@@ -777,7 +806,8 @@ pub struct ModelConfig {
     pub catalog_name: Option<String>,
     // Internal placement hint; kept out of serialized config/telemetry output.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub alt_compute: Option<ComputePlatform>,
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     // need default to ensure None if field is not set
     // serialize_with ensures meta is always present (as {} when None) for Jinja macros
     // that access node.config.meta.get(...)
@@ -807,6 +837,7 @@ pub struct ModelConfig {
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[resolved(promote, expect = "apply_package_defaults guarantees quoting is set")]
     pub quoting: Option<DbtQuoting>,
+    #[serde(default, deserialize_with = "column_types_map")]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     pub compute: Option<ComputeArg>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -827,6 +858,7 @@ pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_anonymous_sproc: Option<bool>,
     pub contract: Option<DbtContract>,
+    #[serde(default, deserialize_with = "event_time_or_map_to_string")]
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub concurrent_batches: Option<bool>,
@@ -895,7 +927,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
             catalog_name: config.catalog_name.clone(),
-            alt_compute: config.alt_compute,
+            adapter: config.adapter,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -1026,6 +1058,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 skip_not_matched_step: config.skip_not_matched_step,
                 unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
+                row_filter: config.row_filter,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -1048,6 +1081,8 @@ impl From<ProjectModelConfig> for ModelConfig {
                 ttl: config.ttl,
                 settings: config.settings,
                 query_settings: config.query_settings,
+                projections: config.projections,
+                inserts_only: config.inserts_only,
                 connection_overrides: config.connection_overrides,
                 fields: config.fields,
                 source_type: config.source_type,
@@ -1059,6 +1094,8 @@ impl From<ProjectModelConfig> for ModelConfig {
                 table: config.table,
                 update_field: config.update_field,
                 update_lag: config.update_lag,
+                definer: config.definer,
+                sql_security: config.sql_security,
                 refreshable: config.refreshable,
                 catchup: config.catchup,
                 mv_on_schema_change: config.mv_on_schema_change,
@@ -1084,7 +1121,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             begin: config.begin,
             bind: config.__warehouse_specific_config__.bind,
             catalog_name: config.catalog_name,
-            alt_compute: config.alt_compute,
+            adapter: config.adapter,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -1245,6 +1282,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             indexes: config.__warehouse_specific_config__.indexes,
             unlogged: config.__warehouse_specific_config__.unlogged,
             schedule: config.__warehouse_specific_config__.schedule,
+            row_filter: config.__warehouse_specific_config__.row_filter,
             incremental_apply_config_changes: config
                 .__warehouse_specific_config__
                 .incremental_apply_config_changes,
@@ -1262,6 +1300,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             ttl: config.__warehouse_specific_config__.ttl,
             settings: config.__warehouse_specific_config__.settings,
             query_settings: config.__warehouse_specific_config__.query_settings,
+            projections: config.__warehouse_specific_config__.projections,
+            inserts_only: config.__warehouse_specific_config__.inserts_only,
             connection_overrides: config.__warehouse_specific_config__.connection_overrides,
             fields: config.__warehouse_specific_config__.fields,
             source_type: config.__warehouse_specific_config__.source_type,
@@ -1273,6 +1313,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             table: config.__warehouse_specific_config__.table,
             update_field: config.__warehouse_specific_config__.update_field,
             update_lag: config.__warehouse_specific_config__.update_lag,
+            definer: config.__warehouse_specific_config__.definer,
+            sql_security: config.__warehouse_specific_config__.sql_security,
             refreshable: config.__warehouse_specific_config__.refreshable,
             catchup: config.__warehouse_specific_config__.catchup,
             mv_on_schema_change: config.__warehouse_specific_config__.mv_on_schema_change,
@@ -1291,10 +1333,14 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
 
     type Resolved = ResolvedModelConfig;
     type PackageDefaults = DbtQuoting;
-    type ResolveDefaults = (StaticAnalysisKind, Option<SyncConfig>);
+    type ResolveDefaults = (StaticAnalysisKind, Option<SyncConfig>, Option<AdapterType>);
 
     fn get_enabled_with_default(&self) -> bool {
         self.enabled.unwrap_or(true)
+    }
+
+    fn get_enabled(&self) -> Option<bool> {
+        self.enabled
     }
 
     fn disable(&mut self) {
@@ -1309,13 +1355,27 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
 
     fn apply_resolve_defaults(
         &mut self,
-        (static_analysis, sync): (StaticAnalysisKind, Option<SyncConfig>),
+        (static_analysis, sync, default_adapter): Self::ResolveDefaults,
     ) {
         if self.static_analysis.is_none() {
             self.static_analysis = Some(Spanned::new(static_analysis));
         }
         if self.sync.is_none() {
             self.sync = sync;
+        }
+        // Lake compute writes open-format tables: a node placed there materializes
+        // an Iceberg table unless its author says otherwise. Applied here rather
+        // than through `#[resolved(default = ...)]` because the default turns on
+        // the node's effective adapter, which is only known once every config layer
+        // has merged -- and `finalize` has already collapsed `materialized` to the
+        // static `view` default by the time a caller could inspect it.
+        if self.adapter.or(default_adapter) == Some(AdapterType::Alt) {
+            if self.materialized.is_none() {
+                self.materialized = Some(DbtMaterialization::Table);
+            }
+            if self.table_format.is_none() {
+                self.table_format = Some("iceberg".to_string());
+            }
         }
     }
 
@@ -1361,7 +1421,7 @@ impl ModelConfig {
         // Compare all fields.
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
-        let alt_compute_eq = self.alt_compute == other.alt_compute;
+        let adapter_eq = self.adapter == other.adapter;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let materialized_eq_result = materialized_eq(&self.materialized, &other.materialized);
         let incremental_strategy_eq = self.incremental_strategy == other.incremental_strategy;
@@ -1421,7 +1481,7 @@ impl ModelConfig {
 
         let result = enabled_eq
             && catalog_name_eq
-            && alt_compute_eq
+            && adapter_eq
             && meta_eq_result
             && materialized_eq_result
             && incremental_strategy_eq
@@ -1479,11 +1539,11 @@ impl ModelConfig {
                         )),
                     ),
                     (
-                        "alt_compute",
-                        alt_compute_eq,
+                        "adapter",
+                        adapter_eq,
                         Some((
-                            format!("{:?}", &self.alt_compute),
-                            format!("{:?}", &other.alt_compute),
+                            format!("{:?}", &self.adapter),
+                            format!("{:?}", &other.adapter),
                         )),
                     ),
                     (
@@ -1895,6 +1955,43 @@ mod tests {
     use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
+    use crate::schemas::serde::StringOrArrayOfStrings;
+
+    #[test]
+    fn test_model_clustered_by_accepts_ordered_list() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  clustered_by: [nation, region]
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.__warehouse_specific_config__.clustered_by,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "nation".to_string(),
+                "region".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_project_model_clustered_by_accepts_ordered_list() {
+        let config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++clustered_by: [nation, region]
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.clustered_by,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "nation".to_string(),
+                "region".to_string(),
+            ]))
+        );
+    }
 
     #[test]
     fn test_classifiers_merge_in_default_to() {
@@ -1983,6 +2080,46 @@ __warehouse_specific_config__: {}
         assert_eq!(state.evaluate_volatile_sql, Some(true));
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
         assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
+    }
+
+    /// Regression for fs#13343: Core accepts a sequence-valued `column_types` entry
+    /// (e.g. produced by a templated macro); Fusion must not reject it during YAML load.
+    #[test]
+    fn test_model_config_column_types_accepts_sequence_value() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+column_types:
+  id:
+    - integer
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        let column_types = config.column_types.expect("column_types should parse");
+        assert_eq!(
+            column_types.get(&dbt_yaml::Spanned::from("id".to_string())),
+            Some(&"integer".to_string())
+        );
+    }
+
+    /// Regression for fs#13343: Core accepts a mapping-valued `event_time`; Fusion
+    /// must not reject it during YAML load.
+    #[test]
+    fn test_model_config_event_time_accepts_mapping_value() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+event_time:
+  column: event_at
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.event_time.as_deref(),
+            Some(r#"{"column":"event_at"}"#)
+        );
     }
 
     #[test]
@@ -2463,5 +2600,142 @@ __additional_properties__: {}
 
         let roundtripped: ProjectModelConfig = model_config.into();
         assert_eq!(roundtripped.persist_constraints, Some(true));
+    }
+
+    #[test]
+    fn test_clickhouse_view_config_keys_roundtrip_through_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++definer: admin@localhost
++sql_security: definer
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.definer.as_deref(), Some("admin@localhost"));
+        assert_eq!(project_config.sql_security.as_deref(), Some("definer"));
+
+        // ProjectModelConfig -> ModelConfig lands the keys in the warehouse config
+        let model_config: ModelConfig = project_config.clone().into();
+        let wh = &model_config.__warehouse_specific_config__;
+        assert_eq!(wh.definer, project_config.definer);
+        assert_eq!(wh.sql_security, project_config.sql_security);
+
+        // ModelConfig -> ProjectModelConfig restores them
+        let roundtripped: ProjectModelConfig = model_config.into();
+        assert_eq!(roundtripped.definer, project_config.definer);
+        assert_eq!(roundtripped.sql_security, project_config.sql_security);
+    }
+
+    #[test]
+    fn test_clickhouse_projections_and_inserts_only_roundtrip_through_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++projections:
+  - name: my_projection
+    query: SELECT id, count() GROUP BY id
++inserts_only: "true"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        let projections = project_config
+            .projections
+            .as_ref()
+            .expect("+projections should parse");
+        assert_eq!(projections.len(), 1);
+        assert_eq!(
+            projections[0].get("name").and_then(|v| v.as_str()),
+            Some("my_projection")
+        );
+        // bool_or_string_bool accepts the string form
+        assert_eq!(project_config.inserts_only, Some(true));
+
+        // ProjectModelConfig -> ModelConfig lands the keys in the warehouse config
+        let model_config: ModelConfig = project_config.clone().into();
+        let wh = &model_config.__warehouse_specific_config__;
+        assert_eq!(wh.projections, project_config.projections);
+        assert_eq!(wh.inserts_only, Some(true));
+
+        // ModelConfig -> ProjectModelConfig restores them
+        let roundtripped: ProjectModelConfig = model_config.into();
+        assert_eq!(roundtripped.projections, project_config.projections);
+        assert_eq!(roundtripped.inserts_only, project_config.inserts_only);
+    }
+
+    /// `apply_resolve_defaults` is the only seam that can key a default off the
+    /// node's effective adapter: it runs after every config layer has merged and
+    /// before `finalize` collapses `materialized` to the static `view` default.
+    mod lake_compute_defaults {
+        use super::ModelConfig;
+        use crate::schemas::common::DbtMaterialization;
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+        use dbt_adapter_core::AdapterType;
+        use dbt_common::io_args::StaticAnalysisKind;
+
+        /// Merged config -> the config `finalize` would see.
+        fn resolved(
+            mut config: ModelConfig,
+            default_adapter: Option<AdapterType>,
+        ) -> (Option<DbtMaterialization>, Option<String>) {
+            config.apply_resolve_defaults((StaticAnalysisKind::default(), None, default_adapter));
+            (config.materialized, config.table_format)
+        }
+
+        #[test]
+        fn an_unconfigured_lake_compute_model_is_an_iceberg_table() {
+            let config = ModelConfig {
+                adapter: Some(AdapterType::Alt),
+                ..Default::default()
+            };
+            let (materialized, table_format) = resolved(config, Some(AdapterType::Snowflake));
+            assert_eq!(materialized, Some(DbtMaterialization::Table));
+            assert_eq!(table_format.as_deref(), Some("iceberg"));
+        }
+
+        /// These are defaults, not overrides: whatever the merge produced wins.
+        #[test]
+        fn an_authored_materialization_and_table_format_survive() {
+            let config = ModelConfig {
+                adapter: Some(AdapterType::Alt),
+                materialized: Some(DbtMaterialization::View),
+                table_format: Some("default".to_string()),
+                ..Default::default()
+            };
+            let (materialized, table_format) = resolved(config, Some(AdapterType::Snowflake));
+            assert_eq!(materialized, Some(DbtMaterialization::View));
+            assert_eq!(table_format.as_deref(), Some("default"));
+        }
+
+        /// A target whose *default* adapter is lake compute needs no `+adapter:` on
+        /// every node to get the same treatment.
+        #[test]
+        fn a_lake_compute_target_defaults_its_nodes_too() {
+            let (materialized, table_format) =
+                resolved(ModelConfig::default(), Some(AdapterType::Alt));
+            assert_eq!(materialized, Some(DbtMaterialization::Table));
+            assert_eq!(table_format.as_deref(), Some("iceberg"));
+        }
+
+        #[test]
+        fn nodes_off_lake_compute_are_untouched() {
+            let config = ModelConfig {
+                adapter: Some(AdapterType::Snowflake),
+                ..Default::default()
+            };
+            let (materialized, table_format) = resolved(config, Some(AdapterType::Alt));
+            assert_eq!(materialized, None, "left for the static `view` default");
+            assert_eq!(table_format, None);
+        }
+
+        /// `None` default adapter (the `Default` resolve-defaults value, used by
+        /// resolvers that never call `with_resolve_defaults`) means only an
+        /// explicit `+adapter` counts.
+        #[test]
+        fn an_unknown_default_adapter_does_not_opt_a_node_in() {
+            let (materialized, table_format) = resolved(ModelConfig::default(), None);
+            assert_eq!(materialized, None);
+            assert_eq!(table_format, None);
+        }
     }
 }

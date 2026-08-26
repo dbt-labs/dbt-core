@@ -474,14 +474,16 @@ impl CliExtensionHooks for DefaultCliExtensionHooks {
                             FsError::exit_with_status(1)
                         })
                     }
-                    SystemCommand::UpgradeDistribution(args) => {
-                        exec_upgrade_distribution(args.yes, feature_stack.cli.command_name)
-                            .await
-                            .map_err(|e| {
-                                emit_error_log_from_fs_error(*e);
-                                FsError::exit_with_status(1)
-                            })
-                    }
+                    SystemCommand::UpgradeDistribution(args) => exec_upgrade_distribution(
+                        args.yes,
+                        args.package_manager.clone(),
+                        feature_stack.cli.command_name,
+                    )
+                    .await
+                    .map_err(|e| {
+                        emit_error_log_from_fs_error(*e);
+                        FsError::exit_with_status(1)
+                    }),
                 }?;
                 // handled the System command, signal to exit with success
                 Err(FsError::exit_with_status(0))

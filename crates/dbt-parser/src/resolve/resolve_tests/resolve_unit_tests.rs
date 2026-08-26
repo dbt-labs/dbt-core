@@ -28,6 +28,7 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::utils::render_extract_ref_or_source_expr;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtUnitTestAttr;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
@@ -128,15 +129,27 @@ pub fn resolve_unit_tests(
         let model_name = format!("model.{}.{}", package_name, unit_test.model);
         // `tested_node_unique_id` is the unversioned model's unique id when resolvable.
         // Versioned cases below override it with the version-specific id.
-        let (database, schema, _, tested_node_unique_id) = match models.get(&model_name) {
-            Some(model) => (
-                model.__base_attr__.database.clone(),
-                model.__base_attr__.schema.clone(),
-                model.__base_attr__.alias.clone(),
-                Some(model_name.clone()),
-            ),
-            None => (String::new(), String::new(), unit_test.model.clone(), None),
-        };
+        // A unit test runs against one model, so it takes that model's adapter --
+        // it has no `+adapter` of its own. `alt` is not inherited: unit tests never
+        // take the compute-platform path (see `tasks_for_node`), so an `alt` dialect
+        // here would only mis-resolve the `unit` materialization.
+        let (database, schema, _, tested_node_unique_id, model_adapter) =
+            match models.get(&model_name) {
+                Some(model) => (
+                    model.__base_attr__.database.clone(),
+                    model.__base_attr__.schema.clone(),
+                    model.__base_attr__.alias.clone(),
+                    Some(model_name.clone()),
+                    Some(model.node_adapter()).filter(|adapter| *adapter != AdapterType::Alt),
+                ),
+                None => (
+                    String::new(),
+                    String::new(),
+                    unit_test.model.clone(),
+                    None,
+                    None,
+                ),
+            };
 
         // Create base unit test node
         let base_unique_id = format!(
@@ -302,6 +315,7 @@ pub fn resolve_unit_tests(
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: model_adapter.unwrap_or(adapter_type),
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 // match dbt-core semantics for unit test alias
@@ -392,12 +406,13 @@ pub fn resolve_unit_tests(
                 );
 
                 // Look up database/schema from the versioned model
-                let (ver_database, ver_schema) = models
+                let (ver_database, ver_schema, ver_adapter) = models
                     .get(&versioned_model_unique_id)
                     .map(|m| {
                         (
                             m.__base_attr__.database.clone(),
                             m.__base_attr__.schema.clone(),
+                            Some(m.node_adapter()).filter(|adapter| *adapter != AdapterType::Alt),
                         )
                     })
                     .unwrap_or_default();
@@ -415,6 +430,7 @@ pub fn resolve_unit_tests(
                     .nodes_with_ref_location =
                     vec![(versioned_model_unique_id.clone(), location.clone())];
                 versioned_test.tested_node_unique_id = Some(versioned_model_unique_id.clone());
+                versioned_test.__base_attr__.adapter = ver_adapter.unwrap_or(adapter_type);
 
                 unit_tests.insert(
                     versioned_test.__common_attr__.unique_id.clone(),
@@ -455,6 +471,7 @@ fn resolve_given_seed(
     let mut resolve_model_context = base_ctx.clone();
     resolve_model_context.extend(build_resolve_model_context(
         &UnitTestConfig::default(),
+        false,
         adapter_type,
         database,
         schema,

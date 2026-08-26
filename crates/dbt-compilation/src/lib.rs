@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
+pub mod adapter_store;
 pub mod config;
 pub mod core;
 pub mod schedule;

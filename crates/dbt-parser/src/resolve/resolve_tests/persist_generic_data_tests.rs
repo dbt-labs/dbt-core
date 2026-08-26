@@ -19,6 +19,7 @@ use dbt_schemas::schemas::data_tests::{CustomTest, DataTests};
 
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
+use dbt_schemas::schemas::dbt_column::VersionColumnProperties;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
@@ -33,7 +34,7 @@ use md5;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -65,9 +66,19 @@ pub struct ColumnTestEntry {
 #[derive(Debug, Clone, Default)]
 pub struct TestUnrenderedConfigs {
     /// Per model/table-level test, in `data_tests`/`tests` order.
-    pub model_level: Vec<BTreeMap<String, dbt_yaml::Value>>,
+    pub model_level: Vec<RawTestConfig>,
     /// Per column name (unquoted) → per-test raw config, in `data_tests`/`tests` order.
-    pub columns: BTreeMap<String, Vec<BTreeMap<String, dbt_yaml::Value>>>,
+    pub columns: BTreeMap<String, Vec<RawTestConfig>>,
+}
+
+/// Raw, unrendered config authored on a single generic test entry in schema.yml.
+#[derive(Debug, Clone, Default)]
+pub struct RawTestConfig {
+    /// Merged authored config used for the manifest's `unrendered_config`: explicit `config:`,
+    /// then deprecated top-level keys, then `arguments:` keys.
+    pub merged: BTreeMap<String, dbt_yaml::Value>,
+    /// Keys written literally under `config:`, before any merging.
+    pub explicit_config_keys: BTreeSet<String>,
 }
 
 /// Extract the raw config authored on a single test entry in schema.yml.
@@ -79,10 +90,12 @@ pub struct TestUnrenderedConfigs {
 /// Config keys accepted in the deprecated top-level and `arguments:` positions are merged in
 /// the same order as test parsing: explicit `config:`, deprecated top-level keys, then keys from
 /// `arguments:`. Keeping the raw values here preserves authored Jinja in `unrendered_config`.
-fn raw_test_entry_config(entry: &dbt_yaml::Value) -> BTreeMap<String, dbt_yaml::Value> {
+/// The keys written literally under `config:` are also recorded, before that merge erases which
+/// position each key came from.
+fn raw_test_entry_config(entry: &dbt_yaml::Value) -> RawTestConfig {
     let Some(mapping) = entry.as_mapping() else {
         // Bare-string test (or unexpected scalar): no authored config.
-        return BTreeMap::new();
+        return RawTestConfig::default();
     };
     // Multi-key shape carries an explicit `test_name:` key alongside `config:`.
     let config_holder = if mapping.get("test_name").is_some() {
@@ -91,12 +104,16 @@ fn raw_test_entry_config(entry: &dbt_yaml::Value) -> BTreeMap<String, dbt_yaml::
         // Single-key shape: `{ <test-type>: { config: {...}, ... } }`.
         match mapping.iter().next() {
             Some((_, inner)) => inner,
-            None => return BTreeMap::new(),
+            None => return RawTestConfig::default(),
         }
     };
     let mut config = extract_config_map(config_holder).unwrap_or_default();
+    let explicit_config_keys: BTreeSet<String> = config.keys().cloned().collect();
     let Some(holder_mapping) = config_holder.as_mapping() else {
-        return config;
+        return RawTestConfig {
+            merged: config,
+            explicit_config_keys,
+        };
     };
 
     for key in CONFIG_ARGS {
@@ -116,11 +133,14 @@ fn raw_test_entry_config(entry: &dbt_yaml::Value) -> BTreeMap<String, dbt_yaml::
         }
     }
 
-    config
+    RawTestConfig {
+        merged: config,
+        explicit_config_keys,
+    }
 }
 
 /// Collect the raw per-test `config:` blocks (in order) from a `data_tests`/`tests` sequence.
-fn raw_tests_seq_configs(container: &dbt_yaml::Value) -> Vec<BTreeMap<String, dbt_yaml::Value>> {
+fn raw_tests_seq_configs(container: &dbt_yaml::Value) -> Vec<RawTestConfig> {
     let tests = container
         .get("data_tests")
         .or_else(|| container.get("tests"));
@@ -135,7 +155,7 @@ fn raw_tests_seq_configs(container: &dbt_yaml::Value) -> Vec<BTreeMap<String, db
 pub fn extract_test_unrendered_configs(schema_value: &dbt_yaml::Value) -> TestUnrenderedConfigs {
     let model_level = raw_tests_seq_configs(schema_value);
 
-    let mut columns: BTreeMap<String, Vec<BTreeMap<String, dbt_yaml::Value>>> = BTreeMap::new();
+    let mut columns: BTreeMap<String, Vec<RawTestConfig>> = BTreeMap::new();
     if let Some(cols) = schema_value.get("columns").and_then(|c| c.as_sequence()) {
         for col in cols {
             let Some(name) = col.get("name").and_then(|n| n.as_str()) else {
@@ -179,7 +199,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                     let column_test: DataTests = test.clone();
                     // The raw model-level test list has the same order as the typed one, so
                     // index correlation gives this test's authored schema.yml config.
-                    let unrendered_schema_config = raw_test_configs
+                    let raw_config = raw_test_configs
                         .model_level
                         .get(i)
                         .cloned()
@@ -196,7 +216,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         test_name_truncations,
                         &[],
                         suppress_deprecated_test_validation,
-                        unrendered_schema_config,
+                        raw_config,
                     )?;
                     collected_generic_tests.push(test_asset);
                 }
@@ -218,7 +238,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         } else {
                             column_name.to_string()
                         };
-                        let unrendered_schema_config = col_configs
+                        let raw_config = col_configs
                             .and_then(|v| v.get(i))
                             .cloned()
                             .unwrap_or_default();
@@ -234,7 +254,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             test_name_truncations,
                             &entry.tags,
                             suppress_deprecated_test_validation,
-                            unrendered_schema_config,
+                            raw_config,
                         )?;
                         collected_generic_tests.push(test_asset);
                     }
@@ -260,8 +280,13 @@ fn persist_inner(
     test_name_truncations: &mut HashMap<String, String>,
     column_tags: &[String],
     suppress_deprecated_test_validation: bool,
-    unrendered_schema_config: BTreeMap<String, dbt_yaml::Value>,
+    raw_config: RawTestConfig,
 ) -> FsResult<GenericTestAsset> {
+    let RawTestConfig {
+        merged: unrendered_schema_config,
+        explicit_config_keys,
+    } = raw_config;
+
     // If this is not the root project, we need to pass the project name as a dependency package name
     let dependecy_package_name = if project_name != root_project_name {
         Some(project_name)
@@ -275,6 +300,7 @@ fn persist_inner(
         column_name,
         dependecy_package_name,
         suppress_deprecated_test_validation,
+        &explicit_config_keys,
     )?;
 
     let TestDetails {
@@ -346,6 +372,8 @@ fn persist_inner(
             }
         }
     }
+    // Explicit test names (`name: customer/id_not_null`) can carry `/` straight into the generic-test SQL path.
+    stdfs::create_dir_all(test_file.parent().unwrap())?;
     stdfs::write(&test_file, generated_test_sql)?;
     let dbt_asset = DbtAsset {
         path,
@@ -429,6 +457,7 @@ fn get_test_details(
     column_name: Option<&str>,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
+    explicit_config_keys: &BTreeSet<String>,
 ) -> FsResult<TestDetails> {
     let mut kwargs = BTreeMap::new();
     let mut config: Option<DataTestConfig> = None;
@@ -484,6 +513,7 @@ fn get_test_details(
                     &mk.config,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
+                    explicit_config_keys,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
                 jinja_set_vars.extend(extraction_result.jinja_set_vars);
@@ -506,6 +536,7 @@ fn get_test_details(
                     &inner.config,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
+                    explicit_config_keys,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
                 jinja_set_vars.extend(extraction_result.jinja_set_vars);
@@ -560,7 +591,8 @@ struct KwargsExtractionResult {
     config: Option<DataTestConfig>,
 }
 
-/// Simplified extraction of kwargs and Jinja variables for strongly typed custom tests
+/// Simplified extraction of kwargs and Jinja variables for strongly typed custom tests.
+/// `explicit_config_keys` are the keys written literally under this test's `config:` block.
 #[allow(clippy::cognitive_complexity)]
 fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     arguments: &Verbatim<Option<dbt_yaml::Value>>,
@@ -568,6 +600,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     existing_config: &Option<DataTestConfig>,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
+    explicit_config_keys: &BTreeSet<String>,
 ) -> FsResult<KwargsExtractionResult> {
     // Start with existing config
     let mut final_config = existing_config.clone();
@@ -647,14 +680,13 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             Value::Object(serde_json::Map::new())
         };
 
-        // Check for conflicts at JSON level. `existing_config_json` is a
-        // serialized `DataTestConfig`, which is not `#[skip_serializing_none]`,
-        // so every optional field (e.g. `where`) is present as `null` even when
-        // the user's `config:` block never set it. Only flag a real conflict
-        // when the key is actually set (non-null) in the existing config.
+        // A conflict requires the key to be written literally under `config:`; `DataTestConfig`
+        // serializes some unset fields as `null`/`[]`/`{}`, so the serialized form cannot tell.
         if let Value::Object(existing_map) = &existing_config_json {
             for key in config_from_deprecated.keys() {
-                if existing_map.get(key).is_some_and(|v| !v.is_null()) {
+                if explicit_config_keys.contains(key)
+                    && existing_map.get(key).is_some_and(|v| !v.is_null())
+                {
                     return err!(
                         ErrorCode::DbtYamlValidationError,
                         "Test cannot have the same key '{}' at the top-level and in config",
@@ -1454,9 +1486,9 @@ fn collect_versioned_model_tests(
         }
 
         // Handle version-specific column tests and inheritance
-        if let Some(columns) = version.__additional_properties__.get("columns") {
+        if let Some(columns) = version.columns.as_deref() {
             let mut column_tests = if let Some(inheritance_rules) =
-                ColumnInheritanceRules::from_version_columns(columns)
+                ColumnInheritanceRules::from_version_column_props(columns)
             {
                 // Apply inheritance rules
                 base_test_config
@@ -1480,33 +1512,36 @@ fn collect_versioned_model_tests(
                 base_test_config.column_tests.clone().unwrap_or_default()
             };
 
-            // Then handle any explicit column test definitions
-            if let Ok(column_map) = dbt_yaml::from_value::<Vec<ColumnProperties>>(columns.clone()) {
-                for col in column_map {
-                    if col.tests.is_some() && col.data_tests.is_some() {
-                        return err!(
-                            ErrorCode::InvalidConfig,
-                            "Cannot have both 'tests' and 'data_tests' defined"
-                        );
-                    }
-                    // In properties files, column tests may be specified via either `tests` or
-                    // `data_tests`. Treat them equivalently (same as non-versioned columns).
-                    if let Some(tests) = col.tests.as_ref().or(col.data_tests.as_ref()) {
-                        let tags = col
-                            .config
-                            .as_ref()
-                            .and_then(|c| c.tags.clone())
-                            .map(|t| t.into())
-                            .unwrap_or_default();
-                        column_tests.insert(
-                            col.name.clone(),
-                            ColumnTestEntry {
-                                quote: col.quote.unwrap_or(false),
-                                tests: tests.clone(),
-                                tags,
-                            },
-                        );
-                    }
+            // Then handle any explicit column test definitions. Directive-only entries
+            // (`include:`/`exclude:`, no `name:`) yield `None` and are skipped here -- they were
+            // already consumed as inheritance rules above.
+            for col in columns
+                .iter()
+                .filter_map(VersionColumnProperties::to_column_properties)
+            {
+                if col.tests.is_some() && col.data_tests.is_some() {
+                    return err!(
+                        ErrorCode::InvalidConfig,
+                        "Cannot have both 'tests' and 'data_tests' defined"
+                    );
+                }
+                // In properties files, column tests may be specified via either `tests` or
+                // `data_tests`. Treat them equivalently (same as non-versioned columns).
+                if let Some(tests) = col.tests.as_ref().or(col.data_tests.as_ref()) {
+                    let tags = col
+                        .config
+                        .as_ref()
+                        .and_then(|c| c.tags.clone())
+                        .map(|t| t.into())
+                        .unwrap_or_default();
+                    column_tests.insert(
+                        col.name.clone(),
+                        ColumnTestEntry {
+                            quote: col.quote.unwrap_or(false),
+                            tests: tests.clone(),
+                            tags,
+                        },
+                    );
                 }
             }
 
@@ -1879,6 +1914,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            &BTreeSet::new(),
         )
         .unwrap();
         let kwargs = extraction_result.kwargs;
@@ -2011,7 +2047,8 @@ mod tests {
         // the assignment, leaving the cloned base config (with all tests) intact.
 
         use dbt_schemas::schemas::common::Versions;
-        use dbt_yaml::{Mapping, Verbatim};
+        use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
+        use dbt_yaml::Verbatim;
 
         // Build a base config: one column "cost_center_bkey" with a `unique` test.
         let unique_test = DataTests::String(Spanned::from("unique".to_string()));
@@ -2033,29 +2070,18 @@ mod tests {
             source_name: None,
         };
 
-        // Helper: build `columns` YAML value for a version spec.
-        let make_columns_value = |include: &str, exclude: Vec<&str>| -> dbt_yaml::Value {
-            let mut entry = Mapping::new();
-            entry.insert(
-                dbt_yaml::Value::string("include".to_string()),
-                dbt_yaml::Value::string(include.to_string()),
-            );
-            if !exclude.is_empty() {
-                let seq = exclude
-                    .iter()
-                    .map(|s| dbt_yaml::Value::string((*s).to_string()))
-                    .collect();
-                entry.insert(
-                    dbt_yaml::Value::string("exclude".to_string()),
-                    dbt_yaml::Value::sequence(seq),
-                );
-            }
-            dbt_yaml::Value::sequence(vec![dbt_yaml::Value::mapping(entry)])
+        // Helper: build the `columns` list of a version spec, carrying only the
+        // include/exclude directive entry.
+        let make_columns = |include: &str, exclude: Vec<&str>| -> Vec<VersionColumnProperties> {
+            vec![VersionColumnProperties {
+                include: Some(StringOrArrayOfStrings::String(include.to_string())),
+                exclude: (!exclude.is_empty())
+                    .then(|| exclude.iter().map(|s| (*s).to_string()).collect()),
+                ..Default::default()
+            }]
         };
 
-        let make_version = |v: i64, columns_value: dbt_yaml::Value| -> Versions {
-            let mut extra: HashMap<String, dbt_yaml::Value> = HashMap::new();
-            extra.insert("columns".to_string(), columns_value);
+        let make_version = |v: i64, columns: Vec<VersionColumnProperties>| -> Versions {
             Versions {
                 v: dbt_yaml::Value::Number(dbt_yaml::Number::from(v), Span::zero()),
                 deprecation_date: None,
@@ -2066,15 +2092,15 @@ mod tests {
                 constraints: None,
                 data_tests: None,
                 tests: None,
-                columns: None,
-                __additional_properties__: Verbatim::from(extra),
+                columns: Some(columns),
+                __additional_properties__: Verbatim::from(HashMap::new()),
             }
         };
 
         // v1: include all (no exclusions) — test must be present
-        let v1 = make_version(1, make_columns_value("all", vec![]));
+        let v1 = make_version(1, make_columns("all", vec![]));
         // v2: include all, exclude cost_center_bkey — test must be absent
-        let v2 = make_version(2, make_columns_value("all", vec!["cost_center_bkey"]));
+        let v2 = make_version(2, make_columns("all", vec!["cost_center_bkey"]));
 
         let result =
             collect_versioned_model_tests(&base_config, &[v1, v2]).expect("should not fail");
@@ -2929,6 +2955,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            &BTreeSet::new(),
         )
         .unwrap();
 
@@ -2954,6 +2981,77 @@ mod tests {
             extraction_result.kwargs.contains_key("values"),
             "values should remain a macro kwarg"
         );
+    }
+
+    /// Drives the top-level-vs-`config:` conflict guard from the two authored YAML positions.
+    /// `explicit_config_keys` lists the keys written literally under `config:`; the deprecation
+    /// log is suppressed so only the guard is under test.
+    fn extract_with_conflict_guard(
+        deprecated_yaml: &str,
+        config_yaml: &str,
+        explicit_config_keys: &[&str],
+    ) -> FsResult<KwargsExtractionResult> {
+        let arguments: Verbatim<Option<dbt_yaml::Value>> = Verbatim::from(None);
+        let deprecated = Verbatim::from(
+            dbt_yaml::from_str::<BTreeMap<String, dbt_yaml::Value>>(deprecated_yaml).unwrap(),
+        );
+        let config_value: dbt_yaml::Value = dbt_yaml::from_str(config_yaml).unwrap();
+        let existing_config: Option<DataTestConfig> =
+            Some(serde::Deserialize::deserialize(config_value).unwrap());
+        let explicit_config_keys: BTreeSet<String> = explicit_config_keys
+            .iter()
+            .map(|k| (*k).to_string())
+            .collect();
+        extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+            &arguments,
+            &deprecated,
+            &existing_config,
+            None,
+            true,
+            &explicit_config_keys,
+        )
+    }
+
+    /// Asserts the guard rejects `key` as authored in both the top-level and `config:` positions.
+    fn assert_same_key_conflict(deprecated_yaml: &str, config_yaml: &str, key: &str) {
+        let err = extract_with_conflict_guard(deprecated_yaml, config_yaml, &[key])
+            .expect_err("a key authored under `config:` must conflict with the top-level key");
+        assert!(
+            err.to_string().contains(&format!("same key '{key}'")),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_empty_config_block_does_not_conflict_with_deprecated_tags() {
+        // `config: {}` authors no keys, so a deprecated top-level `tags` is not a duplicate.
+        // `tags` serializes as `[]` when unset, which must not read as an authored value.
+        extract_with_conflict_guard("tags: [legacy_tag]", "{}", &[])
+            .expect("an empty `config:` block must not conflict with a top-level key");
+    }
+
+    #[test]
+    fn test_empty_config_block_does_not_conflict_with_deprecated_meta() {
+        // Same for `meta`, which serializes as `{}` when unset.
+        extract_with_conflict_guard("meta: {owner: alice}", "{}", &[])
+            .expect("an empty `config:` block must not conflict with a top-level key");
+    }
+
+    #[test]
+    fn test_explicit_config_tags_conflicts_with_deprecated_tags() {
+        assert_same_key_conflict("tags: [legacy_tag]", "tags: [cfg_tag]", "tags");
+    }
+
+    #[test]
+    fn test_empty_list_config_tags_conflicts_with_deprecated_tags() {
+        // dbt Core errors here too: `tags` is literally present under `config:`.
+        assert_same_key_conflict("tags: [legacy_tag]", "tags: []", "tags");
+    }
+
+    #[test]
+    fn test_null_config_tags_conflicts_with_deprecated_tags() {
+        // dbt Core errors here too: `tags` is present under `config:` with a null value.
+        assert_same_key_conflict("tags: [legacy_tag]", "tags:", "tags");
     }
 
     #[test]
@@ -3031,6 +3129,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            &BTreeSet::new(),
         )
         .unwrap();
 
@@ -3178,6 +3277,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            &BTreeSet::new(),
         )
         .unwrap();
 
@@ -3568,6 +3668,7 @@ mod tests {
             None,
             None,
             false,
+            &BTreeSet::new(),
         )
         .unwrap();
 
@@ -3583,6 +3684,64 @@ mod tests {
         assert!(
             !model.contains("version=1_1"),
             "Unquoted v=1_1 would be parsed by Jinja as the numeric literal 11"
+        );
+    }
+
+    #[test]
+    fn test_persist_creates_intermediate_dirs_for_explicit_test_name_with_slash() {
+        let out_dir = tempfile::tempdir().unwrap();
+        let io_args = IoArgs {
+            out_dir: out_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "customers".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let test = DataTests::CustomTest(
+            CustomTest::MultiKey(Box::new(CustomTestMultiKey {
+                test_name: "not_null".to_string(),
+                name: Some("customer/id_not_null".to_string()),
+                description: None,
+                config: None,
+                column_name: None,
+                arguments: Verbatim::from(None),
+                __deprecated_args_and_configs__: Verbatim::from(BTreeMap::new()),
+            }))
+            .into(),
+        );
+
+        let test_asset = persist_inner(
+            "project_name",
+            "project_name",
+            &test_config,
+            Some("id"),
+            &test,
+            &io_args,
+            Path::new("models/schema.yml"),
+            &mut HashSet::new(),
+            &mut HashMap::new(),
+            &[],
+            false,
+            RawTestConfig::default(),
+        )
+        .expect("persist_inner should create missing intermediate directories, not fail");
+
+        assert_eq!(test_asset.test_name, "customer/id_not_null");
+        let written_path = out_dir
+            .path()
+            .join(DBT_GENERIC_TESTS_DIR_NAME)
+            .join("customer/id_not_null.sql");
+        assert!(
+            written_path.is_file(),
+            "expected generated test SQL at {}",
+            written_path.display()
         );
     }
 }

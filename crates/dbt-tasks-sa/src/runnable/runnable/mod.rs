@@ -273,11 +273,18 @@ impl Task for RunTask {
                         ) {
                             let severity =
                                 test.deprecated_config.severity.clone().unwrap_or_default();
-                            let cached_status = cached_data_test_status(
+                            let emit_reused_status = ctx
+                                .inner
+                                .run_cache_ctx
+                                .run_cache_service_config
+                                .as_ref()
+                                .is_some_and(|config| config.emit_reused_status);
+                            let cached_status = cached_data_test_status_with_emit_reused_status(
                                 status,
                                 *cached_result,
                                 severity,
                                 &ctx.inner.arg.warn_error_options,
+                                emit_reused_status,
                             );
                             let reported_result = cached_status.reported_result();
                             record_test_metric(reported_result.status);
@@ -938,11 +945,28 @@ impl CachedDataTestStatus {
 /// a passing test stat. Cached failures use the cached threshold booleans plus data test severity
 /// to report warn/error stats and increment the matching invocation metric so command status
 /// matches a normally executed test.
+#[cfg(test)]
 fn cached_data_test_status(
     reused_status: &NodeStatus,
     result: CachedTestExecutionResult,
     severity: Severity,
     warn_error_options: &WarnErrorOptions,
+) -> CachedDataTestStatus {
+    cached_data_test_status_with_emit_reused_status(
+        reused_status,
+        result,
+        severity,
+        warn_error_options,
+        true,
+    )
+}
+
+fn cached_data_test_status_with_emit_reused_status(
+    reused_status: &NodeStatus,
+    result: CachedTestExecutionResult,
+    severity: Severity,
+    warn_error_options: &WarnErrorOptions,
+    emit_reused_status: bool,
 ) -> CachedDataTestStatus {
     let failures = result.failures.max(0) as usize;
     let status = reported_test_verdict_from_components(
@@ -951,17 +975,21 @@ fn cached_data_test_status(
         result.should_error,
     );
     let status = status_with_warn_error_overrides(status, warn_error_options);
-    let stat_status = status.node_status();
+    let stat_status = match status.node_status() {
+        NodeStatus::TestPassed if emit_reused_status => reused_status.clone(),
+        status => status,
+    };
+    let final_status = if stat_status == NodeStatus::TestPassed {
+        reused_status.clone()
+    } else {
+        stat_status.clone()
+    };
 
     CachedDataTestStatus {
         failures,
         status,
-        stat_status: stat_status.clone(),
-        final_status: if stat_status == NodeStatus::TestPassed {
-            reused_status.clone()
-        } else {
-            stat_status
-        },
+        stat_status,
+        final_status,
     }
 }
 
@@ -1243,6 +1271,7 @@ mod tests {
     use dbt_schemas::schemas::common::Hooks;
     use dbt_schemas::schemas::properties::ModelState;
     use dbt_yaml::Verbatim;
+    use std::time::SystemTime;
 
     fn model_with_pre_hook_and_reuse_hook_config(
         execute_hooks_on_any_reuse: Option<bool>,
@@ -1404,9 +1433,42 @@ mod tests {
 
         assert_eq!(status.failures, 0);
         assert_eq!(status.status, TestExecutionStatus::Passed);
-        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(
+            status.stat_status,
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string())
+        );
+        let stat = Stat::new(
+            "test.project.cached_test".to_string(),
+            SystemTime::now(),
+            Some(status.failures),
+            status.stat_status.clone(),
+            None,
+            1,
+        );
+        assert_eq!(stat.result_status_string(), "reused");
         assert_eq!(status.final_status, reused_status);
         assert_eq!(status.status.metric_key(), None);
+    }
+
+    #[test]
+    fn cached_passing_data_test_keeps_pass_status_when_reuse_status_is_disabled() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status_with_emit_reused_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 0,
+                should_warn: false,
+                should_error: false,
+            },
+            Severity::Error,
+            &WarnErrorOptions::default(),
+            false,
+        );
+
+        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(status.final_status, reused_status);
     }
 
     #[test]
@@ -1539,7 +1601,7 @@ mod tests {
 
         assert_eq!(status.failures, 2);
         assert_eq!(status.status, TestExecutionStatus::Passed);
-        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(status.stat_status, reused_status);
         assert_eq!(status.final_status, reused_status);
         assert_eq!(status.status.metric_key(), None);
     }

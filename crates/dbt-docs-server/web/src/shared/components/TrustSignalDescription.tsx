@@ -1,13 +1,13 @@
 import { type FC, type JSX } from 'react';
 
 import {
-  Link,
   RyeconStatusError,
   RyeconStatusSuccess,
   RyeconStatusWarning,
   SizeType,
 } from '@dbt-labs/sourdough';
 
+import { Link } from '../../components/ui/Link';
 import { toTitleCase } from '../util/string';
 import { TrustSignalMessage, TrustState } from '../util/trustSignals';
 import { trustIconMap } from './constants';

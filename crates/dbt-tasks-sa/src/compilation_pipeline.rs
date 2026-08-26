@@ -1,8 +1,10 @@
 //! Unified compilation pipeline abstraction for dbt
 
+use dbt_adapter_core::AdapterType;
 use dbt_common::{
-    FsResult,
+    ErrorCode, FsResult,
     cancellation::CancellationToken,
+    fs_err,
     io_args::LocalExecutionBackendKind,
     io_utils::{CSV_EXT, SQL_EXT},
     node_selector::{IndirectSelection, MethodName, SelectExpression, SelectionCriteria},
@@ -15,6 +17,9 @@ use dbt_scheduler::{
     args::SchedulerArgs,
     schedule::{build_schedule, modify_schedule_for_sidecar_compute_boundaries},
 };
+use dbt_schemas::IndexMap;
+use dbt_schemas::schemas::Nodes;
+use dbt_schemas::state::ProfileAdapter;
 use dbt_schemas::{
     schemas::{
         InternalDbtNodeAttributes, StateArtifacts, common::DbtMaterialization, profiles::Execute,
@@ -89,11 +94,74 @@ impl CompilationPipeline {
             token,
             resolved_state.adapter_type,
         )?;
+        Self::check_scheduled_adapters_are_declared(
+            &resolved_state.nodes,
+            &schedule,
+            &resolved_state.dbt_profile.adapters,
+            &resolved_state.dbt_profile.target,
+        )?;
         let execute = Execute::from_compute_flag(local_execution_backend);
         if matches!(execute, Execute::Sidecar | Execute::Service) {
             modify_schedule_for_sidecar_compute_boundaries(&mut schedule, &resolved_state.nodes);
         }
         Ok(schedule)
+    }
+
+    /// Every node that will actually execute must run on an adapter the active
+    /// target declares.
+    ///
+    /// Deliberately after scheduling, not at parse. A project may carry
+    /// `+adapter: bigquery` and be run against a Snowflake-only target -- perfectly
+    /// legitimate so long as selection excludes those nodes -- and parse cannot
+    /// know what selection will do. The schedule is the first point where the
+    /// executing set is known, so it is the first point this can be an error
+    /// rather than a guess.
+    ///
+    /// Only `selected_nodes` is checked. Frontier nodes are pulled in for schema
+    /// hydration rather than execution; a frontier node on an undeclared adapter is
+    /// a separate concern and would surface from hydration itself.
+    fn check_scheduled_adapters_are_declared(
+        nodes: &Nodes,
+        schedule: &Schedule<String>,
+        declared: &IndexMap<AdapterType, ProfileAdapter>,
+        target: &str,
+    ) -> FsResult<()> {
+        // First offending node per adapter, so the diagnostic names an example
+        // without listing a whole subgraph. A Vec rather than a map because
+        // `AdapterType` is not `Ord` and the set is at most a handful wide.
+        let mut undeclared: Vec<(AdapterType, &String)> = Vec::new();
+        for unique_id in &schedule.selected_nodes {
+            if let Some(node) = nodes.get_node(unique_id) {
+                let adapter = node.node_adapter();
+                if !declared.contains_key(&adapter)
+                    && !undeclared.iter().any(|(seen, _)| *seen == adapter)
+                {
+                    undeclared.push((adapter, unique_id));
+                }
+            }
+        }
+
+        if undeclared.is_empty() {
+            return Ok(());
+        }
+
+        let offenders = undeclared
+            .iter()
+            .map(|(adapter, unique_id)| format!("'{adapter}' (e.g. {unique_id})"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let declared_list = declared
+            .keys()
+            .map(|t| t.as_ref())
+            .collect::<Vec<_>>()
+            .join(", ");
+        Err(fs_err!(
+            ErrorCode::InvalidConfig,
+            "selected nodes need adapters the target '{}' does not declare: {offenders}. \
+             It declares: {declared_list}. Either configure the missing adapter in profiles.yml \
+             or narrow your selection so those nodes are excluded.",
+            target
+        ))
     }
 
     fn build_atoms_from_cache_state(cache_state: &CacheState) -> Vec<SelectExpression> {
@@ -293,5 +361,100 @@ pub mod loaded_project {
             .instrument(span.clone())
             .await
             .record_status(&span)
+    }
+}
+
+#[cfg(test)]
+mod scheduled_adapter_tests {
+    use super::*;
+    use dbt_schemas::schemas::DbtModel;
+    use dbt_schemas::schemas::profiles::{DbConfig, SnowflakeDbConfig};
+    use std::sync::Arc;
+
+    /// A target declaring `declared`, with `scheduled` selected for execution.
+    fn check(declared: &[AdapterType], scheduled: &[(&str, AdapterType)]) -> FsResult<()> {
+        let mut nodes = Nodes::default();
+        let mut schedule = Schedule::<String>::default();
+        for (unique_id, adapter) in scheduled {
+            let mut model = DbtModel::default();
+            model.__base_attr__.adapter = *adapter;
+            nodes
+                .models
+                .insert((*unique_id).to_string(), Arc::new(model));
+            schedule.selected_nodes.insert((*unique_id).to_string());
+        }
+
+        let declared: IndexMap<AdapterType, ProfileAdapter> = declared
+            .iter()
+            .map(|t| {
+                (
+                    *t,
+                    ProfileAdapter::single(
+                        DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default()),
+                    ),
+                )
+            })
+            .collect();
+
+        CompilationPipeline::check_scheduled_adapters_are_declared(
+            &nodes, &schedule, &declared, "prod",
+        )
+    }
+
+    #[test]
+    fn scheduled_nodes_on_declared_adapters_pass() {
+        check(
+            &[AdapterType::Snowflake, AdapterType::Bigquery],
+            &[
+                ("model.p.a", AdapterType::Snowflake),
+                ("model.p.b", AdapterType::Bigquery),
+            ],
+        )
+        .expect("both adapters are declared");
+    }
+
+    /// The whole reason this is not a parse-time check: a project may carry nodes
+    /// on an adapter the target lacks, so long as selection leaves them out.
+    #[test]
+    fn an_undeclared_adapter_is_fine_when_selection_excludes_it() {
+        check(
+            &[AdapterType::Snowflake],
+            &[("model.p.a", AdapterType::Snowflake)],
+        )
+        .expect("nothing scheduled needs the missing adapter");
+    }
+
+    #[test]
+    fn a_scheduled_node_on_an_undeclared_adapter_fails_and_names_it() {
+        let err = check(
+            &[AdapterType::Snowflake],
+            &[("model.p.needs_bq", AdapterType::Bigquery)],
+        )
+        .expect_err("bigquery is scheduled but not declared");
+        let msg = err.to_string();
+        assert!(msg.contains("bigquery"), "must name the adapter: {msg}");
+        assert!(
+            msg.contains("model.p.needs_bq"),
+            "must name an offending node: {msg}"
+        );
+        assert!(
+            msg.contains("snowflake"),
+            "must say what the target does declare: {msg}"
+        );
+    }
+
+    /// One example per adapter, not one line per node.
+    #[test]
+    fn several_nodes_on_one_undeclared_adapter_report_once() {
+        let err = check(
+            &[AdapterType::Snowflake],
+            &[
+                ("model.p.a", AdapterType::Bigquery),
+                ("model.p.b", AdapterType::Bigquery),
+            ],
+        )
+        .expect_err("bigquery is not declared");
+        let msg = err.to_string();
+        assert_eq!(msg.matches("bigquery").count(), 1, "reported twice: {msg}");
     }
 }

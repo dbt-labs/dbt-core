@@ -7,6 +7,7 @@ use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{
     extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
 };
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_error_log_message};
@@ -40,6 +41,7 @@ type ResolveMetricsResult = FsResult<(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_metrics(
+    adapter_type: AdapterType,
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_package: &DbtPackage,
@@ -70,6 +72,7 @@ pub async fn resolve_metrics(
         disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref());
 
     let (nested_metrics, nested_disabled_metrics) = resolve_nested_model_metrics(
+        adapter_type,
         arg,
         package,
         root_project_configs,
@@ -87,6 +90,7 @@ pub async fn resolve_metrics(
     disabled_metrics.extend(nested_disabled_metrics);
 
     let (top_level_metrics, top_level_disabled_metrics) = resolve_top_level_metrics(
+        adapter_type,
         arg,
         package,
         root_project_configs,
@@ -107,6 +111,7 @@ pub async fn resolve_metrics(
 
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_nested_model_metrics(
+    adapter_type: AdapterType,
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
@@ -266,6 +271,8 @@ pub fn resolve_nested_model_metrics(
                         meta: metric_config.meta.clone().unwrap_or_default(),
                     },
                     __base_attr__: NodeBaseAttributes {
+                        // Not executed against a warehouse; records the target it parsed under.
+                        adapter: adapter_type,
                         database: "".to_string(),
                         schema: "".to_string(),
                         alias: "".to_string(),
@@ -335,6 +342,7 @@ pub fn resolve_nested_model_metrics(
 
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_top_level_metrics(
+    adapter_type: AdapterType,
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
@@ -550,6 +558,8 @@ pub fn resolve_top_level_metrics(
                 meta: metric_metric_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                // Not executed against a warehouse; records the target it parsed under.
+                adapter: adapter_type,
                 database: "".to_string(),
                 schema: "".to_string(),
                 alias: "".to_string(),

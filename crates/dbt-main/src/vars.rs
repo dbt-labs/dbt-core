@@ -1,5 +1,8 @@
 use dbt_common::{
-    io_args::{BATCH_TESTS_ENV, SKIP_REDUNDANT_TESTS_ENV},
+    io_args::{
+        BATCH_TESTS_ENV, REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV,
+        SKIP_REDUNDANT_TESTS_ENV,
+    },
     tracing::dbt_emit::emit_warn_log_message,
 };
 use dbt_init::{ErrorCode, FsResult, fs_err};
@@ -124,11 +127,15 @@ const USED_ENGINE_ENV_VARS: &[&str] = &[
     "DBT_ENGINE_EXPERIMENTAL_LIST_UDFS",
     "DBT_ENGINE_EXPERIMENTAL_SNAPSHOT_COLUMNS",
     "DBT_ENGINE_MANAGE_STATE",
+    "DBT_ENGINE_MANTLE_ARTIFACTS",
     "DBT_ENGINE_NO_WARN_SEMANTIC_MANIFEST_VALIDATION",
+    "DBT_ENGINE_OVERRIDE_SELECTION_FROM_RECORDING",
+    "DBT_ENGINE_OVERRIDE_SELECTION_FROM_RUN_RESULTS",
     "DBT_ENGINE_RECORDER_FILE_PATH",
     "DBT_ENGINE_RECORDER_MODE",
     "DBT_ENGINE_RECORDER_ROW_LIMIT",
     "DBT_ENGINE_RECORDER_TYPES",
+    REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV,
     SKIP_REDUNDANT_TESTS_ENV,
     "DBT_ENGINE_STATE_API_URL",
     "DBT_ENGINE_STATE_AUTH_URL",
@@ -285,6 +292,35 @@ mod tests {
     }
 
     #[test]
+    fn validate_engine_env_vars_allows_selection_override_vars() {
+        // Regression: these are read straight from the environment, which is invisible to the
+        // reserved-prefix check. Setting them must not be rejected as user-authored.
+        let _lock = ENV_MUTEX.lock().unwrap();
+        let vars = [
+            ("DBT_ENGINE_MANTLE_ARTIFACTS", "/tmp/mantle"),
+            ("DBT_ENGINE_OVERRIDE_SELECTION_FROM_RUN_RESULTS", "1"),
+            ("DBT_ENGINE_OVERRIDE_SELECTION_FROM_RECORDING", "1"),
+        ];
+        for (key, value) in vars {
+            unsafe {
+                #[allow(clippy::disallowed_methods)]
+                std::env::set_var(key, value);
+            }
+        }
+        let result = validate_engine_env_vars();
+        for (key, _) in vars {
+            unsafe {
+                #[allow(clippy::disallowed_methods)]
+                std::env::remove_var(key);
+            }
+        }
+        assert!(
+            result.is_ok(),
+            "selection-override vars should be known engine env vars: {result:?}"
+        );
+    }
+
+    #[test]
     fn validate_engine_env_vars_allows_dbt_state_vars() {
         let _lock = ENV_MUTEX.lock().unwrap();
         unsafe {
@@ -326,6 +362,24 @@ mod tests {
         assert!(
             result.is_ok(),
             "test optimization engine env vars should not error"
+        );
+    }
+
+    #[test]
+    fn validate_engine_env_vars_allows_ref_search_order_var() {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV, "1");
+        }
+        let result = validate_engine_env_vars();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::remove_var(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV);
+        }
+        assert!(
+            result.is_ok(),
+            "the ref search order engine env var should not error"
         );
     }
 

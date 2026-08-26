@@ -8,11 +8,15 @@ use dbt_common::warn_error_options::project_flags_get_value;
 use dbt_common::{ErrorCode, FsError};
 use indexmap::IndexMap;
 
+use dbt_adapter_core::AdapterType;
 use dbt_common::{
     FsResult,
     tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message},
 };
 use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
+use dbt_schemas::state::ProfileAdapter;
+
+use crate::resolve::resolve_utils::authored_quoting_per_adapter;
 use dbt_schemas::schemas::{
     project::{
         AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
@@ -339,6 +343,16 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
             .map(|root| !root.get_config_for_fqn(fqn).get_enabled_with_default())
             .unwrap_or(false)
     }
+
+    /// Returns true if the root overlay explicitly sets `enabled = true` for this FQN.
+    /// The root overlay has the highest precedence for dependency packages, so an inline
+    /// `{{ config(enabled=false) }}` must not short-circuit rendering in that case.
+    pub fn is_enabled_by_root_overlay(&self, fqn: &[String]) -> bool {
+        self.root
+            .as_ref()
+            .map(|root| root.get_config_for_fqn(fqn).get_enabled() == Some(true))
+            .unwrap_or(false)
+    }
 }
 
 /// Recursively build the [DbtProjectConfig] from a parent and child configuration.
@@ -497,6 +511,16 @@ pub struct RootProjectConfigs {
     pub analyses: DbtProjectConfig<AnalysesConfig>,
     /// Function configs
     pub functions: DbtProjectConfig<FunctionConfig>,
+    /// Authored identifier quoting per declared adapter name — the adapter's
+    /// `adapters:` entry, plus the top-level `quoting:` block for the target's
+    /// default adapter only. Left unresolved so node config still wins over it.
+    ///
+    /// Root-project config, hence its home here: `adapters:` is a root-only key,
+    /// and the top-level `quoting:` block that layers under it is the root's for
+    /// every package — a dependency's own `quoting:` block was already overridden
+    /// by the root's via [`ProjectConfigResolver::apply_root_overlay`], and stays
+    /// overridden.
+    pub adapter_quoting: IndexMap<AdapterType, DbtQuoting>,
 }
 
 /// Read the `require_resource_names_without_plus_prefix` behavior flag from a
@@ -511,9 +535,21 @@ pub(crate) fn disallow_plus_prefix_from_flags(flags: Option<&dbt_yaml::Value>) -
 }
 
 /// Build the [RootProjectConfigs] from a [DbtProject]
+///
+/// Every resource type that carries quoting — models, seeds, snapshots, data tests
+/// and functions — is also one that can select an adapter with `+adapter`, so all
+/// of them seed **nothing** for quoting, not even the authored top-level block. The
+/// top-level block applies only to the target's *default* adapter, so it cannot be
+/// folded in before the node's adapter is known; the matching `resolve_*` layers it
+/// back on per node, out of `adapter_quoting`. Seeding all-`None` is also what keeps
+/// the subtree and node-level `+quoting:` values distinguishable from the top-level
+/// block after the field-wise merge.
+///
+/// Every other resource type has no quoting to seed at all.
 pub fn build_root_project_configs(
     root_project: &DbtProject,
-    root_project_quoting: DbtQuoting,
+    target_adapters: &IndexMap<AdapterType, ProfileAdapter>,
+    default_adapter: AdapterType,
 ) -> FsResult<RootProjectConfigs> {
     let maybe_root_project_config =
         match (root_project.tests.clone(), root_project.data_tests.clone()) {
@@ -529,26 +565,26 @@ pub fn build_root_project_configs(
     Ok(RootProjectConfigs {
         models: init_project_config(
             &root_project.models,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
         )?,
         sources: init_project_config(&root_project.sources, (), None, disallow_plus_prefix)?,
         snapshots: init_project_config(
             &root_project.snapshots,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
         )?,
         seeds: init_project_config(
             &root_project.seeds,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
         )?,
         tests: init_project_config(
             &maybe_root_project_config,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
         )?,
@@ -570,10 +606,16 @@ pub fn build_root_project_configs(
         analyses: init_project_config(&root_project.analyses, (), None, disallow_plus_prefix)?,
         functions: init_project_config(
             &root_project.functions,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
         )?,
+        adapter_quoting: authored_quoting_per_adapter(
+            root_project.adapters.as_ref(),
+            target_adapters,
+            default_adapter,
+            *root_project.quoting,
+        ),
     })
 }
 
@@ -1527,5 +1569,55 @@ my_project:
             disabled.__warehouse_specific_config__.persist_constraints,
             Some(false)
         );
+    }
+
+    /// The predicate must fire only on an explicit `+enabled: true`; an absent value must not be
+    /// read as `true`, or every dependency package node would be treated as force-enabled.
+    #[test]
+    fn test_is_enabled_by_root_overlay() {
+        let fqn = vec!["pkg".to_string(), "my_model".to_string()];
+        let cases = [
+            (
+                "exact model",
+                "pkg:\n  my_model:\n    +enabled: true\n",
+                true,
+            ),
+            ("inherited from package", "pkg:\n  +enabled: true\n", true),
+            ("global", "+enabled: true\n", true),
+            (
+                "absent",
+                "pkg:\n  my_model:\n    +materialized: view\n",
+                false,
+            ),
+            (
+                "explicitly disabled",
+                "pkg:\n  my_model:\n    +enabled: false\n",
+                false,
+            ),
+        ];
+
+        for (label, yml, expected) in cases {
+            let (root, errors, _) =
+                init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+            assert!(errors.is_empty(), "{label}: {errors:?}");
+            let root = root.expect("root overlay config builds");
+            let local = DbtProjectConfig::<ModelConfig> {
+                config: ModelConfig::default(),
+                children: IndexMap::new(),
+            };
+            let resolver = ProjectConfigResolver::for_dependency(local, root.clone());
+            assert_eq!(
+                resolver.is_enabled_by_root_overlay(&fqn),
+                expected,
+                "{label}"
+            );
+
+            // Root packages have no overlay, so their own inline disable keeps winning.
+            let root_resolver = ProjectConfigResolver::for_root(root);
+            assert!(
+                !root_resolver.is_enabled_by_root_overlay(&fqn),
+                "{label}: root package must never be force-enabled"
+            );
+        }
     }
 }

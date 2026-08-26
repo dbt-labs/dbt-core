@@ -194,6 +194,13 @@ pub trait AdapterEngine: Send + Sync {
         0
     }
 
+    /// Fingerprints the connection `config` would open, without opening one.
+    /// The pool reuses a connection only when this matches the connection's
+    /// own fingerprint; a mismatch forces a new connection.
+    fn fingerprint_for_config(&self, _config: &AdapterConfig) -> AdapterResult<u64> {
+        Ok(self.fingerprint())
+    }
+
     /// Get the physical execution backend for sidecar engines.
     ///
     /// Returns the actual database backend (DuckDB, Snowflake, etc.) that SQL

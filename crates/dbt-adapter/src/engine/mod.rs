@@ -22,8 +22,10 @@ pub mod query_comment;
 pub mod retry;
 
 mod adbc;
+mod databricks;
 pub mod duckdb_attach;
 pub use adbc::AdbcEngine;
+pub(crate) use adbc::resolve_connection_config;
 
 mod noop_connection;
 pub use noop_connection::NoopConnection;
@@ -54,7 +56,6 @@ const REMOVED_IN_FUSION: &[&str] = &[
     "require_nested_cumulative_type_params",
     "require_generic_test_arguments_property",
     "require_unique_project_resource_names",
-    "require_ref_searches_node_package_before_root",
     "require_valid_schema_from_generate_schema_name",
     "require_sql_header_in_test_configs",
     "require_batched_execution_for_custom_microbatch_strategy",

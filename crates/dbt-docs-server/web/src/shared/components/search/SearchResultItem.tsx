@@ -1,8 +1,8 @@
 import { FC } from 'react';
 
 import { ResourceType, ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-import { Link } from '@dbt-labs/sourdough';
 
+import { Link } from '../../../components/ui/Link';
 import { LoadingBlock } from '../../../components/ui/LoadingBlock';
 import { TrustSignals } from '../../typings/trustSignals';
 import { ResourceChip } from '../ResourceChip';

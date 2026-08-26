@@ -277,6 +277,27 @@ impl Adapter {
         }
     }
 
+    /// The adapter type a node's macros should *behave* as.
+    ///
+    /// A node that selected a non-default adapter via `+adapter` has that
+    /// adapter's dialect in its render context, so type-sensitive macro helpers
+    /// answer for the adapter the node runs on rather than the target's default.
+    /// Falls back to this adapter's own type when the node selected nothing.
+    ///
+    /// Note this deliberately does *not* swap the adapter object itself — the
+    /// engine and connection remain the default adapter's. Only the type-derived
+    /// answers change. Methods whose behaviour comes from the connection rather
+    /// than the type (`external_root`, `external_read_location`) are therefore
+    /// unaffected and remain a known gap.
+    pub fn effective_adapter_type(&self, state: &State) -> AdapterType {
+        // `try_resolve_dialect`, not `resolve_dialect`: the latter defaults to
+        // "postgres", which parses successfully, so this adapter's own type would
+        // never be reached and every method would behave as Postgres.
+        minijinja::dispatch_object::try_resolve_dialect(state)
+            .and_then(|dialect| dialect.parse().ok())
+            .unwrap_or_else(|| self.adapter_type())
+    }
+
     pub fn engine(&self) -> &Arc<dyn crate::AdapterEngine> {
         match &self.inner {
             Typed { adapter, .. } => adapter.engine(),
@@ -663,7 +684,7 @@ impl Adapter {
     /// When the flag is off (or in parse mode) a plain `(a = b)` is returned.
     pub fn render_equals(
         &self,
-        _state: &State,
+        state: &State,
         expr1: &str,
         expr2: &str,
     ) -> Result<Value, minijinja::Error> {
@@ -677,14 +698,15 @@ impl Adapter {
         let sql = if !flag_enabled {
             format!("({expr1} = {expr2})")
         } else {
-            match self.adapter_type() {
+            match self.effective_adapter_type(state) {
                 AdapterType::Snowflake
                 | AdapterType::Bigquery
                 | AdapterType::Postgres
                 | AdapterType::Redshift
                 | AdapterType::Spark
                 | AdapterType::Databricks
-                | AdapterType::DuckDB => {
+                | AdapterType::DuckDB
+                | AdapterType::Alt => {
                     format!("({expr1} IS NOT DISTINCT FROM {expr2})")
                 }
                 _ => format!(
@@ -1499,6 +1521,11 @@ impl Adapter {
                             return Ok(RelationObject::new(cached_entry.relation()).into_value());
                         }
                     } else {
+                        if let Some(routine) =
+                            self.cache_routines_and_get_relation(state, temp_relation.as_ref())?
+                        {
+                            return Ok(routine);
+                        }
                         return Ok(cache_result);
                     }
                 }
@@ -3760,7 +3787,7 @@ impl Adapter {
             // relation: BaseRelation, include_transient: bool = False
             "describe_dynamic_table" => self.describe_dynamic_table(state, args),
             "get_catalog_integration" => self.get_catalog_integration(state, args),
-            "type" => Ok(Value::from(self.adapter_type().to_string())),
+            "type" => Ok(Value::from(self.effective_adapter_type(state).to_string())),
             // config: dict
             "get_hard_deletes_behavior" => self.get_hard_deletes_behavior(state, args),
             "cache_added" => {
@@ -4362,5 +4389,61 @@ impl Adapter {
         } else {
             None
         }
+    }
+
+    /// (state change) Lists the schema's routines and inserts each into
+    /// the relation cache. Returns `temp_relation` if it turns out to
+    /// be one of them
+    fn cache_routines_and_get_relation(
+        &self,
+        state: &State,
+        temp_relation: &dyn BaseRelation,
+    ) -> Result<Option<Value>, minijinja::Error> {
+        let Typed { adapter, .. } = &self.inner else {
+            return Ok(None);
+        };
+        if adapter.adapter_type() != AdapterType::Bigquery {
+            return Ok(None);
+        }
+        if !adapter.engine().relation_cache().project_has_functions() {
+            return Ok(None);
+        }
+        if temp_relation
+            .database_as_resolved_str()
+            .unwrap_or_default()
+            .is_empty()
+            && temp_relation
+                .schema_as_resolved_str()
+                .unwrap_or_default()
+                .is_empty()
+        {
+            return Ok(None);
+        }
+
+        let db_schema = CatalogAndSchema::from(temp_relation);
+        let mut conn = adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation > list_routines call");
+        let routines = match bigquery::list_routines(
+            adapter.engine().as_ref(),
+            &query_ctx,
+            conn.as_mut(),
+            &db_schema,
+            self.cancellation_token.clone(),
+        ) {
+            Ok(routines) => routines,
+            Err(e) => {
+                tracing::warn!("relation_cache: list_routines failed: {e}");
+                return Ok(None);
+            }
+        };
+
+        let relation_cache = adapter.engine().relation_cache();
+        for routine in routines {
+            relation_cache.insert_relation(routine, None);
+        }
+
+        Ok(relation_cache
+            .get_relation(temp_relation)
+            .map(|entry| RelationObject::new(entry.relation()).into_value()))
     }
 }

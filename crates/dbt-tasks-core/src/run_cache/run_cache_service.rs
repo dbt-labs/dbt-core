@@ -3219,7 +3219,7 @@ fn metadata_query_options_for_warehouses(
 }
 
 pub(crate) fn run_cache_metadata_query_options(ctx: &TaskRunnerCtx) -> MetadataQueryOptions {
-    let profile_warehouse = match &ctx.dbt_profile().db_config {
+    let profile_warehouse = match &ctx.dbt_profile().default_db_config() {
         DbConfig::Snowflake(config) => config.metadata_warehouse.clone(),
         _ => None,
     };
@@ -3233,7 +3233,7 @@ pub(crate) fn run_cache_metadata_query_options(ctx: &TaskRunnerCtx) -> MetadataQ
     // Adaptive broad-vs-sequential freshness fetch: read from the Snowflake
     // target config, defaulting to `true` (adaptive on). Only the Snowflake
     // no-metadata-warehouse strategy consults it; other adapters ignore it.
-    let adaptive_metadata_fetch = match &ctx.dbt_profile().db_config {
+    let adaptive_metadata_fetch = match &ctx.dbt_profile().default_db_config() {
         DbConfig::Snowflake(config) => config.adaptive_metadata_fetch.unwrap_or(true),
         _ => true,
     };
@@ -4138,7 +4138,8 @@ fn node_uses_custom_materialization(
     node.as_any()
         .downcast_ref::<DbtModel>()
         .is_some_and(|model| {
-            materialization_resolver.is_custom_materialization(&model.materialized().to_string())
+            materialization_resolver
+                .is_custom_materialization(&model.materialized().to_string(), model.node_adapter())
         })
 }
 
@@ -4510,6 +4511,8 @@ fn record_submit_skipped(node: &dyn InternalDbtNodeAttributes, reason: &'static 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::state::ProfileAdapter;
+    use indexmap::IndexMap;
     use std::any::Any;
     use std::future::Future;
     use std::path::{Path, PathBuf};
@@ -7372,17 +7375,23 @@ mod tests {
             disabled_nodes: Nodes::default(),
             macros,
             operations: Operations::default(),
-            dbt_profile: DbtProfile {
-                profile: "default".to_string(),
-                target: "dev".to_string(),
-                defer_to_target: None,
-                allow_clones: true,
-                db_config: DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default()),
-                alt_target_db_config: None,
-                schema: "dbt_test".to_string(),
-                database: "db".to_string(),
-                relative_profile_path: PathBuf::new(),
-                threads: None,
+            dbt_profile: {
+                let db_config = DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default());
+                let default_adapter = db_config.adapter_type();
+                let adapters =
+                    IndexMap::from([(default_adapter, ProfileAdapter::single(db_config))]);
+                DbtProfile {
+                    profile: "default".to_string(),
+                    target: "dev".to_string(),
+                    defer_to_target: None,
+                    allow_clones: true,
+                    adapters,
+                    default_adapter,
+                    schema: "dbt_test".to_string(),
+                    database: "db".to_string(),
+                    relative_profile_path: PathBuf::new(),
+                    threads: None,
+                }
             },
             cloud_config: None,
             render_results: RenderResults::default(),

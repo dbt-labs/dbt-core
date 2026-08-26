@@ -1,4 +1,4 @@
-import type { FileTreeItemType, Ryecon } from '@dbt-labs/sourdough';
+import type { Ryecon } from '@dbt-labs/sourdough';
 import {
   RyeconBook,
   RyeconClipboardSuccess,
@@ -6,6 +6,7 @@ import {
   RyeconFileBlank,
 } from '@dbt-labs/sourdough';
 
+import type { FileTreeItemType } from '../components/ui/PaginatedFileTree';
 import type { FileEntry } from '../shared';
 import { RESOURCE_TYPE_RYECON } from './resourceType';
 

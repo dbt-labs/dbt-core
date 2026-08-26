@@ -493,7 +493,11 @@ pub fn materialize_clone<S: serde::Serialize>(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("clone")?;
+    // `dbt clone` takes the target default: this path is typed `&dyn InternalDbtNode`,
+    // which does not expose the node's `+adapter`. Cloning a node on a non-default
+    // adapter is not supported yet.
+    let macro_name =
+        materialization_resolver.find_materialization_macro_by_name("clone", adapter_type)?;
 
     let unique_id = node.common().unique_id.clone();
     let defer_option = defer_nodes
@@ -565,7 +569,8 @@ pub fn materialize_seed(
     agate_table: AgateTable,
     io_args: &IoArgs,
 ) -> FsResult<(Value, Option<AdapterResponse>)> {
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("seed")?;
+    let macro_name =
+        materialization_resolver.find_materialization_macro_by_name("seed", seed.node_adapter())?;
 
     let (mut context, result_store) = build_run_node_context(
         seed,
@@ -647,7 +652,7 @@ pub fn materialize_model(
     let materialization = model.__base_attr__.materialized.clone();
 
     let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&materialization.to_string())?;
+        .find_materialization_macro_by_name(&materialization.to_string(), model.node_adapter())?;
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
@@ -913,7 +918,8 @@ pub fn materialize_latest_version_pointer(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("view")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("view", model.node_adapter())?;
     context.insert("sql".to_string(), Value::from(pointer_sql.as_str()));
     context.insert(
         "compiled_code".to_string(),
@@ -980,8 +986,10 @@ pub fn materialize_microbatch_model(
     run_node_context.insert("compiled_code".to_string(), Value::from(batch_sql.as_str()));
 
     // Get the incremental materialization macro
-    let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&DbtMaterialization::Incremental.to_string())?;
+    let macro_name = materialization_resolver.find_materialization_macro_by_name(
+        &DbtMaterialization::Incremental.to_string(),
+        model.node_adapter(),
+    )?;
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -1057,7 +1065,8 @@ pub fn materialize_snapshot(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("snapshot")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("snapshot", snapshot.node_adapter())?;
 
     let unique_id = snapshot.__common_attr__.unique_id.clone();
     let node_alias = snapshot.__base_attr__.alias.clone();
@@ -1128,8 +1137,10 @@ pub fn materialize_unit_test(
             .collect(),
     );
     let materialization = DbtMaterialization::Unit;
-    let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&materialization.to_string())?;
+    let macro_name = materialization_resolver.find_materialization_macro_by_name(
+        &materialization.to_string(),
+        unit_test.node_adapter(),
+    )?;
 
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
@@ -1438,8 +1449,8 @@ pub fn materialize_test(
     } else {
         "test"
     };
-    let macro_name =
-        materialization_resolver.find_materialization_macro_by_name(materialization_name)?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name(materialization_name, test.node_adapter())?;
 
     context.insert("sql".to_string(), Value::from(sql));
 
@@ -1936,7 +1947,8 @@ pub fn materialize_function(
     );
 
     // Find the function materialization macro
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("function")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("function", function.node_adapter())?;
 
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
