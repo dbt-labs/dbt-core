@@ -1,0 +1,6 @@
+kind: Features
+body: Add otel_trace_id() and otel_span_id() Jinja functions to correlate query comments and model SQL with OpenTelemetry trace/span ids
+time: 2026-08-19T10:19:49.385492+02:00
+custom:
+    Author: b-per
+    Issue: ""
