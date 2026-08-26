@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, NoReturn, Optio
 # These modules are added to the context. Consider alternative
 # approaches which will extend well to potentially many modules
 import pytz
+from opentelemetry import trace
 
 import dbt.deprecations as deprecations
 import dbt.flags as flags_module
@@ -656,6 +657,37 @@ class BaseContext(metaclass=ContextMeta):
     def thread_id(self) -> str:
         """thread_id outputs an ID for the current thread (useful for auditing)"""
         return threading.current_thread().name
+
+    @contextmember()
+    @staticmethod
+    def otel_trace_id() -> str:
+        """otel_trace_id() outputs the OpenTelemetry trace id (32-char hex) of
+        whichever span is currently active, for correlating query comments and
+        model SQL with the run's OpenTelemetry traces (see
+        `--snowflake-projects-otel`). All spans emitted during a single dbt
+        invocation share one trace id, so the value is the same everywhere it
+        can be read live. It is a function, not a plain variable, because some
+        contexts (e.g. `query-comment`) are built once, before any span is
+        active; reading live rather than capturing at context-build time
+        avoids permanently freezing to the placeholder there. Renders as 32
+        zeros when OpenTelemetry instrumentation is disabled or no span is
+        active.
+        """
+        return format(trace.get_current_span().get_span_context().trace_id, "032x")
+
+    @contextmember()
+    @staticmethod
+    def otel_span_id() -> str:
+        """otel_span_id() outputs the OpenTelemetry span id (16-char hex) of
+        whichever span is currently active, for correlating query comments and
+        model SQL with the run's OpenTelemetry traces (see
+        `--snowflake-projects-otel`). Unlike `otel_trace_id()`, this must be
+        read live: pre-hooks, the main statement, and post-hooks each run in
+        their own span, so the value can change between calls within the same
+        model. Renders as 16 zeros when OpenTelemetry instrumentation is
+        disabled or no span is active.
+        """
+        return format(trace.get_current_span().get_span_context().span_id, "016x")
 
     @contextproperty()
     def modules(self) -> Dict[str, Any]:
