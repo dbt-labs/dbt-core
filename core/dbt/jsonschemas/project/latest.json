@@ -1259,6 +1259,44 @@
               "type": "null"
             }
           ]
+        },
+        "error_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warn_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -3718,6 +3756,18 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+loaded_at_query": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+location": {
