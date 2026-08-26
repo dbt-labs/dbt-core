@@ -201,6 +201,8 @@ REQUIRED_BASE_KEYS = frozenset(
         "run_started_at",
         "invocation_id",
         "thread_id",
+        "otel_trace_id",
+        "otel_span_id",
         "modules",
         "flags",
         "print",
