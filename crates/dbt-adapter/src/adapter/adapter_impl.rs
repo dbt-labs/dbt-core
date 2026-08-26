@@ -5825,38 +5825,8 @@ impl AdapterImpl {
 
     /// ClickHouse: render the model's `query_settings` config as a query-level
     /// `SETTINGS ...` clause appended to the SELECT; empty string when unset.
-    pub fn get_model_query_settings(
-        &self,
-        state: &State,
-        model: &Value,
-        token: CancellationToken,
-    ) -> String {
-        let mut settings = metadata::clickhouse::model_config_map(model, "query_settings");
-
-        // Lightweight-delete strategies carry the probed
-        // `lw_deletes_query_settings` per query; explicit query_settings win.
-        let config = model.get_attr("config").ok();
-        let materialized = config
-            .as_ref()
-            .and_then(|c| c.get_attr("materialized").ok())
-            .and_then(|v| v.as_str().map(str::to_string))
-            .unwrap_or_default();
-        if materialized == "incremental" {
-            let strategy = config
-                .and_then(|c| c.get_attr("incremental_strategy").ok())
-                .and_then(|v| v.as_str().map(str::to_string));
-            let resolved =
-                self.calculate_incremental_strategy(state, strategy.as_deref(), token.clone());
-            if matches!(resolved.as_str(), "delete_insert" | "microbatch") {
-                let caps = metadata::clickhouse::server_capabilities(self, state, token);
-                for (setting, value) in &caps.lw_deletes_query_settings {
-                    if !settings.iter().any(|(key, _)| key == setting) {
-                        settings.push((setting.clone(), value.clone()));
-                    }
-                }
-            }
-        }
-
+    pub fn get_model_query_settings(&self, model: &Value) -> String {
+        let settings = metadata::clickhouse::model_config_map(model, "query_settings");
         let settings_str = metadata::clickhouse::build_settings_str(&settings);
         if settings_str.is_empty() {
             String::new()

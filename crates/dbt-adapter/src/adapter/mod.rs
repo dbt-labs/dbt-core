@@ -3309,18 +3309,14 @@ impl Adapter {
     /// ClickHouse: see [AdapterImpl::get_model_query_settings].
     pub fn get_model_query_settings(
         &self,
-        state: &State,
+        _state: &State,
         args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new("get_model_query_settings", &["model"], args);
         let model = iter.next_arg::<&Value>()?;
         iter.finish()?;
         match &self.inner {
-            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_query_settings(
-                state,
-                model,
-                self.cancellation_token.clone(),
-            ))),
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_query_settings(model))),
             Parse(_) => Ok(empty_string_value()),
         }
     }

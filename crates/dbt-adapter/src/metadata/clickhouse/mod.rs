@@ -475,11 +475,6 @@ pub struct ClickHouseCapabilities {
     /// `has_lw_deletes` gated by the profile `use_lw_deletes` flag; picks the
     /// default incremental strategy.
     pub use_lw_deletes: bool,
-    /// Settings sent as query-level `SETTINGS` on the statements of models
-    /// resolved to a lightweight-delete strategy — Fusion's replacement for
-    /// Python's per-session/per-connection settings, which don't persist
-    /// across the connection pool.
-    pub lw_deletes_query_settings: Vec<(String, Value)>,
 }
 
 impl ClickHouseCapabilities {
@@ -618,8 +613,7 @@ pub fn server_capabilities(
     token: CancellationToken,
 ) -> &'static ClickHouseCapabilities {
     CLICKHOUSE_CAPABILITIES.get_or_init(|| {
-        let (has_lw_deletes, lw_deletes_query_settings) =
-            probe_lightweight_deletes(adapter, state, token.clone());
+        let has_lw_deletes = probe_lightweight_deletes(adapter, state, token.clone());
         let use_lw_deletes_requested = adapter
             .get_db_config_value("use_lw_deletes")
             .and_then(|value| value.as_bool())
@@ -628,7 +622,6 @@ pub fn server_capabilities(
             server_version: probe_server_version(adapter, state, token).unwrap_or_default(),
             has_lw_deletes,
             use_lw_deletes: has_lw_deletes && use_lw_deletes_requested,
-            lw_deletes_query_settings,
         }
     })
 }
@@ -673,33 +666,34 @@ const ND_MUTATION_SETTING: &str = "allow_nondeterministic_mutations";
 
 /// Mirrors dbclient.py `_check_lightweight_deletes` (only
 /// `allow_nondeterministic_mutations` needs checking — lightweight deletes
-/// themselves are GA since ClickHouse 23.3). Divergence: Python raises a config
-/// error at connection time when the setting is readonly and the profile
-/// requested `use_lw_deletes`; here the probe just reports "unavailable" and
-/// `validate_incremental_strategy` errors when a lightweight-delete strategy is
-/// actually used.
+/// themselves are GA since ClickHouse 23.3). Divergences: Python raises a
+/// config error at connection time when the setting is readonly and the
+/// profile requested `use_lw_deletes` — here the probe just reports
+/// "unavailable" and `validate_incremental_strategy` errors when a
+/// lightweight-delete strategy is actually used; and Python enables the
+/// disabled-but-changeable case with a per-session `SET` — the v2 equivalent
+/// (a per-connection driver setting) arrives with the new adbc_clickhouse
+/// driver (issue #70).
 fn probe_lightweight_deletes(
     adapter: &AdapterImpl,
     state: &State,
     token: CancellationToken,
-) -> (bool, Vec<(String, Value)>) {
-    // dbclient.py defaults `lightweight_deletes_sync='3'` per connection.
-    let sync_setting = ("lightweight_deletes_sync".to_string(), Value::from(3));
+) -> bool {
     let sql = format!(
         "SELECT value, toString(readonly) AS readonly FROM system.settings \
          WHERE name = '{ND_MUTATION_SETTING}'"
     );
     let Some(batch) = probe_query(adapter, state, &sql, token.clone()) else {
-        return (false, Vec::new());
+        return false;
     };
     if batch.num_rows() == 0 {
-        return (false, Vec::new());
+        return false;
     }
     let (Ok(values), Ok(readonlys)) = (
         batch.column_values::<StringArray>("value"),
         batch.column_values::<StringArray>("readonly"),
     ) else {
-        return (false, Vec::new());
+        return false;
     };
     let enabled = values
         .value(0)
@@ -707,24 +701,15 @@ fn probe_lightweight_deletes(
         .map(|v| v > 0)
         .unwrap_or(false);
     if enabled {
-        return (true, vec![sync_setting]);
+        return true;
     }
     if readonlys.value(0) != "0" {
-        return (false, Vec::new());
+        return false;
     }
     // Python's `SET {setting} = 1` try/except: verify the user may override
-    // the setting per query.
+    // the setting.
     let probe = format!("SELECT 1 SETTINGS {ND_MUTATION_SETTING} = 1");
-    if probe_query(adapter, state, &probe, token).is_none() {
-        return (false, Vec::new());
-    }
-    (
-        true,
-        vec![
-            (ND_MUTATION_SETTING.to_string(), Value::from(1)),
-            sync_setting,
-        ],
-    )
+    probe_query(adapter, state, &probe, token).is_some()
 }
 
 /// Mirrors impl.py `calculate_incremental_strategy`.
