@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Error instead of panicking when both tests: and data_tests: are set in dbt_project.yml'
+time: 2026-08-16T15:03:15.756054+04:00
+custom:
+    author: daviddallakyan2005
+    issue: "15958"
+    project: dbt-core

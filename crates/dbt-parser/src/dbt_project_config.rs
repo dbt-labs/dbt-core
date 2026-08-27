@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use dbt_common::warn_error_options::project_flags_get_value;
-use dbt_common::{ErrorCode, FsError};
+use dbt_common::{ErrorCode, FsError, err};
 use indexmap::IndexMap;
 
 use dbt_adapter_core::AdapterType;
@@ -536,6 +536,26 @@ pub(crate) fn disallow_plus_prefix_from_flags(flags: Option<&dbt_yaml::Value>) -
         .unwrap_or(false)
 }
 
+/// Select `tests:` or `data_tests:` from a `dbt_project.yml`.
+///
+/// dbt 1.x rejects both keys on the same project. There is no merge.
+pub(crate) fn coalesce_project_tests_config<T>(
+    tests: Option<T>,
+    data_tests: Option<T>,
+) -> FsResult<Option<T>> {
+    match (tests, data_tests) {
+        (Some(_), Some(_)) => {
+            err!(
+                ErrorCode::InvalidConfig,
+                "Invalid project config: cannot have both 'tests' and 'data_tests' defined"
+            )
+        }
+        (Some(tests), None) => Ok(Some(tests)),
+        (None, Some(data_tests)) => Ok(Some(data_tests)),
+        (None, None) => Ok(None),
+    }
+}
+
 /// Build the [RootProjectConfigs] from a [DbtProject]
 ///
 /// Every resource type that carries quoting — models, seeds, snapshots, data tests
@@ -554,14 +574,7 @@ pub fn build_root_project_configs(
     default_adapter: AdapterType,
 ) -> FsResult<RootProjectConfigs> {
     let maybe_root_project_config =
-        match (root_project.tests.clone(), root_project.data_tests.clone()) {
-            (Some(_), Some(_)) => {
-                unimplemented!("Merge logic for tests and data tests is unimplemented")
-            }
-            (Some(tests), None) => Some(tests),
-            (None, Some(data_tests)) => Some(data_tests),
-            (None, None) => None,
-        };
+        coalesce_project_tests_config(root_project.tests.clone(), root_project.data_tests.clone())?;
     let disallow_plus_prefix = disallow_plus_prefix_from_flags(root_project.flags.as_ref());
 
     Ok(RootProjectConfigs {
@@ -1227,6 +1240,42 @@ mod tests {
             result.materialized,
             Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)
         );
+    }
+
+    fn dummy_data_test_config() -> dbt_schemas::schemas::project::ProjectDataTestConfig {
+        dbt_jinja_utils::serde::from_yaml_raw("+enabled: true", None, false, None)
+            .expect("dummy data test config")
+    }
+
+    #[test]
+    fn test_build_root_project_configs_rejects_both_tests_and_data_tests() {
+        let project = DbtProject {
+            tests: Some(dummy_data_test_config()),
+            data_tests: Some(dummy_data_test_config()),
+            ..Default::default()
+        };
+
+        let err = build_root_project_configs(&project, DbtQuoting::default()).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidConfig);
+        assert!(
+            err.context
+                .contains("cannot have both 'tests' and 'data_tests' defined")
+        );
+    }
+
+    #[test]
+    fn test_build_root_project_configs_accepts_tests_or_data_tests_alone() {
+        let tests_only = DbtProject {
+            tests: Some(dummy_data_test_config()),
+            ..Default::default()
+        };
+        assert!(build_root_project_configs(&tests_only, DbtQuoting::default()).is_ok());
+
+        let data_tests_only = DbtProject {
+            data_tests: Some(dummy_data_test_config()),
+            ..Default::default()
+        };
+        assert!(build_root_project_configs(&data_tests_only, DbtQuoting::default()).is_ok());
     }
 }
 
