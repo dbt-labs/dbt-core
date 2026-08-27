@@ -62,3 +62,20 @@ where
     tokio::task::block_in_place(move || tokio::runtime::Handle::current().block_on(task))
         .expect("expected to finish task")
 }
+
+/// Run an async task from sync code, reusing the active Tokio runtime if there is one.
+pub fn run_traced_async_blocking<F>(future: F) -> F::Output
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    if tokio::runtime::Handle::try_current().is_ok() {
+        spawn_traced_block_in_place(future)
+    } else {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("expected to build tokio runtime");
+        runtime.block_on(future)
+    }
+}

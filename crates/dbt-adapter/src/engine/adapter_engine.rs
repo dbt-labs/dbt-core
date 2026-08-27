@@ -238,6 +238,30 @@ fn log_step_duration(label: &str, elapsed: std::time::Duration) {
     tracing::debug!("{label} took {elapsed:?}");
 }
 
+/// Build the BigQuery `QUERY_LABELS` job option from a resolved query comment and state.
+pub(crate) fn bigquery_job_labels_option(
+    query_comment: &QueryCommentConfig,
+    resolved_comment: Option<&str>,
+    state: &State,
+) -> (String, OptionValue) {
+    let mut job_labels = resolved_comment.map_or_else(IndexMap::new, |comment| {
+        query_comment.get_job_labels_from_query_comment(comment)
+    });
+    if let Some(invocation_id_label) = state
+        .lookup("invocation_id", &[])
+        .and_then(|value| value.as_str().map(|label| label.to_owned()))
+    {
+        job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);
+    }
+
+    let job_labels_json =
+        serde_json::to_string(&job_labels).expect("Should be able to serialize job labels");
+    (
+        QUERY_LABELS.to_owned(),
+        OptionValue::String(job_labels_json),
+    )
+}
+
 /// Default ADBC-based execute_with_options implementation.
 ///
 /// Used by engines whose connections implement the full ADBC protocol
@@ -270,25 +294,10 @@ pub(crate) fn adbc_execute_with_options(
     let adapter_type = engine.adapter_type();
     let mut options = options;
     if let (Some(state), AdapterType::Bigquery) = (state, adapter_type) {
-        let mut job_labels = maybe_query_comment
-            .as_ref()
-            .map_or_else(IndexMap::new, |comment| {
-                engine
-                    .query_comment()
-                    .get_job_labels_from_query_comment(comment)
-            });
-        if let Some(invocation_id_label) = state
-            .lookup("invocation_id", &[])
-            .and_then(|value| value.as_str().map(|label| label.to_owned()))
-        {
-            job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);
-        }
-
-        let job_label_option =
-            serde_json::to_string(&job_labels).expect("Should be able to serialize job labels");
-        options.push((
-            QUERY_LABELS.to_owned(),
-            OptionValue::String(job_label_option),
+        options.push(bigquery_job_labels_option(
+            engine.query_comment(),
+            maybe_query_comment.as_deref(),
+            state,
         ));
     }
 
