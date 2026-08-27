@@ -44,6 +44,26 @@
         "type": "string"
       }
     },
+    "check-paths": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "description": "Project-level `checks:` config tree (path-scoped, `+`-prefixed), resolved by the standard project-config machinery like every other node type's subtree.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ProjectCheckConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "clean-targets": {
       "type": [
         "array",
@@ -139,6 +159,17 @@
       "anyOf": [
         {
           "$ref": "#/definitions/ProjectFunctionConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "info_schema": {
+      "description": "Package-scoped `info_schema:` block. Not resolved/inherited like `checks:` -- see [`InfoSchemaConfig`].",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/InfoSchemaConfig"
         },
         {
           "type": "null"
@@ -1134,6 +1165,29 @@
         "$ref": "#/definitions/IndexItem"
       }
     },
+    "InfoSchemaConfig": {
+      "description": "Project-level `info_schema:` block.\n\nPackage-scoped, not resolved/inherited the way `checks:` is: each package -- root or dependency -- declares its own `version` directly in its own `dbt_project.yml`, so a check in the root project can read a newer `info_schema()` shape while an installed package (e.g. `dbt_project_evaluator`) keeps depending on an older one, and every check within a single package queries one consistent version. See `SUPPORTED_INFO_SCHEMA_VERSIONS`.",
+      "type": "object",
+      "properties": {
+        "version": {
+          "anyOf": [
+            {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint32",
+              "minimum": 0.0
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "LatestVersionPointer": {
       "description": "Represents the latest version view configuration for versioned models. Supports shorthand (bool) and full form ({enabled: bool, alias: string}).",
       "type": "object",
@@ -1420,6 +1474,24 @@
       },
       "additionalProperties": false
     },
+    "NodeFqn": {
+      "description": "Which output column(s) node selection scopes a check's rows by.\n\n`\"none\"` opts out of scoping entirely (the check always evaluates the whole project, which is what aggregate checks want). A single name or a list of names scopes on those output columns: a row is kept when the node id in *any* of them is selected.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
+    },
     "OnConfigurationChange": {
       "type": "string",
       "enum": [
@@ -1656,6 +1728,68 @@
       },
       "additionalProperties": {
         "$ref": "#/definitions/ProjectAnalysisConfig"
+      }
+    },
+    "ProjectCheckConfig": {
+      "type": "object",
+      "properties": {
+        "+enabled": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "+node_fqn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NodeFqn"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+severity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Severity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectCheckConfig"
       }
     },
     "ProjectDataTestConfig": {

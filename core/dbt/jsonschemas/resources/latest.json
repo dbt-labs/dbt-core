@@ -21,6 +21,15 @@
         "$ref": "#/definitions/AnyValue"
       }
     },
+    "checks": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/CheckProperties"
+      }
+    },
     "data_tests": {
       "type": [
         "array",
@@ -345,6 +354,96 @@
           "type": "string"
         },
         "field": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CheckConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "anyOf": [
+            {
+              "default": null,
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "node_fqn": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NodeFqn"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Severity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "default": [],
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CheckProperties": {
+      "description": "A `checks:` entry in a properties `.yml`, describing one check by name.\n\nUnlike most resources a check has no `columns:` — it is a query over project metadata, not a relation with a schema.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CheckConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
           "type": "string"
         }
       },
@@ -7805,6 +7904,24 @@
         }
       },
       "additionalProperties": false
+    },
+    "NodeFqn": {
+      "description": "Which output column(s) node selection scopes a check's rows by.\n\n`\"none\"` opts out of scoping entirely (the check always evaluates the whole project, which is what aggregate checks want). A single name or a list of names scopes on those output columns: a row is kept when the node id in *any* of them is selected.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
     },
     "OnConfigurationChange": {
       "type": "string",
