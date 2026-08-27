@@ -955,9 +955,13 @@
           ]
         },
         "column_name": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "config": {
@@ -1002,9 +1006,13 @@
           ]
         },
         "column_name": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "config": {
@@ -1883,6 +1891,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "query_tags": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "quoting": {
@@ -4269,6 +4283,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "query_tags": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "quoting": {
@@ -6886,6 +6906,12 @@
             }
           ]
         },
+        "query_tags": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "quoting": {
           "anyOf": [
             {
@@ -9308,6 +9334,12 @@
             }
           ]
         },
+        "query_tags": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "quote_columns": {
           "anyOf": [
             {
@@ -10779,6 +10811,12 @@
             }
           ]
         },
+        "query_tags": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "quote_columns": {
           "anyOf": [
             {
@@ -12219,6 +12257,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "query_tags": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "range": {
@@ -13860,6 +13904,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "query_tags": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "range": {
