@@ -3238,12 +3238,20 @@ impl Adapter {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new(
                     "parse_columns_and_constraints",
-                    &["existing_columns", "model_columns", "model_constraints"],
+                    &[
+                        "existing_columns",
+                        "model_columns",
+                        "model_constraints",
+                        "contract_enforced",
+                        "model_name",
+                    ],
                     args,
                 );
                 let existing_columns = iter.next_arg::<&Value>()?;
                 let model_columns = iter.next_arg::<&Value>()?;
                 let model_constraints = iter.next_arg::<&Value>()?;
+                let contract_enforced = iter.next_arg::<Option<bool>>()?.unwrap_or(false);
+                let model_name = iter.next_arg::<Option<&str>>()?.unwrap_or("");
                 iter.finish()?;
 
                 adapter.parse_columns_and_constraints(
@@ -3251,6 +3259,8 @@ impl Adapter {
                     existing_columns,
                     model_columns,
                     model_constraints,
+                    contract_enforced,
+                    model_name,
                 )
             }
             Parse(_) => Ok(Value::from(vec![

@@ -58,7 +58,7 @@ use dbt_adbc::{Connection, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::dbt_types::RelationType;
@@ -4965,16 +4965,18 @@ impl AdapterImpl {
     /// Returns [enriched_columns, typed_constraints] for use with get_column_and_constraints_sql
     /// and relation.enrich().
     ///
-    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L899
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/45351e11517d3f37c5ac7a736b5fcba453d3f368/dbt/adapters/databricks/impl.py#L1038
     pub fn parse_columns_and_constraints(
         &self,
         _state: &State,
         existing_columns: &Value,
         model_columns: &Value,
         model_constraints: &Value,
+        contract_enforced: bool,
+        model_name: &str,
     ) -> Result<Value, minijinja::Error> {
         use crate::relation::databricks::typed_constraint;
-        use std::collections::BTreeMap;
+        use std::collections::{BTreeMap, BTreeSet};
 
         if self.adapter_type() != Databricks && self.adapter_type() != Spark {
             return Err(minijinja::Error::new(
@@ -5022,7 +5024,7 @@ impl AdapterImpl {
             .map(|c| Arc::new(c.clone()))
             .collect();
 
-        let (not_nulls, typed_constraints) =
+        let (not_nulls, typed_constraints) = if contract_enforced {
             typed_constraint::parse_constraints(&column_refs, &model_constraints_vec).map_err(
                 |e| {
                     minijinja::Error::new(
@@ -5030,18 +5032,37 @@ impl AdapterImpl {
                         format!("parse_constraints: {e}"),
                     )
                 },
-            )?;
+            )?
+        } else {
+            if model_columns_map
+                .values()
+                .any(|column| !column.constraints.is_empty())
+            {
+                let model_ref = if model_name.is_empty() {
+                    String::new()
+                } else {
+                    format!(" on '{model_name}'")
+                };
+                emit_info_log_message(format!(
+                    "Skipping column-level constraints{model_ref}: set `contract.enforced: true` \
+                     to apply NOT NULL / primary key / foreign key / check constraints."
+                ));
+            }
+            (BTreeSet::new(), Vec::new())
+        };
 
         let model_columns_lower: BTreeMap<String, &DbtColumn> = model_columns_map
             .iter()
             .map(|(k, v)| (k.to_lowercase(), v))
             .collect();
+        let not_nulls_lower: BTreeSet<String> =
+            not_nulls.iter().map(|name| name.to_lowercase()).collect();
 
         let enriched_columns: Vec<Column> = columns
             .iter()
             .map(|col| {
                 let model_col = model_columns_lower.get(&col.name().to_lowercase()).copied();
-                let not_null = not_nulls.contains(col.name());
+                let not_null = not_nulls_lower.contains(&col.name().to_lowercase());
                 col.enrich_for_create(model_col, not_null)
             })
             .collect();
@@ -6590,6 +6611,140 @@ mod tests {
         assert!(
             v.is_undefined(),
             "Expected column NOT to be selected when existing comment is already empty, got: {selected:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_columns_and_constraints_matches_not_null_case_insensitively() {
+        let adapter = AdapterImpl::new_mock(
+            Databricks,
+            BTreeMap::new(),
+            DEFAULT_RESOLVED_QUOTING,
+            Arc::new(DefaultTypeOps::new(Databricks)),
+            Arc::new(DefaultStmtSplitter),
+        );
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let existing_columns = Value::from(vec![Value::from_object(Column::new(
+            Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        ))]);
+        let model_columns = Value::from_serialize(BTreeMap::from([(
+            "ID".to_string(),
+            DbtColumn {
+                name: "ID".to_string(),
+                data_type: Some("int".to_string()),
+                constraints: vec![Constraint {
+                    type_: ConstraintType::NotNull,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        )]));
+        let model_constraints = Value::from_serialize(Vec::<ModelConstraint>::new());
+
+        let result = adapter
+            .parse_columns_and_constraints(
+                &state,
+                &existing_columns,
+                &model_columns,
+                &model_constraints,
+                true,
+                "case_mismatch_model",
+            )
+            .expect("constraint parsing should succeed");
+        let mut result_parts = result.try_iter().expect("result should be iterable");
+        let enriched_columns = result_parts.next().expect("enriched columns should exist");
+        let enriched_column = enriched_columns
+            .try_iter()
+            .expect("enriched columns should be iterable")
+            .next()
+            .expect("one enriched column should exist");
+        let rendered = enriched_column
+            .downcast_object_ref::<Column>()
+            .expect("enriched value should be a Column")
+            .render_for_create();
+
+        assert!(
+            rendered.contains("NOT NULL"),
+            "expected NOT NULL when YAML column ID matches warehouse id, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn test_parse_columns_and_constraints_defaults_to_unenforced() {
+        use crate::adapter::Adapter;
+
+        let adapter = Adapter::new(
+            Arc::new(AdapterImpl::new_mock(
+                Databricks,
+                BTreeMap::new(),
+                DEFAULT_RESOLVED_QUOTING,
+                Arc::new(DefaultTypeOps::new(Databricks)),
+                Arc::new(DefaultStmtSplitter),
+            )),
+            None,
+            dbt_common::cancellation::never_cancels(),
+        );
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let existing_columns = Value::from(vec![Value::from_object(Column::new(
+            Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        ))]);
+        let model_columns = Value::from_serialize(BTreeMap::from([(
+            "id".to_string(),
+            DbtColumn {
+                name: "id".to_string(),
+                data_type: Some("int".to_string()),
+                constraints: vec![Constraint {
+                    type_: ConstraintType::NotNull,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        )]));
+        let model_constraints = Value::from_serialize(vec![ModelConstraint {
+            type_: ConstraintType::PrimaryKey,
+            name: Some("pk_contract_model".to_string()),
+            columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        }]);
+
+        let result = adapter
+            .parse_columns_and_constraints(
+                &state,
+                &[existing_columns, model_columns, model_constraints],
+            )
+            .expect("constraint parsing should succeed");
+        let mut result_parts = result.try_iter().expect("result should be iterable");
+        let enriched_columns = result_parts.next().expect("enriched columns should exist");
+        let parsed_constraints = result_parts.next().expect("constraints should exist");
+        let enriched_column = enriched_columns
+            .try_iter()
+            .expect("enriched columns should be iterable")
+            .next()
+            .expect("one enriched column should exist");
+        let rendered = enriched_column
+            .downcast_object_ref::<Column>()
+            .expect("enriched value should be a Column")
+            .render_for_create();
+
+        assert!(!rendered.contains("NOT NULL"));
+        assert_eq!(
+            parsed_constraints
+                .try_iter()
+                .expect("parsed constraints should be iterable")
+                .count(),
+            0
         );
     }
 

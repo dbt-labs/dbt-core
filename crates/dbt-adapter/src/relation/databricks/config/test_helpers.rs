@@ -33,6 +33,9 @@ pub(crate) struct TestModelConfig {
     #[expect(dead_code)]
     pub cluster_by: Vec<String>,
     pub columns: Vec<TestModelColumn>,
+    /// Defaults to enforced for legacy component tests; set explicitly to `Some(false)` when a
+    /// test exercises the contract ownership boundary.
+    pub contract_enforced: Option<bool>,
     pub cron: Option<String>,
     pub partition_by: Vec<String>,
     pub persist_column_comments: bool,
@@ -128,6 +131,10 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
 
     DbtModel {
         deprecated_config: ModelConfig {
+            contract: Some(DbtContract {
+                enforced: cfg.contract_enforced.unwrap_or(true),
+                ..Default::default()
+            }),
             table_format: cfg.table_format,
             __warehouse_specific_config__: wh_config,
             ..Default::default()

@@ -7,7 +7,7 @@ use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 use dbt_schemas::schemas::relations::base::TableFormat;
 use minijinja::Value;
 
-use crate::macro_test_harness::MacroTestHarness;
+use crate::macro_test_harness::{MacroTestHarness, default_mock_config};
 
 mod databricks {
     use super::*;
@@ -358,6 +358,74 @@ mod databricks {
         assert!(
             lower.contains("using iceberg") && !lower.contains("using delta"),
             "table_format=iceberg with use_catalogs_v2=true but no catalogs.yml must still default to managed Iceberg (`using iceberg`), got:\n{rendered}"
+        );
+    }
+
+    fn render_constraint_changeset(contract_enforced: bool) -> String {
+        let alter_sql = include_str!(
+            "../../src/dbt_macro_assets/dbt-databricks/macros/relations/table/alter.sql"
+        );
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_macro_at_path(
+                "dbt_databricks",
+                "apply_config_changeset",
+                alter_sql,
+                "dbt-databricks/macros/relations/table/alter.sql",
+            )
+            .with_macro(
+                "test_project",
+                "apply_constraints",
+                "{% macro apply_constraints(relation, constraints) %}APPLY_CONSTRAINTS_SENTINEL{% endmacro %}",
+            )
+            .with_stub_functions()
+            .build()
+            .expect("constraint changeset harness should build");
+        let config = default_mock_config();
+        config.on("get", move |args| {
+            let key = args.first().and_then(Value::as_str);
+            let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
+            match key {
+                Some("contract") => Ok(Value::from_serialize(BTreeMap::from([(
+                    "enforced",
+                    contract_enforced,
+                )]))),
+                _ => Ok(default),
+            }
+        });
+        let changes = Value::from_serialize(BTreeMap::from([(
+            "changes",
+            BTreeMap::from([("constraints", Value::from(true))]),
+        )]));
+        let ctx = harness
+            .materialization_context("constraint_table", "select 1")
+            .relation_type(RelationType::Table)
+            .config(Value::from_dyn_object(config))
+            .with("configuration_changes", changes)
+            .build();
+
+        harness
+            .render(
+                "{{ apply_config_changeset(this, model, configuration_changes) }}",
+                ctx,
+            )
+            .expect("constraint changeset should render")
+    }
+
+    #[test]
+    fn table_alter_skips_constraint_reconciliation_when_contract_is_unenforced() {
+        let rendered = render_constraint_changeset(false);
+        assert!(
+            !rendered.contains("APPLY_CONSTRAINTS_SENTINEL"),
+            "unenforced contract must not apply constraints, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn table_alter_reconciles_constraints_when_contract_is_enforced() {
+        let rendered = render_constraint_changeset(true);
+        assert!(
+            rendered.contains("APPLY_CONSTRAINTS_SENTINEL"),
+            "enforced contract must apply constraints, got: {rendered}"
         );
     }
 }

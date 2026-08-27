@@ -29,6 +29,7 @@ fn render_incremental(
 
 fn incremental_model(alias: &str, sql: &str) -> Value {
     Value::from_serialize(BTreeMap::from([
+        ("name", Value::from(alias)),
         ("alias", Value::from(alias)),
         (
             "unique_id",
@@ -48,6 +49,14 @@ fn incremental_model(alias: &str, sql: &str) -> Value {
 }
 
 fn incremental_config_with(strategy: Option<&str>, full_refresh: bool) -> Arc<MockJinjaObject> {
+    incremental_config_with_contract(strategy, full_refresh, false)
+}
+
+fn incremental_config_with_contract(
+    strategy: Option<&str>,
+    full_refresh: bool,
+    contract_enforced: bool,
+) -> Arc<MockJinjaObject> {
     let mock = default_mock_config();
     mock.set_attr("materialized", Value::from("incremental"));
     let strategy = strategy.map(str::to_owned);
@@ -57,7 +66,7 @@ fn incremental_config_with(strategy: Option<&str>, full_refresh: bool) -> Arc<Mo
         match key {
             Some("contract") => Ok(Value::from_serialize(BTreeMap::from([(
                 "enforced".to_string(),
-                Value::from(false),
+                Value::from(contract_enforced),
             )]))),
             Some("full_refresh") => Ok(Value::from(full_refresh)),
             Some("incremental_strategy") => Ok(strategy
@@ -106,6 +115,11 @@ mod databricks {
         let mut harness = MacroTestHarness::for_adapter(ADAPTER)
             .load_all_macros()
             .with_stub_functions()
+            .with_macro(
+                "test_project",
+                "apply_constraints",
+                "{% macro apply_constraints(relation, constraints) %}{% do adapter.execute('APPLY_CONSTRAINTS_SENTINEL') %}{% endmacro %}",
+            )
             .with_behavior_flag("use_materialization_v2", enabled)
             .with_behavior_flag("use_catalogs_v2", false)
             .with_behavior_flag("use_managed_iceberg", false)
@@ -233,6 +247,65 @@ mod databricks {
             sqls.len() >= 2,
             "Expected at least 2 SQL statements (temp table + merge), got: {sqls:?}",
         );
+    }
+
+    fn render_incremental_constraint_changeset(contract_enforced: bool) -> MacroTestHarness {
+        let harness = build_harness();
+        let existing = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "my_incr",
+            Some(RelationType::Table),
+        );
+        harness.mock().on("get_relation", move |_| {
+            Ok(RelationObject::new(Arc::clone(&existing)).into_value())
+        });
+        harness
+            .mock()
+            .on("get_relation_config", |_| Ok(Value::UNDEFINED));
+
+        let changeset = Value::from_serialize(BTreeMap::from([(
+            "changes",
+            BTreeMap::from([("constraints", Value::from(true))]),
+        )]));
+        let model_config = Arc::new(MockJinjaObject::new());
+        model_config.on("get_changeset", move |_| Ok(changeset.clone()));
+        let model_config = Value::from_dyn_object(model_config);
+        harness
+            .mock()
+            .on("get_config_from_model", move |_| Ok(model_config.clone()));
+        harness.mock().on("get_incremental_strategy_macro", |_| {
+            Ok(Value::from_function(
+                |_args: &[Value]| -> Result<Value, minijinja::Error> {
+                    Ok(Value::from("SELECT 1 /* incremental merge */"))
+                },
+            ))
+        });
+
+        let ctx = incremental_ctx_with_config(
+            &harness,
+            incremental_config_with_contract(None, false, contract_enforced),
+        );
+        render_incremental(&harness, ADAPTER, ctx)
+            .unwrap_or_else(|e| panic!("constraint reconciliation render failed: {e:?}"));
+        harness
+    }
+
+    #[test]
+    fn incremental_skips_constraint_reconciliation_when_contract_is_unenforced() {
+        let harness = render_incremental_constraint_changeset(false);
+        let sqls = executed_sql(harness.mock());
+        assert!(
+            sqls.iter()
+                .all(|sql| !sql.contains("APPLY_CONSTRAINTS_SENTINEL")),
+            "unenforced contract must not apply constraints, got: {sqls:?}"
+        );
+    }
+
+    #[test]
+    fn incremental_reconciles_constraints_when_contract_is_enforced() {
+        let harness = render_incremental_constraint_changeset(true);
+        assert_executed_contains(harness.mock(), "APPLY_CONSTRAINTS_SENTINEL");
     }
 
     mod append;
