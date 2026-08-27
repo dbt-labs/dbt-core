@@ -1569,6 +1569,32 @@ my_project:
             disabled.__warehouse_specific_config__.persist_constraints,
             Some(false)
         );
+
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<SnapshotConfig, ProjectSnapshotConfig>(yml, false);
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+        assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+
+        let config = result.unwrap();
+        let inherited = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "inherited".to_string(),
+            "snapshot".to_string(),
+        ]);
+        assert_eq!(
+            inherited.__warehouse_specific_config__.persist_constraints,
+            Some(true)
+        );
+
+        let disabled = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "disabled".to_string(),
+            "snapshot".to_string(),
+        ]);
+        assert_eq!(
+            disabled.__warehouse_specific_config__.persist_constraints,
+            Some(false)
+        );
     }
 
     /// The predicate must fire only on an explicit `+enabled: true`; an absent value must not be

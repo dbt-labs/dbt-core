@@ -118,7 +118,6 @@ pub struct ColumnProperties {
     pub name: String,
     pub data_type: Option<String>,
     pub description: Option<String>,
-    pub meta: Option<IndexMap<String, YmlValue>>,
     pub constraints: Option<Vec<Constraint>>,
     pub tests: Option<Vec<DataTests>>,
     pub data_tests: Option<Vec<DataTests>>,
@@ -148,7 +147,6 @@ pub struct VersionColumnProperties {
     pub exclude: Option<Vec<String>>,
     pub data_type: Option<String>,
     pub description: Option<String>,
-    pub meta: Option<IndexMap<String, YmlValue>>,
     pub constraints: Option<Vec<Constraint>>,
     pub tests: Option<Vec<DataTests>>,
     pub data_tests: Option<Vec<DataTests>>,
@@ -177,7 +175,6 @@ impl VersionColumnProperties {
             name: self.name.clone()?,
             data_type: self.data_type.clone(),
             description: self.description.clone(),
-            meta: self.meta.clone(),
             constraints: self.constraints.clone(),
             tests: self.tests.clone(),
             data_tests: self.data_tests.clone(),
@@ -349,24 +346,18 @@ pub fn process_columns(
             // and a later definition silently overwrites an earlier one.
             let mut by_name: IndexMap<String, DbtColumnRef> = IndexMap::new();
             for cp in cols.iter() {
-                let (config_meta, cp_tags, cp_databricks_tags, cp_policy_tags) = cp
+                let (cp_meta, cp_tags, cp_databricks_tags, cp_policy_tags) = cp
                     .config
                     .clone()
                     .map(|c| (c.meta, c.tags, c.databricks_tags, c.policy_tags))
                     .unwrap_or_default();
-                let has_column_meta = cp.meta.is_some() || config_meta.is_some();
-                let mut column_meta = cp.meta.clone().unwrap_or_default();
-                column_meta.extend(config_meta.unwrap_or_default());
 
                 let col = Arc::new(DbtColumn {
                     name: cp.name.clone(),
                     data_type: cp.data_type.clone(),
                     description: cp.description.clone(),
                     constraints: cp.constraints.clone().unwrap_or_default(),
-                    meta: has_column_meta
-                        .then_some(column_meta)
-                        .or_else(|| meta.clone())
-                        .unwrap_or_default(),
+                    meta: cp_meta.or_else(|| meta.clone()).unwrap_or_default(),
                     tags: cp_tags
                         .map(|t| t.into())
                         .or_else(|| tags.clone())
@@ -408,7 +399,6 @@ mod tests {
             name: name.to_string(),
             description: Some(description.to_string()),
             data_type: None,
-            meta: None,
             constraints: None,
             tests: None,
             data_tests: None,
@@ -540,36 +530,6 @@ policy_tags:
             }
             StringOrMap::StringValue(_) => panic!("expected MapValue for second entry"),
         }
-    }
-
-    #[test]
-    fn test_process_columns_merges_legacy_and_config_meta_with_config_winning() {
-        let yaml = r#"
-name: id
-meta:
-  constraint: legacy
-  legacy_only: retained
-config:
-  meta:
-    constraint: config
-    config_only: retained
-"#;
-        let column: ColumnProperties = dbt_yaml::from_str(yaml).unwrap();
-
-        let result = process_columns(Some(&vec![column]), None, None).unwrap();
-        let meta = &result[0].meta;
-        assert_eq!(
-            meta.get("constraint").and_then(|value| value.as_str()),
-            Some("config")
-        );
-        assert_eq!(
-            meta.get("legacy_only").and_then(|value| value.as_str()),
-            Some("retained")
-        );
-        assert_eq!(
-            meta.get("config_only").and_then(|value| value.as_str()),
-            Some("retained")
-        );
     }
 
     /// Regression for fs#13343: a scalar (non-list) `policy_tags` value must deserialize

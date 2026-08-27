@@ -464,8 +464,6 @@ pub async fn resolve_models(
             ModelProperties::empty(model_name.to_owned())
         };
 
-        model_config.meta = properties.merged_meta(model_config.meta.take());
-
         // Validate model properties (versions, time spine, etc.)
         match validate_model(&properties) {
             Ok(errors) => {

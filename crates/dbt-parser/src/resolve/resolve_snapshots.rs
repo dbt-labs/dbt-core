@@ -398,8 +398,6 @@ pub async fn resolve_snapshots(
                 })
                 .unwrap_or_default();
 
-            snapshot_config.meta = properties.merged_meta(snapshot_config.meta.take());
-
             let unique_id = format!("snapshot.{package_name}.{snapshot_name}");
 
             let columns = process_columns(

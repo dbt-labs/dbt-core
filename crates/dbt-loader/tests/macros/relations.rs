@@ -176,6 +176,40 @@ mod databricks {
         )
         .expect_err("legacy check constraints without a name must fail");
         assert!(error.to_string().contains("Invalid check constraint name"));
+
+        let invalid_column = Value::from_serialize(BTreeMap::from([
+            ("name".to_string(), Value::from("id")),
+            (
+                "meta".to_string(),
+                Value::from_serialize(BTreeMap::from([(
+                    "constraint".to_string(),
+                    "invalid".to_string(),
+                )])),
+            ),
+        ]));
+        let error = render_legacy_constraint_macro(
+            "{{ get_column_constraints(column) | tojson }}",
+            BTreeMap::from([
+                ("config".to_string(), constraint_config(true)),
+                ("column".to_string(), invalid_column.clone()),
+            ]),
+        )
+        .expect_err("unsupported legacy column constraints must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("Invalid constraint for column id. Only `not_null` is supported.")
+        );
+
+        let disabled = render_legacy_constraint_macro(
+            "{{ get_column_constraints(column) | tojson }}",
+            BTreeMap::from([
+                ("config".to_string(), constraint_config(false)),
+                ("column".to_string(), invalid_column),
+            ]),
+        )
+        .expect("disabled legacy column metadata must not be validated");
+        assert_eq!(disabled.trim(), "[]");
     }
 
     fn build_comment_clause_harness() -> MacroTestHarness {
