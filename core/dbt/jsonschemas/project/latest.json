@@ -1259,6 +1259,44 @@
               "type": "null"
             }
           ]
+        },
+        "error_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "warn_after": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FreshnessRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -3333,6 +3371,17 @@
             "null"
           ]
         },
+        "+distribute_by_config": {
+          "description": "Exasol: DISTRIBUTE BY column list (name matches the Python dbt-exasol adapter)",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+docs": {
           "anyOf": [
             {
@@ -3720,6 +3769,18 @@
             }
           ]
         },
+        "+loaded_at_field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+loaded_at_query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+location": {
           "type": [
             "string",
@@ -3931,6 +3992,17 @@
             }
           ]
         },
+        "+partition_by_config": {
+          "description": "Exasol: PARTITION BY column list (name matches the Python dbt-exasol adapter)",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "+partition_expiration_days": {
           "anyOf": [
             {
@@ -4002,6 +4074,17 @@
           "allOf": [
             {
               "$ref": "#/definitions/PrimaryKeyConfig"
+            }
+          ]
+        },
+        "+primary_key_config": {
+          "description": "Exasol: advisory PRIMARY KEY column list (name matches the Python dbt-exasol adapter)",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
             }
           ]
         },
