@@ -1,5 +1,5 @@
 # **what?**
-# Cut a `dbt-sa-cli` release: bump version on a release branch, build the
+# Cut a `dbt` release: bump version on a release branch, build the
 # binary matrix via `cargo build`, pack each binary into a wheel via
 # `cargo ci pypi pack`, tag the build commit, publish to PyPI, create a
 # GitHub Release with the platform tarballs, and push a Homebrew formula
@@ -191,7 +191,7 @@ jobs:
       CARGO_INCREMENTAL: 0
       RUST_BACKTRACE: 1
       RUSTC_WRAPPER: sccache
-      BINARY_NAME: dbt-sa-cli
+      BINARY_NAME: dbt
       PACKAGE_NAME: dbt-core
     strategy:
       fail-fast: false
@@ -1008,7 +1008,7 @@ jobs:
       # `ARCHIVE_BASE` template's `${PACKAGE_NAME}-` prefix. Hardcoded
       # because reusable-workflow `with:` blocks don't accept the `env`
       # context — keep these in lockstep with the build job manually.
-      binary_name: dbt-sa-cli
+      binary_name: dbt
       tarball_prefix: dbt-core-
     permissions:
       contents: read

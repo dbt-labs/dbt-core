@@ -43,7 +43,8 @@ WORKDIR /tmp
 
 # Resolve the version, download the tarball for the target architecture, check
 # it against the release's published SHA256SUMS, then install the single binary
-# it contains (named dbt-sa-cli in the archive) as `dbt`.
+# it contains as `dbt`. Releases through 2.0.0-beta.2 shipped that binary named
+# `dbt-sa-cli`; later ones name it `dbt`, so accept either.
 #
 # Why the release list and not /releases/latest: this repository also publishes
 # the dbt Core Python package, and those are the releases marked "latest", so
@@ -101,7 +102,15 @@ awk -v want="${base}.tar.gz" '$2 == want { print; found = 1 } END { exit !found 
 sha256sum -c wanted.sha256
 
 tar -xzf "${base}.tar.gz"
-install -Dm755 "${base}/dbt-sa-cli" /out/dbt
+if [ -f "${base}/dbt" ]; then
+  install -Dm755 "${base}/dbt" /out/dbt
+elif [ -f "${base}/dbt-sa-cli" ]; then
+  install -Dm755 "${base}/dbt-sa-cli" /out/dbt
+else
+  echo "no dbt binary found in ${base}.tar.gz" >&2
+  ls -la "${base}" >&2
+  exit 1
+fi
 EOF
 
 
