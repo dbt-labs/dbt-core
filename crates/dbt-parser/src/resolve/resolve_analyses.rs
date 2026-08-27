@@ -198,7 +198,6 @@ pub async fn resolve_analyses(
         }
         let columns = process_columns(
             properties.columns.as_ref(),
-            analysis_config.meta.clone(),
             analysis_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
 

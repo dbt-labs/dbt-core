@@ -302,7 +302,6 @@ pub async fn resolve_seeds(
 
         let columns = process_columns(
             seed.columns.as_ref(),
-            properties_config.meta.clone(),
             properties_config
                 .tags
                 .inner()

@@ -509,7 +509,6 @@ pub async fn resolve_models(
 
         let mut columns = process_columns(
             properties.columns.as_ref(),
-            model_config.meta.clone(),
             model_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
         let materialized = model_config.materialized.clone();
@@ -1214,7 +1213,6 @@ fn process_versioned_columns(
                 .collect();
             let version_columns = process_columns(
                 Some(&version_column_props),
-                model_config.meta.clone(),
                 model_config.tags.inner().clone().map(|tags| tags.into()),
             )?;
 
