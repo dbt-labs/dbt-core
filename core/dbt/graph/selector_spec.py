@@ -53,6 +53,23 @@ def _match_to_int(match: Dict[str, str], key: str) -> Optional[int]:
         raise DbtRuntimeError(f"Invalid node spec - could not handle parent depth {raw}") from exc
 
 
+def _looks_like_windows_drive_path(method: Optional[str], value: str) -> bool:
+    return (
+        method is not None
+        and len(method) == 1
+        and method.isalpha()
+        and value.startswith(("\\", "/"))
+    )
+
+
+def _fix_windows_drive_path(dct: Dict[str, Any]) -> None:
+    method = dct.get("method")
+    value = dct.get("value", "")
+    if _looks_like_windows_drive_path(method, value):
+        dct["method"] = MethodName.Path
+        dct["value"] = f"{method}:{value}"
+
+
 SelectionSpec = Union[
     "SelectionCriteria",
     "SelectionIntersection",
@@ -112,8 +129,10 @@ class SelectionCriteria:
         raw: Any,
         dct: Dict[str, Any],
     ) -> "SelectionCriteria":
+        dct = dict(dct)
         if "value" not in dct:
             raise DbtRuntimeError(f'Invalid node spec "{raw}" - no search value!')
+        _fix_windows_drive_path(dct)
         method_name, method_arguments = cls.parse_method(dct)
 
         parents_depth = _match_to_int(dct, "parents_depth")
@@ -143,6 +162,7 @@ class SelectionCriteria:
         if result is None:
             return {"error": "Invalid selector spec"}
         dct: Dict[str, Any] = result.groupdict()
+        _fix_windows_drive_path(dct)
         method_name, method_arguments = cls.parse_method(dct)
         meth_name = str(method_name)
         if method_arguments:
