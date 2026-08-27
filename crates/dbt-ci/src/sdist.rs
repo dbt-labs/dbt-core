@@ -176,6 +176,15 @@ fn render_sdist_pyproject(spec: &Spec, version_pep440: &str) -> String {
     if let Some(rp) = &spec.requires_python {
         let _ = writeln!(out, "requires-python = {rp:?}");
     }
+    // Must mirror the downloaded wheel's deps: uv trusts sdist metadata rather
+    // than rebuilding to read the wheel's, so omitting these installs broken.
+    if !spec.dependencies.is_empty() {
+        out.push_str("dependencies = [\n");
+        for dep in &spec.dependencies {
+            let _ = writeln!(out, "  {dep:?},");
+        }
+        out.push_str("]\n");
+    }
     out
 }
 
@@ -243,6 +252,7 @@ mod tests {
             pyproject_dir: dir.to_path_buf(),
             summary: Some("dbt fusion standalone analyzer CLI".to_string()),
             requires_python: Some(">=3.9".to_string()),
+            dependencies: vec![],
             classifiers: vec![],
             urls: vec![],
             authors: vec![],
@@ -307,6 +317,8 @@ mod tests {
         assert!(pyproject.contains("name = \"dbt-sa-cli\""));
         assert!(pyproject.contains("version = \"2.0.0a1\""));
         assert!(pyproject.contains("requires-python = \">=3.9\""));
+        // The binary CLI wheel has no Python deps; don't emit an empty key.
+        assert!(!pyproject.contains("dependencies"));
 
         let backend = &files["dbt_sa_cli-2.0.0a1/_dbt_sa_build/__init__.py"];
         assert!(backend.contains("def build_wheel("));
@@ -324,6 +336,35 @@ mod tests {
             assets["wheels"]["macosx_11_0_arm64"]["sha256"],
             "bb".repeat(32)
         );
+    }
+
+    #[test]
+    fn build_sdist_declares_wheel_dependencies() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let mut spec = sample_spec(dir);
+        spec.wheel_name = "dbt-oss".to_string();
+        spec.requires_python = Some(">=3.11".to_string());
+        spec.dependencies = vec!["mashumaro[msgpack]>=3.14".to_string()];
+        let wheels = vec![WheelAsset {
+            platform_tag: "macosx_11_0_arm64".to_string(),
+            filename: "dbt_oss-2.0.0a1-cp311-abi3-macosx_11_0_arm64.whl".to_string(),
+            sha256_hex: "cc".repeat(32),
+        }];
+
+        let path = build_sdist(&spec, "2.0.0a1", &wheels, "https://example.com/dl/", dir).unwrap();
+        let files = read_targz(&path);
+
+        let pyproject = &files["dbt_oss-2.0.0a1/pyproject.toml"];
+        assert!(pyproject.contains("requires-python = \">=3.11\""));
+        assert!(
+            pyproject.contains("dependencies = [\n  \"mashumaro[msgpack]>=3.14\",\n]"),
+            "sdist pyproject must declare the wheel's deps, got:\n{pyproject}"
+        );
+
+        let pkg_info = &files["dbt_oss-2.0.0a1/PKG-INFO"];
+        assert!(pkg_info.contains("Requires-Dist: mashumaro[msgpack]>=3.14"));
+        assert!(pkg_info.contains("Requires-Python: >=3.11"));
     }
 
     #[test]

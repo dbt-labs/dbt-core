@@ -844,6 +844,9 @@ jobs:
       # the binary CLI wheel (py3-none) `cargo ci pypi pack` produces — pass
       # the matching python/abi tags so the sdist manifest's filenames match
       # what's actually sitting at BASE_URL.
+      # `--runtime-metadata-from` points at the same crate for requires-python
+      # and dependencies, since the root pyproject describes the binary CLI
+      # wheel instead and understates both.
       - name: Publish (dbt-core)
         if: inputs.release_target == 'all' || inputs.release_target == 'core'
         run: |
@@ -853,6 +856,7 @@ jobs:
             --download-base-url "$BASE_URL" \
             --python-tag cp311 \
             --abi-tag abi3 \
+            --runtime-metadata-from crates/dbt-python \
             --target x86_64-unknown-linux-gnu \
             --target aarch64-unknown-linux-gnu \
             --target x86_64-apple-darwin \
@@ -902,6 +906,7 @@ jobs:
             --download-base-url "$BASE_URL" \
             --python-tag cp311 \
             --abi-tag abi3 \
+            --runtime-metadata-from crates/dbt-python \
             --target x86_64-unknown-linux-gnu \
             --target aarch64-unknown-linux-gnu \
             --target x86_64-apple-darwin \
