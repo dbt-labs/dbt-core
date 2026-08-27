@@ -86,6 +86,20 @@ def test_raw_parse_simple_infer_path():
     assert result.children_depth is None
 
 
+def test_raw_parse_windows_drive_path():
+    raw = r"C:\dbt\models\orders.sql"
+    result = SelectionCriteria.from_single_spec(raw)
+    assert result.raw == raw
+    assert result.method == MethodName.Path
+    assert result.method_arguments == []
+    assert result.value == raw
+    assert not result.childrens_parents
+    assert not result.children
+    assert not result.parents
+    assert result.parents_depth is None
+    assert result.children_depth is None
+
+
 def test_raw_parse_simple_infer_path_modified():
     raw = "@" + os.path.join("asdf", "*")
     result = SelectionCriteria.from_single_spec(raw)
@@ -112,6 +126,13 @@ def test_raw_parse_simple_infer_fqn_parents():
     assert result.parents
     assert result.parents_depth is None
     assert result.children_depth is None
+
+
+def test_raw_parse_windows_drive_path_to_dict():
+    raw = r"C:\dbt\models\orders.sql"
+    result = SelectionCriteria.dict_from_single_spec(raw)
+    assert result["method"] == "path"
+    assert result["value"] == raw
 
 
 def test_raw_parse_simple_infer_fqn_children():

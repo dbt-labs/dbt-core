@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fixed Windows absolute path node selectors being parsed as selector methods.
+time: 2026-08-27T07:00:00.000+05:30
+custom:
+  Author: arpansahu
+  Issue: "16094"
