@@ -1,7 +1,0 @@
-kind: Fixes
-body: Include invocation IDs in default Databricks query comments and preserve run-operation connection names
-time: 2026-08-02T06:44:02.000000+00:00
-custom:
-    author: sd-db
-    issue: 15689
-    project: dbt-core
