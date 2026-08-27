@@ -2347,6 +2347,12 @@
             }
           ]
         },
+        "+query_tags": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+quoting": {
           "anyOf": [
             {
@@ -4265,6 +4271,12 @@
             }
           ]
         },
+        "+query_tags": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+quoting": {
           "anyOf": [
             {
@@ -5460,6 +5472,12 @@
             }
           ]
         },
+        "+query_tags": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+quote_columns": {
           "anyOf": [
             {
@@ -6411,6 +6429,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+query_tags": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+quote_columns": {
@@ -7875,6 +7899,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "+query_tags": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "+refresh_interval_minutes": {
