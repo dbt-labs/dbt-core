@@ -195,6 +195,44 @@ pub fn render_column_constraint(
 mod tests {
     use super::*;
 
+    /// dbt-clickhouse impl.py render_model_constraint: only named CHECK renders;
+    /// an unnamed CHECK errors, other types are dropped.
+    #[test]
+    fn clickhouse_model_constraint_requires_named_check() {
+        let named = ModelConstraint {
+            type_: ConstraintType::Check,
+            expression: Some("id > 100".to_string()),
+            name: Some("valid_id".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_model_constraint(AdapterType::ClickHouse, named).unwrap(),
+            Some("CONSTRAINT valid_id CHECK (id > 100)".to_string())
+        );
+
+        let unnamed = ModelConstraint {
+            type_: ConstraintType::Check,
+            expression: Some("id > 100".to_string()),
+            ..Default::default()
+        };
+        let err = render_model_constraint(AdapterType::ClickHouse, unnamed).unwrap_err();
+        assert!(
+            err.message()
+                .contains("CHECK Constraint 'name' is required")
+        );
+
+        let foreign_key = ModelConstraint {
+            type_: ConstraintType::ForeignKey,
+            expression: Some("other_table (id)".to_string()),
+            columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_model_constraint(AdapterType::ClickHouse, foreign_key).unwrap(),
+            None
+        );
+    }
+
     #[test]
     fn not_supported_warns_by_default() {
         assert_eq!(
