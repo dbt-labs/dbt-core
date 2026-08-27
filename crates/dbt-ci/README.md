@@ -12,6 +12,20 @@ workspace `.cargo/config.toml` alias.
 - `cargo ci homebrew render --tarballs-dir DIR --version X.Y.Z --url-template URL [--out PATH] [--formula-name NAME] [--binary-name NAME] [--conflicts-with NAME]…` — writes a `Formula/<name>.rb` from release tarballs (`fs-v{version}-{target}.tar.gz`). Reads name/license/homepage from pyproject. Linux + macOS only — Windows tarballs are skipped.
 - `cargo ci homebrew publish --formula PATH --tap-repo URL --version X.Y.Z [--tap-branch B] [--token-env VAR] [--dry-run]` — clones the tap, copies the formula into `Formula/`, commits, and pushes. Idempotent: no-op if the formula is byte-identical. `--token-env` defaults to `HOMEBREW_TAP_REPO_TOKEN`.
 
+### Install-time namespace notice
+
+Pre-release sdists named `dbt-core` (2.x and up) embed a `notice` in the sdist
+manifest, which the PEP 517 backend prints at install time pointing at the `dbt`
+/ `dbt-oss` distributions. Nothing reaches a `dbt-core` pre-release by accident
+— a resolver only picks one under `--pre` or an explicit `dbt-core==2.0.0rc…`
+pin — so the notice is exactly the set of installs worth redirecting.
+
+`dbt-core` 2.x keeps shipping in parallel with `dbt` / `dbt-oss`, so the notice
+is a pointer at the preferred name, not a deprecation. Final releases, older
+majors, and the other distributions get no notice; widening it to every 2.x
+`dbt-core` sdist means dropping the pre-release check in `install_notice`
+(`src/sdist.rs`).
+
 ## Version shapes
 
 | SemVer            | PEP 440 |

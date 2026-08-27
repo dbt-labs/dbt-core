@@ -34,6 +34,10 @@ struct AssetsManifest<'a> {
     name: &'a str,
     version: &'a str,
     base_url: &'a str,
+    /// Install-time notice the backend prints before downloading; see
+    /// [`install_notice`]. Absent for distributions that don't need one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    notice: Option<&'a str>,
     wheels: BTreeMap<&'a str, AssetEntry<'a>>,
 }
 
@@ -59,7 +63,8 @@ pub(crate) fn build_sdist(
 
     let pyproject = render_sdist_pyproject(spec, version_pep440);
     let pkg_info = render_metadata(spec, version_pep440);
-    let assets = render_assets_json(spec, version_pep440, base_url, wheels)?;
+    let notice = install_notice(&dist, version_pep440);
+    let assets = render_assets_json(spec, version_pep440, base_url, wheels, notice.as_deref())?;
 
     let entries: Vec<(String, Vec<u8>)> = vec![
         (format!("{root}/pyproject.toml"), pyproject.into_bytes()),
@@ -179,11 +184,64 @@ fn render_sdist_pyproject(spec: &Spec, version_pep440: &str) -> String {
     out
 }
 
+/// Normalized distribution name whose pre-releases carry the namespace notice.
+const NOTICE_DIST: &str = "dbt_core";
+
+/// Major version from which `dbt` / `dbt-oss` are the preferred names. `dbt-core`
+/// keeps shipping in parallel at this major; the notice is a pointer, not an EOL.
+const NOTICE_MAJOR_FLOOR: u64 = 2;
+
+/// Install-time notice embedded in the sdist manifest, printed by the backend
+/// before it downloads a wheel.
+///
+/// Only `dbt-core` 2.x *pre-releases* get one: a resolver never picks a
+/// pre-release on its own, so reaching this build means the user asked for it
+/// explicitly (`--pre`, or a `dbt-core==2.0.0rc…` pin) and should be pointed at
+/// the `dbt` / `dbt-oss` distributions instead.
+fn install_notice(dist: &str, version_pep440: &str) -> Option<String> {
+    if dist != NOTICE_DIST {
+        return None;
+    }
+    let (major, is_prerelease) = pep440_major_and_prerelease(version_pep440)?;
+    if major < NOTICE_MAJOR_FLOOR || !is_prerelease {
+        return None;
+    }
+    Some(format!(
+        "\
+========================================================================
+WARNING: you are installing a pre-release of `dbt-core` ({version_pep440}).
+
+Starting with 2.x, `dbt` and `dbt-oss` are the recommended package names
+going forward. Unless you specifically need the `dbt-core` name, install
+one of these instead:
+
+    pip install dbt
+    pip install dbt-oss    # Apache-2.0 licensed
+
+You are seeing this because you passed `--pre`, or pinned a version like
+`dbt-core=={version_pep440}`.
+========================================================================",
+    ))
+}
+
+/// Splits the `X.Y.Z[{a,b,rc}N | .devN]` versions [`semver_to_pep440`] emits
+/// into `(major, is_prerelease)`. `None` if the release segment isn't numeric.
+fn pep440_major_and_prerelease(version_pep440: &str) -> Option<(u64, bool)> {
+    let release_end = version_pep440
+        .find(|c: char| !c.is_ascii_digit() && c != '.')
+        .unwrap_or(version_pep440.len());
+    // `.devN` leaves the separating dot behind in the release segment.
+    let release = version_pep440[..release_end].trim_end_matches('.');
+    let major = release.split('.').next()?.parse().ok()?;
+    Some((major, release_end != version_pep440.len()))
+}
+
 fn render_assets_json(
     spec: &Spec,
     version_pep440: &str,
     base_url: &str,
     wheels: &[WheelAsset],
+    notice: Option<&str>,
 ) -> Result<String> {
     let mut map: BTreeMap<&str, AssetEntry> = BTreeMap::new();
     for w in wheels {
@@ -203,6 +261,7 @@ fn render_assets_json(
         name: &spec.wheel_name,
         version: version_pep440,
         base_url,
+        notice,
         wheels: map,
     };
     let mut json = serde_json::to_string_pretty(&manifest).context("serialize assets.json")?;
@@ -238,8 +297,12 @@ mod tests {
     use std::io::Read;
 
     fn sample_spec(dir: &Path) -> Spec {
+        named_spec(dir, "dbt-sa-cli")
+    }
+
+    fn named_spec(dir: &Path, name: &str) -> Spec {
         Spec {
-            wheel_name: "dbt-sa-cli".to_string(),
+            wheel_name: name.to_string(),
             pyproject_dir: dir.to_path_buf(),
             summary: Some("dbt fusion standalone analyzer CLI".to_string()),
             requires_python: Some(">=3.9".to_string()),
@@ -360,5 +423,99 @@ mod tests {
         }];
         let err = build_sdist(&spec, "2.0.0", &wheels, "http://example.com", dir).unwrap_err();
         assert!(err.to_string().contains("https"));
+    }
+
+    #[test]
+    fn install_notice_targets_dbt_core_prereleases() {
+        for version in ["2.0.0rc1", "2.0.0a4", "2.0.0b2", "2.0.0.dev5", "3.1.0rc2"] {
+            let notice = install_notice("dbt_core", version)
+                .unwrap_or_else(|| panic!("expected a notice for {version}"));
+            assert!(notice.contains(version), "{version} not named in notice");
+            assert!(notice.contains("pip install dbt\n"));
+            assert!(notice.contains("pip install dbt-oss"));
+        }
+        // Final releases, older majors, and the other distributions stay quiet.
+        assert!(install_notice("dbt_core", "2.0.0").is_none());
+        assert!(install_notice("dbt_core", "1.11.0rc1").is_none());
+        assert!(install_notice("dbt_oss", "2.0.0rc1").is_none());
+        assert!(install_notice("dbt_core_experimental_parser", "2.0.0rc1").is_none());
+    }
+
+    #[test]
+    fn pep440_major_and_prerelease_parses_lanes() {
+        assert_eq!(pep440_major_and_prerelease("2.0.0"), Some((2, false)));
+        assert_eq!(pep440_major_and_prerelease("2.0.0rc1"), Some((2, true)));
+        assert_eq!(pep440_major_and_prerelease("2.0.0a4"), Some((2, true)));
+        assert_eq!(pep440_major_and_prerelease("2.0.0b2"), Some((2, true)));
+        assert_eq!(pep440_major_and_prerelease("2.0.0.dev5"), Some((2, true)));
+        assert_eq!(pep440_major_and_prerelease("10.2.3"), Some((10, false)));
+        assert_eq!(pep440_major_and_prerelease("rc1"), None);
+    }
+
+    #[test]
+    fn build_sdist_embeds_notice_only_for_dbt_core_prereleases() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let wheels = vec![WheelAsset {
+            platform_tag: "macosx_11_0_arm64".to_string(),
+            filename: "dbt_core-2.0.0rc1-cp311-abi3-macosx_11_0_arm64.whl".to_string(),
+            sha256_hex: "aa".repeat(32),
+        }];
+
+        let notice = manifest_notice(
+            &named_spec(dir, "dbt-core"),
+            "2.0.0rc1",
+            &wheels,
+            dir.join("pre"),
+        );
+        assert!(notice.unwrap().contains("pip install dbt-oss"));
+
+        // Only the pre-release lane and the name gate it; both other cases ship
+        // a manifest with no `notice` key at all.
+        assert!(
+            manifest_notice(
+                &named_spec(dir, "dbt-core"),
+                "2.0.0",
+                &wheels,
+                dir.join("final"),
+            )
+            .is_none()
+        );
+        assert!(
+            manifest_notice(
+                &named_spec(dir, "dbt-oss"),
+                "2.0.0rc1",
+                &wheels,
+                dir.join("oss"),
+            )
+            .is_none()
+        );
+    }
+
+    /// Builds an sdist into a fresh `out_dir` and reads back its manifest notice.
+    fn manifest_notice(
+        spec: &Spec,
+        version_pep440: &str,
+        wheels: &[WheelAsset],
+        out_dir: PathBuf,
+    ) -> Option<String> {
+        std::fs::create_dir_all(&out_dir).unwrap();
+        let path = build_sdist(
+            spec,
+            version_pep440,
+            wheels,
+            "https://example.com/dl",
+            &out_dir,
+        )
+        .unwrap();
+        let files = read_targz(&path);
+        let dist = normalize_wheel_name(&spec.wheel_name);
+        let assets: serde_json::Value = serde_json::from_str(
+            &files[&format!("{dist}-{version_pep440}/_dbt_sa_build/assets.json")],
+        )
+        .unwrap();
+        assets
+            .get("notice")
+            .map(|n| n.as_str().unwrap().to_string())
     }
 }
