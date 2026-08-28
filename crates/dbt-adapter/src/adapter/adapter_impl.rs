@@ -5784,57 +5784,6 @@ impl AdapterImpl {
         metadata::clickhouse::server_capabilities(self, state, token).is_at_or_after(version)
     }
 
-    /// ClickHouse: render the model's `settings` config as a table-level `SETTINGS ...`
-    /// block for CREATE TABLE DDL. The leading `-- end_of_sql` marker is what
-    /// `clickhouse__place_limit` (utils/utils.sql) splits on to inject LIMIT ahead of
-    /// the SETTINGS clause. Mirrors impl.py `get_model_settings`, including dbclient.py's
-    /// `replicated_deduplication_window='0'` default (profile flag
-    /// `allow_automatic_deduplication` opts out; a user-provided value wins).
-    pub fn get_model_settings(&self, model: &Value, engine: &str) -> String {
-        // dbclient.py DEDUP_WINDOW_SETTING_SUPPORTED_MATERIALIZATION
-        const DEDUP_SUPPORTED_MATERIALIZATIONS: &[&str] =
-            &["table", "incremental", "ephemeral", "materialized_view"];
-        const DEDUP_WINDOW_SETTING: &str = "replicated_deduplication_window";
-
-        let mut settings = metadata::clickhouse::model_config_map(model, "settings");
-
-        let materialized = model
-            .get_attr("config")
-            .ok()
-            .and_then(|config| config.get_attr("materialized").ok())
-            .and_then(|v| v.as_str().map(str::to_string))
-            .unwrap_or_default();
-        let allow_automatic_deduplication = self
-            .get_db_config_value("allow_automatic_deduplication")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        if DEDUP_SUPPORTED_MATERIALIZATIONS.contains(&materialized.as_str())
-            && !allow_automatic_deduplication
-            && !settings.iter().any(|(key, _)| key == DEDUP_WINDOW_SETTING)
-        {
-            // Upstream sets the string '0', which _build_settings_str single-quotes.
-            settings.push((DEDUP_WINDOW_SETTING.to_string(), Value::from("0")));
-        }
-
-        // filter_settings_by_engine: replicated_deduplication_window is MergeTree-only.
-        settings.retain(|(key, _)| engine.contains("MergeTree") || key != DEDUP_WINDOW_SETTING);
-
-        let settings_str = metadata::clickhouse::build_settings_str(&settings);
-        format!("\n-- end_of_sql\n{settings_str}\n")
-    }
-
-    /// ClickHouse: render the model's `query_settings` config as a query-level
-    /// `SETTINGS ...` clause appended to the SELECT; empty string when unset.
-    pub fn get_model_query_settings(&self, model: &Value) -> String {
-        let settings = metadata::clickhouse::model_config_map(model, "query_settings");
-        let settings_str = metadata::clickhouse::build_settings_str(&settings);
-        if settings_str.is_empty() {
-            String::new()
-        } else {
-            format!("\n-- settings_section\n{settings_str}\n")
-        }
-    }
-
     /// ClickHouse `adapter.calculate_incremental_strategy(strategy)` — see
     /// [`metadata::clickhouse::calculate_incremental_strategy`].
     pub fn calculate_incremental_strategy(
@@ -5919,6 +5868,57 @@ impl AdapterImpl {
             target,
             materialization,
         )
+    }
+
+    /// ClickHouse: render the model's `settings` config as a table-level `SETTINGS ...`
+    /// block for CREATE TABLE DDL. The leading `-- end_of_sql` marker is what
+    /// `clickhouse__place_limit` (utils/utils.sql) splits on to inject LIMIT ahead of
+    /// the SETTINGS clause. Mirrors impl.py `get_model_settings`, including dbclient.py's
+    /// `replicated_deduplication_window='0'` default (profile flag
+    /// `allow_automatic_deduplication` opts out; a user-provided value wins).
+    pub fn get_model_settings(&self, model: &Value, engine: &str) -> String {
+        // dbclient.py DEDUP_WINDOW_SETTING_SUPPORTED_MATERIALIZATION
+        const DEDUP_SUPPORTED_MATERIALIZATIONS: &[&str] =
+            &["table", "incremental", "ephemeral", "materialized_view"];
+        const DEDUP_WINDOW_SETTING: &str = "replicated_deduplication_window";
+
+        let mut settings = metadata::clickhouse::model_config_map(model, "settings");
+
+        let materialized = model
+            .get_attr("config")
+            .ok()
+            .and_then(|config| config.get_attr("materialized").ok())
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default();
+        let allow_automatic_deduplication = self
+            .get_db_config_value("allow_automatic_deduplication")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if DEDUP_SUPPORTED_MATERIALIZATIONS.contains(&materialized.as_str())
+            && !allow_automatic_deduplication
+            && !settings.iter().any(|(key, _)| key == DEDUP_WINDOW_SETTING)
+        {
+            // Upstream sets the string '0', which _build_settings_str single-quotes.
+            settings.push((DEDUP_WINDOW_SETTING.to_string(), Value::from("0")));
+        }
+
+        // filter_settings_by_engine: replicated_deduplication_window is MergeTree-only.
+        settings.retain(|(key, _)| engine.contains("MergeTree") || key != DEDUP_WINDOW_SETTING);
+
+        let settings_str = metadata::clickhouse::build_settings_str(&settings);
+        format!("\n-- end_of_sql\n{settings_str}\n")
+    }
+
+    /// ClickHouse: render the model's `query_settings` config as a query-level
+    /// `SETTINGS ...` clause appended to the SELECT; empty string when unset.
+    pub fn get_model_query_settings(&self, model: &Value) -> String {
+        let settings = metadata::clickhouse::model_config_map(model, "query_settings");
+        let settings_str = metadata::clickhouse::build_settings_str(&settings);
+        if settings_str.is_empty() {
+            String::new()
+        } else {
+            format!("\n-- settings_section\n{settings_str}\n")
+        }
     }
 
     pub fn engine(&self) -> &Arc<dyn AdapterEngine> {
