@@ -1,9 +1,9 @@
 //! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/incremental.py
 
-use crate::AdapterType;
 use crate::relation::config_v2::ComponentConfigChange;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfigLoader};
-use crate::relation::databricks::config::{DatabricksRelationMetadata, components};
+use crate::relation::databricks::config::{components, DatabricksRelationMetadata};
+use crate::AdapterType;
 use indexmap::IndexMap;
 
 fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
@@ -31,22 +31,24 @@ pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMe
 #[cfg(test)]
 mod tests {
     use super::{new_loader, requires_full_refresh};
-    use crate::AdapterType;
     use crate::relation::config_v2::{
         ComponentConfigChange, ComponentConfigLoader, RelationComponentConfigChangeSet,
     };
     use crate::relation::databricks::config::{
-        DatabricksRelationMetadata, components,
-        test_helpers::{TestModelColumn, TestModelConfig, run_test_cases},
+        components,
+        test_helpers::{run_test_cases, TestModelColumn, TestModelConfig},
+        DatabricksRelationMetadata,
     };
     use crate::relation::test_helpers::TestCase;
+    use crate::AdapterType;
     use dbt_schemas::schemas::common::{Constraint, ConstraintType};
     use dbt_schemas::schemas::dbt_column::ColumnMask;
     use indexmap::{IndexMap, IndexSet};
 
     fn create_test_cases() -> Vec<TestCase<DatabricksRelationMetadata, TestModelConfig>> {
         vec![TestCase {
-            description: "changing any incremental table components should not trigger a full refresh",
+            description:
+                "changing any incremental table components should not trigger a full refresh",
             relation_loader: new_loader(),
             current_state: TestModelConfig {
                 persist_relation_comments: true,
@@ -79,14 +81,10 @@ mod tests {
                     ("a_tag".to_string(), "old".to_string()),
                     ("b_tag".to_string(), "old".to_string()),
                 ]),
-                tbl_properties: IndexMap::from_iter([
-                    ("delta.enableRowTracking".to_string(), "false".to_string()),
-                    (
-                        "pipelines.pipelineId".to_string(),
-                        "my_old_pipeline".to_string(),
-                    ),
-                    ("customKey".to_string(), "old".to_string()),
-                ]),
+                tbl_properties: IndexMap::from_iter([(
+                    "delta.enableChangeDataFeed".to_string(),
+                    "false".to_string(),
+                )]),
                 ..Default::default()
             },
             desired_state: TestModelConfig {
@@ -123,16 +121,11 @@ mod tests {
                     ("b_tag".to_string(), "old".to_string()),
                 ]),
                 tbl_properties: IndexMap::from_iter([
-                    // changing these key should not result in anything as these should be ignored
-                    ("delta.enableRowTracking".to_string(), "true".to_string()),
+                    ("delta.enableChangeDataFeed".to_string(), "true".to_string()),
                     (
-                        "pipelines.pipelineId".to_string(),
-                        "my_new_pipeline".to_string(),
+                        "data.owner".to_string(),
+                        "analytics-engineering".to_string(),
                     ),
-                    // changing a key not in the ignore list should cause a changeset entry
-                    ("customKey".to_string(), "new".to_string()),
-                    // introducing a new key should also add it to the changeset
-                    ("customKey2".to_string(), "value".to_string()),
                 ]),
                 ..Default::default()
             },
@@ -219,8 +212,11 @@ mod tests {
                         ComponentConfigChange::Some(
                             components::TblPropertiesLoader::new_component_type_erased(
                                 IndexMap::from_iter([
-                                    ("customKey".to_string(), "new".to_string()),
-                                    ("customKey2".to_string(), "value".to_string()),
+                                    ("delta.enableChangeDataFeed".to_string(), "true".to_string()),
+                                    (
+                                        "data.owner".to_string(),
+                                        "analytics-engineering".to_string(),
+                                    ),
                                 ]),
                             ),
                         ),
@@ -318,18 +314,15 @@ mod tests {
 </row_filter>
 <tblproperties>
     <tblproperties>
-        <delta.enableRowTracking>
+        <data.owner>
+            analytics-engineering
+        </data.owner>
+        <delta.enableChangeDataFeed>
             true
-        </delta.enableRowTracking>
-        <customKey>
-            new
-        </customKey>
-        <customKey2>
-            value
-        </customKey2>
+        </delta.enableChangeDataFeed>
     </tblproperties>
     <pipeline_id>
-        my_new_pipeline
+        None
     </pipeline_id>
 </tblproperties>
 <column_masks>

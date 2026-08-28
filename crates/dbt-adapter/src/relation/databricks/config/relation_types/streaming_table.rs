@@ -1,9 +1,9 @@
 //! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/streaming_table.py
 
-use crate::AdapterType;
 use crate::relation::config_v2::ComponentConfigChange;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfigLoader};
-use crate::relation::databricks::config::{DatabricksRelationMetadata, components};
+use crate::relation::databricks::config::{components, DatabricksRelationMetadata};
+use crate::AdapterType;
 use indexmap::IndexMap;
 
 fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
@@ -31,15 +31,16 @@ pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMe
 #[cfg(test)]
 mod tests {
     use super::{new_loader, requires_full_refresh};
-    use crate::AdapterType;
     use crate::relation::config_v2::{
         ComponentConfigChange, ComponentConfigLoader, RelationComponentConfigChangeSet,
     };
     use crate::relation::databricks::config::{
-        DatabricksRelationMetadata, components,
-        test_helpers::{TestModelConfig, run_test_cases},
+        components,
+        test_helpers::{run_test_cases, TestModelConfig},
+        DatabricksRelationMetadata,
     };
     use crate::relation::test_helpers::TestCase;
+    use crate::AdapterType;
     use indexmap::IndexMap;
 
     fn create_test_cases() -> Vec<TestCase<DatabricksRelationMetadata, TestModelConfig>> {
@@ -60,12 +61,12 @@ mod tests {
                         ("b_tag".to_string(), "old".to_string()),
                     ]),
                     tbl_properties: IndexMap::from_iter([
-                        ("delta.enableRowTracking".to_string(), "false".to_string()),
                         (
                             "pipelines.pipelineId".to_string(),
-                            "my_old_pipeline".to_string(),
+                            "dlt-pipeline-1".to_string(),
                         ),
-                        ("customKey".to_string(), "old".to_string()),
+                        ("data.quality".to_string(), "bronze".to_string()),
+                        ("source.system".to_string(), "events-v1".to_string()),
                     ]),
                     ..Default::default()
                 },
@@ -82,16 +83,12 @@ mod tests {
                     row_filter_function: None,
                     row_filter_columns: vec![],
                     tbl_properties: IndexMap::from_iter([
-                        // changing these key should not result in anything as these should be ignored
-                        ("delta.enableRowTracking".to_string(), "true".to_string()),
                         (
                             "pipelines.pipelineId".to_string(),
-                            "my_new_pipeline".to_string(),
+                            "dlt-pipeline-1".to_string(),
                         ),
-                        // changing a key not in the ignore list should cause a changeset entry
-                        ("customKey".to_string(), "new".to_string()),
-                        // introducing a new key should also add it to the changeset
-                        ("customKey2".to_string(), "value".to_string()),
+                        ("data.quality".to_string(), "silver".to_string()),
+                        ("source.system".to_string(), "events-v2".to_string()),
                     ]),
                     ..Default::default()
                 },
@@ -148,8 +145,12 @@ mod tests {
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
                                     IndexMap::from_iter([
-                                        ("customKey".to_string(), "new".to_string()),
-                                        ("customKey2".to_string(), "value".to_string()),
+                                        (
+                                            "pipelines.pipelineId".to_string(),
+                                            "dlt-pipeline-1".to_string(),
+                                        ),
+                                        ("data.quality".to_string(), "silver".to_string()),
+                                        ("source.system".to_string(), "events-v2".to_string()),
                                     ]),
                                 ),
                             ),
@@ -176,18 +177,15 @@ mod tests {
 </comment>
 <tblproperties>
     <tblproperties>
-        <delta.enableRowTracking>
-            true
-        </delta.enableRowTracking>
-        <customKey>
-            new
-        </customKey>
-        <customKey2>
-            value
-        </customKey2>
+        <data.quality>
+            silver
+        </data.quality>
+        <source.system>
+            events-v2
+        </source.system>
     </tblproperties>
     <pipeline_id>
-        my_new_pipeline
+        dlt-pipeline-1
     </pipeline_id>
 </tblproperties>
 <refresh>
