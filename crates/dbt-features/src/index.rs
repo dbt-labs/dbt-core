@@ -177,6 +177,7 @@ fn node_declared_classifiers(node: &DbtNode) -> &[String] {
         DbtNode::Test(x) => &x.__common_attr__.classifiers,
         DbtNode::Operation(x) => &x.__common_attr__.classifiers,
         DbtNode::Function(x) => &x.__common_attr__.classifiers,
+        DbtNode::Check(x) => &x.__common_attr__.classifiers,
     }
 }
 
@@ -266,6 +267,7 @@ fn write_metadata_parquet_impl(
             DbtNode::Test(x) => &x.__base_attr__,
             DbtNode::Operation(x) => &x.__base_attr__,
             DbtNode::Function(x) => &x.__base_attr__,
+            DbtNode::Check(x) => &x.__base_attr__,
         };
 
         // compile/nodes requires --write-metadata --static-analysis strict.

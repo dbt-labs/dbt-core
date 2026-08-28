@@ -34,6 +34,7 @@ const ADAPTER_PROP_LOCATION_ROOT: &str = "location_root";
 const ADAPTER_PROP_USE_UNIFORM: &str = "use_uniform";
 
 const FIELD_CATALOG_DATABASE: &str = "catalog_database";
+const FIELD_LAKEHOUSE_CATALOG: &str = "lakehouse_catalog";
 const ADAPTER_PROP_AUTO_REFRESH: &str = "auto_refresh";
 const ADAPTER_PROP_MAX_DATA_EXTENSION_TIME_IN_DAYS: &str = "max_data_extension_time_in_days";
 const ADAPTER_PROP_TARGET_FILE_SIZE: &str = "target_file_size";
@@ -81,13 +82,23 @@ pub(super) fn from_model_config_and_catalogs_v2(
 
             match model_catalog_name {
                 None if !wants_iceberg => {
-                    return Ok(CatalogRelation::default_catalog_relation_databricks());
+                    return Ok(
+                        CatalogRelation::default_catalog_relation_databricks_for_model(model),
+                    );
                 }
                 None => {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::Configuration,
-                        "On Databricks, table_format=iceberg requires a `catalog_name` to select a v2 catalog (unity or hive_metastore).",
-                    ));
+                    let use_uniform =
+                        parse_model_bool(model, FIELD_USE_UNIFORM, AdapterType::Databricks)?
+                            .unwrap_or(false);
+                    let relation = CatalogRelation::default_catalog_relation_databricks()
+                        .with_table_format(TableFormat::Iceberg)
+                        .with_file_format(if use_uniform {
+                            DELTA_TABLE_FORMAT
+                        } else {
+                            PARQUET_TABLE_FORMAT
+                        })
+                        .with_adapter_property(ADAPTER_PROP_USE_UNIFORM, use_uniform.to_string());
+                    return Ok(relation);
                 }
                 Some(catalog_name) => catalog_name,
             }
@@ -477,6 +488,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume,
             catalog_database,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -515,6 +527,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -589,6 +602,7 @@ impl CatalogRelation {
             table_format,
             external_volume: None,
             catalog_database: Some(catalog_database),
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: Some(false),
@@ -716,6 +730,7 @@ impl CatalogRelation {
             table_format: catalog.table_format,
             external_volume,
             catalog_database,
+            lakehouse_catalog: None,
             base_location,
             adapter_properties,
             is_transient: Some(false),
@@ -819,6 +834,8 @@ impl CatalogRelation {
 
         let catalog_database =
             get_yaml_str(bigquery, FIELD_CATALOG_DATABASE).map(|s| s.to_string());
+        let lakehouse_catalog =
+            get_yaml_str(bigquery, FIELD_LAKEHOUSE_CATALOG).map(|s| s.to_string());
 
         let mut adapter_properties = BTreeMap::new();
 
@@ -837,6 +854,7 @@ impl CatalogRelation {
             is_transient: None,
             external_volume: None,
             catalog_database,
+            lakehouse_catalog,
             base_location: None,
             file_format: Some(file_format),
         })
@@ -874,6 +892,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: Some(catalog_database),
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
             is_transient: None,
@@ -934,6 +953,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -980,6 +1000,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -1021,6 +1042,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -1146,6 +1168,122 @@ catalogs:
     }
 
     #[test]
+    fn databricks_v2_iceberg_without_catalog_name_defaults_to_managed_iceberg() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: true
+"#,
+        );
+        let conf = json!({ "table_format": "iceberg" });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.catalog_type, CatalogType::Unity);
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.file_format.as_deref(), Some("parquet"));
+            assert!(r.external_volume.is_none());
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("false")
+            );
+        }
+    }
+
+    #[test]
+    fn databricks_v2_iceberg_use_uniform_false_without_catalog_name_succeeds() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: true
+"#,
+        );
+        let conf = json!({ "table_format": "iceberg", "use_uniform": false });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.file_format.as_deref(), Some("parquet"));
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("false")
+            );
+        }
+    }
+
+    #[test]
+    fn databricks_v2_iceberg_explicit_use_uniform_true_without_catalog_name_succeeds() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: UNRELATED
+    type: unity
+    table_format: iceberg
+    config:
+      databricks:
+        file_format: delta
+        use_uniform: true
+"#,
+        );
+        let conf = json!({ "table_format": "iceberg", "use_uniform": true });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.table_format, TableFormat::Iceberg);
+            assert_eq!(r.file_format.as_deref(), Some("delta"));
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("true")
+            );
+        }
+    }
+
+    #[test]
     fn databricks_v2_unity_catalog_builds_relation_parquet_managed_iceberg() {
         let catalogs = load_catalogs_yaml(
             r#"
@@ -1239,6 +1377,34 @@ catalogs:
             .unwrap();
 
             assert_eq!(r.catalog_database.as_deref(), Some("PROD_DB"));
+        }
+    }
+
+    #[test]
+    fn databricks_v2_no_catalog_name_default_honors_location_root() {
+        let catalogs = load_catalogs_yaml("catalogs: []\n");
+        let conf = json!({
+            "location_root": "s3://bucket/root",
+            "database": "db",
+            "schema": "sc",
+            "alias": "a",
+        });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.catalog_type, CatalogType::Unity);
+            assert_eq!(r.external_volume.as_deref(), Some("s3://bucket/root/a"));
         }
     }
 
@@ -1397,6 +1563,45 @@ catalogs:
             .unwrap();
 
             assert_eq!(r.catalog_database.as_deref(), Some("analytics-project"));
+        }
+    }
+
+    #[test]
+    fn bigquery_v2_biglake_lakehouse_catalog() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: BQ
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: gs://bucket
+        file_format: parquet
+        base_location_root: root
+        lakehouse_catalog: "sales_catalog"
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "BQ",
+            "schema": "analytics",
+            "alias": "events"
+        });
+        let ms = [
+            model(AdapterType::Bigquery, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Bigquery,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.lakehouse_catalog.as_deref(), Some("sales_catalog"));
+            assert!(r.catalog_database.is_none());
         }
     }
 

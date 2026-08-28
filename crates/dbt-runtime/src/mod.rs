@@ -30,10 +30,15 @@ mod runtime;
 pub use runtime::Runtime;
 
 pub mod builder;
-pub mod handle;
 pub mod task_hooks;
 
+pub mod handle;
+pub use handle::Handle;
+
 mod context;
+pub use context::current::SetCurrentGuard;
+pub use context::is_pool_worker;
+
 mod future;
 mod park;
 mod util;

@@ -265,7 +265,7 @@ fn render_python_model(
     )
     .map_err(|e| *e)?;
 
-    let compiled_python = format!("{}\n{}", raw_python, rendered_postfix);
+    let compiled_python = format!("{}\n\n{}", raw_python.trim_end(), rendered_postfix);
 
     emit_compiled_code(node, ctx, &compiled_python);
 

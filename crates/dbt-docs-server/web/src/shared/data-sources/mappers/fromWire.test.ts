@@ -22,9 +22,11 @@ import {
   fromSemanticModelSummary,
   fromSnapshotSummary,
   fromSourceSummary,
+  fromTestDetail,
   fromTestSummary,
   type RestColumnLineageResponse,
   type RestLineageResponse,
+  type RestTestDetail,
 } from './fromWire';
 
 describe('fromLineageResponse', () => {
@@ -415,6 +417,41 @@ describe('fromTestSummary', () => {
     });
     expect(s.status).toBeNull();
     expect(s.testedColumn).toBeNull();
+  });
+});
+
+describe('fromTestDetail', () => {
+  test('maps a data test to resourceType "test" even with a stray `given: null` key', () => {
+    // Regression: the duckdb UNION ALL backing test-detail rows selects a
+    // `given` column on both branches (NULL for data tests), so `'given' in d`
+    // always matched -- the discriminator must be `resource_type` instead.
+    const d = fromTestDetail({
+      unique_id: 'test.shop.not_null_customers_id',
+      name: 'not_null_customers_id',
+      resource_type: 'test',
+      package_name: 'shop',
+      tags: [],
+      fqn: ['shop', 'not_null_customers_id'],
+      depends_on: [],
+      given: null,
+      expect: null,
+    } as unknown as RestTestDetail);
+    expect(d.resourceType).toBe('test');
+  });
+
+  test('maps a real unit test to resourceType "unit_test"', () => {
+    const d = fromTestDetail({
+      unique_id: 'unit_test.shop.test_customers',
+      name: 'test_customers',
+      resource_type: 'unit_test',
+      package_name: 'shop',
+      tags: [],
+      fqn: ['shop', 'test_customers'],
+      depends_on: [],
+      given: [],
+      expect: { rows: [] },
+    } as unknown as RestTestDetail);
+    expect(d.resourceType).toBe('unit_test');
   });
 });
 

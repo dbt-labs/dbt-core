@@ -2,6 +2,9 @@
   {% if column_mask_exists() %}
     {% do exceptions.raise_compiler_error("Column masks are not supported for views.") %}
   {% endif %}
+  {% if row_filter_exists() %}
+    {% do exceptions.raise_compiler_error("Row filters are not supported for views.") %}
+  {% endif %}
   {{ log("Creating view " ~ relation) }}
   create or replace view {{ relation.render() }}
   {%- if config.persist_column_docs() -%}

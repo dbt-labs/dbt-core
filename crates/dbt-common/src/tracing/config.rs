@@ -92,6 +92,8 @@ pub struct FsTraceConfig {
     pub(super) export_to_otlp: bool,
     /// The log format being used
     pub(super) log_format: LogFormat,
+    /// File-specific log format (`--log-format-file`), overriding `log_format` for the on-disk log sink only.
+    pub(super) file_log_format: Option<LogFormat>,
     /// If True, enables separate query log file output
     pub(super) enable_query_log: bool,
     /// Show options controlling terminal/file output visibility
@@ -122,6 +124,7 @@ impl Default for FsTraceConfig {
             parent_span_id: None,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            file_log_format: None,
             enable_query_log: false,
             show_options: HashSet::default(),
             show_all_deprecations: false,
@@ -404,6 +407,7 @@ impl FsTraceConfig {
             parent_span_id,
             export_to_otlp,
             log_format,
+            file_log_format: None,
             enable_query_log,
             show_options,
             show_all_deprecations,
@@ -417,6 +421,12 @@ impl FsTraceConfig {
     /// JSON log lines.
     pub fn with_command_name(mut self, command_name: &'static str) -> Self {
         self.command_name = command_name;
+        self
+    }
+
+    /// Override the file-specific log format. When `None` fall back to `log_format`.
+    pub fn with_file_log_format(mut self, file_log_format: Option<LogFormat>) -> Self {
+        self.file_log_format = file_log_format;
         self
     }
 
@@ -469,6 +479,7 @@ impl FsTraceConfig {
             None, // log_file_name - use default dbt.log
             io_args.log_file_max_bytes,
         )
+        .with_file_log_format(io_args.log_format_file)
     }
 
     /// Initializes tracing with the consumers configured for this CLI invocation.
@@ -585,12 +596,13 @@ impl FsTraceConfig {
             crate::stdfs::create_dir_all(&self.log_path)?;
         }
 
+        // File sink honours `--log-format-file` when set, otherwise uses `log_format`
         let (file_log_layer, mut file_log_shutdown_items, file_log_path) = build_file_log_consumer(
             self.max_file_log_verbosity,
             &self.log_path,
             self.log_file_name.as_deref(),
             self.log_file_max_bytes,
-            self.log_format,
+            self.file_log_format.unwrap_or(self.log_format),
             self.invocation_id,
             self.command,
             self.command_name,

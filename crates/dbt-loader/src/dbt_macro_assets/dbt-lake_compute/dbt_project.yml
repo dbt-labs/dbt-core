@@ -1,5 +1,5 @@
 
-name: dbt_alt
+name: dbt_lake_compute
 version: 1.0
 config-version: 2
 

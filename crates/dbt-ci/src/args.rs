@@ -32,6 +32,12 @@ pub struct PypiPublishArgs {
     #[arg(long, value_name = "DIR")]
     pub project_dir: Option<PathBuf>,
 
+    /// Dir whose `pyproject.toml` supplies the sdist's `requires-python` and
+    /// `dependencies` — the one describing the referenced wheels. Point at
+    /// `crates/dbt-python` for the maturin extension build.
+    #[arg(long, value_name = "DIR", requires = "download_base_url")]
+    pub runtime_metadata_from: Option<PathBuf>,
+
     /// Interpreter tag of the referenced wheels (sdist mode). `py3` for the binary
     /// CLI wheel, `cp310` for the maturin abi3 extension wheel.
     #[arg(long, default_value = "py3", requires = "download_base_url")]

@@ -147,13 +147,29 @@ DBT_TARGET_PATH=/abs/path/to/project/target docker compose up --build
 
 Then open <http://localhost:8580>.
 
-### 🐋 Option C: Docker
-
-A `Dockerfile` is included. It installs the released dbt binary (it does not build from source), so the build is quick and needs no cargo toolchain:
+Set `DBT_VERSION` to pin a dbt version instead of tracking the newest release:
 
 ```bash
-docker build -f crates/dbt-docs-server/Dockerfile -t dbt-docs-server .
+DBT_VERSION=2.0.0-beta.2 DBT_TARGET_PATH=/abs/path/to/project/target docker compose up --build
 ```
+
+### 🐋 Option C: Docker
+
+A `Dockerfile` is included. It downloads a released dbt binary from this repo's [GitHub Releases](https://github.com/dbt-labs/dbt-core/releases) and verifies it against the release's published `SHA256SUMS`, so the build is quick and needs no cargo toolchain. It is a multi-stage BuildKit build, produces `linux/amd64` and `linux/arm64`, and runs as an unprivileged user.
+
+Nothing is copied out of the build context, so the context is this crate's directory and the command is the same whether you run it from the repo root or from `crates/dbt-docs-server/`:
+
+```bash
+docker build -t dbt-docs-server crates/dbt-docs-server
+```
+
+By default the newest release carrying a Linux binary is resolved at build time. Pin a version with `--build-arg DBT_VERSION=<version>`:
+
+```bash
+docker build -t dbt-docs-server --build-arg DBT_VERSION=2.0.0-beta.2 crates/dbt-docs-server
+```
+
+> **On `latest` and the build cache.** Because the default build args don't change between builds, Docker reuses the cached download layer and keeps whatever version it resolved the first time. To pick up a newer release, build with `--no-cache` or pass the version explicitly.
 
 Run it, mounting a project `target/` that already contains `target/index/*.parquet`:
 
@@ -164,6 +180,8 @@ docker run --rm -p 8580:8580 \
 ```
 
 Then open <http://localhost:8580>.
+
+> **The artifact mount is required.** With no `target/index/*.parquet` behind `/data/target`, the server has nothing to serve and the container exits on startup. Generate them first with `dbt --write-index` (see [Prerequisites](#-prerequisites)).
 
 **First-run network note.** The parquet is queried through an ADBC DuckDB driver that is **not** bundled in the image. On first boot the driver is downloaded from `public.cdn.getdbt.com` into the cache dir (`/var/cache/dbt`). The container therefore needs outbound HTTPS the first time it runs. 
 

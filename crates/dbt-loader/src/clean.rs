@@ -54,8 +54,8 @@ pub async fn execute_clean_command(
     let env = initialize_load_jinja_environment(
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
-        dbt_state.dbt_profile.db_config.adapter_type(),
-        dbt_state.dbt_profile.db_config.clone(),
+        dbt_state.dbt_profile.default_db_config().adapter_type(),
+        dbt_state.dbt_profile.default_db_config().clone(),
         dbt_state.run_started_at,
         &flags,
         invocation_args.warn_error_options.clone(),

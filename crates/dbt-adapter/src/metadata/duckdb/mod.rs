@@ -10,7 +10,8 @@ use arrow_schema::Schema;
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 
 use dbt_adapter_core::ExecutionPhase;
-use dbt_adbc::{Connection, MapReduce, QueryCtx};
+use dbt_adapter_engine::MapReduce;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
@@ -454,11 +455,12 @@ impl CatalogSpecDuckDbExt for CatalogSpecV2View<'_> {
     }
 
     fn resolved_attach_alias(&self) -> Option<String> {
-        // The base DuckDB adapter uses the `duckdb` block; the alt compute engine
-        // uses `alt`. Fall back so a catalog configured for either resolves.
+        // The base DuckDB adapter uses the `duckdb` block; the lake compute engine
+        // uses `lake_compute`. Fall back so a catalog configured for either
+        // resolves.
         let duckdb_block = self
-            .config_block("duckdb")
-            .or_else(|| self.config_block("alt"))?;
+            .config_block(AdapterType::DuckDB.as_ref())
+            .or_else(|| self.config_block(AdapterType::Alt.as_ref()))?;
         let alias = duckdb_block
             .get(dbt_yaml::Value::from("attach_as"))
             .and_then(|value| value.as_str())

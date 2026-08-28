@@ -1,6 +1,7 @@
 use crate::AdapterEngine;
-use crate::adapter::adapter_impl::AdapterImpl;
+use crate::adapter::adapter_impl::{AdapterImpl, InnerAdapter};
 use crate::connection::AdapterConnectionFactory;
+use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::record_batch::RecordBatchExt;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
@@ -10,7 +11,8 @@ use arrow_schema::Schema;
 use arrow_array::{Array, RecordBatch, StringArray, UInt64Array};
 
 use dbt_adapter_core::ExecutionPhase;
-use dbt_adbc::{Connection, MapReduce, QueryCtx};
+use dbt_adapter_engine::MapReduce;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
@@ -20,6 +22,7 @@ use dbt_schemas::schemas::{
 };
 use indexmap::IndexMap;
 use minijinja::State;
+use minijinja::Value;
 use std::collections::btree_map::Entry;
 
 use std::collections::{BTreeMap, HashMap};
@@ -402,30 +405,238 @@ pub fn relation_type_from_engine(engine_name: &str) -> RelationType {
     }
 }
 
+/// The `(name, type)` pairs from a `DESCRIBE TABLE` result batch (which also
+/// carries default/comment/codec/ttl columns; only name/type are consumed).
+fn describe_name_type_pairs(batch: &RecordBatch) -> AdapterResult<Vec<(String, String)>> {
+    let names = batch.column_values::<StringArray>("name")?;
+    let types = batch.column_values::<StringArray>("type")?;
+    Ok((0..batch.num_rows())
+        .map(|i| (names.value(i).to_string(), types.value(i).to_string()))
+        .collect())
+}
+
+/// Column names and ClickHouse type text of an arbitrary SELECT, via
+/// `DESCRIBE TABLE (<sql>)`. DESCRIBE preserves the server's own type text —
+/// the ADBC/Arrow result schema marks every column Nullable, which breaks
+/// downstream DDL and contract/type comparisons. `settings_clause` (rendered
+/// by [`query_settings_clause`]) makes introspected types match runtime
+/// settings such as `join_use_nulls`.
+pub fn describe_query_columns(
+    engine: &dyn AdapterEngine,
+    state: Option<&State>,
+    conn: &mut dyn Connection,
+    ctx: &QueryCtx,
+    sql: &str,
+    settings_clause: &str,
+    token: CancellationToken,
+) -> AdapterResult<Vec<(String, String)>> {
+    // The closing paren goes on its own line: model SQL routinely ends with a
+    // `-- line comment` (no trailing newline), which would otherwise swallow
+    // the `)` and break the query.
+    let batch = engine.execute(
+        state,
+        conn,
+        ctx,
+        &format!("DESCRIBE TABLE ({sql}\n){settings_clause}"),
+        token,
+    )?;
+    describe_name_type_pairs(&batch)
+}
+
 /// Build an Arrow Schema from ClickHouse's `DESCRIBE TABLE` output.
-///
-/// ClickHouse `DESCRIBE TABLE` returns columns: name, type, default_type,
-/// default_expression, comment, codec_expression, ttl_expression.
 fn build_schema_from_clickhouse_describe(
     describe_result: Arc<RecordBatch>,
     type_ops: &dyn TypeOps,
 ) -> AdapterResult<Arc<Schema>> {
-    let column_names = describe_result.column_values::<StringArray>("name")?;
-    let data_types = describe_result.column_values::<StringArray>("type")?;
-
     let mut fields = vec![];
-    for i in 0..describe_result.num_rows() {
-        let name = column_names.value(i);
-        let text_data_type = data_types.value(i);
+    for (name, text_data_type) in describe_name_type_pairs(&describe_result)? {
         // ClickHouse encodes nullability via the `Nullable(...)` wrapper in the
         // type text; the type parser handles that and the Arrow nullable bit is
         // derived from there.
-        let field = make_arrow_field_v2(type_ops, name.to_string(), text_data_type, None, None)?;
+        let field = make_arrow_field_v2(type_ops, name, &text_data_type, None, None)?;
         fields.push(field);
     }
 
     let schema = Schema::new(fields);
     Ok(Arc::new(schema))
+}
+
+/// ClickHouse server capabilities, probed once per process and reused for every
+/// model/thread afterwards (as the Python client does at connection init).
+/// Later capability probes (atomic exchange, lightweight deletes) extend this
+/// struct.
+#[derive(Debug, Clone)]
+pub struct ClickHouseCapabilities {
+    /// `SELECT version()` result; empty when the probe failed (callers treat
+    /// unknown as "modern server").
+    pub server_version: String,
+}
+
+impl ClickHouseCapabilities {
+    /// Whether the connected server is older than `version`; an unknown
+    /// server version is treated as modern (false).
+    pub fn is_before(&self, version: &str) -> AdapterResult<bool> {
+        if self.server_version.is_empty() {
+            return Ok(false);
+        }
+        Ok(compare_versions(version, &self.server_version)? > 0)
+    }
+
+    /// Inclusive counterpart of [`ClickHouseCapabilities::is_before`]; an
+    /// unknown server version is treated as modern (true).
+    pub fn is_at_or_after(&self, version: &str) -> AdapterResult<bool> {
+        if self.server_version.is_empty() {
+            return Ok(true);
+        }
+        Ok(compare_versions(&self.server_version, version)? >= 0)
+    }
+}
+
+/// Mirrors dbt-clickhouse util.py `compare_versions`: 1/-1/0 comparing dotted
+/// numeric versions segment by segment; errors on non-numeric segments.
+fn compare_versions(v1: &str, v2: &str) -> AdapterResult<i32> {
+    for (part1, part2) in v1.split('.').zip(v2.split('.')) {
+        match (part1.parse::<i64>(), part2.parse::<i64>()) {
+            (Ok(a), Ok(b)) => {
+                if a != b {
+                    return Ok(if a > b { 1 } else { -1 });
+                }
+            }
+            _ => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "Version must consist of only numbers separated by '.'",
+                ));
+            }
+        }
+    }
+    Ok(0)
+}
+
+/// Read a dict-valued key (e.g. `settings`, `query_settings`) from
+/// `model['config']`, preserving iteration order. Missing/undefined -> empty.
+pub(crate) fn model_config_map(model: &Value, key: &str) -> Vec<(String, Value)> {
+    let Ok(config) = model.get_attr("config") else {
+        return Vec::new();
+    };
+    let Ok(map) = config.get_attr(key) else {
+        return Vec::new();
+    };
+    if map.is_none() || map.is_undefined() {
+        return Vec::new();
+    }
+    let Ok(keys) = map.try_iter() else {
+        return Vec::new();
+    };
+    keys.filter_map(|k| {
+        let name = k.as_str()?.to_string();
+        let value = map.get_item(&k).ok()?;
+        Some((name, value))
+    })
+    .collect()
+}
+
+/// Mirrors dbt-clickhouse impl.py `_build_settings_str`: string values not
+/// already single-quoted get single-quoted, other values are emitted verbatim;
+/// '' for no entries, otherwise newline-terminated.
+pub(crate) fn build_settings_str(settings: &[(String, Value)]) -> String {
+    let res: Vec<String> = settings
+        .iter()
+        .map(|(key, value)| match value.as_str() {
+            Some(s) if !s.starts_with('\'') => format!("{key}='{s}'"),
+            _ => format!("{key}={value}"),
+        })
+        .collect();
+    if res.is_empty() {
+        String::new()
+    } else {
+        format!("SETTINGS {}\n", res.join(", "))
+    }
+}
+
+/// Mirrors ClickHouse impl.py `format_columns`:
+/// `[{'name': c.name, 'data_type': c.data_type}, ...]`.
+pub(crate) fn format_columns(columns: &Value) -> Value {
+    let mut out: Vec<Value> = Vec::new();
+    if let Ok(items) = columns.try_iter() {
+        for column in items {
+            let mut map: BTreeMap<String, Value> = BTreeMap::new();
+            map.insert(
+                "name".to_string(),
+                column.get_attr("name").unwrap_or_default(),
+            );
+            map.insert(
+                "data_type".to_string(),
+                column.get_attr("data_type").unwrap_or_default(),
+            );
+            out.push(Value::from(map));
+        }
+    }
+    Value::from(out)
+}
+
+/// Render a `query_settings` map (from macro kwargs) into a `" SETTINGS k=v, ..."`
+/// suffix for introspection queries; empty string when absent or empty.
+pub(crate) fn query_settings_clause(query_settings: Option<&Value>) -> String {
+    let Some(qs) = query_settings else {
+        return String::new();
+    };
+    let mut pairs: Vec<(String, Value)> = Vec::new();
+    if let Ok(keys) = qs.try_iter() {
+        for key in keys {
+            if let (Some(name), Ok(value)) = (key.as_str(), qs.get_item(&key)) {
+                pairs.push((name.to_string(), value));
+            }
+        }
+    }
+    let rendered = build_settings_str(&pairs);
+    if rendered.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", rendered.trim_end())
+    }
+}
+
+static CLICKHOUSE_CAPABILITIES: std::sync::OnceLock<ClickHouseCapabilities> =
+    std::sync::OnceLock::new();
+
+/// Return the server capabilities, probing only on the very first call
+/// process-wide (concurrent callers block until it completes).
+pub fn server_capabilities(
+    adapter: &AdapterImpl,
+    state: &State,
+    token: CancellationToken,
+) -> &'static ClickHouseCapabilities {
+    CLICKHOUSE_CAPABILITIES.get_or_init(|| ClickHouseCapabilities {
+        server_version: probe_server_version(adapter, state, token).unwrap_or_default(),
+    })
+}
+
+/// `SELECT version()`; None when the probe cannot run (replay has no live
+/// connection) or fails, leaving the version unknown -> "assume modern server".
+fn probe_server_version(
+    adapter: &AdapterImpl,
+    state: &State,
+    token: CancellationToken,
+) -> Option<String> {
+    let InnerAdapter::Impl(_, engine) = adapter.inner_adapter() else {
+        return None;
+    };
+    let engine = Arc::clone(engine);
+    let ctx = query_ctx_from_state(state)
+        .ok()?
+        .with_desc("clickhouse capability probe");
+    let mut conn = adapter
+        .borrow_tlocal_connection(Some(state), node_id_from_state(state))
+        .ok()?;
+    let batch = engine
+        .execute(None, conn.as_mut(), &ctx, "SELECT version() AS v", token)
+        .ok()?;
+    if batch.num_rows() == 0 {
+        return None;
+    }
+    let values = batch.column_values::<StringArray>("v").ok()?;
+    Some(values.value(0).to_string())
 }
 
 #[cfg(test)]
@@ -435,6 +646,50 @@ mod tests {
     use crate::stmt_splitter::DefaultStmtSplitter;
     use arrow_schema::{DataType, Field};
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+    #[test]
+    fn test_build_settings_str_mirrors_python() {
+        // Mirrors dbt-clickhouse _build_settings_str: unquoted strings get
+        // single-quoted, other values verbatim; trailing newline; '' when empty.
+        assert_eq!(build_settings_str(&[]), "");
+        assert_eq!(
+            build_settings_str(&[
+                ("index_granularity".to_string(), Value::from(4096)),
+                (
+                    "replicated_deduplication_window".to_string(),
+                    Value::from("0")
+                ),
+                ("prequoted".to_string(), Value::from("'x'")),
+            ]),
+            "SETTINGS index_granularity=4096, replicated_deduplication_window='0', prequoted='x'\n"
+        );
+    }
+
+    #[test]
+    fn test_model_config_map_reads_model_config() {
+        let model = Value::from_serialize(serde_json::json!({
+            "config": {
+                "settings": {"index_granularity": 4096},
+                "query_settings": {"join_use_nulls": 1},
+            }
+        }));
+        let settings = model_config_map(&model, "settings");
+        assert_eq!(settings.len(), 1);
+        assert_eq!(settings[0].0, "index_granularity");
+
+        // missing key -> empty
+        assert!(model_config_map(&model, "not_there").is_empty());
+        // model without config -> empty
+        assert!(model_config_map(&Value::from(()), "settings").is_empty());
+    }
+
+    #[test]
+    fn test_compare_versions_mirrors_python() {
+        assert_eq!(compare_versions("26.6", "26.3.12.3").unwrap(), 1);
+        assert_eq!(compare_versions("22.7.1.2484", "26.3.12.3").unwrap(), -1);
+        assert_eq!(compare_versions("26.3", "26.3.12.3").unwrap(), 0); // zip stops at shorter
+        assert!(compare_versions("26.x", "26.3").is_err());
+    }
 
     /// A ClickHouse metadata adapter backed by a mock engine (no live
     /// connection); the catalog batch parsers never touch the engine.

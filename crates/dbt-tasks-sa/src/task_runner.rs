@@ -140,7 +140,6 @@ impl TaskRunner {
         run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
     ) -> FsResult<()> {
-        let adapter_type = self.resolved_state.dbt_profile.db_config.adapter_type();
         // Pre-register only *selected* seeds (not frontier dependencies) so that
         // frontier seeds don't mask "missing in remote" static analysis errors.
         let selected_seed_ids: Vec<&String> = schedule
@@ -154,7 +153,6 @@ impl TaskRunner {
         register_seeds::pre_register_seeds(
             &selected_seed_ids,
             &self.resolved_state.nodes.seeds,
-            adapter_type,
             Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
             Arc::clone(&self.data_store),
             Arc::clone(self.adapter.engine().type_ops()),

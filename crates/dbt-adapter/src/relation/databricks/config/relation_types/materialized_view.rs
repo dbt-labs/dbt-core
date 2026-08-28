@@ -16,13 +16,14 @@ pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMe
     // - liquid clustering
     // - relation tags
     // - query
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 6] = [
         // Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::PartitionByLoader),
         // Box::new(components::QueryLoader),
         Box::new(components::RefreshLoader),
         // Box::new(components::RelationTagsLoader),
+        Box::new(components::RowFilterLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::ColumnMasksLoader),
     ];
@@ -140,6 +141,8 @@ mod tests {
                     cron: Some("*/60 * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
                     tags: IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
+                    row_filter_function: Some("new_row_filter_fn".to_string()),
+                    row_filter_columns: vec!["col1".to_string(), "col3".to_string()],
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
@@ -161,6 +164,15 @@ mod tests {
                         //         IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
                         //     )),
                         // ),
+                        (
+                            components::RowFilterLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::RowFilterLoader::new_component_type_erased(
+                                    Some("test_db.test_schema.new_row_filter_fn".to_string()),
+                                    vec!["col1".to_string(), "col3".to_string()],
+                                ),
+                            ),
+                        ),
                     ],
                     requires_full_refresh,
                 ),
@@ -176,6 +188,21 @@ mod tests {
         True
     </is_altered>
 </refresh>
+<row_filter>
+    <function>
+        test_db.test_schema.new_row_filter_fn
+    </function>
+    <columns>
+        col1
+        col3
+    </columns>
+    <should_unset>
+        False
+    </should_unset>
+    <is_change>
+        True
+    </is_change>
+</row_filter>
                     ",
                 requires_full_refresh: false,
             },

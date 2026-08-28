@@ -1,8 +1,9 @@
 import { FC, isValidElement, ReactElement } from 'react';
 import toast from 'react-hot-toast';
+import { Copy } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
 
-import { CellContext, ColumnDef, Icon, RyeconCopy, Sizes } from '@dbt-labs/sourdough';
+import { CellContext, ColumnDef } from '@dbt-labs/sourdough';
 
 import { Tooltip } from '../../components/ui/Tooltip';
 import { formatAbsoluteLocalDate, formatDateCommon } from '../util/dateUtils';
@@ -128,7 +129,7 @@ export const TruncatedCopyLinkCell = <TData extends object>({
       innerClassName="py-4 cursor-pointer"
       value={
         <span className="whitespace-nowrap py-4">
-          <Icon className="mr-1 align-middle" ryecon={RyeconCopy} size={Sizes.sm} />
+          <Copy className="mr-1 size-3.5 align-middle" />
           <span className="align-middle">{value}</span>
         </span>
       }

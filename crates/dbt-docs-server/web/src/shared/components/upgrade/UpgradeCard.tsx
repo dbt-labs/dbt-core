@@ -1,7 +1,6 @@
 import { FC, useEffect, useRef } from 'react';
+import { ChevronUp, X } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
-
-import { Icon, RyeconCaretUp, RyeconClose, Sizes } from '@dbt-labs/sourdough';
 
 import { Button } from '../../../components/ui/Button';
 import { InvisibleButton } from '../../../components/ui/InvisibleButton';
@@ -253,7 +252,7 @@ function InlineCard({
           className="inline-flex !w-auto shrink-0 items-center text-fgDecorative hover:text-fgMain"
           testId={testId ? `${testId}-dismiss` : undefined}
         >
-          <Icon ryecon={RyeconClose} size="sm" alt="" />
+          <X className="size-3.5" />
         </InvisibleButton>
       )}
     </div>
@@ -299,7 +298,7 @@ function BlockCard({
             className="inline-flex !w-auto shrink-0 items-center text-fgDecorative hover:text-fgMain"
             testId={testId ? `${testId}-dismiss` : undefined}
           >
-            <Icon ryecon={RyeconClose} size="sm" alt="" />
+            <X className="size-3.5" />
           </InvisibleButton>
         )}
       </div>
@@ -377,7 +376,7 @@ function RailCard({
               className="inline-flex shrink-0 items-center text-fgDecorative"
               aria-hidden
             >
-              <Icon ryecon={RyeconCaretUp} size="xs" alt="" />
+              <ChevronUp className="size-3" />
             </span>
           )}
         </InvisibleButton>
@@ -389,7 +388,7 @@ function RailCard({
             className="inline-flex !w-auto shrink-0 items-center text-fgDecorative hover:text-fgMain"
             testId={testId ? `${testId}-dismiss` : undefined}
           >
-            <Icon ryecon={RyeconClose} size="xs" alt="" />
+            <X className="size-3" />
           </InvisibleButton>
         )}
       </div>
@@ -443,7 +442,7 @@ function CtaForSpec({ spec, emit, decorate, fullWidth, testId }: CtaProps) {
   return (
     <Button
       variant="default"
-      size={Sizes.sm}
+      size="sm"
       text={label}
       className={fullWidth ? 'w-full justify-center' : undefined}
       onClick={() => {

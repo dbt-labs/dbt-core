@@ -13,6 +13,9 @@ pub mod serde;
 /// Module containing utility functions and helpers
 pub mod utils;
 
+/// The `info_schema()` Jinja helper for project quality checks
+pub mod info_schema;
+
 /// Module for functions implementations for the dbt jinja context
 mod functions;
 pub use functions::Var;

@@ -711,12 +711,21 @@ impl StateArtifacts {
             // specific keys where env-aware Jinja is known to appear. A new false positive for
             // those types requires a new per-key fix; the wholesale approach cannot yet be applied
             // to them.
+            // Checks are on Approach B deliberately. They have no dbt-core counterpart to mirror
+            // (`same_contents` does not exist for the type), and `build_unrendered_config` does not
+            // populate `unrendered_config` for them, so the Stage-1 wholesale shortcut would be an
+            // under-selection landmine: it would report "not modified" off an empty map and mask
+            // real edits to `severity`/`tags`/`phase`. `DbtCheck::has_same_config` compares the
+            // rendered config instead. Moving checks to Approach A requires populating
+            // `unrendered_config` first, as a prerequisite commit
+            // (see `.agents/state-modified-conformance.md`).
             NodeType::Exposure
             | NodeType::Analysis
             | NodeType::Macro
             | NodeType::SemanticModel
             | NodeType::Metric
-            | NodeType::SavedQuery => !current_node.has_same_config(previous_node, adapter_type),
+            | NodeType::SavedQuery
+            | NodeType::Check => !current_node.has_same_config(previous_node, adapter_type),
 
             // Never returned by any `InternalDbtNode::resource_type()` impl (see nodes.rs) —
             // `DocsMacro`/`Operation` describe non-node telemetry concepts and `Unspecified` is a
@@ -2783,9 +2792,7 @@ mod tests {
             (
                 "freshness",
                 ExcludeKind::Relevant,
-                Box::new(|n| {
-                    n.deprecated_config.freshness = Some(ModelFreshness { build_after: None })
-                }),
+                Box::new(|n| n.deprecated_config.freshness = Some(ModelFreshness::default())),
             ),
             (
                 "state",

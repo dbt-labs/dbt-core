@@ -23,6 +23,7 @@ use crate::metadata::databricks::dbr_capabilities;
 use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::duckdb::DuckDBMetadataAdapter;
 use crate::metadata::duckdb::{classify_attach_entry, duckdb_table_format_for_database};
+use crate::metadata::exasol::ExasolMetadataAdapter;
 use crate::metadata::fabric::FabricMetadataAdapter;
 use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
@@ -704,7 +705,9 @@ impl AdapterImpl {
                         }
                         ClickHouse => Box::new(ClickHouseMetadataAdapter::new(engine))
                             as Box<dyn MetadataAdapter>,
-                        Exasol => return None,
+                        Exasol => {
+                            Box::new(ExasolMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                        }
                         Starburst => todo!("Starburst"),
                         Athena => todo!("Athena"),
                         Trino => todo!("Trino"),
@@ -1010,6 +1013,7 @@ impl AdapterImpl {
     /// PostgresAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-postgres/src/dbt/adapters/postgres/impl.py#L175
     /// RedshiftAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-redshift/src/dbt/adapters/redshift/impl.py#L490
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L502
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L808
     pub fn valid_incremental_strategies(&self) -> &[DbtIncrementalStrategy] {
         use DbtIncrementalStrategy::*;
 
@@ -1017,13 +1021,14 @@ impl AdapterImpl {
             Postgres | DuckDB | Alt => &[Append, DeleteInsert, Merge, Microbatch],
             Snowflake => &[Append, DeleteInsert, InsertOverwrite, Merge, Microbatch],
             Bigquery => &[Append],
-            Databricks => &[Append, DeleteInsert, Merge, InsertOverwrite, ReplaceWhere],
+            Databricks => &[Append, DeleteInsert, Merge, InsertOverwrite, ReplaceWhere, Microbatch],
             Redshift => &[Append, DeleteInsert, Merge, Microbatch],
             Fabric => &[Append, DeleteInsert, Merge, Microbatch],
             Salesforce => &[Append, Merge],
             ClickHouse => &[Append, DeleteInsert, InsertOverwrite, Microbatch, Legacy],
             Spark => &[Append, Merge, InsertOverwrite, Microbatch],
-            Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle => {
+            Exasol => &[Append, DeleteInsert, Merge, Microbatch],
+            Athena | Starburst | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("valid_incremental_strategies not implemented")
             }
         }
@@ -1678,7 +1683,10 @@ impl AdapterImpl {
         state: &State,
         relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
-        let args = [RelationObject::new(Arc::clone(relation)).into_value()];
+        // Matches upstream: the identifier is stripped here, before the macro runs, so
+        // `create_schema`/`drop_schema` macros can render the relation as-is.
+        let relation = relation.without_identifier()?;
+        let args = [RelationObject::new(relation).into_value()];
         execute_macro(state, &args, "create_schema")?;
         Ok(none_value())
     }
@@ -1692,7 +1700,8 @@ impl AdapterImpl {
         self.engine()
             .relation_cache()
             .evict_schema_for_relation(relation.as_ref());
-        let args = [RelationObject::new(Arc::clone(relation)).into_value()];
+        let relation = relation.without_identifier()?;
+        let args = [RelationObject::new(relation).into_value()];
         execute_macro(state, &args, "drop_schema")?;
         Ok(none_value())
     }
@@ -1988,7 +1997,7 @@ impl AdapterImpl {
         // Replay fast-path: consult trace-derived cache if available
         if let Replay(..) = self.inner_adapter() {
             // TODO: move this logic to the [ReplayAdapter]
-            if let Some(exists) = self.schema_exists_from_trace(database, schema) {
+            if let Some(exists) = self.schema_exists_from_trace(state, database, schema) {
                 return Ok(Value::from(exists));
             }
         }
@@ -2757,24 +2766,26 @@ impl AdapterImpl {
             _ => true,
         };
 
-        match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_convert_type(state, data_type),
-            Impl(Snowflake, _)
-                if matches!(
-                    data_type,
-                    DataType::Utf8 | DataType::Utf8View | DataType::LargeUtf8
-                ) =>
-            {
-                Ok("text".to_string())
-            }
-            Impl(_, engine) => {
-                let mut out = String::new();
-                engine
-                    .type_ops()
-                    .format_arrow_type_as_sql(data_type, nullable, &mut out)?;
-                Ok(out)
-            }
+        if let Replay(_, replay) = self.inner_adapter()
+            && let Some(recorded) = replay.replay_convert_type(state, data_type)?
+        {
+            return Ok(recorded);
         }
+
+        if self.adapter_type() == Snowflake
+            && matches!(
+                data_type,
+                DataType::Utf8 | DataType::Utf8View | DataType::LargeUtf8
+            )
+        {
+            return Ok("text".to_string());
+        }
+
+        let mut out = String::new();
+        self.engine()
+            .type_ops()
+            .format_arrow_type_as_sql(data_type, nullable, &mut out)?;
+        Ok(out)
     }
 
     /// Expand the to_relation table's column types to match the schema of from_relation
@@ -3161,10 +3172,18 @@ impl AdapterImpl {
             (Fabric, ForeignKey) => Enforced,
             (Fabric, Custom) => NotSupported,
 
+            // Exasol (verified on Exasol 8)
+            (Exasol, NotNull) => Enforced,
+            (Exasol, PrimaryKey) => Enforced,
+            (Exasol, ForeignKey) => Enforced,
+            (Exasol, Unique) => NotSupported,
+            (Exasol, Check) => NotSupported,
+            (Exasol, Custom) => NotSupported,
+
             // Salesforce
             (
-                Salesforce | Spark | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
-                | Dremio | Oracle,
+                Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio
+                | Oracle,
                 _,
             ) => {
                 unimplemented!("constraint support not implemented")
@@ -3271,7 +3290,7 @@ impl AdapterImpl {
         }
 
         match self.adapter_type() {
-            Postgres | Bigquery | DuckDB | Alt => {
+            Postgres | Bigquery | DuckDB | Alt | Exasol => {
                 let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
                 let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
 
@@ -3465,8 +3484,8 @@ impl AdapterImpl {
 
                 Ok(result)
             }
-            Salesforce | Spark | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
-            | Datafusion | Dremio | Oracle => {
+            Salesforce | Spark | Fabric | ClickHouse | Starburst | Athena | Trino | Datafusion
+            | Dremio | Oracle => {
                 unimplemented!("grants not implemented")
             }
         }
@@ -3938,10 +3957,12 @@ impl AdapterImpl {
         conn: &mut dyn Connection,
         ctx: &QueryCtx,
         sql: &str,
+        // ClickHouse only: see metadata::clickhouse::describe_query_columns.
+        query_settings: Option<&Value>,
         token: CancellationToken,
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx),
+            Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx, sql),
             Impl(Bigquery, engine) => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/f4dfd350942cce11ff25e3d22f2bee9e60b12b6d/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
                 let batch = engine.execute(Some(state), conn, ctx, sql, token)?;
@@ -3961,6 +3982,26 @@ impl AdapterImpl {
                 let flattened_columns =
                     columns.iter().flat_map(|column| column.flatten()).collect();
                 Ok(flattened_columns)
+            }
+            Impl(ClickHouse, engine) => {
+                // Server-typed schema via DESCRIBE; the rationale lives on
+                // metadata::clickhouse::describe_query_columns.
+                let settings_clause = metadata::clickhouse::query_settings_clause(query_settings);
+                let pairs = metadata::clickhouse::describe_query_columns(
+                    engine.as_ref(),
+                    Some(state),
+                    conn,
+                    ctx,
+                    sql,
+                    &settings_clause,
+                    token,
+                )?;
+                Ok(pairs
+                    .into_iter()
+                    .map(|(name, type_text)| {
+                        Column::new(self.adapter_type(), name, type_text, None, None, None)
+                    })
+                    .collect())
             }
             Impl(_, engine) => {
                 let (_, table) = self.execute_inner(
@@ -3992,7 +4033,9 @@ impl AdapterImpl {
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_get_columns_in_select_sql(state),
-            Impl(Bigquery, _) => self.get_column_schema_from_query(state, conn, ctx, sql, token),
+            Impl(Bigquery, _) => {
+                self.get_column_schema_from_query(state, conn, ctx, sql, None, token)
+            }
             Impl(_, _) => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -4618,22 +4661,17 @@ impl AdapterImpl {
                     .include_full_name_in_path
                     .unwrap_or_default();
 
-                // Build path using the same logic as posixpath.join
+                // Build path using the same logic as posixpath.join.
                 let path = if include_full_name_in_path {
                     format!(
                         "{}/{}/{}/{}",
                         location_root.trim_end_matches('/'),
                         node.database().trim_end_matches('/'),
                         node.schema().trim_end_matches('/'),
-                        node.name()
+                        node.alias()
                     )
                 } else {
-                    format!(
-                        "{}/{}/{}",
-                        location_root.trim_end_matches('/'),
-                        node.database().trim_end_matches('/'),
-                        node.name()
-                    )
+                    format!("{}/{}", location_root.trim_end_matches('/'), node.alias())
                 };
 
                 let path = if is_incremental {
@@ -5055,7 +5093,7 @@ impl AdapterImpl {
             .from_local_config(model)?;
         Ok(tags.to_jinja())
     }
-    /// TODO: implement if necessary, currently its noop
+    /// Trims surrounding whitespace and strips a single trailing semicolon.
     ///
     /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L966
     pub fn clean_sql(&self, sql: &str) -> AdapterResult<String> {
@@ -5063,7 +5101,7 @@ impl AdapterImpl {
             self.adapter_type() == Databricks,
             "clean_sql is a Databricks-specific adapter operation"
         );
-        Ok(sql.to_string())
+        Ok(crate::relation::databricks::config::components::query::clean_sql(sql))
     }
 
     /// relation_max_name_length
@@ -5170,7 +5208,12 @@ impl AdapterImpl {
         }
 
         if let (Replay(_, replay), Some(state)) = (self.inner_adapter(), state) {
-            let recorded = replay.replay_describe_relation(state)?;
+            let recorded = match replay.replay_describe_relation(state)? {
+                // Nothing recorded for this call: report no relation config, the same answer
+                // the path below gives for a relation it cannot describe.
+                DescribeRelationReplay::NotRecorded => return Ok(None),
+                DescribeRelationReplay::Recorded(payload) => payload,
+            };
             return crate::relation::bigquery::config::relation_types::materialized_view::relation_config_from_recorded(
                 recorded.as_ref(),
             )
@@ -5337,9 +5380,14 @@ impl AdapterImpl {
     /// when available.
     ///
     /// Default is None for non-replay adapters.
-    pub fn schema_exists_from_trace(&self, database: &str, schema: &str) -> Option<bool> {
+    pub fn schema_exists_from_trace(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+    ) -> Option<bool> {
         match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_schema_exists_from_trace(database, schema),
+            Replay(_, replay) => replay.replay_schema_exists_from_trace(state, database, schema),
             Impl(_, _engine) => None,
         }
     }
@@ -5719,6 +5767,81 @@ impl AdapterImpl {
         }
     }
 
+    /// ClickHouse `adapter.is_before_version(version)` — see
+    /// [`metadata::clickhouse::ClickHouseCapabilities::is_before`].
+    pub fn is_before_version(
+        &self,
+        state: &State,
+        version: &str,
+        token: CancellationToken,
+    ) -> AdapterResult<bool> {
+        metadata::clickhouse::server_capabilities(self, state, token).is_before(version)
+    }
+
+    /// ClickHouse `adapter.is_at_or_after_version(version)` — see
+    /// [`metadata::clickhouse::ClickHouseCapabilities::is_at_or_after`].
+    pub fn is_at_or_after_version(
+        &self,
+        state: &State,
+        version: &str,
+        token: CancellationToken,
+    ) -> AdapterResult<bool> {
+        metadata::clickhouse::server_capabilities(self, state, token).is_at_or_after(version)
+    }
+
+    /// ClickHouse: render the model's `settings` config as a table-level `SETTINGS ...`
+    /// block for CREATE TABLE DDL. The leading `-- end_of_sql` marker is what
+    /// `clickhouse__place_limit` (utils/utils.sql) splits on to inject LIMIT ahead of
+    /// the SETTINGS clause. Mirrors impl.py `get_model_settings`, including dbclient.py's
+    /// `replicated_deduplication_window='0'` default (profile flag
+    /// `allow_automatic_deduplication` opts out; a user-provided value wins).
+    pub fn get_model_settings(&self, model: &Value, engine: &str) -> String {
+        // dbclient.py DEDUP_WINDOW_SETTING_SUPPORTED_MATERIALIZATION
+        const DEDUP_SUPPORTED_MATERIALIZATIONS: &[&str] =
+            &["table", "incremental", "ephemeral", "materialized_view"];
+        const DEDUP_WINDOW_SETTING: &str = "replicated_deduplication_window";
+
+        let mut settings = metadata::clickhouse::model_config_map(model, "settings");
+
+        let materialized = model
+            .get_attr("config")
+            .ok()
+            .and_then(|config| config.get_attr("materialized").ok())
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default();
+        let allow_automatic_deduplication = self
+            .get_db_config_value("allow_automatic_deduplication")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if DEDUP_SUPPORTED_MATERIALIZATIONS.contains(&materialized.as_str())
+            && !allow_automatic_deduplication
+            && !settings.iter().any(|(key, _)| key == DEDUP_WINDOW_SETTING)
+        {
+            // Upstream sets the string '0', which _build_settings_str single-quotes.
+            settings.push((DEDUP_WINDOW_SETTING.to_string(), Value::from("0")));
+        }
+
+        // filter_settings_by_engine: replicated_deduplication_window is MergeTree-only.
+        settings.retain(|(key, _)| engine.contains("MergeTree") || key != DEDUP_WINDOW_SETTING);
+
+        let settings_str = metadata::clickhouse::build_settings_str(&settings);
+        format!("\n-- end_of_sql\n{settings_str}\n")
+    }
+
+    /// ClickHouse: render the model's `query_settings` config as a query-level
+    /// `SETTINGS ...` clause appended to the SELECT; empty string when unset.
+    /// The lightweight-delete query-settings injection arrives with the
+    /// incremental-strategies port.
+    pub fn get_model_query_settings(&self, model: &Value) -> String {
+        let settings = metadata::clickhouse::model_config_map(model, "query_settings");
+        let settings_str = metadata::clickhouse::build_settings_str(&settings);
+        if settings_str.is_empty() {
+            String::new()
+        } else {
+            format!("\n-- settings_section\n{settings_str}\n")
+        }
+    }
+
     pub fn engine(&self) -> &Arc<dyn AdapterEngine> {
         match self.inner_adapter() {
             Impl(_, engine) => engine,
@@ -5740,6 +5863,19 @@ impl fmt::Debug for AdapterImpl {
     }
 }
 
+/// Outcome of asking the recording for a `describe_relation` call.
+///
+/// Distinct from a plain `Option` so a recording with no record for this call (fall back to no
+/// relation config) can't be confused with a recording that has one whose payload is null (an
+/// error case `relation_config_from_recorded` already handles).
+#[derive(Debug, Clone)]
+pub enum DescribeRelationReplay {
+    /// No `describe_relation` record was at the replay cursor.
+    NotRecorded,
+    /// A record was present; its payload may itself be null.
+    Recorded(Option<serde_json::Value>),
+}
+
 /// Abstract interface for the functions that the adapter can call to perform replays
 /// consuming recorded runs instead of making real calls to the data warehouse.
 pub trait Replayer: fmt::Debug + Send + Sync {
@@ -5754,6 +5890,13 @@ pub trait Replayer: fmt::Debug + Send + Sync {
     /// Seed a mapping from a truncated/hashed generic test name back to the original pre-hash
     /// full test name. Default implementation is a no-op.
     fn record_test_name_truncation(&self, _truncated_name: &str, _full_name: &str) {}
+
+    /// Seed a mapping from a model's unique_id to its resolved alias, so an ephemeral model's
+    /// own node_id can be traced back to the CTE name dbt-core actually compiled it under. A
+    /// versioned model's unique_id ends in `.v<N>`, which is not its alias (e.g. `stg_thing_v2`
+    /// vs. unique_id `model.pkg.stg_thing.v2`), so this cannot be reconstructed from the
+    /// unique_id alone. Default implementation is a no-op.
+    fn record_node_alias(&self, _unique_id: &str, _alias: &str) {}
 
     fn replay_use_warehouse(
         &self,
@@ -5824,7 +5967,11 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         quote_config: Option<bool>,
     ) -> AdapterResult<String>;
 
-    fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
+    fn replay_convert_type(
+        &self,
+        state: &State,
+        data_type: &DataType,
+    ) -> AdapterResult<Option<String>>;
 
     fn replay_list_relations(
         &self,
@@ -5845,6 +5992,7 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         state: &State,
         _conn: &mut dyn Connection,
         _query_ctx: &QueryCtx,
+        sql: &str,
     ) -> AdapterResult<Vec<Column>>;
 
     fn replay_get_columns_in_select_sql(&self, state: &State) -> AdapterResult<Vec<Column>>;
@@ -5939,9 +6087,14 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         schema: &str,
     ) -> AdapterResult<Value>;
 
-    fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<serde_json::Value>>;
+    fn replay_describe_relation(&self, state: &State) -> AdapterResult<DescribeRelationReplay>;
 
-    fn replay_schema_exists_from_trace(&self, database: &str, schema: &str) -> Option<bool>;
+    fn replay_schema_exists_from_trace(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+    ) -> Option<bool>;
 
     fn replay_get_missing_columns(
         &self,
@@ -6073,6 +6226,7 @@ mod tests {
             Arc::new(RelationCache::default()),
             behavior_flag_overrides,
             None,
+            None,
         ))
     }
 
@@ -6080,6 +6234,52 @@ mod tests {
     fn test_adapter_type() {
         let adapter = AdapterImpl::new(engine(Snowflake), None);
         assert_eq!(adapter.adapter_type(), Snowflake);
+    }
+
+    fn databricks_external_path(include_full_name_in_path: bool, is_incremental: bool) -> String {
+        use crate::relation::databricks::config::test_helpers::{
+            TestModelConfig, create_mock_dbt_model,
+        };
+        use dbt_schemas::schemas::project::WarehouseSpecificNodeConfig;
+
+        let adapter = AdapterImpl::new(engine(Databricks), None);
+        let node = create_mock_dbt_model(TestModelConfig::default());
+        let config = ModelConfig {
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                location_root: Some("s3://bucket/root".to_string()),
+                include_full_name_in_path: Some(include_full_name_in_path),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        adapter
+            .compute_external_path(config, &node, is_incremental)
+            .expect("location_root is set")
+    }
+
+    #[test]
+    fn test_databricks_compute_external_path_uses_alias_without_full_name() {
+        assert_eq!(
+            databricks_external_path(false, false),
+            "s3://bucket/root/test_table"
+        );
+    }
+
+    #[test]
+    fn test_databricks_compute_external_path_with_full_name() {
+        assert_eq!(
+            databricks_external_path(true, false),
+            "s3://bucket/root/test_db/test_schema/test_table"
+        );
+    }
+
+    #[test]
+    fn test_databricks_compute_external_path_incremental_suffix() {
+        assert_eq!(
+            databricks_external_path(false, true),
+            "s3://bucket/root/test_table_tmp"
+        );
     }
 
     #[test]

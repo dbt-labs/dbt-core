@@ -3,6 +3,7 @@ use crate::dbt_project_config::{
     ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
 };
 use crate::resolve::resolve_utils::deep_merge_yaml;
+use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message};
@@ -12,8 +13,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
-    AnalysesProperties, DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
-    MinimalUnitTestValue,
+    AnalysesProperties, CheckProperties, DbtPropertiesFileValues, MinimalSchemaValue,
+    MinimalTableValue, MinimalUnitTestValue,
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
@@ -46,6 +47,7 @@ pub struct MinimalProperties {
     pub source_tables: BTreeMap<(String, String), MinimalPropertiesEntry>,
     pub models: BTreeMap<String, MinimalPropertiesEntry>,
     pub analyses: BTreeMap<String, MinimalPropertiesEntry>,
+    pub checks: BTreeMap<String, MinimalPropertiesEntry>,
     pub seeds: BTreeMap<String, MinimalPropertiesEntry>,
     pub snapshots: BTreeMap<String, MinimalPropertiesEntry>,
     pub functions: BTreeMap<String, MinimalPropertiesEntry>,
@@ -135,6 +137,37 @@ impl MinimalProperties {
                             name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: analysis_value,
+                            table_value: None,
+                            version_info: None,
+                            duplicate_paths: vec![],
+                        },
+                    );
+                }
+            }
+        }
+        if let Some(checks) = other.checks {
+            for check_value in checks {
+                let check = into_typed_with_jinja::<CheckProperties, _>(
+                    check_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
+                )?;
+                if let Some(existing_check) = self.checks.get_mut(&check.name) {
+                    existing_check
+                        .duplicate_paths
+                        .push(properties_path.to_path_buf());
+                } else {
+                    self.checks.insert(
+                        check.name.clone(),
+                        MinimalPropertiesEntry {
+                            name: validate_resource_name(&check.name)?,
+                            name_span: Span::default(),
+                            relative_path: properties_path.to_path_buf(),
+                            schema_value: check_value,
                             table_value: None,
                             version_info: None,
                             duplicate_paths: vec![],
@@ -601,6 +634,7 @@ pub fn resolve_minimal_properties(
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     token: &CancellationToken,
+    adapter_type: AdapterType,
 ) -> FsResult<MinimalProperties> {
     let mut minimal_resolved_properties = MinimalProperties {
         semantic_layer_spec_is_legacy: false,
@@ -617,8 +651,10 @@ pub fn resolve_minimal_properties(
                 (),
                 Some(package.dbt_project.name.as_str()),
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     for dbt_asset in package.dbt_properties.iter().dedup() {

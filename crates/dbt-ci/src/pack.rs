@@ -203,6 +203,9 @@ pub(crate) fn render_metadata(spec: &Spec, version_pep440: &str) -> String {
     if let Some(rp) = &spec.requires_python {
         let _ = writeln!(out, "Requires-Python: {rp}");
     }
+    for dep in &spec.dependencies {
+        let _ = writeln!(out, "Requires-Dist: {dep}");
+    }
     if let Some(l) = &spec.license {
         let _ = writeln!(out, "License: {}", flatten_for_header(l));
     }
@@ -386,6 +389,7 @@ mod tests {
             pyproject_dir: dir.to_path_buf(),
             summary: Some("dbt fusion standalone analyzer CLI".to_string()),
             requires_python: Some(">=3.9".to_string()),
+            dependencies: vec![],
             classifiers: vec!["Programming Language :: Rust".to_string()],
             urls: vec![("Homepage".to_string(), "https://getdbt.com".to_string())],
             authors: vec![Author {
@@ -472,6 +476,7 @@ mod tests {
             pyproject_dir: dir.to_path_buf(),
             summary: None,
             requires_python: None,
+            dependencies: vec![],
             classifiers: vec![],
             urls: vec![],
             authors: vec![],

@@ -1,8 +1,6 @@
 import { FC, useEffect, useRef } from 'react';
 import { twJoin } from 'tailwind-merge';
 
-import { Sizes } from '@dbt-labs/sourdough';
-
 import { Button } from '../../../components/ui/Button';
 import { getUpgradeCopy, isUpgradeCopyVisible } from './copy';
 import {
@@ -68,7 +66,7 @@ export const UpgradeRow: FC<Props> = ({
         <span className="flex shrink-0 items-center gap-2">
           <Button
             variant="default"
-            size={Sizes.sm}
+            size="sm"
             text={ctaLabel}
             onClick={() => {
               onUpsellEvent?.({

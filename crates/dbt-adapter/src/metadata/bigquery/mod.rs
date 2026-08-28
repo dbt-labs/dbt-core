@@ -16,6 +16,7 @@ use arrow_array::*;
 use arrow_schema::*;
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_adapter_engine::MapReduce;
 use dbt_adbc::*;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
@@ -429,6 +430,7 @@ pub fn nest_column_data_types(
                     databricks_tags: column.databricks_tags.clone(),
                     column_mask: column.column_mask.clone(),
                     quote: column.quote,
+                    codec: column.codec.clone(),
                     deprecated_config: column.deprecated_config.clone(),
                     dimension: column.dimension.clone(),
                     entity: column.entity.clone(),
@@ -449,6 +451,7 @@ pub fn nest_column_data_types(
                     databricks_tags: None,
                     column_mask: None,
                     quote: None,
+                    codec: None,
                     deprecated_config: Default::default(),
                     dimension: None,
                     entity: None,

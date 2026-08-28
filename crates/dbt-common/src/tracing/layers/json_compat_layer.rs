@@ -888,10 +888,11 @@ impl JsonCompatLayer {
             .as_ref()
             .map(|d| d.node_freshness_outcome());
 
-        // Check if this is a freshness phase and a source node
-        // (fusion runs freshness as part of SAO also on extended models hence the node type check)
-        let is_freshness =
-            node.last_phase() == ExecutionPhase::FreshnessAnalysis && node_type == NodeType::Source;
+        // Every node measured by the freshness phase reports a freshness result, models with
+        // a freshness SLA included — not just sources. The phase is enough on its own: the
+        // freshness SAO runs during a build create no node spans at all, so an extended model
+        // can never reach here with this phase.
+        let is_freshness = node.last_phase() == ExecutionPhase::FreshnessAnalysis;
 
         // Determine `Log[NODE TYPE]Result` event name and code
         let (event_name, event_code) = if is_freshness {
@@ -930,7 +931,18 @@ impl JsonCompatLayer {
 
         // Format message - for freshness, use special format
         let msg = if is_freshness {
-            format!("Freshness of {}.{}: {}", source_name, table_name, status)
+            // dbt-core qualifies with the source name; a model has none, so fall back to its
+            // schema rather than emitting a bare leading dot.
+            let qualifier = if source_name.is_empty() {
+                node.schema.as_deref().unwrap_or("")
+            } else {
+                source_name
+            };
+            if qualifier.is_empty() {
+                format!("Freshness of {}: {}", table_name, status)
+            } else {
+                format!("Freshness of {}.{}: {}", qualifier, table_name, status)
+            }
         } else {
             format_node_processed_end(node, duration, false)
         };

@@ -970,6 +970,41 @@ impl StringOrArrayOfStrings {
             StringOrArrayOfStrings::ArrayOfStrings(a) => a.clone(),
         }
     }
+
+    /// The value as JSON, preserving the authored shape: a string, or an array of strings.
+    pub fn to_json_value(&self) -> serde_json::Value {
+        match self {
+            StringOrArrayOfStrings::String(s) => serde_json::Value::String(s.clone()),
+            StringOrArrayOfStrings::ArrayOfStrings(a) => {
+                serde_json::Value::Array(a.iter().cloned().map(serde_json::Value::String).collect())
+            }
+        }
+    }
+
+    /// The value as YAML, preserving the authored shape: a string, or a sequence of strings.
+    pub fn to_yaml_value(&self) -> dbt_yaml::Value {
+        match self {
+            StringOrArrayOfStrings::String(s) => dbt_yaml::Value::string(s.clone()),
+            StringOrArrayOfStrings::ArrayOfStrings(a) => dbt_yaml::Value::Sequence(
+                a.iter().cloned().map(dbt_yaml::Value::string).collect(),
+                Default::default(),
+            ),
+        }
+    }
+
+    /// The inverse of [`Self::to_json_value`]. `None` for any other JSON shape, including an
+    /// array holding a non-string.
+    pub fn from_json_value(value: &serde_json::Value) -> Option<Self> {
+        match value {
+            serde_json::Value::String(s) => Some(StringOrArrayOfStrings::String(s.clone())),
+            serde_json::Value::Array(a) => a
+                .iter()
+                .map(|v| v.as_str().map(str::to_string))
+                .collect::<Option<Vec<String>>>()
+                .map(StringOrArrayOfStrings::ArrayOfStrings),
+            _ => None,
+        }
+    }
 }
 
 impl PartialEq for StringOrArrayOfStrings {
@@ -991,6 +1026,14 @@ impl PartialEq for StringOrArrayOfStrings {
 }
 
 impl Eq for StringOrArrayOfStrings {}
+
+impl std::hash::Hash for StringOrArrayOfStrings {
+    // Consistent with the `PartialEq` impl above, which treats a single-element array as
+    // equal to the equivalent scalar string, so both must normalize to the same hash.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.to_strings().hash(state);
+    }
+}
 
 // =============================================================================
 // PrimaryKeyConfig - Wrapper type for primary_key that normalizes to arrays

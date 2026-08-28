@@ -1,0 +1,7 @@
+kind: Security
+body: Skip symlink, hard link, and device entries when extracting package tarballs instead of extracting them as-is
+time: 2026-08-26T20:34:10.637299+05:30
+custom:
+    author: tauhid621
+    issue: ""
+    project: dbt-core

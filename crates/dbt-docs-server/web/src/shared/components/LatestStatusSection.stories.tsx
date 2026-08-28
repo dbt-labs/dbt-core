@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-
-import { RyeconStatusSuccess } from '@dbt-labs/sourdough';
+import { BadgeCheck } from 'lucide-react';
 
 import {
-  freshnessStatusResultRyeconMap,
+  freshnessStatusResultIconMap,
   LatestStatusSectionDisplay,
   ResourceStatusResult,
-  runStatusResultRyeconMap,
+  runStatusResultIconMap,
 } from './LatestStatusSection';
 
 const meta: Meta<typeof LatestStatusSectionDisplay> = {
@@ -14,7 +13,7 @@ const meta: Meta<typeof LatestStatusSectionDisplay> = {
   args: {
     header: 'Build succeeded',
     status: ResourceStatusResult.pass,
-    statusIcon: RyeconStatusSuccess,
+    statusIcon: BadgeCheck,
     tooltip: 'The most recent build of this model succeeded.',
     checkCompletedAt: 'Feb 11, 2026, 4:12 PM',
     checkCompletedAtUtc: '2026-02-11 16:12:18 UTC',
@@ -33,7 +32,7 @@ export const WithViewRunLink: Story = {
   args: { viewRunUrl: 'https://cloud.getdbt.com/deploy/1/runs/4821' },
 };
 
-/** Every run status, each with the icon `runStatusResultRyeconMap` assigns it. */
+/** Every run status, each with the icon `runStatusResultIconMap` assigns it. */
 export const AllRunStatuses: Story = {
   render: () => (
     <div className="space-y-8">
@@ -51,7 +50,7 @@ export const AllRunStatuses: Story = {
           key={status}
           header={header}
           status={status}
-          statusIcon={runStatusResultRyeconMap[status]}
+          statusIcon={runStatusResultIconMap[status]}
           tooltip={header}
         />
       ))}
@@ -76,7 +75,7 @@ export const AllFreshnessStatuses: Story = {
           key={status}
           header={header}
           status={status}
-          statusIcon={freshnessStatusResultRyeconMap[status]}
+          statusIcon={freshnessStatusResultIconMap[status]}
           tooltip={header}
         />
       ))}

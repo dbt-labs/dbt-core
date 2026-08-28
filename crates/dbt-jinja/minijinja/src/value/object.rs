@@ -9,6 +9,7 @@ use std::sync::Arc;
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
 use crate::utils::UndefinedBehavior;
+use crate::value::introspective::IntrospectiveValue;
 use crate::value::{intern, intern_into_value, Value};
 use crate::vm::State;
 
@@ -1474,7 +1475,26 @@ pub mod mutable_vec {
 
     fn remove_impl(vec: &Arc<MutableVec<Value>>, args: &[Value]) -> Result<Value, Error> {
         match args {
-            [value] => vec.remove(value),
+            [value] => match vec.remove(value) {
+                Ok(removed) => Ok(removed),
+                Err(_)
+                    if vec.tainted.load(std::sync::atomic::Ordering::Relaxed)
+                        || value.is_introspective_stub() =>
+                {
+                    // `append`/`insert`/`extend` mark the container tainted the
+                    // moment a fabricated (introspective-stub) item enters it
+                    // (see e.g. `append_impl` above), because from then on the
+                    // container's real contents can't be trusted to match what
+                    // template logic assumes is in there. A `remove()` the
+                    // caller "knows" should succeed can therefore legitimately
+                    // find nothing to remove -- degrade like every other
+                    // introspective-stub operation (see
+                    // `IntrospectiveValue::call`/`call_method`) instead of
+                    // raising a hard render error over fabricated data.
+                    Ok(IntrospectiveValue::wrap_leaf(Value::UNDEFINED))
+                }
+                Err(err) => Err(err),
+            },
             _ if args.len() > 1 => Err(Error::new(
                 ErrorKind::TooManyArguments,
                 format!(

@@ -19,7 +19,15 @@ use dbt_common::serde_utils::try_get_bool;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
-const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duckdb", "alt"];
+// `lake_compute` is `AdapterType::Alt`'s external name; the Rust side still
+// says `Alt` (see `GLUE_ALT_FIELDS` and friends below).
+const ALL_V2_PLATFORMS: &[&str] = &[
+    "snowflake",
+    "databricks",
+    "bigquery",
+    "duckdb",
+    "lake_compute",
+];
 
 const TARGET_FILE_SIZES: &[&str] = &["AUTO", "16MB", "32MB", "64MB", "128MB"];
 const STORAGE_SERIALIZATION_POLICIES: &[&str] = &["COMPATIBLE", "OPTIMIZED"];
@@ -224,6 +232,9 @@ const BIGLAKE_BIGQUERY_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("catalog_database")
         .non_empty()
         .doc("GCP project where models using this catalog should land. When set, takes precedence over model database config and target.database."),
+    FieldSpec::string("lakehouse_catalog")
+        .non_empty()
+        .doc("Lakehouse Runtime Catalog (LRC) catalog name. When set, models using this catalog render a 4-part BigQuery FQN (project.lakehouse_catalog.namespace.table) instead of the standard 3-part project.dataset.table."),
     FieldSpec::string("base_location_root").non_empty(),
     FieldSpec::string("connection_id").non_empty(),
 ];
@@ -286,7 +297,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -297,7 +308,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", GLUE_ALT_FIELDS),
+            PlatformBlock::new("lake_compute", GLUE_ALT_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -308,7 +319,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -320,7 +331,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", UNITY_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -343,11 +354,11 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         catalog_type: CatalogType::DuckLake,
         table_format: "default",
-        description: "DuckLake metadata store catalog. Supports duckdb and/or alt connection blocks.",
+        description: "DuckLake metadata store catalog. Supports duckdb and/or lake_compute connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("duckdb", DUCKLAKE_DUCKDB_FIELDS),
-            PlatformBlock::new("alt", DUCKLAKE_DUCKDB_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKLAKE_DUCKDB_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -1518,14 +1529,22 @@ mod tests {
     use dbt_yaml as yml;
     use std::path::Path;
 
-    fn parse_and_validate(yaml: &str) -> FsResult<()> {
-        let v: yml::Value = yml::from_str(yaml).unwrap();
+    fn parse_and_validate_with<F: FnOnce(&DbtCatalogsV2View<'_>)>(
+        yaml: &str,
+        inspect: F,
+    ) -> FsResult<()> {
+        let v: yml::Value = yml::from_str(yaml)?;
         let v_span = v.span();
         let m = v.as_mapping().expect("top-level YAML must be a mapping");
         validate_catalogs_v2_shape(m, v_span)?;
         let view = DbtCatalogsV2View::from_mapping(m, v_span)?;
+        inspect(&view);
         validate_catalogs_v2(&view, Path::new("<test>"))?;
         Ok(())
+    }
+
+    fn parse_and_validate(yaml: &str) -> FsResult<()> {
+        parse_and_validate_with(yaml, |_| {})
     }
 
     #[test]
@@ -1703,6 +1722,56 @@ catalogs:
         connection_id: "cool_connection"
 "#;
         parse_and_validate(yaml).expect("v2 bigquery should validate");
+    }
+
+    #[test]
+    fn biglake_accepts_lakehouse_catalog() {
+        let yaml = r#"
+catalogs:
+  - name: cat1
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: "gs://bucket"
+        file_format: parquet
+        lakehouse_catalog: "sales_catalog"
+"#;
+        parse_and_validate_with(yaml, |view| {
+            let bigquery_config = view.catalogs[0]
+                .config_block("bigquery")
+                .expect("bigquery config block");
+            assert_eq!(
+                get_str(bigquery_config, "external_volume").unwrap(),
+                Some("gs://bucket")
+            );
+            assert_eq!(
+                get_str(bigquery_config, "file_format").unwrap(),
+                Some("parquet")
+            );
+            assert_eq!(
+                get_str(bigquery_config, "lakehouse_catalog").unwrap(),
+                Some("sales_catalog")
+            );
+        })
+        .expect("v2 bigquery LRC catalog should validate");
+    }
+
+    #[test]
+    fn biglake_rejects_blank_lakehouse_catalog() {
+        let yaml = r#"
+catalogs:
+  - name: cat1
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: "gs://bucket"
+        file_format: parquet
+        lakehouse_catalog: ""
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error but got Ok");
     }
 
     #[test]

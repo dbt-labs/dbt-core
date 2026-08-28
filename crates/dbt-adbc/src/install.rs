@@ -684,7 +684,23 @@ pub fn download_zst_driver_file(
 
     // fsync() the temp file and atomically rename it to the destination.
     tmp.sync_data().map_err(InstallError::SyncFile)?;
-    std::fs::rename(tmp_path, destination).map_err(InstallError::RenameFile)?;
+    finalize_install(&tmp_path, destination)
+}
+
+/// Move a fully-downloaded temporary file over the destination.
+///
+/// If the rename fails but the destination exists, another process installed the
+/// same (version-qualified) driver concurrently and we can use theirs. This is the
+/// common case on Windows, where renaming over a DLL another process has already
+/// `LoadLibrary`'d fails with "Access is denied" (os error 5).
+fn finalize_install(tmp_path: &Path, destination: &Path) -> Result<(), InstallError> {
+    if let Err(e) = std::fs::rename(tmp_path, destination) {
+        let installed_by_other_process = destination.try_exists().unwrap_or(false);
+        let _ = std::fs::remove_file(tmp_path);
+        if !installed_by_other_process {
+            return Err(InstallError::RenameFile(e));
+        }
+    }
     Ok(())
 }
 
@@ -693,6 +709,31 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
     use std::sync::Mutex;
+
+    #[test]
+    fn finalize_install_tolerates_concurrent_install() {
+        let dir = env::temp_dir().join(tmpname("finalize-install-", 12, "").unwrap());
+        std::fs::create_dir_all(&dir).unwrap();
+        let dst = dir.join("driver.bin");
+        let missing_tmp = dir.join("nonexistent.download");
+
+        // Rename failure with no destination in place is a real error.
+        assert!(finalize_install(&missing_tmp, &dst).is_err());
+
+        // Another process won the race: destination exists, so we accept it.
+        std::fs::write(&dst, b"theirs").unwrap();
+        assert!(finalize_install(&missing_tmp, &dst).is_ok());
+        assert_eq!(std::fs::read(&dst).unwrap(), b"theirs");
+
+        // Normal path still renames.
+        let tmp = dir.join("ours.download");
+        std::fs::write(&tmp, b"ours").unwrap();
+        assert!(finalize_install(&tmp, &dst).is_ok());
+        assert_eq!(std::fs::read(&dst).unwrap(), b"ours");
+        assert!(!tmp.exists());
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 

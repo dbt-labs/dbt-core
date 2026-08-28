@@ -54,10 +54,10 @@ use dbt_tasks_core::run_cache::run_cache_service::{
     CachedTestExecutionResult, RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError,
     RunCacheReuseHookExecutor, RunCacheReuseHookPhase, RunCacheServiceDecision,
     clear_stale_missing_last_modified_epoch_for_node, confirm_run_cache_service_execution,
-    execute_run_cache_service_clone, insert_compiled_view_definition,
-    record_run_cache_clone_decision, record_run_cache_service_execution, replay_dev_clone_decision,
-    replay_run_cache_clone_decision, run_cache_service_before_execution,
-    should_execute_hooks_for_skip_reuse,
+    evict_node_metadata_for_untracked_rebuild, execute_run_cache_service_clone,
+    insert_compiled_view_definition, record_run_cache_clone_decision,
+    record_run_cache_service_execution, replay_dev_clone_decision, replay_run_cache_clone_decision,
+    run_cache_service_before_execution, should_execute_hooks_for_skip_reuse,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -888,6 +888,15 @@ async fn run_cache_after_success_action(
             // planned prefetch path.
             if ctx.inner.run_cache_ctx.run_cache_service_requested {
                 clear_stale_missing_last_modified_epoch_for_node(ctx, node);
+            }
+        }
+        RunCacheAfterSuccess::InvalidateFreshness => {
+            // The node rebuilt its target but no decision was sought and no
+            // execution will be recorded, so nothing refreshed the cached
+            // epoch. Drop it: the next submit that needs this relation takes
+            // the prefetch-miss path and re-reads it from the warehouse.
+            if ctx.inner.run_cache_ctx.run_cache_service_requested {
+                evict_node_metadata_for_untracked_rebuild(ctx, node);
             }
         }
         RunCacheAfterSuccess::Confirm(mut confirmation) => {

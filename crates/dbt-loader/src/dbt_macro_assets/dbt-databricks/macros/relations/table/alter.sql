@@ -9,6 +9,7 @@
       {% set liquid_clustering = configuration_changes.changes.get("liquid_clustering")%}
       {% set constraints = configuration_changes.changes.get("constraints") %}
       {% set column_masks = configuration_changes.changes.get("column_masks") %}
+      {% set row_filter = configuration_changes.changes.get("row_filter") %}
       {% if tags is not none %}
         {% do apply_tags(target_relation, tags.set_tags) %}
       {%- endif -%}
@@ -32,6 +33,9 @@
       {% endif %}
       {% if column_masks %}
         {{ apply_column_masks(target_relation, column_masks) }}
+      {% endif %}
+      {% if row_filter %}
+        {{ apply_row_filter(target_relation, row_filter) }}
       {% endif %}
     {%- endif -%}
 {% endmacro %}

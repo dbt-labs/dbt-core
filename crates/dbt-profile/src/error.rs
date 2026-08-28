@@ -33,6 +33,103 @@ pub enum ProfileError {
     #[error("missing 'type' field in resolved profile output")]
     NoAdapterType,
 
+    #[error("adapter type '{written}' is no longer recognized; it was renamed to '{replacement}'")]
+    RetiredAdapterType {
+        written: String,
+        replacement: String,
+    },
+
+    // ----------------------------------------------------------------------
+    // Adapter-type-keyed targets: `outputs.<target>` as a map of adapter type
+    // to a list of connections.
+    // ----------------------------------------------------------------------
+    #[error(
+        "target '{target}' in profile '{profile}' must be either a mapping carrying a `type:` \
+         (one connection) or a list of connections"
+    )]
+    TargetNotConnectionList { profile: String, target: String },
+
+    #[error("target '{target}' in profile '{profile}' declares an empty list of connections")]
+    EmptyConnectionList { profile: String, target: String },
+
+    #[error(
+        "connection #{} in target '{target}' of profile '{profile}' must be a mapping",
+        index + 1
+    )]
+    ConnectionNotMapping {
+        profile: String,
+        target: String,
+        index: usize,
+    },
+
+    #[error(
+        "connection #{} in target '{target}' of profile '{profile}' needs a `type:` naming its \
+         adapter",
+        index + 1
+    )]
+    ConnectionMissingType {
+        profile: String,
+        target: String,
+        index: usize,
+    },
+
+    #[error(
+        "connection #{} in target '{target}' of profile '{profile}' has a `name:` that is not a \
+         non-empty string; omit it to leave the connection unnamed",
+        index + 1
+    )]
+    ConnectionNameNotString {
+        profile: String,
+        target: String,
+        index: usize,
+    },
+
+    #[error(
+        "adapter '{adapter}' in target '{target}' of profile '{profile}' declares more than one \
+         connection named '{connection}'"
+    )]
+    DuplicateConnectionName {
+        profile: String,
+        target: String,
+        adapter: String,
+        connection: String,
+    },
+
+    #[error(
+        "connection '{connection}' of adapter '{adapter}' in target '{target}' of profile \
+         '{profile}' has a non-boolean `default:`"
+    )]
+    ConnectionDefaultNotBool {
+        profile: String,
+        target: String,
+        adapter: String,
+        connection: String,
+    },
+
+    #[error(
+        "target '{target}' in profile '{profile}' declares {} adapters ({}) but marks no \
+         connection `default: true`; one must be, to say which adapter nodes use by default",
+        adapters.len(),
+        adapters.join(", ")
+    )]
+    NoDefaultConnection {
+        profile: String,
+        target: String,
+        adapters: Vec<String>,
+    },
+
+    #[error(
+        "target '{target}' in profile '{profile}' marks {} connections `default: true` ({}); \
+         exactly one may be",
+        connections.len(),
+        connections.join(", ")
+    )]
+    MultipleDefaultConnections {
+        profile: String,
+        target: String,
+        connections: Vec<String>,
+    },
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 

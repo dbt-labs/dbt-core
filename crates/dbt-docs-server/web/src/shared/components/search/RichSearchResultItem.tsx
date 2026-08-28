@@ -1,4 +1,5 @@
 import { FC, ReactNode } from 'react';
+import { Columns3, Folder, Server } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
 
 import {
@@ -7,12 +8,6 @@ import {
   ResourceTypeExplorer,
   WarehouseType,
 } from '@dbt-labs/dbt-dag';
-import {
-  Icon,
-  RyeconDatabaseEnvironment,
-  RyeconProjects,
-  RyeconTableColumn,
-} from '@dbt-labs/sourdough';
 
 import { Link } from '../../../components/ui/Link';
 import { LoadingBlock } from '../../../components/ui/LoadingBlock';
@@ -183,13 +178,13 @@ export const RichSearchResultItem: FC<RichItemParams | SkeletonItemParams> = (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 truncate pt-3 text-fgAlt">
             {metadata?.projectName && (
               <span className="flex items-center gap-1">
-                <Icon ryecon={RyeconProjects} />
+                <Folder className="size-3.5" />
                 {metadata.projectName}
               </span>
             )}
             {metadata?.environmentType && (
               <span className="flex items-center gap-1">
-                <Icon ryecon={RyeconDatabaseEnvironment} />
+                <Server className="size-3.5" />
                 {toTitleCase(metadata.environmentType)}
               </span>
             )}
@@ -199,7 +194,7 @@ export const RichSearchResultItem: FC<RichItemParams | SkeletonItemParams> = (
             </span>
             {metadata?.numColumns != null && metadata.numColumns > 0 && (
               <span className="flex items-center gap-1">
-                <Icon ryecon={RyeconTableColumn} />
+                <Columns3 className="size-3.5" />
                 {metadata.numColumns} columns
               </span>
             )}

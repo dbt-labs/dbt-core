@@ -50,6 +50,7 @@ dbt-state = { workspace = true }
 dbt-tasks-core = { workspace = true }
 dbt-tasks-sa = { workspace = true }
 dbt-telemetry = { workspace = true }
+dbt-tracked-stmt = { workspace = true }
 dbt-vortex = { workspace = true }
 
 arrow = { workspace = true }

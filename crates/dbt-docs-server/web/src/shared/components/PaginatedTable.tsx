@@ -6,13 +6,7 @@ import {
   type SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-
-import {
-  Icon,
-  RyeconArrowDown,
-  RyeconArrowUp,
-  RyeconArrowUpDown,
-} from '@dbt-labs/sourdough';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 
 import { LoadingBlock } from '../../components/ui/LoadingBlock';
 import { Pagination } from '../../components/ui/Pagination';
@@ -29,7 +23,7 @@ import {
   TableRow,
 } from '../../components/ui/Table';
 
-type DefaultTData = object & {
+export type DefaultTData = object & {
   isLoadingRow?: boolean;
   testId?: string;
 };
@@ -272,23 +266,21 @@ function DataTable<TData extends object>({
                       onClick={header.column.getToggleSortingHandler()}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
-                      <Icon
-                        ryecon={
+                      {(() => {
+                        const SortIcon =
                           sortDirection === 'asc'
-                            ? RyeconArrowUp
+                            ? ArrowUp
                             : sortDirection === 'desc'
-                              ? RyeconArrowDown
-                              : RyeconArrowUpDown
-                        }
-                        size="xs"
-                        alt={
+                              ? ArrowDown
+                              : ArrowUpDown;
+                        const label =
                           sortDirection === 'asc'
                             ? 'sort ascending'
                             : sortDirection === 'desc'
                               ? 'sort descending'
-                              : 'sortable'
-                        }
-                      />
+                              : 'sortable';
+                        return <SortIcon className="size-3" aria-label={label} />;
+                      })()}
                     </button>
                   ) : (
                     flexRender(header.column.columnDef.header, header.getContext())

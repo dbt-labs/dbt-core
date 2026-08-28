@@ -211,6 +211,13 @@ impl JinjaEnv {
         self.env.get_global(name)
     }
 
+    /// Register a global value (e.g. a helper function) available to every
+    /// template rendered by this environment. Clone the environment first if
+    /// you want the global scoped to a single render pass.
+    pub fn add_global(&mut self, name: &str, value: Value) {
+        self.env.add_global(name.to_string(), value);
+    }
+
     /// Compile an expression.
     pub fn compile_expression<'a>(&self, expr: &'a str) -> FsResult<JinjaExpression<'_, 'a>> {
         Ok(JinjaExpression(self.env.compile_expression(expr).map_err(
@@ -288,9 +295,14 @@ impl JinjaEnv {
         Ok(JinjaTemplate(result))
     }
 
-    /// Get the dbt and adapters namespace.
-    pub fn get_dbt_and_adapters_namespace(&self) -> Arc<ValueMap> {
-        self.env.get_dbt_and_adapters_namespace()
+    /// Get the dbt and adapters namespace for `dialect`.
+    pub fn get_dbt_and_adapters_namespace(&self, dialect: &str) -> Arc<ValueMap> {
+        self.env.get_dbt_and_adapters_namespace(dialect)
+    }
+
+    /// The full `dialect -> namespace` map, for passing into a typecheck context.
+    pub fn get_dbt_and_adapters_namespaces(&self) -> Arc<ValueMap> {
+        self.env.get_dbt_and_adapters_namespaces()
     }
 
     /// Get the target context.

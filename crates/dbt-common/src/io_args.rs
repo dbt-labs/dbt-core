@@ -35,6 +35,19 @@ pub enum LocalExecutionBackendKind {
     Service,
 }
 
+impl LocalExecutionBackendKind {
+    /// Whether this backend can execute against the adapter.
+    pub fn is_supported_for_adapter(self, adapter: AdapterType) -> bool {
+        matches!(
+            (adapter, self),
+            (_, Self::Remote)
+                | (AdapterType::Snowflake, _)
+                | (AdapterType::Bigquery, Self::Worker)
+                | (AdapterType::Datafusion, Self::Inline)
+        )
+    }
+}
+
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, ValueEnum, Display, Default,
 )]
@@ -122,7 +135,10 @@ impl From<ComputeArg> for LocalExecutionBackendKind {
     }
 }
 
-use crate::constants::{DBT_METADATA_DIR_NAME, DBT_TARGET_DIR_NAME, WARNING};
+use crate::constants::{
+    DBT_INFO_SCHEMA_DIR_NAME, DBT_INFO_SCHEMA_STAGING_DIR_NAME, DBT_METADATA_DIR_NAME,
+    DBT_TARGET_DIR_NAME, WARNING,
+};
 use crate::pretty_string::YELLOW;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
@@ -213,6 +229,7 @@ pub enum FsCommand {
     Parse,
     List, // aka: Ls
     Compile,
+    Check,
     Run,
     RunOperation,
     Test,
@@ -222,6 +239,7 @@ pub enum FsCommand {
     Build,
     Clean,
     Source,
+    Freshness,
     Clone,
     System,
     Man,
@@ -238,6 +256,14 @@ pub enum FsCommand {
 }
 
 impl FsCommand {
+    pub const fn is_freshness_command(&self) -> bool {
+        matches!(self, FsCommand::Source | FsCommand::Freshness)
+    }
+
+    pub const fn is_sources_only_freshness(&self) -> bool {
+        matches!(self, FsCommand::Source)
+    }
+
     pub const fn as_str(&self) -> &'static str {
         match self {
             FsCommand::Unset => "",
@@ -246,6 +272,7 @@ impl FsCommand {
             FsCommand::Parse => "parse",
             FsCommand::List => "list",
             FsCommand::Compile => "compile",
+            FsCommand::Check => "check",
             FsCommand::Run => "run",
             FsCommand::RunOperation => "run-operation",
             FsCommand::Test => "test",
@@ -255,6 +282,7 @@ impl FsCommand {
             FsCommand::Build => "build",
             FsCommand::Clean => "clean",
             FsCommand::Source => "freshness",
+            FsCommand::Freshness => "freshness",
             FsCommand::Clone => "clone",
             FsCommand::System => "system",
             FsCommand::Man => "man",
@@ -267,6 +295,16 @@ impl FsCommand {
             FsCommand::Internal => "internal",
             FsCommand::Extension(s) => s,
         }
+    }
+
+    /// Whether this command compiles every node in the project (as opposed to a narrower
+    /// operation like `test`, `seed`, or `snapshot`, which act on a subset). Per-node artifacts
+    /// derived from a full compile are only meaningful for these commands.
+    pub const fn compiles_project(&self) -> bool {
+        matches!(
+            self,
+            FsCommand::Compile | FsCommand::Check | FsCommand::Build | FsCommand::Run
+        )
     }
 }
 
@@ -289,6 +327,7 @@ pub struct IoArgs {
     pub otel_parquet_file_name: Option<String>,
     pub export_to_otlp: bool,
     pub log_format: LogFormat,
+    pub log_format_file: Option<LogFormat>,
     pub log_level: Option<LogLevel>,
     pub log_level_file: Option<LogLevel>,
     pub log_file_max_bytes: u64,
@@ -478,8 +517,6 @@ pub struct EvalArgs {
     pub profile: Option<String>,
     // The target within the profile to use for the dbt run
     pub target: Option<String>,
-    // The output to use for models on the alternate compute target (--x-alt-target)
-    pub x_alt_target: Option<String>,
     // Vars to pass to the jinja environment
     pub vars: BTreeMap<String, Value>,
     // Stop as soon as this stage is reached
@@ -567,6 +604,9 @@ pub struct EvalArgs {
     pub macro_name: Option<String>,
     pub macro_args: BTreeMap<String, Value>,
     pub macro_sql: Option<String>,
+    /// `run-operation --adapter <type>`: run against this non-default adapter
+    /// instead of the target's default one.
+    pub adapter_override: Option<String>,
     pub warn_error: Option<bool>,
     pub warn_error_options: WarnErrorOptions,
     pub version_check: bool,
@@ -609,14 +649,32 @@ pub struct EvalArgs {
     pub write_metadata: bool,
     /// Also write snapshot index parquet to target/index/ (implies write_metadata)
     pub write_index: bool,
+    /// True when `write_index` came from a command's default rather than from the command
+    /// line. The index itself is identical either way; this only suppresses the advisory
+    /// naming the extra flags that would enrich it, which is noise for a user who never
+    /// asked for an index (and fails the command under `--warn-error`).
+    pub write_index_implied: bool,
     /// Directory for index parquet output (default: <target>/index/)
     pub index_dir: Option<PathBuf>,
     /// Directory for metadata parquet output (default: <target>/metadata/)
     pub metadata_dir: Option<PathBuf>,
+    /// Write the dbt information schema to target/info_schema/ (implies write_metadata)
+    pub generate_info_schema: bool,
+    /// Directory for information schema parquet output (default: <target>/info_schema/)
+    pub info_schema_dir: Option<PathBuf>,
     /// Whether to skip creating generic tests
     pub skip_creating_generic_tests: bool,
     /// Compute and write column-level lineage into compile/cll parquet (requires --write-metadata and --static-analysis strict)
     pub write_lineage: bool,
+    /// Positional check names from `dbt check <name>...`. Empty means every check.
+    ///
+    /// A filter on which checks run, not a node selection: the parse-time gate still
+    /// evaluates against the whole project's index. Narrowing the schedule to the check
+    /// node instead would leave it querying an empty index and passing vacuously.
+    pub check_names: Vec<String>,
+    /// Skip the parse-time check gate (`dbt build --skip-checks`). Opt-out, no
+    /// warning: the user asked to skip. The index is still written.
+    pub skip_checks: bool,
     /// Always enable the linter.
     pub force_enable_linter: bool,
     /// Always enable formatter-fix diagnostics.
@@ -772,6 +830,36 @@ impl EvalArgs {
             .unwrap_or_else(|| self.io.out_dir.join("index"))
     }
 
+    /// Resolves the information schema output directory: `--info-schema-dir` if
+    /// set, else `<out_dir>/info_schema`.
+    ///
+    /// The intermediate for building it is the flat index at [`index_dir`] when one
+    /// is already present; otherwise the fallback at [`info_schema_staging_dir`].
+    ///
+    /// [`index_dir`]: Self::index_dir
+    /// [`info_schema_staging_dir`]: Self::info_schema_staging_dir
+    pub fn info_schema_dir(&self) -> PathBuf {
+        self.info_schema_dir
+            .clone()
+            .unwrap_or_else(|| self.io.out_dir.join(DBT_INFO_SCHEMA_DIR_NAME))
+    }
+
+    /// Fallback intermediate for building the information schema, used only when
+    /// there is no flat index at [`index_dir`] to reuse — e.g. under
+    /// `--no-write-index`, or a `parse` that never builds one. Held beside the
+    /// output directory rather than inside it, because it holds files in a
+    /// different shape and must never be picked up by a caller globbing the
+    /// information schema. When an index *is* present it is reused directly and
+    /// this directory is never created.
+    ///
+    /// [`index_dir`]: Self::index_dir
+    pub fn info_schema_staging_dir(&self) -> PathBuf {
+        match &self.info_schema_dir {
+            Some(dir) => dir.with_file_name(DBT_INFO_SCHEMA_STAGING_DIR_NAME),
+            None => self.io.out_dir.join(DBT_INFO_SCHEMA_STAGING_DIR_NAME),
+        }
+    }
+
     // this could accept a SelectExpression in case we want to join more complex selections together.
     pub fn set_refined_node_selectors(mut self, predicate: Option<SelectionCriteria>) -> EvalArgs {
         // Convert SelectionCriteria to SelectExpression::Atom first
@@ -832,6 +920,7 @@ pub enum ClapResourceType {
     SemanticModel,
     Metric,
     SavedQuery,
+    Check,
 }
 
 impl Display for ClapResourceType {
@@ -848,6 +937,7 @@ impl Display for ClapResourceType {
             ClapResourceType::SemanticModel => "semantic_model",
             ClapResourceType::Metric => "metric",
             ClapResourceType::SavedQuery => "saved_query",
+            ClapResourceType::Check => "check",
         };
         write!(f, "{s}")
     }
@@ -867,6 +957,7 @@ impl From<&ClapResourceType> for NodeType {
             ClapResourceType::SemanticModel => NodeType::SemanticModel,
             ClapResourceType::Metric => NodeType::Metric,
             ClapResourceType::SavedQuery => NodeType::SavedQuery,
+            ClapResourceType::Check => NodeType::Check,
         }
     }
 }
@@ -1457,6 +1548,31 @@ fn parse_boolish_env(value: &OsStr) -> Option<bool> {
         .ok()
 }
 
+/// Read a boolean environment variable, using the same value grammar as the boolean CLI flags
+/// (`1`/`0`, `true`/`false`, `yes`/`no`, …).
+///
+/// Unset reads as `false`; set-but-unparseable is an error rather than a silent `false`, so a typo
+/// cannot quietly turn a feature off.
+pub fn env_flag_enabled(name: &str) -> crate::FsResult<bool> {
+    let Some(value) = std::env::var_os(name) else {
+        return Ok(false);
+    };
+    parse_boolish_env(value.as_ref()).ok_or_else(|| {
+        crate::fs_err!(
+            crate::ErrorCode::InvalidConfig,
+            "{name} must be a boolean (1/0, true/false, yes/no), got '{}'",
+            value.to_string_lossy()
+        )
+    })
+}
+
+/// Read an environment variable holding a path, treating empty as unset.
+pub fn env_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
 pub const LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV: &str =
     "DBT_LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT";
 
@@ -1479,6 +1595,44 @@ fn resolve_latest_version_pointer_enabled_by_default_with_env_lookup(
     if let Some(enabled) = project_flags
         .and_then(|flags| {
             project_flags_get_value(flags, "latest_version_pointer_enabled_by_default")
+        })
+        .and_then(Value::as_bool)
+    {
+        return enabled;
+    }
+
+    true
+}
+
+pub const REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV: &str =
+    "DBT_ENGINE_REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT";
+
+/// Whether an unqualified `ref()` / `source()` / `function()` from a node inside an
+/// installed package searches that package before the root project.
+///
+/// Defaults to `true`, which is Fusion's established behavior. Set it to `false` for
+/// dbt-core's candidate order, where a root-project definition wins instead.
+pub fn resolve_require_ref_searches_node_package_before_root(
+    project_flags: Option<&Value>,
+) -> bool {
+    resolve_require_ref_searches_node_package_before_root_with_env_lookup(project_flags, |name| {
+        std::env::var_os(name)
+    })
+}
+
+fn resolve_require_ref_searches_node_package_before_root_with_env_lookup(
+    project_flags: Option<&Value>,
+    get_env: impl Fn(&str) -> Option<OsString>,
+) -> bool {
+    if let Some(value) = get_env(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV) {
+        if let Some(resolved) = parse_boolish_env(value.as_ref()) {
+            return resolved;
+        }
+    }
+
+    if let Some(enabled) = project_flags
+        .and_then(|flags| {
+            project_flags_get_value(flags, "require_ref_searches_node_package_before_root")
         })
         .and_then(Value::as_bool)
     {
@@ -1699,6 +1853,38 @@ pub fn validate_project_name(name: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn local_execution_backend_support_matrix() {
+        let cases: &[(LocalExecutionBackendKind, &[AdapterType])] = &[
+            (
+                LocalExecutionBackendKind::Inline,
+                &[AdapterType::Snowflake, AdapterType::Datafusion],
+            ),
+            (
+                LocalExecutionBackendKind::Worker,
+                &[AdapterType::Snowflake, AdapterType::Bigquery],
+            ),
+            (
+                LocalExecutionBackendKind::Service,
+                &[AdapterType::Snowflake],
+            ),
+        ];
+
+        for (adapter, _) in AdapterType::iter_with_names() {
+            assert!(
+                LocalExecutionBackendKind::Remote.is_supported_for_adapter(adapter),
+                "remote must support {adapter}"
+            );
+            for (backend, supported_adapters) in cases {
+                assert_eq!(
+                    backend.is_supported_for_adapter(adapter),
+                    supported_adapters.contains(&adapter),
+                    "unexpected {backend:?} support for {adapter}"
+                );
+            }
+        }
+    }
+
     fn optimize_tests_with_env(
         command: FsCommand,
         explicit_cli: &HashSet<OptimizeTestsOptions>,
@@ -1734,6 +1920,89 @@ mod tests {
                     .find_map(|(key, value)| (*key == name).then(|| OsString::from(*value)))
             },
         )
+    }
+
+    fn require_ref_searches_node_package_before_root_with_env(
+        project_flags_yaml: Option<&str>,
+        env: &[(&str, &str)],
+    ) -> bool {
+        let project_flags =
+            project_flags_yaml.map(|yaml| dbt_yaml::from_str::<Value>(yaml).unwrap());
+        resolve_require_ref_searches_node_package_before_root_with_env_lookup(
+            project_flags.as_ref(),
+            |name| {
+                env.iter()
+                    .find_map(|(key, value)| (*key == name).then(|| OsString::from(*value)))
+            },
+        )
+    }
+
+    #[test]
+    fn require_ref_searches_node_package_before_root_defaults_to_fusion_order() {
+        assert!(require_ref_searches_node_package_before_root_with_env(
+            None,
+            &[]
+        ));
+        assert!(require_ref_searches_node_package_before_root_with_env(
+            Some("some_other_flag: true\n"),
+            &[]
+        ));
+    }
+
+    #[test]
+    fn require_ref_searches_node_package_before_root_reads_project_flag() {
+        assert!(require_ref_searches_node_package_before_root_with_env(
+            Some("require_ref_searches_node_package_before_root: true\n"),
+            &[]
+        ));
+        assert!(!require_ref_searches_node_package_before_root_with_env(
+            Some("require_ref_searches_node_package_before_root: false\n"),
+            &[]
+        ));
+    }
+
+    #[test]
+    fn require_ref_searches_node_package_before_root_env_overrides_project_flag() {
+        // Env wins in both directions
+        assert!(require_ref_searches_node_package_before_root_with_env(
+            Some("require_ref_searches_node_package_before_root: false\n"),
+            &[(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV, "1")]
+        ));
+        assert!(!require_ref_searches_node_package_before_root_with_env(
+            Some("require_ref_searches_node_package_before_root: true\n"),
+            &[(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV, "false")]
+        ));
+    }
+
+    #[test]
+    fn require_ref_searches_node_package_before_root_env_accepts_boolish_values() {
+        for truthy in ["1", "true", "TRUE", "yes", "on"] {
+            assert!(
+                require_ref_searches_node_package_before_root_with_env(
+                    None,
+                    &[(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV, truthy)]
+                ),
+                "expected {truthy} to enable the flag"
+            );
+        }
+        for falsy in ["0", "false", "no", "off"] {
+            assert!(
+                !require_ref_searches_node_package_before_root_with_env(
+                    None,
+                    &[(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV, falsy)]
+                ),
+                "expected {falsy} to disable the flag"
+            );
+        }
+    }
+
+    #[test]
+    fn require_ref_searches_node_package_before_root_unparseable_env_falls_back() {
+        // A typo must not silently flip the behavior; the project flag still wins
+        assert!(!require_ref_searches_node_package_before_root_with_env(
+            Some("require_ref_searches_node_package_before_root: false\n"),
+            &[(REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT_ENV, "yep")]
+        ));
     }
 
     #[test]

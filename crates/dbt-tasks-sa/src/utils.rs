@@ -18,7 +18,7 @@ use dbt_common::unexpected_err;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, stdfs};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_loader::internal_macro_package_names;
+use dbt_loader::internal_macro_package_names_for;
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
@@ -428,6 +428,7 @@ pub fn update_node_columns(
             databricks_tags: existing.and_then(|col| col.databricks_tags.clone()),
             column_mask: existing.and_then(|col| col.column_mask.clone()),
             quote: existing.and_then(|col| col.quote),
+            codec: existing.and_then(|col| col.codec.clone()),
             deprecated_config: existing
                 .map(|col| col.deprecated_config.clone())
                 .unwrap_or_default(),
@@ -642,7 +643,10 @@ pub fn typecheck_macros(
     // mode. Skip them — they're stable and pre-tested. After the manifest parity fix,
     // original_file_path is package-relative and no longer starts with "dbt_internal_packages",
     // so we identify internal macros by package_name instead.
-    let internal_pkgs = internal_macro_package_names(resolver_state.adapter_type);
+    // Union over every adapter the target declares, not just the default one:
+    // otherwise a borrowed package's macros would not be recognised as internal.
+    let internal_pkgs =
+        internal_macro_package_names_for(resolver_state.dbt_profile.adapter_types());
     let is_internal = |m: &&DbtMacro| internal_pkgs.contains(&m.package_name);
 
     let all_files = {
@@ -724,7 +728,7 @@ pub fn typecheck_macros(
             jinja_typechecking_listener_factory.clone(),
             Some(m.package_name.clone()),
             &env.env.get_root_package_name(),
-            Value::from_dyn_object(env.env.get_dbt_and_adapters_namespace()),
+            Value::from_dyn_object(env.env.get_dbt_and_adapters_namespaces()),
             &relative_file_path.clone(),
             &content,
             &offset,

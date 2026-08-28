@@ -331,6 +331,9 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
         // versions and would otherwise regolden every fixture that emits it.
         // Asserted directly in the feature-fingerprint test instead.
         "dbt_feature_fingerprint",
+        // Parallel CI tests can contend on the process-wide `dbt_packages`
+        // (or `target/`) directory lease. The wait line is timing-dependent.
+        "Waiting for lease on '",
     ];
 
     let mut res = content
@@ -383,6 +386,18 @@ mod tests {
     fn test_filter_lines() {
         let lines = filter_lines("abc \n has been running for over \n 123".to_string());
         assert_eq!("abc\n 123", lines);
+    }
+
+    #[test]
+    fn test_filter_lease_wait() {
+        let lines = filter_lines(
+            "   Loading profiles.yml\nWaiting for lease on 'dbt_packages' directory\n   Parsing models/mat_view.sql\n"
+                .to_string(),
+        );
+        assert_eq!(
+            "   Loading profiles.yml\n   Parsing models/mat_view.sql\n",
+            lines
+        );
     }
 
     #[test]

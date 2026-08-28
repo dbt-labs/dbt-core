@@ -34,8 +34,10 @@ pub const COMPILED_INLINE_NODE_TITLE: &str = "Compiled inline node is:";
 /// used as database identifiers, but the full readable name is shown in CLI output.
 pub fn get_node_display_alias(node_type: NodeType, identifier: Option<&str>, name: &str) -> String {
     match node_type {
-        // Tests and unit tests always use `name` for display (contains original untruncated name)
-        NodeType::Test | NodeType::UnitTest => name.to_string(),
+        // Tests and unit tests always use `name` for display (contains original untruncated name).
+        // Checks likewise: they have no relation, so `identifier` is empty and would display as
+        // nothing at all.
+        NodeType::Test | NodeType::UnitTest | NodeType::Check => name.to_string(),
         // Other nodes prefer `identifier` (database alias) with `name` as fallback
         _ => identifier
             .map(|s| s.to_string())
@@ -399,8 +401,12 @@ pub fn format_node_processed_end(
     // Determine description based on outcome
     let desc = format_node_description(node);
 
-    // Get materialization string - use custom_materialization if materialization is Custom
-    let materialization_str = if node.materialization.is_some() {
+    // Get materialization string - use custom_materialization if materialization is Custom.
+    // Checks materialize nothing, so they get no suffix — reporting one (they carry `analysis`
+    // internally) would claim a relation that is never written.
+    let materialization_str = if node_type == NodeType::Check {
+        None
+    } else if node.materialization.is_some() {
         let mat = node.materialization();
         Some(if mat == NodeMaterialization::Custom {
             node.custom_materialization.clone().unwrap_or_default()
@@ -737,10 +743,11 @@ pub fn format_compiled_code(compiled_code: &CompiledCode, colorize: bool) -> Str
     }
 }
 
-/// Format a source freshness result
+/// Format a freshness result, for a source or for a model carrying a freshness SLA.
 ///
 /// Returns formatted string in the pattern:
-/// `{action} [{duration}] source {schema}.{identifier} (last updated {age} ago)`
+/// `{action} [{duration}] {node_type} {qualifier}.{identifier} (last updated {age} ago)`
+/// where the qualifier is the source name for sources and the schema for models.
 pub fn format_freshness_result(
     node: &NodeProcessed,
     duration: std::time::Duration,
@@ -766,12 +773,17 @@ pub fn format_freshness_result(
         (None, "".to_string())
     };
 
-    // Prepare source name and identifier (dbt-core logs `source_name.identifier`)
-    let source_name = node.source_name.as_deref().unwrap_or("");
+    // dbt-core logs `source_name.identifier` for sources. A model has no source name, so
+    // qualify it with its schema instead — the same qualifier its build line uses.
+    let qualifier = node
+        .source_name
+        .as_deref()
+        .or(node.schema.as_deref())
+        .unwrap_or("");
     let identifier = node.identifier.as_deref().unwrap_or(&node.name);
 
     // Format components
-    let qualifier_alias = format_qualifier_alias(source_name, identifier, colorize);
+    let qualifier_alias = format_qualifier_alias(qualifier, identifier, colorize);
     let node_type_formatted =
         format_node_type_fixed_width(node.node_type().as_static_ref(), colorize);
     let action_formatted = format_node_action(
@@ -797,12 +809,75 @@ pub fn format_freshness_result(
 mod tests {
     use super::*;
     use dbt_telemetry::{
-        NodeOutcomeDetail, TestEvaluationDetail,
+        NodeOutcomeDetail, SourceFreshnessDetail, TestEvaluationDetail,
         node_processed::NodeOutcomeDetail as ProcessedDetail,
     };
 
     /// Stand-in for the batch's synthetic test node unique_id that members are stamped with.
     const BATCH_UNIQUE_ID: &str = "test.project.aggregated_accepted_values_orders";
+
+    fn freshness_processed(node_type: NodeType, source_name: Option<&str>) -> NodeProcessed {
+        let mut node = NodeProcessed::start(
+            "model.project.stg_orders".to_string(),
+            "stg_orders".to_string(),
+            None,
+            Some("analytics".to_string()),
+            Some("stg_orders".to_string()),
+            None,
+            None,
+            node_type,
+            Some(ExecutionPhase::FreshnessAnalysis),
+            "models/staging/stg_orders.sql".to_string(),
+            None,
+            None,
+            "checksum".to_string(),
+            true,
+            None,
+        );
+        node.source_name = source_name.map(str::to_string);
+        node.set_node_outcome(NodeOutcome::Success);
+        node.node_outcome_detail = Some(ProcessedDetail::NodeFreshnessOutcome(
+            SourceFreshnessDetail {
+                node_freshness_outcome: SourceFreshnessOutcome::OutcomePassed as i32,
+                age_seconds: Some(60),
+            },
+        ));
+        node
+    }
+
+    /// A model has no source name, so the schema qualifies it — the same qualifier its
+    /// build line uses. Without the fallback this rendered as a bare identifier.
+    #[test]
+    fn model_freshness_result_is_qualified_by_schema() {
+        let line = format_freshness_result(
+            &freshness_processed(NodeType::Model, None),
+            std::time::Duration::from_secs(1),
+            false,
+        );
+        assert!(
+            line.contains("analytics.stg_orders"),
+            "model freshness line is not schema-qualified: {line}"
+        );
+        assert!(line.contains("(last updated 1m ago)"), "got {line}");
+    }
+
+    /// Sources keep dbt-core's `source_name.identifier`, not the schema.
+    #[test]
+    fn source_freshness_result_is_qualified_by_source_name() {
+        let line = format_freshness_result(
+            &freshness_processed(NodeType::Source, Some("raw")),
+            std::time::Duration::from_secs(1),
+            false,
+        );
+        assert!(
+            line.contains("raw.stg_orders"),
+            "source freshness line lost its source name: {line}"
+        );
+        assert!(
+            !line.contains("analytics."),
+            "source freshness line should not use the schema: {line}"
+        );
+    }
 
     fn cached_warned_test_processed() -> NodeProcessed {
         let mut node = NodeProcessed::start(

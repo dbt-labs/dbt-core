@@ -49,7 +49,9 @@ use dbt_tasks_core::test_aggregation::GenericTestRelationships;
 use dbt_telemetry::ExecutionPhase;
 use dbt_yaml::Verbatim;
 use minijinja::Value;
+use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::mutable_map::MutableMap;
 use tracing::debug;
 
 /// Macro to handle NULL values in Arrow arrays
@@ -493,7 +495,11 @@ pub fn materialize_clone<S: serde::Serialize>(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("clone")?;
+    // `dbt clone` takes the target default: this path is typed `&dyn InternalDbtNode`,
+    // which does not expose the node's `+adapter`. Cloning a node on a non-default
+    // adapter is not supported yet.
+    let macro_name =
+        materialization_resolver.find_materialization_macro_by_name("clone", adapter_type)?;
 
     let unique_id = node.common().unique_id.clone();
     let defer_option = defer_nodes
@@ -565,7 +571,8 @@ pub fn materialize_seed(
     agate_table: AgateTable,
     io_args: &IoArgs,
 ) -> FsResult<(Value, Option<AdapterResponse>)> {
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("seed")?;
+    let macro_name =
+        materialization_resolver.find_materialization_macro_by_name("seed", seed.node_adapter())?;
 
     let (mut context, result_store) = build_run_node_context(
         seed,
@@ -647,7 +654,7 @@ pub fn materialize_model(
     let materialization = model.__base_attr__.materialized.clone();
 
     let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&materialization.to_string())?;
+        .find_materialization_macro_by_name(&materialization.to_string(), model.node_adapter())?;
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
@@ -880,21 +887,45 @@ pub fn materialize_latest_version_pointer(
 
     let source_relation_str = source_relation.render_self_as_str();
 
-    let pointer_sql = format!("SELECT * FROM {source_relation_str}");
+    let pointer_sql = format!("select * from {source_relation_str}");
+
+    let unique_id = format!(
+        "{}__latest_version_pointer",
+        model.__common_attr__.unique_id
+    );
 
     // Build a synthetic model with the pointer's alias and view materialization.
     // Clone the model and override:
+    //   - unique_id → the synthetic pointer id, so the pointer view's own adapter calls carry a
+    //     distinct replay identity. dbt-core records the pointer view's create-view/grant
+    //     statements on the base model's thread, interleaved before the base model's own trailing
+    //     grants/persist_docs/column calls, but Fusion runs the base model's materialization
+    //     macro (including those trailing calls) to completion before this function ever runs.
+    //     Sequential replay would let the trailing calls permanently consume (and discard) the
+    //     earlier pointer-view records while skipping past them. A distinct id lets the replay
+    //     adapter route these calls through unordered, content-based matching instead
+    //     (`find_key_for_node_id`'s `__latest_version_pointer` handling) rather than the shared
+    //     sequential cursor. See fs#13705.
     //   - alias → pointer identifier
     //   - materialization → "view"
     //   - hooks cleared (pre/post hooks should not run for the pointer)
     //   - persist_docs cleared (avoid duplicating doc persistence)
+    //   - contract cleared: dbt-core never contract-checks the synthetic pointer view (it's a
+    //     plain `create or replace view as select *`, not an independent contracted node), but
+    //     Fusion's `snowflake__create_or_replace_view` reads `config.get('contract')` off this
+    //     same cloned model. Left enforced, it calls `get_assert_columns_equivalent` ->
+    //     `get_column_schema_from_query` for the pointer, a call dbt-core's recording never
+    //     made, producing a genuine ReplayDataMissing. See fs#13705.
     let mut pointer_model = model.clone();
+    pointer_model.__common_attr__.unique_id = unique_id.clone();
     pointer_model.__base_attr__.alias = pointer_identifier.clone();
     pointer_model.__base_attr__.materialized = DbtMaterialization::View;
     pointer_model.deprecated_config.materialized = Some(DbtMaterialization::View);
     pointer_model.deprecated_config.pre_hook = Verbatim::from(None);
     pointer_model.deprecated_config.post_hook = Verbatim::from(None);
     pointer_model.deprecated_config.persist_docs = None;
+    pointer_model.deprecated_config.contract = None;
+    pointer_model.__model_attr__.contract = None;
 
     debug!(
         "Creating latest version pointer view '{}' -> '{}' for model '{}'",
@@ -913,16 +944,20 @@ pub fn materialize_latest_version_pointer(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("view")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("view", model.node_adapter())?;
     context.insert("sql".to_string(), Value::from(pointer_sql.as_str()));
     context.insert(
         "compiled_code".to_string(),
         Value::from(pointer_sql.as_str()),
     );
-
-    let unique_id = format!(
-        "{}__latest_version_pointer",
-        model.__common_attr__.unique_id
+    // Belt-and-suspenders: some adapter methods read `TARGET_UNIQUE_ID` directly out of Jinja
+    // state rather than deserializing it back out of the `model` context key `pointer_model`
+    // seeds above (via `node_id_from_state`/`query_ctx_from_state`). Set both so every lookup
+    // path lands on the same synthetic id. See fs#13705.
+    context.insert(
+        TARGET_UNIQUE_ID.to_string(),
+        Value::from(unique_id.as_str()),
     );
 
     let run_path = model
@@ -975,13 +1010,27 @@ pub fn materialize_microbatch_model(
         &io_args.out_dir,
     )?;
 
-    // Insert the batch SQL into context
-    run_node_context.insert("sql".to_string(), Value::from(batch_sql.as_str()));
-    run_node_context.insert("compiled_code".to_string(), Value::from(batch_sql.as_str()));
+    let batch_sql = Value::from(batch_sql);
+
+    // Databricks incremental materialization reads `model['compiled_code']`.
+    let batch_model = run_node_context
+        .get("model")
+        .and_then(|model| model.downcast_object_ref::<MutableMap>())
+        .ok_or_else(|| {
+            unexpected_fs_err!(
+                "No batch-local model context for microbatch model {}",
+                batch_ctx.id,
+            )
+        })?;
+    batch_model.insert(Value::from("compiled_code"), batch_sql.clone());
+    run_node_context.insert("sql".to_string(), batch_sql.clone());
+    run_node_context.insert("compiled_code".to_string(), batch_sql);
 
     // Get the incremental materialization macro
-    let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&DbtMaterialization::Incremental.to_string())?;
+    let macro_name = materialization_resolver.find_materialization_macro_by_name(
+        &DbtMaterialization::Incremental.to_string(),
+        model.node_adapter(),
+    )?;
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -1057,7 +1106,8 @@ pub fn materialize_snapshot(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("snapshot")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("snapshot", snapshot.node_adapter())?;
 
     let unique_id = snapshot.__common_attr__.unique_id.clone();
     let node_alias = snapshot.__base_attr__.alias.clone();
@@ -1128,8 +1178,10 @@ pub fn materialize_unit_test(
             .collect(),
     );
     let materialization = DbtMaterialization::Unit;
-    let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&materialization.to_string())?;
+    let macro_name = materialization_resolver.find_materialization_macro_by_name(
+        &materialization.to_string(),
+        unit_test.node_adapter(),
+    )?;
 
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
@@ -1438,8 +1490,8 @@ pub fn materialize_test(
     } else {
         "test"
     };
-    let macro_name =
-        materialization_resolver.find_materialization_macro_by_name(materialization_name)?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name(materialization_name, test.node_adapter())?;
 
     context.insert("sql".to_string(), Value::from(sql));
 
@@ -1936,7 +1988,8 @@ pub fn materialize_function(
     );
 
     // Find the function materialization macro
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("function")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("function", function.node_adapter())?;
 
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));

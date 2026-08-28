@@ -21,7 +21,8 @@ use arrow_array::{
 };
 use arrow_schema::Schema;
 use dbt_adapter_core::ExecutionPhase;
-use dbt_adbc::{Connection, ConnectionFactory, MapReduce, QueryCtx};
+use dbt_adapter_engine::{ConnectionFactory, MapReduce};
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::AsyncAdapterResult;
 use dbt_common::ErrorCode;
 use dbt_common::cancellation::Cancellable;

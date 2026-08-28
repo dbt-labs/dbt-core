@@ -15,7 +15,9 @@ use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_yaml::Value;
-use crate::schemas::common::{ExternalTable, PersistDocsConfig, hooks_equal, normalize_sql};
+use crate::schemas::common::{
+    ExternalTable, PersistDocsConfig, RowFilterConfig, hooks_equal, normalize_sql,
+};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
@@ -25,7 +27,7 @@ use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
-        Access, ClusterConfig, ComputePlatform, DbtChecksum, DbtContract, DbtIncrementalStrategy,
+        Access, ClusterConfig, DbtChecksum, DbtContract, DbtIncrementalStrategy,
         DbtMaterialization, Expect, FreshnessDefinition, Given, IncludeExclude, NodeDependsOn,
         PartitionConfig, ResolvedQuoting, ScheduleConfig, SchemaOrigin, SchemaRefreshInterval,
         SyncConfig,
@@ -35,8 +37,8 @@ use crate::schemas::{
     manifest::semantic_model::NodeRelation,
     manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
     project::{
-        DataTestConfig, ExposureConfig, FunctionConfig, ModelConfig, SeedConfig, SnapshotConfig,
-        SnapshotMetaColumnNames, SourceConfig, UnitTestConfig,
+        CheckConfig, DataTestConfig, ExposureConfig, FunctionConfig, ModelConfig, SeedConfig,
+        SnapshotConfig, SnapshotMetaColumnNames, SourceConfig, UnitTestConfig,
     },
     properties::{
         FunctionArgument, FunctionReturnType, ModelConstraint, ModelFreshness, UnitTestOverrides,
@@ -227,6 +229,13 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     }
     fn is_extended_model(&self) -> bool {
         false
+    }
+    fn has_freshness(&self) -> bool {
+        false
+    }
+    /// The SLA this node is measured against. Empty for node types that carry none.
+    fn freshness_criteria(&self) -> FreshnessDefinition {
+        FreshnessDefinition::default()
     }
     fn is_versioned(&self) -> bool {
         false
@@ -588,6 +597,13 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 }
 
 pub trait InternalDbtNodeAttributes: InternalDbtNode {
+    /// The adapter this node runs on, fully resolved at parse. Reads
+    /// [`NodeBaseAttributes::adapter`], so every node type answers without the
+    /// caller reaching into its own attr struct or supplying a fallback.
+    fn node_adapter(&self) -> AdapterType {
+        self.base().adapter
+    }
+
     // Required Fields
     fn skip_generate_database_name_macro(&self) -> bool {
         false
@@ -1228,6 +1244,28 @@ impl InternalDbtNode for DbtModel {
 
     fn is_extended_model(&self) -> bool {
         self.__base_attr__.extended_model
+    }
+
+    fn has_freshness(&self) -> bool {
+        self.__model_attr__
+            .freshness
+            .as_ref()
+            .is_some_and(ModelFreshness::has_sla)
+    }
+
+    /// Projects `ModelFreshness`'s SLA fields onto `FreshnessDefinition`.
+    /// `build_after` is a scheduling rule and is excluded.
+    fn freshness_criteria(&self) -> FreshnessDefinition {
+        let Some(freshness) = self.__model_attr__.freshness.as_ref() else {
+            return FreshnessDefinition::default();
+        };
+        FreshnessDefinition {
+            error_after: freshness.error_after.clone(),
+            warn_after: freshness.warn_after.clone(),
+            filter: freshness.filter.clone(),
+            loaded_at_field: freshness.loaded_at_field.clone(),
+            loaded_at_query: freshness.loaded_at_query.clone(),
+        }
     }
 
     fn resource_type(&self) -> NodeType {
@@ -2161,6 +2199,10 @@ impl InternalDbtNode for DbtSource {
         NodeType::Source
     }
 
+    fn freshness_criteria(&self) -> FreshnessDefinition {
+        self.__source_attr__.freshness.clone().unwrap_or_default()
+    }
+
     fn event_time(&self) -> Option<String> {
         self.deprecated_config.event_time.clone()
     }
@@ -3035,6 +3077,184 @@ impl InternalDbtNode for DbtExposure {
     }
 }
 
+impl InternalDbtNode for DbtCheck {
+    fn common(&self) -> &CommonAttributes {
+        &self.__common_attr__
+    }
+    fn base(&self) -> &NodeBaseAttributes {
+        &self.__base_attr__
+    }
+    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
+        &mut self.__base_attr__
+    }
+    fn common_mut(&mut self) -> &mut CommonAttributes {
+        &mut self.__common_attr__
+    }
+    fn resource_type(&self) -> NodeType {
+        NodeType::Check
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
+    }
+    /// Rendered-config comparison for `state:modified`. Checks are on "Approach B" — see the
+    /// `NodeType::Check` arm in `prev_state::check_configs_modified` for why the Stage-1 unrendered
+    /// shortcut is not used.
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
+        if let Some(other_check) = other.as_any().downcast_ref::<DbtCheck>() {
+            let enabled_eq =
+                self.deprecated_config.enabled == other_check.deprecated_config.enabled;
+            let severity_eq =
+                self.deprecated_config.severity == other_check.deprecated_config.severity;
+            let selection_filter_on_eq = self.deprecated_config.selection_filter_on
+                == other_check.deprecated_config.selection_filter_on;
+            // Resolved tags live on common_attr, not the config wrapper (cf. DbtSavedQuery).
+            let tags_eq = tags_eq_vec(
+                &self.__common_attr__.tags,
+                &other_check.__common_attr__.tags,
+            );
+
+            let result = enabled_eq && severity_eq && selection_filter_on_eq && tags_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "check_config",
+                    [
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.enabled),
+                                format!("{:?}", &other_check.deprecated_config.enabled),
+                            )),
+                        ),
+                        (
+                            "severity",
+                            severity_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.severity),
+                                format!("{:?}", &other_check.deprecated_config.severity),
+                            )),
+                        ),
+                        (
+                            "selection_filter_on",
+                            selection_filter_on_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.selection_filter_on),
+                                format!("{:?}", &other_check.deprecated_config.selection_filter_on),
+                            )),
+                        ),
+                        (
+                            "tags",
+                            tags_eq,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.tags),
+                                format!("{:?}", &other_check.__common_attr__.tags),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
+        } else {
+            false
+        }
+    }
+    /// Content comparison for `state:modified`.
+    ///
+    /// Must include the checksum. `has_same_body` is NOT consulted by plain `state:modified`:
+    /// `is_modified`'s `Any` arm calls `check_modified_content` (and so this method), while
+    /// `check_body_modified` only runs for the explicit `state:modified.body` sub-selector. An
+    /// earlier version of this compared only identity and phase, on the assumption that
+    /// `has_same_body` covered the SQL — with the result that editing a check's SQL did not mark it
+    /// modified and `--select state:modified` reported "Nothing to do". `DbtAnalysis`, the closest
+    /// analogue, compares the checksum here for the same reason.
+    ///
+    /// Phase is also compared: a check whose inferred phase moved is materially different even if
+    /// its text is byte-identical, which can happen when the tables it references change.
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
+        if let Some(other_check) = other.as_any().downcast_ref::<DbtCheck>() {
+            let same_checksum_result =
+                self.__common_attr__.checksum == other_check.__common_attr__.checksum;
+            let same_name_result = self.__common_attr__.name == other_check.__common_attr__.name;
+            let same_fqn_result = self.__common_attr__.fqn == other_check.__common_attr__.fqn;
+
+            let result = same_checksum_result && same_name_result && same_fqn_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "check",
+                    [
+                        (
+                            "same_checksum",
+                            same_checksum_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.checksum),
+                                format!("{:?}", &other_check.__common_attr__.checksum),
+                            )),
+                        ),
+                        (
+                            "same_name",
+                            same_name_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.name),
+                                format!("{:?}", &other_check.__common_attr__.name),
+                            )),
+                        ),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.fqn),
+                                format!("{:?}", &other_check.__common_attr__.fqn),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
+        } else {
+            false
+        }
+    }
+    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
+        panic!("DbtCheck does not support setting detected_unsafe");
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtCheck {
+    fn materialized(&self) -> DbtMaterialization {
+        self.__base_attr__.materialized.clone()
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.__base_attr__.quoting
+    }
+    fn tags(&self) -> Vec<String> {
+        self.__common_attr__.tags.clone()
+    }
+    fn meta(&self) -> IndexMap<String, YmlValue> {
+        self.__common_attr__.meta.clone()
+    }
+    fn serialized_config(&self) -> YmlValue {
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+    }
+    fn search_name(&self) -> String {
+        self.__common_attr__.name.clone()
+    }
+    fn selector_string(&self) -> String {
+        self.__common_attr__.fqn.join(".")
+    }
+}
+
 impl InternalDbtNodeAttributes for DbtExposure {
     fn materialized(&self) -> DbtMaterialization {
         self.__base_attr__.materialized.clone()
@@ -3855,6 +4075,7 @@ pub struct Nodes {
     pub saved_queries: BTreeMap<String, Arc<DbtSavedQuery>>,
     pub groups: BTreeMap<String, Arc<DbtGroup>>,
     pub functions: BTreeMap<String, Arc<DbtFunction>>,
+    pub checks: BTreeMap<String, Arc<DbtCheck>>,
     pub macros: BTreeMap<String, Arc<DbtMacro>>,
     /// The root project name. Used to resolve the `package:this` selector.
     pub project_name: Option<String>,
@@ -3933,6 +4154,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let checks = self
+            .checks
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         let macros = self
             .macros
             .iter()
@@ -3952,12 +4178,18 @@ impl Nodes {
             saved_queries,
             groups,
             functions,
+            checks,
             macros,
             project_name: self.project_name.clone(),
         }
     }
 
-    /// Return only the keys of materializable nodes (this excludes exposures and semantic resources)
+    /// The default selection set: every node considered when no `--select` is given.
+    ///
+    /// NOTE: the name is a misnomer — this is not restricted to materializable nodes, and never has
+    /// been (exposures, semantic models, metrics and saved queries are all here and none of them
+    /// are materialized). Anything omitted here is invisible to a bare `dbt build`, which is why
+    /// checks belong in it.
     pub fn materializable_keys(&self) -> impl Iterator<Item = &String> {
         self.models
             .keys()
@@ -3969,6 +4201,7 @@ impl Nodes {
             .chain(self.analyses.keys())
             .chain(self.exposures.keys())
             .chain(self.functions.keys())
+            .chain(self.checks.keys())
             .chain(self.semantic_models.keys())
             .chain(self.metrics.keys())
             .chain(self.saved_queries.keys())
@@ -4015,6 +4248,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.functions
+                    .get(unique_id)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.checks
                     .get(unique_id)
                     .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
@@ -4080,6 +4318,11 @@ impl Nodes {
                     .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
             })
             .or_else(|| {
+                self.checks
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
                 self.semantic_models
                     .get(unique_id)
                     .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
@@ -4111,6 +4354,7 @@ impl Nodes {
             || self.semantic_models.contains_key(unique_id)
             || self.metrics.contains_key(unique_id)
             || self.functions.contains_key(unique_id)
+            || self.checks.contains_key(unique_id)
             || self.saved_queries.contains_key(unique_id)
     }
 
@@ -4155,6 +4399,11 @@ impl Nodes {
             )
             .chain(
                 self.functions
+                    .iter()
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
+            )
+            .chain(
+                self.checks
                     .iter()
                     .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
@@ -4214,6 +4463,10 @@ impl Nodes {
             .functions
             .iter()
             .map(|(id, node)| (id.clone(), upcast(node.clone())));
+        let checks = self
+            .checks
+            .iter()
+            .map(|(id, node)| (id.clone(), upcast(node.clone())));
         let semantic_models = self
             .semantic_models
             .iter()
@@ -4236,6 +4489,7 @@ impl Nodes {
             .chain(analyses)
             .chain(exposures)
             .chain(functions)
+            .chain(checks)
             .chain(semantic_models)
             .chain(metrics)
             .chain(saved_queries)
@@ -4280,6 +4534,10 @@ impl Nodes {
             .functions
             .values_mut()
             .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
+        let map_checks = self
+            .checks
+            .values_mut()
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_semantic_models = self
             .semantic_models
             .values_mut()
@@ -4302,6 +4560,7 @@ impl Nodes {
             .chain(map_analyses)
             .chain(map_exposures)
             .chain(map_functions)
+            .chain(map_checks)
             .chain(map_semantic_models)
             .chain(map_metrics)
             .chain(map_saved_queries)
@@ -4348,6 +4607,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.functions
+                    .get_mut(unique_id)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.checks
                     .get_mut(unique_id)
                     .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
@@ -4471,6 +4735,7 @@ impl Nodes {
         self.saved_queries.extend(other.saved_queries);
         self.groups.extend(other.groups);
         self.functions.extend(other.functions);
+        self.checks.extend(other.checks);
     }
 
     pub fn warn_on_custom_materializations(&self) -> FsResult<()> {
@@ -4625,7 +4890,7 @@ pub struct CommonAttributes {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NodeBaseAttributes {
     // Identifiers
@@ -4640,6 +4905,15 @@ pub struct NodeBaseAttributes {
     // TODO: Potentially add ignore_case to ResolvedQuoting
     pub quoting_ignore_case: bool,
     pub materialized: DbtMaterialization,
+    /// The adapter this node runs on: its `+adapter` selection if it made one,
+    /// inherited from its subject if it is a test, and otherwise the target's
+    /// default. Resolved at parse like `quoting` and `materialized`, so nothing
+    /// downstream has to know the target default to answer "where does this run".
+    ///
+    /// Not part of `ManifestNodeBaseAttributes`, so it does not reach the manifest;
+    /// it is serialized only into the partial-parse cache, which a `dbt_version`
+    /// change invalidates.
+    pub adapter: AdapterType,
     pub static_analysis: Spanned<StaticAnalysisKind>,
     #[serde(skip_deserializing, default)]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
@@ -4685,6 +4959,40 @@ pub struct NodeBaseAttributes {
     pub unrendered_config: BTreeMap<String, YmlValue>,
 }
 
+/// Hand-written rather than derived because [`AdapterType`] has no `Default`, and
+/// deliberately so: this PR removed the implicit adapter defaults that let a caller
+/// resolve against the wrong warehouse by omission. Picking one here is a
+/// construction convenience for tests and nothing more -- every node built by the
+/// resolvers has its adapter set explicitly. Adding a field to the struct breaks
+/// this impl, which is the point: the new field needs a deliberate default too.
+impl Default for NodeBaseAttributes {
+    fn default() -> Self {
+        Self {
+            database: String::default(),
+            schema: String::default(),
+            alias: String::default(),
+            relation_name: None,
+            quoting: ResolvedQuoting::default(),
+            quoting_ignore_case: false,
+            materialized: DbtMaterialization::default(),
+            adapter: AdapterType::Snowflake,
+            static_analysis: Spanned::default(),
+            static_analysis_off_reason: None,
+            compute: None,
+            enabled: false,
+            extended_model: false,
+            persist_docs: None,
+            columns: Vec::new(),
+            refs: Vec::new(),
+            sources: Vec::new(),
+            functions: Vec::new(),
+            metrics: Vec::new(),
+            depends_on: NodeDependsOn::default(),
+            unrendered_config: BTreeMap::default(),
+        }
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -4712,7 +5020,6 @@ pub struct DbtSeedAttr {
     pub delimiter: Option<String>,
     pub root_path: Option<PathBuf>,
     pub catalog_name: Option<String>,
-    pub alt_compute: Option<ComputePlatform>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -4759,6 +5066,42 @@ pub struct DbtExposureAttr {
     pub unrendered_config: BTreeMap<String, YmlValue>,
     #[serde(default)]
     pub created_at: f64,
+}
+
+/// A project quality check: user-authored SQL over the dbt metadata index.
+///
+/// A check is a node but not a relation — it is never materialized and has no `ref()`s, so its
+/// `__base_attr__` carries no meaningful database/schema/alias and its `depends_on` stays empty.
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtCheck {
+    pub __common_attr__: CommonAttributes,
+
+    pub __base_attr__: NodeBaseAttributes,
+
+    pub __check_attr__: DbtCheckAttr,
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: CheckConfig,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtCheckAttr {
+    /// The check's Jinja-rendered SQL, carried from parse to execution.
+    ///
+    /// A check is fully rendered during parse — that is what phase inference reads — so it has no
+    /// render task to produce compiled SQL later. Keeping the rendered text on the node means the
+    /// query executed is byte-identical to the one the phase was inferred from.
+    ///
+    /// Serialized: the incremental parse cache (`target/metadata/parse`) reconstructs check nodes
+    /// from this representation and then *executes* them, so dropping the rendered text here makes
+    /// every warm run report "no rendered SQL". (It does duplicate `raw_code` for checks that
+    /// contain no Jinja, which is the accepted cost of the round-trip.)
+    pub compiled_sql: Option<String>,
 }
 
 #[skip_serializing_none]
@@ -4819,6 +5162,8 @@ impl DbtUnitTest {
 #[derive(Default)]
 pub struct DbtUnitTestAttr {
     pub model: String,
+    /// The adapter of the model under test, so the unit test runs where its
+    /// subject runs. Inherited only -- a unit test has no `+adapter` of its own.
     pub given: Vec<Given>,
     pub expect: Expect,
     pub versions: Option<IncludeExclude>,
@@ -4881,6 +5226,8 @@ impl DbtTest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtTestAttr {
+    /// The column this test is attached to, from its position in the schema file. `None`
+    /// for a model-level test; a `column_name` macro kwarg lives in `test_metadata.kwargs`.
     pub column_name: Option<String>,
     pub attached_node: Option<String>,
     pub test_metadata: Option<TestMetadata>,
@@ -5074,22 +5421,6 @@ impl DbtSource {
 
     pub fn get_base_attr(&self) -> NodeBaseAttributes {
         self.__base_attr__.clone()
-    }
-
-    pub fn get_loaded_at_field(&self) -> &str {
-        self.__source_attr__
-            .loaded_at_field
-            .as_ref()
-            .map(AsRef::as_ref)
-            .unwrap_or("")
-    }
-
-    pub fn get_loaded_at_query(&self) -> &str {
-        self.__source_attr__
-            .loaded_at_query
-            .as_ref()
-            .map(AsRef::as_ref)
-            .unwrap_or("")
     }
 }
 
@@ -5686,6 +6017,7 @@ impl AdapterAttr {
                     buckets: config.buckets,
                     catalog: config.catalog.clone(),
                     databricks_tags: config.databricks_tags.clone(),
+                    query_tags: config.query_tags.clone(),
                     compression: config.compression.clone(),
                     databricks_compute: config.databricks_compute.clone(),
                     target_alias: config.target_alias.clone(),
@@ -5698,6 +6030,7 @@ impl AdapterAttr {
                     skip_matched_step: config.skip_matched_step,
                     skip_not_matched_step: config.skip_not_matched_step,
                     unique_tmp_table_suffix: config.unique_tmp_table_suffix,
+                    row_filter: config.row_filter.clone(),
                     schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                 })))
             }
@@ -5791,6 +6124,7 @@ impl AdapterAttr {
                         buckets: config.buckets,
                         catalog: config.catalog.clone(),
                         databricks_tags: config.databricks_tags.clone(),
+                        query_tags: config.query_tags.clone(),
                         compression: config.compression.clone(),
                         databricks_compute: config.databricks_compute.clone(),
                         target_alias: config.target_alias.clone(),
@@ -5805,6 +6139,7 @@ impl AdapterAttr {
                         skip_matched_step: config.skip_matched_step,
                         skip_not_matched_step: config.skip_not_matched_step,
                         unique_tmp_table_suffix: config.unique_tmp_table_suffix,
+                        row_filter: config.row_filter.clone(),
                         schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                     })))
             }
@@ -5865,6 +6200,7 @@ pub struct DatabricksAttr {
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub query_tags: Option<String>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,
@@ -5876,6 +6212,7 @@ pub struct DatabricksAttr {
     pub merge_with_schema_evolution: Option<bool>,
     pub skip_matched_step: Option<bool>,
     pub skip_not_matched_step: Option<bool>,
+    pub row_filter: Option<RowFilterConfig>,
     pub unique_tmp_table_suffix: Option<bool>,
     pub schedule: Option<ScheduleConfig>,
 }
@@ -5943,7 +6280,6 @@ pub struct DbtModelAttr {
     pub event_time: Option<String>,
     // TODO(anna): See if we _need_ to put these here, or if they can somehow be added to AdapterAttr.
     pub catalog_name: Option<String>,
-    pub alt_compute: Option<ComputePlatform>,
     pub table_format: Option<String>,
     pub sync: Option<SyncConfig>,
     /// Compiled SQL, populated only by callers that need to diff it (see
@@ -6021,12 +6357,14 @@ mod tests {
     use serde::Deserialize;
 
     use super::{
-        AbsorbedOverload, DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtSeed, DbtSnapshot,
-        DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind,
-        hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
-        test_alias_config_equal,
+        AbsorbedOverload, DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtModel, DbtSeed,
+        DbtSnapshot, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig,
+        ModelFreshness, NodePathKind, hooks_equal, normalize_description,
+        persist_docs_configs_equal, quoting_equal, test_alias_config_equal,
     };
-    use crate::schemas::common::{Hooks, PersistDocsConfig};
+    use crate::schemas::common::{
+        FreshnessPeriod, FreshnessRules, Hooks, ModelFreshnessRules, PersistDocsConfig,
+    };
     use crate::schemas::manifest::{DbtMetric, DbtOperation, DbtSavedQuery};
     use crate::schemas::project::SnapshotMetaColumnNames;
     use dbt_adapter_core::AdapterType;
@@ -6823,6 +7161,52 @@ mod tests {
         ));
     }
 
+    /// The freshness path moved from passing `&source.deprecated_config` to
+    /// `&node.serialized_config()`, which runs the config through `to_value` one
+    /// extra time. A source's `config` dict is Jinja-visible while rendering
+    /// `loaded_at_query` and `collect_freshness`, and `SourceConfig` carries a
+    /// `Verbatim`, an `Omissible`, and a custom `serialize_with`, so the extra hop
+    /// has to be a no-op.
+    #[test]
+    fn source_serialized_config_matches_direct_config_serialization() {
+        use dbt_common::serde_utils::Omissible;
+
+        use crate::schemas::common::{FreshnessDefinition, FreshnessPeriod, FreshnessRules};
+        use dbt_yaml::Verbatim;
+
+        let cases = [
+            // `freshness` omitted entirely, `meta` unset (hits serialize_none_as_empty_map).
+            Omissible::Omitted,
+            // Explicit `freshness: null`, i.e. opted out.
+            Omissible::Present(None),
+            Omissible::Present(Some(FreshnessDefinition {
+                warn_after: Some(FreshnessRules {
+                    count: Some(12),
+                    period: Some(FreshnessPeriod::hour),
+                }),
+                filter: Some("id > 0".to_string()),
+                ..Default::default()
+            })),
+        ];
+
+        for freshness in cases {
+            let mut source = DbtSource::default();
+            source.deprecated_config.enabled = Some(true);
+            source.deprecated_config.meta = None;
+            source.deprecated_config.freshness = freshness;
+            source.deprecated_config.loaded_at_field = Some("updated_at".to_string());
+            source.deprecated_config.loaded_at_query =
+                Verbatim::from(Some("select max(updated_at) from {{ this }}".to_string()));
+
+            let direct = dbt_yaml::to_value(&source.deprecated_config).unwrap();
+            let via_trait = dbt_yaml::to_value(source.serialized_config()).unwrap();
+            assert_eq!(
+                direct, via_trait,
+                "serialized_config() is not a no-op; the Jinja-visible source config changed shape"
+            );
+        }
+    }
+
     #[test]
     fn test_alias_config_equal_treats_generated_alias_as_unchanged() {
         let generated =
@@ -6865,6 +7249,66 @@ mod tests {
         if let Err(err) = config {
             panic!("Could not deserialize and failed with the following error: {err}");
         }
+    }
+
+    fn model_with_freshness(freshness: Option<ModelFreshness>) -> DbtModel {
+        let mut model = DbtModel::default();
+        model.__model_attr__.freshness = freshness;
+        model
+    }
+
+    #[test]
+    fn has_freshness_false_when_unset_or_build_after_only() {
+        assert!(!model_with_freshness(None).has_freshness());
+
+        let build_after_only = ModelFreshness {
+            build_after: Some(ModelFreshnessRules {
+                count: Some(1),
+                period: Some(FreshnessPeriod::day),
+                updates_on: None,
+            }),
+            ..Default::default()
+        };
+        assert!(!model_with_freshness(Some(build_after_only)).has_freshness());
+    }
+
+    #[test]
+    fn has_freshness_false_when_rule_object_is_empty() {
+        let empty_warn = ModelFreshness {
+            warn_after: Some(FreshnessRules::default()),
+            ..Default::default()
+        };
+        assert!(!model_with_freshness(Some(empty_warn)).has_freshness());
+
+        let empty_error = ModelFreshness {
+            error_after: Some(FreshnessRules::default()),
+            ..Default::default()
+        };
+        assert!(!model_with_freshness(Some(empty_error)).has_freshness());
+    }
+
+    #[test]
+    fn has_freshness_true_when_warn_after_set() {
+        let freshness = ModelFreshness {
+            warn_after: Some(FreshnessRules {
+                count: Some(24),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        };
+        assert!(model_with_freshness(Some(freshness)).has_freshness());
+    }
+
+    #[test]
+    fn has_freshness_true_when_error_after_set() {
+        let freshness = ModelFreshness {
+            error_after: Some(FreshnessRules {
+                count: Some(48),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        };
+        assert!(model_with_freshness(Some(freshness)).has_freshness());
     }
 
     mod optional_string_vecs_equal_tests {

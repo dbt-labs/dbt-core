@@ -27,6 +27,7 @@
     "@dbt-labs/proto": "^1.0.560",
     "@dbt-labs/sourdough": "18.23.0",
     "@dbt-labs/vortex": "^0.3.0",
+    "@radix-ui/react-collapsible": "^1.1.20",
     "@radix-ui/react-hover-card": "^1.1.23",
     "@radix-ui/react-select": "^2.3.7",
     "@radix-ui/react-tabs": "^1.1.21",

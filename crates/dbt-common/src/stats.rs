@@ -143,12 +143,18 @@ impl Stat {
             format!("{:?}", self.status)
         }
     }
+    /// Nodes whose result is an *assertion* rather than a build: they report `pass`/`fail` instead
+    /// of `success`/`error`, and the row count decides which. Checks belong here for the same reason
+    /// tests do — "3 rows came back" is a failed assertion, not a failed build.
+    fn is_assertion_node(&self) -> bool {
+        self.unique_id.starts_with("test.")
+            || self.unique_id.starts_with("unit_test.")
+            || self.unique_id.starts_with("check.")
+    }
+
     pub fn result_status_string(&self) -> String {
         match self.status {
-            NodeStatus::Succeeded
-                if self.unique_id.starts_with("test.")
-                    || self.unique_id.starts_with("unit_test.") =>
-            {
+            NodeStatus::Succeeded if self.is_assertion_node() => {
                 match self.num_rows {
                     Some(0) => "pass".to_string(),
                     Some(_) => "fail".to_string(),
@@ -156,16 +162,11 @@ impl Stat {
                     None => "pass".to_string(),
                 }
             }
-            NodeStatus::Errored
-                if self.unique_id.starts_with("test.")
-                    || self.unique_id.starts_with("unit_test.") =>
-            {
-                match self.num_rows {
-                    Some(0) => "error".to_string(),
-                    Some(_) => "fail".to_string(),
-                    None => "error".to_string(),
-                }
-            }
+            NodeStatus::Errored if self.is_assertion_node() => match self.num_rows {
+                Some(0) => "error".to_string(),
+                Some(_) => "fail".to_string(),
+                None => "error".to_string(),
+            },
             NodeStatus::Succeeded => "success".to_string(),
             NodeStatus::SucceededWithWarning => "warn".to_string(),
             NodeStatus::TestWarned => "warn".to_string(),

@@ -1,6 +1,5 @@
+import { X } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
-
-import { Icon, RyeconClose, Sizes } from '@dbt-labs/sourdough';
 
 import { Button } from '../../../components/ui/Button';
 import { InvisibleButton } from '../../../components/ui/InvisibleButton';
@@ -141,7 +140,7 @@ export function UpgradeStatusPanel({
             className="inline-flex !w-auto shrink-0 items-center text-fgDecorative hover:text-fgMain"
             testId={testId ? `${testId}-dismiss` : undefined}
           >
-            <Icon ryecon={RyeconClose} size="sm" alt="" />
+            <X className="size-3.5" />
           </InvisibleButton>
         </div>
         {showHeading && (
@@ -151,7 +150,7 @@ export function UpgradeStatusPanel({
             </h2>
             <Button
               variant="outline"
-              size={Sizes.sm}
+              size="sm"
               text="Need Enterprise? Contact sales."
               onClick={() =>
                 window.open(decorateOutboundHref(contactSalesUrl), '_blank')

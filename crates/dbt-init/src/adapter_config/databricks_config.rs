@@ -121,6 +121,7 @@ pub fn setup_databricks_profile(
         azure_tenant_id: None,
         oauth_redirect_url: None,
         oauth_scopes: None,
+        query_tags: None,
         session_properties: None,
         connection_parameters: None,
         auth_type: None,

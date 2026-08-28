@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
@@ -70,6 +71,8 @@ pub struct ProjectUnitTestConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -415,6 +418,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -425,6 +429,12 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
+
+                partition_by_config: None,
+
+                distribute_by_config: None,
+
+                primary_key_config: None,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
@@ -475,6 +485,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 skip_not_matched_step: config.skip_not_matched_step,
                 unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
+                row_filter: None,
                 incremental_apply_config_changes: None,
                 use_safer_relation_operations: None,
                 view_update_via_alter: None,
@@ -501,6 +512,8 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 ttl: None,
                 settings: None,
                 query_settings: None,
+                projections: None,
+                inserts_only: None,
                 connection_overrides: None,
                 fields: None,
                 source_type: None,
@@ -512,6 +525,8 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 table: None,
                 update_field: None,
                 update_lag: None,
+                definer: None,
+                sql_security: None,
                 refreshable: None,
                 catchup: None,
                 mv_on_schema_change: None,
@@ -546,6 +561,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -657,6 +673,10 @@ impl ResolvableConfig<UnitTestConfig> for UnitTestConfig {
     fn default_to(&mut self, parent: &UnitTestConfig) {
         self.default_to_fields(parent);
     }
+
+    // Unit tests have no `database`/`schema` field of their own -- they run against the model
+    // under test's relation, so there is nothing to canonicalize a `catalog`-style alias into.
+    fn canonicalize_adapter_aliases(&mut self, _default_adapter: AdapterType) {}
 }
 
 impl ConfigKeys for UnitTestConfig {
@@ -667,6 +687,23 @@ impl ConfigKeys for UnitTestConfig {
 #[cfg(test)]
 mod tests {
     use super::{ComputeArg, ProjectUnitTestConfig, UnitTestConfig};
+
+    #[test]
+    fn test_unit_test_query_tags_propagate_through_resolved_config() {
+        let project: ProjectUnitTestConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"unit-test"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: UnitTestConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"unit-test"}"#)
+        );
+    }
 
     #[test]
     fn test_compute_local_is_an_alias_for_sidecar() {

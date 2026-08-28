@@ -5,6 +5,7 @@
 //! and automatic retry logic for transient failures.
 //! Supports selective extraction with root directory stripping and subdirectory filtering.
 
+use crate::utils::ensure_dir;
 use async_compression::tokio::bufread::GzipDecoder;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::dbt_emit::emit_info_log_message;
@@ -83,8 +84,27 @@ impl TarballClient {
 
         let reader = StreamReader::new(stream);
         let decoder = GzipDecoder::new(reader);
-        let mut archive = Archive::new(decoder);
+        let archive = Archive::new(decoder);
 
+        self.extract_archive(archive, download_url, target_path, strip_root, subdirectory)
+            .await
+    }
+
+    /// Extract an already-opened tar archive into `target_path`.
+    ///
+    /// Split out so the extraction logic can be tested against in-memory
+    /// archives. `download_url` is used for error messages only.
+    async fn extract_archive<R>(
+        &self,
+        mut archive: Archive<R>,
+        download_url: &str,
+        target_path: &Path,
+        strip_root: bool,
+        subdirectory: Option<&str>,
+    ) -> FsResult<PathBuf>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+    {
         let mut entries = archive
             .entries()
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to read tar entries: {}", e))?;
@@ -184,12 +204,14 @@ impl TarballClient {
                 );
             }
 
-            // Links and device nodes are extracted as-is, but `unpack()` applies no
-            // containment to a link *target*, so they are not safe in general. Only
-            // notify for now: dropping them outright would change what installs,
-            // because some published packages commit a self-referential
-            // `integration_tests/dbt_packages/<pkg>` symlink. This notice is the
-            // signal for whether real projects contain any such entry.
+            // Security: never create a link inside the extraction root. `unpack()`
+            // applies no containment to a link *target*, so a link pointing outside
+            // the root plus a later entry written through it is an arbitrary file
+            // write. Devices and FIFOs are skipped too — a package needs neither.
+            //
+            // Skipped, not rejected: some published packages commit a self-referential
+            // `integration_tests/dbt_packages/<pkg>` symlink, and erroring would make
+            // them uninstallable for no security gain.
             let entry_type = entry.header().entry_type();
             if matches!(
                 entry_type,
@@ -200,9 +222,16 @@ impl TarballClient {
                     | EntryType::Fifo
             ) {
                 emit_info_log_message(format!(
-                    "Unsupported tar entry ({entry_type:?}) in tarball from {download_url}: {}. Extracting these entries will stop being supported in a future release.",
+                    "Skipping unsupported tar entry ({entry_type:?}) in tarball from {download_url}: {}",
                     entry_path.display()
                 ));
+                continue;
+            }
+
+            // `unpack()` relies on the archive's own directory entries, which a
+            // producer may omit — and won't be materialized via a skipped link.
+            if let Some(parent) = target_entry_path.parent() {
+                ensure_dir(parent).await?;
             }
 
             entry.unpack(&target_entry_path).await.map_err(|e| {
@@ -242,5 +271,266 @@ impl TarballClient {
         }
 
         Ok(target_path.to_path_buf())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_common::cancellation::never_cancels;
+    use tempfile::TempDir;
+    use tokio_tar::{Builder, EntryType, Header};
+
+    const TEST_URL: &str = "http://test/package.tar.gz";
+    const PROJECT_YML: &str = "bad_package/dbt_project.yml";
+
+    /// Append one entry. `link_target` applies to hard/symbolic links only.
+    async fn append(
+        builder: &mut Builder<Vec<u8>>,
+        entry_type: EntryType,
+        path: &str,
+        contents: &[u8],
+        link_target: Option<&Path>,
+    ) {
+        let mut header = Header::new_gnu();
+        header.set_entry_type(entry_type);
+        // Directories need the execute bit, or unpacking their contents fails.
+        header.set_mode(if entry_type.is_dir() { 0o755 } else { 0o644 });
+        header.set_size(contents.len() as u64);
+        header.set_path(path).unwrap();
+        if let Some(link_target) = link_target {
+            header.set_link_name(link_target).unwrap();
+        }
+        header.set_cksum();
+        builder.append(&header, contents).await.unwrap();
+    }
+
+    async fn append_file(builder: &mut Builder<Vec<u8>>, path: &str, contents: &[u8]) {
+        append(builder, EntryType::Regular, path, contents, None).await;
+    }
+
+    /// Write the name into the header verbatim, bypassing the `set_path`
+    /// validation that refuses `..`, as a hostile archive would.
+    async fn append_file_raw_path(builder: &mut Builder<Vec<u8>>, raw_path: &str, contents: &[u8]) {
+        let mut header = Header::new_gnu();
+        header.set_entry_type(EntryType::Regular);
+        header.set_mode(0o644);
+        header.set_size(contents.len() as u64);
+        header.as_old_mut().name[..raw_path.len()].copy_from_slice(raw_path.as_bytes());
+        header.set_cksum();
+        builder.append(&header, contents).await.unwrap();
+    }
+
+    fn extraction_root(tmp: &TempDir) -> PathBuf {
+        let target = tmp.path().join("dbt_packages");
+        std::fs::create_dir_all(&target).unwrap();
+        target
+    }
+
+    /// Extract with root stripping, as package installs do.
+    async fn extract(archive_bytes: &[u8], target: &Path) -> FsResult<PathBuf> {
+        let http_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new()).build();
+        TarballClient::from_client(http_client, never_cancels())
+            .extract_archive(Archive::new(archive_bytes), TEST_URL, target, true, None)
+            .await
+    }
+
+    fn assert_rejected(result: &FsResult<PathBuf>, needle: &str, context: impl std::fmt::Debug) {
+        match result {
+            Ok(p) => panic!("expected rejection of {context:?}, but extraction succeeded at {p:?}"),
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.contains(needle),
+                    "expected error containing {needle:?} for {context:?}, got: {msg}"
+                );
+            }
+        }
+    }
+
+    /// A symlink out of the root, followed by a write *through* it. The link is
+    /// skipped, so the write lands on a real directory inside the root.
+    #[tokio::test]
+    async fn contains_symlink_traversal_escape() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = extraction_root(&tmp);
+
+        let outside = tmp.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let victim = outside.join("example.txt");
+        std::fs::write(&victim, b"ORIGINAL").unwrap();
+
+        let mut builder = Builder::new(Vec::new());
+        append_file(&mut builder, PROJECT_YML, b"name: bad_package\n").await;
+        let link = EntryType::Symlink;
+        append(&mut builder, link, "bad_package/evil", &[], Some(&outside)).await;
+        append_file(&mut builder, "bad_package/evil/example.txt", b"OWNED\n").await;
+        let bytes = builder.into_inner().await.unwrap();
+
+        let result = extract(&bytes, &target).await;
+
+        assert!(result.is_ok(), "expected extraction to succeed: {result:?}");
+        assert_eq!(std::fs::read(&victim).unwrap(), b"ORIGINAL");
+        assert!(
+            std::fs::symlink_metadata(target.join("evil"))
+                .unwrap()
+                .is_dir()
+        );
+        assert_eq!(
+            std::fs::read(target.join("evil/example.txt")).unwrap(),
+            b"OWNED\n"
+        );
+    }
+
+    /// The entry is not created and the rest of the package still installs.
+    #[tokio::test]
+    async fn skips_link_and_device_entries() {
+        for entry_type in [
+            EntryType::Symlink,
+            EntryType::Link,
+            EntryType::Char,
+            EntryType::Block,
+            EntryType::Fifo,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let target = extraction_root(&tmp);
+            let outside = tmp.path().join("outside.txt");
+            std::fs::write(&outside, b"ORIGINAL").unwrap();
+
+            let link_target = (entry_type == EntryType::Symlink || entry_type == EntryType::Link)
+                .then_some(outside.as_path());
+
+            let mut builder = Builder::new(Vec::new());
+            append_file(&mut builder, PROJECT_YML, b"name: bad_package\n").await;
+            append(
+                &mut builder,
+                entry_type,
+                "bad_package/entry",
+                &[],
+                link_target,
+            )
+            .await;
+            let bytes = builder.into_inner().await.unwrap();
+
+            let result = extract(&bytes, &target).await;
+
+            assert!(
+                result.is_ok(),
+                "expected {entry_type:?} to be skipped, got: {result:?}"
+            );
+            assert!(
+                std::fs::symlink_metadata(target.join("entry")).is_err(),
+                "{entry_type:?} was created inside the extraction root"
+            );
+            assert_eq!(
+                std::fs::read(&outside).unwrap(),
+                b"ORIGINAL",
+                "{entry_type:?} modified a file outside the extraction root"
+            );
+            assert_eq!(
+                std::fs::read(target.join("dbt_project.yml")).unwrap(),
+                b"name: bad_package\n"
+            );
+        }
+    }
+
+    /// Packages committing a self-referential `dbt_packages/<pkg> -> ../..`
+    /// symlink must keep installing; only the symlink is dropped.
+    #[tokio::test]
+    async fn installs_package_with_self_referential_symlink() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = extraction_root(&tmp);
+
+        let mut builder = Builder::new(Vec::new());
+        append_file(
+            &mut builder,
+            "good_package/dbt_project.yml",
+            b"name: good_package\n",
+        )
+        .await;
+        append(
+            &mut builder,
+            EntryType::Symlink,
+            "good_package/integration_tests/dbt_packages/good_package",
+            &[],
+            Some(Path::new("../..")),
+        )
+        .await;
+        append_file(
+            &mut builder,
+            "good_package/macros/my_macro.sql",
+            b"{% macro %}",
+        )
+        .await;
+        let bytes = builder.into_inner().await.unwrap();
+
+        let result = extract(&bytes, &target).await;
+
+        assert!(result.is_ok(), "expected extraction to succeed: {result:?}");
+        assert_eq!(
+            std::fs::read(target.join("macros/my_macro.sql")).unwrap(),
+            b"{% macro %}"
+        );
+        assert!(
+            std::fs::symlink_metadata(target.join("integration_tests/dbt_packages/good_package"))
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_parent_dir_traversal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = extraction_root(&tmp);
+
+        let mut builder = Builder::new(Vec::new());
+        append_file(&mut builder, PROJECT_YML, b"name: bad_package\n").await;
+        append_file_raw_path(&mut builder, "bad_package/../escaped.txt", b"OWNED\n").await;
+        let bytes = builder.into_inner().await.unwrap();
+
+        let result = extract(&bytes, &target).await;
+
+        assert_rejected(&result, "path traversal", "..");
+        assert!(!tmp.path().join("escaped.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn extracts_regular_package() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = extraction_root(&tmp);
+
+        let mut builder = Builder::new(Vec::new());
+        append_file(
+            &mut builder,
+            "good_package/dbt_project.yml",
+            b"name: good_package\n",
+        )
+        .await;
+        append(
+            &mut builder,
+            EntryType::Directory,
+            "good_package/models/",
+            &[],
+            None,
+        )
+        .await;
+        append_file(
+            &mut builder,
+            "good_package/models/my_model.sql",
+            b"select 1\n",
+        )
+        .await;
+        let bytes = builder.into_inner().await.unwrap();
+
+        let result = extract(&bytes, &target).await;
+
+        assert!(result.is_ok(), "expected extraction to succeed: {result:?}");
+        assert_eq!(
+            std::fs::read(target.join("dbt_project.yml")).unwrap(),
+            b"name: good_package\n"
+        );
+        assert_eq!(
+            std::fs::read(target.join("models/my_model.sql")).unwrap(),
+            b"select 1\n"
+        );
     }
 }

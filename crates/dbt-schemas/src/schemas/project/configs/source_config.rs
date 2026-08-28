@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_proc_macros::Resolvable;
@@ -377,6 +378,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 scheduler: None,
                 tmp_relation_type: None,
                 query_tag: None,
+                query_tags: None,
                 table_tag: None,
                 row_access_policy: None,
                 automatic_clustering: None,
@@ -387,6 +389,12 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
+
+                partition_by_config: None,
+
+                distribute_by_config: None,
+
+                primary_key_config: None,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
@@ -440,6 +448,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 skip_not_matched_step: config.skip_not_matched_step,
                 unique_tmp_table_suffix: None,
                 schedule: config.schedule,
+                row_filter: None,
 
                 auto_refresh: config.auto_refresh,
                 backup: config.backup,
@@ -464,6 +473,8 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 ttl: None,
                 settings: None,
                 query_settings: None,
+                projections: None,
+                inserts_only: None,
                 connection_overrides: None,
                 fields: None,
                 source_type: None,
@@ -475,6 +486,8 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 table: None,
                 update_field: None,
                 update_lag: None,
+                definer: None,
+                sql_security: None,
                 refreshable: None,
                 catchup: None,
                 mv_on_schema_change: None,
@@ -609,6 +622,12 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
     fn default_to(&mut self, parent: &SourceConfig) {
         self.default_to_fields(parent);
     }
+
+    // `SourceConfig` has no `database`/`schema` field of its own -- a source's database/schema
+    // are per-table, authored as top-level `SourceProperties`/`Tables` keys in schema.yml
+    // (`resolve_sources.rs`), not through this project-config pipeline. Canonicalized there
+    // instead of here.
+    fn canonicalize_adapter_aliases(&mut self, _default_adapter: AdapterType) {}
 }
 
 impl ConfigKeys for SourceConfig {

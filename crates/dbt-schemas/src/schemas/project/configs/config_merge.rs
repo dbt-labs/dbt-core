@@ -307,7 +307,7 @@ impl ReplaceIfNone for dbt_common::io_args::ComputeArg {}
 // crate::schemas::common types
 impl ReplaceIfNone for crate::schemas::common::Access {}
 impl ReplaceIfNone for crate::schemas::common::ClusterConfig {}
-impl ReplaceIfNone for crate::schemas::common::ComputePlatform {}
+impl ReplaceIfNone for dbt_adapter_core::AdapterType {}
 impl ReplaceIfNone for crate::schemas::common::DbtBatchSize {}
 impl ReplaceIfNone for crate::schemas::common::DbtContract {}
 impl ReplaceIfNone for crate::schemas::common::DbtIncrementalStrategy {}
@@ -320,6 +320,7 @@ impl ReplaceIfNone for crate::schemas::common::OnSchemaChange {}
 impl ReplaceIfNone for crate::schemas::common::PartitionConfig {}
 impl ReplaceIfNone for crate::schemas::common::PersistDocsConfig {}
 impl ReplaceIfNone for crate::schemas::common::Schedule {}
+impl ReplaceIfNone for crate::schemas::common::RowFilterConfig {}
 impl ReplaceIfNone for crate::schemas::common::SchemaOrigin {}
 impl ReplaceIfNone for crate::schemas::common::Severity {}
 impl ReplaceIfNone for crate::schemas::common::StoreFailuresAs {}
@@ -343,6 +344,7 @@ impl ReplaceIfNone for crate::schemas::properties::model_properties::ModelState 
 impl ReplaceIfNone for crate::schemas::properties::model_properties::DataTestState {}
 
 // Config-internal types
+impl ReplaceIfNone for crate::schemas::project::configs::check_config::SelectionFilterOn {}
 impl ReplaceIfNone for crate::schemas::project::configs::function_config::FunctionSnowflakeConfig {}
 impl ReplaceIfNone for crate::schemas::project::configs::model_config::DataLakeObjectCategory {}
 impl ReplaceIfNone for crate::schemas::project::configs::model_config::LatestVersionPointer {}

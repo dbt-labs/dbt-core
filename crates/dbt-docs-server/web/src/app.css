@@ -1,8 +1,10 @@
-/* @dbt-labs/biga ships the design tokens (CSS custom properties for
-   every color, spacing, and typography value). Sourdough and dbt-dag
-   both reference these via `var(--bgBrand)` etc.; without them every
-   color renders as missing. Cloud-ui imports in the same order. */
-@import "@dbt-labs/biga/tokens.css";
+/* Vendored copy of @dbt-labs/biga's tokens.css (design tokens: CSS custom
+   properties for every color value). Sourdough and dbt-dag both reference
+   these via `var(--bgBrand)` etc.; without them every color renders as
+   missing. Vendored (not imported from the private package) so docs v2 can
+   build without it for OSS distribution — see the OSS Design Capability
+   plan. Re-copy from @dbt-labs/biga/tokens.css if biga's tokens change. */
+@import "./styles/tokens.css";
 /* @dbt-labs/dbt-dag bundles react-flow under the hood; its CSS provides
    node positioning, zoom transforms, and viewport styles. Without this
    import, nodes overlap in a tight cluster and zoom is broken. */

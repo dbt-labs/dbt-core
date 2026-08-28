@@ -277,6 +277,27 @@ impl Adapter {
         }
     }
 
+    /// The adapter type a node's macros should *behave* as.
+    ///
+    /// A node that selected a non-default adapter via `+adapter` has that
+    /// adapter's dialect in its render context, so type-sensitive macro helpers
+    /// answer for the adapter the node runs on rather than the target's default.
+    /// Falls back to this adapter's own type when the node selected nothing.
+    ///
+    /// Note this deliberately does *not* swap the adapter object itself — the
+    /// engine and connection remain the default adapter's. Only the type-derived
+    /// answers change. Methods whose behaviour comes from the connection rather
+    /// than the type (`external_root`, `external_read_location`) are therefore
+    /// unaffected and remain a known gap.
+    pub fn effective_adapter_type(&self, state: &State) -> AdapterType {
+        // `try_resolve_dialect`, not `resolve_dialect`: the latter defaults to
+        // "postgres", which parses successfully, so this adapter's own type would
+        // never be reached and every method would behave as Postgres.
+        minijinja::dispatch_object::try_resolve_dialect(state)
+            .and_then(|dialect| dialect.parse().ok())
+            .unwrap_or_else(|| self.adapter_type())
+    }
+
     pub fn engine(&self) -> &Arc<dyn crate::AdapterEngine> {
         match &self.inner {
             Typed { adapter, .. } => adapter.engine(),
@@ -663,7 +684,7 @@ impl Adapter {
     /// When the flag is off (or in parse mode) a plain `(a = b)` is returned.
     pub fn render_equals(
         &self,
-        _state: &State,
+        state: &State,
         expr1: &str,
         expr2: &str,
     ) -> Result<Value, minijinja::Error> {
@@ -677,14 +698,15 @@ impl Adapter {
         let sql = if !flag_enabled {
             format!("({expr1} = {expr2})")
         } else {
-            match self.adapter_type() {
+            match self.effective_adapter_type(state) {
                 AdapterType::Snowflake
                 | AdapterType::Bigquery
                 | AdapterType::Postgres
                 | AdapterType::Redshift
                 | AdapterType::Spark
                 | AdapterType::Databricks
-                | AdapterType::DuckDB => {
+                | AdapterType::DuckDB
+                | AdapterType::Alt => {
                     format!("({expr1} IS NOT DISTINCT FROM {expr2})")
                 }
                 _ => format!(
@@ -1734,6 +1756,9 @@ impl Adapter {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new("get_column_schema_from_query", &["sql"], args);
                 let sql = iter.next_arg::<&str>()?;
+                // dbt-clickhouse: column_spec_ddl.sql passes the model's
+                // query_settings so introspected types match runtime settings.
+                let query_settings = iter.next_kwarg::<Option<&Value>>("query_settings")?;
                 iter.finish()?;
 
                 let ctx = query_ctx_from_state(state)?
@@ -1745,6 +1770,7 @@ impl Adapter {
                     conn.as_mut(),
                     &ctx,
                     sql,
+                    query_settings,
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from(result))
@@ -3264,6 +3290,75 @@ impl Adapter {
         }
     }
 
+    /// ClickHouse: see [AdapterImpl::get_model_settings].
+    pub fn get_model_settings(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_model_settings", &["model", "engine"], args);
+        let model = iter.next_arg::<&Value>()?;
+        let engine = iter.next_arg::<Option<&str>>()?.unwrap_or("MergeTree");
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_settings(model, engine))),
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::get_model_query_settings].
+    pub fn get_model_query_settings(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_model_query_settings", &["model"], args);
+        let model = iter.next_arg::<&Value>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_query_settings(model))),
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::is_before_version].
+    pub fn is_before_version(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("is_before_version", &["version"], args);
+        let version = iter.next_arg::<&str>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.is_before_version(
+                state,
+                version,
+                self.cancellation_token.clone(),
+            )?)),
+            Parse(_) => Ok(Value::from(false)),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::is_at_or_after_version].
+    pub fn is_at_or_after_version(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("is_at_or_after_version", &["version"], args);
+        let version = iter.next_arg::<&str>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.is_at_or_after_version(
+                state,
+                version,
+                self.cancellation_token.clone(),
+            )?)),
+            Parse(_) => Ok(Value::from(true)),
+        }
+    }
+
     /// Get configuration from a model node.
     ///
     /// Given a model, parse and build its configurations.
@@ -3765,7 +3860,7 @@ impl Adapter {
             // relation: BaseRelation, include_transient: bool = False
             "describe_dynamic_table" => self.describe_dynamic_table(state, args),
             "get_catalog_integration" => self.get_catalog_integration(state, args),
-            "type" => Ok(Value::from(self.adapter_type().to_string())),
+            "type" => Ok(Value::from(self.effective_adapter_type(state).to_string())),
             // config: dict
             "get_hard_deletes_behavior" => self.get_hard_deletes_behavior(state, args),
             "cache_added" => {
@@ -4066,20 +4161,27 @@ impl Adapter {
                 Ok(Value::from(()))
             }
             "get_model_settings" => {
-                // model: dict, engine: str = "MergeTree"  -> "" (no settings)
-                Ok(Value::from(""))
+                // model: dict, engine: str = "MergeTree" -> SETTINGS section of CREATE DDL
+                self.get_model_settings(state, args)
             }
             "get_model_query_settings" => {
                 // model: dict -> SETTINGS clause appended to CREATE TABLE ... AS (SELECT ...)
-                // Default join_use_nulls=1 makes unmatched LEFT JOIN rows produce NULL
-                // instead of ClickHouse's default type-zero values (0 for Int64, etc.),
-                // restoring standard SQL semantics.
-                // Users can override via model config `query_settings`.
-                Ok(Value::from("SETTINGS join_use_nulls = 1"))
+                self.get_model_query_settings(state, args)
             }
             "is_before_version" => {
-                // version: str -> false (assume modern server)
-                Ok(Value::from(false))
+                // version: str -> bool (server version < given version)
+                self.is_before_version(state, args)
+            }
+            "is_at_or_after_version" => {
+                // version: str -> bool (server version >= given version)
+                self.is_at_or_after_version(state, args)
+            }
+            "format_columns" => {
+                // columns: List[Column] -> List[dict] of {name, data_type}
+                let iter = ArgsIter::new("format_columns", &["columns"], args);
+                let columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                Ok(clickhouse::format_columns(columns))
             }
             "can_exchange" => {
                 // schema: str, type: str -> false (don't use EXCHANGE TABLES)

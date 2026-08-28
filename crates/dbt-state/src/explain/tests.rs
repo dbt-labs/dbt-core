@@ -160,6 +160,44 @@ fn render_merged_explain_records_uses_matching_service_message() {
 }
 
 #[test]
+fn render_merged_explain_records_hides_service_tree_unless_verbose() {
+    let mut records = sample_records();
+    records[0].execution_decision_id = Some("decision-1".to_string());
+    let mut message = service_message("decision-1", "ready");
+    message.explain_lines = vec![ExplainLine {
+        text: "target table exists".to_string(),
+        marker: Some(ExplainMarker::Success as i32),
+        badge: None,
+        children: Vec::new(),
+    }];
+    let response = GetExplainMessagesResponse {
+        messages: vec![message],
+    };
+
+    let concise =
+        render_merged_explain_records(&records, Some(&response), &StateExplainOptions::default());
+
+    assert_eq!(
+        concise,
+        "READY_TO_EXECUTE model.pkg.orders - ready\nMISS model.pkg.customers - relation changed"
+    );
+
+    let verbose = render_merged_explain_records(
+        &records,
+        Some(&response),
+        &StateExplainOptions {
+            verbose: true,
+            ..Default::default()
+        },
+    );
+
+    assert_eq!(
+        verbose,
+        "READY_TO_EXECUTE model.pkg.orders - ready\n  - target table exists [SUCCESS]\nMISS model.pkg.customers - relation changed"
+    );
+}
+
+#[test]
 fn render_merged_explain_records_falls_back_for_missing_service_message() {
     let mut records = sample_records();
     records[0].execution_decision_id = Some("missing-decision".to_string());

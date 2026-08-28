@@ -16,11 +16,11 @@
     {{ primary_key_clause(label='primary key') }}
     {{ partition_cols(label='partition by') }}
     {{ ttl_config(label='ttl') }}
-    {{ clickhouse_model_settings(model, config.get('engine', default='MergeTree')) }}
+    {{ adapter.get_model_settings(model, config.get('engine', default='MergeTree')) }}
     as (
       {{ sql }}
     )
-    {{ clickhouse_model_query_settings(model) }}
+    {{ adapter.get_model_query_settings(model) }}
   {%- endcall %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
@@ -90,17 +90,27 @@
 
 {% macro primary_key_clause(label) %}
   {%- set primary_key = config.get('primary_key', validator=validation.any[list, basestring]) -%}
-  {#- An empty value ('' or []) would emit "PRIMARY KEY" with no columns,
+  {#- An empty value ('', '   ' or []) would emit "PRIMARY KEY" with no columns,
       which is invalid DDL - treat it as unset instead. -#}
-{%- if primary_key is not none and ((primary_key is string and primary_key | trim | length == 0) or (primary_key is not string and primary_key | length == 0)) -%}
-  {%- set primary_key = none -%}
-{%- endif -%}
+  {%- if primary_key is string -%}
+    {%- set primary_key = primary_key | trim -%}
+  {%- endif -%}
+  {%- if primary_key is not none and primary_key | length == 0 -%}
+    {%- set primary_key = none -%}
+  {%- endif -%}
   {#- v2 compatibility: v2's typed primary_key config arrives as a list
       (scalar inputs are listified). Render it as a single parenthesized
       expression, since bare "PRIMARY KEY a, b" is a ClickHouse syntax error.
+      Whitespace-only entries are dropped like the scalar case above.
       Guarded like the incremental macros' unique_key handling. -#}
   {%- if primary_key is not none and primary_key is iterable and (primary_key is not string and primary_key is not mapping) -%}
-    {%- set primary_key = '(' ~ (primary_key | join(', ')) ~ ')' -%}
+    {%- set pk_cols = [] -%}
+    {%- for col in primary_key -%}
+      {%- if col | trim | length > 0 -%}
+        {%- do pk_cols.append(col | trim) -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- set primary_key = '(' ~ (pk_cols | join(', ')) ~ ')' if pk_cols else none -%}
   {%- endif %}
 
   {%- if primary_key is not none %}
@@ -155,18 +165,23 @@
 
 {% macro clickhouse__create_table_as(temporary, relation, sql) -%}
     {% set has_contract = config.get('contract').enforced %}
-    {% set create_table = create_table_or_empty(temporary, relation, sql, has_contract) %}
-    {% if clickhouse_is_before_version('22.7.1.2484') or temporary -%}
-        {{ create_table }}
-    {%- else %}
-        {% call statement('create_table_empty') %}
-            {{ create_table }}
-        {% endcall %}
-         {{ add_index_and_projections(relation) }}
-
+    {{ clickhouse__create_empty_table(temporary, relation, sql, has_contract) }}
+    {%- if not temporary %}
         {{ clickhouse__insert_into(relation, sql, has_contract) }}
     {%- endif %}
 {%- endmacro %}
+
+{#
+    "CREATE TABLE" step extracted from clickhouse__create_table_as so it can be used by other macros.
+#}
+{% macro clickhouse__create_empty_table(temporary, relation, sql, has_contract, statement_name='create_table_empty') %}
+    {% call statement(statement_name) %}
+        {{ create_table_or_empty(temporary, relation, sql, has_contract) }}
+    {% endcall %}
+    {%- if not temporary %}
+        {{ add_index_and_projections(relation) }}
+    {%- endif %}
+{% endmacro %}
 
 {#
     A macro that adds any configured projections or indexes at the same time.
@@ -211,7 +226,7 @@
     {% if temporary -%}
         create temporary table {{ relation.identifier }}
         engine Memory
-        {{ clickhouse_model_settings(model, 'Memory') }}
+        {{ adapter.get_model_settings(model, 'Memory') }}
         as (
           {{ sql }}
         )
@@ -227,17 +242,15 @@
         {{ primary_key_clause(label="primary key") }}
         {{ partition_cols(label="partition by") }}
         {{ ttl_config(label="ttl")}}
-        {{ clickhouse_model_settings(model, config.get('engine', default='MergeTree')) }}
+        {{ adapter.get_model_settings(model, config.get('engine', default='MergeTree')) }}
 
         {%- if not has_contract %}
-          {%- if not clickhouse_is_before_version('22.7.1.2484') %}
-            empty
-          {%- endif %}
+          empty
           as (
             {{ sql }}
           )
         {%- endif %}
-        {{ clickhouse_model_query_settings(model) }}
+        {{ adapter.get_model_query_settings(model) }}
     {%- endif %}
 
 {%- endmacro %}
@@ -266,7 +279,7 @@
   {%- else -%}
       {{ sql }}
   {%- endif -%}
-  {{ clickhouse_model_query_settings(model) }}
+  {{ adapter.get_model_query_settings(model) }}
 {%- endmacro %}
 
 {% macro codec_clause(codec_name) %}

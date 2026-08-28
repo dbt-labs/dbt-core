@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-
-import { Icon, RyeconCheckmark, RyeconCopy } from '@dbt-labs/sourdough';
+import { Check, Copy } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
 
@@ -128,7 +127,7 @@ export function CodeSnippet({
           data-testid="code-snippet-copy-button"
           className="absolute right-2 top-2 rounded p-1 text-fgDecorative hover:bg-bgMainHover hover:text-fgMain"
         >
-          <Icon ryecon={copied ? RyeconCheckmark : RyeconCopy} size="xs" />
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
         </button>
       )}
       {html ? (

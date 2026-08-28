@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
-
-import { RyeconCheckmark, RyeconCopy, Sizes } from '@dbt-labs/sourdough';
+import { Check, Copy } from 'lucide-react';
 
 import { Button } from '../../../components/ui/Button';
 import { Code } from '../../../components/ui/Code';
@@ -29,9 +28,9 @@ export function CopyCommandSnippet({ command, className }: Props) {
       <Code>{command}</Code>
       <Button
         variant="ghost"
-        size={Sizes.xs}
+        size="xs"
         ariaLabel={copied ? 'Copied to clipboard' : `Copy ${command}`}
-        ryecon={copied ? RyeconCheckmark : RyeconCopy}
+        icon={copied ? <Check className="size-3" /> : <Copy className="size-3" />}
         onClick={handleCopy}
         testId="upgrade-copy-command"
       />

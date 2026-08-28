@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use dbt_runtime::builder::Builder;
 
@@ -49,5 +49,22 @@ fn a_panicking_task_reports_a_join_error() {
     let h = handle.spawn_blocking(|| panic!("boom"));
     let err = futures::executor::block_on(h).expect_err("should be a JoinError");
     assert!(err.is_panic());
+    drop(rt);
+}
+
+#[test]
+fn worker_threads_are_marked_as_pool_workers() {
+    let rt = Builder::new().max_blocking_threads(2).build();
+    let seen = Arc::new(AtomicBool::new(false));
+    let seen2 = Arc::clone(&seen);
+
+    let h = rt.handle().spawn_blocking(move || {
+        seen2.store(dbt_runtime::is_pool_worker(), Ordering::Relaxed);
+    });
+    futures::executor::block_on(h).unwrap();
+    assert!(
+        seen.load(Ordering::Relaxed),
+        "worker thread should report is_pool_worker() == true"
+    );
     drop(rt);
 }

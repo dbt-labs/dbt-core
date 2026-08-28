@@ -145,6 +145,12 @@ fn new_operation(
                 alias: name,
                 database: database.to_string(),
                 schema: schema.to_string(),
+                // A hook is not a node the user configures, so it runs on the
+                // target default. This must be set rather than defaulted: the
+                // adapter decides which dialect's internal-macro namespace the
+                // hook resolves `dbt.run_query` and friends through, and a wrong
+                // one yields an empty namespace rather than an error.
+                adapter: adapter_type,
                 ..Default::default()
             },
             __other__: BTreeMap::new(),

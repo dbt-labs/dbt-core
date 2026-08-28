@@ -1,4 +1,4 @@
-import { Icon, RyeconClose } from '@dbt-labs/sourdough';
+import { X } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
 
@@ -29,7 +29,7 @@ export function Pill({ id, value, onClickRemove, className }: PillProps) {
           onClick={() => onClickRemove({ id, value })}
           className="text-fgDecorative hover:text-fgMain"
         >
-          <Icon ryecon={RyeconClose} size="xs" />
+          <X className="size-3" />
         </button>
       )}
     </span>

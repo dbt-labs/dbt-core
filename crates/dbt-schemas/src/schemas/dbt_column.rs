@@ -53,6 +53,7 @@ pub struct DbtColumn {
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
+    pub codec: Option<String>,
     #[serde(default, rename = "config")]
     pub deprecated_config: ColumnConfig,
     pub dimension: Option<ColumnPropertiesDimension>,
@@ -127,6 +128,7 @@ pub struct ColumnProperties {
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
+    pub codec: Option<String>,
     pub config: Option<ColumnConfig>,
 
     pub entity: Option<Entity>,
@@ -155,6 +157,7 @@ pub struct VersionColumnProperties {
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
+    pub codec: Option<String>,
     pub config: Option<ColumnConfig>,
     pub entity: Option<Entity>,
     pub dimension: Option<ColumnPropertiesDimension>,
@@ -181,6 +184,7 @@ impl VersionColumnProperties {
             databricks_tags: self.databricks_tags.clone(),
             column_mask: self.column_mask.clone(),
             quote: self.quote,
+            codec: self.codec.clone(),
             config: self.config.clone(),
             entity: self.entity.clone(),
             dimension: self.dimension.clone(),
@@ -364,6 +368,7 @@ pub fn process_columns(
                     databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
                     column_mask: cp.column_mask.clone(),
                     quote: cp.quote,
+                    codec: cp.codec.clone(),
                     deprecated_config: cp.config.clone().unwrap_or_default(),
                     dimension: normalize_dimension(
                         cp.dimension.clone(),
@@ -403,6 +408,7 @@ mod tests {
             databricks_tags: None,
             column_mask: None,
             quote: None,
+            codec: None,
             config: None,
             entity: None,
             dimension: None,
@@ -461,6 +467,18 @@ mod tests {
             }
             other => panic!("expected DimensionConfig, got {other:?}"),
         }
+    }
+
+    /// ClickHouse `codec:` on a schema.yml column must survive into `DbtColumn`
+    /// (the manifest/Jinja-visible column) — dbt-clickhouse's schema_changes macro
+    /// reads it from `model['columns']` to render the CODEC clause.
+    #[test]
+    fn test_process_columns_preserves_codec() {
+        let mut col = make_col("col_3", "Compressed column.");
+        col.codec = Some("ZSTD".to_string());
+
+        let result = process_columns(Some(&vec![col]), None, None).unwrap();
+        assert_eq!(result[0].codec.as_deref(), Some("ZSTD"));
     }
 
     /// Bare-string `dimension: time` must pass through untouched — dbt-core

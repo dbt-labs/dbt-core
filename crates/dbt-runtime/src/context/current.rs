@@ -6,7 +6,7 @@ use crate::handle::{Handle, TryCurrentError};
 use crate::util::markers::SyncNotSend;
 
 #[must_use]
-pub(crate) struct SetCurrentGuard {
+pub struct SetCurrentGuard {
     /// The previous handle.
     prev: Option<Handle>,
 

@@ -1050,7 +1050,9 @@ impl Column {
                 if self._nullable == Some(false) {
                     s.push_str(" NOT NULL");
                 }
-                if let Some(comment) = &self.comment {
+                if let Some(comment) = &self.comment
+                    && !comment.is_empty()
+                {
                     let escaped = comment.replace('\\', "\\\\").replace('\'', "\\'");
                     s.push_str(&format!(" COMMENT '{escaped}'"));
                 }
@@ -1558,5 +1560,82 @@ mod tests {
             Column::try_from_snowflake_raw_data_type("c", "VARCHAR(20) COLLATE 'en-ci'").unwrap();
         assert!(small.can_expand_to(&large).unwrap());
         assert!(!large.can_expand_to(&small).unwrap());
+    }
+
+    #[test]
+    fn test_render_for_create_omits_empty_comment() {
+        let no_comment = Column::new(
+            AdapterType::Databricks,
+            "col_a".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(None);
+        assert_eq!(no_comment.render_for_create(), "`col_a` int");
+
+        let empty_comment = Column::new(
+            AdapterType::Databricks,
+            "col_a".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(Some(String::new()));
+        assert_eq!(empty_comment.render_for_create(), "`col_a` int");
+
+        let with_comment = Column::new(
+            AdapterType::Databricks,
+            "col_b".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(Some("has a description".to_string()));
+        assert_eq!(
+            with_comment.render_for_create(),
+            "`col_b` int COMMENT 'has a description'"
+        );
+    }
+
+    #[test]
+    fn test_enrich_for_create_with_empty_description_renders_no_comment() {
+        let model_column = DbtColumn {
+            name: "col_a".to_string(),
+            description: Some(String::new()),
+            ..Default::default()
+        };
+        let enriched = Column::new(
+            AdapterType::Databricks,
+            "col_a".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .enrich_for_create(Some(&model_column), false);
+        assert_eq!(enriched.render_for_create(), "`col_a` int");
+
+        let described = DbtColumn {
+            name: "col_b".to_string(),
+            description: Some("has a description".to_string()),
+            ..Default::default()
+        };
+        let enriched = Column::new(
+            AdapterType::Databricks,
+            "col_b".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .enrich_for_create(Some(&described), true);
+        assert_eq!(
+            enriched.render_for_create(),
+            "`col_b` int NOT NULL COMMENT 'has a description'"
+        );
     }
 }

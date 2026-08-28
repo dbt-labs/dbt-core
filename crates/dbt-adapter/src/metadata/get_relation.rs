@@ -68,10 +68,7 @@ pub fn get_relation(
         AdapterType::Spark => {
             spark_get_relation(adapter, state, ctx, conn, schema, identifier, token)
         }
-        AdapterType::DuckDB => duckdb_get_relation(
-            adapter, state, ctx, conn, database, schema, identifier, token,
-        ),
-        AdapterType::Alt => duckdb_get_relation(
+        AdapterType::DuckDB | AdapterType::Alt => duckdb_get_relation(
             adapter, state, ctx, conn, database, schema, identifier, token,
         ),
         AdapterType::Fabric => fabric_get_relation(
@@ -782,8 +779,20 @@ fn exasol_get_relation(
     identifier: &str,
     token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
-    let q_schema = schema.to_uppercase();
-    let q_ident = identifier.to_uppercase();
+    // Exasol folds unquoted identifiers to uppercase but stores quoted ones
+    // verbatim, so resolve to the stored case per the quoting policy and match
+    // exactly (as postgres_get_relation does). Single quotes doubled for safety.
+    let quoting = adapter.quoting();
+    let fold = |s: &str, quoted: bool| {
+        let folded = if quoted {
+            s.to_string()
+        } else {
+            s.to_uppercase()
+        };
+        folded.replace('\'', "''")
+    };
+    let q_schema = fold(schema, quoting.schema);
+    let q_ident = fold(identifier, quoting.identifier);
 
     let sql = format!(
         "select 'table' as \"type\" from sys.exa_all_tables \

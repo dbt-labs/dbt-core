@@ -2059,6 +2059,7 @@ impl serde::Serialize for NodeType {
             Self::SavedQuery => "NODE_TYPE_SAVED_QUERY",
             Self::SemanticModel => "NODE_TYPE_SEMANTIC_MODEL",
             Self::Function => "NODE_TYPE_FUNCTION",
+            Self::Check => "NODE_TYPE_CHECK",
         };
         serializer.serialize_str(variant)
     }
@@ -2086,6 +2087,7 @@ impl<'de> serde::Deserialize<'de> for NodeType {
             "NODE_TYPE_SAVED_QUERY",
             "NODE_TYPE_SEMANTIC_MODEL",
             "NODE_TYPE_FUNCTION",
+            "NODE_TYPE_CHECK",
         ];
 
         struct GeneratedVisitor;
@@ -2142,6 +2144,7 @@ impl<'de> serde::Deserialize<'de> for NodeType {
                     "NODE_TYPE_SAVED_QUERY" => Ok(NodeType::SavedQuery),
                     "NODE_TYPE_SEMANTIC_MODEL" => Ok(NodeType::SemanticModel),
                     "NODE_TYPE_FUNCTION" => Ok(NodeType::Function),
+                    "NODE_TYPE_CHECK" => Ok(NodeType::Check),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

@@ -1,6 +1,5 @@
+import { Info, Search } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
-
-import { RyeconInfoOutline, RyeconMagnifyingGlass } from '@dbt-labs/sourdough';
 
 import { Input, type InputProps } from '../../components/ui/Input';
 
@@ -26,11 +25,11 @@ export const SelectorInput = ({
       labelIsHidden
       spellCheck={false}
       isEdit
-      startIcon={{ ryecon: RyeconMagnifyingGlass }}
+      startIcon={{ icon: <Search className="size-3" /> }}
       {...(endIconEnabled
         ? {
             endIcon: {
-              ryecon: RyeconInfoOutline,
+              icon: <Info className="size-3" />,
               onClick: () => {
                 window.open('https://docs.getdbt.com/reference/node-selection/syntax');
               },

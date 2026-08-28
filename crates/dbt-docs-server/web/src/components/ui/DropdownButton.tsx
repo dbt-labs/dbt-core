@@ -1,6 +1,5 @@
 import * as SelectPrimitive from '@radix-ui/react-select';
-
-import { Icon, RyeconCaretDown } from '@dbt-labs/sourdough';
+import { ChevronDown } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
 
@@ -54,7 +53,7 @@ export function DropdownButton({
         {name && <span className="text-fgDecorative">{name}</span>}
         <SelectPrimitive.Value />
         <SelectPrimitive.Icon>
-          <Icon ryecon={RyeconCaretDown} size="xs" />
+          <ChevronDown className="size-3" />
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>

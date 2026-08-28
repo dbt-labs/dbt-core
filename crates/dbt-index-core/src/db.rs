@@ -91,6 +91,8 @@ pub fn write_views_sql(dir: &Path) -> Result<(), IndexError> {
 
     // Analytical views
     sql.push_str(ANALYTICAL_VIEWS);
+    sql.push_str(GRAPH_NODES_VIEWS_DDL);
+    sql.push_str(COLUMNS_VIEW_DDL);
 
     std::fs::write(dir.join("views.sql"), sql)?;
     Ok(())
@@ -162,7 +164,15 @@ LEFT JOIN dbt.nodes target ON tm.attached_node = target.unique_id
 LEFT JOIN dbt_rt.run_results_latest r ON n.unique_id = r.unique_id
 LEFT JOIN dbt_rt.test_failures tf ON n.unique_id = tf.unique_id AND r.invocation_id = tf.invocation_id
 WHERE n.resource_type IN ('test');
+";
 
+/// The `dbt.nodes`-derived half of the parse-safe surface: `dbt.graph_nodes` plus the
+/// per-resource-type views built on it. Split from [`COLUMNS_VIEW_DDL`] because the two halves
+/// depend on different base tables (`dbt.nodes` vs `dbt.node_columns`), which is not always
+/// registered (it only exists once something has written `node_columns.parquet`) -- a caller
+/// executing this DDL should skip it, not fail, when `dbt.nodes` itself is not registered, without
+/// that also taking down the columns view or vice versa.
+pub const GRAPH_NODES_VIEWS_DDL: &str = "
 -- Parse-safe views: columns are enumerated (never `SELECT *`) so a
 -- dbt.nodes column that is never populated at parse cannot leak into
 -- these views as a silent NULL. Per-resource-type views select from
@@ -185,7 +195,12 @@ CREATE OR REPLACE VIEW dbt.sources AS SELECT * FROM dbt.graph_nodes WHERE resour
 CREATE OR REPLACE VIEW dbt.analyses AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'analysis';
 CREATE OR REPLACE VIEW dbt.operations AS SELECT * FROM dbt.graph_nodes WHERE resource_type IN ('operation', 'sql_operation');
 CREATE OR REPLACE VIEW dbt.functions AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'function';
+CREATE OR REPLACE VIEW dbt.checks AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'check';
+";
 
+/// The `dbt.node_columns`-derived half of the parse-safe surface. See [`GRAPH_NODES_VIEWS_DDL`]
+/// for why this is a separate constant rather than one bundled with it.
+pub const COLUMNS_VIEW_DDL: &str = "
 -- dbt.columns: dbt.node_columns restricted to columns populated at parse
 -- (catalog/inferred-type/expression columns require static analysis or
 -- `dbt docs generate` and are NULL until then).
@@ -193,6 +208,42 @@ CREATE OR REPLACE VIEW dbt.columns AS
 SELECT unique_id, column_name, declared_type, description, tags, ingested_at
 FROM dbt.node_columns;
 ";
+
+/// Splits a `;`-separated DDL script into individual statements, stripping `--` line
+/// comments (respecting `'...'` string literals so a comment marker inside a string is not
+/// mistaken for one). Some execution paths run one statement per call rather than a whole
+/// script, `GRAPH_NODES_VIEWS_DDL` / `COLUMNS_VIEW_DDL`'s consumers among them.
+pub fn split_ddl_statements(ddl: &str) -> Vec<String> {
+    let stripped: String = ddl
+        .lines()
+        .map(|line| {
+            let mut in_string = false;
+            let mut chars = line.char_indices().peekable();
+            while let Some((i, ch)) = chars.next() {
+                if ch == '\'' {
+                    // `''` is SQL's escaped quote within a string literal, not two delimiters:
+                    // consume the pair without toggling, so an escaped quote doesn't prematurely
+                    // close the string and expose a later `--` as a real comment marker.
+                    if chars.peek() == Some(&(i + 1, '\'')) {
+                        chars.next();
+                        continue;
+                    }
+                    in_string = !in_string;
+                } else if ch == '-' && !in_string && chars.peek().map(|&(_, c)| c) == Some('-') {
+                    return &line[..i];
+                }
+            }
+            line
+        })
+        .collect::<Vec<&str>>()
+        .join("\n");
+
+    stripped
+        .split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
 
 /// Manages an in-memory DuckDB connection via the ADBC adapter.
 ///
@@ -315,5 +366,36 @@ impl Db {
             })?);
         }
         Ok(batches)
+    }
+}
+
+#[cfg(test)]
+mod split_ddl_statements_tests {
+    use super::split_ddl_statements;
+
+    #[test]
+    fn strips_trailing_comment() {
+        let ddl = "SELECT 1; -- a comment\nSELECT 2;";
+        assert_eq!(split_ddl_statements(ddl), vec!["SELECT 1", "SELECT 2"]);
+    }
+
+    #[test]
+    fn preserves_comment_marker_inside_string_literal() {
+        let ddl = "SELECT '--not a comment' AS x;";
+        assert_eq!(
+            split_ddl_statements(ddl),
+            vec!["SELECT '--not a comment' AS x"]
+        );
+    }
+
+    #[test]
+    fn escaped_quote_does_not_prematurely_close_string() {
+        // A doubled `''` inside the literal is SQL's escaped quote, not the string's end — a
+        // `--` later in the same string must not be treated as a real comment marker.
+        let ddl = "SELECT 'it''s -- odd' AS x;";
+        assert_eq!(
+            split_ddl_statements(ddl),
+            vec!["SELECT 'it''s -- odd' AS x"]
+        );
     }
 }

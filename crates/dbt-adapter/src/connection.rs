@@ -10,7 +10,8 @@ use std::task::{Poll, Waker};
 use std::time::Instant;
 
 use dbt_adapter_core::AdapterType;
-use dbt_adbc::{Connection, ConnectionFactory};
+use dbt_adapter_engine::ConnectionFactory;
+use dbt_adbc::Connection;
 use dbt_common::AdapterResult;
 use dbt_common::cancellation::Cancellable;
 use dbt_telemetry::{AdapterConnectionClose, ConnectionLimitWait};
@@ -752,6 +753,9 @@ mod tests {
     use dbt_adbc::Statement;
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
     use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
+    static GLOBAL_CONNECTION_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn make_conn() -> Box<dyn Connection> {
         Box::new(NoopConnection)
@@ -845,11 +849,17 @@ mod tests {
         assert!(pool.recycle().is_none());
     }
 
-    // Tests that touch the global thread-locals (CONNECTION / RECYCLING_POOL)
-    // run on a fresh thread to avoid TLS-destruction ordering issues with
-    // nextest's test harness.
+    // Fresh threads isolate TLS state; the lock isolates the process-global pool
+    // when libtest runs these cases concurrently.
     fn run_on_fresh_thread(f: impl FnOnce() + Send + 'static) {
-        std::thread::spawn(f).join().unwrap();
+        let result = {
+            let _guard = GLOBAL_CONNECTION_TEST_LOCK.lock().unwrap();
+            drain_recycling_pool();
+            let result = std::thread::spawn(f).join();
+            drain_recycling_pool();
+            result
+        };
+        result.unwrap();
     }
 
     #[test]

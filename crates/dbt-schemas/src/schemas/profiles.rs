@@ -49,6 +49,32 @@ pub enum DbConfig {
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
+    // Doc comments on these variants are published verbatim as the JSON
+    // schema's `description`, so the implementation note lives here instead.
+    //
+    // The rename is `schemars`-only on purpose. `UntaggedEnumDeserialize`
+    // rejects *any* `#[serde(..)]` attribute on a variant and derives the tag
+    // from the variant identifier alone, so this enum's wire tag is `alt` and
+    // cannot be changed here. `lake_compute` is mapped onto it by
+    // `dbt_profile::adapters::canonicalize_adapter_type`, before the mapping
+    // reaches this enum -- see the test of the same name there.
+    //
+    // That the tag is `alt` does *not* make `alt` an accepted profiles.yml
+    // spelling: `canonicalize_adapter_type` rejects it outright. The tag stays
+    // `alt` only because `Serialize` uses it too, and our own serialized state
+    // (`ProfileConnection`, `DbtRuntimeConfigInner`) has to round trip.
+    //
+    // What the `schemars` rename does fix is the generated schema, which is
+    // published to dbt-jsonschema and drives editor validation and autocomplete
+    // for profiles.yml: authors are shown the name they should write.
+    // `Serialize` still emits `type: alt`, which keeps our own
+    // serialize/deserialize round trip consistent.
+    //
+    // Once `dbt-yaml`'s derive honours variant renames this collapses into a
+    // plain `#[serde(rename = "lake_compute")]`, matching `AdapterType::Alt`,
+    // and the mapping in `dbt-profile` goes away.
+    /// The dbt lake compute engine.
+    #[schemars(rename = "lake_compute")]
     Alt(Box<AltConfig>),
     // Hive,
     Exasol(Box<ExasolDbConfig>),
@@ -136,9 +162,21 @@ impl DbConfig {
     }
 
     // XXX: this outdated and it affects the `dbt debug` command. A review is pending.
+    //
+    // These keys are what `dbt debug` prints as a connection's details, so a key
+    // naming a credential leaks it to stdout and to any log that captures it. Since
+    // `dbt debug` checks *every* declared adapter, that is now true of every entry
+    // in a multi-adapter target, not just the default one.
     pub fn get_connection_keys(&self) -> &'static [&'static str] {
-        match self {
-            DbConfig::Snowflake(_) => &[
+        Self::connection_keys_for(self.adapter_type())
+    }
+
+    /// The connection keys for an adapter type, independent of any config
+    /// instance, so the credential audit in the tests below can walk every
+    /// adapter without having to construct one.
+    pub fn connection_keys_for(adapter_type: AdapterType) -> &'static [&'static str] {
+        match adapter_type {
+            AdapterType::Snowflake => &[
                 "account",
                 "user",
                 "database",
@@ -161,7 +199,7 @@ impl DbConfig {
                 "insecure_mode",
                 "reuse_connections",
             ],
-            DbConfig::Postgres(_) => &[
+            AdapterType::Postgres => &[
                 "host",
                 "port",
                 "user",
@@ -178,7 +216,7 @@ impl DbConfig {
                 "application_name",
                 "retries",
             ],
-            DbConfig::Bigquery(_) => &[
+            AdapterType::Bigquery => &[
                 "method",
                 "database",
                 "execution_project",
@@ -202,7 +240,7 @@ impl DbConfig {
                 "submission_method",
                 "dataproc_batch",
             ],
-            DbConfig::Redshift(_) => &[
+            AdapterType::Redshift => &[
                 "host",
                 "user",
                 "port",
@@ -229,34 +267,40 @@ impl DbConfig {
                 "serverless_work_group",
                 "serverless_acct_id",
             ],
-            DbConfig::Databricks(_) => &["host", "http_path", "schema"],
+            AdapterType::Databricks => &["host", "http_path", "schema"],
             // TODO: Salesforce connection keys
-            DbConfig::Salesforce(_) => &["login_url", "database", "data_transform_run_timeout"],
-            DbConfig::DuckDB(_) => &[
+            AdapterType::Salesforce => &["login_url", "database", "data_transform_run_timeout"],
+            // `secrets` and `motherduck_token` are deliberately absent: these keys
+            // reach `dbt debug`'s connection display, which must not print
+            // credentials. See `connection_keys_never_expose_a_credential`.
+            AdapterType::DuckDB => &[
                 "path",
                 "database",
                 "schema",
                 "extensions",
                 "settings",
-                "secrets",
                 "attach",
-                "motherduck_token",
             ],
-            DbConfig::Alt(_) => &[
+            // `token` is deliberately absent, for the same reason.
+            AdapterType::Alt => &[
                 "path",
                 "database",
                 "schema",
                 "base_url",
                 "method",
-                "token",
                 "organization",
             ],
+            // Adapter types with no `DbConfig` variant, so nothing to display.
+            AdapterType::Athena
+            | AdapterType::Starburst
+            | AdapterType::Dremio
+            | AdapterType::Oracle => &[],
             // TODO(serramatutu): Spark connection keys
-            DbConfig::Spark(_) => &[],
+            AdapterType::Spark => &[],
             // TODO: Trino and Datafusion connection keys
-            DbConfig::Trino(_) => &[],
-            DbConfig::Datafusion(_) => &[],
-            DbConfig::Fabric(_) => &[
+            AdapterType::Trino => &[],
+            AdapterType::Datafusion => &[],
+            AdapterType::Fabric => &[
                 "server",
                 "database",
                 "schema",
@@ -273,15 +317,19 @@ impl DbConfig {
                 "trust_cert",
                 "api_url",
             ],
-            DbConfig::Exasol(_) => &[
+            AdapterType::Exasol => &[
                 "host",
                 "port",
                 "user",
                 "schema",
                 "encryption",
                 "certificate_validation",
+                "certificate_fingerprint",
+                "connection_timeout",
+                "query_timeout",
+                "idle_timeout",
             ],
-            DbConfig::ClickHouse(_) => &[
+            AdapterType::ClickHouse => &[
                 "database",
                 "schema",
                 "driver",
@@ -554,10 +602,6 @@ impl Execute {
 pub struct DbTargets {
     #[serde(rename = "target", default = "default_target")]
     pub default_target: DefaultTargetName,
-    /// Optional output used for models on the alternate compute target (a peer of
-    /// `target`). Overridable with the `--x-alt-target` flag.
-    #[serde(default)]
-    pub x_alt_target: Option<TargetName>,
     pub outputs: HashMap<TargetName, YmlValue>,
 }
 
@@ -915,6 +959,8 @@ pub struct DatabricksDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oauth_scopes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_tags: Option<YmlValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub session_properties: Option<HashMap<String, YmlValue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1034,8 +1080,6 @@ pub struct AltConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub organization: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
@@ -1043,10 +1087,6 @@ pub struct AltConfig {
     pub schema: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
-    /// Kind of catalog the queries target, e.g. "snowflake". Controls SQL
-    /// identifier-casing normalization on the dbt Compute service.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub target_catalog: Option<String>,
 }
 
 /// DuckDB adapter configuration
@@ -1312,6 +1352,12 @@ pub struct ExasolDbConfig {
     pub certificate_fingerprint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_timeout: Option<StringOrInteger>,
+    /// Per-statement execution timeout in seconds (0 = no limit)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_timeout: Option<StringOrInteger>,
+    /// Idle connection timeout in seconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_timeout: Option<StringOrInteger>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
 }
@@ -2202,6 +2248,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_databricks_profile_deserializes_query_tags_from_both_profile_shapes() {
+        let config: DbConfig = dbt_yaml::from_str(
+            r#"
+type: databricks
+query_tags: '{"team":"analytics"}'
+"#,
+        )
+        .unwrap();
+        let DbConfig::Databricks(config) = config else {
+            panic!("Expected Databricks config");
+        };
+
+        assert_eq!(
+            config.query_tags.as_ref().and_then(YmlValue::as_str),
+            Some(r#"{"team":"analytics"}"#)
+        );
+
+        let config: DbConfig = dbt_yaml::from_str(
+            r#"
+type: databricks
+query_tags:
+  team: analytics
+  cost_center: "3000"
+"#,
+        )
+        .unwrap();
+        let DbConfig::Databricks(config) = config else {
+            panic!("Expected Databricks config");
+        };
+
+        let query_tags = config.query_tags.as_ref().unwrap();
+        assert_eq!(
+            query_tags.get("team").and_then(YmlValue::as_str),
+            Some("analytics")
+        );
+        assert_eq!(
+            query_tags.get("cost_center").and_then(YmlValue::as_str),
+            Some("3000")
+        );
+    }
+
+    #[test]
     fn test_snowflake_adapter_unique_id() {
         let config: DbConfig = SnowflakeDbConfig {
             account: Some("kw27752".to_string()),
@@ -2544,6 +2632,48 @@ extensions:
             .get(dbt_yaml::Value::from("drop_without_cascade"))
             .expect("drop_without_cascade should be present in connection mapping");
         assert_eq!(value.as_bool(), Some(true));
+    }
+
+    /// `get_connection_keys` decides what `dbt debug` prints as a connection's
+    /// details. Since `dbt debug` checks every declared adapter, a credential named
+    /// here leaks for every adapter in a multi-adapter target, not just the default.
+    /// This walks every variant so a newly added adapter cannot reintroduce one.
+    #[test]
+    fn connection_keys_never_expose_a_credential() {
+        // Substrings, so `motherduck_token` and `client_secret` are caught as well
+        // as bare `token` / `secret`. `token_uri` is an OAuth endpoint URL rather
+        // than a credential, and `secrets` is DuckDB's credential block.
+        const CREDENTIAL_MARKERS: &[&str] = &[
+            "password",
+            "token",
+            "secret",
+            "private_key",
+            "passphrase",
+            "keyfile",
+            "api_key",
+            "credential",
+        ];
+        const ALLOWED: &[&str] = &["token_uri"];
+
+        // Driven off `AdapterType::iter()` so a newly supported adapter is audited
+        // the moment it exists, without this test needing a constructible config.
+        use strum::IntoEnumIterator;
+
+        for adapter_type in AdapterType::iter() {
+            for key in DbConfig::connection_keys_for(adapter_type) {
+                if ALLOWED.contains(key) {
+                    continue;
+                }
+                for marker in CREDENTIAL_MARKERS {
+                    assert!(
+                        !key.contains(marker),
+                        "`{adapter_type}` lists connection key `{key}`, which looks like a \
+                         credential (matched `{marker}`). `dbt debug` prints these, so remove \
+                         it or add it to ALLOWED if it is genuinely not secret."
+                    );
+                }
+            }
+        }
     }
 
     #[test]

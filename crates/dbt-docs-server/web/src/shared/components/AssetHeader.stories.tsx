@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-
-import { RyeconInfoOutline, RyeconKey, RyeconLineage } from '@dbt-labs/sourdough';
+import { Info, Key, Waypoints } from 'lucide-react';
 
 import { assetToHeaderProps } from '../mappers/assetToHeaderProps';
 import { storyExposure, storyModel, storySource } from '../testing/storyFixtures';
@@ -23,10 +22,14 @@ export const Default: Story = {};
 export const WithHeaderIcons: Story = {
   args: {
     headerIcons: [
-      { ryecon: RyeconKey, text: 'customer_id' },
-      { ryecon: RyeconLineage, text: '2 upstream', tooltip: 'Direct parents' },
+      { icon: <Key className="size-3 align-middle" />, text: 'customer_id' },
       {
-        ryecon: RyeconInfoOutline,
+        icon: <Waypoints className="size-3 align-middle" />,
+        text: '2 upstream',
+        tooltip: 'Direct parents',
+      },
+      {
+        icon: <Info className="size-3 align-middle" />,
         text: 'Contract enforced',
         href: 'https://docs.getdbt.com/docs/collaborate/govern/model-contracts',
       },

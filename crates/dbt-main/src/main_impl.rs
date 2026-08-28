@@ -17,7 +17,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use crate::dbt_lib::execute_fs_and_shutdown;
-use crate::vars::apply_engine_env_var_aliases;
+use crate::vars::{apply_color_env_overrides, apply_engine_env_var_aliases};
 
 const FS_DEFAULT_STACK_SIZE: usize = 8 * 1024 * 1024;
 
@@ -53,6 +53,10 @@ fn init_env_before_parse() {
     // Apply DBT_ENGINE_* -> DBT_* aliases before CLI parsing.
     // This allows users to use DBT_ENGINE_FAIL_FAST instead of DBT_FAIL_FAST.
     apply_engine_env_var_aliases();
+
+    // Translate FORCE_COLOR before CLI parsing, so clap's own usage/error text
+    // is styled consistently with the rest of the output.
+    apply_color_env_overrides();
 }
 
 fn parse_cli_or_exit(cli_parser: &CliParser) -> Box<Cli> {

@@ -83,7 +83,12 @@
         );
       {% else %}
         {%- set columns = get_column_schema_from_query(compiled_code, sql_header) -%}
-        {%- set user_provided_columns = model['columns'] -%}
+        {#-- These columns are derived from the SELECT, so they carry no `quote:`
+             config of their own. Look the flag up by name in the model's yaml
+             `columns:` block, matching `default__get_column_names`; unflagged
+             columns are emitted bare rather than quoted unconditionally.
+             `or {}` guards the lookups below when `columns:` is absent. --#}
+        {%- set user_provided_columns = model['columns'] or {} -%}
         create table
           {{ relation.include(database=True, schema=True) }}
         (

@@ -1,12 +1,5 @@
 import { FC, ReactNode } from 'react';
-
-import {
-  Icon,
-  RyeconCaretDown,
-  RyeconCaretRight,
-  RyeconKey,
-  RyeconLineage,
-} from '@dbt-labs/sourdough';
+import { ChevronRight, Key, Workflow } from 'lucide-react';
 
 import { Button } from '../../components/ui/Button';
 import { truthy } from '../util/array';
@@ -61,7 +54,6 @@ export const ColumnCardShell: FC<ColumnCardShellProps> = ({
   bodyRows,
   expandedBody,
 }) => {
-  const ryecon = expanded ? RyeconCaretDown : RyeconCaretRight;
   const constraintLabels =
     constraints?.map((c) => c.name ?? c.type).filter(truthy) ?? [];
 
@@ -78,12 +70,7 @@ export const ColumnCardShell: FC<ColumnCardShellProps> = ({
             {type && <Badge aria-label="data type">{type.toUpperCase()}</Badge>}
             {isPrimaryKey && (
               <>
-                <Icon
-                  size="xs"
-                  testId={`pk-icon-${name}`}
-                  className="ml-2 mr-1"
-                  ryecon={RyeconKey}
-                />
+                <Key data-testid={`pk-icon-${name}`} className="ml-2 mr-1 size-3" />
                 PK
               </>
             )}
@@ -94,7 +81,7 @@ export const ColumnCardShell: FC<ColumnCardShellProps> = ({
               onClick={onToggleExpanded}
               className="ml-1 flex items-center gap-1 rounded-md bg-bgBrandMuted px-2 py-0.5 text-xs font-semibold text-fgBrand"
             >
-              <Icon ryecon={RyeconLineage} size="xs" />
+              <Workflow className="size-3" />
               CLL
             </button>
           )}
@@ -104,7 +91,9 @@ export const ColumnCardShell: FC<ColumnCardShellProps> = ({
               onClick={onToggleExpanded}
               className="flex-2 not-sr-only pb-0.5 align-middle"
               testId={`toggle-column-card-${name}`}
-              ryecon={ryecon}
+              icon={
+                <ChevronRight className={`size-3 ${expanded ? 'rotate-90' : ''}`} />
+              }
               size="icon-xs"
               tooltip={expanded ? toggleTooltip?.open : toggleTooltip?.closed}
             />

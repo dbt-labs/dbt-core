@@ -638,7 +638,7 @@ mod tests {
     /// user-defined macro, so `is_custom_materialization` is false — matching
     /// the built-in materializations these tests use.
     fn test_resolver() -> MaterializationResolver {
-        MaterializationResolver::new(&BTreeMap::new(), AdapterType::Snowflake, "jaffle_shop")
+        MaterializationResolver::new(&BTreeMap::new(), "jaffle_shop")
     }
 
     #[test]

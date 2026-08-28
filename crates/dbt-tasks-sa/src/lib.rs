@@ -8,6 +8,8 @@ pub mod context;
 
 pub mod barrier;
 pub mod base_context;
+pub mod check;
+pub mod check_index_adapter;
 pub mod cloneable;
 pub mod compilation_pipeline;
 pub mod compiled_sql_cache;

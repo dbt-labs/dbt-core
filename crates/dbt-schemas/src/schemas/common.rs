@@ -398,23 +398,6 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
     }
 }
 
-/// Selects the compute target a model's DML is executed against.
-///
-/// `Default` uses the profile's adapter. A run implementation may honor an
-/// alternate target for other variants; parse/compile/render and introspection
-/// are unaffected by this selection.
-#[derive(
-    Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ComputePlatform {
-    /// Execute on the profile's (default) adapter.
-    #[default]
-    Default,
-    /// Execute on the alternate compute target.
-    Alt,
-}
-
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {
@@ -682,6 +665,24 @@ impl DbtQuoting {
         self.database = self.database.or(other.database);
         self.identifier = self.identifier.or(other.identifier);
         self.schema = self.schema.or(other.schema);
+    }
+
+    /// A copy of `self` with every field it leaves unset taken from `fallback`.
+    ///
+    /// The layering primitive for quoting precedence: apply it once per layer,
+    /// most specific first, and the first layer to set a field wins. Unlike
+    /// [`Self::default_to`] this carries `snowflake_ignore_case` too, so a layer
+    /// that sets only that field is not silently dropped.
+    #[must_use]
+    pub fn filled_from(&self, fallback: &DbtQuoting) -> DbtQuoting {
+        DbtQuoting {
+            database: self.database.or(fallback.database),
+            schema: self.schema.or(fallback.schema),
+            identifier: self.identifier.or(fallback.identifier),
+            snowflake_ignore_case: self
+                .snowflake_ignore_case
+                .or(fallback.snowflake_ignore_case),
+        }
     }
 
     /// Shallow last-non-None-wins merge of two user-supplied quoting layers.
@@ -1208,7 +1209,7 @@ pub struct PersistDocsConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema, Default)]
 pub struct ScheduleConfig {
     pub cron: Option<String>,
     pub time_zone_value: Option<String>,
@@ -1236,6 +1237,13 @@ impl Schedule {
             Schedule::ScheduleConfig(config) => config.clone(),
         }
     }
+}
+
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
+pub struct RowFilterConfig {
+    pub function: Option<String>,
+    pub columns: Option<StringOrArrayOfStrings>,
 }
 
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]

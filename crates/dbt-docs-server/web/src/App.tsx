@@ -1,8 +1,7 @@
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-
-import { RyeconMagnifyingGlass } from '@dbt-labs/sourdough';
+import { Search as SearchIcon } from 'lucide-react';
 
 import { AnalysisFilterView } from './components/AnalysisFilterView';
 import FullLineagePage from './components/FullLineagePage';
@@ -624,7 +623,7 @@ function Topbar({
       </div>
       <Input
         type="search"
-        startIcon={{ ryecon: RyeconMagnifyingGlass }}
+        startIcon={{ icon: <SearchIcon className="size-3" /> }}
         placeholder="Search models, sources, tests, metrics…"
         value={search}
         onChange={(e) => onSearch(e.target.value)}

@@ -37,9 +37,10 @@ mod databricks {
     // `databricks__create_table_as` calls these clause helpers (defined in other asset files)
     // unconditionally. Each must resolve, but the only thing under test here is the
     // create/replace branch, so we register them as no-ops.
-    const CLAUSE_STUBS: [&str; 7] = [
+    const CLAUSE_STUBS: [&str; 8] = [
         "file_format_clause",
         "partition_cols",
+        "get_create_row_filter_clause",
         "liquid_clustered_cols",
         "clustered_cols",
         "location_clause",
@@ -86,6 +87,59 @@ mod databricks {
                 )])),
             ),
         ])
+    }
+
+    fn build_location_clause_harness() -> MacroTestHarness {
+        let databricks_location_sql =
+            include_str!("../../src/dbt_macro_assets/dbt-databricks/macros/relations/location.sql");
+
+        MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_macro(
+                "dbt",
+                "is_incremental",
+                "{% macro is_incremental() %}{{ return(false) }}{% endmacro %}",
+            )
+            .with_macro_at_path(
+                "dbt_databricks",
+                "location_clause",
+                databricks_location_sql,
+                "dbt_macro_assets/dbt-databricks/macros/relations/location.sql",
+            )
+            .build()
+            .expect("location clause harness should build")
+    }
+
+    fn render_location_clause(external_volume: Option<&str>) -> String {
+        let harness = build_location_clause_harness();
+        let relation = Value::from_object(CatalogRelation {
+            external_volume: external_volume.map(str::to_string),
+            ..CatalogRelation::default_catalog_relation_databricks()
+        });
+
+        harness
+            .render(
+                "{{ location_clause(relation) }}",
+                BTreeMap::from([("relation".to_string(), relation)]),
+            )
+            .expect("render should succeed")
+    }
+
+    #[test]
+    fn location_clause_renders_location_from_relation() {
+        let rendered = render_location_clause(Some("s3://bucket/root/a"));
+        assert!(
+            rendered.contains("location 's3://bucket/root/a'"),
+            "expected a location clause, got: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn location_clause_renders_nothing_without_location() {
+        let rendered = render_location_clause(None);
+        assert!(
+            !rendered.to_lowercase().contains("location"),
+            "expected no location clause, got: {rendered:?}"
+        );
     }
 
     #[test]
@@ -207,6 +261,103 @@ mod databricks {
         assert!(
             !lower.contains("create or replace table") && lower.contains("create table"),
             "managed iceberg without catalogs v2 must keep `create table`, got:\n{rendered}"
+        );
+    }
+
+    fn build_file_format_harness() -> MacroTestHarness {
+        let file_format_sql = include_str!(
+            "../../src/dbt_macro_assets/dbt-databricks/macros/relations/file_format.sql"
+        );
+
+        MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_macro_at_path(
+                "dbt_databricks",
+                "file_format_clause",
+                file_format_sql,
+                "dbt-databricks/macros/relations/file_format.sql",
+            )
+            .build()
+            .expect("file format harness should build")
+    }
+
+    fn render_file_format_clause(
+        use_catalogs_v2: bool,
+        use_managed_iceberg: bool,
+        relation: CatalogRelation,
+    ) -> String {
+        let harness = build_file_format_harness();
+
+        if use_catalogs_v2 {
+            enable_catalogs_v2();
+        }
+
+        harness.mock().set_attr(
+            "behavior",
+            Value::from_serialize(serde_json::json!({
+                "use_catalogs_v2": { "no_warn": use_catalogs_v2 },
+                "use_managed_iceberg": use_managed_iceberg,
+            })),
+        );
+
+        let ctx = BTreeMap::from([
+            ("dbt_version".to_string(), Value::from("2.0.0")),
+            ("relation".to_string(), Value::from_object(relation)),
+        ]);
+
+        harness
+            .render("{{ file_format_clause(relation) }}", ctx)
+            .expect("render should succeed")
+    }
+
+    #[test]
+    fn iceberg_without_catalogs_yml_renders_uniform_delta_v1_by_default() {
+        let relation = CatalogRelation::default_catalog_relation_databricks()
+            .with_table_format(TableFormat::Iceberg)
+            .with_adapter_property("use_uniform", "false");
+        let rendered = render_file_format_clause(false, false, relation);
+        let lower = rendered.to_lowercase();
+        assert!(
+            lower.contains("using delta") && !lower.contains("using iceberg"),
+            "table_format=iceberg without catalogs.yml must default to UniForm (`using delta`) in v1, unchanged from today, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn iceberg_renders_managed_iceberg_when_use_managed_iceberg_enabled_v1() {
+        let relation = CatalogRelation::default_catalog_relation_databricks()
+            .with_table_format(TableFormat::Iceberg)
+            .with_adapter_property("use_uniform", "false");
+        let rendered = render_file_format_clause(false, true, relation);
+        let lower = rendered.to_lowercase();
+        assert!(
+            lower.contains("using iceberg") && !lower.contains("using delta"),
+            "table_format=iceberg with use_managed_iceberg: true must opt into managed Iceberg (`using iceberg`), got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn iceberg_without_catalog_name_renders_uniform_delta_explicit_opt_in_v2() {
+        let relation = CatalogRelation::default_catalog_relation_databricks()
+            .with_table_format(TableFormat::Iceberg)
+            .with_adapter_property("use_uniform", "true");
+        let rendered = render_file_format_clause(true, true, relation);
+        let lower = rendered.to_lowercase();
+        assert!(
+            lower.contains("using delta") && !lower.contains("using iceberg"),
+            "table_format=iceberg with explicit use_uniform:true (v2) must render UniForm (`using delta`), got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn iceberg_without_catalogs_yml_renders_managed_iceberg_even_with_use_catalogs_v2_flag() {
+        let relation = CatalogRelation::default_catalog_relation_databricks()
+            .with_table_format(TableFormat::Iceberg)
+            .with_adapter_property("use_uniform", "false");
+        let rendered = render_file_format_clause(true, true, relation);
+        let lower = rendered.to_lowercase();
+        assert!(
+            lower.contains("using iceberg") && !lower.contains("using delta"),
+            "table_format=iceberg with use_catalogs_v2=true but no catalogs.yml must still default to managed Iceberg (`using iceberg`), got:\n{rendered}"
         );
     }
 }

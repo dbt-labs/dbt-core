@@ -30,6 +30,9 @@ pub use db::{DBT_RT_TABLES, DBT_TABLES, write_views_sql};
 
 pub mod ingest;
 
+pub mod info_schema;
+pub use info_schema::{INFO_SCHEMA_DIR_NAME, STAGING_DIR_NAME, write_info_schema};
+
 pub mod parquet;
 pub use parquet::{IndexWriter, WriteMode};
 

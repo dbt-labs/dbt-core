@@ -1,6 +1,7 @@
 use crate::adapter_config::{
     setup_bigquery_profile, setup_clickhouse_profile, setup_databricks_profile,
-    setup_fabric_profile, setup_postgres_profile, setup_redshift_profile, setup_snowflake_profile,
+    setup_exasol_profile, setup_fabric_profile, setup_postgres_profile, setup_redshift_profile,
+    setup_snowflake_profile,
 };
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{
@@ -65,7 +66,7 @@ fn load_profile_with_loader(
     };
 
     let dbt_profile = load_profiles(&load_args, &dbt_project)?;
-    Ok(dbt_profile.db_config)
+    Ok(dbt_profile.default_db_config().clone())
 }
 
 #[derive(Debug, Clone)]
@@ -184,6 +185,7 @@ impl ProfileSetup {
             AdapterType::Databricks,
             AdapterType::Bigquery,
             AdapterType::ClickHouse,
+            AdapterType::Exasol,
             AdapterType::Postgres,
             AdapterType::Redshift,
             AdapterType::Fabric,
@@ -392,10 +394,10 @@ impl ProfileSetup {
                 ));
             }
             AdapterType::Alt => {
-                // TODO: Create proper Alt profile setup
+                // TODO: Create proper lake compute profile setup
                 return Err(fs_err!(
                     ErrorCode::Generic,
-                    "Alt profile setup not yet implemented."
+                    "lake_compute profile setup not yet implemented."
                 ));
             }
             AdapterType::ClickHouse => {
@@ -407,7 +409,13 @@ impl ProfileSetup {
                     clickhouse_config.map(Box::as_ref),
                 )?)
             }
-            AdapterType::Exasol => todo!("Exasol"),
+            AdapterType::Exasol => {
+                let exasol_config = match existing_config {
+                    Some(DbConfig::Exasol(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Exasol(setup_exasol_profile(exasol_config.map(Box::as_ref))?)
+            }
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),

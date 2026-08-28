@@ -1347,6 +1347,9 @@ impl<'a> Parser<'a> {
             loop {
                 targets.push(ok!(self.parse_assign_name(true)));
                 if skip_token!(self, Token::Comma) {
+                    if matches_token!(self, Token::BlockEnd) {
+                        break;
+                    }
                     continue;
                 } else {
                     break;
@@ -1376,10 +1379,15 @@ impl<'a> Parser<'a> {
         } else {
             expect_token!(self, Token::Assign, "assignment operator");
             let mut exprs: Vec<ast::Expr<'a>> = Vec::new();
-            // parse multiple righthand side expressions
+            // parse multiple righthand side expressions; a comma makes this a tuple
+            let mut is_tuple = false;
             loop {
                 exprs.push(ok!(self.parse_expr()));
                 if skip_token!(self, Token::Comma) {
+                    is_tuple = true;
+                    if matches_token!(self, Token::BlockEnd) {
+                        break;
+                    }
                     continue;
                 } else {
                     break;
@@ -1394,11 +1402,11 @@ impl<'a> Parser<'a> {
                         self.stream.current_span(),
                     ))
                 },
-                expr: if exprs.len() == 1 {
+                expr: if !is_tuple {
                     exprs.into_iter().next().unwrap()
                 } else {
-                    ast::Expr::List(Spanned::new(
-                        ast::List { items: exprs },
+                    ast::Expr::Tuple(Spanned::new(
+                        ast::Tuple { items: exprs },
                         self.stream.current_span(),
                     ))
                 },

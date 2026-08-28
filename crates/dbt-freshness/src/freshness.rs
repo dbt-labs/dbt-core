@@ -12,7 +12,7 @@ use dbt_adapter::{
 };
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
-use dbt_common::constants::DBT_SOURCES_JSON;
+use dbt_common::constants::{DBT_FRESHNESS_JSON, DBT_SOURCES_JSON};
 use dbt_common::io_args::{IoArgs, ShowOptions};
 use dbt_common::tracing::dbt_emit::emit_info_log_message;
 use dbt_common::tracing::event_info::store_event_attributes;
@@ -35,16 +35,17 @@ use dbt_jinja_utils::{
 };
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
 use dbt_schemas::schemas::{
-    DbtModel, DbtSource, FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode,
-    InternalDbtNode, InternalDbtNodeAttributes, NodePathKind,
-    common::{FreshnessPeriod, FreshnessRules, FreshnessStatus},
+    DbtModel, DbtSource, FreshnessNodeRef, FreshnessResultsArtifact, FreshnessResultsMetadata,
+    FreshnessResultsNode, InternalDbtNodeAttributes, NodePathKind,
+    common::{FreshnessDefinition, FreshnessPeriod, FreshnessRules, FreshnessStatus},
+    is_freshness_node,
     relations::base::BaseRelation,
 };
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::PreTaskRunData;
 use dbt_telemetry::{
-    ArtifactType, ArtifactWritten, NodeOutcome, NodeProcessed, ProgressMessage, ShowResult,
-    SourceFreshnessDetail, SourceFreshnessOutcome, node_processed,
+    ArtifactType, ArtifactWritten, NodeOutcome, NodeProcessed, NodeType, ProgressMessage,
+    ShowResult, SourceFreshnessDetail, SourceFreshnessOutcome, node_processed,
     update_dbt_core_event_code_for_node_processed_end,
 };
 use itertools::Itertools;
@@ -124,23 +125,125 @@ pub fn calculate_seconds(freshness: &FreshnessRules) -> FsResult<i64> {
 const MAX_LOADED_AT_COLUMN: usize = 0;
 const SNAPSHOTTED_AT_COLUMN: usize = 1;
 
+/// `dbt source freshness` keeps its own wording verbatim: the message is
+/// user-visible and predates the unified command, so only the new spelling
+/// mentions models.
+fn nothing_to_do_message(sources_only: bool) -> &'static str {
+    if sources_only {
+        "Nothing to do. No sources with freshness config."
+    } else {
+        "Nothing to do. No sources or models with a freshness config."
+    }
+}
+
+/// Parse time only warns on a partial rule, so the `dbt1007` error has to surface
+/// here. Up front, because failing inside the results loop would discard every
+/// other node's already-measured result before any artifact is written.
+fn validate_freshness_rules_early(node: &dyn FreshnessNodeRef) -> FsResult<()> {
+    let criteria = node.freshness_criteria();
+    let loc = node.common().name_span.start.clone();
+    FreshnessRules::validate(criteria.error_after.as_ref())
+        .map_err(|e| e.with_location(loc.clone()))?;
+    FreshnessRules::validate(criteria.warn_after.as_ref()).map_err(|e| e.with_location(loc))?;
+    Ok(())
+}
+
+/// Revalidates on the way through: parse time only warns on a partial rule.
+fn evaluate_freshness_thresholds(
+    criteria: &FreshnessDefinition,
+    age: i64,
+) -> FsResult<(FreshnessStatus, SourceFreshnessOutcome)> {
+    let error_after = criteria
+        .error_after
+        .as_ref()
+        .map(calculate_seconds)
+        .transpose()?;
+    let warn_after = criteria
+        .warn_after
+        .as_ref()
+        .map(calculate_seconds)
+        .transpose()?;
+
+    if error_after.is_some_and(|threshold| age > threshold) {
+        Ok((
+            FreshnessStatus::Error,
+            SourceFreshnessOutcome::OutcomeFailed,
+        ))
+    } else if warn_after.is_some_and(|threshold| age > threshold) {
+        Ok((FreshnessStatus::Warn, SourceFreshnessOutcome::OutcomeWarned))
+    } else {
+        Ok((FreshnessStatus::Pass, SourceFreshnessOutcome::OutcomePassed))
+    }
+}
+
+/// `None` when the node declares neither key, and so belongs to the batch
+/// metadata pre-pass instead.
+#[allow(clippy::too_many_arguments)]
+async fn measure_query_based_freshness(
+    node: &dyn FreshnessNodeRef,
+    adapter_type: AdapterType,
+    jinja_env: &JinjaEnv,
+    compile_base: &CompileBaseCtx,
+    io_args: &IoArgs,
+    dependencies: BTreeSet<String>,
+) -> FsResult<Option<FreshnessResult>> {
+    let mut result = None;
+
+    let loaded_at_field = node.get_loaded_at_field();
+    if !loaded_at_field.is_empty() {
+        let filter = node.get_freshness_filter().unwrap_or("");
+        result = Some(
+            calculate_freshness(
+                &loaded_at_field.escape_default().to_string(),
+                &filter.escape_default().to_string(),
+                node,
+                adapter_type,
+                jinja_env,
+                compile_base,
+                io_args,
+                dependencies.clone(),
+            )
+            .await?,
+        );
+    }
+
+    // `loaded_at_query` wins when both are set, as before.
+    let loaded_at_query = node.get_loaded_at_query();
+    if !loaded_at_query.is_empty() {
+        result = Some(
+            calculate_freshness_custom_sql(
+                loaded_at_query,
+                node,
+                adapter_type,
+                jinja_env,
+                compile_base,
+                io_args,
+                dependencies,
+            )
+            .await?,
+        );
+    }
+
+    Ok(result)
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(skip_all, level = "trace")]
 pub async fn calculate_freshness(
     loaded_at_field: &str,
     filter: &str,
-    source: &DbtSource,
+    node: &dyn FreshnessNodeRef,
     adapter_type: AdapterType,
     jinja_env: &JinjaEnv,
     compile_base: &CompileBaseCtx,
     io_args: &IoArgs,
     dependencies: BTreeSet<String>,
 ) -> FsResult<FreshnessResult> {
-    let relation = source
-        .__base_attr__
+    let relation = node
+        .base()
         .relation_name
         .as_ref()
-        .ok_or_else(|| unexpected_fs_err!("Source needs a relation name"))?
+        .ok_or_else(|| unexpected_fs_err!("{} needs a relation name", node.kind_label()))?
         .as_str();
     let macro_expr = if filter.is_empty() {
         format!("collect_freshness('{relation}', '{loaded_at_field}').table")
@@ -150,7 +253,7 @@ pub async fn calculate_freshness(
 
     calculate_freshness_common(
         &macro_expr,
-        source,
+        node,
         adapter_type,
         jinja_env,
         compile_base,
@@ -165,18 +268,18 @@ pub async fn calculate_freshness(
 #[tracing::instrument(skip_all, level = "trace")]
 pub async fn calculate_freshness_custom_sql(
     loaded_at_query: &str,
-    source: &DbtSource,
+    node: &dyn FreshnessNodeRef,
     adapter_type: AdapterType,
     jinja_env: &JinjaEnv,
     compile_base: &CompileBaseCtx,
     io_args: &IoArgs,
     dependencies: BTreeSet<String>,
 ) -> FsResult<FreshnessResult> {
-    let relation = source
-        .__base_attr__
+    let relation = node
+        .base()
         .relation_name
         .as_ref()
-        .ok_or_else(|| unexpected_fs_err!("Source needs a relation name"))?
+        .ok_or_else(|| unexpected_fs_err!("{} needs a relation name", node.kind_label()))?
         .as_str();
 
     // Create a context with `this` relation for rendering the loaded_at_query
@@ -184,18 +287,19 @@ pub async fn calculate_freshness_custom_sql(
     let this_relation = RelationObject::new(Arc::from(
         do_create_relation(
             adapter_type,
-            source.__base_attr__.database.clone(),
-            source.__base_attr__.schema.clone(),
-            Some(source.__base_attr__.alias.clone()),
+            node.base().database.clone(),
+            node.base().schema.clone(),
+            Some(node.base().alias.clone()),
             None,
-            source.__base_attr__.quoting,
+            node.base().quoting,
         )
         .map_err(|e| {
             fs_err!(
                 code => ErrorCode::Unexpected,
-                loc => source.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
-                "Failed to create 'this' relation for source '{}': {}",
-                source.__common_attr__.unique_id,
+                loc => node.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
+                "Failed to create 'this' relation for {} '{}': {}",
+                node.kind_label().to_lowercase(),
+                node.common().unique_id,
                 e
             )
         })?,
@@ -211,13 +315,13 @@ pub async fn calculate_freshness_custom_sql(
             config: JinjaObject::new(DummyConfig {}),
         },
         this: this_relation,
-        database: source.__base_attr__.database.clone(),
-        schema: source.__base_attr__.schema.clone(),
-        identifier: source.__base_attr__.alias.clone(),
+        database: node.base().database.clone(),
+        schema: node.base().schema.clone(),
+        identifier: node.base().alias.clone(),
     };
 
     // Pre-render the loaded_at_query to resolve any Jinja expressions like {{this}}
-    let source_path = source
+    let source_path = node
         .get_node_path(
             NodePathKind::Definition,
             io_args.in_dir.as_path(),
@@ -254,7 +358,7 @@ pub async fn calculate_freshness_custom_sql(
 
     calculate_freshness_common(
         &macro_expr,
-        source,
+        node,
         adapter_type,
         jinja_env,
         compile_base,
@@ -269,7 +373,7 @@ pub async fn calculate_freshness_custom_sql(
 #[tracing::instrument(skip_all, level = "trace")]
 async fn calculate_freshness_common(
     macro_expr: &str,
-    source: &DbtSource,
+    node: &dyn FreshnessNodeRef,
     adapter_type: AdapterType,
     jinja_env: &JinjaEnv,
     compile_base: &CompileBaseCtx,
@@ -278,8 +382,8 @@ async fn calculate_freshness_common(
     error_message: &str,
 ) -> FsResult<FreshnessResult> {
     let context = build_run_node_ctx(
-        source,
-        &source.deprecated_config,
+        node,
+        &node.serialized_config(),
         adapter_type,
         None,
         compile_base,
@@ -301,9 +405,10 @@ async fn calculate_freshness_common(
     if batch.num_rows() != 1 || batch.num_columns() != 2 {
         return err!(
             code => ErrorCode::Unexpected,
-            loc => source.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
-            "Source '{}' freshness result table should have 1 row and 2 columns, but got {} rows and {} columns",
-            source.__common_attr__.unique_id,
+            loc => node.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
+            "{} '{}' freshness result table should have 1 row and 2 columns, but got {} rows and {} columns",
+            node.kind_label(),
+            node.common().unique_id,
             batch.num_rows(),
             batch.num_columns()
         );
@@ -314,7 +419,7 @@ async fn calculate_freshness_common(
     let max_loaded_at_column = validate_and_extract_timestamp_column(
         &batch,
         MAX_LOADED_AT_COLUMN,
-        source,
+        node,
         error_message,
         io_args,
     )?;
@@ -322,7 +427,7 @@ async fn calculate_freshness_common(
     let snapshotted_at = validate_and_extract_timestamp_column(
         &batch,
         SNAPSHOTTED_AT_COLUMN,
-        source,
+        node,
         error_message,
         io_args,
     )?;
@@ -391,8 +496,9 @@ pub async fn run_freshness(
     resolver_state: &ResolverState,
     adapter: Arc<Adapter>,
     env: &JinjaEnv,
-    is_source_freshness_command: bool,
+    is_freshness_command: bool,
     check_all: bool,
+    sources_only: bool,
 ) -> FsResult<BTreeMap<String, FreshnessResult>> {
     // First, collect all sources and extended models
     let set_of_nodes = schedule
@@ -413,25 +519,41 @@ pub async fn run_freshness(
         .filter_map_ok(|node| node.as_any().downcast_ref::<DbtSource>())
         .collect::<Result<Vec<_>, _>>()?;
 
-    // F2 safety net: parse-time validation of freshness rules is now demoted
-    // to a warning so partial rules don't abort `parse` / `run` / `build`. When
-    // `dbt source freshness` actually consumes the rule, surface the same
-    // `dbt1007` error before we issue any warehouse query, matching the
-    // pre-fix user-visible behavior of the command.
-    if is_source_freshness_command {
+    if is_freshness_command {
         for node in sources.iter() {
-            if let Some(freshness) = node.__source_attr__.freshness.as_ref() {
-                let loc = node.__common_attr__.name_span.start.clone();
-                FreshnessRules::validate(freshness.error_after.as_ref())
-                    .map_err(|e| e.with_location(loc.clone()))?;
-                FreshnessRules::validate(freshness.warn_after.as_ref())
-                    .map_err(|e| e.with_location(loc))?;
-            }
+            validate_freshness_rules_early(*node)?;
         }
     }
 
+    // Build-time freshness handles models through the extended-model path below.
+    let sla_models = if is_freshness_command && !sources_only {
+        set_of_nodes
+            .iter()
+            .map(|unique_id| {
+                resolver_state
+                    .nodes
+                    .get_node(unique_id)
+                    .ok_or_else(|| unexpected_fs_err!("Node must be resolved"))
+            })
+            .filter_map_ok(|node| {
+                if is_freshness_node(node) {
+                    node.as_any().downcast_ref::<DbtModel>()
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        vec![]
+    };
+
+    // `sla_models` is only populated for the freshness command, so no extra gate.
+    for node in sla_models.iter() {
+        validate_freshness_rules_early(*node)?;
+    }
+
     // If we are not checking all
-    let extended_models = if is_source_freshness_command {
+    let extended_models = if is_freshness_command {
         if !check_all {
             sources = sources
                 .into_iter()
@@ -467,13 +589,13 @@ pub async fn run_freshness(
             .collect::<Result<Vec<_>, _>>()?
     };
 
-    // Early out if we have no sources or extended models to check freshness for
-    if sources.is_empty() && extended_models.is_empty() {
-        // If this is a source freshness command, issue "Nothing to do" message.
-        if is_source_freshness_command {
+    // Early out if we have nothing to check freshness for
+    if sources.is_empty() && sla_models.is_empty() && extended_models.is_empty() {
+        // If this is a freshness command, issue "Nothing to do" message.
+        if is_freshness_command {
             emit_warn_log_message(
                 ErrorCode::FreshnessConfigInvalid,
-                "Nothing to do. No sources with freshness config.",
+                nothing_to_do_message(sources_only),
             );
         }
         return Ok(BTreeMap::new());
@@ -484,9 +606,11 @@ pub async fn run_freshness(
     // When freshness is collected as part of a build rather than by
     // `dbt source freshness`, no spans are created so users are not confused by
     // extra counts of processed nodes. We instead issue a progress log line.
-    let source_spans: HashMap<&str, tracing::Span> = if is_source_freshness_command {
+    let node_spans: HashMap<&str, tracing::Span> = if is_freshness_command {
+        let sources = sources.iter().map(|node| *node as &dyn FreshnessNodeRef);
+        let models = sla_models.iter().map(|node| *node as &dyn FreshnessNodeRef);
         sources
-            .iter()
+            .chain(models)
             .map(|node| {
                 let node_processed_event = node.get_node_processed_event(
                     Some(ExecutionPhase::FreshnessAnalysis),
@@ -495,7 +619,7 @@ pub async fn run_freshness(
                     true,
                 );
                 let span = create_info_span(node_processed_event);
-                (node.__common_attr__.unique_id.as_str(), span)
+                (node.common().unique_id.as_str(), span)
             })
             .collect()
     } else {
@@ -520,20 +644,21 @@ pub async fn run_freshness(
 
     let results = run_freshness_with_spans(
         &sources,
+        &sla_models,
         &extended_models,
         resolver_state,
         adapter,
         env,
         &compile_base,
         io_args,
-        is_source_freshness_command,
-        &source_spans,
+        is_freshness_command,
+        &node_spans,
     )
     .await;
 
-    if is_source_freshness_command && let Err(ref err) = results {
+    if is_freshness_command && let Err(ref err) = results {
         let error_message = err.to_string();
-        for span in source_spans.values() {
+        for span in node_spans.values() {
             record_span_status_with_attrs(
                 span,
                 |attrs| {
@@ -547,26 +672,31 @@ pub async fn run_freshness(
         }
     }
 
-    // source_spans are dropped here, which closes the spans and emits the end events
+    // node_spans are dropped here, which closes the spans and emits the end events
     results
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn run_freshness_with_spans(
     sources: &Vec<&DbtSource>,
+    sla_models: &Vec<&DbtModel>,
     extended_models: &Vec<&DbtModel>,
     resolver_state: &ResolverState,
     adapter: Arc<Adapter>,
     env: &JinjaEnv,
     compile_base: &CompileBaseCtx,
     io_args: &IoArgs,
-    is_source_freshness_command: bool,
-    source_spans: &HashMap<&str, tracing::Span>,
+    is_freshness_command: bool,
+    node_spans: &HashMap<&str, tracing::Span>,
 ) -> FsResult<BTreeMap<String, FreshnessResult>> {
     let mut results: BTreeMap<String, FreshnessResult> = BTreeMap::new();
-    // Collect all source relations that do not specify a 'loaded_at' field or a custom sql query.
-    let (relations, name_map) =
-        collect_relations(sources, extended_models, resolver_state.adapter_type)?;
+    // Collect all relations that do not specify a 'loaded_at' field or a custom sql query.
+    let (relations, name_map) = collect_relations(
+        sources,
+        sla_models,
+        extended_models,
+        resolver_state.adapter_type,
+    )?;
 
     // Get the freshness information for the collected source relations.
     if !relations.is_empty()
@@ -583,7 +713,7 @@ async fn run_freshness_with_spans(
         // downstream fallback (treated as updated).
         let freshness = match freshness_result {
             Ok(f) => f,
-            Err(e) if !is_source_freshness_command => {
+            Err(e) if !is_freshness_command => {
                 emit_warn_log_message(
                     ErrorCode::FreshnessMetadataWarning,
                     format!(
@@ -629,55 +759,49 @@ async fn run_freshness_with_spans(
     }
 
     // Run 'loaded_at' and custom queries.
-    for node in sources.iter().filter(|node| {
-        !node.get_loaded_at_field().is_empty() || !node.get_loaded_at_query().is_empty()
-    }) {
-        let loaded_at_field = node.get_loaded_at_field();
-        let loaded_at_query = node.get_loaded_at_query();
-        let dependencies: BTreeSet<String> = resolver_state
-            .runtime_config
-            .dependencies
-            .keys()
-            .cloned()
-            .collect();
-        if !loaded_at_field.is_empty() {
-            let filter = node
-                .__source_attr__
-                .freshness
-                .as_ref()
-                .and_then(|f| f.filter.as_deref())
-                .unwrap_or("");
-            let result = calculate_freshness(
-                &loaded_at_field.escape_default().to_string(),
-                &filter.escape_default().to_string(),
-                node,
-                resolver_state.adapter_type,
-                env,
-                compile_base,
-                io_args,
-                dependencies.clone(),
-            )
-            .await?;
+    let dependencies: BTreeSet<String> = resolver_state
+        .runtime_config
+        .dependencies
+        .keys()
+        .cloned()
+        .collect();
+    for node in sources.iter() {
+        if let Some(result) = measure_query_based_freshness(
+            *node,
+            resolver_state.adapter_type,
+            env,
+            compile_base,
+            io_args,
+            dependencies.clone(),
+        )
+        .await?
+        {
             results.insert(node.__common_attr__.unique_id.clone(), result);
         }
-        if !loaded_at_query.is_empty() {
-            let result = calculate_freshness_custom_sql(
-                loaded_at_query,
-                node,
-                resolver_state.adapter_type,
-                env,
-                compile_base,
-                io_args,
-                dependencies,
-            )
-            .await?;
+    }
+    for node in sla_models.iter() {
+        if let Some(result) = measure_query_based_freshness(
+            *node,
+            resolver_state.adapter_type,
+            env,
+            compile_base,
+            io_args,
+            dependencies.clone(),
+        )
+        .await?
+        {
             results.insert(node.__common_attr__.unique_id.clone(), result);
         }
     }
 
-    for node in sources {
-        if let Some(result) = results.get_mut(&node.__common_attr__.unique_id) {
-            if !is_source_freshness_command {
+    let reported_nodes = sources
+        .iter()
+        .map(|node| *node as &dyn FreshnessNodeRef)
+        .chain(sla_models.iter().map(|node| *node as &dyn FreshnessNodeRef));
+    for node in reported_nodes {
+        let kind = node.kind_label().to_lowercase();
+        if let Some(result) = results.get_mut(&node.common().unique_id) {
+            if !is_freshness_command {
                 // Emit a freshness info log when freshness is collected as part of a
                 // build. The source freshness command generates `NodeProcessed`, so it
                 // does not need this.
@@ -685,45 +809,21 @@ async fn run_freshness_with_spans(
                     "Freshness".to_string(),
                     format!(
                         "{} last updated {} ago",
-                        node.__common_attr__.unique_id,
+                        node.common().unique_id,
                         humantime::format_duration(std::time::Duration::from_secs(
                             result.age as u64
                         ))
                     ),
                 ));
             }
-            let error_after = node
-                .__source_attr__
-                .freshness
-                .as_ref()
-                .and_then(|x| x.error_after.as_ref())
-                .map(calculate_seconds)
-                .transpose()?;
-
-            let warn_after = node
-                .__source_attr__
-                .freshness
-                .as_ref()
-                .and_then(|x| x.warn_after.as_ref())
-                .map(calculate_seconds)
-                .transpose()?;
-
-            // Determine freshness outcome based on thresholds
-            let freshness_outcome = if error_after.is_some_and(|x| result.age > x) {
-                result.status = FreshnessStatus::Error;
-                SourceFreshnessOutcome::OutcomeFailed
-            } else if warn_after.is_some_and(|x| result.age > x) {
-                result.status = FreshnessStatus::Warn;
-                SourceFreshnessOutcome::OutcomeWarned
-            } else {
-                result.status = FreshnessStatus::Pass;
-                SourceFreshnessOutcome::OutcomePassed
-            };
+            let (status, freshness_outcome) =
+                evaluate_freshness_thresholds(&node.freshness_criteria(), result.age)?;
+            result.status = status;
 
             // Update the span status with freshness outcome
             // The span was created before the queries, now we update it with the result
-            if is_source_freshness_command {
-                if let Some(span) = source_spans.get(node.__common_attr__.unique_id.as_str()) {
+            if is_freshness_command {
+                if let Some(span) = node_spans.get(node.common().unique_id.as_str()) {
                     update_span_attrs(span, |ev: &mut NodeProcessed| {
                         ev.node_outcome = NodeOutcome::Success as i32;
                         ev.node_outcome_detail =
@@ -742,26 +842,28 @@ async fn run_freshness_with_spans(
                     let err = fs_err!(
                         code => ErrorCode::StaleSource,
                         loc => node.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
-                        "Stale source {}",
-                        node.__common_attr__.unique_id
+                        "Stale {} {}",
+                        kind,
+                        node.common().unique_id
                     );
                     emit_error_log_from_fs_error(*err);
                 } else if freshness_outcome == SourceFreshnessOutcome::OutcomeWarned {
                     let err = fs_err!(
                         code => ErrorCode::StaleSource,
                         loc => node.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
-                        "Stale source {}",
-                        node.__common_attr__.unique_id
+                        "Stale {} {}",
+                        kind,
+                        node.common().unique_id
                     );
                     emit_warn_log_from_fs_error(*err);
                 }
             }
-        } else if is_source_freshness_command {
+        } else if is_freshness_command {
             return err!(
                     code => ErrorCode::Unexpected,
-                    loc => node.__common_attr__.name_span.start.clone(),
-                    "Could not find freshness information for source '{}'. Please verify that you have access to view metadata for this source in the warehouse.",
-                    node.__common_attr__.unique_id
+                    loc => node.common().name_span.start.clone(),
+                    "Could not find freshness information for {kind} '{}'. Please verify that you have access to view metadata for this {kind} in the warehouse.",
+                    node.common().unique_id
             );
         } else {
             // When freshness is collected as part of a build, missing freshness info is
@@ -770,8 +872,8 @@ async fn run_freshness_with_spans(
             emit_warn_log_message(
                 ErrorCode::FreshnessMetadataWarning,
                 format!(
-                    "Could not find freshness information for source '{}'. The source will be treated as updated, and dependent models will rebuild.",
-                    node.__common_attr__.unique_id
+                    "Could not find freshness information for {kind} '{}'. The {kind} will be treated as updated, and dependent models will rebuild.",
+                    node.common().unique_id
                 ),
             );
         }
@@ -803,6 +905,7 @@ fn create_relation_and_map(
 #[allow(clippy::type_complexity)]
 fn collect_relations(
     sources: &[&DbtSource],
+    sla_models: &Vec<&DbtModel>,
     extended_models: &Vec<&DbtModel>,
     adapter_type: AdapterType,
 ) -> FsResult<(Vec<Arc<dyn BaseRelation>>, BTreeMap<String, Vec<String>>)> {
@@ -819,6 +922,18 @@ fn collect_relations(
         .collect::<FsResult<Vec<_>>>()?;
 
     all_relations.extend(source_relations);
+
+    // Share the sources' single batch metadata call. Query-measured models are
+    // excluded, same as sources.
+    let sla_model_relations = sla_models
+        .iter()
+        .filter(|node| {
+            node.get_loaded_at_field().is_empty() && node.get_loaded_at_query().is_empty()
+        })
+        .map(|node| create_relation_and_map(*node, adapter_type, &mut name_map))
+        .collect::<FsResult<Vec<_>>>()?;
+
+    all_relations.extend(sla_model_relations);
 
     // Collect relations from extended models
     let model_relations = extended_models
@@ -841,7 +956,7 @@ fn collect_relations(
 fn validate_and_extract_timestamp_column(
     batch: &arrow::record_batch::RecordBatch,
     column_index: usize,
-    source: &DbtSource,
+    node: &dyn FreshnessNodeRef,
     error_message: &str,
     io_args: &IoArgs,
 ) -> FsResult<arrow::array::ArrayRef> {
@@ -850,9 +965,10 @@ fn validate_and_extract_timestamp_column(
             // No timezone info is attached so we issue a warning as we are about to make some timezone up.
             let err = fs_err!(
                 code => ErrorCode::Unexpected,
-                loc => source.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
-                "Source '{}' {} has a timestamp type without a timezone, we will assume a UTC timezone",
-                source.__common_attr__.unique_id,
+                loc => node.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
+                "{} '{}' {} has a timestamp type without a timezone, we will assume a UTC timezone",
+                node.kind_label(),
+                node.common().unique_id,
                 error_message
             );
             emit_warn_log_from_fs_error(*err);
@@ -863,9 +979,10 @@ fn validate_and_extract_timestamp_column(
         _ => {
             err!(
                 code => ErrorCode::Unexpected,
-                loc => source.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
-                "Source '{}' {} should have a timestamp type, but got {} type",
-                source.__common_attr__.unique_id,
+                loc => node.get_node_path(NodePathKind::Definition, io_args.in_dir.as_path(), io_args.out_dir.as_path()).into_owned(),
+                "{} '{}' {} should have a timestamp type, but got {} type",
+                node.kind_label(),
+                node.common().unique_id,
                 error_message,
                 batch.column(column_index).data_type()
             )
@@ -873,48 +990,108 @@ fn validate_and_extract_timestamp_column(
     }
 }
 
+/// Whether the selection contains any source at all.
+///
+/// Gates the `sources.json` write: a model-only `dbt freshness --select some_model`
+/// would otherwise overwrite a good artifact with an empty one, even though the run
+/// measured no sources and the user never asked about them.
+///
+/// Keyed on what was *selected*, not on what was measured. A source that was selected
+/// but produced no result is a different situation, already fatal in
+/// `run_freshness_with_spans`, and must still write the artifact rather than silently
+/// skip it.
+pub fn selection_contains_source(
+    schedule: &Schedule<String>,
+    resolver_state: &ResolverState,
+) -> bool {
+    schedule
+        .all_selected_nodes
+        .iter()
+        .chain(schedule.frontier_nodes.iter())
+        .any(|unique_id| {
+            resolver_state
+                .nodes
+                .get_node(unique_id)
+                .is_some_and(|node| node.resource_type() == NodeType::Source)
+        })
+}
+
+/// Whether `sources.json` should be (re)written for this invocation.
+///
+/// `dbt source freshness` (`sources_only`) always writes it, empty results
+/// included, matching dbt-core. The unified `dbt freshness` spelling only writes
+/// it when [`selection_contains_source`] holds, so a model-only selection doesn't
+/// clobber a good artifact with an empty one.
+pub fn should_write_sources_json(
+    sources_only: bool,
+    schedule: &Schedule<String>,
+    resolver_state: &ResolverState,
+) -> bool {
+    sources_only || selection_contains_source(schedule, resolver_state)
+}
+
+/// Sources only, `resource_type` unset: `sources.json` keeps the exact shape
+/// `dbt source freshness` has always written.
 pub fn freshness_results_to_nodes(
     resolver_state: &ResolverState,
     results: &BTreeMap<String, FreshnessResult>,
 ) -> Vec<FreshnessResultsNode> {
+    build_result_nodes(resolver_state, results, true)
+}
+
+/// Sources and models, each tagged with its resource type.
+pub fn freshness_results_to_freshness_nodes(
+    resolver_state: &ResolverState,
+    results: &BTreeMap<String, FreshnessResult>,
+) -> Vec<FreshnessResultsNode> {
+    build_result_nodes(resolver_state, results, false)
+}
+
+fn build_result_nodes(
+    resolver_state: &ResolverState,
+    results: &BTreeMap<String, FreshnessResult>,
+    sources_only: bool,
+) -> Vec<FreshnessResultsNode> {
     results
         .iter()
-        .map(|(unique_id, result)| FreshnessResultsNode {
-            unique_id: unique_id.clone(),
-            max_loaded_at: result.max_loaded_at,
-            snapshotted_at: result.snapshotted_at,
-            max_loaded_at_time_ago_in_s: result.age as f64,
-            status: result.status.clone(),
-            criteria: resolver_state
+        .filter_map(|(unique_id, result)| {
+            let node = resolver_state
                 .nodes
                 .get_node(unique_id)
-                .expect("node must exist")
-                .as_any()
-                .downcast_ref::<DbtSource>()
-                .expect("source expected")
-                .__source_attr__
-                .freshness
-                .clone()
-                .unwrap_or_default(),
-            adapter_response: BTreeMap::new(),
-            timing: vec![],
-            thread_id: format!(
-                "Thread-{}",
-                format!("{:?}", std::thread::current().id())
-                    .trim_start_matches("ThreadId(")
-                    .trim_end_matches(")")
-            ),
-            execution_time: 0.0,
-            node: None,
+                .expect("node must exist");
+            if sources_only && node.resource_type() != NodeType::Source {
+                return None;
+            }
+            Some(FreshnessResultsNode {
+                unique_id: unique_id.clone(),
+                resource_type: (!sources_only)
+                    .then(|| node.resource_type().as_static_ref().to_string()),
+                max_loaded_at: result.max_loaded_at,
+                snapshotted_at: result.snapshotted_at,
+                max_loaded_at_time_ago_in_s: result.age as f64,
+                status: result.status.clone(),
+                criteria: node.freshness_criteria(),
+                adapter_response: BTreeMap::new(),
+                timing: vec![],
+                thread_id: format!(
+                    "Thread-{}",
+                    format!("{:?}", std::thread::current().id())
+                        .trim_start_matches("ThreadId(")
+                        .trim_end_matches(")")
+                ),
+                execution_time: 0.0,
+                node: None,
+            })
         })
         .collect()
 }
 
-/// Builds freshness results for the Jinja `on_run_end` context, including the source node.
+/// Builds freshness results for the Jinja `on_run_end` context, including the node.
 ///
-/// Unlike `freshness_results_to_nodes` (used for the sources.json artifact),
-/// this variant attaches the resolved source node so that macros like elementary's
-/// `upload_source_freshness` can access `result.node.unique_id` and other node fields.
+/// Unlike `freshness_results_to_nodes` (used for the sources.json artifact), this
+/// variant attaches the resolved node so that macros like elementary's
+/// `upload_source_freshness` can access `result.node.unique_id` and other node
+/// fields. Do not drop `node: Some(..)`.
 pub fn freshness_results_to_context(
     resolver_state: &ResolverState,
     results: &BTreeMap<String, FreshnessResult>,
@@ -926,16 +1103,10 @@ pub fn freshness_results_to_context(
                 .nodes
                 .get_node_owned(unique_id)
                 .expect("node must exist");
-            let criteria = node
-                .as_any()
-                .downcast_ref::<DbtSource>()
-                .expect("source expected")
-                .__source_attr__
-                .freshness
-                .clone()
-                .unwrap_or_default();
+            let criteria = node.freshness_criteria();
             FreshnessResultsNode {
                 unique_id: unique_id.clone(),
+                resource_type: None,
                 max_loaded_at: result.max_loaded_at,
                 snapshotted_at: result.snapshotted_at,
                 max_loaded_at_time_ago_in_s: result.age as f64,
@@ -963,6 +1134,29 @@ pub fn build_sources_artifact(
     resolver_state: &ResolverState,
     results: &BTreeMap<String, FreshnessResult>,
 ) -> FreshnessResultsArtifact {
+    build_artifact(
+        invocation_id,
+        freshness_results_to_nodes(resolver_state, results),
+    )
+}
+
+/// Builds the `freshness.json` artifact: the `sources.json` shape plus
+/// `resource_type`, covering models as well as sources.
+pub fn build_freshness_artifact(
+    invocation_id: &uuid::Uuid,
+    resolver_state: &ResolverState,
+    results: &BTreeMap<String, FreshnessResult>,
+) -> FreshnessResultsArtifact {
+    build_artifact(
+        invocation_id,
+        freshness_results_to_freshness_nodes(resolver_state, results),
+    )
+}
+
+fn build_artifact(
+    invocation_id: &uuid::Uuid,
+    results: Vec<FreshnessResultsNode>,
+) -> FreshnessResultsArtifact {
     let generated_at: DateTime<Utc> = Utc::now();
     let metadata = FreshnessResultsMetadata {
         dbt_schema_version: "https://schemas.getdbt.com/dbt/sources/v3.json".to_string(),
@@ -975,7 +1169,7 @@ pub fn build_sources_artifact(
 
     FreshnessResultsArtifact {
         metadata,
-        results: freshness_results_to_nodes(resolver_state, results),
+        results,
         elapsed_time: 0.0,
     }
 }
@@ -985,7 +1179,39 @@ pub fn write_sources_json(
     in_dir: &Path,
     sources_artifact: &FreshnessResultsArtifact,
 ) -> FsResult<()> {
-    let results_path = out_dir.join(DBT_SOURCES_JSON);
+    write_freshness_artifact(out_dir, in_dir, sources_artifact, true)
+}
+
+/// `sources.json` is still written alongside `freshness.json` for back-compat.
+pub fn write_freshness_json(
+    out_dir: &Path,
+    in_dir: &Path,
+    freshness_artifact: &FreshnessResultsArtifact,
+) -> FsResult<()> {
+    write_freshness_artifact(out_dir, in_dir, freshness_artifact, false)
+}
+
+fn write_freshness_artifact(
+    out_dir: &Path,
+    in_dir: &Path,
+    artifact: &FreshnessResultsArtifact,
+    sources_only: bool,
+) -> FsResult<()> {
+    let (file_name, artifact_type, log_message) = if sources_only {
+        (
+            DBT_SOURCES_JSON,
+            ArtifactType::Sources,
+            "Successfully wrote sources.json",
+        )
+    } else {
+        (
+            DBT_FRESHNESS_JSON,
+            ArtifactType::Freshness,
+            "Successfully wrote freshness.json",
+        )
+    };
+
+    let results_path = out_dir.join(file_name);
 
     let rel_path = pathdiff::diff_paths(&results_path, in_dir)
         .unwrap_or_else(|| results_path.clone())
@@ -993,15 +1219,15 @@ pub fn write_sources_json(
         .into_owned();
 
     let _sp = create_info_span(ArtifactWritten {
-        artifact_type: ArtifactType::Sources as i32,
+        artifact_type: artifact_type as i32,
         relative_path: rel_path,
     })
     .entered();
 
     let results_file = File::create(results_path)?;
 
-    serde_json::to_writer(results_file, sources_artifact)?;
-    emit_info_log_message("Successfully wrote sources.json");
+    serde_json::to_writer(results_file, artifact)?;
+    emit_info_log_message(log_message);
     Ok(())
 }
 
@@ -1014,20 +1240,18 @@ pub fn write_freshness_results_parquet(
 
     let freshness_dir = io.out_dir.join("metadata").join("run").join("freshness");
 
-    let ingested_at: i64 = Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    // Microseconds, matching the column's Arrow type and every sibling producer.
+    let ingested_at: i64 = Utc::now().timestamp_micros();
 
     let rows: Vec<FreshnessResultRow> = results
         .iter()
         .filter_map(|(unique_id, result)| {
-            let source = resolver_state
-                .nodes
-                .get_node(unique_id)?
-                .as_any()
-                .downcast_ref::<DbtSource>()?;
-            let criteria = source.__source_attr__.freshness.clone().unwrap_or_default();
+            let node = resolver_state.nodes.get_node(unique_id)?;
+            let criteria = node.freshness_criteria();
             Some(FreshnessResultRow {
                 invocation_id: io.invocation_id.to_string(),
                 unique_id: unique_id.clone(),
+                resource_type: Some(node.resource_type().as_static_ref().to_string()),
                 status: result.status.to_string(),
                 max_loaded_at: Some(result.max_loaded_at.to_rfc3339()),
                 snapshotted_at: Some(result.snapshotted_at.to_rfc3339()),
@@ -1079,20 +1303,501 @@ pub fn emit_freshness_stats(io_args: &IoArgs, results: &BTreeMap<String, Freshne
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_schemas::schemas::common::FreshnessDefinition;
-    use dbt_schemas::schemas::nodes::DbtSourceAttr;
+    use dbt_schemas::IndexMap;
+    use dbt_schemas::schemas::InternalDbtNode;
+    use dbt_schemas::schemas::Nodes;
+    use dbt_schemas::schemas::common::ModelFreshnessRules;
+    use dbt_schemas::schemas::profiles::{DbConfig, SnowflakeDbConfig};
+    use dbt_schemas::schemas::properties::ModelFreshness;
+    use dbt_schemas::state::{
+        DbtProfile, DbtRuntimeConfig, DummyNodeResolverTracker, Macros, Operations, ProfileAdapter,
+        RenderResults,
+    };
 
-    /// A source whose `freshness` resolved to `Some(..)`, i.e. anything that did not opt out
-    /// with `config: freshness: null`. `default()` is what a source that configures no freshness
-    /// at all resolves to (META-5461).
+    fn rules(count: i64, period: FreshnessPeriod) -> FreshnessRules {
+        FreshnessRules {
+            count: Some(count),
+            period: Some(period),
+        }
+    }
+
+    /// Minimal `ResolverState` for tests that only need `nodes` populated.
+    fn test_resolver_state_with_nodes(nodes: Nodes) -> ResolverState {
+        ResolverState {
+            root_project_name: "test".to_string(),
+            adapter_type: AdapterType::Snowflake,
+            nodes,
+            disabled_nodes: Nodes::default(),
+            macros: Macros::default(),
+            operations: Operations::default(),
+            dbt_profile: {
+                let db_config = DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default());
+                let default_adapter = db_config.adapter_type();
+                let adapters =
+                    IndexMap::from([(default_adapter, ProfileAdapter::single(db_config))]);
+                DbtProfile {
+                    profile: "default".to_string(),
+                    target: "dev".to_string(),
+                    defer_to_target: None,
+                    allow_clones: true,
+                    adapters,
+                    default_adapter,
+                    schema: "dbt_test".to_string(),
+                    database: "db".to_string(),
+                    relative_profile_path: std::path::PathBuf::new(),
+                    threads: None,
+                }
+            },
+            cloud_config: None,
+            render_results: RenderResults::default(),
+            node_resolver: Arc::new(DummyNodeResolverTracker),
+            get_relation_calls: Default::default(),
+            get_columns_in_relation_calls: Default::default(),
+            patterned_dangling_sources: Default::default(),
+            run_started_at: Utc::now().with_timezone(&chrono_tz::UTC),
+            runtime_config: Arc::new(DbtRuntimeConfig::default()),
+            manifest_path_configs: BTreeMap::new(),
+            manifest_selectors: BTreeMap::new(),
+            resolved_selectors: Default::default(),
+            root_project_quoting: Default::default(),
+            defer_nodes: None,
+            nodes_with_resolution_errors: Default::default(),
+            nodes_with_access_errors: Default::default(),
+            semantic_layer_spec_is_legacy: false,
+            test_name_truncations: Default::default(),
+        }
+    }
+
+    #[test]
+    fn selection_contains_source_is_false_with_no_sources_selected() {
+        let resolver_state = test_resolver_state_with_nodes(Nodes::default());
+        let schedule = Schedule::<String>::default();
+        assert!(!selection_contains_source(&schedule, &resolver_state));
+    }
+
+    #[test]
+    fn selection_contains_source_is_true_when_a_frontier_source_is_present() {
+        let mut nodes = Nodes::default();
+        let source = source_with_freshness(None);
+        let unique_id = source.__common_attr__.unique_id.clone();
+        nodes.sources.insert(unique_id.clone(), Arc::new(source));
+        let resolver_state = test_resolver_state_with_nodes(nodes);
+
+        let mut schedule = Schedule::<String>::default();
+        schedule.frontier_nodes.insert(unique_id);
+
+        assert!(selection_contains_source(&schedule, &resolver_state));
+    }
+
+    #[test]
+    fn should_write_sources_json_is_always_true_for_source_freshness() {
+        // `dbt source freshness` always writes `sources.json`, matching dbt-core,
+        // even when the resolved selection contains zero source nodes.
+        let resolver_state = test_resolver_state_with_nodes(Nodes::default());
+        let schedule = Schedule::<String>::default();
+
+        assert!(!selection_contains_source(&schedule, &resolver_state));
+        assert!(should_write_sources_json(true, &schedule, &resolver_state));
+    }
+
+    #[test]
+    fn should_write_sources_json_is_false_for_freshness_with_no_source_selected() {
+        // The unified `dbt freshness` spelling keeps the guard: a model-only
+        // selection must not clobber a good `sources.json` with an empty one.
+        let resolver_state = test_resolver_state_with_nodes(Nodes::default());
+        let schedule = Schedule::<String>::default();
+
+        assert!(!should_write_sources_json(
+            false,
+            &schedule,
+            &resolver_state
+        ));
+    }
+
+    #[test]
+    fn source_freshness_writes_sources_json_with_empty_results_when_no_source_selected() {
+        // Regression test: `dbt source freshness` must still write an (empty)
+        // `sources.json` rather than skip the write, even though the resolved
+        // selection contains no source nodes.
+        let resolver_state = test_resolver_state_with_nodes(Nodes::default());
+        let schedule = Schedule::<String>::default();
+        let sources_only = true;
+
+        assert!(should_write_sources_json(
+            sources_only,
+            &schedule,
+            &resolver_state
+        ));
+
+        let empty_results: BTreeMap<String, FreshnessResult> = BTreeMap::new();
+        let artifact =
+            build_sources_artifact(&uuid::Uuid::new_v4(), &resolver_state, &empty_results);
+        assert!(artifact.results.is_empty());
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        write_sources_json(tmp_dir.path(), tmp_dir.path(), &artifact).unwrap();
+
+        let written = std::fs::read_to_string(tmp_dir.path().join(DBT_SOURCES_JSON)).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&written).unwrap();
+        assert_eq!(
+            parsed["results"].as_array().unwrap().len(),
+            0,
+            "sources.json should contain an empty results list, not be skipped"
+        );
+    }
+
     fn source_with_freshness(freshness: Option<FreshnessDefinition>) -> DbtSource {
-        DbtSource {
-            __source_attr__: DbtSourceAttr {
-                freshness,
+        let mut source = DbtSource::default();
+        source.__common_attr__.unique_id = "source.pkg.raw.orders".to_string();
+        source.__source_attr__.freshness = freshness;
+        source
+    }
+
+    fn model_with_freshness(freshness: Option<ModelFreshness>) -> DbtModel {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.pkg.stg_orders".to_string();
+        model.__model_attr__.freshness = freshness;
+        model
+    }
+
+    #[test]
+    fn source_accessors_read_source_attr() {
+        let mut source = source_with_freshness(Some(FreshnessDefinition {
+            warn_after: Some(rules(12, FreshnessPeriod::hour)),
+            filter: Some("id > 0".to_string()),
+            ..Default::default()
+        }));
+        source.__source_attr__.loaded_at_field = Some("updated_at".to_string());
+
+        let node: &dyn FreshnessNodeRef = &source;
+        assert_eq!(node.get_loaded_at_field(), "updated_at");
+        assert_eq!(node.get_loaded_at_query(), "");
+        assert_eq!(node.get_freshness_filter(), Some("id > 0"));
+    }
+
+    #[test]
+    fn model_accessors_read_model_attr_freshness() {
+        let model = model_with_freshness(Some(ModelFreshness {
+            warn_after: Some(rules(12, FreshnessPeriod::hour)),
+            filter: Some("id > 0".to_string()),
+            loaded_at_field: Some("updated_at".to_string()),
+            ..Default::default()
+        }));
+
+        let node: &dyn FreshnessNodeRef = &model;
+        assert_eq!(node.get_loaded_at_field(), "updated_at");
+        assert_eq!(node.get_loaded_at_query(), "");
+        assert_eq!(node.get_freshness_filter(), Some("id > 0"));
+    }
+
+    #[test]
+    fn model_accessors_are_empty_when_no_freshness() {
+        let model = model_with_freshness(None);
+        let node: &dyn FreshnessNodeRef = &model;
+        assert_eq!(node.get_loaded_at_field(), "");
+        assert_eq!(node.get_loaded_at_query(), "");
+        assert_eq!(node.get_freshness_filter(), None);
+    }
+
+    #[test]
+    fn criteria_for_source_reads_source_attr_freshness() {
+        let definition = FreshnessDefinition {
+            error_after: Some(rules(2, FreshnessPeriod::day)),
+            warn_after: Some(rules(12, FreshnessPeriod::hour)),
+            ..Default::default()
+        };
+        let source = source_with_freshness(Some(definition.clone()));
+
+        assert_eq!(source.freshness_criteria(), definition);
+    }
+
+    #[test]
+    fn criteria_for_source_without_freshness_is_default() {
+        let source = source_with_freshness(None);
+        assert_eq!(source.freshness_criteria(), FreshnessDefinition::default());
+    }
+
+    #[test]
+    fn criteria_for_model_uses_sla_fields_and_ignores_build_after() {
+        let model = model_with_freshness(Some(ModelFreshness {
+            build_after: Some(ModelFreshnessRules {
+                count: Some(1),
+                period: Some(FreshnessPeriod::day),
+                updates_on: None,
+            }),
+            warn_after: Some(rules(12, FreshnessPeriod::hour)),
+            error_after: Some(rules(2, FreshnessPeriod::day)),
+            filter: Some("id > 0".to_string()),
+            loaded_at_field: Some("updated_at".to_string()),
+            loaded_at_query: None,
+        }));
+
+        assert_eq!(
+            model.freshness_criteria(),
+            FreshnessDefinition {
+                error_after: Some(rules(2, FreshnessPeriod::day)),
+                warn_after: Some(rules(12, FreshnessPeriod::hour)),
+                filter: Some("id > 0".to_string()),
+                loaded_at_field: Some("updated_at".to_string()),
+                loaded_at_query: None,
+            }
+        );
+    }
+
+    /// These paths used to hard-downcast to `DbtSource` and panic on a model.
+    #[test]
+    fn criteria_for_model_does_not_panic() {
+        let model = model_with_freshness(Some(ModelFreshness {
+            warn_after: Some(rules(1, FreshnessPeriod::hour)),
+            ..Default::default()
+        }));
+        let node: &dyn InternalDbtNode = &model;
+
+        assert_eq!(
+            node.freshness_criteria(),
+            FreshnessDefinition {
+                warn_after: Some(rules(1, FreshnessPeriod::hour)),
+                ..Default::default()
+            }
+        );
+    }
+
+    #[test]
+    fn thresholds_pass_when_age_within_warn() {
+        let criteria = FreshnessDefinition {
+            warn_after: Some(rules(1, FreshnessPeriod::hour)),
+            error_after: Some(rules(2, FreshnessPeriod::hour)),
+            ..Default::default()
+        };
+        let (status, outcome) = evaluate_freshness_thresholds(&criteria, 60).unwrap();
+        assert_eq!(status, FreshnessStatus::Pass);
+        assert_eq!(outcome, SourceFreshnessOutcome::OutcomePassed);
+    }
+
+    #[test]
+    fn thresholds_warn_when_age_exceeds_warn_after() {
+        let criteria = FreshnessDefinition {
+            warn_after: Some(rules(1, FreshnessPeriod::hour)),
+            error_after: Some(rules(2, FreshnessPeriod::hour)),
+            ..Default::default()
+        };
+        let (status, outcome) = evaluate_freshness_thresholds(&criteria, 3601).unwrap();
+        assert_eq!(status, FreshnessStatus::Warn);
+        assert_eq!(outcome, SourceFreshnessOutcome::OutcomeWarned);
+    }
+
+    #[test]
+    fn thresholds_error_takes_precedence_over_warn() {
+        let criteria = FreshnessDefinition {
+            warn_after: Some(rules(1, FreshnessPeriod::hour)),
+            error_after: Some(rules(2, FreshnessPeriod::hour)),
+            ..Default::default()
+        };
+        let (status, outcome) = evaluate_freshness_thresholds(&criteria, 7201).unwrap();
+        assert_eq!(status, FreshnessStatus::Error);
+        assert_eq!(outcome, SourceFreshnessOutcome::OutcomeFailed);
+    }
+
+    #[test]
+    fn thresholds_pass_when_no_rules_set() {
+        let (status, outcome) =
+            evaluate_freshness_thresholds(&FreshnessDefinition::default(), 999_999).unwrap();
+        assert_eq!(status, FreshnessStatus::Pass);
+        assert_eq!(outcome, SourceFreshnessOutcome::OutcomePassed);
+    }
+
+    fn metadata_source(name: &str) -> DbtSource {
+        let mut source = source_with_freshness(Some(FreshnessDefinition {
+            warn_after: Some(rules(12, FreshnessPeriod::hour)),
+            ..Default::default()
+        }));
+        source.__common_attr__.unique_id = format!("source.pkg.raw.{name}");
+        source.__common_attr__.name = name.to_string();
+        source.__base_attr__.database = "db".to_string();
+        source.__base_attr__.schema = "sch".to_string();
+        source.__base_attr__.alias = name.to_string();
+        source
+    }
+
+    fn sla_model(name: &str, freshness: ModelFreshness) -> DbtModel {
+        let mut model = model_with_freshness(Some(freshness));
+        model.__common_attr__.unique_id = format!("model.pkg.{name}");
+        model.__common_attr__.name = name.to_string();
+        model.__base_attr__.database = "db".to_string();
+        model.__base_attr__.schema = "sch".to_string();
+        model.__base_attr__.alias = name.to_string();
+        model
+    }
+
+    fn metadata_sla_model(name: &str) -> DbtModel {
+        sla_model(
+            name,
+            ModelFreshness {
+                warn_after: Some(rules(12, FreshnessPeriod::hour)),
                 ..Default::default()
             },
+        )
+    }
+
+    #[test]
+    fn collect_relations_batches_sources_and_sla_models_together() {
+        let s1 = metadata_source("orders");
+        let s2 = metadata_source("customers");
+        let m1 = metadata_sla_model("stg_orders");
+        let m2 = metadata_sla_model("stg_customers");
+
+        let (relations, name_map) =
+            collect_relations(&[&s1, &s2], &vec![&m1, &m2], &vec![], AdapterType::DuckDB).unwrap();
+
+        assert_eq!(relations.len(), 4);
+        let mapped: BTreeSet<String> = name_map.values().flatten().cloned().collect();
+        assert_eq!(
+            mapped,
+            BTreeSet::from([
+                "source.pkg.raw.orders".to_string(),
+                "source.pkg.raw.customers".to_string(),
+                "model.pkg.stg_orders".to_string(),
+                "model.pkg.stg_customers".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn collect_relations_excludes_sla_models_measured_by_query() {
+        let field_model = sla_model(
+            "by_field",
+            ModelFreshness {
+                warn_after: Some(rules(12, FreshnessPeriod::hour)),
+                loaded_at_field: Some("updated_at".to_string()),
+                ..Default::default()
+            },
+        );
+        let query_model = sla_model(
+            "by_query",
+            ModelFreshness {
+                warn_after: Some(rules(12, FreshnessPeriod::hour)),
+                loaded_at_query: Some("select max(updated_at) from {{ this }}".to_string()),
+                ..Default::default()
+            },
+        );
+        let metadata_model = metadata_sla_model("by_metadata");
+
+        let (relations, name_map) = collect_relations(
+            &[],
+            &vec![&field_model, &query_model, &metadata_model],
+            &vec![],
+            AdapterType::DuckDB,
+        )
+        .unwrap();
+
+        assert_eq!(relations.len(), 1);
+        let mapped: BTreeSet<String> = name_map.values().flatten().cloned().collect();
+        assert_eq!(
+            mapped,
+            BTreeSet::from(["model.pkg.by_metadata".to_string()])
+        );
+    }
+
+    #[test]
+    fn collect_relations_with_no_sla_models_is_sources_only() {
+        let s1 = metadata_source("orders");
+
+        let (relations, name_map) =
+            collect_relations(&[&s1], &vec![], &vec![], AdapterType::DuckDB).unwrap();
+
+        assert_eq!(relations.len(), 1);
+        let mapped: BTreeSet<String> = name_map.values().flatten().cloned().collect();
+        assert_eq!(
+            mapped,
+            BTreeSet::from(["source.pkg.raw.orders".to_string()])
+        );
+    }
+
+    #[test]
+    fn collect_relations_keeps_extended_models_separate() {
+        let mut extended = DbtModel::default();
+        extended.__common_attr__.unique_id = "model.pkg.extended".to_string();
+        extended.__common_attr__.name = "extended".to_string();
+        extended.__base_attr__.database = "db".to_string();
+        extended.__base_attr__.schema = "sch".to_string();
+        extended.__base_attr__.alias = "extended".to_string();
+        extended.__base_attr__.extended_model = true;
+
+        let (relations, name_map) =
+            collect_relations(&[], &vec![], &vec![&extended], AdapterType::DuckDB).unwrap();
+
+        assert_eq!(relations.len(), 1);
+        let mapped: BTreeSet<String> = name_map.values().flatten().cloned().collect();
+        assert_eq!(mapped, BTreeSet::from(["model.pkg.extended".to_string()]));
+    }
+
+    #[test]
+    fn early_validation_rejects_partial_rule_on_model() {
+        let partial = sla_model(
+            "bad_rule",
+            ModelFreshness {
+                warn_after: Some(FreshnessRules {
+                    count: Some(24),
+                    period: None,
+                }),
+                ..Default::default()
+            },
+        );
+        assert!(validate_freshness_rules_early(&partial).is_err());
+    }
+
+    #[test]
+    fn early_validation_rejects_partial_rule_on_source() {
+        let partial = source_with_freshness(Some(FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: None,
+                period: Some(FreshnessPeriod::hour),
+            }),
             ..Default::default()
-        }
+        }));
+        assert!(validate_freshness_rules_early(&partial).is_err());
+    }
+
+    #[test]
+    fn early_validation_accepts_well_formed_and_empty_rules() {
+        assert!(validate_freshness_rules_early(&metadata_source("ok")).is_ok());
+        assert!(validate_freshness_rules_early(&metadata_sla_model("ok_model")).is_ok());
+
+        // Empty rule object == omitted (F1), so it must not be rejected.
+        let empty = source_with_freshness(Some(FreshnessDefinition {
+            warn_after: Some(FreshnessRules::default()),
+            ..Default::default()
+        }));
+        assert!(validate_freshness_rules_early(&empty).is_ok());
+    }
+
+    /// `dbt source freshness` must keep the exact string it shipped with.
+    #[test]
+    fn nothing_to_do_message_is_unchanged_for_source_freshness() {
+        assert_eq!(
+            nothing_to_do_message(true),
+            "Nothing to do. No sources with freshness config."
+        );
+    }
+
+    #[test]
+    fn nothing_to_do_message_mentions_models_for_unified_freshness() {
+        assert_eq!(
+            nothing_to_do_message(false),
+            "Nothing to do. No sources or models with a freshness config."
+        );
+    }
+
+    #[test]
+    fn thresholds_error_on_partial_rule() {
+        let criteria = FreshnessDefinition {
+            warn_after: Some(FreshnessRules {
+                count: Some(1),
+                period: None,
+            }),
+            ..Default::default()
+        };
+        assert!(evaluate_freshness_thresholds(&criteria, 10).is_err());
     }
 
     #[test]

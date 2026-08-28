@@ -23,6 +23,7 @@ enum NodeType {
   NODE_TYPE_SAVED_QUERY = 13;
   NODE_TYPE_SEMANTIC_MODEL = 14;
   NODE_TYPE_FUNCTION = 15;
+  NODE_TYPE_CHECK = 16;
 }
 
 // Core outcome for any node evaluation result within any phase.
