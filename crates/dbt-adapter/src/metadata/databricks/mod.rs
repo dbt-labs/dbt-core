@@ -302,7 +302,7 @@ impl DatabricksMetadataAdapter {
         match relation_type {
             RelationType::MaterializedView => {
                 metadata.insert(
-                    DatabricksRelationMetadataKey::DescribeExtended,
+                    DatabricksRelationMetadataKey::InfoSchemaViews,
                     self.get_view_description(
                         &database,
                         &schema,
