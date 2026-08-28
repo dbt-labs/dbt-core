@@ -386,10 +386,10 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
-        "node_fqn": {
+        "selection_filter_on": {
           "anyOf": [
             {
-              "$ref": "#/definitions/NodeFqn"
+              "$ref": "#/definitions/SelectionFilterOn"
             },
             {
               "type": "null"
@@ -6241,6 +6241,21 @@
             "null"
           ]
         },
+        "environment_dependencies": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "event_time": {
           "default": null,
           "type": [
@@ -6405,13 +6420,14 @@
           ]
         },
         "incremental_predicates": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "incremental_strategy": {
           "anyOf": [
@@ -7930,24 +7946,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "NodeFqn": {
-      "description": "Which output column(s) node selection scopes a check's rows by.\n\n`\"none\"` opts out of scoping entirely (the check always evaluates the whole project, which is what aggregate checks want). A single name or a list of names scopes on those output columns: a row is kept when the node id in *any* of them is selected.",
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        {
-          "type": "string",
-          "pattern": "^\\{.*\\}$"
-        }
-      ]
     },
     "OnConfigurationChange": {
       "type": "string",
@@ -9879,6 +9877,24 @@
         }
       },
       "additionalProperties": false
+    },
+    "SelectionFilterOn": {
+      "description": "Which output column(s) node selection scopes a check's rows by.\n\n`\"none\"` opts out of scoping entirely (the check always evaluates the whole project, which is what aggregate checks want). A single name or a list of names scopes on those output columns: a row is kept when the node id in *any* of them is selected. Unset defaults to the `unique_id` column when the check outputs one.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
     },
     "SemanticLayerElementConfig": {
       "type": "object",
