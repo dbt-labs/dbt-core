@@ -27,7 +27,6 @@ use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
-use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
@@ -36,6 +35,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
+use dbt_schemas::schemas::{DbtSeed, InternalDbtNodeWrapper};
 use indexmap::IndexMap;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::constants::TARGET_UNIQUE_ID;
@@ -3562,6 +3562,29 @@ impl Adapter {
         }
     }
 
+    /// Absolute path of the data file backing a seed node.
+    #[tracing::instrument(skip_all, level = "trace")]
+    pub fn get_seed_file_path(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_seed_file_path", &["model"], args);
+        let model = iter.next_arg::<Value>()?;
+        iter.finish()?;
+
+        let seed = minijinja_value_to_typed_struct::<DbtSeed>(model).map_err(|e| {
+            minijinja::Error::new(
+                minijinja::ErrorKind::SerdeDeserializeError,
+                format!("get_seed_file_path: Failed to deserialize DbtSeed: {e}"),
+            )
+        })?;
+
+        let full_path = seed.resolve_file_path().map_err(|e| {
+            minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                format!("get_seed_file_path: {e}"),
+            )
+        })?;
+        Ok(Value::from(full_path.display().to_string()))
+    }
+
     /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement.
     #[tracing::instrument(skip(self), level = "trace")]
     pub fn use_warehouse(
@@ -4226,28 +4249,8 @@ impl Adapter {
             "parse_columns_and_constraints" => self.parse_columns_and_constraints(state, args),
             // sql: str
             "clean_sql" => self.clean_sql(state, args),
-            "get_seed_file_path" => {
-                // model: dict (seed node)
-                let iter = ArgsIter::new(name, &["model"], args);
-                let model = iter.next_arg::<Value>()?;
-                iter.finish()?;
-
-                // Extract seed file path from the model
-                // The seed file path is root_path + original_file_path
-                let seed =
-                    minijinja_value_to_typed_struct::<dbt_schemas::schemas::nodes::DbtSeed>(model)
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                format!("get_seed_file_path: Failed to deserialize DbtSeed: {e}"),
-                            )
-                        })?;
-
-                let root_path = seed.__seed_attr__.root_path.unwrap_or_default();
-                let original_file_path = &seed.__common_attr__.original_file_path;
-                let full_path = root_path.join(original_file_path);
-                Ok(Value::from(full_path.display().to_string()))
-            }
+            // model: dict
+            "get_seed_file_path" => self.get_seed_file_path(args),
             "external_root" => {
                 // (no args)
                 let iter = ArgsIter::new(name, &[], args);

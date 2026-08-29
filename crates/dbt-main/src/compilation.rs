@@ -2339,7 +2339,7 @@ impl DbtProjectCompilation {
                 }
 
                 task_runner
-                    .register_seeds_for_selected_ids(run_task_args.as_ref(), &schedule)
+                    .register_seeds_for_selected_ids(&schedule)
                     .await?;
 
                 let ctx = task_runner
