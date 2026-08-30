@@ -431,6 +431,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
                 zorder: None,
+                skip_optimize: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,

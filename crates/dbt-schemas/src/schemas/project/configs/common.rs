@@ -156,6 +156,8 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_liquid_cluster: Option<bool>,
     pub zorder: Option<StringOrArrayOfStrings>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub skip_optimize: Option<bool>,
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
@@ -477,6 +479,7 @@ pub fn same_warehouse_config(
     let liquid_clustered_by_eq = self_wh.liquid_clustered_by == other_wh.liquid_clustered_by;
     let auto_liquid_cluster_eq = self_wh.auto_liquid_cluster == other_wh.auto_liquid_cluster;
     let zorder_eq = self_wh.zorder == other_wh.zorder;
+    let skip_optimize_eq = self_wh.skip_optimize == other_wh.skip_optimize;
     let clustered_by_eq = self_wh.clustered_by == other_wh.clustered_by;
     let buckets_eq = self_wh.buckets == other_wh.buckets;
     let catalog_eq = self_wh.catalog == other_wh.catalog;
@@ -581,6 +584,7 @@ pub fn same_warehouse_config(
         && liquid_clustered_by_eq
         && auto_liquid_cluster_eq
         && zorder_eq
+        && skip_optimize_eq
         && clustered_by_eq
         && buckets_eq
         && catalog_eq
@@ -843,6 +847,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.zorder),
                         format!("{:?}", &other_wh.zorder),
+                    )),
+                ),
+                (
+                    "skip_optimize",
+                    skip_optimize_eq,
+                    Some((
+                        format!("{:?}", &self_wh.skip_optimize),
+                        format!("{:?}", &other_wh.skip_optimize),
                     )),
                 ),
                 (

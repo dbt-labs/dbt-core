@@ -483,6 +483,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub skip_not_matched_step: Option<bool>,
+    #[serde(
+        default,
+        rename = "+skip_optimize",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub skip_optimize: Option<bool>,
     #[serde(default, rename = "+secure", deserialize_with = "bool_or_string_bool")]
     pub secure: Option<bool>,
     #[serde(rename = "+sort")]
@@ -776,6 +782,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.schema.is_present()
             || self.skip_matched_step.is_some()
             || self.skip_not_matched_step.is_some()
+            || self.skip_optimize.is_some()
             || self.secure.is_some()
             || self.sort.is_some()
             || self.sort_type.is_some()
@@ -1088,6 +1095,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                skip_optimize: config.skip_optimize,
                 unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
                 row_filter: config.row_filter,
@@ -1313,6 +1321,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             target_alias: config.__warehouse_specific_config__.target_alias,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            skip_optimize: config.__warehouse_specific_config__.skip_optimize,
             storage_serialization_policy: config
                 .__warehouse_specific_config__
                 .storage_serialization_policy,
@@ -2005,7 +2014,9 @@ mod tests {
     use super::ModelConfig;
     use crate::schemas::common::{ConstraintType, FreshnessPeriod, UpdatesOn};
     use crate::schemas::manifest::ManifestModelConfig;
+    use crate::schemas::project::WarehouseSpecificNodeConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
+    use crate::schemas::project::dbt_project::ResolvableConfig;
     use crate::schemas::properties::StatePreClone;
     use crate::schemas::serde::StringOrArrayOfStrings;
 
@@ -2158,6 +2169,37 @@ __additional_properties__: {}
         assert_eq!(
             resolved.__warehouse_specific_config__.query_tags.as_deref(),
             Some(r#"{"team":"model"}"#)
+        );
+    }
+
+    #[test]
+    fn test_skip_optimize_inherits_from_parent_model_config() {
+        let parent = ModelConfig {
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                skip_optimize: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut inherited = ModelConfig::default();
+        inherited.default_to(&parent);
+        assert_eq!(
+            inherited.__warehouse_specific_config__.skip_optimize,
+            Some(true)
+        );
+
+        let mut overridden = ModelConfig {
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                skip_optimize: Some(false),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        overridden.default_to(&parent);
+        assert_eq!(
+            overridden.__warehouse_specific_config__.skip_optimize,
+            Some(false)
         );
     }
 

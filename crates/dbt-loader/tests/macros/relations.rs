@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use dbt_adapter::catalog_relation::CatalogRelation;
+use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
@@ -13,6 +14,12 @@ use crate::macro_test_harness::{MacroTestHarness, default_mock_config};
 
 mod databricks {
     use super::*;
+
+    const STATEMENT_STUB: &str = r#"
+{% macro statement(name=none, fetch_result=False, auto_begin=True, language='sql') -%}
+  [statement:{{ name }}]{{ caller() }}[/statement]
+{%- endmacro %}
+"#;
 
     fn build_comment_clause_harness() -> MacroTestHarness {
         let databricks_comment_sql =
@@ -163,6 +170,122 @@ __additional_properties__: {}
             )
             .build()
             .expect("location clause harness should build")
+    }
+
+    fn build_optimize_harness() -> MacroTestHarness {
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .load_all_macros()
+            .with_macro("dbt", "statement", STATEMENT_STUB)
+            .build()
+            .expect("optimize harness should build");
+
+        harness
+            .mock()
+            .on("resolve_file_format", |_| Ok(Value::from("delta")));
+
+        harness
+    }
+
+    fn render_optimize(
+        config_values: BTreeMap<String, Value>,
+        vars: BTreeMap<String, bool>,
+    ) -> String {
+        let mut harness = build_optimize_harness();
+        let config = default_mock_config();
+        config.on("get", move |args| {
+            let key = args.first().and_then(Value::as_str);
+            let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
+            Ok(key
+                .and_then(|key| config_values.get(key).cloned())
+                .unwrap_or(default))
+        });
+
+        harness
+            .env_mut()
+            .env
+            .add_function("var", move |name: Value, default: Option<Value>| {
+                let value = name
+                    .as_str()
+                    .and_then(|name| vars.get(name))
+                    .copied()
+                    .map(Value::from);
+                Ok(value.unwrap_or_else(|| default.unwrap_or(Value::UNDEFINED)))
+            });
+
+        let relation = RelationObject::new(harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "target",
+            Some(RelationType::Table),
+        ))
+        .into_value();
+        harness
+            .render(
+                "{{ optimize(relation) }}",
+                BTreeMap::from([
+                    ("config".to_string(), Value::from_dyn_object(config)),
+                    ("relation".to_string(), relation),
+                ]),
+            )
+            .expect("optimize should render")
+    }
+
+    #[test]
+    fn optimize_macro_skips_configured_clustering() {
+        for (cluster_key, cluster_value) in [
+            ("zorder", Value::from("id")),
+            (
+                "liquid_clustered_by",
+                Value::from_serialize(vec!["id".to_string()]),
+            ),
+            ("auto_liquid_cluster", Value::from(true)),
+        ] {
+            let rendered = render_optimize(
+                BTreeMap::from([
+                    (cluster_key.to_string(), cluster_value),
+                    ("skip_optimize".to_string(), Value::from(true)),
+                ]),
+                BTreeMap::new(),
+            );
+            assert!(
+                !rendered.to_lowercase().contains("optimize"),
+                "skip_optimize must suppress post-materialization OPTIMIZE for {cluster_key}, got: {rendered:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn optimize_macro_preserves_existing_guards() {
+        let cluster = BTreeMap::from([(String::from("zorder"), Value::from("id"))]);
+
+        let rendered = render_optimize(cluster.clone(), BTreeMap::new());
+        assert!(
+            rendered.to_lowercase().contains("optimize"),
+            "absent skip_optimize must preserve optimize, got: {rendered:?}"
+        );
+
+        let rendered = render_optimize(
+            BTreeMap::from([
+                (String::from("zorder"), Value::from("id")),
+                (String::from("skip_optimize"), Value::from(false)),
+            ]),
+            BTreeMap::new(),
+        );
+        assert!(
+            rendered.to_lowercase().contains("optimize"),
+            "false skip_optimize must preserve optimize, got: {rendered:?}"
+        );
+
+        for variable in ["DATABRICKS_SKIP_OPTIMIZE", "databricks_skip_optimize"] {
+            let rendered = render_optimize(
+                cluster.clone(),
+                BTreeMap::from([(variable.to_string(), true)]),
+            );
+            assert!(
+                !rendered.to_lowercase().contains("optimize"),
+                "{variable} must still suppress optimize, got: {rendered:?}"
+            );
+        }
     }
 
     fn render_location_clause(external_volume: Option<&str>) -> String {
