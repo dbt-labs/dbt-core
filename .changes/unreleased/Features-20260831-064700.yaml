@@ -3,5 +3,5 @@ body: 'Announce dbt v2 availability as an INFO message on `dbt --version`, with 
     to the v2 install docs'
 time: 2026-08-31T06:47:00.000000-07:00
 custom:
-    Author: tauhidanjum
-    Issue: "15694"
+    Author: tauhid621
+    Issue: ""
