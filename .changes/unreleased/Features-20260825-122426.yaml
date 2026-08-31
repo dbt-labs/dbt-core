@@ -1,7 +1,0 @@
-kind: Features
-body: Track ref()/source()/this call provenance during Jinja rendering (on_this_reference listener hook), powering the dbt.hard_coded_reference (DBT05) lint rule
-time: 2026-08-25T12:24:26.001969371-07:00
-custom:
-    author: wizardxz
-    issue: "16080"
-    project: dbt-core

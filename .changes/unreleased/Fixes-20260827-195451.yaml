@@ -1,7 +1,0 @@
-kind: Fixes
-body: Apply Databricks model and column constraints only when contract.enforced is true
-time: 2026-08-27T19:54:51.612629+05:30
-custom:
-    author: sd-db
-    issue: "16056"
-    project: dbt-core

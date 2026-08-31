@@ -1,7 +1,0 @@
-kind: Fixes
-body: Allow Databricks incremental models to use `delete+insert` with correctly quoted unique keys
-time: 2026-07-30T00:00:00.000000000Z
-custom:
-    author: sd-db
-    issue: "15250"
-    project: dbt-core
