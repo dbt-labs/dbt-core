@@ -897,13 +897,17 @@ jobs:
           grep '^name = ' pyproject.toml
 
       # dbt-oss is the identical rebrand of dbt-core (see the `build` job),
-      # so it uses the same cp311/abi3 tags. `grep -qx` guards against a
-      # silent no-op `sed` (exits 0 either way).
+      # so it uses the same cp311/abi3 tags and the same --project-dir: the
+      # wheels being published were built from crates/dbt-sa-python, whose
+      # pyproject.toml is what needs the name swap (not the workspace root,
+      # which describes the unrelated binary CLI package and would otherwise
+      # feed `cargo ci pypi publish` >=3.9 metadata for >=3.11 wheels).
+      # `grep -qx` guards against a silent no-op `sed` (exits 0 either way).
       - name: Rename pyproject for oss publish
         if: inputs.release_target == 'all' || inputs.release_target == 'oss'
         run: |
-          sed -i 's/^name = "dbt-core"$/name = "dbt-oss"/' pyproject.toml
-          grep -qx 'name = "dbt-oss"' pyproject.toml
+          sed -i 's/^name = "dbt-core"$/name = "dbt-oss"/' crates/dbt-sa-python/pyproject.toml
+          grep -qx 'name = "dbt-oss"' crates/dbt-sa-python/pyproject.toml
 
       - name: Publish (dbt-oss)
         if: inputs.release_target == 'all' || inputs.release_target == 'oss'
@@ -912,6 +916,7 @@ jobs:
             --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --download-base-url "$BASE_URL" \
+            --project-dir crates/dbt-sa-python \
             --python-tag cp311 \
             --abi-tag abi3 \
             --target x86_64-unknown-linux-gnu \
@@ -923,8 +928,8 @@ jobs:
       - name: Restore pyproject name after oss publish
         if: ${{ always() && (inputs.release_target == 'all' || inputs.release_target == 'oss') }}
         run: |
-          sed -i 's/^name = "dbt-oss"$/name = "dbt-core"/' pyproject.toml
-          grep -qx 'name = "dbt-core"' pyproject.toml
+          sed -i 's/^name = "dbt-oss"$/name = "dbt-core"/' crates/dbt-sa-python/pyproject.toml
+          grep -qx 'name = "dbt-core"' crates/dbt-sa-python/pyproject.toml
 
   # ------------------------------------------------------------------
   # Create the GitHub Release with all assets. Skipped on dry-run.
