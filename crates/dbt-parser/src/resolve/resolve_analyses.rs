@@ -49,7 +49,7 @@ pub async fn resolve_analyses(
     analysis_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
+    // The target's default adapter.
     default_adapter: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
@@ -76,8 +76,10 @@ pub async fn resolve_analyses(
                 (),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
         },
+        default_adapter,
     )?;
 
     let render_ctx = RenderCtx {
@@ -90,7 +92,7 @@ pub async fn resolve_analyses(
             defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             resource_paths: package
@@ -159,15 +161,14 @@ pub async fn resolve_analyses(
         // choice. Resolved the same way every other node type resolves it.
         let selected_adapter = validate_node_adapter(
             analysis_config.adapter,
-            default_adapter,
             &DbtMaterialization::Analysis,
             None,
-            adapter_type,
+            default_adapter,
             dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
             dbt_asset.is_python(),
             &dbt_asset.path,
         )?
-        .unwrap_or(adapter_type);
+        .unwrap_or(default_adapter);
         // unique_id.push_str(&format!(".{statement_index}"));
 
         let fqn = get_node_fqn(
@@ -309,7 +310,7 @@ pub async fn resolve_analyses(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
         if status == ModelStatus::Enabled || render_error_deferred {

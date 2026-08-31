@@ -80,19 +80,19 @@ pub fn zero_rows_is_vacuous(scope: Option<&BTreeSet<String>>, filter: &Selection
     matches!(scope, Some(s) if s.is_empty()) && !matches!(filter, SelectionFilter::None)
 }
 
-/// Map a check node's resolved `node_fqn` config onto a [`SelectionFilter`].
+/// Map a check node's resolved `selection_filter_on` config onto a [`SelectionFilter`].
 ///
 /// One definition for the single execution path; two paths previously disagreed
 /// about what a check's rows are scoped by.
 pub fn selection_filter_for(
-    node_fqn: Option<&dbt_schemas::schemas::project::NodeFqn>,
+    selection_filter_on: Option<&dbt_schemas::schemas::project::SelectionFilterOn>,
 ) -> SelectionFilter {
-    use dbt_schemas::schemas::project::NodeFqn;
-    match node_fqn {
+    use dbt_schemas::schemas::project::SelectionFilterOn;
+    match selection_filter_on {
         None => SelectionFilter::Auto,
-        Some(NodeFqn::One(s)) if s.eq_ignore_ascii_case("none") => SelectionFilter::None,
-        Some(NodeFqn::One(s)) => SelectionFilter::Columns(vec![s.clone()]),
-        Some(NodeFqn::Many(v)) => SelectionFilter::Columns(v.clone()),
+        Some(SelectionFilterOn::One(s)) if s.eq_ignore_ascii_case("none") => SelectionFilter::None,
+        Some(SelectionFilterOn::One(s)) => SelectionFilter::Columns(vec![s.clone()]),
+        Some(SelectionFilterOn::Many(v)) => SelectionFilter::Columns(v.clone()),
     }
 }
 
@@ -168,7 +168,7 @@ pub fn evaluate_batches(
                         Ok(i) => idxs.push(i),
                         Err(_) => {
                             return Err(format!(
-                                "node_fqn: column '{c}' is not in the check's output columns"
+                                "selection_filter_on: column '{c}' is not in the check's output columns"
                             ));
                         }
                     }
@@ -375,7 +375,7 @@ impl CheckResult {
 /// with its sharpest edge: a node configured `static_analysis: off` has no analyze task, so gating
 /// only the analyze heads used to let it materialize straight through a failing check.
 ///
-/// `selection` scopes each check's *rows* (by `unique_id`, or the columns named in `node_fqn`); it
+/// `selection` scopes each check's *rows* (by `unique_id`, or the columns named in `selection_filter_on`); it
 /// never decides whether a check runs. A selector that matches nothing therefore yields `skipped`
 /// rather than `pass`, because a green result must not stand in for a check that examined nothing.
 pub fn run_parse_time_checks(
@@ -431,7 +431,7 @@ pub fn run_parse_time_checks(
             .severity
             .clone()
             .unwrap_or(dbt_schemas::schemas::common::Severity::Error);
-        let filter = selection_filter_for(c.deprecated_config.node_fqn.as_ref());
+        let filter = selection_filter_for(c.deprecated_config.selection_filter_on.as_ref());
 
         let Some(sql) = c.__check_attr__.compiled_sql.as_deref() else {
             outcome.failed += 1;

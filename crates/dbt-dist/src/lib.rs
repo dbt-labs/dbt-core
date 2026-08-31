@@ -36,7 +36,7 @@ pub enum DistInfoDiscovery<'a> {
 
 impl<'a> DistInfoDiscovery<'a> {
     /// `command_name` is the CLI-brand name of the currently running binary
-    /// (e.g. `"dbt-core"` for OSS, or the proprietary Fusion build's name) —
+    /// (e.g. `"dbt-core"` for OSS, or the proprietary dbt v2 build's name) —
     /// used only to resolve the *current* process's own distribution, since a
     /// process can't `--version`-probe itself the way it does other `dbt`s
     /// found on `PATH`.
@@ -720,7 +720,7 @@ fn probe_package_manager_in_venv(
 /// answers a different question: which manager installed *dbt's own
 /// binary*. That's frequently `None`, or simply irrelevant to a project's
 /// dependencies, when dbt ships as a standalone binary placed directly onto
-/// `PATH` (the common case for Fusion) -- there's no venv/tool-dir signal to
+/// `PATH` (the common case for the proprietary dbt v2 build) -- there's no venv/tool-dir signal to
 /// derive a hint from at all, even though `manifest_dir` obviously has
 /// *some* real package manager governing it. This probes that directory
 /// directly instead, as a fallback once every other signal
@@ -1096,12 +1096,11 @@ fn discover_dist_info_from_legacy_dbt(
 /// distribution signal.
 ///
 /// v1 prints a multi-line `Core:\n  - installed: ...` block and is always
-/// the OSS distribution. v2 prints a single `<name> <version>` banner line
-/// (clap's default `--version` format): the OSS v2 build (`dbt-sa-cli`)
-/// brands itself `dbt-core`, while the proprietary Fusion build brands
-/// itself something else — currently `dbt-fusion`, though that string is
-/// cosmetic and may change (e.g. dropping "fusion") — so `dbt-core` is the
-/// one name checked for and everything else is treated as Fusion.
+/// the legacy `dbt-core` distribution. v2 prints a single `<name> <version>`
+/// banner line (clap's default `--version` format): the OSS v2 build
+/// (`dbt-sa-cli`) will brand itself `dbt-oss`, but `dbt-core` is still
+/// checked for too since preview builds already installed print that name;
+/// everything else is treated as the proprietary distribution.
 ///
 /// Callers should only reach for this once the path-based channel resolver
 /// couldn't already name a distribution outright (e.g. a Homebrew-tap
@@ -1133,15 +1132,15 @@ fn classify_version_output(stdout: &str) -> Option<(Generation, Distribution, Op
     if stdout.contains("Core:") {
         return Some((
             Generation::V1,
-            Distribution::OSS,
+            Distribution::Core,
             extract_v1_installed_version(stdout),
         ));
     }
     if stdout.starts_with("dbt Cloud CLI") {
         return Some((Generation::NotApplicable, Distribution::CloudCLI, None));
     }
-    // Validation check: OSS, Fusion, and Cloud CLI contain "dbt"
-    // in the output.
+    // Validation check: dbt-oss, dbt (proprietary), and the Cloud CLI all
+    // contain "dbt" in the output.
     if !stdout.contains("dbt") {
         return None;
     }
@@ -1160,14 +1159,14 @@ fn classify_version_output(stdout: &str) -> Option<(Generation, Distribution, Op
 
 /// Classifies a CLI-brand name (the same string printed as the leading token
 /// of a v2 binary's `--version` banner, and injected into the running
-/// process as its own `command_name`) into a [Distribution]. The OSS v2
-/// build (`dbt-sa-cli`) brands itself `dbt-core`; every other name is
-/// treated as Fusion.
+/// process as its own `command_name`) into a [Distribution]. `dbt-core` is
+/// kept for preview builds already in the wild; `dbt-oss` is the final OSS
+/// v2 name. Everything else is the proprietary distribution.
 fn distribution_from_name(name: &str) -> Distribution {
-    if name == "dbt-core" {
-        Distribution::OSS
+    if name == "dbt-core" || name == "dbt-oss" {
+        Distribution::Oss
     } else {
-        Distribution::Fusion
+        Distribution::Dbt
     }
 }
 
@@ -1971,7 +1970,7 @@ mod tests {
 
     #[test]
     fn probe_manager_for_manifest_finds_a_tool_only_manager_on_path() {
-        // Reproduces the reported gap: Fusion shipped as a standalone binary
+        // Reproduces the reported gap: dbt v2 shipped as a standalone binary
         // has no venv/tool-dir signal of its own, so `existing_hint` is
         // `None` -- but a Hatch- or Rye-managed pyproject.toml project (no
         // recognized lockfile of its own) still has a real manager
@@ -2302,7 +2301,7 @@ mod tests {
         }"#;
         let info = parse_dist_info_json(json).unwrap();
         assert_eq!(info.channel, Some(Channel::Pypi));
-        assert_eq!(info.distribution, Some(Distribution::Fusion));
+        assert_eq!(info.distribution, Some(Distribution::Dbt));
     }
 
     #[test]
@@ -2326,39 +2325,39 @@ Plugins:
 ";
 
     #[test]
-    fn classify_version_output_v1_core_block_is_oss() {
+    fn classify_version_output_v1_core_block_is_core() {
         assert_eq!(
             classify_version_output(V1_VERSION_OUTPUT),
             Some((
                 Generation::V1,
-                Distribution::OSS,
+                Distribution::Core,
                 Some("1.12.0".to_string())
             ))
         );
     }
 
     #[test]
-    fn classify_version_output_v2_banner_is_fusion() {
+    fn classify_version_output_v2_banner_is_dbt() {
         assert_eq!(
             classify_version_output("dbt-fusion 2.0.0-preview.196\n"),
             Some((
                 Generation::V2,
-                Distribution::Fusion,
+                Distribution::Dbt,
                 Some("2.0.0-preview.196".to_string())
             ))
         );
     }
 
     #[test]
-    fn classify_version_output_v2_banner_without_fusion_branding_is_still_fusion() {
+    fn classify_version_output_v2_banner_without_fusion_branding_is_still_dbt() {
         // The banner's display name is cosmetic and may change (e.g. drop
         // "fusion"); anything other than the OSS build's `dbt-core` name is
-        // treated as Fusion.
+        // treated as the proprietary distribution.
         assert_eq!(
             classify_version_output("dbt 2.0.0-preview.196\n"),
             Some((
                 Generation::V2,
-                Distribution::Fusion,
+                Distribution::Dbt,
                 Some("2.0.0-preview.196".to_string())
             ))
         );
@@ -2367,14 +2366,25 @@ Plugins:
     #[test]
     fn classify_version_output_v2_dbt_core_banner_is_oss() {
         // `dbt-sa-cli` (the OSS-only v2 build) brands its `--version` banner
-        // as `dbt-core`, so v2 alone doesn't imply Fusion.
+        // as `dbt-core`, so v2 alone doesn't imply the proprietary
+        // distribution.
         assert_eq!(
             classify_version_output("dbt-core 2.0.0-preview.200\n"),
             Some((
                 Generation::V2,
-                Distribution::OSS,
+                Distribution::Oss,
                 Some("2.0.0-preview.200".to_string())
             ))
+        );
+    }
+
+    #[test]
+    fn classify_version_output_v2_dbt_oss_banner_is_oss() {
+        // `dbt-sa-cli` (the OSS-only v2 build) is planned to brand its
+        // `--version` banner as `dbt-oss` once it leaves preview.
+        assert_eq!(
+            classify_version_output("dbt-oss 2.0.0\n"),
+            Some((Generation::V2, Distribution::Oss, Some("2.0.0".to_string())))
         );
     }
 
@@ -2511,7 +2521,7 @@ Plugins:
 
         let result = get_at_path(&exe, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V1);
-        assert_eq!(result.distribution, Some(Distribution::OSS));
+        assert_eq!(result.distribution, Some(Distribution::Core));
     }
 
     #[test]
@@ -2532,7 +2542,7 @@ Plugins:
 
         let result = get_at_path(&exe, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V2);
-        assert_eq!(result.distribution, Some(Distribution::Fusion));
+        assert_eq!(result.distribution, Some(Distribution::Dbt));
     }
 
     #[test]
@@ -2554,7 +2564,7 @@ Plugins:
 
         let result = get_at_path(&exe, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V2);
-        assert_eq!(result.distribution, Some(Distribution::OSS));
+        assert_eq!(result.distribution, Some(Distribution::Oss));
     }
 
     #[test]
@@ -2565,7 +2575,7 @@ Plugins:
         let current = env::current_exe().unwrap();
         let result = get_at_path(&current, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V2);
-        assert_eq!(result.distribution, Some(Distribution::OSS));
+        assert_eq!(result.distribution, Some(Distribution::Oss));
     }
 
     #[test]
@@ -2585,7 +2595,7 @@ Plugins:
     fn get_current_succeeds_against_real_binary() {
         let info = get_current("dbt-core").unwrap();
         assert_eq!(info.generation, Generation::V2);
-        assert_eq!(info.distribution, Some(Distribution::OSS));
+        assert_eq!(info.distribution, Some(Distribution::Oss));
         assert!(!info.path.is_empty());
         assert_eq!(
             Path::new(&info.path),

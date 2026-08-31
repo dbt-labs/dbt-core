@@ -802,6 +802,8 @@ fn resolve_expr(
                 MethodName::Source => IndexLookupMethod::Source,
                 _ => return None,
             };
+            // A non-scalar `value:` has no index lookup; fall back to a full parse.
+            let value = criteria.value.as_str()?;
             let indirect = criteria.indirect.unwrap_or(default_indirect);
             // Eager and Buildable expand to include tests/unit_tests that depend on
             // the selected nodes (indirect selection).  Empty/Cautious do not.
@@ -812,7 +814,7 @@ fn resolve_expr(
             resolve_unique_ids_from_index(
                 out_dir,
                 method,
-                &criteria.value,
+                value,
                 criteria.parents_depth,
                 criteria.children_depth,
                 include_indirect,
@@ -1900,7 +1902,7 @@ mod tests {
         SelectExpression::Atom(SelectionCriteria::new(
             method,
             vec![],
-            value.into(),
+            value,
             false,
             None,
             None,
@@ -1992,7 +1994,7 @@ mod tests {
                 dbt_common::node_selector::SelectionCriteria::new(
                     MethodName::Fqn,
                     vec![],
-                    "my_model".into(),
+                    "my_model",
                     true, // childrens_parents = @
                     None,
                     None,
@@ -2078,7 +2080,7 @@ mod tests {
                 dbt_common::node_selector::SelectionCriteria::new(
                     MethodName::Fqn,
                     vec![],
-                    name.into(),
+                    name,
                     false,
                     parents_depth,
                     children_depth,
@@ -2406,7 +2408,7 @@ mod tests {
             select: Some(SelectExpression::Atom(SelectionCriteria::new(
                 MethodName::Fqn,
                 vec![],
-                "my_*".into(),
+                "my_*",
                 false,
                 None,
                 None,

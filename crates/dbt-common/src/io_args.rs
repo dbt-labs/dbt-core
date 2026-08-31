@@ -135,7 +135,10 @@ impl From<ComputeArg> for LocalExecutionBackendKind {
     }
 }
 
-use crate::constants::{DBT_METADATA_DIR_NAME, DBT_TARGET_DIR_NAME, WARNING};
+use crate::constants::{
+    DBT_INFO_SCHEMA_DIR_NAME, DBT_INFO_SCHEMA_STAGING_DIR_NAME, DBT_METADATA_DIR_NAME,
+    DBT_TARGET_DIR_NAME, WARNING,
+};
 use crate::pretty_string::YELLOW;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
@@ -655,6 +658,10 @@ pub struct EvalArgs {
     pub index_dir: Option<PathBuf>,
     /// Directory for metadata parquet output (default: <target>/metadata/)
     pub metadata_dir: Option<PathBuf>,
+    /// Write the dbt information schema to target/info_schema/ (implies write_metadata)
+    pub generate_info_schema: bool,
+    /// Directory for information schema parquet output (default: <target>/info_schema/)
+    pub info_schema_dir: Option<PathBuf>,
     /// Whether to skip creating generic tests
     pub skip_creating_generic_tests: bool,
     /// Compute and write column-level lineage into compile/cll parquet (requires --write-metadata and --static-analysis strict)
@@ -821,6 +828,36 @@ impl EvalArgs {
         self.index_dir
             .clone()
             .unwrap_or_else(|| self.io.out_dir.join("index"))
+    }
+
+    /// Resolves the information schema output directory: `--info-schema-dir` if
+    /// set, else `<out_dir>/info_schema`.
+    ///
+    /// The intermediate for building it is the flat index at [`index_dir`] when one
+    /// is already present; otherwise the fallback at [`info_schema_staging_dir`].
+    ///
+    /// [`index_dir`]: Self::index_dir
+    /// [`info_schema_staging_dir`]: Self::info_schema_staging_dir
+    pub fn info_schema_dir(&self) -> PathBuf {
+        self.info_schema_dir
+            .clone()
+            .unwrap_or_else(|| self.io.out_dir.join(DBT_INFO_SCHEMA_DIR_NAME))
+    }
+
+    /// Fallback intermediate for building the information schema, used only when
+    /// there is no flat index at [`index_dir`] to reuse — e.g. under
+    /// `--no-write-index`, or a `parse` that never builds one. Held beside the
+    /// output directory rather than inside it, because it holds files in a
+    /// different shape and must never be picked up by a caller globbing the
+    /// information schema. When an index *is* present it is reused directly and
+    /// this directory is never created.
+    ///
+    /// [`index_dir`]: Self::index_dir
+    pub fn info_schema_staging_dir(&self) -> PathBuf {
+        match &self.info_schema_dir {
+            Some(dir) => dir.with_file_name(DBT_INFO_SCHEMA_STAGING_DIR_NAME),
+            None => self.io.out_dir.join(DBT_INFO_SCHEMA_STAGING_DIR_NAME),
+        }
     }
 
     // this could accept a SelectExpression in case we want to join more complex selections together.

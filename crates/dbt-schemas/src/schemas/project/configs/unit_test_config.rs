@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
@@ -16,7 +17,9 @@ use crate::schemas::{
     project::{
         ResolvableConfig, TypedRecursiveConfig,
         configs::{
-            common::WarehouseSpecificNodeConfig, config_keys::ConfigKeys, config_merge::Tags,
+            common::WarehouseSpecificNodeConfig,
+            config_keys::ConfigKeys,
+            config_merge::{Tags, TblProperties},
         },
     },
     serde::{
@@ -70,6 +73,8 @@ pub struct ProjectUnitTestConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -169,7 +174,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -248,7 +253,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -415,6 +420,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -557,6 +563,7 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -668,6 +675,10 @@ impl ResolvableConfig<UnitTestConfig> for UnitTestConfig {
     fn default_to(&mut self, parent: &UnitTestConfig) {
         self.default_to_fields(parent);
     }
+
+    // Unit tests have no `database`/`schema` field of their own -- they run against the model
+    // under test's relation, so there is nothing to canonicalize a `catalog`-style alias into.
+    fn canonicalize_adapter_aliases(&mut self, _default_adapter: AdapterType) {}
 }
 
 impl ConfigKeys for UnitTestConfig {
@@ -678,6 +689,23 @@ impl ConfigKeys for UnitTestConfig {
 #[cfg(test)]
 mod tests {
     use super::{ComputeArg, ProjectUnitTestConfig, UnitTestConfig};
+
+    #[test]
+    fn test_unit_test_query_tags_propagate_through_resolved_config() {
+        let project: ProjectUnitTestConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"unit-test"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: UnitTestConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"unit-test"}"#)
+        );
+    }
 
     #[test]
     fn test_compute_local_is_an_alias_for_sidecar() {

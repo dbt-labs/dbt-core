@@ -73,7 +73,6 @@ pub async fn resolve_snapshots(
     macros: &BTreeMap<String, DbtMacro>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
     default_adapter: AdapterType,
     adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     jinja_env: Arc<JinjaEnv>,
@@ -100,13 +99,17 @@ pub async fn resolve_snapshots(
     };
 
     let is_dependency = dependency_package_name.is_some();
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "snapshots");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "snapshots",
+        default_adapter,
+    )?;
     let raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "snapshots",
-        ))
+            default_adapter,
+        )?)
     } else {
         None
     };
@@ -291,8 +294,10 @@ pub async fn resolve_snapshots(
                 DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
         },
+        default_adapter,
     )?
     .with_resolve_defaults((
         arg.static_analysis.unwrap_or_default(),
@@ -309,7 +314,7 @@ pub async fn resolve_snapshots(
             defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             // Must match the resource paths used for the node's own fqn below,
@@ -437,13 +442,12 @@ pub async fn resolve_snapshots(
             // `alt` does not materialize snapshots in v1.
             let resolved_node_adapter = validate_node_adapter(
                 snapshot_config.adapter,
-                default_adapter,
                 &DbtMaterialization::Snapshot,
                 snapshot_config
                     .__warehouse_specific_config__
                     .catalog_name
                     .as_deref(),
-                adapter_type,
+                default_adapter,
                 dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
                 false,
                 error_path,
@@ -451,7 +455,7 @@ pub async fn resolve_snapshots(
 
             // See `resolve_models`: both remaining quoting layers depend on which
             // adapter the node runs on, which is only known after the config merge.
-            let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+            let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
             snapshot_config.quoting = resolve_package_quoting(
                 Some(match adapter_quoting.get(&selected_adapter) {
                     Some(authored) => snapshot_config.quoting.filled_from(authored),
@@ -506,7 +510,8 @@ pub async fn resolve_snapshots(
                 raw_schema_yml_configs.get(snapshot_name),
                 raw_inline_config.as_ref(),
                 true,
-            );
+                default_adapter,
+            )?;
 
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
@@ -608,7 +613,7 @@ pub async fn resolve_snapshots(
                 },
                 __adapter_attr__: AdapterAttr::from_config_and_dialect(
                     &snapshot_config.__warehouse_specific_config__,
-                    adapter_type,
+                    default_adapter,
                 ),
                 deprecated_config: snapshot_config.clone().into(),
                 compiled: None,
@@ -620,16 +625,6 @@ pub async fn resolve_snapshots(
                 // For backwards compatibility with target_schema and target_database configs
                 database: if snapshot_config.target_database.is_some() {
                     snapshot_config.target_database.clone()
-                } else if matches!(adapter_type, AdapterType::Databricks)
-                    && snapshot_config
-                        .__warehouse_specific_config__
-                        .catalog
-                        .is_some()
-                {
-                    snapshot_config
-                        .__warehouse_specific_config__
-                        .catalog
-                        .clone()
                 } else {
                     snapshot_config.database.clone()
                 },
@@ -650,10 +645,10 @@ pub async fn resolve_snapshots(
                 &package_name,
                 base_ctx,
                 &components,
-                adapter_type,
+                default_adapter,
             )?;
 
-            match node_resolver.insert_ref(&dbt_snapshot, adapter_type, status, false) {
+            match node_resolver.insert_ref(&dbt_snapshot, default_adapter, status, false) {
                 Ok(_) => (),
                 Err(e) => {
                     let err_with_loc = e.with_location(error_path.clone());
@@ -684,7 +679,7 @@ pub async fn resolve_snapshots(
                             &root_package.dbt_project.name,
                             collected_generic_tests,
                             test_name_truncations,
-                            adapter_type,
+                            default_adapter,
                             &arg.io,
                             patch_path.as_ref().unwrap_or(&dbt_asset.path),
                             false,
@@ -708,7 +703,7 @@ pub async fn resolve_snapshots(
                                 &root_package.dbt_project.name,
                                 collected_generic_tests,
                                 test_name_truncations,
-                                adapter_type,
+                                default_adapter,
                                 &arg.io,
                                 patch_path.as_ref().unwrap_or(&dbt_asset.path),
                                 false,
@@ -747,7 +742,7 @@ pub async fn resolve_snapshots(
         snapshots_with_execute,
         node_resolver,
         jinja_env,
-        adapter_type,
+        default_adapter,
         package.dbt_project.name.as_str(),
         &root_package.dbt_project.name,
         runtime_config,

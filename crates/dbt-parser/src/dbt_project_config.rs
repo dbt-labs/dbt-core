@@ -60,6 +60,7 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
         configs: &S,
         dependency_package_name: Option<&str>,
         disallow_plus_prefix: bool,
+        default_adapter: AdapterType,
     ) -> FsResult<Self>
     where
         T: PartialEq,
@@ -133,6 +134,7 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
             "",
             &on_error,
             disallow_plus_prefix,
+            default_adapter,
         ))
     }
 
@@ -198,24 +200,31 @@ pub struct ProjectConfigResolver<T: ResolvableConfig<T>> {
     local: DbtProjectConfig<T>,
     root: Option<DbtProjectConfig<T>>,
     resolve_defaults: T::ResolveDefaults,
+    default_adapter: AdapterType,
 }
 
 impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     /// Use when the current package is the root project (no root overlay needed).
-    pub fn for_root(config: DbtProjectConfig<T>) -> Self {
+    pub fn for_root(config: DbtProjectConfig<T>, default_adapter: AdapterType) -> Self {
         ProjectConfigResolver {
             local: config,
             root: None,
             resolve_defaults: T::ResolveDefaults::default(),
+            default_adapter,
         }
     }
 
     /// Use when the current package is a dependency.
-    pub fn for_dependency(local: DbtProjectConfig<T>, root: DbtProjectConfig<T>) -> Self {
+    pub fn for_dependency(
+        local: DbtProjectConfig<T>,
+        root: DbtProjectConfig<T>,
+        default_adapter: AdapterType,
+    ) -> Self {
         ProjectConfigResolver {
             local,
             root: Some(root),
             resolve_defaults: T::ResolveDefaults::default(),
+            default_adapter,
         }
     }
 
@@ -229,18 +238,22 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     /// called to construct the local package config; the closure is never called for root packages
     /// because the `root` argument itself serves as the local config (root packages have no
     /// separate overlay to apply).
+    ///
+    /// `default_adapter` is required (not an optional setter) so no resolver can be built without
+    /// wiring the per-layer alias-canonicalization hook below.
     pub fn build<F>(
         root: DbtProjectConfig<T>,
         is_dependency: bool,
         build_local: F,
+        default_adapter: AdapterType,
     ) -> FsResult<Self>
     where
         F: FnOnce() -> FsResult<DbtProjectConfig<T>>,
     {
         if is_dependency {
-            Ok(Self::for_dependency(build_local()?, root))
+            Ok(Self::for_dependency(build_local()?, root, default_adapter))
         } else {
-            Ok(Self::for_root(root))
+            Ok(Self::for_root(root, default_adapter))
         }
     }
 
@@ -248,6 +261,7 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     fn apply_root_overlay(&self, config: &mut T, fqn: &[String]) {
         if let Some(root) = &self.root {
             let mut root_config = root.get_config_for_fqn(fqn).clone();
+            root_config.canonicalize_adapter_aliases(self.default_adapter);
             root_config.default_to(config);
             *config = root_config;
         }
@@ -260,6 +274,7 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
         let mut config = self.local.get_config_for_fqn(fqn).clone();
         for c in configs.iter().flatten() {
             let mut c = (*c).clone();
+            c.canonicalize_adapter_aliases(self.default_adapter);
             c.default_to(&config);
             config = c;
         }
@@ -365,6 +380,7 @@ pub fn recur_build_dbt_project_config<T, S, F>(
     key_path: &str,
     on_error: &F,
     disallow_plus_prefix: bool,
+    default_adapter: AdapterType,
 ) -> DbtProjectConfig<T>
 where
     T: ResolvableConfig<T> + PartialEq,
@@ -372,6 +388,9 @@ where
     F: Fn(&ShouldBe<S>, &str, &str),
 {
     let mut child_config: T = child.clone().into();
+    // Canonicalize this level's own config source before merging with its (already-canonical)
+    // parent, per-layer. [dbt-core `credentials.translate_aliases`]
+    child_config.canonicalize_adapter_aliases(default_adapter);
     child_config.default_to(parent_config);
     let mut children = IndexMap::new();
 
@@ -406,6 +425,7 @@ where
                 &child_key_path,
                 on_error,
                 disallow_plus_prefix,
+                default_adapter,
             ),
         );
     }
@@ -570,49 +590,92 @@ pub fn build_root_project_configs(
             DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        sources: init_project_config(&root_project.sources, (), None, disallow_plus_prefix)?,
+        sources: init_project_config(
+            &root_project.sources,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         snapshots: init_project_config(
             &root_project.snapshots,
             DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
         seeds: init_project_config(
             &root_project.seeds,
             DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
         tests: init_project_config(
             &maybe_root_project_config,
             DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        unit_tests: init_project_config(&root_project.unit_tests, (), None, disallow_plus_prefix)?,
-        exposures: init_project_config(&root_project.exposures, (), None, disallow_plus_prefix)?,
+        unit_tests: init_project_config(
+            &root_project.unit_tests,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        exposures: init_project_config(
+            &root_project.exposures,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         semantic_models: init_project_config(
             &root_project.semantic_models,
             (),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        metrics: init_project_config(&root_project.metrics, (), None, disallow_plus_prefix)?,
+        metrics: init_project_config(
+            &root_project.metrics,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         saved_queries: init_project_config(
             &root_project.saved_queries,
             (),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        analyses: init_project_config(&root_project.analyses, (), None, disallow_plus_prefix)?,
+        analyses: init_project_config(
+            &root_project.analyses,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         functions: init_project_config(
             &root_project.functions,
             DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        checks: init_project_config(&root_project.checks, (), None, disallow_plus_prefix)?,
+        checks: init_project_config(
+            &root_project.checks,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         adapter_quoting: authored_quoting_per_adapter(
             root_project.adapters.as_ref(),
             target_adapters,
@@ -631,6 +694,7 @@ pub fn init_project_config<
     package_defaults: T::PackageDefaults,
     dependency_package_name: Option<&str>,
     disallow_plus_prefix: bool,
+    default_adapter: AdapterType,
 ) -> FsResult<DbtProjectConfig<T>> {
     let mut default_config = T::default();
     default_config.apply_package_defaults(package_defaults);
@@ -640,6 +704,7 @@ pub fn init_project_config<
             configs,
             dependency_package_name,
             disallow_plus_prefix,
+            default_adapter,
         )?
     } else {
         DbtProjectConfig {
@@ -1292,6 +1357,7 @@ mod init_project_config_tests {
                 Default::default(),
                 None,
                 disallow_plus_prefix,
+                AdapterType::Snowflake,
             )
         });
 
@@ -1536,6 +1602,53 @@ my_project:
         assert!(msg.contains("Unrecognized key `my_project.staging.+contract`"));
     }
 
+    /// Residual (fs#13424): Databricks' `target_catalog` -> `target_database`
+    /// alias has no dedicated field the way `catalog` -> `database` does (there is no
+    /// `target_catalog` field on `SnapshotConfig`/`ProjectSnapshotConfig` to canonicalize),
+    /// and unlike the inline `{{ config(...) }}` layer, `dbt_project.yml`'s subtree levels are
+    /// already-typed structs by the time `recur_build_dbt_project_config` runs -- there is no
+    /// raw YAML map left in which to rename the key. So `+target_catalog:` in `dbt_project.yml`
+    /// remains an unrecognized key, unlike the same alias authored via inline config (see
+    /// `test_parse_config_inline_target_catalog_alias_resolves_on_databricks_snapshot` in
+    /// `dbt-jinja-utils`). `#[ignore]`d because this pins the *gap*, not the desired behavior;
+    /// delete it and add real coverage instead if the gap is ever closed (see the comment on
+    /// `SnapshotConfig::canonicalize_adapter_aliases`).
+    #[test]
+    #[ignore = "fs#13424 residual: +target_catalog: in dbt_project.yml has no typed \
+                field to canonicalize into (see SnapshotConfig::canonicalize_adapter_aliases)"]
+    fn test_snapshot_target_catalog_in_project_yml_is_unrecognized_key() {
+        let yml = "+target_catalog: some_cat\n";
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<SnapshotConfig, ProjectSnapshotConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `+target_catalog`"));
+    }
+
+    /// Residual (fs#13424): postgres/redshift's `dbname` -> `database` alias has
+    /// the same shape of gap as `target_catalog` above, on a different config type -- `dbname`
+    /// has no dedicated field at all (unlike `catalog`, which has one to move out of), so it can
+    /// only resolve via a raw config-key rename before typing, which is only available at the
+    /// inline `{{ config(...) }}` layer (see
+    /// `test_parse_config_inline_dbname_alias_resolves_on_postgres` in `dbt-jinja-utils`).
+    /// `#[ignore]`d for the same reason as the test above: this pins the gap, not the desired
+    /// behavior.
+    #[test]
+    #[ignore = "fs#13424 residual: +dbname: in dbt_project.yml has no typed field to \
+                canonicalize into (see ResolvableConfig::canonicalize_adapter_aliases)"]
+    fn test_dbname_in_project_yml_is_unrecognized_key() {
+        let yml = "+dbname: some_db\n";
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `+dbname`"));
+    }
+
     /// The predicate must fire only on an explicit `+enabled: true`; an absent value must not be
     /// read as `true`, or every dependency package node would be treated as force-enabled.
     #[test]
@@ -1570,7 +1683,8 @@ my_project:
                 config: ModelConfig::default(),
                 children: IndexMap::new(),
             };
-            let resolver = ProjectConfigResolver::for_dependency(local, root.clone());
+            let resolver =
+                ProjectConfigResolver::for_dependency(local, root.clone(), AdapterType::Snowflake);
             assert_eq!(
                 resolver.is_enabled_by_root_overlay(&fqn),
                 expected,
@@ -1578,7 +1692,7 @@ my_project:
             );
 
             // Root packages have no overlay, so their own inline disable keeps winning.
-            let root_resolver = ProjectConfigResolver::for_root(root);
+            let root_resolver = ProjectConfigResolver::for_root(root, AdapterType::Snowflake);
             assert!(
                 !root_resolver.is_enabled_by_root_overlay(&fqn),
                 "{label}: root package must never be force-enabled"

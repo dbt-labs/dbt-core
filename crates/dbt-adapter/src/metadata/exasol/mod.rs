@@ -19,7 +19,8 @@ use crate::connection::AdapterConnectionFactory;
 use crate::errors::{AdapterError, AdapterErrorKind, AsyncAdapterResult, Cancellable};
 use crate::{AdapterResult, metadata::*, record_batch::RecordBatchExt};
 use arrow_schema::Schema;
-use dbt_adbc::{Connection, MapReduce, QueryCtx};
+use dbt_adapter_engine::MapReduce;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::CancellationToken;
 
 use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};

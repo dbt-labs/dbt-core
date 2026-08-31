@@ -9,6 +9,7 @@ use dbt_common::tracing::dbt_metrics::{FusionMetricKey, RunCacheServiceMetricKey
 use dbt_common::tracing::metrics::increment_metric;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::profiles::Execute;
+use dbt_schemas::state::DbtProfile;
 use dbt_state::metadata_cache::RunCacheMetadataCache;
 use dbt_state::service_client::{
     ClientVersionStatus, GrpcRunCacheServiceClient, RunCacheClientMetadata, RunCacheServiceClient,
@@ -83,6 +84,13 @@ impl RunCacheLifecycle {
 
     pub fn service_client(&self) -> Option<SharedRunCacheServiceClient> {
         self.service.client.clone()
+    }
+
+    pub fn defer_to_target(&self, active_profile: &DbtProfile) -> Option<String> {
+        self.service
+            .config
+            .as_ref()
+            .map(|c| c.defer_to_target(active_profile))
     }
 }
 

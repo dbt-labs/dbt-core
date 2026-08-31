@@ -202,10 +202,30 @@ pub(crate) fn deep_merge_yaml(destination: &mut dbt_yaml::Value, source: &dbt_ya
     }
 }
 
+/// Applies `adapter_type`'s config-key alias map to one config source.
+/// (`core/dbt/utils/utils.py:185-192`)
+pub(crate) fn canonicalize_source_config_keys(
+    adapter_type: AdapterType,
+    cfg: BTreeMap<String, dbt_yaml::Value>,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+    dbt_adapter_core::config_aliases::canonicalize_config_keys(adapter_type, cfg).map_err(|dup| {
+        let location = dbt_common::CodeLocationWithFile::from(dup.value_b.span().clone());
+        fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => location,
+            "Config keys `{}` and `{}` both resolve to `{}` for adapter '{}'; a project cannot \
+             set the same underlying config key two different ways in the same place.",
+            dup.key_a,
+            dup.key_b,
+            dup.canonical,
+            adapter_type,
+        )
+    })
+}
+
 /// Builds `unrendered_config` by merging config sources in hierarchical order:
-/// project < root < schema.yml < inline. Each source is merged independently so
-/// that hook key normalization (pre_hook → pre-hook, etc.) applies per-source
-/// before merging. Ordinary keys use overwrite semantics (most specific source wins);
+/// project < root < schema.yml < inline. Each source is canonicalized independently, before merging.
+/// Ordinary keys use overwrite semantics (most specific source wins);
 /// `pre-hook`/`post-hook` accumulate across sources instead (see [`merge_config_source`]).
 ///
 /// Sources not applicable to a resource type should be passed as `None`.
@@ -218,32 +238,43 @@ pub(crate) fn build_unrendered_config(
     schema: Option<&BTreeMap<String, dbt_yaml::Value>>,
     inline: Option<&BTreeMap<String, dbt_yaml::Value>>,
     normalize_hooks: bool,
-) -> BTreeMap<String, dbt_yaml::Value> {
-    let apply = |cfg: BTreeMap<String, dbt_yaml::Value>| {
-        if normalize_hooks {
-            normalize_hook_names(cfg)
-        } else {
-            cfg
-        }
-    };
+    adapter_type: AdapterType,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+    let canonicalize =
+        |cfg: BTreeMap<String, dbt_yaml::Value>| -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+            let cfg = canonicalize_source_config_keys(adapter_type, cfg)?;
+            Ok(if normalize_hooks {
+                normalize_hook_names(cfg)
+            } else {
+                cfg
+            })
+        };
 
-    let mut unrendered = apply(local.get_config_for_fqn(fqn).clone());
+    let mut unrendered = canonicalize(local.get_config_for_fqn(fqn).clone())?;
 
     if let Some(root_cfg) = root {
         merge_config_source(
             &mut unrendered,
-            apply(root_cfg.get_config_for_fqn(fqn).clone()),
+            canonicalize(root_cfg.get_config_for_fqn(fqn).clone())?,
             normalize_hooks,
         );
     }
     if let Some(schema_cfg) = schema {
-        merge_config_source(&mut unrendered, apply(schema_cfg.clone()), normalize_hooks);
+        merge_config_source(
+            &mut unrendered,
+            canonicalize(schema_cfg.clone())?,
+            normalize_hooks,
+        );
     }
     if let Some(inline_cfg) = inline {
-        merge_config_source(&mut unrendered, apply(inline_cfg.clone()), normalize_hooks);
+        merge_config_source(
+            &mut unrendered,
+            canonicalize(inline_cfg.clone())?,
+            normalize_hooks,
+        );
     }
 
-    unrendered
+    Ok(unrendered)
 }
 
 /// Returns an error for resource names derived from filenames that contain spaces.
@@ -315,10 +346,9 @@ pub(crate) fn validate_compute(compute: Option<ComputeArg>, path: &Path) -> FsRe
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn validate_node_adapter(
     adapter: Option<AdapterType>,
-    default_adapter: AdapterType,
     materialized: &DbtMaterialization,
     catalog_name: Option<&str>,
-    adapter_type: AdapterType,
+    default_adapter: AdapterType,
     use_catalogs_v2: bool,
     is_python: bool,
     path: &Path,
@@ -359,11 +389,11 @@ pub(crate) fn validate_node_adapter(
 
     // Rule 2: v1 warehouse guard.
     if !matches!(
-        adapter_type,
+        default_adapter,
         AdapterType::Snowflake | AdapterType::DuckDB | AdapterType::Alt
     ) {
         return Err(err(format!(
-            "adapter: '{name}' in v1 supports Snowflake and lake compute only;              the target's default adapter is '{adapter_type}'"
+            "adapter: '{name}' in v1 supports Snowflake and lake compute only;              the target's default adapter is '{default_adapter}'"
         )));
     }
 
@@ -413,20 +443,19 @@ mod tests {
     use super::*;
     use crate::utils::RawProjectConfig;
 
-    /// Validate a selection of the `alt` adapter.
+    /// Validate a selection of the `alt` adapter against a given target default.
     fn validate_alt(
         materialized: DbtMaterialization,
         catalog_name: Option<&str>,
-        adapter_type: AdapterType,
+        default_adapter: AdapterType,
         use_catalogs_v2: bool,
         is_python: bool,
     ) -> FsResult<Option<AdapterType>> {
         validate_node_adapter(
             Some(AdapterType::Alt),
-            AdapterType::Snowflake,
             &materialized,
             catalog_name,
-            adapter_type,
+            default_adapter,
             use_catalogs_v2,
             is_python,
             Path::new("models/m.sql"),
@@ -436,7 +465,6 @@ mod tests {
     fn validate_selection(selected: Option<AdapterType>) -> FsResult<Option<AdapterType>> {
         validate_node_adapter(
             selected,
-            AdapterType::Snowflake,
             &DbtMaterialization::Table,
             Some("horizon"),
             AdapterType::Snowflake,
@@ -452,7 +480,6 @@ mod tests {
         assert_eq!(
             validate_node_adapter(
                 None,
-                AdapterType::Snowflake,
                 &DbtMaterialization::MaterializedView,
                 None,
                 AdapterType::Bigquery,
@@ -520,11 +547,11 @@ mod tests {
 
     #[test]
     fn alt_happy_paths() {
-        for adapter in [
-            AdapterType::Snowflake,
-            AdapterType::DuckDB,
-            AdapterType::Alt,
-        ] {
+        // The warehouses rule 2 admits as a target default. `alt` itself is not
+        // among them: an `alt` selection against an `alt` default is the no-op
+        // asserted by `alt_on_an_alt_target_is_the_default_selection_no_op`, and
+        // never reaches rule 2.
+        for adapter in [AdapterType::Snowflake, AdapterType::DuckDB] {
             assert!(
                 validate_alt(
                     DbtMaterialization::Table,
@@ -567,6 +594,26 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    /// When the target's default adapter *is* `alt`, selecting `alt` names the
+    /// default explicitly: it returns at the no-op guard before any of the alt
+    /// preconditions run, so even inputs rule 1 and rule 3 would reject pass.
+    /// This is also why rule 2's own `AdapterType::Alt` arm is unreachable: rule 2
+    /// runs only when the selection is `alt` *and* differs from the default.
+    #[test]
+    fn alt_on_an_alt_target_is_the_default_selection_no_op() {
+        let resolved = validate_alt(
+            DbtMaterialization::MaterializedView,
+            None,
+            AdapterType::Alt,
+            false,
+            false,
+        )
+        .expect("naming the target's own default adapter is always allowed")
+        .expect("an explicit selection resolves to itself");
+
+        assert_eq!(resolved, AdapterType::Alt);
     }
 
     #[test]
@@ -670,7 +717,6 @@ mod tests {
             assert_eq!(
                 validate_node_adapter(
                     Some(AdapterType::DuckDB),
-                    AdapterType::Snowflake,
                     &mat,
                     None,
                     AdapterType::Snowflake,
@@ -697,7 +743,6 @@ mod tests {
         ] {
             let resolved = validate_node_adapter(
                 Some(AdapterType::Redshift),
-                AdapterType::Snowflake,
                 &mat,
                 None,
                 AdapterType::Snowflake,
@@ -738,8 +783,16 @@ mod tests {
         let schema = config_map(&[("post_hook", "\"apply masking\"")]);
         let inline = config_map(&[("post_hook", "\"delete rows\"")]);
 
-        let unrendered =
-            build_unrendered_config(&[], &local, None, Some(&schema), Some(&inline), true);
+        let unrendered = build_unrendered_config(
+            &[],
+            &local,
+            None,
+            Some(&schema),
+            Some(&inline),
+            true,
+            AdapterType::Snowflake,
+        )
+        .unwrap();
 
         let post_hook = unrendered.get("post-hook").expect("expected post-hook key");
         assert_eq!(
@@ -755,8 +808,16 @@ mod tests {
         let schema = config_map(&[("materialized", "\"view\"")]);
         let inline = config_map(&[("materialized", "\"table\"")]);
 
-        let unrendered =
-            build_unrendered_config(&[], &local, None, Some(&schema), Some(&inline), true);
+        let unrendered = build_unrendered_config(
+            &[],
+            &local,
+            None,
+            Some(&schema),
+            Some(&inline),
+            true,
+            AdapterType::Snowflake,
+        )
+        .unwrap();
 
         assert_eq!(
             unrendered.get("materialized").and_then(|v| v.as_str()),
@@ -771,7 +832,16 @@ mod tests {
         let local = RawProjectConfig::empty();
         let inline = config_map(&[("post_hook", "\"delete rows\"")]);
 
-        let unrendered = build_unrendered_config(&[], &local, None, None, Some(&inline), true);
+        let unrendered = build_unrendered_config(
+            &[],
+            &local,
+            None,
+            None,
+            Some(&inline),
+            true,
+            AdapterType::Snowflake,
+        )
+        .unwrap();
 
         assert_eq!(
             unrendered.get("post-hook").and_then(|v| v.as_str()),
@@ -787,14 +857,209 @@ mod tests {
         let schema = config_map(&[("post_hook", "\"a\"")]);
         let inline = config_map(&[("post_hook", "\"b\"")]);
 
-        let unrendered =
-            build_unrendered_config(&[], &local, None, Some(&schema), Some(&inline), false);
+        let unrendered = build_unrendered_config(
+            &[],
+            &local,
+            None,
+            Some(&schema),
+            Some(&inline),
+            false,
+            AdapterType::Snowflake,
+        )
+        .unwrap();
 
         assert_eq!(
             unrendered.get("post_hook").and_then(|v| v.as_str()),
             Some("b")
         );
         assert!(!unrendered.contains_key("post-hook"));
+    }
+
+    fn raw_project_config(pairs: &[(&str, &str)]) -> RawProjectConfig {
+        RawProjectConfig {
+            config: config_map(pairs),
+            children: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn databricks_catalog_alias_is_canonicalized_to_database() {
+        let local = raw_project_config(&[("catalog", "\"my_catalog\"")]);
+
+        let unrendered =
+            build_unrendered_config(&[], &local, None, None, None, true, AdapterType::Databricks)
+                .unwrap();
+
+        assert_eq!(
+            unrendered.get("database").and_then(|v| v.as_str()),
+            Some("my_catalog")
+        );
+        assert!(!unrendered.contains_key("catalog"));
+    }
+
+    /// The alias map is gated on adapter type, so the same `+catalog:` is an inert extra
+    /// config key on an adapter with no such alias.
+    #[test]
+    fn catalog_key_is_untouched_on_an_adapter_with_no_alias_map() {
+        let local = raw_project_config(&[("catalog", "\"my_catalog\"")]);
+
+        let unrendered =
+            build_unrendered_config(&[], &local, None, None, None, true, AdapterType::Snowflake)
+                .unwrap();
+
+        assert_eq!(
+            unrendered.get("catalog").and_then(|v| v.as_str()),
+            Some("my_catalog")
+        );
+        assert!(!unrendered.contains_key("database"));
+    }
+
+    /// `catalog_name` is a distinct, real config with its own dbt-core counterpart and must
+    /// never be swept up by the `catalog` → `database` alias.
+    #[test]
+    fn catalog_name_is_never_aliased() {
+        for adapter_type in [AdapterType::Databricks, AdapterType::Snowflake] {
+            let local = raw_project_config(&[("catalog_name", "\"cat\"")]);
+
+            let unrendered =
+                build_unrendered_config(&[], &local, None, None, None, true, adapter_type).unwrap();
+
+            assert_eq!(
+                unrendered.get("catalog_name").and_then(|v| v.as_str()),
+                Some("cat"),
+                "{adapter_type:?}"
+            );
+        }
+    }
+
+    /// Two keys in the same config source resolving to the same canonical key is an error,
+    /// mirroring dbt-core's `DuplicateAliasError`.
+    #[test]
+    fn duplicate_alias_and_canonical_key_in_one_source_errors() {
+        let local = raw_project_config(&[("catalog", "\"a\""), ("database", "\"b\"")]);
+
+        let err =
+            build_unrendered_config(&[], &local, None, None, None, true, AdapterType::Databricks)
+                .expect_err(
+                    "catalog and database both resolve to database and must not silently pick one",
+                );
+
+        let message = err.to_string();
+        assert!(message.contains("catalog"), "{message}");
+        assert!(message.contains("database"), "{message}");
+    }
+
+    /// Canonicalization runs per source, before layering, so a less specific source's
+    /// alias spelling does not shadow ordinary precedence -- a model-level `database:` still
+    /// wins over a project-level `+catalog:`.
+    #[test]
+    fn model_level_canonical_key_wins_over_project_level_alias() {
+        let local = raw_project_config(&[("catalog", "\"project_catalog\"")]);
+        let inline = config_map(&[("database", "\"model_database\"")]);
+
+        let unrendered = build_unrendered_config(
+            &[],
+            &local,
+            None,
+            None,
+            Some(&inline),
+            true,
+            AdapterType::Databricks,
+        )
+        .unwrap();
+
+        assert_eq!(
+            unrendered.get("database").and_then(|v| v.as_str()),
+            Some("model_database")
+        );
+        assert!(!unrendered.contains_key("catalog"));
+    }
+
+    /// https://github.com/dbt-labs/fs/pull/13752#discussion_r3872848766 -- a `+catalog:` alias
+    /// at a parent `dbt_project.yml` subtree level and a `+database:` canonical spelling at a
+    /// nested child level. dbt-mantle (`078260e46`, `context/context_config.py:120-127,222`,
+    /// `utils/utils.py:258` `fqn_search`) translates each hierarchy level's own dict through
+    /// `translate_aliases` *before* folding it into the accumulating typed result one level at a
+    /// time, so this is ordinary override precedence (child's `database` wins) and never a
+    /// `DuplicateAliasError` -- that error only fires when the *same* level dict has two
+    /// colliding keys.
+    ///
+    /// `RawProjectConfig` (`crate::utils::recur_raw_project_config`) used to pre-merge every
+    /// `dbt_project.yml` subtree level into one raw dict via plain key overwrite
+    /// (`merge_raw_config_mappings`), before `build_unrendered_config` ever canonicalized
+    /// anything. So the leaf's merged dict carried both `catalog` (from the parent level) and
+    /// `database` (from this level) as two distinct keys, and canonicalizing that combined dict
+    /// as if it were one config source raised a spurious `DuplicateAliasKey` -- exactly the
+    /// "duplicate issue" the review comment predicted, and not one of D3's documented axes
+    /// (cross-*source* canonicalize-before-merge, not cross-*level* within one source).
+    /// `merge_raw_config_mappings` now canonicalizes each level's own keys before folding them
+    /// into the (already-canonical) accumulated parent, closing that gap.
+    #[test]
+    fn alias_at_parent_level_and_canonical_key_at_child_level_does_not_error() {
+        let mapping = yaml(
+            r#"
+my_project:
+  "+catalog": parent_catalog
+  staging:
+    "+database": staging_database
+"#,
+        );
+        let tree = crate::utils::recur_raw_project_config(
+            mapping.as_mapping().unwrap(),
+            &BTreeMap::new(),
+            AdapterType::Databricks,
+        )
+        .expect(
+            "dbt-core translates per dbt_project.yml level before merging, so a parent-level \
+             alias and a child-level canonical spelling never collide",
+        );
+
+        let fqn = vec!["my_project".to_string(), "staging".to_string()];
+
+        // Each level is canonicalized before merging, so the leaf's merged dict already carries
+        // only the canonical spelling -- the parent's `catalog` was renamed to `database` before
+        // the child's own `database` overwrote it, never surviving as a second distinct key.
+        let merged = tree.get_config_for_fqn(&fqn);
+        assert_eq!(
+            merged.get("database").and_then(|v| v.as_str()),
+            Some("staging_database")
+        );
+        assert!(!merged.contains_key("catalog"));
+
+        let unrendered =
+            build_unrendered_config(&fqn, &tree, None, None, None, true, AdapterType::Databricks)
+                .unwrap();
+
+        assert_eq!(
+            unrendered.get("database").and_then(|v| v.as_str()),
+            Some("staging_database")
+        );
+        assert!(!unrendered.contains_key("catalog"));
+    }
+
+    /// A genuine same-level duplicate (one `dbt_project.yml` subtree writes both spellings at
+    /// once) must still error -- the per-level canonicalization the fix above adds must check at
+    /// the same granularity dbt-core does, not disable the check entirely.
+    #[test]
+    fn alias_and_canonical_key_in_the_same_dbt_project_level_still_errors() {
+        let mapping = yaml(
+            r#"
+my_project:
+  "+catalog": a
+  "+database": b
+"#,
+        );
+
+        let err = crate::utils::recur_raw_project_config(
+            mapping.as_mapping().unwrap(),
+            &BTreeMap::new(),
+            AdapterType::Databricks,
+        )
+        .expect_err("catalog and database both resolve to database at the same level");
+
+        let message = err.to_string();
+        assert!(message.contains("catalog"), "{message}");
+        assert!(message.contains("database"), "{message}");
     }
 
     fn yaml(text: &str) -> dbt_yaml::Value {

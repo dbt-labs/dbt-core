@@ -10,7 +10,8 @@ use std::task::{Poll, Waker};
 use std::time::Instant;
 
 use dbt_adapter_core::AdapterType;
-use dbt_adbc::{Connection, ConnectionFactory};
+use dbt_adapter_engine::ConnectionFactory;
+use dbt_adbc::Connection;
 use dbt_common::AdapterResult;
 use dbt_common::cancellation::Cancellable;
 use dbt_telemetry::{AdapterConnectionClose, ConnectionLimitWait};

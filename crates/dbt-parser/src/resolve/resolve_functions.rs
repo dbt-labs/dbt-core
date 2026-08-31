@@ -74,7 +74,6 @@ pub async fn resolve_functions(
     function_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
     default_adapter: AdapterType,
     adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     package_name: &str,
@@ -100,8 +99,10 @@ pub async fn resolve_functions(
                 DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
         },
+        default_adapter,
     )?
     .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
@@ -115,7 +116,7 @@ pub async fn resolve_functions(
             defer_render_errors_to_compile: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             resource_paths: package
@@ -135,13 +136,17 @@ pub async fn resolve_functions(
     // prerequisite — the Stage-1 wholesale comparison requires a fully populated
     // `unrendered_config`).
     let is_dependency = dependency_package_name.is_some();
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "functions");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "functions",
+        default_adapter,
+    )?;
     let raw_root_project_functions_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "functions",
-        ))
+            default_adapter,
+        )?)
     } else {
         None
     };
@@ -291,17 +296,16 @@ pub async fn resolve_functions(
         // function selects explicitly; it has no attached node to inherit from.
         let resolved_node_adapter = validate_node_adapter(
             model_config.adapter,
-            default_adapter,
             &DbtMaterialization::Function,
             None,
-            adapter_type,
+            default_adapter,
             dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
             dbt_asset.is_python(),
             &dbt_asset.path,
         )?;
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
-        let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
         model_config.quoting = resolve_package_quoting(
             Some(match adapter_quoting.get(&selected_adapter) {
                 Some(authored) => model_config.quoting.filled_from(authored),
@@ -353,7 +357,8 @@ pub async fn resolve_functions(
             raw_schema_yml_configs.get(function_name),
             raw_config_call_dict.as_ref(),
             false,
-        );
+            default_adapter,
+        )?;
 
         let properties = if let Some(properties) = maybe_properties {
             properties
@@ -494,13 +499,7 @@ pub async fn resolve_functions(
         };
 
         let components = RelationComponents {
-            database: if matches!(adapter_type, AdapterType::Databricks)
-                && model_config.__warehouse_specific_config__.catalog.is_some()
-            {
-                model_config.__warehouse_specific_config__.catalog.clone()
-            } else {
-                model_config.database.clone().into_inner().unwrap_or(None)
-            },
+            database: model_config.database.clone().into_inner().unwrap_or(None),
             schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
@@ -514,10 +513,10 @@ pub async fn resolve_functions(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
-        match node_resolver.insert_function(&function, adapter_type, status) {
+        match node_resolver.insert_function(&function, default_adapter, status) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());

@@ -11,6 +11,7 @@ use arrow::compute::concat_batches;
 use arrow::datatypes::GenericStringType;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_adapter_core::{AdapterType, ExecutionPhase};
+use dbt_adapter_engine::MapReduce;
 use dbt_adbc::*;
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;

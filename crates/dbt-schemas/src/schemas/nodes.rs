@@ -22,7 +22,7 @@ use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serializ
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{grants_equal, tags_eq_vec};
-use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
+use crate::schemas::project::{TblProperties, WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
@@ -2000,22 +2000,66 @@ impl InternalDbtNode for DbtTest {
         if let Some(other_test) = other.as_any().downcast_ref::<DbtTest>() {
             let same_fqn_result = self.common().fqn == other_test.common().fqn;
 
-            if !same_fqn_result {
-                log_state_mod_diff(
-                    &self.__common_attr__.unique_id,
-                    "test",
-                    [(
-                        "same_fqn",
-                        same_fqn_result,
-                        Some((
-                            format!("{:?}", &self.common().fqn),
-                            format!("{:?}", &other_test.common().fqn),
-                        )),
-                    )],
-                );
-            }
+            // dbt-core: `GenericTestNode.same_contents` overrides `ParsedNode`'s to
+            // `same_config and same_fqn` (nodes.py:1170-1174) -- a generic test's body is just
+            // the macro-call text, not authored content, so body is deliberately excluded.
+            // `SingularTestNode` has no such override, so it inherits `ParsedNode.same_contents`,
+            // which ANDs `same_body` (nodes.py:373-374,402-416). `test_metadata` is populated only
+            // for generic tests (see `DbtTestAttr`), so it's the same discriminator dbt-core's
+            // class split encodes.
+            if self.__test_attr__.test_metadata.is_some() {
+                // Generic test: unchanged, fqn only.
+                if !same_fqn_result {
+                    log_state_mod_diff(
+                        &self.__common_attr__.unique_id,
+                        "test",
+                        [(
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.common().fqn),
+                                format!("{:?}", &other_test.common().fqn),
+                            )),
+                        )],
+                    );
+                }
 
-            same_fqn_result
+                same_fqn_result
+            } else {
+                // Singular test: also consult body (checksum-based, like `DbtModel`'s).
+                //
+                // Deliberately stop at `same_fqn && same_body`. `ParsedNode.same_contents` also
+                // ANDs relation, persisted-description and contract, but do NOT add those checks
+                // here: `is_modified`'s `Any` case (`prev_state/mod.rs`) already ORs
+                // `check_relation_modified`, `check_persisted_descriptions_modified`,
+                // `check_modified_macros` and `check_contract_modified` for every node type,
+                // singular tests included. Re-adding them here would double-count -- the
+                // selection result would be unchanged, but the `[state_mod_diff]` trace would
+                // misattribute which sub-check actually caught the difference.
+                let same_body_result =
+                    same_body(&self.__common_attr__, &other_test.__common_attr__);
+                let result = same_fqn_result && same_body_result;
+
+                if !result {
+                    log_state_mod_diff(
+                        &self.__common_attr__.unique_id,
+                        "test",
+                        [
+                            (
+                                "same_fqn",
+                                same_fqn_result,
+                                Some((
+                                    format!("{:?}", &self.common().fqn),
+                                    format!("{:?}", &other_test.common().fqn),
+                                )),
+                            ),
+                            ("same_body", same_body_result, None),
+                        ],
+                    );
+                }
+
+                result
+            }
         } else {
             false
         }
@@ -3111,15 +3155,15 @@ impl InternalDbtNode for DbtCheck {
                 self.deprecated_config.enabled == other_check.deprecated_config.enabled;
             let severity_eq =
                 self.deprecated_config.severity == other_check.deprecated_config.severity;
-            let node_fqn_eq =
-                self.deprecated_config.node_fqn == other_check.deprecated_config.node_fqn;
+            let selection_filter_on_eq = self.deprecated_config.selection_filter_on
+                == other_check.deprecated_config.selection_filter_on;
             // Resolved tags live on common_attr, not the config wrapper (cf. DbtSavedQuery).
             let tags_eq = tags_eq_vec(
                 &self.__common_attr__.tags,
                 &other_check.__common_attr__.tags,
             );
 
-            let result = enabled_eq && severity_eq && node_fqn_eq && tags_eq;
+            let result = enabled_eq && severity_eq && selection_filter_on_eq && tags_eq;
 
             if !result {
                 log_state_mod_diff(
@@ -3143,11 +3187,11 @@ impl InternalDbtNode for DbtCheck {
                             )),
                         ),
                         (
-                            "node_fqn",
-                            node_fqn_eq,
+                            "selection_filter_on",
+                            selection_filter_on_eq,
                             Some((
-                                format!("{:?}", &self.deprecated_config.node_fqn),
-                                format!("{:?}", &other_check.deprecated_config.node_fqn),
+                                format!("{:?}", &self.deprecated_config.selection_filter_on),
+                                format!("{:?}", &other_check.deprecated_config.selection_filter_on),
                             )),
                         ),
                         (
@@ -5226,6 +5270,8 @@ impl DbtTest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtTestAttr {
+    /// The column this test is attached to, from its position in the schema file. `None`
+    /// for a model-level test; a `column_name` macro kwarg lives in `test_metadata.kwargs`.
     pub column_name: Option<String>,
     pub attached_node: Option<String>,
     pub test_metadata: Option<TestMetadata>,
@@ -6015,6 +6061,7 @@ impl AdapterAttr {
                     buckets: config.buckets,
                     catalog: config.catalog.clone(),
                     databricks_tags: config.databricks_tags.clone(),
+                    query_tags: config.query_tags.clone(),
                     compression: config.compression.clone(),
                     databricks_compute: config.databricks_compute.clone(),
                     target_alias: config.target_alias.clone(),
@@ -6121,6 +6168,7 @@ impl AdapterAttr {
                         buckets: config.buckets,
                         catalog: config.catalog.clone(),
                         databricks_tags: config.databricks_tags.clone(),
+                        query_tags: config.query_tags.clone(),
                         compression: config.compression.clone(),
                         databricks_compute: config.databricks_compute.clone(),
                         target_alias: config.target_alias.clone(),
@@ -6187,7 +6235,7 @@ pub struct DatabricksAttr {
     pub file_format: Option<String>,
     pub location_root: Option<String>,
     pub use_uniform: Option<bool>,
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     pub include_full_name_in_path: Option<bool>,
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     pub auto_liquid_cluster: Option<bool>,
@@ -6196,6 +6244,7 @@ pub struct DatabricksAttr {
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub query_tags: Option<String>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,
@@ -6250,7 +6299,7 @@ pub struct RedshiftAttr {
     pub auto_refresh: Option<bool>,
     pub backup: Option<bool>,
     pub bind: Option<bool>,
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     pub sort: Option<StringOrArrayOfStrings>,
     pub sort_type: Option<String>,
 }

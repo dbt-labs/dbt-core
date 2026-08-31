@@ -1,11 +1,14 @@
 import { BadgeAlert, BadgeCheck, BadgeMinus } from 'lucide-react';
 
-import { SizeType } from '@dbt-labs/sourdough';
-
 import { TrustState } from '../util/trustSignals';
 
+/** Matches sourdough's SizeType structurally (same string values) so it's
+ *  still assignable everywhere that type was used -- TypeScript checks
+ *  shape, not origin, for a plain string-literal union. */
+type SourdoughSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+
 /** Mirrors sourdough's rendered ryecon sizes (Ryecons.css custom properties). */
-const SIZE_CLASS: Record<SizeType, string> = {
+const SIZE_CLASS: Record<SourdoughSize, string> = {
   xs: 'size-3',
   sm: 'size-3.5',
   md: 'size-4',
@@ -17,7 +20,7 @@ const SIZE_CLASS: Record<SizeType, string> = {
 };
 
 export const trustIconMap = (
-  size: SizeType,
+  size: SourdoughSize,
 ): Record<TrustState, React.ReactElement> => {
   const sizeClass = SIZE_CLASS[size];
   return {

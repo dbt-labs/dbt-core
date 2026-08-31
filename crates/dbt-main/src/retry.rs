@@ -37,6 +37,20 @@ pub struct RetryState {
     pub original_full_refresh: bool,
 }
 
+/// Decode check names from `check.<package>.<name>` unique_ids.
+///
+/// Everything after the second `.` is the name, so a name containing a
+/// dot survives. Keys that don't fit (e.g. a legacy artifact) drop out;
+/// an empty result means "run every discovered check".
+pub fn check_names_from_retry_ids(ids: &[String]) -> Vec<String> {
+    ids.iter()
+        .filter_map(|id| {
+            id.strip_prefix("check.")
+                .and_then(|rest| rest.split_once('.').map(|(_, name)| name.to_string()))
+        })
+        .collect()
+}
+
 impl RetryState {
     /// Load retry state from a run_results.json file.
     ///
@@ -174,17 +188,9 @@ impl RetryState {
                 ..CompileArgs::default()
             }),
             "check" => {
-                // Re-run exactly the checks that failed, by name. Each failed
-                // check was recorded under the key `check.<project>.<name>`;
-                // take the check name (everything after the second `.`, so a
-                // name containing a dot survives). Keys that don't fit (e.g. a
-                // legacy artifact) drop out, and retry then runs all discovered
-                // checks.
-                let check_names = self
-                    .retryable_node_ids
-                    .iter()
-                    .filter_map(|id| id.splitn(3, '.').nth(2).map(str::to_string))
-                    .collect();
+                // Re-run exactly the checks that failed, by name. See
+                // `check_names_from_retry_ids`.
+                let check_names = check_names_from_retry_ids(&self.retryable_node_ids);
                 CoreCommand::Check(CheckArgs {
                     check_names,
                     common_args,
@@ -360,6 +366,18 @@ expected_sa: {expected_sa:?}",
             ),
             other => panic!("expected Check, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_check_names_from_retry_ids_ignores_non_check_nodes() {
+        assert_eq!(
+            check_names_from_retry_ids(&[
+                "check.pkg.failed_check".to_string(),
+                "model.pkg.skipped".to_string(),
+                "check.pkg.dot.named".to_string(),
+            ]),
+            vec!["failed_check".to_string(), "dot.named".to_string()]
+        );
     }
 
     #[test]

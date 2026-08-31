@@ -218,8 +218,10 @@ fn values_match_inner(
             // consumers. It is not stable public model data, so tolerate its presence or absence
             // during replay. Graph nodes are plain serialized maps and have no __type__ marker.
             let is_lazy_model = [a, b].iter().any(|value| {
-                value.get("__type__").and_then(serde_json::Value::as_str)
-                    == Some("LazyModelWrapper")
+                value
+                    .get("__type__")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|type_name| type_name.ends_with("LazyModelWrapper"))
             });
             let is_graph_node = [a, b].iter().any(|value| {
                 value.get("resource_type").is_some() && value.get("unique_id").is_some()

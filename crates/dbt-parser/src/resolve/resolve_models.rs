@@ -176,9 +176,6 @@ pub async fn resolve_models(
     macros: &BTreeMap<String, DbtMacro>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
-    // Every adapter the active target declares, for resolving `+adapter`.
-    // The target's default adapter.
     default_adapter: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
@@ -210,31 +207,40 @@ pub async fn resolve_models(
     let is_dependency = dependency_package_name.is_some();
     // Best-effort raw parse of the root project's `models:` subtree, used only to hydrate
     // dependency package nodes' `unrendered_config` with root overrides (preserving Jinja).
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "models");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "models",
+        default_adapter,
+    )?;
     let raw_root_project_models_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "models",
-        ))
+            default_adapter,
+        )?)
     } else {
         None
     };
 
-    let config_resolver =
-        ProjectConfigResolver::build(root_project_configs.models.clone(), is_dependency, || {
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.models.clone(),
+        is_dependency,
+        || {
             init_project_config(
                 &package.dbt_project.models,
                 DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
-        })?
-        .with_resolve_defaults((
-            arg.static_analysis.unwrap_or_default(),
-            root_package.dbt_project.sync.clone(),
-            Some(default_adapter),
-        ));
+        },
+        default_adapter,
+    )?
+    .with_resolve_defaults((
+        arg.static_analysis.unwrap_or_default(),
+        root_package.dbt_project.sync.clone(),
+        Some(default_adapter),
+    ));
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -246,7 +252,7 @@ pub async fn resolve_models(
             defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             resource_paths: package
@@ -340,6 +346,7 @@ pub async fn resolve_models(
         config_resolver,
         python_files,
         &mut models_properties_sans_semantics,
+        default_adapter,
     )?;
     model_sql_resources_map.extend(python_results);
 
@@ -573,10 +580,9 @@ pub async fn resolve_models(
         // to reach the run layer, which has no profile.
         let resolved_node_adapter = validate_node_adapter(
             model_config.adapter,
-            default_adapter,
             &materialized,
             model_config.catalog_name.as_deref(),
-            adapter_type,
+            default_adapter,
             dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
             dbt_asset.is_python(),
             &dbt_asset.path,
@@ -621,7 +627,7 @@ pub async fn resolve_models(
         // `{% if execute %}` (dbt-core#14486).
         let is_custom_materialization = materialization_resolver.is_custom_materialization(
             &materialized.to_string(),
-            resolved_node_adapter.unwrap_or(adapter_type),
+            resolved_node_adapter.unwrap_or(default_adapter),
         );
         let static_analysis = if is_custom_materialization {
             Spanned::new(StaticAnalysisKind::Off)
@@ -692,7 +698,8 @@ pub async fn resolve_models(
             raw_schema_yml_configs.get(ref_name),
             raw_config_call_dict.as_ref(),
             true,
-        );
+            default_adapter,
+        )?;
 
         // Quoting is resolved here rather than at the package seed, because both
         // remaining layers depend on which adapter the node runs on, and that is
@@ -704,13 +711,13 @@ pub async fn resolve_models(
         // downstream sees the same fully-resolved value -- notably
         // `deprecated_config`, which reaches the manifest and the run-cache hash.
         // Leaving unset fields as `None` there would change both.
-        let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
         model_config.quoting = resolve_package_quoting(
             Some(match adapter_quoting.get(&selected_adapter) {
                 Some(authored) => model_config.quoting.filled_from(authored),
                 None => model_config.quoting,
             }),
-            resolved_node_adapter.unwrap_or(adapter_type),
+            resolved_node_adapter.unwrap_or(default_adapter),
         );
 
         // Create the DbtModel with all properties already set
@@ -905,7 +912,7 @@ pub async fn resolve_models(
             },
             __adapter_attr__: AdapterAttr::from_config_and_dialect(
                 &model_config.__warehouse_specific_config__,
-                adapter_type,
+                default_adapter,
             ),
             // Derived from the model config
             deprecated_config: model_config.clone().into(),
@@ -913,13 +920,7 @@ pub async fn resolve_models(
         };
 
         let components = RelationComponents {
-            database: if matches!(adapter_type, AdapterType::Databricks)
-                && model_config.__warehouse_specific_config__.catalog.is_some()
-            {
-                model_config.__warehouse_specific_config__.catalog.clone()
-            } else {
-                model_config.database.clone().into_inner().unwrap_or(None)
-            },
+            database: model_config.database.clone().into_inner().unwrap_or(None),
             schema: model_config.schema.clone().into_inner().unwrap_or(None),
             alias: model_config.alias.clone(),
             store_failures: None,
@@ -933,7 +934,7 @@ pub async fn resolve_models(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
         // Update time_spine node_relation with the resolved relation components
@@ -952,7 +953,7 @@ pub async fn resolve_models(
                 };
             }
         }
-        match node_resolver.insert_ref(&dbt_model, adapter_type, status, false) {
+        match node_resolver.insert_ref(&dbt_model, default_adapter, status, false) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
@@ -977,7 +978,7 @@ pub async fn resolve_models(
                         &root_package.dbt_project.name,
                         collected_generic_tests,
                         test_name_truncations,
-                        adapter_type,
+                        default_adapter,
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
                         false,
@@ -993,7 +994,7 @@ pub async fn resolve_models(
                         &root_package.dbt_project.name,
                         collected_generic_tests,
                         test_name_truncations,
-                        adapter_type,
+                        default_adapter,
                         &arg.io,
                         patch_path.as_ref().unwrap_or(&dbt_asset.path),
                         true,
@@ -1012,7 +1013,7 @@ pub async fn resolve_models(
                             &root_package.dbt_project.name,
                             collected_generic_tests,
                             test_name_truncations,
-                            adapter_type,
+                            default_adapter,
                             &arg.io,
                             patch_path.as_ref().unwrap_or(&dbt_asset.path),
                             false,
@@ -1089,7 +1090,7 @@ pub async fn resolve_models(
         models_with_execute,
         node_resolver,
         env,
-        adapter_type,
+        default_adapter,
         package_name,
         &root_package.dbt_project.name,
         runtime_config,
@@ -1294,6 +1295,7 @@ fn process_python_models(
     config_resolver: ProjectConfigResolver<ModelConfig>,
     python_files: Vec<dbt_schemas::state::DbtAsset>,
     models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    adapter_type: AdapterType,
 ) -> FsResult<Vec<SqlFileRenderResult<ModelConfig, ModelProperties>>> {
     let mut results = Vec::new();
     let dependency_package_name = dependency_package_name_from_ctx(env.as_ref(), base_ctx);
@@ -1329,6 +1331,7 @@ fn process_python_models(
             checksum,
             dependency_package_name,
             Some(python_asset.path.clone()),
+            adapter_type,
         ) {
             Ok(info) => info,
             Err(e) => {

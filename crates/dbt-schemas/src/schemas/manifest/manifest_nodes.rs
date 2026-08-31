@@ -870,7 +870,7 @@ pub struct ManifestModelConfig {
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub incremental_predicates: Option<Vec<String>>,
+    pub incremental_predicates: Option<StringOrArrayOfStrings>,
     pub batch_size: Option<DbtBatchSize>,
     pub lookback: Option<i32>,
     pub begin: Option<String>,
@@ -986,6 +986,10 @@ pub struct ManifestModelConfig {
     pub additional_libs: Option<Vec<YmlValue>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_folder_for_python: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment_dependencies: Option<Vec<String>>,
     /// Schema synchronization configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sync: Option<SyncConfig>,
@@ -1200,6 +1204,8 @@ impl From<ModelConfig> for ManifestModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            environment_key: config.environment_key.clone(),
+            environment_dependencies: config.environment_dependencies.clone(),
             sync: config.sync,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
@@ -1281,6 +1287,8 @@ impl From<ManifestModelConfig> for ModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            environment_key: config.environment_key.clone(),
+            environment_dependencies: config.environment_dependencies.clone(),
             sync: config.sync,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
             // config_keys_used and config_keys_defaults are not in ManifestModelConfig

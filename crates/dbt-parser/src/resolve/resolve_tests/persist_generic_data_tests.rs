@@ -23,6 +23,7 @@ use dbt_schemas::schemas::dbt_column::VersionColumnProperties;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_schemas::state::{DbtAsset, GenericTestAsset};
 use dbt_yaml::ShouldBe;
@@ -215,6 +216,9 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         project_name,
                         root_project_name,
                         &test_config,
+                        // A model-level test is attached to no column, even when it passes
+                        // a `column_name` kwarg to its macro.
+                        None,
                         test.column_name(),
                         &column_test,
                         io_args,
@@ -254,7 +258,8 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             project_name,
                             root_project_name,
                             &test_config,
-                            Some(&quoted_column_name),
+                            Some(quoted_column_name.clone()),
+                            Some(StringOrArrayOfStrings::String(quoted_column_name)),
                             test,
                             io_args,
                             original_file_path,
@@ -281,7 +286,8 @@ fn persist_inner(
     project_name: &str,
     root_project_name: &str,
     test_config: &GenericTestConfig,
-    column_name: Option<&str>,
+    column_name: Option<String>,
+    column_name_kwarg: Option<StringOrArrayOfStrings>,
     test: &DataTests,
     io_args: &IoArgs,
     original_file_path: &Path,
@@ -307,7 +313,7 @@ fn persist_inner(
     let details = get_test_details(
         test,
         test_config,
-        column_name,
+        column_name_kwarg,
         dependecy_package_name,
         suppress_deprecated_test_validation,
         legacy_syntax_handling,
@@ -361,7 +367,7 @@ fn persist_inner(
     // rather than just the cleaned name. This matches mantle's behavior where
     // tests with different kwargs get different unique_ids.
     if !seen_tests.insert(unique_id) {
-        match column_name {
+        match &column_name {
             Some(column_name) => {
                 return err!(
                     ErrorCode::DbtYamlValidationError,
@@ -393,10 +399,9 @@ fn persist_inner(
         package_name: project_name.to_string(),
     };
     let (meta_name, meta_namespace) = (Some(test_macro_name), namespace);
-    let column_name = kwargs
+    let column_name_kwarg = kwargs
         .get("column_name")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .and_then(StringOrArrayOfStrings::from_json_value);
     let combination_of_columns = kwargs
         .get("combination_of_columns")
         .and_then(|v| v.as_array())
@@ -440,7 +445,8 @@ fn persist_inner(
         defined_at: test.span().clone().into(),
         test_metadata_name: meta_name,
         test_metadata_namespace: meta_namespace,
-        test_metadata_column_name: column_name,
+        column_name,
+        test_metadata_column_name: column_name_kwarg,
         test_metadata_combination_of_columns: combination_of_columns,
         test_metadata_model,
         test_metadata_kwargs,
@@ -465,7 +471,7 @@ struct TestDetails {
 fn get_test_details(
     test: &DataTests,
     test_config: &GenericTestConfig,
-    column_name: Option<&str>,
+    column_name_kwarg: Option<StringOrArrayOfStrings>,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
     legacy_syntax_handling: LegacyTestSyntaxHandling,
@@ -507,8 +513,8 @@ fn get_test_details(
         "model".to_string(),
         Value::String(format!("{{{{ get_where_subquery({model_string}) }}}}")),
     );
-    if let Some(col) = column_name {
-        kwargs.insert("column_name".to_string(), Value::String(col.to_string()));
+    if let Some(col) = column_name_kwarg {
+        kwargs.insert("column_name".to_string(), col.to_json_value());
     }
 
     let (test_macro_name, mut custom_test_name, namespace) = match test {
@@ -3752,7 +3758,8 @@ mod tests {
             "project_name",
             "project_name",
             &test_config,
-            Some("id"),
+            Some("id".to_string()),
+            Some(StringOrArrayOfStrings::String("id".to_string())),
             &test,
             &io_args,
             Path::new("models/schema.yml"),

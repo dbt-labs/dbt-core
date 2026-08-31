@@ -697,6 +697,14 @@ impl BaseRelation for Relation {
         }
     }
 
+    fn set_table_format(&mut self, table_format: Option<TableFormat>) {
+        if self.adapter_type == AdapterType::Snowflake
+            && let Some(table_format) = table_format
+        {
+            self.table_format = table_format;
+        }
+    }
+
     fn is_materialized_view(&self) -> bool {
         let result = matches!(self.relation_type, Some(RelationType::MaterializedView));
         result

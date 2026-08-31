@@ -17,8 +17,10 @@ use crate::schemas::common::{
     ClusterConfig, DbtMaterialization, DbtQuoting, Schedule, Severity, StoreFailuresAs,
 };
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::project::configs::common::{
+    WarehouseSpecificNodeConfig, take_databricks_catalog_alias,
+};
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::properties::DataTestState;
 use dbt_proc_macros::DefaultTo;
 use dbt_proc_macros::Resolvable;
@@ -119,6 +121,8 @@ pub struct ProjectDataTestConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -218,7 +222,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -288,7 +292,7 @@ pub struct ProjectDataTestConfig {
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -534,6 +538,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -695,6 +700,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -834,6 +840,18 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
     fn default_to(&mut self, parent: &DataTestConfig) {
         self.default_to_fields(parent);
     }
+
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            self.database.is_some(),
+        ) {
+            self.database = Some(catalog);
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
+    }
 }
 
 impl ConfigKeys for DataTestConfig {
@@ -865,6 +883,23 @@ impl ConfigKeys for DataTestConfig {
 mod tests {
     use super::{AdapterType, DataTestConfig, ProjectDataTestConfig};
     use crate::schemas::common::UpdatesOn;
+
+    #[test]
+    fn test_data_test_query_tags_propagate_through_resolved_config() {
+        let project: ProjectDataTestConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"data-test"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: DataTestConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"data-test"}"#)
+        );
+    }
 
     #[test]
     fn test_project_data_test_config_state_parses_with_plus_prefix() {

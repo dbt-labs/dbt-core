@@ -3,6 +3,7 @@ use crate::dbt_project_config::{
     ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
 };
 use crate::resolve::resolve_utils::deep_merge_yaml;
+use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message};
@@ -633,6 +634,7 @@ pub fn resolve_minimal_properties(
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     token: &CancellationToken,
+    adapter_type: AdapterType,
 ) -> FsResult<MinimalProperties> {
     let mut minimal_resolved_properties = MinimalProperties {
         semantic_layer_spec_is_legacy: false,
@@ -649,8 +651,10 @@ pub fn resolve_minimal_properties(
                 (),
                 Some(package.dbt_project.name.as_str()),
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     for dbt_asset in package.dbt_properties.iter().dedup() {

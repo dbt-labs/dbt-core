@@ -26,7 +26,7 @@ use super::semantic::SemanticCategory;
 use super::serde::values_match;
 use super::validation::{SqlSanitizer, TmpSuffixSanitizer, UuidSanitizer};
 use crate::AdapterType;
-use crate::sql::diff::compare_sql;
+use crate::sql::diff::{canonicalize_python_model_pair, compare_sql};
 
 /// Marker for temp-relation identifiers, which carry a non-deterministic suffix.
 static TMP_MARKER_RE: LazyLock<Regex> =
@@ -244,20 +244,105 @@ fn normalize_tmp_suffixes(value: &serde_json::Value) -> serde_json::Value {
 /// submitted job, so recordings captured before raw_code was populated would otherwise
 /// false-fail replay against newer binaries. Strip `raw_code` from the model object on
 /// both sides before comparing so the comparison reflects the actual submission.
+///
+/// The compiled code itself is compared with `python_code_matches` rather than byte-wise,
+/// so pure layout changes in how Fusion joins the user's source to `py_script_postfix`
+/// don't invalidate every python-model recording.
 fn python_job_args_match(recorded: &serde_json::Value, actual: &serde_json::Value) -> bool {
     fn strip_model_raw_code(args: &serde_json::Value) -> serde_json::Value {
         let mut args = args.clone();
-        if let Some(model) = args.as_array_mut().and_then(|arr| arr.first_mut())
-            && let Some(obj) = model.as_object_mut()
+        if let Some(model) = args.as_array_mut().and_then(|arr| arr.first_mut()) {
+            fn strip(value: &mut serde_json::Value, inside_model: bool) {
+                if let Some(obj) = value.as_object_mut() {
+                    let is_model = obj
+                        .get("__type__")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|type_name| type_name.ends_with("LazyModelWrapper"));
+                    if is_model || inside_model && obj.contains_key("adapter") {
+                        obj.remove("raw_code");
+                        obj.remove("adapter");
+                    }
+                    for child in obj.values_mut() {
+                        strip(child, is_model || inside_model);
+                    }
+                } else if let Some(array) = value.as_array_mut() {
+                    for child in array {
+                        strip(child, inside_model);
+                    }
+                }
+            }
+            strip(model, false);
+        }
+        if let Some(code) = args.as_array_mut().and_then(|arr| arr.get_mut(1))
+            && let Some(code) = code.as_str()
         {
-            obj.remove("raw_code");
+            *args.as_array_mut().unwrap().get_mut(1).unwrap() = serde_json::Value::String(
+                code.lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
         }
         args
     }
-    values_match(
-        &strip_model_raw_code(recorded),
-        &strip_model_raw_code(actual),
-    )
+    let recorded = strip_model_raw_code(recorded);
+    let actual = strip_model_raw_code(actual);
+
+    match (recorded.as_array(), actual.as_array()) {
+        (Some(rec_args), Some(act_args)) if rec_args.len() == act_args.len() => rec_args
+            .iter()
+            .zip(act_args.iter())
+            .enumerate()
+            .all(
+                |(index, (rec, act))| match (index, rec.as_str(), act.as_str()) {
+                    (COMPILED_CODE_ARG_INDEX, Some(rec_code), Some(act_code)) => {
+                        python_code_matches(rec_code, act_code)
+                    }
+                    _ => values_match(rec, act),
+                },
+            ),
+        _ => values_match(&recorded, &actual),
+    }
+}
+
+/// Position of the compiled python payload in `submit_python_job(model, compiled_code)`.
+const COMPILED_CODE_ARG_INDEX: usize = 1;
+
+/// Compare two compiled python model payloads, ignoring differences that cannot change
+/// the program the warehouse runs: line endings, trailing whitespace, and how many blank
+/// lines separate two statements.
+///
+/// Fusion assembles this payload as `<user source> + <py_script_postfix>`, and the joining
+/// whitespace has changed before (PR #13818 switched to `trim_end()` plus a blank line to
+/// match dbt Core's layout, which shifted every python model by one blank line). Blank
+/// lines are not significant to the python tokenizer, so treating them as equal keeps
+/// recordings valid across those edits while still catching real changes to the submitted
+/// code. The one lossy case is blank lines inside a triple-quoted string literal.
+fn python_code_matches(recorded: &str, actual: &str) -> bool {
+    // Handles CRLF vs LF plus the config_dict/meta_get equivalences shared with the
+    // Mantle replay path.
+    let (actual, recorded) = canonicalize_python_model_pair(actual, recorded);
+    normalize_python_blank_lines(&recorded) == normalize_python_blank_lines(&actual)
+}
+
+/// Collapse every run of blank lines to a single blank line, strip trailing whitespace on
+/// each line, and drop leading/trailing blank lines. Indentation is preserved.
+fn normalize_python_blank_lines(code: &str) -> String {
+    let mut lines: Vec<&str> = Vec::new();
+    let mut pending_blank = false;
+    for line in code.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            pending_blank = true;
+        } else {
+            if pending_blank && !lines.is_empty() {
+                lines.push("");
+            }
+            pending_blank = false;
+            lines.push(line);
+        }
+    }
+    lines.join("\n")
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1353,15 +1438,12 @@ pub fn validate_replay(
                 actual: actual_args.len(),
             });
         } else {
-            for (i, (expected, actual)) in recorded_args.iter().zip(actual_args.iter()).enumerate()
-            {
-                if !values_match(expected, actual) {
-                    differences.push(ReplayDifference::ArgValueMismatch {
-                        index: i,
-                        expected: expected.clone(),
-                        actual: actual.clone(),
-                    });
-                }
+            if !adapter_args_match_for_type(method, &recorded.args, args, adapter_type) {
+                differences.push(ReplayDifference::ArgValueMismatch {
+                    index: 0,
+                    expected: recorded.args.clone(),
+                    actual: args.clone(),
+                });
             }
         }
     }
@@ -2066,6 +2148,55 @@ mod tests {
             "submit_python_job",
             &actual,
             &recorded,
+            AdapterType::Snowflake
+        ));
+    }
+
+    #[test]
+    fn test_submit_python_job_ignores_compiled_code_blank_lines() {
+        // PR #13818 changed how `render_python_model` joins the user's source to
+        // py_script_postfix (`{}\n{}` on raw_python -> `{}\n\n{}` on raw_python.trim_end()),
+        // which shifted every python model payload by one blank line and false-failed
+        // replay of recordings made before it. Blank-line runs must compare equal.
+        let recorded = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m" },
+            "def model(dbt, session):\n    return df\n\n# COMMAND ----------\ndef main(session):\n    return \"OK\"\n"
+        ]);
+        let actual = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m" },
+            "def model(dbt, session):\n    return df\n\n\n# COMMAND ----------\ndef main(session):\n    return \"OK\"  \n\n\n"
+        ]);
+
+        assert!(adapter_args_match_for_type(
+            "submit_python_job",
+            &recorded,
+            &actual,
+            AdapterType::Snowflake
+        ));
+        assert!(adapter_args_match_for_type(
+            "submit_python_job",
+            &actual,
+            &recorded,
+            AdapterType::Snowflake
+        ));
+    }
+
+    #[test]
+    fn test_submit_python_job_still_detects_indentation_diff() {
+        // Blank-line tolerance must not extend to indentation, which is significant.
+        let recorded = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m" },
+            "def model(dbt, session):\n    return df\n"
+        ]);
+        let actual = serde_json::json!([
+            { "__type__": "LazyModelWrapper", "alias": "m" },
+            "def model(dbt, session):\n        return df\n"
+        ]);
+
+        assert!(!adapter_args_match_for_type(
+            "submit_python_job",
+            &recorded,
+            &actual,
             AdapterType::Snowflake
         ));
     }

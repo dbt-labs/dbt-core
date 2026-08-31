@@ -1,8 +1,6 @@
 import { type MouseEvent, type ReactNode } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { type Sizes } from '@dbt-labs/sourdough';
-
 import { cn } from '../../lib/utils';
 import { Tooltip } from './Tooltip';
 
@@ -34,9 +32,13 @@ const buttonVariants = cva(
 export type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>['variant']>;
 type ButtonVariantSize = VariantProps<typeof buttonVariants>['size'];
 
+/** Matches sourdough's Sizes enum structurally (same string values) so callers
+ *  still passing it are still assignable -- TypeScript checks shape, not
+ *  origin, for a plain string-literal union. */
+type SourdoughSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+
 export interface ButtonProps extends Omit<VariantProps<typeof buttonVariants>, 'size'> {
-  /** Accepts sourdough's Sizes enum too, since its string values match our text-size variants. */
-  size?: ButtonVariantSize | Sizes;
+  size?: ButtonVariantSize | SourdoughSize;
   text?: ReactNode;
   icon?: ReactNode;
   ariaLabel?: string;

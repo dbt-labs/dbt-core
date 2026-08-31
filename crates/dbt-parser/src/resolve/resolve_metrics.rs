@@ -58,13 +58,17 @@ pub async fn resolve_metrics(
     let mut seen_metric_names = HashSet::new();
 
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "metrics");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "metrics",
+        adapter_type,
+    )?;
     let raw_root_project_cfg = if dependency_package_name.is_some() {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "metrics",
-        ))
+            adapter_type,
+        )?)
     } else {
         None
     };
@@ -143,8 +147,10 @@ pub fn resolve_nested_model_metrics(
                 (),
                 dependency_package_name,
                 disallow_plus_prefix,
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     for (model_name, model_props) in typed_models_properties.iter() {
@@ -238,7 +244,8 @@ pub fn resolve_nested_model_metrics(
                     raw_properties_yml_config.as_ref(),
                     None,
                     false,
-                );
+                    adapter_type,
+                )?;
 
                 let dbt_metric = DbtMetric {
                     __common_attr__: CommonAttributes {
@@ -372,8 +379,10 @@ pub fn resolve_top_level_metrics(
                 (),
                 dependency_package_name,
                 disallow_plus_prefix,
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     for (metric_name, mpe) in minimal_metric_properties.iter() {
@@ -525,7 +534,8 @@ pub fn resolve_top_level_metrics(
             raw_properties_yml_config.as_ref(),
             None,
             false,
-        );
+            adapter_type,
+        )?;
 
         let dbt_metric = DbtMetric {
             __common_attr__: CommonAttributes {

@@ -429,6 +429,7 @@ pub fn update_node_columns(
             column_mask: existing.and_then(|col| col.column_mask.clone()),
             quote: existing.and_then(|col| col.quote),
             codec: existing.and_then(|col| col.codec.clone()),
+            ttl: existing.and_then(|col| col.ttl.clone()),
             deprecated_config: existing
                 .map(|col| col.deprecated_config.clone())
                 .unwrap_or_default(),

@@ -26,13 +26,12 @@ pub(crate) struct TestModelColumn {
 
 #[derive(Default)]
 pub(crate) struct TestModelConfig {
-    // This will be used once we actually implement liquid clustering
-    #[expect(dead_code)]
     pub auto_cluster: bool,
-    // This will be used once we actually implement liquid clustering
-    #[expect(dead_code)]
     pub cluster_by: Vec<String>,
     pub columns: Vec<TestModelColumn>,
+    /// Defaults to enforced for legacy component tests; set explicitly to `Some(false)` when a
+    /// test exercises the contract ownership boundary.
+    pub contract_enforced: Option<bool>,
     pub cron: Option<String>,
     pub partition_by: Vec<String>,
     pub persist_column_comments: bool,
@@ -98,13 +97,16 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
     };
 
     let wh_config = WarehouseSpecificNodeConfig {
-        tblproperties: Some(
+        tblproperties: Some(TblProperties(
             cfg.tbl_properties
                 .into_iter()
                 .map(|(k, v)| (k, dbt_yaml::Value::from(v)))
                 .collect(),
-        ),
+        )),
         partition_by: Some(PartitionConfig::List(cfg.partition_by)),
+        liquid_clustered_by: (!cfg.cluster_by.is_empty())
+            .then_some(StringOrArrayOfStrings::ArrayOfStrings(cfg.cluster_by)),
+        auto_liquid_cluster: Some(cfg.auto_cluster),
         schedule: Some(Schedule::ScheduleConfig(ScheduleConfig {
             cron: cfg.cron,
             time_zone_value: cfg.time_zone,
@@ -128,6 +130,10 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
 
     DbtModel {
         deprecated_config: ModelConfig {
+            contract: Some(DbtContract {
+                enforced: cfg.contract_enforced.unwrap_or(true),
+                ..Default::default()
+            }),
             table_format: cfg.table_format,
             __warehouse_specific_config__: wh_config,
             ..Default::default()

@@ -9,7 +9,9 @@ use crate::runtime::ThreadId;
 use crate::task::id::Id;
 
 pub mod blocking;
+
 pub mod current;
+pub use current::SetCurrentGuard;
 
 use current::HandleCell;
 
@@ -66,8 +68,12 @@ pub(crate) fn current_task_id() -> Option<Id> {
 }
 
 /// Whether the calling thread is one of the pool's worker threads.
-pub(crate) fn is_pool_worker() -> bool {
+pub fn is_pool_worker() -> bool {
     CONTEXT
         .try_with(|ctx| ctx.is_pool_worker.get())
         .unwrap_or(false)
+}
+
+pub(crate) fn set_pool_worker(val: bool) {
+    CONTEXT.with(|ctx| ctx.is_pool_worker.set(val));
 }

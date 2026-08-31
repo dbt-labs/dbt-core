@@ -58,7 +58,7 @@ use dbt_adbc::{Connection, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::dbt_types::RelationType;
@@ -1013,6 +1013,7 @@ impl AdapterImpl {
     /// PostgresAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-postgres/src/dbt/adapters/postgres/impl.py#L175
     /// RedshiftAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-redshift/src/dbt/adapters/redshift/impl.py#L490
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L502
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L808
     pub fn valid_incremental_strategies(&self) -> &[DbtIncrementalStrategy] {
         use DbtIncrementalStrategy::*;
 
@@ -1020,7 +1021,14 @@ impl AdapterImpl {
             Postgres | DuckDB | Alt => &[Append, DeleteInsert, Merge, Microbatch],
             Snowflake => &[Append, DeleteInsert, InsertOverwrite, Merge, Microbatch],
             Bigquery => &[Append],
-            Databricks => &[Append, Merge, InsertOverwrite, ReplaceWhere],
+            Databricks => &[
+                Append,
+                DeleteInsert,
+                Merge,
+                InsertOverwrite,
+                ReplaceWhere,
+                Microbatch,
+            ],
             Redshift => &[Append, DeleteInsert, Merge, Microbatch],
             Fabric => &[Append, DeleteInsert, Merge, Microbatch],
             Salesforce => &[Append, Merge],
@@ -1682,7 +1690,10 @@ impl AdapterImpl {
         state: &State,
         relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
-        let args = [RelationObject::new(Arc::clone(relation)).into_value()];
+        // Matches upstream: the identifier is stripped here, before the macro runs, so
+        // `create_schema`/`drop_schema` macros can render the relation as-is.
+        let relation = relation.without_identifier()?;
+        let args = [RelationObject::new(relation).into_value()];
         execute_macro(state, &args, "create_schema")?;
         Ok(none_value())
     }
@@ -1696,7 +1707,8 @@ impl AdapterImpl {
         self.engine()
             .relation_cache()
             .evict_schema_for_relation(relation.as_ref());
-        let args = [RelationObject::new(Arc::clone(relation)).into_value()];
+        let relation = relation.without_identifier()?;
+        let args = [RelationObject::new(relation).into_value()];
         execute_macro(state, &args, "drop_schema")?;
         Ok(none_value())
     }
@@ -2972,9 +2984,37 @@ impl AdapterImpl {
         columns_map: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Vec<String>> {
         match self.adapter_type() {
+            // dbt-clickhouse impl.py override: column constraints warn as
+            // unsupported and never render; codec/ttl ride after the type.
+            ClickHouse => {
+                let mut result = vec![];
+                for (_, column) in columns_map {
+                    let mut rendered = format!(
+                        "`{}` {}",
+                        column.name,
+                        column.data_type.as_deref().unwrap_or_default()
+                    );
+                    if let Some(codec) = column.codec.as_deref().filter(|c| !c.is_empty()) {
+                        rendered.push_str(&format!(" CODEC({codec})"));
+                    }
+                    if let Some(ttl) = column.ttl.as_deref().filter(|t| !t.is_empty()) {
+                        rendered.push_str(&format!(" TTL {ttl}"));
+                    }
+                    for constraint in column.constraints {
+                        warn_constraint_support(
+                            ClickHouse,
+                            constraint.type_,
+                            ConstraintSupport::NotSupported,
+                            constraint.warn_unsupported,
+                            constraint.warn_unenforced,
+                        );
+                    }
+                    result.push(rendered);
+                }
+                Ok(result)
+            }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            | Fabric | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
                 let mut result = vec![];
                 for (_, column) in columns_map {
                     let col_name = if column.quote.unwrap_or(false) {
@@ -3175,12 +3215,12 @@ impl AdapterImpl {
             (Exasol, Check) => NotSupported,
             (Exasol, Custom) => NotSupported,
 
+            // ClickHouse (dbt-clickhouse impl.py CONSTRAINT_SUPPORT)
+            (ClickHouse, Check) => Enforced,
+            (ClickHouse, NotNull | Unique | PrimaryKey | ForeignKey | Custom) => NotSupported,
+
             // Salesforce
-            (
-                Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Datafusion | Dremio
-                | Oracle,
-                _,
-            ) => {
+            (Salesforce | Spark | Starburst | Athena | Trino | Datafusion | Dremio | Oracle, _) => {
                 unimplemented!("constraint support not implemented")
             }
         }
@@ -3952,6 +3992,8 @@ impl AdapterImpl {
         conn: &mut dyn Connection,
         ctx: &QueryCtx,
         sql: &str,
+        // ClickHouse only: see metadata::clickhouse::describe_query_columns.
+        query_settings: Option<&Value>,
         token: CancellationToken,
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
@@ -3975,6 +4017,26 @@ impl AdapterImpl {
                 let flattened_columns =
                     columns.iter().flat_map(|column| column.flatten()).collect();
                 Ok(flattened_columns)
+            }
+            Impl(ClickHouse, engine) => {
+                // Server-typed schema via DESCRIBE; the rationale lives on
+                // metadata::clickhouse::describe_query_columns.
+                let settings_clause = metadata::clickhouse::query_settings_clause(query_settings);
+                let pairs = metadata::clickhouse::describe_query_columns(
+                    engine.as_ref(),
+                    Some(state),
+                    conn,
+                    ctx,
+                    sql,
+                    &settings_clause,
+                    token,
+                )?;
+                Ok(pairs
+                    .into_iter()
+                    .map(|(name, type_text)| {
+                        Column::new(self.adapter_type(), name, type_text, None, None, None)
+                    })
+                    .collect())
             }
             Impl(_, engine) => {
                 let (_, table) = self.execute_inner(
@@ -4006,7 +4068,9 @@ impl AdapterImpl {
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_get_columns_in_select_sql(state),
-            Impl(Bigquery, _) => self.get_column_schema_from_query(state, conn, ctx, sql, token),
+            Impl(Bigquery, _) => {
+                self.get_column_schema_from_query(state, conn, ctx, sql, None, token)
+            }
             Impl(_, _) => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -4632,22 +4696,17 @@ impl AdapterImpl {
                     .include_full_name_in_path
                     .unwrap_or_default();
 
-                // Build path using the same logic as posixpath.join
+                // Build path using the same logic as posixpath.join.
                 let path = if include_full_name_in_path {
                     format!(
                         "{}/{}/{}/{}",
                         location_root.trim_end_matches('/'),
                         node.database().trim_end_matches('/'),
                         node.schema().trim_end_matches('/'),
-                        node.name()
+                        node.alias()
                     )
                 } else {
-                    format!(
-                        "{}/{}/{}",
-                        location_root.trim_end_matches('/'),
-                        node.database().trim_end_matches('/'),
-                        node.name()
-                    )
+                    format!("{}/{}", location_root.trim_end_matches('/'), node.alias())
                 };
 
                 let path = if is_incremental {
@@ -4673,7 +4732,7 @@ impl AdapterImpl {
         conn: &mut dyn Connection,
         config: ModelConfig,
         node: &InternalDbtNodeWrapper,
-        tblproperties: &mut BTreeMap<String, Value>,
+        tblproperties: &mut IndexMap<String, Value>,
         token: CancellationToken,
     ) -> AdapterResult<()> {
         match self.adapter_type() {
@@ -4946,16 +5005,18 @@ impl AdapterImpl {
     /// Returns [enriched_columns, typed_constraints] for use with get_column_and_constraints_sql
     /// and relation.enrich().
     ///
-    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L899
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/45351e11517d3f37c5ac7a736b5fcba453d3f368/dbt/adapters/databricks/impl.py#L1038
     pub fn parse_columns_and_constraints(
         &self,
         _state: &State,
         existing_columns: &Value,
         model_columns: &Value,
         model_constraints: &Value,
+        contract_enforced: bool,
+        model_name: &str,
     ) -> Result<Value, minijinja::Error> {
         use crate::relation::databricks::typed_constraint;
-        use std::collections::BTreeMap;
+        use std::collections::{BTreeMap, BTreeSet};
 
         if self.adapter_type() != Databricks && self.adapter_type() != Spark {
             return Err(minijinja::Error::new(
@@ -5003,7 +5064,7 @@ impl AdapterImpl {
             .map(|c| Arc::new(c.clone()))
             .collect();
 
-        let (not_nulls, typed_constraints) =
+        let (not_nulls, typed_constraints) = if contract_enforced {
             typed_constraint::parse_constraints(&column_refs, &model_constraints_vec).map_err(
                 |e| {
                     minijinja::Error::new(
@@ -5011,18 +5072,37 @@ impl AdapterImpl {
                         format!("parse_constraints: {e}"),
                     )
                 },
-            )?;
+            )?
+        } else {
+            if model_columns_map
+                .values()
+                .any(|column| !column.constraints.is_empty())
+            {
+                let model_ref = if model_name.is_empty() {
+                    String::new()
+                } else {
+                    format!(" on '{model_name}'")
+                };
+                emit_info_log_message(format!(
+                    "Skipping column-level constraints{model_ref}: set `contract.enforced: true` \
+                     to apply NOT NULL / primary key / foreign key / check constraints."
+                ));
+            }
+            (BTreeSet::new(), Vec::new())
+        };
 
         let model_columns_lower: BTreeMap<String, &DbtColumn> = model_columns_map
             .iter()
             .map(|(k, v)| (k.to_lowercase(), v))
             .collect();
+        let not_nulls_lower: BTreeSet<String> =
+            not_nulls.iter().map(|name| name.to_lowercase()).collect();
 
         let enriched_columns: Vec<Column> = columns
             .iter()
             .map(|col| {
                 let model_col = model_columns_lower.get(&col.name().to_lowercase()).copied();
-                let not_null = not_nulls.contains(col.name());
+                let not_null = not_nulls_lower.contains(&col.name().to_lowercase());
                 col.enrich_for_create(model_col, not_null)
             })
             .collect();
@@ -5069,7 +5149,7 @@ impl AdapterImpl {
             .from_local_config(model)?;
         Ok(tags.to_jinja())
     }
-    /// TODO: implement if necessary, currently its noop
+    /// Trims surrounding whitespace and strips a single trailing semicolon.
     ///
     /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L966
     pub fn clean_sql(&self, sql: &str) -> AdapterResult<String> {
@@ -5077,7 +5157,7 @@ impl AdapterImpl {
             self.adapter_type() == Databricks,
             "clean_sql is a Databricks-specific adapter operation"
         );
-        Ok(sql.to_string())
+        Ok(crate::relation::databricks::config::components::query::clean_sql(sql))
     }
 
     /// relation_max_name_length
@@ -5743,6 +5823,196 @@ impl AdapterImpl {
         }
     }
 
+    /// ClickHouse `adapter.is_before_version(version)` — see
+    /// [`metadata::clickhouse::ClickHouseCapabilities::is_before`].
+    pub fn is_before_version(
+        &self,
+        state: &State,
+        version: &str,
+        token: CancellationToken,
+    ) -> AdapterResult<bool> {
+        metadata::clickhouse::server_capabilities(self, state, token).is_before(version)
+    }
+
+    /// ClickHouse `adapter.is_at_or_after_version(version)` — see
+    /// [`metadata::clickhouse::ClickHouseCapabilities::is_at_or_after`].
+    pub fn is_at_or_after_version(
+        &self,
+        state: &State,
+        version: &str,
+        token: CancellationToken,
+    ) -> AdapterResult<bool> {
+        metadata::clickhouse::server_capabilities(self, state, token).is_at_or_after(version)
+    }
+
+    /// ClickHouse `adapter.calculate_incremental_strategy(strategy)` — see
+    /// [`metadata::clickhouse::calculate_incremental_strategy`].
+    pub fn calculate_incremental_strategy(
+        &self,
+        state: &State,
+        strategy: Option<&str>,
+        token: CancellationToken,
+    ) -> String {
+        metadata::clickhouse::calculate_incremental_strategy(
+            strategy,
+            metadata::clickhouse::server_capabilities(self, state, token).use_lw_deletes,
+        )
+    }
+
+    /// ClickHouse `adapter.validate_incremental_strategy(strategy, predicates,
+    /// unique_key, partition_by)` — see
+    /// [`metadata::clickhouse::validate_incremental_strategy`].
+    pub fn validate_incremental_strategy(
+        &self,
+        state: &State,
+        strategy: &str,
+        has_predicates: bool,
+        has_unique_key: bool,
+        has_partition_by: bool,
+        token: CancellationToken,
+    ) -> AdapterResult<()> {
+        metadata::clickhouse::validate_incremental_strategy(
+            strategy,
+            has_predicates,
+            has_unique_key,
+            has_partition_by,
+            metadata::clickhouse::server_capabilities(self, state, token).has_lw_deletes,
+        )
+    }
+
+    /// ClickHouse `adapter.check_incremental_schema_changes(...)` — see
+    /// [`metadata::clickhouse::column_changes_value`]. Returns none when the
+    /// relation does not exist yet.
+    #[allow(clippy::too_many_arguments)]
+    pub fn check_incremental_schema_changes(
+        &self,
+        state: &State,
+        on_schema_change: &str,
+        existing: Option<Arc<dyn BaseRelation>>,
+        target_sql: &str,
+        materialization: &str,
+        // dbt-clickhouse #689: applied to the DESCRIBE probe so introspected
+        // types match runtime (e.g. join_use_nulls).
+        query_settings: Option<&Value>,
+        token: CancellationToken,
+    ) -> AdapterResult<Value> {
+        if !matches!(
+            on_schema_change,
+            "fail" | "ignore" | "append_new_columns" | "sync_all_columns"
+        ) {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Only `fail`, `ignore`, `append_new_columns`, and `sync_all_columns` supported for `on_schema_change`.",
+            ));
+        }
+        let Some(existing) = existing else {
+            return Ok(none_value());
+        };
+
+        let source = self.get_columns_in_relation(state, existing.as_ref())?;
+        let target = {
+            let ctx = query_ctx_from_state(state)?.with_desc("check_incremental_schema_changes");
+            let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+            self.get_column_schema_from_query(
+                state,
+                conn.as_mut(),
+                &ctx,
+                target_sql,
+                query_settings,
+                token,
+            )?
+        };
+
+        metadata::clickhouse::column_changes_value(
+            on_schema_change,
+            source,
+            target,
+            materialization,
+        )
+    }
+
+    /// ClickHouse: render the model's `settings` config as a table-level `SETTINGS ...`
+    /// block for CREATE TABLE DDL. The leading `-- end_of_sql` marker is what
+    /// `clickhouse__place_limit` (utils/utils.sql) splits on to inject LIMIT ahead of
+    /// the SETTINGS clause. Mirrors impl.py `get_model_settings`, including dbclient.py's
+    /// `replicated_deduplication_window='0'` default (profile flag
+    /// `allow_automatic_deduplication` opts out; a user-provided value wins).
+    pub fn get_model_settings(&self, model: &Value, engine: &str) -> String {
+        // dbclient.py DEDUP_WINDOW_SETTING_SUPPORTED_MATERIALIZATION
+        const DEDUP_SUPPORTED_MATERIALIZATIONS: &[&str] =
+            &["table", "incremental", "ephemeral", "materialized_view"];
+        const DEDUP_WINDOW_SETTING: &str = "replicated_deduplication_window";
+
+        let mut settings = metadata::clickhouse::model_config_map(model, "settings");
+
+        let materialized = model
+            .get_attr("config")
+            .ok()
+            .and_then(|config| config.get_attr("materialized").ok())
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default();
+        let allow_automatic_deduplication = self
+            .get_db_config_value("allow_automatic_deduplication")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if DEDUP_SUPPORTED_MATERIALIZATIONS.contains(&materialized.as_str())
+            && !allow_automatic_deduplication
+            && !settings.iter().any(|(key, _)| key == DEDUP_WINDOW_SETTING)
+        {
+            // Upstream sets the string '0', which _build_settings_str single-quotes.
+            settings.push((DEDUP_WINDOW_SETTING.to_string(), Value::from("0")));
+        }
+
+        // filter_settings_by_engine: replicated_deduplication_window is MergeTree-only.
+        settings.retain(|(key, _)| engine.contains("MergeTree") || key != DEDUP_WINDOW_SETTING);
+
+        let settings_str = metadata::clickhouse::build_settings_str(&settings);
+        format!("\n-- end_of_sql\n{settings_str}\n")
+    }
+
+    /// ClickHouse: render the model's `query_settings` config as a query-level
+    /// `SETTINGS ...` clause appended to the SELECT; empty string when unset.
+    pub fn get_model_query_settings(&self, model: &Value) -> String {
+        let settings = metadata::clickhouse::model_config_map(model, "query_settings");
+        let settings_str = metadata::clickhouse::build_settings_str(&settings);
+        if settings_str.is_empty() {
+            String::new()
+        } else {
+            format!("\n-- settings_section\n{settings_str}\n")
+        }
+    }
+
+    /// ClickHouse: see [metadata::clickhouse::s3source_clause].
+    #[allow(clippy::too_many_arguments)]
+    pub fn s3source_clause(
+        &self,
+        vars_config: Option<&Value>,
+        model_config: Option<&Value>,
+        structure: &Value,
+        bucket: &str,
+        path: &str,
+        fmt: &str,
+        aws_access_key_id: &str,
+        aws_secret_access_key: &str,
+        role_arn: &str,
+        compression: &str,
+        external_id: &str,
+    ) -> AdapterResult<String> {
+        let s3config = metadata::clickhouse::merge_s3_config(vars_config, model_config);
+        metadata::clickhouse::s3source_clause(
+            &s3config,
+            structure,
+            bucket,
+            path,
+            fmt,
+            aws_access_key_id,
+            aws_secret_access_key,
+            role_arn,
+            compression,
+            external_id,
+        )
+    }
+
     pub fn engine(&self) -> &Arc<dyn AdapterEngine> {
         match self.inner_adapter() {
             Impl(_, engine) => engine,
@@ -5791,6 +6061,13 @@ pub trait Replayer: fmt::Debug + Send + Sync {
     /// Seed a mapping from a truncated/hashed generic test name back to the original pre-hash
     /// full test name. Default implementation is a no-op.
     fn record_test_name_truncation(&self, _truncated_name: &str, _full_name: &str) {}
+
+    /// Seed a mapping from a model's unique_id to its resolved alias, so an ephemeral model's
+    /// own node_id can be traced back to the CTE name dbt-core actually compiled it under. A
+    /// versioned model's unique_id ends in `.v<N>`, which is not its alias (e.g. `stg_thing_v2`
+    /// vs. unique_id `model.pkg.stg_thing.v2`), so this cannot be reconstructed from the
+    /// unique_id alone. Default implementation is a no-op.
+    fn record_node_alias(&self, _unique_id: &str, _alias: &str) {}
 
     fn replay_use_warehouse(
         &self,
@@ -6130,6 +6407,52 @@ mod tests {
         assert_eq!(adapter.adapter_type(), Snowflake);
     }
 
+    fn databricks_external_path(include_full_name_in_path: bool, is_incremental: bool) -> String {
+        use crate::relation::databricks::config::test_helpers::{
+            TestModelConfig, create_mock_dbt_model,
+        };
+        use dbt_schemas::schemas::project::WarehouseSpecificNodeConfig;
+
+        let adapter = AdapterImpl::new(engine(Databricks), None);
+        let node = create_mock_dbt_model(TestModelConfig::default());
+        let config = ModelConfig {
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                location_root: Some("s3://bucket/root".to_string()),
+                include_full_name_in_path: Some(include_full_name_in_path),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        adapter
+            .compute_external_path(config, &node, is_incremental)
+            .expect("location_root is set")
+    }
+
+    #[test]
+    fn test_databricks_compute_external_path_uses_alias_without_full_name() {
+        assert_eq!(
+            databricks_external_path(false, false),
+            "s3://bucket/root/test_table"
+        );
+    }
+
+    #[test]
+    fn test_databricks_compute_external_path_with_full_name() {
+        assert_eq!(
+            databricks_external_path(true, false),
+            "s3://bucket/root/test_db/test_schema/test_table"
+        );
+    }
+
+    #[test]
+    fn test_databricks_compute_external_path_incremental_suffix() {
+        assert_eq!(
+            databricks_external_path(false, true),
+            "s3://bucket/root/test_table_tmp"
+        );
+    }
+
     #[test]
     fn test_restore_warehouse_matches_snowflake_current_warehouse_text() {
         assert_eq!(
@@ -6168,6 +6491,36 @@ mod tests {
         assert_eq!(AdapterImpl::warehouse_restore_name("\"WH$1\""), "WH$1");
         assert_eq!(AdapterImpl::warehouse_restore_name("\"_WH\""), "_WH");
         assert_eq!(AdapterImpl::warehouse_restore_name("\"\""), "\"\"");
+    }
+
+    #[test]
+    fn databricks_accepts_delete_insert_incremental_strategy() {
+        let adapter = AdapterImpl::new(engine(Databricks), None);
+
+        assert!(
+            adapter
+                .valid_incremental_strategies()
+                .contains(&DbtIncrementalStrategy::DeleteInsert)
+        );
+    }
+
+    #[test]
+    fn databricks_resolves_delete_insert_incremental_macro() {
+        let adapter = AdapterImpl::new(engine(Databricks), None);
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        let macro_value = adapter
+            .get_incremental_strategy_macro(&state, "delete+insert")
+            .expect("delete+insert must resolve for Databricks");
+
+        assert_eq!(
+            macro_value
+                .get_attr("macro_name")
+                .expect("dispatch object must expose its macro name")
+                .as_str(),
+            Some("get_incremental_delete_insert_sql")
+        );
     }
 
     #[test]
@@ -6450,6 +6803,140 @@ mod tests {
         assert!(
             v.is_undefined(),
             "Expected column NOT to be selected when existing comment is already empty, got: {selected:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_columns_and_constraints_matches_not_null_case_insensitively() {
+        let adapter = AdapterImpl::new_mock(
+            Databricks,
+            BTreeMap::new(),
+            DEFAULT_RESOLVED_QUOTING,
+            Arc::new(DefaultTypeOps::new(Databricks)),
+            Arc::new(DefaultStmtSplitter),
+        );
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let existing_columns = Value::from(vec![Value::from_object(Column::new(
+            Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        ))]);
+        let model_columns = Value::from_serialize(BTreeMap::from([(
+            "ID".to_string(),
+            DbtColumn {
+                name: "ID".to_string(),
+                data_type: Some("int".to_string()),
+                constraints: vec![Constraint {
+                    type_: ConstraintType::NotNull,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        )]));
+        let model_constraints = Value::from_serialize(Vec::<ModelConstraint>::new());
+
+        let result = adapter
+            .parse_columns_and_constraints(
+                &state,
+                &existing_columns,
+                &model_columns,
+                &model_constraints,
+                true,
+                "case_mismatch_model",
+            )
+            .expect("constraint parsing should succeed");
+        let mut result_parts = result.try_iter().expect("result should be iterable");
+        let enriched_columns = result_parts.next().expect("enriched columns should exist");
+        let enriched_column = enriched_columns
+            .try_iter()
+            .expect("enriched columns should be iterable")
+            .next()
+            .expect("one enriched column should exist");
+        let rendered = enriched_column
+            .downcast_object_ref::<Column>()
+            .expect("enriched value should be a Column")
+            .render_for_create();
+
+        assert!(
+            rendered.contains("NOT NULL"),
+            "expected NOT NULL when YAML column ID matches warehouse id, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn test_parse_columns_and_constraints_defaults_to_unenforced() {
+        use crate::adapter::Adapter;
+
+        let adapter = Adapter::new(
+            Arc::new(AdapterImpl::new_mock(
+                Databricks,
+                BTreeMap::new(),
+                DEFAULT_RESOLVED_QUOTING,
+                Arc::new(DefaultTypeOps::new(Databricks)),
+                Arc::new(DefaultStmtSplitter),
+            )),
+            None,
+            dbt_common::cancellation::never_cancels(),
+        );
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let existing_columns = Value::from(vec![Value::from_object(Column::new(
+            Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        ))]);
+        let model_columns = Value::from_serialize(BTreeMap::from([(
+            "id".to_string(),
+            DbtColumn {
+                name: "id".to_string(),
+                data_type: Some("int".to_string()),
+                constraints: vec![Constraint {
+                    type_: ConstraintType::NotNull,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        )]));
+        let model_constraints = Value::from_serialize(vec![ModelConstraint {
+            type_: ConstraintType::PrimaryKey,
+            name: Some("pk_contract_model".to_string()),
+            columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        }]);
+
+        let result = adapter
+            .parse_columns_and_constraints(
+                &state,
+                &[existing_columns, model_columns, model_constraints],
+            )
+            .expect("constraint parsing should succeed");
+        let mut result_parts = result.try_iter().expect("result should be iterable");
+        let enriched_columns = result_parts.next().expect("enriched columns should exist");
+        let parsed_constraints = result_parts.next().expect("constraints should exist");
+        let enriched_column = enriched_columns
+            .try_iter()
+            .expect("enriched columns should be iterable")
+            .next()
+            .expect("one enriched column should exist");
+        let rendered = enriched_column
+            .downcast_object_ref::<Column>()
+            .expect("enriched value should be a Column")
+            .render_for_create();
+
+        assert!(!rendered.contains("NOT NULL"));
+        assert_eq!(
+            parsed_constraints
+                .try_iter()
+                .expect("parsed constraints should be iterable")
+                .count(),
+            0
         );
     }
 
@@ -7240,6 +7727,81 @@ mod tests {
             warn_unenforced: None,
         };
         assert!(adapter.render_column_constraint(constraint).is_none());
+    }
+
+    fn clickhouse_mock_adapter() -> AdapterImpl {
+        AdapterImpl::new_mock(
+            ClickHouse,
+            BTreeMap::new(),
+            DEFAULT_RESOLVED_QUOTING,
+            Arc::new(DefaultTypeOps::new(ClickHouse)),
+            Arc::new(DefaultStmtSplitter),
+        )
+    }
+
+    /// impl.py CONSTRAINT_SUPPORT: only CHECK is enforced.
+    #[test]
+    fn test_constraint_support_clickhouse() {
+        let adapter = clickhouse_mock_adapter();
+        assert_eq!(
+            adapter.get_constraint_support(ConstraintType::Check),
+            ConstraintSupport::Enforced
+        );
+        for ct in [
+            ConstraintType::NotNull,
+            ConstraintType::Unique,
+            ConstraintType::PrimaryKey,
+            ConstraintType::ForeignKey,
+            ConstraintType::Custom,
+        ] {
+            assert_eq!(
+                adapter.get_constraint_support(ct),
+                ConstraintSupport::NotSupported
+            );
+        }
+    }
+
+    /// Column constraints never render (warn only); codec/ttl ride after the
+    /// type, codec first, like impl.py.
+    #[test]
+    fn test_render_raw_columns_constraints_clickhouse() {
+        let adapter = clickhouse_mock_adapter();
+        let mut columns: IndexMap<String, DbtColumn> = IndexMap::new();
+        columns.insert(
+            "id".to_string(),
+            DbtColumn {
+                name: "id".to_string(),
+                data_type: Some("Int32".to_string()),
+                constraints: vec![Constraint {
+                    type_: ConstraintType::NotNull,
+                    expression: None,
+                    name: None,
+                    to: None,
+                    to_columns: None,
+                    warn_unsupported: None,
+                    warn_unenforced: None,
+                }],
+                ..Default::default()
+            },
+        );
+        columns.insert(
+            "payload".to_string(),
+            DbtColumn {
+                name: "payload".to_string(),
+                data_type: Some("String".to_string()),
+                codec: Some("ZSTD".to_string()),
+                ttl: Some("created_at + INTERVAL 1 DAY".to_string()),
+                ..Default::default()
+            },
+        );
+        let rendered = adapter.render_raw_columns_constraints(columns).unwrap();
+        assert_eq!(
+            rendered,
+            vec![
+                "`id` Int32",
+                "`payload` String CODEC(ZSTD) TTL created_at + INTERVAL 1 DAY",
+            ]
+        );
     }
 
     /// Build a single-column `show databases` style result with the given column

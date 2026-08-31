@@ -73,8 +73,10 @@ pub async fn resolve_checks(
                 (),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     let render_ctx = RenderCtx {

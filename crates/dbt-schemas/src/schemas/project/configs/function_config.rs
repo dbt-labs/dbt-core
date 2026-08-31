@@ -25,7 +25,7 @@ use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
     access_eq, array_of_strings_eq, docs_eq, grants_equal, meta_eq, omissible_option_eq,
-    same_warehouse_config,
+    same_warehouse_config, take_databricks_catalog_alias,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::config_merge::{Packages, Tags};
@@ -297,6 +297,18 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
 
     fn default_to(&mut self, parent: &FunctionConfig) {
         self.default_to_fields(parent);
+    }
+
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            !self.database.is_omitted(),
+        ) {
+            self.database = Omissible::Present(Some(catalog));
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
     }
 }
 

@@ -318,6 +318,15 @@ impl Constraints {
     }
 
     fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Self {
+        let contract_enforced = relation_config
+            .as_any()
+            .downcast_ref::<dbt_schemas::schemas::nodes::DbtModel>()
+            .and_then(|model| model.deprecated_config.contract.as_ref())
+            .is_some_and(|contract| contract.enforced);
+        if !contract_enforced {
+            return Self::default();
+        }
+
         let columns = &relation_config.base().columns;
 
         let model_constraints = if let Some(model) = relation_config
@@ -505,6 +514,7 @@ mod tests {
     use dbt_schemas::schemas::{
         common::{Constraint, ConstraintType},
         nodes::DbtModel,
+        properties::ModelConstraint,
     };
     use dbt_test_primitives::assert_contains;
     use indexmap::{IndexMap, IndexSet};
@@ -593,6 +603,24 @@ fk_composite,parent_type,main,default,parents,type
                     ..Default::default()
                 })
                 .collect(),
+            ..Default::default()
+        };
+        test_helpers::create_mock_dbt_model(cfg)
+    }
+
+    fn create_mock_unenforced_dbt_model_with_constraints(
+        constraints: IndexMap<&str, Vec<Constraint>>,
+    ) -> DbtModel {
+        let cfg = test_helpers::TestModelConfig {
+            columns: constraints
+                .into_iter()
+                .map(|(name, constraints)| test_helpers::TestModelColumn {
+                    name: name.to_string(),
+                    constraints,
+                    ..Default::default()
+                })
+                .collect(),
+            contract_enforced: Some(false),
             ..Default::default()
         };
         test_helpers::create_mock_dbt_model(cfg)
@@ -817,6 +845,28 @@ fk_composite,parent_type,main,default,parents,type
         assert_contains!(config.set_non_nulls, "id");
         assert_contains!(config.set_non_nulls, "name");
         // Only not-null constraints from columns (model constraints would also be processed here)
+        assert!(config.set_constraints.is_empty());
+    }
+
+    #[test]
+    fn test_from_local_config_ignores_declared_constraints_when_contract_is_unenforced() {
+        let columns = IndexMap::from_iter([(
+            "id",
+            vec![Constraint {
+                type_: ConstraintType::NotNull,
+                ..Default::default()
+            }],
+        )]);
+        let mut mock_node = create_mock_unenforced_dbt_model_with_constraints(columns);
+        mock_node.__model_attr__.constraints = vec![ModelConstraint {
+            type_: ConstraintType::PrimaryKey,
+            columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        }];
+
+        let config = Constraints::from_local_config(&mock_node);
+
+        assert!(config.set_non_nulls.is_empty());
         assert!(config.set_constraints.is_empty());
     }
 

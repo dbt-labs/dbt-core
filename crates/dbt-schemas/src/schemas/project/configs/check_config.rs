@@ -41,10 +41,11 @@ pub struct InfoSchemaConfig {
 ///
 /// `"none"` opts out of scoping entirely (the check always evaluates the whole project, which is
 /// what aggregate checks want). A single name or a list of names scopes on those output columns:
-/// a row is kept when the node id in *any* of them is selected.
+/// a row is kept when the node id in *any* of them is selected. Unset defaults to the `unique_id`
+/// column when the check outputs one.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
-pub enum NodeFqn {
+pub enum SelectionFilterOn {
     One(String),
     Many(Vec<String>),
 }
@@ -60,8 +61,8 @@ pub struct ProjectCheckConfig {
     pub enabled: Option<bool>,
     #[serde(rename = "+severity")]
     pub severity: Option<Severity>,
-    #[serde(rename = "+node_fqn")]
-    pub node_fqn: Option<NodeFqn>,
+    #[serde(rename = "+selection_filter_on")]
+    pub selection_filter_on: Option<SelectionFilterOn>,
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectCheckConfig>>,
 }
 
@@ -79,7 +80,7 @@ impl TypedRecursiveConfig for ProjectCheckConfig {
             || self.tags.is_some()
             || self.enabled.is_some()
             || self.severity.is_some()
-            || self.node_fqn.is_some()
+            || self.selection_filter_on.is_some()
     }
 }
 
@@ -97,7 +98,7 @@ pub struct CheckConfig {
     pub tags: Tags,
     #[resolved(promote, default = DEFAULT_CHECK_SEVERITY.clone())]
     pub severity: Option<Severity>,
-    pub node_fqn: Option<NodeFqn>,
+    pub selection_filter_on: Option<SelectionFilterOn>,
 }
 
 impl From<ProjectCheckConfig> for CheckConfig {
@@ -107,7 +108,7 @@ impl From<ProjectCheckConfig> for CheckConfig {
             meta: config.meta,
             tags: Tags(config.tags),
             severity: config.severity,
-            node_fqn: config.node_fqn,
+            selection_filter_on: config.selection_filter_on,
         }
     }
 }
@@ -119,7 +120,7 @@ impl From<CheckConfig> for ProjectCheckConfig {
             tags: config.tags.into_inner(),
             enabled: config.enabled,
             severity: config.severity,
-            node_fqn: config.node_fqn,
+            selection_filter_on: config.selection_filter_on,
             __additional_properties__: BTreeMap::new(),
         }
     }

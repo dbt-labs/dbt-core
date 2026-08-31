@@ -465,6 +465,7 @@ pub enum RunCacheServiceConfigError {
     InvalidDuration { name: &'static str, value: String },
     InvalidInteger { name: &'static str, value: String },
     InvalidCloneIncrementalInDev { value: String },
+    ProjectIdRequired,
 }
 
 impl fmt::Display for RunCacheServiceConfigError {
@@ -482,6 +483,10 @@ impl fmt::Display for RunCacheServiceConfigError {
             Self::InvalidCloneIncrementalInDev { value } => write!(
                 f,
                 "invalid value for RUN_CACHE_CLONE_INCREMENTAL_IN_DEV: {value}"
+            ),
+            Self::ProjectIdRequired => write!(
+                f,
+                "To use the state:* selector, please define the 'project-id' field in your dbt_project.yml:\n\ndbt-cloud:\n  project-id: 'your-project-id'\n\n",
             ),
         }
     }

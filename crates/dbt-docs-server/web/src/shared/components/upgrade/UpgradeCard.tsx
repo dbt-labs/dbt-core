@@ -2,8 +2,6 @@ import { FC, useEffect, useRef } from 'react';
 import { ChevronUp, X } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
 
-import { Sizes } from '@dbt-labs/sourdough';
-
 import { Button } from '../../../components/ui/Button';
 import { InvisibleButton } from '../../../components/ui/InvisibleButton';
 import { Link } from '../../../components/ui/Link';
@@ -444,7 +442,7 @@ function CtaForSpec({ spec, emit, decorate, fullWidth, testId }: CtaProps) {
   return (
     <Button
       variant="default"
-      size={Sizes.sm}
+      size="sm"
       text={label}
       className={fullWidth ? 'w-full justify-center' : undefined}
       onClick={() => {

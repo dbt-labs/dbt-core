@@ -13,8 +13,24 @@ use dbt_main::{print_trimmed_error, run_cli_with_code};
 use dbt_schemas::schemas::DbtCommandExecutionArtifacts;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use std::cell::Cell;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::level_filters::LevelFilter;
+
+thread_local! {
+    static DBT_RT_GUARD: Cell<Option<dbt_runtime::SetCurrentGuard>> =
+        const { Cell::new(None) };
+}
+
+fn on_tokio_thread_start(handle: &dbt_runtime::Handle) {
+    // SAFETY: cleanup is performed on the tokio thread stop callback.
+    let guard = unsafe { handle.enter_owned() };
+    DBT_RT_GUARD.set(Some(guard));
+}
+
+fn on_tokio_thread_stop() {
+    DBT_RT_GUARD.set(None);
+}
 
 mod contracts;
 
@@ -291,11 +307,19 @@ where
     // Ctrl+C is Python's job; the engine gets a never-cancel token.
     let token = dbt_base::cancel::never_cancels();
 
+    let dbt_rt = dbt_runtime::builder::Builder::new()
+        .max_blocking_threads(48)
+        .thread_stack_size(8 * 1024 * 1024)
+        .build();
+
     // Big stack for the recursive parser/compiler; blocking-thread headroom for adapters.
+    let dbt_rt_handle = dbt_rt.handle().clone();
     let tokio_rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(8 * 1024 * 1024)
         .max_blocking_threads(512)
+        .on_thread_start(move || on_tokio_thread_start(&dbt_rt_handle))
+        .on_thread_stop(on_tokio_thread_stop)
         .build()
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 

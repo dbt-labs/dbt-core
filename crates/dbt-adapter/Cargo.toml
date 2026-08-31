@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 adbc-record-replay = { workspace = true }
 dbt-adapter-core = { workspace = true }
+dbt-adapter-engine = { workspace = true }
 dbt-adapter-sql = { workspace = true }
 dbt-adbc = { workspace = true }
 dbt-agate = { workspace = true }

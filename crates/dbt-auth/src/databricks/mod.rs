@@ -13,6 +13,11 @@ use dbt_adbc::{Backend, database, databricks};
 ///
 /// Ref: https://github.com/databricks/databricks-sql-go/blob/56b8a73b09908454e3070fe513ff2563c85ba214/connector.go#L214
 const USER_AGENT_NAME: &str = "dbt";
+const QUERY_TAG_OPTION_PREFIX: &str = "databricks.query_tag.";
+const DBT_CORE_VERSION: &str = "@@dbt_core_version";
+const DBT_MODEL_NAME: &str = "@@dbt_model_name";
+const DBT_MATERIALIZED: &str = "@@dbt_materialized";
+const RESERVED_QUERY_TAG_KEYS: [&str; 3] = [DBT_CORE_VERSION, DBT_MODEL_NAME, DBT_MATERIALIZED];
 
 /// Supported Databricks authentication types.
 /// When `auth_type` is absent, defaults to token-based (PAT) authentication.
@@ -174,6 +179,7 @@ fn apply_connection_args(
     builder.with_named_option(databricks::SCHEMA, config.require_string("schema")?)?;
     builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
     builder.with_named_option(databricks::HTTP_PATH, http_path)?;
+    apply_query_tag_defaults(config, &mut builder)?;
 
     // `connect_timeout` (seconds) is the documented Databricks connection timeout. Pass it to the
     // driver as a real connection-establishment deadline so a cold-starting warehouse has time to
@@ -200,6 +206,72 @@ fn apply_connection_args(
     }
 
     Ok(builder)
+}
+
+fn apply_query_tag_defaults(
+    config: &AdapterConfig,
+    builder: &mut DatabaseBuilder,
+) -> Result<(), AuthError> {
+    builder.with_named_option(
+        format!("{QUERY_TAG_OPTION_PREFIX}{DBT_CORE_VERSION}"),
+        env!("CARGO_PKG_VERSION"),
+    )?;
+
+    let Some(value) = config.get("query_tags") else {
+        return Ok(());
+    };
+    match value {
+        Value::Null(_) => Ok(()),
+        Value::String(query_tags, _) if query_tags.is_empty() => Ok(()),
+        Value::String(query_tags, _) => {
+            let query_tags: dbt_yaml::Mapping =
+                serde_json::from_str(query_tags).map_err(|error| {
+                    if error.classify() == serde_json::error::Category::Data {
+                        AuthError::config("query_tags must be a JSON object (dictionary)")
+                    } else {
+                        AuthError::config(format!("Invalid JSON in query_tags: {error}"))
+                    }
+                })?;
+            apply_query_tag_mapping(&query_tags, builder)
+        }
+        Value::Mapping(query_tags, _) => apply_query_tag_mapping(query_tags, builder),
+        _ => Err(AuthError::config(
+            "query_tags must be a JSON object (dictionary)",
+        )),
+    }
+}
+
+fn apply_query_tag_mapping(
+    query_tags: &dbt_yaml::Mapping,
+    builder: &mut DatabaseBuilder,
+) -> Result<(), AuthError> {
+    let mut reserved = query_tags
+        .keys()
+        .filter_map(Value::as_str)
+        .filter(|key| RESERVED_QUERY_TAG_KEYS.contains(key))
+        .collect::<Vec<_>>();
+    reserved.sort_unstable();
+    if !reserved.is_empty() {
+        return Err(AuthError::config(format!(
+            "Connection config: Cannot use reserved query tag keys: {}. Reserved keys are: {}",
+            reserved.join(", "),
+            RESERVED_QUERY_TAG_KEYS.join(", ")
+        )));
+    }
+
+    for (key, value) in query_tags {
+        let key = key.as_str().ok_or_else(|| {
+            AuthError::config("query_tags keys must be strings. Only string keys are supported.")
+        })?;
+        let value = value.as_str().ok_or_else(|| {
+            AuthError::config(format!(
+                "Connection config: query_tags values must be strings for key '{key}'. Only string values are supported."
+            ))
+        })?;
+        builder.with_named_option(format!("{QUERY_TAG_OPTION_PREFIX}{key}"), value.to_owned())?;
+    }
+
+    Ok(())
 }
 
 /// Resolve the Microsoft Entra ID tenant for an Azure Databricks workspace from the
@@ -343,7 +415,11 @@ mod tests {
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) -> Result<(), AuthError> {
         let auth = DatabricksAuth {};
         let builder = auth.configure(&AdapterConfig::new(config))?.builder;
-        assert_eq!(builder.clone().into_iter().count(), expected.len());
+        assert_eq!(builder.clone().into_iter().count(), expected.len() + 1);
+        assert_eq!(
+            other_option_value(&builder, "databricks.query_tag.@@dbt_core_version"),
+            Some(env!("CARGO_PKG_VERSION"))
+        );
 
         for &(key, expected_val) in expected {
             assert_eq!(
@@ -353,6 +429,189 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_query_tags_string_installs_ordered_database_defaults() {
+        let mut config = base_config();
+        config.insert("token".into(), "T".into());
+        config.insert(
+            "query_tags".into(),
+            r#"{"z_team":"analytics","a_cost_center":"3000"}"#.into(),
+        );
+
+        let builder = DatabricksAuth {}
+            .configure(&AdapterConfig::new(config))
+            .unwrap()
+            .builder;
+        let query_tag_options = builder
+            .other
+            .iter()
+            .filter_map(|(option, _)| match option {
+                adbc_core::options::OptionDatabase::Other(name)
+                    if name.starts_with("databricks.query_tag.") =>
+                {
+                    Some(name.as_str())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            query_tag_options,
+            [
+                "databricks.query_tag.@@dbt_core_version",
+                "databricks.query_tag.z_team",
+                "databricks.query_tag.a_cost_center",
+            ]
+        );
+        assert_eq!(
+            other_option_value(&builder, "databricks.query_tag.z_team"),
+            Some("analytics")
+        );
+    }
+
+    #[test]
+    fn test_query_tags_mapping_installs_database_defaults_without_coercion() {
+        let mut config = base_config();
+        config.insert("token".into(), "T".into());
+        config.insert(
+            "query_tags".into(),
+            YmlValue::mapping(Mapping::from_iter([
+                ("team".into(), "analytics".into()),
+                ("cost_center".into(), "3000".into()),
+            ])),
+        );
+
+        let builder = DatabricksAuth {}
+            .configure(&AdapterConfig::new(config))
+            .unwrap()
+            .builder;
+        let query_tag_options = builder
+            .other
+            .iter()
+            .filter_map(|(option, _)| match option {
+                adbc_core::options::OptionDatabase::Other(name)
+                    if name.starts_with(QUERY_TAG_OPTION_PREFIX) =>
+                {
+                    Some(name.as_str())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            query_tag_options,
+            [
+                "databricks.query_tag.@@dbt_core_version",
+                "databricks.query_tag.team",
+                "databricks.query_tag.cost_center",
+            ]
+        );
+        assert_eq!(
+            other_option_value(&builder, "databricks.query_tag.team"),
+            Some("analytics")
+        );
+        assert_eq!(
+            other_option_value(&builder, "databricks.query_tag.cost_center"),
+            Some("3000")
+        );
+    }
+
+    #[test]
+    fn test_query_tags_null_and_empty_profiles_install_only_core_default() {
+        for query_tags in [
+            YmlValue::null(),
+            YmlValue::string(String::new()),
+            YmlValue::mapping(Mapping::new()),
+        ] {
+            let mut config = base_config();
+            config.insert("token".into(), "T".into());
+            config.insert("query_tags".into(), query_tags);
+
+            let builder = DatabricksAuth {}
+                .configure(&AdapterConfig::new(config))
+                .unwrap()
+                .builder;
+            let query_tag_options = builder
+                .other
+                .iter()
+                .filter_map(|(option, _)| match option {
+                    adbc_core::options::OptionDatabase::Other(name)
+                        if name.starts_with(QUERY_TAG_OPTION_PREFIX) =>
+                    {
+                        Some(name.as_str())
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                query_tag_options,
+                ["databricks.query_tag.@@dbt_core_version"]
+            );
+        }
+    }
+
+    #[test]
+    fn test_query_tags_database_defaults_reject_invalid_profile_values() {
+        let non_string_key: YmlValue = dbt_yaml::from_str("3000: analytics").unwrap();
+        for (query_tags, expected) in [
+            (
+                YmlValue::sequence(vec!["not".into(), "an-object".into()]),
+                "query_tags must be a JSON object (dictionary)",
+            ),
+            (
+                YmlValue::mapping(Mapping::from_iter([(
+                    "cost_center".into(),
+                    YmlValue::number(3000.into()),
+                )])),
+                "query_tags values must be strings for key 'cost_center'",
+            ),
+            (
+                YmlValue::mapping(Mapping::from_iter([(
+                    "@@dbt_model_name".into(),
+                    "override".into(),
+                )])),
+                "Cannot use reserved query tag keys: @@dbt_model_name",
+            ),
+            (
+                non_string_key,
+                "query_tags keys must be strings. Only string keys are supported.",
+            ),
+        ] {
+            let mut config = base_config();
+            config.insert("token".into(), "T".into());
+            config.insert("query_tags".into(), query_tags);
+
+            let error = DatabricksAuth {}
+                .configure(&AdapterConfig::new(config))
+                .unwrap_err();
+            assert!(error.msg().contains(expected), "{}", error.msg());
+        }
+    }
+
+    #[test]
+    fn test_query_tags_database_defaults_reject_invalid_json_strings() {
+        for (query_tags, expected) in [
+            (
+                YmlValue::string(r#"["not","an","object"]"#.to_owned()),
+                "query_tags must be a JSON object (dictionary)",
+            ),
+            (
+                YmlValue::string(r#"{"invalid": json}"#.to_owned()),
+                "Invalid JSON in query_tags",
+            ),
+        ] {
+            let mut config = base_config();
+            config.insert("token".into(), "T".into());
+            config.insert("query_tags".into(), query_tags);
+
+            let error = DatabricksAuth {}
+                .configure(&AdapterConfig::new(config))
+                .unwrap_err();
+            assert!(error.msg().contains(expected), "{}", error.msg());
+        }
     }
 
     #[test]

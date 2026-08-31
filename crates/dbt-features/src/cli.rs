@@ -100,15 +100,15 @@ impl CliFeatureBuilder {
 #[derive(clap::Parser, Debug, Clone, Serialize, Deserialize)]
 #[command()]
 pub enum SystemCommand {
-    /// Informative-only update command for dbt Core 2.x.
+    /// Informative-only update command for dbt v2 OSS.
     #[clap(hide = true)]
     Update,
-    /// Informative-only uninstall command for dbt Core 2.x.
+    /// Informative-only uninstall command for dbt v2 OSS.
     #[clap(hide = true)]
     Uninstall,
     /// Preinstall all supported database drivers into the local cache
     InstallDrivers,
-    /// Upgrade a dbt Core installation to dbt (Fusion)
+    /// Upgrade a dbt v2 OSS installation to dbt v2 proprietary
     UpgradeDistribution(SystemUpgradeDistributionArgs),
 }
 
@@ -148,7 +148,7 @@ impl MissingDistributionStubArgs {
 #[derive(clap::Subcommand, Debug, Clone)]
 #[allow(clippy::large_enum_variant)] // System is expected to be much larger than the stub variants.
 pub enum OSSExtensionCommand {
-    /// dbt Core 2.x system subcommand
+    /// dbt v2 OSS system subcommand
     System(SystemMgmtArgs),
     /// Lint models (requires the full dbt distribution)
     Lint(MissingDistributionStubArgs),

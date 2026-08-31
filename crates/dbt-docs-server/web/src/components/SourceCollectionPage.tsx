@@ -4,8 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Clock, Copy, Table } from 'lucide-react';
 
-import { resourceIconMap, type ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-import { Icon } from '@dbt-labs/sourdough';
+import type { ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
 
 import type { FreshnessStatusValue, SourceAsset } from '../shared';
 import {
@@ -111,12 +110,6 @@ export function SourceCollectionPage({ nodes, onSelect }: Props) {
         size: 280,
         cell: (info) => (
           <div className="flex min-w-0 items-center gap-2">
-            <Icon
-              ryecon={resourceIconMap.source}
-              size="xs"
-              alt=""
-              className="shrink-0"
-            />
             <Tooltip
               displayOnlyWhenTruncated
               content={info.row.original.name}

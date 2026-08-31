@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_proc_macros::Resolvable;
@@ -16,7 +17,7 @@ use crate::schemas::common::{
 };
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::project::{ResolvableConfig, TypedRecursiveConfig};
 use crate::schemas::serde::{
     IndexesConfig, PartitionsConfig, PrimaryKeyConfig, StringOrArrayOfStrings, StringOrInteger,
@@ -120,7 +121,7 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -190,7 +191,7 @@ pub struct ProjectSourceConfig {
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -377,6 +378,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 scheduler: None,
                 tmp_relation_type: None,
                 query_tag: None,
+                query_tags: None,
                 table_tag: None,
                 row_access_policy: None,
                 automatic_clustering: None,
@@ -620,6 +622,12 @@ impl ResolvableConfig<SourceConfig> for SourceConfig {
     fn default_to(&mut self, parent: &SourceConfig) {
         self.default_to_fields(parent);
     }
+
+    // `SourceConfig` has no `database`/`schema` field of its own -- a source's database/schema
+    // are per-table, authored as top-level `SourceProperties`/`Tables` keys in schema.yml
+    // (`resolve_sources.rs`), not through this project-config pipeline. Canonicalized there
+    // instead of here.
+    fn canonicalize_adapter_aliases(&mut self, _default_adapter: AdapterType) {}
 }
 
 impl ConfigKeys for SourceConfig {

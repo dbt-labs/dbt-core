@@ -12,15 +12,13 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks incremental tables
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
-    // TODO: missing from Python dbt-databricks:
-    // - liquid clustering
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 8] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 9] = [
         // TODO: column mask
         Box::new(components::ColumnCommentsLoader),
         Box::new(components::ColumnTagsLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::ConstraintsLoader),
-        // Box::new(components::LiquidClusteringLoader),
+        Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationTagsLoader),
         Box::new(components::RowFilterLoader),
         Box::new(components::TblPropertiesLoader),
@@ -141,7 +139,15 @@ mod tests {
             expected_changeset: RelationComponentConfigChangeSet::new(
                 AdapterType::Databricks,
                 [
-                    // TODO: add liquid clustering to changeset here once that gets implemented
+                    (
+                        components::LiquidClusteringLoader.type_name(),
+                        ComponentConfigChange::Some(
+                            components::LiquidClusteringLoader::new_component_type_erased(
+                                false,
+                                vec!["cluster_by_new".to_string()],
+                            ),
+                        ),
+                    ),
                     (
                         components::ColumnCommentsLoader.type_name(),
                         ComponentConfigChange::Some(
@@ -277,6 +283,14 @@ mod tests {
     <unset_constraints>
     </unset_constraints>
 </constraints>
+<liquid_clustering>
+    <auto_cluster>
+        False
+    </auto_cluster>
+    <cluster_by>
+        cluster_by_new
+    </cluster_by>
+</liquid_clustering>
 <tags>
     <set_tags>
         <a_tag>
@@ -304,15 +318,15 @@ mod tests {
 </row_filter>
 <tblproperties>
     <tblproperties>
+        <delta.enableRowTracking>
+            true
+        </delta.enableRowTracking>
         <customKey>
             new
         </customKey>
         <customKey2>
             value
         </customKey2>
-        <delta.enableRowTracking>
-            true
-        </delta.enableRowTracking>
     </tblproperties>
     <pipeline_id>
         my_new_pipeline

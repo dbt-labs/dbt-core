@@ -179,15 +179,15 @@ mod tests {
 </tags>
 <tblproperties>
     <tblproperties>
+        <delta.enableRowTracking>
+            true
+        </delta.enableRowTracking>
         <customKey>
             new
         </customKey>
         <customKey2>
             value
         </customKey2>
-        <delta.enableRowTracking>
-            true
-        </delta.enableRowTracking>
     </tblproperties>
     <pipeline_id>
         my_new_pipeline

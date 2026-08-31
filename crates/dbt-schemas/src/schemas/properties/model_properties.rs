@@ -173,6 +173,25 @@ impl ModelFreshness {
         self.warn_after.as_ref().is_some_and(|r| !r.is_empty())
             || self.error_after.as_ref().is_some_and(|r| !r.is_empty())
     }
+
+    /// The subset of this config a downstream project may see, e.g. in a Mesh
+    /// publication artifact.
+    ///
+    /// `None` when there's no SLA to check (`has_sla` is false), so a
+    /// `build_after`-only config doesn't travel at all. `build_after` is a
+    /// local scheduling rule, not an SLA, and is cleared even when an SLA is
+    /// present: it names this project's own build cadence, which is
+    /// meaningless — and potentially confusing/leaky — to a consumer that
+    /// doesn't run this project's jobs.
+    pub fn for_publication(&self) -> Option<Self> {
+        if !self.has_sla() {
+            return None;
+        }
+        Some(Self {
+            build_after: None,
+            ..self.clone()
+        })
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
@@ -445,6 +464,48 @@ warn_after: {}
             !freshness.has_sla(),
             "an empty rule object is equivalent to omitting the key"
         );
+    }
+
+    #[test]
+    fn for_publication_is_none_without_an_sla() {
+        let build_after_only = ModelFreshness {
+            build_after: Some(ModelFreshnessRules {
+                count: Some(1),
+                period: Some(FreshnessPeriod::day),
+                updates_on: None,
+            }),
+            ..Default::default()
+        };
+        assert!(build_after_only.for_publication().is_none());
+        assert!(ModelFreshness::default().for_publication().is_none());
+    }
+
+    #[test]
+    fn for_publication_clears_build_after_but_keeps_the_sla() {
+        let freshness = ModelFreshness {
+            build_after: Some(ModelFreshnessRules {
+                count: Some(1),
+                period: Some(FreshnessPeriod::day),
+                updates_on: None,
+            }),
+            warn_after: Some(FreshnessRules {
+                count: Some(12),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            loaded_at_field: Some("updated_at".to_string()),
+            ..Default::default()
+        };
+
+        let published = freshness
+            .for_publication()
+            .expect("has an SLA, so it should publish");
+
+        assert!(
+            published.build_after.is_none(),
+            "build_after is this project's own scheduling rule and must not leak to a downstream consumer"
+        );
+        assert_eq!(published.warn_after, freshness.warn_after);
+        assert_eq!(published.loaded_at_field, freshness.loaded_at_field);
     }
 
     #[test]

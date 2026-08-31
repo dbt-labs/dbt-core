@@ -61,7 +61,11 @@ export function Input({
         name={name}
         data-testid={testId}
         className={cn(
-          'flex h-9 w-full rounded-md border border-borderMain bg-bgMain px-3 py-1 text-sm text-fgMain shadow-sm transition-colors placeholder:text-fgDecorative focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-bgBrand disabled:cursor-not-allowed disabled:opacity-50',
+          // appearance-none suppresses WebKit/Chrome's native decoration on
+          // <input type="search"> (its own focus ring, clear-button styling,
+          // etc.) -- outline:0/focus-visible:outline-none alone doesn't fully
+          // remove it, which is what caused the double focus-ring bug.
+          'flex h-9 w-full appearance-none rounded-md border border-borderMain bg-bgMain px-3 py-1 text-sm text-fgMain shadow-sm transition-colors placeholder:text-fgDecorative focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-bgBrand disabled:cursor-not-allowed disabled:opacity-50',
           startIcon && 'pl-8',
           endIcon && 'pr-8',
           inputClassName,

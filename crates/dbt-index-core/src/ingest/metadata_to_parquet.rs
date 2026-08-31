@@ -27,6 +27,7 @@ use crate::ingest::payload::{
     ParsedDoc, ParsedExposure, ParsedGroup, ParsedMacro, ParsedMetric, ParsedSavedQuery,
     ParsedSemanticModel, ParsedTimeSpine, ParsedUnitTest,
 };
+use crate::ingest::timings;
 use crate::parquet::{IndexWriter, WriteMode};
 
 /// Columns projected when reading parse/nodes epoch parquet files.
@@ -60,6 +61,14 @@ pub const PARSE_NODES_COLS: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 pub const STATE_FILE: &str = ".fusion_state.json";
+
+/// Whether `index_dir` already holds a completed ingest — its persisted state
+/// file is present. Lets a caller reuse an existing index as a staging
+/// intermediate rather than building one, and conversely avoid materialising an
+/// index the caller opted out of (`--no-write-index`).
+pub fn has_persisted_state(index_dir: &Path) -> bool {
+    index_dir.join(STATE_FILE).exists()
+}
 
 /// Serializable mirror of IngestState for disk persistence.
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -168,7 +177,20 @@ pub fn ingest_from_metadata_direct(
     }
 }
 
+/// Attributed to [`timings::Stage::RowBuild`] as a whole, exclusive of the read,
+/// payload-parse and write stages nested inside it — so the benchmark accounts for
+/// every table's row building, not only the instrumented ones.
 fn cold_ingest(
+    metadata_dir: &Path,
+    index_dir: &Path,
+    state: &mut IngestState,
+) -> Result<usize, IndexError> {
+    timings::time(timings::Stage::RowBuild, || {
+        cold_ingest_inner(metadata_dir, index_dir, state)
+    })
+}
+
+fn cold_ingest_inner(
     metadata_dir: &Path,
     index_dir: &Path,
     state: &mut IngestState,
@@ -228,7 +250,7 @@ fn cold_ingest(
     total += write_seed_catalog_stats(&mut writer, index_dir, metadata_dir, &now)?;
     total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, true)?;
     total += write_run_freshness(&mut writer, metadata_dir, state, &now, true)?;
-    writer.finish_for_ingest()?;
+    timings::time(timings::Stage::StagingWrite, || writer.finish_for_ingest())?;
 
     // Store at µs precision to match what save_state serializes.
     let alive_us: Option<u64> = std::fs::metadata(metadata_dir.join(PARSE_ALIVE))
@@ -267,7 +289,20 @@ pub fn index_is_current(metadata_dir: &Path, index_dir: &Path) -> bool {
 
 /// Incremental delta ingest: reads only new epochs since last run,
 /// merges into existing index_dir parquet files.
+///
+/// Attributed to [`timings::Stage::RowBuild`] on the same terms as
+/// [`cold_ingest`].
 pub fn apply_delta_direct(
+    metadata_dir: &Path,
+    index_dir: &Path,
+    state: &mut IngestState,
+) -> Result<usize, IndexError> {
+    timings::time(timings::Stage::RowBuild, || {
+        apply_delta_direct_inner(metadata_dir, index_dir, state)
+    })
+}
+
+fn apply_delta_direct_inner(
     metadata_dir: &Path,
     index_dir: &Path,
     state: &mut IngestState,
@@ -384,7 +419,7 @@ pub fn apply_delta_direct(
         total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, false)?;
         total += write_run_freshness(&mut writer, metadata_dir, state, &now, false)?;
     }
-    writer.finish_for_ingest()?;
+    timings::time(timings::Stage::StagingWrite, || writer.finish_for_ingest())?;
 
     Ok(total)
 }
@@ -425,12 +460,23 @@ pub fn has_unseen_compile_epochs(metadata_dir: &Path, state: &IngestState) -> bo
 // Helpers — read a parquet file into RecordBatches
 // ---------------------------------------------------------------------------
 
-fn read_parquet_batches(path: &Path) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
+pub(crate) fn read_parquet_batches(
+    path: &Path,
+) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
     read_parquet_batches_proj(path, &[])
 }
 
 /// Read parquet, projecting only the named columns (empty = all columns).
 pub fn read_parquet_batches_proj(
+    path: &Path,
+    cols: &[&str],
+) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
+    timings::time(timings::Stage::EpochRead, || {
+        read_parquet_batches_proj_inner(path, cols)
+    })
+}
+
+fn read_parquet_batches_proj_inner(
     path: &Path,
     cols: &[&str],
 ) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
@@ -481,7 +527,16 @@ fn i64_col<'a>(
         .and_then(|c| c.as_any().downcast_ref::<arrow_array::Int64Array>())
 }
 
-fn timestamp_micros_col<'a>(
+pub fn bool_col<'a>(
+    batch: &'a arrow_array::RecordBatch,
+    name: &str,
+) -> Option<&'a arrow_array::BooleanArray> {
+    batch
+        .column_by_name(name)
+        .and_then(|c| c.as_any().downcast_ref::<arrow_array::BooleanArray>())
+}
+
+pub fn timestamp_micros_col<'a>(
     batch: &'a arrow_array::RecordBatch,
     name: &str,
 ) -> Option<&'a arrow_array::TimestampMicrosecondArray> {
@@ -500,7 +555,7 @@ fn i32_col<'a>(
         .and_then(|c| c.as_any().downcast_ref::<arrow_array::Int32Array>())
 }
 
-fn f64_col<'a>(
+pub(crate) fn f64_col<'a>(
     batch: &'a arrow_array::RecordBatch,
     name: &str,
 ) -> Option<&'a arrow_array::Float64Array> {
@@ -549,18 +604,90 @@ fn get_list(col: Option<&arrow_array::ListArray>, i: usize) -> Vec<String> {
     crate::ingest::payload::list_col(col, i)
 }
 
+/// The raw text of the *top-level* field `key` of the JSON object `json`, or
+/// `None` if `json` is not an object or has no such field.
+///
+/// Walks the object's own members rather than searching the text for
+/// `"key":`. A text search finds whichever occurrence comes first, which for a
+/// model with documented columns is a column's nested `"config":` and not the
+/// node's — the node's config then reads as `{}`.
 pub fn extract_json_field_raw<'a>(json: &'a str, key: &str) -> Option<&'a str> {
-    let needle = format!("\"{key}\":");
-    let key_pos = json.find(needle.as_str())?;
-    let value_start_offset = key_pos + needle.len();
-    // Skip leading whitespace
-    let trimmed = json[value_start_offset..].trim_start();
-    if trimmed.is_empty() {
+    let bytes = json.as_bytes();
+    let skip_ws = |mut i: usize| {
+        while matches!(bytes.get(i), Some(b' ' | b'\n' | b'\r' | b'\t')) {
+            i += 1;
+        }
+        i
+    };
+
+    let mut i = skip_ws(0);
+    if bytes.get(i) != Some(&b'{') {
         return None;
     }
-    let abs_start = json.len() - trimmed.len();
-    let end = find_json_value_end(json, abs_start)?;
-    Some(&json[abs_start..end])
+    i += 1;
+    loop {
+        i = skip_ws(i);
+        match bytes.get(i)? {
+            b'}' => return None,
+            b',' => {
+                i += 1;
+                continue;
+            }
+            b'"' => {}
+            // Not a member of a well-formed object; stop rather than guess.
+            _ => return None,
+        }
+        // The member name, quotes included.
+        let name_end = find_json_value_end(json, i)?;
+        let name = json.get(i + 1..name_end - 1)?;
+        i = skip_ws(name_end);
+        if bytes.get(i) != Some(&b':') {
+            return None;
+        }
+        i = skip_ws(i + 1);
+        let value_end = find_json_value_end(json, i)?;
+        if name == key {
+            return json.get(i..value_end);
+        }
+        i = value_end;
+    }
+}
+
+/// A model payload reduced to the fields the parse-node ingest reads.
+///
+/// Model payloads are multi-KB — mostly `raw_code`, `compiled_code` and the
+/// per-column documentation — so rather than pay for a full `simd_json` parse of
+/// the whole thing this keeps two fields and drops the rest.
+///
+/// Dropping `__common_attr__` costs `raw_code`, `checksum`, `patch_path` and
+/// `meta` for models — but those columns are null for *every* resource type
+/// today, including the ones whose payloads are parsed whole, because the row
+/// builder reads them at the payload top level where they live one level down
+/// (see the note at their reads in `extract_parse_nodes_batch`). Fixing that is a
+/// follow-up that has to move in step with `epoch_views`, which does not emit
+/// them either; widening this trim is the models half of it.
+///
+/// `config` is kept as raw JSON text, since only some of the builders parse it.
+/// `__model_attr__` is kept whole and parsed: `DbtModelAttr` is a fixed, small
+/// struct with no code or column blobs in it, so keeping all of it costs little
+/// and means a builder that starts reading a new attribute finds it here. An
+/// allowlist of sub-objects would instead have to be widened in step with the
+/// builders, and forgetting to is silent — that is how `time_spine` came to be
+/// dropped, leaving `dbt.time_spines` empty for every project.
+///
+/// Shared so the delta path in `dbt-index` trims exactly the same way.
+pub fn trim_model_payload(raw: Option<&str>) -> Value {
+    let mut obj = serde_json::Map::new();
+    if let Some(cfg) = raw.and_then(|r| extract_json_field_raw(r, "config")) {
+        obj.insert("config".to_string(), Value::String(cfg.to_string()));
+    }
+    if let Some(ma) = raw
+        .and_then(|r| extract_json_field_raw(r, "__model_attr__"))
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+    {
+        obj.insert("__model_attr__".to_string(), ma);
+    }
+    Value::Object(obj)
 }
 
 /// Find the end offset of a JSON value starting at `start` in `s`.
@@ -892,7 +1019,7 @@ fn write_parse_nodes(
             // Parse payloads selectively: models only have `config` in their payload
             // (no raw_code, meta, patch_path, etc.), so we avoid the expensive full
             // simd_json parse for them and extract config as a raw JSON string instead.
-            let payloads: Vec<Value> = {
+            let payloads: Vec<Value> = timings::time(timings::Stage::PayloadParse, || {
                 let payload_col = str_col(batch, "payload");
                 let rt_col_inner = str_col(batch, "resource_type");
                 use arrow_array::Array;
@@ -903,32 +1030,9 @@ fn write_parse_nodes(
                             .map(|c| c.value(i) == "model")
                             .unwrap_or(false);
                         if is_model {
-                            // For models: extract only the fields the parse-node
-                            // ingest actually reads, as raw strings — avoid a full
-                            // JSON parse of the (multi-KB) payload.
-                            let raw = payload_col.filter(|c| !c.is_null(i)).map(|c| c.value(i));
-                            let mut obj = serde_json::Map::new();
-                            if let Some(cfg) = raw.and_then(|r| extract_json_field_raw(r, "config"))
-                            {
-                                obj.insert("config".to_string(), Value::String(cfg.to_string()));
-                            }
-                            // `contract` lives on `__model_attr__` (the canonical
-                            // source the manifest reads) and the top-level `config`
-                            // is frequently empty (`{}`), so we must carry
-                            // `__model_attr__.contract` through the model trim or
-                            // `contract_enforced` is silently lost. Pull just the
-                            // `contract` sub-object to keep the trimmed payload small.
-                            if let Some(ma) = raw
-                                .and_then(|r| extract_json_field_raw(r, "__model_attr__"))
-                                .and_then(|s| serde_json::from_str::<Value>(s).ok())
-                            {
-                                if let Some(contract) = ma.get("contract") {
-                                    let mut ma_obj = serde_json::Map::new();
-                                    ma_obj.insert("contract".to_string(), contract.clone());
-                                    obj.insert("__model_attr__".to_string(), Value::Object(ma_obj));
-                                }
-                            }
-                            Value::Object(obj)
+                            trim_model_payload(
+                                payload_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)),
+                            )
                         } else {
                             // Non-model nodes (macros, docs, sources, etc.): full parse needed.
                             payload_col
@@ -941,7 +1045,7 @@ fn write_parse_nodes(
                         }
                     })
                     .collect()
-            };
+            });
             extract_parse_nodes_batch(
                 batch,
                 now,
@@ -1253,6 +1357,14 @@ pub fn extract_parse_nodes_batch(
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        // Pre-existing, and null on every corpus: `checksum`, `raw_code`,
+        // `patch_path` and `meta` below are read at the payload top level, but the
+        // `parse/nodes` payload nests them under `__common_attr__` (`path`, just
+        // above, is the one read that gets this right). The reads are left as they
+        // are because `epoch_views` does not emit these columns either, so both
+        // layers are null and agree; correcting one without the other breaks the
+        // differential test. Same for `version`, `latest_version` and
+        // `deprecation_date`, which live under `__model_attr__`.
         let checksum = payload
             .get("checksum")
             .and_then(|c| c.get("checksum"))
@@ -1488,7 +1600,15 @@ pub fn extract_parse_nodes_batch(
         match rt.as_str() {
             "metric" => {
                 let node_name = get_str(name_col, i).unwrap_or_default();
-                build_metric_from_payload(&uid, &node_name, payload, &tags, &ts, metric_rows);
+                build_metric_from_payload(
+                    &uid,
+                    &node_name,
+                    payload,
+                    &tags,
+                    enabled,
+                    &ts,
+                    metric_rows,
+                );
             }
             "semantic_model" => {
                 build_semantic_model_from_payload(
@@ -1505,7 +1625,7 @@ pub fn extract_parse_nodes_batch(
                 build_saved_query_from_payload(&uid, payload, &ts, saved_query_rows);
             }
             "exposure" => {
-                build_exposure_from_payload(&uid, payload, &tags, &ts, exposure_rows);
+                build_exposure_from_payload(&uid, payload, &tags, enabled, &ts, exposure_rows);
             }
             "group" => {
                 build_group_from_payload(&uid, payload, &ts, group_rows);
@@ -1517,7 +1637,7 @@ pub fn extract_parse_nodes_batch(
                 build_doc_from_payload(&uid, payload, &ts, doc_rows);
             }
             "unit_test" => {
-                build_unit_test_from_payload(&uid, payload, &ts, unit_test_rows);
+                build_unit_test_from_payload(&uid, payload, enabled, &ts, unit_test_rows);
             }
             "model" => {
                 // time_spine: embedded in __model_attr__
@@ -1543,6 +1663,7 @@ fn build_metric_from_payload(
     node_name: &str,
     payload: &Value,
     tags: &[String],
+    enabled: bool,
     now: &str,
     rows: &mut Vec<Value>,
 ) {
@@ -1574,6 +1695,7 @@ fn build_metric_from_payload(
         "tags": m.tags,
         "meta": m.meta.as_ref().map(|v| v.to_string()),
         "config": m.config.as_ref().map(|v| v.to_string()),
+        "enabled": enabled,
         "created_at": m.created_at,
         "ingested_at": now,
     }));
@@ -1674,6 +1796,7 @@ fn build_exposure_from_payload(
     uid: &str,
     payload: &Value,
     tags: &[String],
+    enabled: bool,
     now: &str,
     rows: &mut Vec<Value>,
 ) {
@@ -1695,6 +1818,7 @@ fn build_exposure_from_payload(
         "depends_on_nodes": m.depends_on_nodes,
         "depends_on_macros": m.depends_on_macros,
         "tags": m.tags,
+        "enabled": enabled,
         "created_at": m.created_at,
         "ingested_at": now,
     }));
@@ -1746,7 +1870,13 @@ fn build_doc_from_payload(uid: &str, payload: &Value, now: &str, rows: &mut Vec<
     }));
 }
 
-fn build_unit_test_from_payload(uid: &str, payload: &Value, now: &str, rows: &mut Vec<Value>) {
+fn build_unit_test_from_payload(
+    uid: &str,
+    payload: &Value,
+    enabled: bool,
+    now: &str,
+    rows: &mut Vec<Value>,
+) {
     let m = ParsedUnitTest::from_payload(payload);
     rows.push(json!({
         "unique_id": uid,
@@ -1765,6 +1895,7 @@ fn build_unit_test_from_payload(uid: &str, payload: &Value, now: &str, rows: &mu
         "schema_name": m.schema_name,
         "depends_on_nodes": m.depends_on_nodes,
         "depends_on_macros": m.depends_on_macros,
+        "enabled": enabled,
         "ingested_at": now,
     }));
 }
@@ -1812,9 +1943,20 @@ fn write_parse_columns(
     }
 
     let mut rows: Vec<Value> = Vec::new();
-    let mut last_epoch = 0u32;
-    for (epoch_num, path) in &new_epochs {
+    // Newest epoch wins wholesale per node — an epoch republishes a node's whole
+    // column set, so walk newest-first and skip a node a later epoch already
+    // covered. The same rule as `dedup_epoch_groups` for the other two column
+    // sources, and what the delta path's `MergePrune` does to the rows already in
+    // the table; without it a cold ingest over two parse epochs emits every column
+    // of an unchanged node twice.
+    //
+    // Marked seen per *epoch* rather than per row: a node's columns can span
+    // batches within one file, and marking on the first row would keep one column.
+    let mut seen_ids: HashSet<String> = HashSet::new();
+    let last_epoch = new_epochs.last().map(|(n, _)| *n).unwrap_or(0);
+    for (_epoch_num, path) in new_epochs.iter().rev() {
         let batches = read_parquet_batches(path)?;
+        let mut epoch_ids: HashSet<String> = HashSet::new();
         for batch in &batches {
             let uid_col = str_col(batch, "unique_id");
             let col_col = str_col(batch, "column_name");
@@ -1826,6 +1968,10 @@ fn write_parse_columns(
                 let Some(uid) = get_str(uid_col, i) else {
                     continue;
                 };
+                if seen_ids.contains(&uid) {
+                    continue;
+                }
+                epoch_ids.insert(uid.clone());
                 let ts = get_i64(ts_col, i)
                     .map(micros_to_ts)
                     .unwrap_or_else(|| now.to_string());
@@ -1843,7 +1989,7 @@ fn write_parse_columns(
                 }));
             }
         }
-        last_epoch = *epoch_num;
+        seen_ids.extend(epoch_ids);
     }
 
     if need_full {
@@ -2094,6 +2240,62 @@ fn write_parse_generation(
 // Fast path: Arrow→Arrow projection, no serde_json round-trip.
 // ---------------------------------------------------------------------------
 
+/// Newest-epoch-wins rows from `epochs`, grouped by `key_col`, alive-pruned.
+///
+/// The rule every per-node-republished source shares: a whole group is written by
+/// one epoch, so a later epoch supersedes an earlier one for that entire group.
+/// Read newest-first and keep every row of a group not already seen. Used by both
+/// column sources (`compile/columns`, `catalog/columns`) keyed on `unique_id`,
+/// where the group is a node's column set, and by `compile/column_lineage` keyed
+/// on `to_node_unique_id`, where it is a target's incoming edges.
+///
+/// The dedup is per *group*, not per row, so a group is only marked seen once the
+/// whole batch has been walked — marking it on its first row would keep just the
+/// first row of each group and drop the rest. Alive pruning is folded into the
+/// same pass, so a row costs one hash lookup in total.
+///
+/// `Supersede::LatestGroup` is the view layer's spelling of this.
+fn dedup_epoch_groups(
+    epochs: &[(u32, std::path::PathBuf)],
+    key_col: &str,
+    alive_ids: Option<&HashSet<String>>,
+) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
+    use arrow_array::Array;
+    let mut seen_ids: HashSet<String> = HashSet::new();
+    let mut out: Vec<arrow_array::RecordBatch> = Vec::new();
+    for (_epoch_num, path) in epochs.iter().rev() {
+        for batch in read_parquet_batches(path)? {
+            let uid_col = str_col(&batch, key_col);
+            let mut keep = Vec::with_capacity(batch.num_rows());
+            let mut any_keep = false;
+            let mut batch_uids: HashSet<String> = HashSet::new();
+            for i in 0..batch.num_rows() {
+                let Some(uid) = uid_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
+                    keep.push(false);
+                    continue;
+                };
+                let dead = alive_ids.map(|ids| !ids.contains(uid)).unwrap_or(false);
+                if dead || seen_ids.contains(uid) {
+                    keep.push(false);
+                    continue;
+                }
+                batch_uids.insert(uid.to_string());
+                keep.push(true);
+                any_keep = true;
+            }
+            seen_ids.extend(batch_uids);
+            if !any_keep {
+                continue;
+            }
+            let mask = arrow_array::BooleanArray::from(keep);
+            if let Ok(filtered) = arrow_select::filter::filter_record_batch(&batch, &mask) {
+                out.push(filtered);
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn write_compile_columns(
     writer: &mut IndexWriter,
     metadata_dir: &Path,
@@ -2120,57 +2322,8 @@ fn write_compile_columns(
         return Ok(0);
     }
 
-    // Invariant: all columns for a given unique_id come from the same epoch (a compile
-    // epoch writes all columns for all compiled nodes atomically). Later epochs supersede
-    // earlier ones for the same node.
-    //
-    // Strategy: read epochs newest-first, track which unique_ids have been seen.
-    // For each batch keep only rows whose unique_id is NOT yet seen, then mark them seen.
-    // Combined with alive pruning inline — one HashSet lookup per row total.
     let out_schema = crate::parquet::schema_for("node_columns");
-    let mut seen_ids: HashSet<String> = HashSet::new();
-    let mut batches: Vec<arrow_array::RecordBatch> = Vec::new();
-
-    for (_epoch_num, path) in new_epochs.iter().rev() {
-        for batch in read_parquet_batches(path)? {
-            use arrow_array::Array;
-            let uid_col = str_col(&batch, "unique_id");
-            // A compile epoch writes ALL columns for a node atomically, so a node
-            // has multiple rows (one per column) in the same batch. Dedup is
-            // per-NODE across epochs (newest wins): keep every column-row of a
-            // node not yet seen in a newer epoch, and only mark the node seen
-            // AFTER the batch — marking per-row would drop all but the first
-            // column of each node.
-            let mut keep = Vec::with_capacity(batch.num_rows());
-            let mut any_keep = false;
-            let mut batch_uids: HashSet<String> = HashSet::new();
-            for i in 0..batch.num_rows() {
-                let Some(uid) = uid_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
-                    keep.push(false);
-                    continue;
-                };
-                if alive_ids.map(|ids| !ids.contains(uid)).unwrap_or(false) {
-                    keep.push(false);
-                    continue;
-                }
-                if seen_ids.contains(uid) {
-                    keep.push(false);
-                    continue;
-                }
-                batch_uids.insert(uid.to_string());
-                keep.push(true);
-                any_keep = true;
-            }
-            seen_ids.extend(batch_uids);
-            if !any_keep {
-                continue;
-            }
-            let mask = arrow_array::BooleanArray::from(keep);
-            if let Ok(filtered) = arrow_select::filter::filter_record_batch(&batch, &mask) {
-                batches.push(filtered);
-            }
-        }
-    }
+    let batches = dedup_epoch_groups(&new_epochs, "unique_id", alive_ids)?;
 
     let total: usize = batches.iter().map(|b| b.num_rows()).sum();
     if total == 0 {
@@ -2222,41 +2375,7 @@ fn write_catalog_columns(
     }
 
     let out_schema = crate::parquet::schema_for("node_columns");
-    let mut seen_ids: HashSet<String> = HashSet::new();
-    let mut batches: Vec<arrow_array::RecordBatch> = Vec::new();
-
-    for (_epoch_num, path) in new_epochs.iter().rev() {
-        for batch in read_parquet_batches(path)? {
-            use arrow_array::Array;
-            let uid_col = str_col(&batch, "unique_id");
-            let mut keep = Vec::with_capacity(batch.num_rows());
-            let mut any_keep = false;
-            for i in 0..batch.num_rows() {
-                let Some(uid) = uid_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)) else {
-                    keep.push(false);
-                    continue;
-                };
-                if alive_ids.map(|ids| !ids.contains(uid)).unwrap_or(false) {
-                    keep.push(false);
-                    continue;
-                }
-                if seen_ids.contains(uid) {
-                    keep.push(false);
-                    continue;
-                }
-                seen_ids.insert(uid.to_string());
-                keep.push(true);
-                any_keep = true;
-            }
-            if !any_keep {
-                continue;
-            }
-            let mask = arrow_array::BooleanArray::from(keep);
-            if let Ok(filtered) = arrow_select::filter::filter_record_batch(&batch, &mask) {
-                batches.push(filtered);
-            }
-        }
-    }
+    let batches = dedup_epoch_groups(&new_epochs, "unique_id", alive_ids)?;
 
     let total: usize = batches.iter().map(|b| b.num_rows()).sum();
     if total == 0 {
@@ -2355,49 +2474,6 @@ fn project_catalog_columns_batches(
 
             arrow_array::RecordBatch::try_new(out_schema.clone(), columns)
                 .map_err(|e| IndexError::Other(format!("project_catalog_columns: {e}")))
-        })
-        .collect()
-}
-
-/// Collect RecordBatches from a list of epoch (num, path) pairs.
-fn collect_epoch_batches(
-    epochs: &[(u32, std::path::PathBuf)],
-) -> Result<Vec<arrow_array::RecordBatch>, IndexError> {
-    let mut out = Vec::new();
-    for (_n, path) in epochs {
-        out.extend(read_parquet_batches(path)?);
-    }
-    Ok(out)
-}
-
-/// Filter batches: keep only rows whose `col_name` column value is in `alive_ids`.
-/// Uses a boolean filter kernel — faster than index-based take for dense keep sets.
-/// Filter batches: keep only rows whose `col_name` is in `alive_ids`.
-/// Uses boolean filter kernel (faster than index take for dense keep sets).
-fn filter_batches_by_alive_col(
-    batches: Vec<arrow_array::RecordBatch>,
-    alive_ids: Option<&HashSet<String>>,
-    col_name: &str,
-) -> Vec<arrow_array::RecordBatch> {
-    let Some(ids) = alive_ids else { return batches };
-    batches
-        .into_iter()
-        .filter_map(|batch| {
-            let col = str_col(&batch, col_name);
-            use arrow_array::Array;
-            let mask: arrow_array::BooleanArray = (0..batch.num_rows())
-                .map(|i| {
-                    Some(
-                        col.filter(|c| !c.is_null(i))
-                            .map(|c| ids.contains(c.value(i)))
-                            .unwrap_or(false),
-                    )
-                })
-                .collect();
-            if mask.true_count() == 0 {
-                return None;
-            }
-            arrow_select::filter::filter_record_batch(&batch, &mask).ok()
         })
         .collect()
 }
@@ -2617,14 +2693,17 @@ fn write_compile_cll(
         return Ok(0);
     }
 
-    let batches = collect_epoch_batches(&new_epochs)?;
-
-    // Alive pruning on full ingest.
-    let batches = if need_full && alive_ids.is_some() {
-        filter_batches_by_alive_col(batches, alive_ids, "to_node_unique_id")
-    } else {
-        batches
-    };
+    // Newest-epoch-wins per *target* node, which is the unit a compile epoch
+    // republishes: `WriteMode::ReplaceColumnLineage` below deletes every edge into
+    // a recomputed target before inserting the new set, so a full ingest that
+    // merely unioned the epochs would publish an edge a later compile removed —
+    // and duplicate every edge it kept. Alive pruning only on full ingest, as
+    // before: a delta run's rows are all newly recomputed.
+    let batches = dedup_epoch_groups(
+        &new_epochs,
+        "to_node_unique_id",
+        if need_full { alive_ids } else { None },
+    )?;
 
     let total: usize = batches.iter().map(|b| b.num_rows()).sum();
     let last = new_epochs.last().map(|(n, _)| *n).unwrap_or(0);
@@ -3257,4 +3336,270 @@ fn write_warehouse_catalog_stats(
     }
     state.set_epoch(RUN_CATALOG_STATS_SUBDIR, last_epoch);
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use arrow_array::{Int32Array, RecordBatch, StringArray, TimestampMicrosecondArray};
+    use arrow_schema::{DataType, Field, Schema, TimeUnit};
+
+    use super::{
+        CATALOG_COLUMNS_SUBDIR, COMPILE_COLUMNS_SUBDIR, IngestState, extract_json_field_raw,
+        read_parquet_batches, trim_model_payload, write_catalog_columns, write_compile_columns,
+    };
+    use crate::parquet::IndexWriter;
+
+    /// A `catalog/columns` epoch holding `nodes × columns_per_node` rows.
+    fn write_catalog_epoch(dir: &std::path::Path, nodes: &[&str], columns_per_node: &[&str]) {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("unique_id", DataType::Utf8, false),
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("column_index", DataType::Int32, true),
+            Field::new("catalog_type", DataType::Utf8, true),
+            Field::new("catalog_comment", DataType::Utf8, true),
+            Field::new(
+                "ingested_at",
+                DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into())),
+                true,
+            ),
+        ]));
+        let (mut uids, mut names, mut idxs, mut types) = (vec![], vec![], vec![], vec![]);
+        for uid in nodes {
+            for (i, col) in columns_per_node.iter().enumerate() {
+                uids.push(*uid);
+                names.push(*col);
+                idxs.push(i as i32);
+                types.push("VARCHAR");
+            }
+        }
+        let n = uids.len();
+        let batch = RecordBatch::try_new(
+            Arc::clone(&schema),
+            vec![
+                Arc::new(StringArray::from(uids)),
+                Arc::new(StringArray::from(names)),
+                Arc::new(Int32Array::from(idxs)),
+                Arc::new(StringArray::from(types)),
+                Arc::new(StringArray::from(vec![None::<&str>; n])),
+                Arc::new(TimestampMicrosecondArray::from(vec![0i64; n]).with_timezone("UTC")),
+            ],
+        )
+        .expect("catalog batch");
+        std::fs::create_dir_all(dir).expect("epoch dir");
+        let file = std::fs::File::create(dir.join("v1_0.parquet")).expect("epoch file");
+        let mut writer =
+            parquet::arrow::ArrowWriter::try_new(file, schema, None).expect("epoch writer");
+        writer.write(&batch).expect("epoch write");
+        writer.close().expect("epoch close");
+    }
+
+    /// Catalog rows are deduplicated per node across epochs, not per row: a node
+    /// has one row per column in the same batch, so marking it seen mid-batch
+    /// would keep only its first column.
+    #[test]
+    fn a_catalog_epoch_keeps_every_column_of_every_node() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let metadata_dir = tmp.path().join("metadata");
+        write_catalog_epoch(
+            &metadata_dir.join(CATALOG_COLUMNS_SUBDIR),
+            &["model.p.a", "model.p.b"],
+            &["c1", "c2", "c3"],
+        );
+
+        let index_dir = tmp.path().join("index");
+        let mut writer = IndexWriter::new(&index_dir).expect("writer");
+        let mut state = IngestState::default();
+        let kept = write_catalog_columns(
+            &mut writer,
+            &metadata_dir,
+            &mut state,
+            "2026-08-25T00:00:00Z",
+            true,
+            None,
+        )
+        .expect("write catalog columns");
+
+        assert_eq!(kept, 6, "2 nodes × 3 columns");
+        let written = read_parquet_batches(&index_dir.join("dbt.node_columns.parquet"))
+            .expect("read node_columns");
+        let rows: usize = written.iter().map(|b| b.num_rows()).sum();
+        assert_eq!(rows, 6);
+    }
+
+    /// A `compile/columns` epoch holding one row per `(unique_id, column_name)`.
+    fn write_compile_columns_epoch(dir: &std::path::Path, file: &str, rows: &[(&str, &str)]) {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("unique_id", DataType::Utf8, false),
+            Field::new("column_name", DataType::Utf8, false),
+            Field::new("column_index", DataType::Int32, true),
+            Field::new("column_type", DataType::Utf8, true),
+            Field::new(
+                "ingested_at",
+                DataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into())),
+                true,
+            ),
+        ]));
+        let n = rows.len();
+        let batch = RecordBatch::try_new(
+            Arc::clone(&schema),
+            vec![
+                Arc::new(StringArray::from(
+                    rows.iter().map(|(uid, _)| *uid).collect::<Vec<_>>(),
+                )),
+                Arc::new(StringArray::from(
+                    rows.iter().map(|(_, col)| *col).collect::<Vec<_>>(),
+                )),
+                Arc::new(Int32Array::from((0..n as i32).collect::<Vec<_>>())),
+                Arc::new(StringArray::from(vec!["INT"; n])),
+                Arc::new(TimestampMicrosecondArray::from(vec![0i64; n]).with_timezone("UTC")),
+            ],
+        )
+        .expect("compile columns batch");
+        std::fs::create_dir_all(dir).expect("epoch dir");
+        let out = std::fs::File::create(dir.join(file)).expect("epoch file");
+        let mut writer =
+            parquet::arrow::ArrowWriter::try_new(out, schema, None).expect("epoch writer");
+        writer.write(&batch).expect("epoch write");
+        writer.close().expect("epoch close");
+    }
+
+    /// A cold ingest reading several epochs at once applies the group rule itself.
+    ///
+    /// A delta ingest is handed only the epochs it has not seen, so replacing a
+    /// node's whole column set falls out of the write. A cold one — fresh
+    /// `target/`, CI, `dbt clean`, or any first ingest after several compiles —
+    /// reads every epoch in one pass and has to supersede within that pass:
+    /// concatenating them publishes a column a later compile dropped, and
+    /// duplicates every column it kept. `dedup_epoch_groups` is what does it, and
+    /// the unit is the whole group, not the row: `a.c` below exists only in the
+    /// older epoch, so a per-`(node, column)` dedup would keep it. The view layer
+    /// states the same rule as `Supersede::LatestGroup` — see
+    /// `info_schema::tests_epoch::latest_group_supersedes_the_whole_group`.
+    #[test]
+    fn a_cold_ingest_supersedes_a_whole_group_across_epochs() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let metadata_dir = tmp.path().join("metadata");
+        let dir = metadata_dir.join(COMPILE_COLUMNS_SUBDIR);
+        // Epoch 0: `a` has three columns, `b` one. Epoch 1: `a` is recompiled and
+        // now has two — `c` is gone — and does not mention `b` at all.
+        write_compile_columns_epoch(
+            &dir,
+            "v1_0.parquet",
+            &[
+                ("model.p.a", "x"),
+                ("model.p.a", "y"),
+                ("model.p.a", "c"),
+                ("model.p.b", "z"),
+            ],
+        );
+        write_compile_columns_epoch(
+            &dir,
+            "v1_1.parquet",
+            &[("model.p.a", "x"), ("model.p.a", "y")],
+        );
+
+        let index_dir = tmp.path().join("index");
+        let mut writer = IndexWriter::new(&index_dir).expect("writer");
+        let mut state = IngestState::default();
+        let kept = write_compile_columns(
+            &mut writer,
+            &metadata_dir,
+            &mut state,
+            "2026-08-25T00:00:00Z",
+            true,
+            None,
+        )
+        .expect("write compile columns");
+        assert_eq!(kept, 3, "`a`'s two columns from epoch 1 plus `b`'s one");
+
+        let written = read_parquet_batches(&index_dir.join("dbt.node_columns.parquet"))
+            .expect("read node_columns");
+        let mut got: Vec<String> = Vec::new();
+        for batch in &written {
+            let uids = super::str_col(batch, "unique_id").expect("unique_id");
+            let names = super::str_col(batch, "column_name").expect("column_name");
+            for i in 0..batch.num_rows() {
+                got.push(format!("{}.{}", uids.value(i), names.value(i)));
+            }
+        }
+        got.sort();
+        assert_eq!(
+            got,
+            vec!["model.p.a.x", "model.p.a.y", "model.p.b.z"],
+            "the newest epoch that mentions `a` replaces every row it had — `a.c` \
+             is dropped and not duplicated — while `b`, which epoch 1 does not \
+             mention, keeps its epoch-0 row"
+        );
+    }
+
+    #[test]
+    fn field_is_read_from_the_top_level_only() {
+        // A model with documented columns carries a column-level `config` ahead
+        // of its own in the payload text; the node's config is the one wanted.
+        let payload = r#"{"name":"m","columns":{"id":{"config":{"tags":[]}}},"config":{"materialized":"table"}}"#;
+        assert_eq!(
+            extract_json_field_raw(payload, "config"),
+            Some(r#"{"materialized":"table"}"#)
+        );
+    }
+
+    #[test]
+    fn a_key_inside_a_string_value_is_not_a_field() {
+        let payload = r#"{"raw_code":"select 1 -- \"config\": {}","config":{"enabled":true}}"#;
+        assert_eq!(
+            extract_json_field_raw(payload, "config"),
+            Some(r#"{"enabled":true}"#)
+        );
+    }
+
+    #[test]
+    fn every_value_shape_is_delimited() {
+        let payload = r#"{"a":"s","b":12,"c":true,"d":null,"e":[1,2],"f":{"g":1}}"#;
+        for (key, want) in [
+            ("a", "\"s\""),
+            ("b", "12"),
+            ("c", "true"),
+            ("d", "null"),
+            ("e", "[1,2]"),
+            ("f", "{\"g\":1}"),
+        ] {
+            assert_eq!(
+                extract_json_field_raw(payload, key),
+                Some(want),
+                "key {key}"
+            );
+        }
+        assert_eq!(extract_json_field_raw(payload, "missing"), None);
+        assert_eq!(extract_json_field_raw("[1]", "a"), None);
+    }
+
+    #[test]
+    fn the_model_trim_keeps_what_the_row_builders_read() {
+        let payload = r#"{"raw_code":"select 1","config":{"materialized":"view"},
+            "__model_attr__":{"contract":{"enforced":true},"primary_key":["id"],
+            "time_spine":{"standard_granularity_column":"d"},"other":"kept too"}}"#;
+        let trimmed = trim_model_payload(Some(payload));
+        assert_eq!(
+            trimmed.get("config").and_then(|v| v.as_str()),
+            Some(r#"{"materialized":"view"}"#)
+        );
+        let ma = trimmed.get("__model_attr__").expect("model attr");
+        assert!(ma.get("contract").is_some());
+        assert!(ma.get("primary_key").is_some());
+        assert!(ma.get("time_spine").is_some());
+        // Whole-object, so an attribute no builder reads yet is there when one
+        // starts to. `raw_code` is what the trim is for, and is gone.
+        assert!(ma.get("other").is_some());
+        assert!(trimmed.get("raw_code").is_none());
+    }
+
+    #[test]
+    fn the_model_trim_omits_absent_fields() {
+        let trimmed = trim_model_payload(Some(r#"{"other":1}"#));
+        assert!(trimmed.get("config").is_none());
+        assert!(trimmed.get("__model_attr__").is_none());
+        assert_eq!(trim_model_payload(None), serde_json::json!({}));
+    }
 }

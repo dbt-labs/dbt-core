@@ -439,7 +439,9 @@ got {:?}, expected an instance of {}",
         if arg.local_execution_backend != LocalExecutionBackendKind::Remote {
             arg.static_analysis = Some(StaticAnalysisKind::Strict);
         }
-        if arg.write_index && arg.static_analysis == Some(StaticAnalysisKind::Strict) {
+        if (arg.write_index || arg.generate_info_schema)
+            && arg.static_analysis == Some(StaticAnalysisKind::Strict)
+        {
             arg.write_lineage = true;
         }
         // `build`, `run`, and `check` write the index by default.
@@ -2004,6 +2006,22 @@ pub struct CommonArgs {
     )]
     pub index_dir: Option<PathBuf>,
 
+    /// Write the dbt information schema to target/info_schema/: a queryable
+    /// parquet layer over your project's metadata. With --static-analysis strict,
+    /// also writes column types and column-level lineage.
+    #[arg(global = true, long = "generate-info-schema", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_GENERATE_INFO_SCHEMA", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS)]
+    pub generate_info_schema: bool,
+
+    /// Directory for information schema parquet output (default: <target>/info_schema/)
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_INFO_SCHEMA_DIR",
+        help_heading = help_headings::ARTIFACTS,
+        hide_short_help = true
+    )]
+    pub info_schema_dir: Option<PathBuf>,
+
     /// Compute and write column-level lineage into compile/cll parquet.
     /// Requires --write-index and --static-analysis strict. Omitting this flag
     /// skips the expensive CLL graph build, keeping index writing fast.
@@ -2652,10 +2670,11 @@ impl CommonArgs {
     /// `--verify-partial-load` → `--partial-load` → `--partial-parse`
     /// `--verify-partial-parse` → `--partial-parse`
     /// `--dirty` → `--partial-parse`
-    /// `--write-index` → `--write-metadata` → `--partial-parse`
+    /// `--write-index` / `--generate-info-schema` → `--write-metadata` → `--partial-parse`
     pub fn effective_partial_parse(&self) -> bool {
         self.write_metadata
             || self.effective_write_index()
+            || self.generate_info_schema
             || self.partial_parse
             || self.partial_load
             || self.verify_partial_load
@@ -2664,10 +2683,11 @@ impl CommonArgs {
     }
 
     /// `--verify-partial-load` implies `--partial-load`. `--write-metadata` implies both.
-    /// `--write-index` implies `--write-metadata` implies both.
+    /// `--write-index` and `--generate-info-schema` imply `--write-metadata`, hence both.
     pub fn effective_partial_load(&self) -> bool {
         self.write_metadata
             || self.effective_write_index()
+            || self.generate_info_schema
             || self.partial_load
             || self.verify_partial_load
     }
@@ -2679,6 +2699,8 @@ impl CommonArgs {
     /// without cancelling them would leave the caller with no index *and* the partial-load fast
     /// path, which cannot see files it has not already recorded — the worst of both. An explicit
     /// `--write-metadata` still implies both on its own; `--no-write-index` only cancels the index.
+    /// (`--generate-info-schema` implies `--write-metadata` independently, so it stays in the gates
+    /// above regardless of `--no-write-index`.)
     pub fn effective_write_index(&self) -> bool {
         self.write_index && !self.no_write_index
     }
@@ -2828,13 +2850,18 @@ impl CommonArgs {
             // `--no-write-index` is authoritative over `--write-index`, the way
             // `--no-write-json` is over `--write-json`. It cancels only the index, so
             // `--write-metadata --no-write-index` still means epochs-without-index.
-            write_metadata: self.write_metadata || self.effective_write_index(),
+            // `--generate-info-schema` implies `--write-metadata` on its own.
+            write_metadata: self.write_metadata
+                || self.effective_write_index()
+                || self.generate_info_schema,
             write_index: self.effective_write_index(),
             // Set by `Cli::to_eval_args` for the commands that default the index on; a
             // per-command conversion cannot know it was a default rather than a request.
             write_index_implied: false,
             check_names: Vec::new(),
             skip_checks: false,
+            generate_info_schema: self.generate_info_schema,
+            info_schema_dir: self.info_schema_dir.clone(),
             classify_with_warehouse_tags: self.classify_with_warehouse_tags,
             index_dir: self.index_dir.clone(),
             metadata_dir: self.metadata_dir.clone(),
@@ -2964,9 +2991,10 @@ pub struct InitArgs {
     #[arg(long, default_value = "false")]
     pub skip_profile_setup: bool,
 
-    /// Run the Fusion onboarding/upgrade flow
-    #[arg(long, default_value = "false")]
-    pub fusion_upgrade: bool,
+    /// Run the dbt v2 onboarding/upgrade flow
+    #[arg(long = "v2-upgrade", alias = "fusion-upgrade", default_value = "false")]
+    #[serde(alias = "fusion_upgrade")]
+    pub v2_upgrade: bool,
 
     /// The sample project to initialize with
     #[arg(long, default_value = "jaffle-shop")]

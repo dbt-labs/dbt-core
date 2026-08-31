@@ -37,7 +37,9 @@ use dbt_schemas::schemas::selection_override::{
 
 use crate::{
     args::SchedulerArgs,
-    node_selector::{filter_select_criteria, fnmatch},
+    node_selector::{
+        StateSelectorResults, filter_select_criteria_with_state_selector_results, fnmatch,
+    },
 };
 
 /// Schedule nodes based on selection criteria and dependencies.
@@ -50,6 +52,26 @@ use crate::{
 ///
 /// # Returns
 /// * `FsResult<Schedule<String>>` - Scheduled nodes with dependencies
+pub fn build_schedule(
+    arg: &SchedulerArgs,
+    nodes: &Nodes,
+    previous_state: Option<&StateArtifacts>,
+    resolved_selectors: &ResolvedSelector,
+    token: &CancellationToken,
+    adapter_type: AdapterType,
+) -> FsResult<Schedule<String>> {
+    build_schedule_with_state_selector_results(
+        arg,
+        nodes,
+        previous_state,
+        resolved_selectors,
+        None,
+        token,
+        adapter_type,
+    )
+}
+
+/// Build a schedule, optionally using externally evaluated state selector results.
 #[tracing::instrument(
     skip_all,
     fields(
@@ -59,11 +81,12 @@ use crate::{
         }),
     )
 )]
-pub fn build_schedule(
+pub fn build_schedule_with_state_selector_results(
     arg: &SchedulerArgs,
     nodes: &Nodes,
     previous_state: Option<&StateArtifacts>,
     resolved_selectors: &ResolvedSelector,
+    state_selector_results: Option<&StateSelectorResults>,
     token: &CancellationToken,
     adapter_type: AdapterType,
 ) -> FsResult<Schedule<String>> {
@@ -105,6 +128,7 @@ pub fn build_schedule(
         nodes,
         previous_state,
         &converted_selectors,
+        state_selector_results,
         arg,
         adapter_type,
     )?;
@@ -176,6 +200,7 @@ fn schedule_graph(
     nodes: &Nodes,
     previous_state: Option<&StateArtifacts>,
     resolved_selectors: &ResolvedSelector,
+    state_selector_results: Option<&StateSelectorResults>,
     args: &SchedulerArgs,
     adapter_type: AdapterType,
 ) -> FsResult<(Schedule<String>, Option<SelectionOverrideStats>)> {
@@ -189,11 +214,12 @@ fn schedule_graph(
             } else {
                 include.clone()
             };
-            expand_selector(
+            expand_selector_with_state_selector_results(
                 &effective_include,
                 deps,
                 nodes,
                 previous_state,
+                state_selector_results,
                 adapter_type,
                 &resolved_selectors.selector_definitions,
             )?
@@ -203,11 +229,12 @@ fn schedule_graph(
 
     // Get fully expanded excluded nodes
     let excluded_nodes = match &resolved_selectors.exclude {
-        Some(exclude) => expand_selector(
+        Some(exclude) => expand_selector_with_state_selector_results(
             exclude,
             deps,
             nodes,
             previous_state,
+            state_selector_results,
             adapter_type,
             &resolved_selectors.selector_definitions,
         )?,
@@ -577,6 +604,7 @@ fn eval_selector(
     deps: &BTreeMap<String, BTreeSet<String>>,
     nodes: &Nodes,
     previous_state: Option<&StateArtifacts>,
+    state_selector_results: Option<&StateSelectorResults>,
     adapter_type: AdapterType,
     selector_defs: &HashMap<String, SelectorEntry>,
     resolution_stack: &mut Vec<String>,
@@ -592,6 +620,7 @@ fn eval_selector(
                     deps,
                     nodes,
                     previous_state,
+                    state_selector_results,
                     adapter_type,
                     selector_defs,
                     resolution_stack,
@@ -609,6 +638,7 @@ fn eval_selector(
                 deps,
                 nodes,
                 previous_state,
+                state_selector_results,
                 adapter_type,
                 selector_defs,
                 resolution_stack,
@@ -619,6 +649,7 @@ fn eval_selector(
                     deps,
                     nodes,
                     previous_state,
+                    state_selector_results,
                     adapter_type,
                     selector_defs,
                     resolution_stack,
@@ -632,6 +663,7 @@ fn eval_selector(
                 deps,
                 nodes,
                 previous_state,
+                state_selector_results,
                 adapter_type,
                 selector_defs,
                 resolution_stack,
@@ -650,6 +682,7 @@ fn eval_selector(
                     deps,
                     nodes,
                     previous_state,
+                    state_selector_results,
                     adapter_type,
                     selector_defs,
                     resolution_stack,
@@ -657,8 +690,13 @@ fn eval_selector(
             }
 
             // 1️⃣ base filter
-            let mut selected =
-                filter_select_criteria(nodes, criteria, previous_state, adapter_type)?;
+            let mut selected = filter_select_criteria_with_state_selector_results(
+                nodes,
+                criteria,
+                previous_state,
+                state_selector_results,
+                adapter_type,
+            )?;
 
             // 2️⃣ graph operators — multi-source traversal
             //
@@ -699,6 +737,7 @@ fn eval_selector(
                     deps,
                     nodes,
                     previous_state,
+                    state_selector_results,
                     adapter_type,
                     selector_defs,
                     resolution_stack,
@@ -722,11 +761,14 @@ fn eval_selector_method(
     deps: &BTreeMap<String, BTreeSet<String>>,
     nodes: &Nodes,
     previous_state: Option<&StateArtifacts>,
+    state_selector_results: Option<&StateSelectorResults>,
     adapter_type: AdapterType,
     selector_defs: &HashMap<String, SelectorEntry>,
     resolution_stack: &mut Vec<String>,
 ) -> FsResult<EvalResult> {
-    let pattern = &criteria.value;
+    let pattern = criteria
+        .value
+        .resolve(dbt_common::node_selector::MethodName::Selector)?;
 
     // fnmatch lookup: supports wildcards like `selector:model_*`
     let matching: Vec<(&String, &SelectorEntry)> = selector_defs
@@ -760,6 +802,7 @@ fn eval_selector_method(
             deps,
             nodes,
             previous_state,
+            state_selector_results,
             adapter_type,
             selector_defs,
             resolution_stack,
@@ -797,6 +840,7 @@ fn eval_selector_method(
             deps,
             nodes,
             previous_state,
+            state_selector_results,
             adapter_type,
             selector_defs,
             resolution_stack,
@@ -820,12 +864,34 @@ pub fn expand_selector(
     adapter_type: AdapterType,
     selector_defs: &HashMap<String, SelectorEntry>,
 ) -> FsResult<BTreeSet<String>> {
+    expand_selector_with_state_selector_results(
+        selector,
+        deps,
+        nodes,
+        previous_state,
+        None,
+        adapter_type,
+        selector_defs,
+    )
+}
+
+/// Expand a selector, optionally using externally evaluated state selector results.
+pub fn expand_selector_with_state_selector_results(
+    selector: &SelectExpression,
+    deps: &BTreeMap<String, BTreeSet<String>>,
+    nodes: &Nodes,
+    previous_state: Option<&StateArtifacts>,
+    state_selector_results: Option<&StateSelectorResults>,
+    adapter_type: AdapterType,
+    selector_defs: &HashMap<String, SelectorEntry>,
+) -> FsResult<BTreeSet<String>> {
     let mut resolution_stack = Vec::new();
     let res = eval_selector(
         selector,
         deps,
         nodes,
         previous_state,
+        state_selector_results,
         adapter_type,
         selector_defs,
         &mut resolution_stack,
@@ -1753,6 +1819,7 @@ mod tests {
             &nodes,
             None,
             &resolved_selectors,
+            None,
             &args,
             AdapterType::Bigquery,
         ) {
@@ -1807,6 +1874,7 @@ mod tests {
             &nodes,
             None,
             &resolved_selectors,
+            None,
             &args,
             AdapterType::Bigquery,
         ) {
@@ -3614,6 +3682,7 @@ mod resource_type_filtering_tests {
             nodes,
             None,
             resolved_selectors,
+            None,
             args,
             AdapterType::Bigquery,
         )
@@ -4310,6 +4379,7 @@ mod cycle_detection_tests {
             &nodes,
             None,
             &resolved_selectors,
+            None,
             &args,
             AdapterType::Bigquery,
         )
@@ -4410,6 +4480,7 @@ mod cycle_detection_tests {
             nodes,
             None,
             &resolved_selectors,
+            None,
             &args,
             AdapterType::Bigquery,
         )
@@ -4653,6 +4724,7 @@ mod selector_method_tests {
             &deps,
             &nodes,
             None,
+            None,
             AdapterType::Bigquery,
             &sel_defs,
             &mut stack,
@@ -4684,6 +4756,7 @@ mod selector_method_tests {
             &deps,
             &nodes,
             None,
+            None,
             AdapterType::Bigquery,
             &sel_defs,
             &mut stack,
@@ -4712,6 +4785,7 @@ mod selector_method_tests {
             &deps,
             &nodes,
             None,
+            None,
             AdapterType::Bigquery,
             &sel_defs,
             &mut stack,
@@ -4737,6 +4811,7 @@ mod selector_method_tests {
             &selector_atom("alpha"),
             &deps,
             &nodes,
+            None,
             None,
             AdapterType::Bigquery,
             &sel_defs,
@@ -4770,6 +4845,7 @@ mod selector_method_tests {
             &deps,
             &nodes,
             None,
+            None,
             AdapterType::Bigquery,
             &sel_defs,
             &mut stack,
@@ -4798,6 +4874,7 @@ mod selector_method_tests {
             &selector_atom("derived"),
             &deps,
             &nodes,
+            None,
             None,
             AdapterType::Bigquery,
             &sel_defs,

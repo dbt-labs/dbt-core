@@ -21,8 +21,10 @@ use dbt_defer::DeferState;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
 use dbt_index_core::ingest::ingest_state::IngestState;
-use dbt_index_core::ingest::metadata_to_parquet::ingest_from_metadata_direct;
-use dbt_index_core::{WriteSource, save_artifact_meta};
+use dbt_index_core::ingest::metadata_to_parquet::{
+    has_persisted_state, ingest_from_metadata_direct,
+};
+use dbt_index_core::{WriteSource, save_artifact_meta, write_info_schema};
 use dbt_jinja_utils::{
     JinjaFactory,
     invocation_args::InvocationArgs,
@@ -54,6 +56,7 @@ use dbt_common::{
     artifact_io::write_artifact_to_file,
     cancellation::CancellationToken,
     constants::{DBT_MANIFEST_JSON, DBT_SEMANTIC_MANIFEST_JSON},
+    fail_fast::FailFast,
     fs_err,
     io_args::{
         EvalArgs, EvalArgsBuilder, ListOutputFormat, Phases, ShowOptions,
@@ -107,8 +110,8 @@ use tracing::Instrument;
 use vortex_events::{adapter_info_event, resource_counts_event};
 
 use dbt_schemas::schemas::{
-    InternalDbtNode, OnManifestLoadFailure, StateArtifacts, legacy_catalog::DbtCatalog,
-    manifest::build_manifest,
+    InternalDbtNode, InternalDbtNodeAttributes, OnManifestLoadFailure, StateArtifacts,
+    legacy_catalog::DbtCatalog, manifest::build_manifest,
 };
 
 use dbt_compilation::config::CompilationConfig;
@@ -119,11 +122,10 @@ use dbt_telemetry::{ArtifactType, ListItemOutput};
 
 use std::{sync::Arc, time::SystemTime};
 
-use serde_json::to_string_pretty;
-
 use crate::utils::update_manifest_with_macro_depends_on;
-
+use dbt_common::io_args::LocalExecutionBackendKind;
 use dbt_schemas::state::NodeResolverTracker;
+use serde_json::to_string_pretty;
 
 fn should_skip_tasks_when_no_selected_nodes(
     command: &FsCommand,
@@ -403,8 +405,8 @@ impl<'a> CompilationPhasesExecutor<'a> {
     fn publish_parse_index(&mut self, resolved_state: &ResolverState) {
         // `write_index` is still consulted, just not as the *trigger*: `--no-write-index` clears it
         // (see `effective_write_index`), and an explicit opt-out has to win even here. The gate
-        // then skips because `write_index` is false — no `CheckIndexUnavailable`, that code is for
-        // a write that was requested and failed.
+        // then skips because `write_index` is false — the gate warns under `CheckIndexDisabled`
+        // rather than `CheckIndexUnavailable`, which is for a write that was requested and failed.
         //
         // `nodes.checks` is enabled-only (`resolve_checks` inserts a node only when enabled), so an
         // empty map means nothing will read the parse layer early even on `build`/`check`.
@@ -567,40 +569,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 &empty_column_classifiers,
             );
 
-            // When --write-index is set, convert the parse epochs into snapshot index
-            // parquet. The parse index is intentionally incomplete: it carries nodes and
-            // node-level lineage from the manifest, but no column schemas or column-level
-            // lineage (those require compilation). ingest_from_metadata_direct creates the
-            // index directory, so the subsequent save_artifact_meta can record the fingerprint.
-            // Metadata-only runs (no --write-index) write epochs only and skip the index.
-            if self.arg.write_index {
-                let metadata_dir = self.arg.metadata_dir();
-                let index_dir = self.arg.index_dir();
-                let mut state = IngestState::default();
-                match ingest_from_metadata_direct(&metadata_dir, &index_dir, &mut state) {
-                    Ok(_) => {
-                        if let Err(e) = save_artifact_meta(
-                            &index_dir,
-                            &self.arg.io.out_dir,
-                            WriteSource::DirectWrite,
-                            None,
-                        ) {
-                            emit_warn_log_message(
-                                ErrorCode::Generic,
-                                format!("dbt-index: save_artifact_meta: {e}"),
-                            );
-                        }
-                        emit_warn_log_message(
-                            ErrorCode::Generic,
-                            "--write-index: the index produced by `parse` is incomplete; column schemas and column-level lineage are only written by `compile`, `run`, or `build`.",
-                        );
-                    }
-                    Err(e) => emit_warn_log_message(
-                        ErrorCode::Generic,
-                        format!("dbt-index: write-index: {e}"),
-                    ),
-                }
-            }
+            write_parse_artifacts(&self.arg);
         }
 
         if self.arg.io.should_show(ShowOptions::Manifest) {
@@ -784,6 +753,8 @@ pub struct DbtProjectCompilation {
     pub(crate) parse_index_publish_failed: bool,
     /// --state
     pub(crate) previous_state: Option<Arc<StateArtifacts>>,
+    /// Request context for service-backed state selection when no local state is available.
+    pub(crate) run_cache_state_selector_args: Option<RunCacheStateSelectorArgs>,
     pub(crate) invocation_id: String,
     /// True when --partial-load actually applied a unique_id filter to the cache load
     /// (either via the fast path or filtered incremental load). False on a full parse
@@ -853,11 +824,11 @@ pub type DbtRunTasksResult = (
     Arc<DbtProjectCompilationCacheState>,
 );
 
-use dbt_compilation::traits::{CompilationCache, CompiledProject};
-
 use crate::partial_parse::{
     PrevCompilationResult, try_lazy_load_fast_path, try_load_prev_compilation,
 };
+use dbt_compilation::traits::{CompilationCache, CompiledProject};
+use dbt_state::selector::RunCacheStateSelectorArgs;
 
 impl DbtProjectCompilation {
     fn dbt_state(&self) -> Arc<DbtState> {
@@ -1505,6 +1476,20 @@ impl DbtProjectCompilation {
             prev_state.set_test_name_truncations(&resolved_state.test_name_truncations);
         }
 
+        // Only initialize run-cache state selector when no local previous state is available.
+        // The lifecycle handles all enablement checks and fail-open logic internally.
+        let run_cache_state_selector_args = if maybe_previous_state.is_none() {
+            create_run_cache_state_selector_args(
+                arg_use_once,
+                &resolved_state,
+                loaded_project.dbt_cloud_config(),
+                loaded_project.root_package().package_root_path.as_path(),
+            )
+            .await?
+        } else {
+            None
+        };
+
         // Refresh node_resolver (no renaming needed - sample plan is resolved after scheduling)
         executor.refresh_node_resolver(
             &loaded_project,
@@ -1533,6 +1518,7 @@ impl DbtProjectCompilation {
                 catalog_artifact: executor.catalog_artifact.take(),
                 parse_index_publish_failed: executor.parse_index_publish_failed,
                 previous_state: maybe_previous_state,
+                run_cache_state_selector_args,
                 invocation_id,
                 partial_load_filter_applied: false,
             },
@@ -1550,6 +1536,7 @@ impl DbtProjectCompilation {
         token: &CancellationToken,
     ) -> FsResult<Schedule<String>> {
         let maybe_previous_state = self.previous_state.clone();
+        let run_cache_state_selector_args = self.run_cache_state_selector_args.as_ref();
 
         // ========================================================================
         // PHASE 3: Use Pipeline for Schedule
@@ -1579,6 +1566,7 @@ impl DbtProjectCompilation {
                 &self.resolved_state,
                 scheduler_args,
                 maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                run_cache_state_selector_args,
                 select_expr,
                 exclude_expr,
                 arg.local_execution_backend,
@@ -1592,6 +1580,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         scheduler_args,
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         arg.local_execution_backend,
                         token,
                     )
@@ -1602,6 +1591,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         scheduler_args,
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         &custom_schedule_desc.unique_ids,
                         custom_schedule_desc.include_parents,
                         custom_schedule_desc.include_children,
@@ -1616,6 +1606,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         scheduler_args,
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         compilation_cache_changes.as_cache_state(),
                         arg.local_execution_backend,
                         token,
@@ -1652,6 +1643,7 @@ impl DbtProjectCompilation {
         let dbt_cloud_config = self.dbt_cloud_config().cloned();
         let metricflow_server_client = self.metricflow_server_client.clone();
         let maybe_previous_state = self.previous_state.clone();
+        let run_cache_state_selector_args = self.run_cache_state_selector_args.as_ref();
         let root_project_quoting = self.resolved_state.root_project_quoting;
         let project_optimize_tests =
             optimize_test_defaults_from_project_flags(self.root_project().flags.as_ref());
@@ -1880,6 +1872,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         SchedulerArgs::from_eval_args(arg),
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         arg.local_execution_backend,
                         token,
                     )
@@ -2122,6 +2115,12 @@ impl DbtProjectCompilation {
         if let Some(replay_adapter) = adapter.as_replay() {
             for (truncated, full_name) in resolved_state.test_name_truncations.iter() {
                 replay_adapter.record_test_name_truncation(truncated, full_name);
+            }
+            // A versioned model's unique_id ends in `.v<N>`, which is not its alias, so an
+            // ephemeral+versioned model's own node_id can't be traced back to the CTE name
+            // dbt-core compiled it under without this. See fs#11684.
+            for model in resolved_state.nodes.models.values() {
+                replay_adapter.record_node_alias(&model.unique_id(), &model.alias());
             }
         }
 
@@ -2572,17 +2571,14 @@ pub fn update_resolved_state_node_columns(
 /// Skipped for local execution (`--compute inline`).
 fn spawn_version_check_if_possible(
     config: &CompilationConfig,
-    compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
+    compute_flag: LocalExecutionBackendKind,
     version_check_disabled: bool,
     command_name: &'static str,
 ) -> Option<tokio::task::JoinHandle<Option<String>>> {
     if version_check_disabled {
         return None;
     }
-    let is_local = matches!(
-        compute_flag,
-        dbt_common::io_args::LocalExecutionBackendKind::Inline
-    );
+    let is_local = matches!(compute_flag, LocalExecutionBackendKind::Inline);
     if !is_local {
         let disable_version_check =
             { config.no_version_check || std::env::var("DBT_DISABLE_VERSION_CHECK").is_ok() };
@@ -2746,7 +2742,9 @@ fn select_matches_macro(
         match expr {
             SelectExpression::Atom(criteria) => {
                 if matches!(criteria.method, MethodName::Path | MethodName::File) {
-                    values.push((criteria.method, criteria.value.clone()));
+                    if let Some(value) = criteria.value.as_str() {
+                        values.push((criteria.method, value.to_string()));
+                    }
                 }
             }
             SelectExpression::And(exprs) | SelectExpression::Or(exprs) => {
@@ -2874,6 +2872,104 @@ fn run_verify_partial_load(arg: &EvalArgs, schedule: &Schedule<String>) {
         tracing::warn!("verify-partial-load: {}", line.trim());
     } else {
         tracing::info!("verify-partial-load: {}", line.trim());
+    }
+}
+
+async fn create_run_cache_state_selector_args(
+    arg: &EvalArgs,
+    resolved_state: &ResolverState,
+    cloud_config: Option<&ResolvedCloudConfig>,
+    project_root: &std::path::Path,
+) -> FsResult<Option<RunCacheStateSelectorArgs>> {
+    let execute_mode = Execute::from_compute_flag(arg.local_execution_backend);
+    let run_task_args = RunTasksArgs::from_eval_args(arg, FailFast::new());
+    let lifecycle = RunCacheLifecycle::get_or_initialize(
+        run_task_args.as_ref(),
+        execute_mode,
+        resolved_state.adapter_type,
+        cloud_config,
+    )
+    .await?;
+
+    let Some(client) = lifecycle.service_client() else {
+        return Ok(None);
+    };
+
+    let defer_to = lifecycle
+        .defer_to_target(&resolved_state.dbt_profile)
+        .unwrap_or_default();
+    let project_id = cloud_config.and_then(|c| c.project_id.clone());
+
+    Ok(Some(RunCacheStateSelectorArgs {
+        client,
+        defer_to,
+        project_id,
+        macros: resolved_state.macros.macros.clone(),
+        project_root: DbtPath::from(project_root),
+    }))
+}
+
+/// Convert the `parse` metadata epochs into whichever opt-in artifacts were
+/// requested.
+///
+/// Both artifact sets are independent: either, neither, or both may be asked
+/// for. Failures are advisory — an artifact that could not be written must not
+/// fail the command.
+///
+/// What `parse` can produce is limited: nodes and node-level lineage, but no
+/// column types and no column-level lineage, both of which need a compile.
+fn write_parse_artifacts(arg: &EvalArgs) {
+    let metadata_dir = arg.metadata_dir();
+
+    if arg.write_index {
+        let index_dir = arg.index_dir();
+        let mut state = IngestState::default();
+        // `ingest_from_metadata_direct` creates the directory, so the
+        // fingerprint below has somewhere to land.
+        match ingest_from_metadata_direct(&metadata_dir, &index_dir, &mut state) {
+            Ok(_) => {
+                if let Err(e) =
+                    save_artifact_meta(&index_dir, &arg.io.out_dir, WriteSource::DirectWrite, None)
+                {
+                    emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!("dbt-index: save_artifact_meta: {e}"),
+                    );
+                }
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    "--write-index: the index produced by `parse` is incomplete; column schemas and column-level lineage are only written by `compile`, `run`, or `build`.",
+                );
+            }
+            Err(e) => {
+                emit_warn_log_message(ErrorCode::Generic, format!("dbt-index: write-index: {e}"))
+            }
+        }
+    }
+
+    if arg.generate_info_schema {
+        let info_schema_dir = arg.info_schema_dir();
+        // Reuse the flat index at `target/index` as the intermediate when one is
+        // already there (the same ingest builds both, so an index written earlier
+        // in this run is picked up via the delta path rather than re-ingested).
+        // With no index to reuse — e.g. `--no-write-index` — stage privately
+        // instead, so we never materialise an index the caller opted out of.
+        let index_dir = arg.index_dir();
+        let staging_dir = if has_persisted_state(&index_dir) {
+            index_dir
+        } else {
+            arg.info_schema_staging_dir()
+        };
+        match write_info_schema(&metadata_dir, &info_schema_dir, &staging_dir) {
+            Ok(_) => emit_warn_log_message(
+                ErrorCode::Generic,
+                "--generate-info-schema: the information schema produced by `parse` is incomplete; column types, column-level lineage, and runtime results are only written by `compile`, `run`, or `build`.",
+            ),
+            Err(e) => emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("dbt: generate-info-schema: {e}"),
+            ),
+        }
     }
 }
 

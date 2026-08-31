@@ -382,3 +382,26 @@ writing
   am
   writing");
 }
+
+#[test]
+fn test_unrecognized_string_escapes_render_verbatim() {
+    let env = Environment::new();
+    for (template, expected) in [
+        (
+            r#"{% set pat = "'[+*\/=<> :;.,!?]+'" %}{{ pat }}"#,
+            r"'[+*\/=<> :;.,!?]+'",
+        ),
+        (r#"{{ "a/b" }}"#, "a/b"),
+        (r#"{{ "http://x.com/a/b" }}"#, "http://x.com/a/b"),
+        (r#"{{ "a/b\tc" }}"#, "a/b\tc"),
+        (r#"{{ "a/b\/c" }}"#, "a/b\\/c"),
+        (r#"{{ "a\/b" }}"#, r"a\/b"),
+        (r#"{{ 'a\/b' }}"#, r"a\/b"),
+        (r#"{{ "\\/" }}"#, r"\/"),
+        (r#"{{ "\d+" }}"#, r"\d+"),
+        (r#"{{ "a\'b\"c\\d" }}"#, r#"a'b"c\d"#),
+    ] {
+        let rv = env.render_str(template, context! {}, &[]).unwrap();
+        assert_eq!(rv, expected, "template: {template}");
+    }
+}

@@ -18,7 +18,7 @@ pub type Query = SimpleComponentConfigImpl<String>;
 
 /// `SqlUtils.clean_sql`
 /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/handle.py
-fn clean_sql(sql: &str) -> String {
+pub(crate) fn clean_sql(sql: &str) -> String {
     let trimmed = sql.trim();
     trimmed.strip_suffix(';').unwrap_or(trimmed).to_string()
 }

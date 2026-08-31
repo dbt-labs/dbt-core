@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { Copy } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
 
-import { CellContext, ColumnDef } from '@dbt-labs/sourdough';
+import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 
 import { Tooltip } from '../../components/ui/Tooltip';
 import { formatAbsoluteLocalDate, formatDateCommon } from '../util/dateUtils';

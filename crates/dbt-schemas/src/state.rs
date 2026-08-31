@@ -137,10 +137,16 @@ pub struct GenericTestAsset {
     pub source_name: Option<String>,
     pub test_name: String,
     pub defined_at: dbt_common::CodeLocationWithFile,
+    /// The column this test is attached to, taken from its position in the schema file
+    /// (`columns[*].data_tests`). `None` for a model-level test, regardless of any
+    /// `column_name` kwarg the test passes to its macro.
+    pub column_name: Option<String>,
     // Structured metadata for generic tests (optional; not used for singular tests)
     pub test_metadata_name: Option<String>,
     pub test_metadata_namespace: Option<String>,
-    pub test_metadata_column_name: Option<String>,
+    /// The `column_name` macro kwarg, which a generic test may set to an arbitrary
+    /// sequence. Distinct from [`GenericTestAsset::column_name`].
+    pub test_metadata_column_name: Option<StringOrArrayOfStrings>,
     pub test_metadata_combination_of_columns: Option<Vec<String>>,
     /// The model kwarg for generic tests, e.g. "{{ get_where_subquery(ref('foo')) }}"
     pub test_metadata_model: Option<String>,

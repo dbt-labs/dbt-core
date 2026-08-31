@@ -27,6 +27,7 @@ use tracy_client::span;
 use crate::AdapterType;
 use crate::cache::RelationCache;
 use crate::engine::concat_batches::concat_batches_widened;
+use crate::engine::databricks_query_tags::query_tags_from_state;
 use crate::engine::query_comment::QueryCommentConfig;
 use crate::engine::sidecar_client::SidecarClient;
 use crate::errors::adbc_error_to_adapter_error;
@@ -269,27 +270,34 @@ pub(crate) fn adbc_execute_with_options(
 
     let adapter_type = engine.adapter_type();
     let mut options = options;
-    if let (Some(state), AdapterType::Bigquery) = (state, adapter_type) {
-        let mut job_labels = maybe_query_comment
-            .as_ref()
-            .map_or_else(IndexMap::new, |comment| {
-                engine
-                    .query_comment()
-                    .get_job_labels_from_query_comment(comment)
-            });
-        if let Some(invocation_id_label) = state
-            .lookup("invocation_id", &[])
-            .and_then(|value| value.as_str().map(|label| label.to_owned()))
-        {
-            job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);
+    match (state, adapter_type) {
+        (_, AdapterType::Databricks) => {
+            options.extend(query_tags_from_state(state)?.into_statement_options())
         }
+        (Some(state), AdapterType::Bigquery) => {
+            let mut job_labels =
+                maybe_query_comment
+                    .as_ref()
+                    .map_or_else(IndexMap::new, |comment| {
+                        engine
+                            .query_comment()
+                            .get_job_labels_from_query_comment(comment)
+                    });
+            if let Some(invocation_id_label) = state
+                .lookup("invocation_id", &[])
+                .and_then(|value| value.as_str().map(|label| label.to_owned()))
+            {
+                job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);
+            }
 
-        let job_label_option =
-            serde_json::to_string(&job_labels).expect("Should be able to serialize job labels");
-        options.push((
-            QUERY_LABELS.to_owned(),
-            OptionValue::String(job_label_option),
-        ));
+            let job_label_option =
+                serde_json::to_string(&job_labels).expect("Should be able to serialize job labels");
+            options.push((
+                QUERY_LABELS.to_owned(),
+                OptionValue::String(job_label_option),
+            ));
+        }
+        _ => {}
     }
 
     type ExecuteOutput = (Arc<Schema>, Vec<RecordBatch>, Option<i64>);

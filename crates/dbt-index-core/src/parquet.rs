@@ -18,6 +18,7 @@ use serde_json::{Map, Value};
 
 use crate::IndexError;
 use crate::db::{DBT_RT_TABLES, DBT_TABLES, write_views_sql};
+use crate::ingest::timings;
 
 // ── Generic helpers ─────────────────────────────────────────────────────────
 
@@ -38,6 +39,16 @@ const CHUNK_SIZE_TYPED: usize = 65536;
 /// to the `ArrowWriter` before the next chunk is built, so only one
 /// chunk's worth of Arrow arrays is live at a time.
 fn write_table_items<T: serde::Serialize>(
+    path: &Path,
+    schema: SchemaRef,
+    items: &[T],
+) -> Result<(), IndexError> {
+    timings::time(timings::Stage::StagingWrite, || {
+        write_table_items_at(path, schema, items)
+    })
+}
+
+fn write_table_items_at<T: serde::Serialize>(
     path: &Path,
     schema: SchemaRef,
     items: &[T],
@@ -74,6 +85,16 @@ fn write_table_items<T: serde::Serialize>(
 /// Like `write_table_items` but uses `CHUNK_SIZE_TYPED` (64k rows/batch).
 /// Use only with typed structs where serde_arrow is fast.
 fn write_table_items_typed<T: serde::Serialize>(
+    path: &Path,
+    schema: SchemaRef,
+    items: &[T],
+) -> Result<(), IndexError> {
+    timings::time(timings::Stage::StagingWrite, || {
+        write_table_items_typed_at(path, schema, items)
+    })
+}
+
+fn write_table_items_typed_at<T: serde::Serialize>(
     path: &Path,
     schema: SchemaRef,
     items: &[T],
@@ -165,6 +186,18 @@ pub enum WriteMode<'a> {
 ///
 /// Returns the total rows written. No-op (writes only `new_batch`) if file absent.
 pub fn merge_prune_arrow(
+    path: &Path,
+    schema: SchemaRef,
+    new_batch: arrow_array::RecordBatch,
+    key_col: &str,
+    drop_keys: &HashSet<String>,
+) -> Result<usize, IndexError> {
+    timings::time(timings::Stage::StagingWrite, || {
+        merge_prune_arrow_at(path, schema, new_batch, key_col, drop_keys)
+    })
+}
+
+fn merge_prune_arrow_at(
     path: &Path,
     schema: SchemaRef,
     new_batch: arrow_array::RecordBatch,
@@ -806,6 +839,16 @@ impl IndexWriter {
         table: &str,
         batches: Vec<arrow_array::RecordBatch>,
     ) -> Result<(), IndexError> {
+        timings::time(timings::Stage::StagingWrite, || {
+            self.write_arrow_batches_at(table, batches)
+        })
+    }
+
+    fn write_arrow_batches_at(
+        &mut self,
+        table: &str,
+        batches: Vec<arrow_array::RecordBatch>,
+    ) -> Result<(), IndexError> {
         let schema = schema_for(table);
         let path = self.index_dir.join(format!("dbt.{table}.parquet"));
         if let Some(parent) = path.parent() {
@@ -833,6 +876,18 @@ impl IndexWriter {
 
     /// Merge-prune a `dbt.*` table using pre-built Arrow RecordBatches.
     pub fn write_arrow_batches_merge_prune(
+        &mut self,
+        table: &str,
+        new_batches: Vec<arrow_array::RecordBatch>,
+        key_col: &str,
+        drop_keys: &HashSet<String>,
+    ) -> Result<(), IndexError> {
+        timings::time(timings::Stage::StagingWrite, || {
+            self.write_arrow_batches_merge_prune_at(table, new_batches, key_col, drop_keys)
+        })
+    }
+
+    fn write_arrow_batches_merge_prune_at(
         &mut self,
         table: &str,
         new_batches: Vec<arrow_array::RecordBatch>,
@@ -1173,7 +1228,14 @@ impl IndexWriter {
         let table = "node_columns";
         let path = self.index_dir.join(format!("dbt.{table}.parquet"));
 
+        // Key by (unique_id, LOWERCASED column_name) so catalog rows match the
+        // existing parse/compile rows case-insensitively. Snowflake uppercases
+        // unquoted identifiers in the catalog (`EMAIL`) while the merged rows use
+        // the manifest casing (`email`); a case-sensitive key would miss the
+        // match and append a duplicate row, splitting a column's classifiers and
+        // types across two rows.
         struct CatalogInfo {
+            column_name: String,
             column_index: Option<i64>,
             catalog_type: Option<String>,
             catalog_comment: Option<String>,
@@ -1203,8 +1265,9 @@ impl IndexWriter {
                     continue;
                 };
                 catalog_map.insert(
-                    (uid.to_string(), cname.to_string()),
+                    (uid.to_string(), cname.to_ascii_lowercase()),
                     CatalogInfo {
+                        column_name: cname.to_string(),
                         column_index: idx_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)),
                         catalog_type: ctype_col
                             .filter(|c| !c.is_null(i))
@@ -1232,7 +1295,7 @@ impl IndexWriter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let key = (uid, cname);
+                let key = (uid, cname.to_ascii_lowercase());
                 if let Some(ci) = catalog_map.get(&key) {
                     if let Some(idx) = ci.column_index {
                         map.insert("column_index".to_string(), Value::Number(idx.into()));
@@ -1260,14 +1323,19 @@ impl IndexWriter {
             }
         }
 
-        // Append catalog rows that had no existing match
+        // Append catalog rows that had no existing match. `cname` here is the
+        // lowercased match key; use `ci.column_name` for the stored name to
+        // preserve the original (warehouse) casing.
         for ((uid, cname), ci) in &catalog_map {
             if seen_keys.contains(&(uid.clone(), cname.clone())) {
                 continue;
             }
             let mut obj = Map::new();
             obj.insert("unique_id".to_string(), Value::String(uid.clone()));
-            obj.insert("column_name".to_string(), Value::String(cname.clone()));
+            obj.insert(
+                "column_name".to_string(),
+                Value::String(ci.column_name.clone()),
+            );
             if let Some(idx) = ci.column_index {
                 obj.insert("column_index".to_string(), Value::Number(idx.into()));
             }
@@ -1714,6 +1782,9 @@ define_row! {
         [list_utf8!] pub tags: Vec<String>,
         [utf8]  pub meta: Option<String>,
         [utf8]  pub config: Option<String>,
+        // From the epoch relation's inverted `is_disabled`; NULL when the row
+        // came from a source that does not carry it (manifest extraction).
+        [bool]  pub enabled: Option<bool>,
         [float] pub created_at: Option<f64>,
         [timestamp !] pub ingested_at: &'a str,
     }
@@ -1746,6 +1817,8 @@ define_row! {
         [utf8]  pub meta: Option<String>,
         [utf8]  pub ai_context: Option<String>,
         [utf8]  pub config: Option<String>,
+        // See `ExposureRow::enabled`.
+        [bool]  pub enabled: Option<bool>,
         [float] pub created_at: Option<f64>,
         [timestamp !] pub ingested_at: &'a str,
     }
@@ -1935,6 +2008,8 @@ define_row! {
         [list_utf8!] pub depends_on_macros: Vec<String>,
         [utf8]  pub checksum: Option<&'a str>,
         [utf8]  pub config: Option<String>,
+        // See `ExposureRow::enabled`.
+        [bool]  pub enabled: Option<bool>,
         [float] pub created_at: Option<f64>,
         [timestamp !] pub ingested_at: &'a str,
     }

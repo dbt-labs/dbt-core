@@ -466,6 +466,7 @@ impl Spawner {
         builder.spawn(move || {
             // Only the reference should be moved into the closure
             let _enter = rt.enter();
+            crate::context::set_pool_worker(true);
             rt.inner.blocking_spawner.inner.run(id);
             drop(shutdown_tx);
         })

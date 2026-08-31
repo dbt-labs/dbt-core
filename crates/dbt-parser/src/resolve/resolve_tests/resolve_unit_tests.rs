@@ -92,8 +92,10 @@ pub fn resolve_unit_tests(
                 (),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?
     .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 

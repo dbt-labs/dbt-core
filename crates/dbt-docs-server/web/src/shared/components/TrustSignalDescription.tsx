@@ -1,8 +1,6 @@
 import { type FC, type JSX } from 'react';
 import { BadgeAlert, BadgeCheck, BadgeMinus } from 'lucide-react';
 
-import { SizeType } from '@dbt-labs/sourdough';
-
 import { Link } from '../../components/ui/Link';
 import { toTitleCase } from '../util/string';
 import { TrustSignalMessage, TrustState } from '../util/trustSignals';
@@ -30,10 +28,15 @@ export const trustStateTraits: Record<
   },
 };
 
+/** Matches sourdough's SizeType structurally (same string values) so it's
+ *  still assignable everywhere that type was used -- TypeScript checks
+ *  shape, not origin, for a plain string-literal union. */
+type SourdoughSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+
 type TrustSignalDescriptionProps = {
   trustState: TrustState;
   messages: TrustSignalMessage[];
-  size?: SizeType;
+  size?: SourdoughSize;
 };
 
 export const TrustSignalDescription: FC<TrustSignalDescriptionProps> = ({

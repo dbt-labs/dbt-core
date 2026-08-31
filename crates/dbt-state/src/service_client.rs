@@ -18,11 +18,12 @@ use crate::auth::browser_flow::is_retryable_token_error;
 use crate::proto::query_cache::{
     CloneRequest, CloneResponse, ConfirmExecutionRequest, ConfirmExecutionResponse,
     GetExplainMessagesRequest, GetExplainMessagesResponse, RecordExecutionsRequest,
-    RecordExecutionsResponse, ResolveDeferredRelationsRequest, SubmitEnrichedSqlRequest,
-    SubmitSqlResponse, SubmitSqlSpeculativeResponse, SubmitTelemetryBatchRequest,
-    SubmitTelemetryBatchResponse, SubmitValuesRequest, ValidateClientVersionRequest,
-    client_validation_client::ClientValidationClient, execution_client::ExecutionClient,
-    explain_client::ExplainClient, sql_client::SqlClient,
+    RecordExecutionsResponse, ResolveDeferredRelationsRequest, SelectorRequest, SelectorResponse,
+    SubmitEnrichedSqlRequest, SubmitSqlResponse, SubmitSqlSpeculativeResponse,
+    SubmitTelemetryBatchRequest, SubmitTelemetryBatchResponse, SubmitValuesRequest,
+    ValidateClientVersionRequest, client_validation_client::ClientValidationClient,
+    execution_client::ExecutionClient, explain_client::ExplainClient,
+    selector_service_client::SelectorServiceClient, sql_client::SqlClient,
 };
 use crate::proto::query_cache::{client_telemetry_client::ClientTelemetryClient, clone_client};
 use crate::service_config::{RunCacheServiceConfig, RunCacheServiceConfigError};
@@ -355,6 +356,12 @@ pub trait RunCacheServiceClient: Send + Sync {
     ) -> Result<GetExplainMessagesResponse, RunCacheServiceError> {
         Err(RunCacheServiceError::Disabled)
     }
+    async fn get_state_selection(
+        &self,
+        _request: SelectorRequest,
+    ) -> Result<SelectorResponse, RunCacheServiceError> {
+        Err(RunCacheServiceError::Disabled)
+    }
 
     async fn resolve_deferred_relations(
         &self,
@@ -372,6 +379,7 @@ pub struct GrpcRunCacheServiceClient {
     client_telemetry: ClientTelemetryClient<Channel>,
     client_validation: ClientValidationClient<Channel>,
     explain: ExplainClient<Channel>,
+    state_selector: SelectorServiceClient<Channel>,
     auth: RunCacheAuth,
     metadata: RunCacheClientMetadata,
     disabled: Arc<AtomicBool>,
@@ -415,6 +423,7 @@ impl GrpcRunCacheServiceClient {
             execution: ExecutionClient::new(channel.clone()),
             client_telemetry: ClientTelemetryClient::new(channel.clone()),
             client_validation: ClientValidationClient::new(channel.clone()),
+            state_selector: SelectorServiceClient::new(channel.clone()),
             explain: ExplainClient::new(channel),
             auth,
             metadata,
@@ -643,6 +652,22 @@ impl RunCacheServiceClient for GrpcRunCacheServiceClient {
         )?;
 
         Ok(response.fqn_by_unique_id)
+    }
+
+    async fn get_state_selection(
+        &self,
+        request: SelectorRequest,
+    ) -> Result<SelectorResponse, RunCacheServiceError> {
+        self.with_retry(|| async {
+            let request = self.attach(Request::new(request.clone())).await?;
+            self.response(
+                self.state_selector
+                    .clone()
+                    .get_state_selection(request)
+                    .await,
+            )
+        })
+        .await
     }
 }
 
@@ -935,6 +960,7 @@ mod tests {
             execution: ExecutionClient::new(channel.clone()),
             client_telemetry: ClientTelemetryClient::new(channel.clone()),
             client_validation: ClientValidationClient::new(channel.clone()),
+            state_selector: SelectorServiceClient::new(channel.clone()),
             explain: ExplainClient::new(channel),
             auth: RunCacheAuth::None,
             metadata: RunCacheClientMetadata::default(),

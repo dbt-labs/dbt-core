@@ -34,6 +34,7 @@ const ADAPTER_PROP_LOCATION_ROOT: &str = "location_root";
 const ADAPTER_PROP_USE_UNIFORM: &str = "use_uniform";
 
 const FIELD_CATALOG_DATABASE: &str = "catalog_database";
+const FIELD_LAKEHOUSE_CATALOG: &str = "lakehouse_catalog";
 const ADAPTER_PROP_AUTO_REFRESH: &str = "auto_refresh";
 const ADAPTER_PROP_MAX_DATA_EXTENSION_TIME_IN_DAYS: &str = "max_data_extension_time_in_days";
 const ADAPTER_PROP_TARGET_FILE_SIZE: &str = "target_file_size";
@@ -81,7 +82,9 @@ pub(super) fn from_model_config_and_catalogs_v2(
 
             match model_catalog_name {
                 None if !wants_iceberg => {
-                    return Ok(CatalogRelation::default_catalog_relation_databricks());
+                    return Ok(
+                        CatalogRelation::default_catalog_relation_databricks_for_model(model),
+                    );
                 }
                 None => {
                     let use_uniform =
@@ -485,6 +488,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume,
             catalog_database,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -523,6 +527,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -597,6 +602,7 @@ impl CatalogRelation {
             table_format,
             external_volume: None,
             catalog_database: Some(catalog_database),
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: Some(false),
@@ -724,6 +730,7 @@ impl CatalogRelation {
             table_format: catalog.table_format,
             external_volume,
             catalog_database,
+            lakehouse_catalog: None,
             base_location,
             adapter_properties,
             is_transient: Some(false),
@@ -827,6 +834,8 @@ impl CatalogRelation {
 
         let catalog_database =
             get_yaml_str(bigquery, FIELD_CATALOG_DATABASE).map(|s| s.to_string());
+        let lakehouse_catalog =
+            get_yaml_str(bigquery, FIELD_LAKEHOUSE_CATALOG).map(|s| s.to_string());
 
         let mut adapter_properties = BTreeMap::new();
 
@@ -845,6 +854,7 @@ impl CatalogRelation {
             is_transient: None,
             external_volume: None,
             catalog_database,
+            lakehouse_catalog,
             base_location: None,
             file_format: Some(file_format),
         })
@@ -882,6 +892,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: Some(catalog_database),
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
             is_transient: None,
@@ -942,6 +953,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -988,6 +1000,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -1029,6 +1042,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -1367,6 +1381,34 @@ catalogs:
     }
 
     #[test]
+    fn databricks_v2_no_catalog_name_default_honors_location_root() {
+        let catalogs = load_catalogs_yaml("catalogs: []\n");
+        let conf = json!({
+            "location_root": "s3://bucket/root",
+            "database": "db",
+            "schema": "sc",
+            "alias": "a",
+        });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.catalog_type, CatalogType::Unity);
+            assert_eq!(r.external_volume.as_deref(), Some("s3://bucket/root/a"));
+        }
+    }
+
+    #[test]
     fn snowflake_v2_horizon_iceberg_with_external_volume_synthesizes_base_location() {
         let catalogs = load_catalogs_yaml(
             r#"
@@ -1521,6 +1563,45 @@ catalogs:
             .unwrap();
 
             assert_eq!(r.catalog_database.as_deref(), Some("analytics-project"));
+        }
+    }
+
+    #[test]
+    fn bigquery_v2_biglake_lakehouse_catalog() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: BQ
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: gs://bucket
+        file_format: parquet
+        base_location_root: root
+        lakehouse_catalog: "sales_catalog"
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "BQ",
+            "schema": "analytics",
+            "alias": "events"
+        });
+        let ms = [
+            model(AdapterType::Bigquery, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Bigquery,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.lakehouse_catalog.as_deref(), Some("sales_catalog"));
+            assert!(r.catalog_database.is_none());
         }
     }
 

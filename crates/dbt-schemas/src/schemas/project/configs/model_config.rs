@@ -33,9 +33,9 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_equal, meta_eq, omissible_option_eq,
-    same_warehouse_config,
+    same_warehouse_config, take_databricks_catalog_alias,
 };
-use crate::schemas::project::configs::config_merge::{Classifiers, Packages, Tags};
+use crate::schemas::project::configs::config_merge::{Classifiers, Packages, Tags, TblProperties};
 use crate::schemas::project::dbt_project::ResolvableConfig;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::model_properties::ModelConstraint;
@@ -44,7 +44,8 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, column_types_map,
     default_type, event_time_or_map_to_string, f64_or_string_f64,
-    hours_to_expiration_or_string_omissible, string_or_number_to_string, u64_or_string_u64,
+    hours_to_expiration_or_string_omissible, model_constraints_or_map, string_or_number_to_string,
+    u64_or_string_u64,
 };
 use dbt_proc_macros::{DefaultTo, Resolvable};
 use dbt_yaml::ShouldBe;
@@ -183,6 +184,10 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub user_folder_for_python: Option<bool>,
+    #[serde(rename = "+environment_key")]
+    pub environment_key: Option<String>,
+    #[serde(rename = "+environment_dependencies")]
+    pub environment_dependencies: Option<Vec<String>>,
     #[serde(
         default,
         rename = "+incremental_apply_config_changes",
@@ -212,7 +217,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+description")]
     pub description: Option<String>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+docs")]
     pub docs: Option<DocsConfig>,
     #[serde(
@@ -276,10 +281,14 @@ pub struct ProjectModelConfig {
     )]
     pub include_full_name_in_path: Option<bool>,
     #[serde(rename = "+incremental_predicates")]
-    pub incremental_predicates: Option<Vec<String>>,
+    pub incremental_predicates: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+incremental_strategy")]
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
-    #[serde(rename = "+constraints")]
+    #[serde(
+        default,
+        rename = "+constraints",
+        deserialize_with = "model_constraints_or_map"
+    )]
     pub constraints: Option<Vec<ModelConstraint>>,
     #[serde(rename = "+initialize")]
     pub initialize: Option<String>,
@@ -434,6 +443,8 @@ pub struct ProjectModelConfig {
     pub predicates: Option<Vec<String>>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -501,7 +512,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+target_file_size")]
     pub target_file_size: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(rename = "+tmp_relation_type")]
     pub tmp_relation_type: Option<String>,
     #[serde(
@@ -679,6 +690,8 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.index_url.is_some()
             || self.additional_libs.is_some()
             || self.user_folder_for_python.is_some()
+            || self.environment_key.is_some()
+            || self.environment_dependencies.is_some()
             || self.incremental_apply_config_changes.is_some()
             || self.use_safer_relation_operations.is_some()
             || self.view_update_via_alter.is_some()
@@ -801,6 +814,8 @@ pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub alias: Option<String>,
+    // These aliases (like the `+`-prefixed variants above) are ungated: accepted on every
+    // adapter, unlike dbt-core's per-adapter `_ALIASES` map. Deliberate, see fs#13424.
     #[serde(alias = "project", alias = "data_space")]
     pub database: Omissible<Option<String>>,
     #[serde(alias = "dataset")]
@@ -827,10 +842,10 @@ pub struct ModelConfig {
     #[resolved(promote, default = DbtMaterialization::View)]
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
-    pub incremental_predicates: Option<Vec<String>>,
-    // Model-level constraints authored via `{{ config(constraints=[...]) }}`, as opposed to
-    // the schema.yml `constraints:` model property (see `resolve_models.rs`, which prefers
-    // this when set and otherwise falls back to the schema.yml-resolved value).
+    pub incremental_predicates: Option<StringOrArrayOfStrings>,
+    // Hashed into the run-cache key only; the functional source of a model's constraints is the
+    // schema.yml `constraints:` property (`resolve_models.rs:1163`). Matches dbt-core.
+    #[serde(default, deserialize_with = "model_constraints_or_map")]
     pub constraints: Option<Vec<ModelConstraint>>,
     pub batch_size: Option<DbtBatchSize>,
     #[resolved(promote, default = 1)]
@@ -896,6 +911,8 @@ pub struct ModelConfig {
     pub index_url: Option<String>,
     pub additional_libs: Option<Vec<YmlValue>>,
     pub user_folder_for_python: Option<bool>,
+    pub environment_key: Option<String>,
+    pub environment_dependencies: Option<Vec<String>>,
     /// Config keys accessed via dbt.config.get() in Python models
     /// Used to populate config_dict at runtime
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -934,6 +951,8 @@ impl From<ProjectModelConfig> for ModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            environment_key: config.environment_key.clone(),
+            environment_dependencies: config.environment_dependencies.clone(),
             catalog_name: config.catalog_name.clone(),
             adapter: config.adapter,
             column_types: config.column_types,
@@ -1004,6 +1023,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -1169,6 +1189,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            environment_key: config.environment_key.clone(),
+            environment_dependencies: config.environment_dependencies.clone(),
             on_configuration_change: config.on_configuration_change,
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,
@@ -1212,6 +1234,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -1397,6 +1420,18 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
 
     fn finalize(self) -> ResolvedModelConfig {
         self.finalize_resolved()
+    }
+
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            !self.database.is_omitted(),
+        ) {
+            self.database = Omissible::Present(Some(catalog));
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
     }
 }
 
@@ -1829,6 +1864,7 @@ impl ConfigKeys for ModelConfig {
         }
 
         // Add known aliases that might not show up in serialization
+        // The first three are ungated adapter aliases (fs#13424).
         field_names.insert("project".to_string()); // alias for database
         field_names.insert("data_space".to_string()); // alias for database
         field_names.insert("dataset".to_string()); // alias for schema
@@ -1967,7 +2003,7 @@ fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization
 #[cfg(test)]
 mod tests {
     use super::ModelConfig;
-    use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
+    use crate::schemas::common::{ConstraintType, FreshnessPeriod, UpdatesOn};
     use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::properties::StatePreClone;
@@ -2006,6 +2042,122 @@ __additional_properties__: {}
                 "nation".to_string(),
                 "region".to_string(),
             ]))
+        );
+    }
+
+    #[test]
+    fn test_tblproperties_order_survives_project_to_model_config() {
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++tblproperties:
+  zeta: last
+  alpha: first
+  middle: center
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let model_config: ModelConfig = project_config.into();
+        let keys = model_config
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("tblproperties should parse")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+
+        assert_eq!(keys, ["zeta", "alpha", "middle"]);
+    }
+
+    #[test]
+    fn test_tblproperties_default_to_clobbers_or_inherits_without_reordering() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+
+        let parent: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  tblproperties:
+    parent_zeta: last
+    parent_alpha: first
+"#,
+        )
+        .unwrap();
+        let mut configured_child: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  tblproperties:
+    child_zeta: last
+    child_alpha: first
+"#,
+        )
+        .unwrap();
+
+        configured_child.default_to(&parent);
+        let configured_keys = configured_child
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("configured child should retain tblproperties")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(configured_keys, ["child_zeta", "child_alpha"]);
+
+        let mut empty_child: ModelConfig = dbt_yaml::from_str(
+            r#"
+__warehouse_specific_config__:
+  tblproperties: {}
+"#,
+        )
+        .unwrap();
+        empty_child.default_to(&parent);
+        let empty_keys = empty_child
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("empty tblproperties should remain Some, not inherit")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert!(
+            empty_keys.is_empty(),
+            "empty tblproperties should clobber parent, got {empty_keys:?}"
+        );
+
+        let mut unset_child = ModelConfig::default();
+        unset_child.default_to(&parent);
+        let inherited_keys = unset_child
+            .__warehouse_specific_config__
+            .tblproperties
+            .as_ref()
+            .expect("unset child should inherit tblproperties")
+            .0
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(inherited_keys, ["parent_zeta", "parent_alpha"]);
+    }
+
+    #[test]
+    fn test_databricks_model_deserializes_and_resolves_query_tags() {
+        let project: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"model"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project.query_tags.as_deref(), Some(r#"{"team":"model"}"#));
+
+        let resolved = ModelConfig::from(project);
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"model"}"#)
         );
     }
 
@@ -2136,6 +2288,38 @@ __warehouse_specific_config__: {}
             config.event_time.as_deref(),
             Some(r#"{"column":"event_at"}"#)
         );
+    }
+
+    /// dbt-core accepts a mapping-valued `config: constraints:` and yields no constraint from
+    /// it, while the sequence shape still parses into typed constraints.
+    #[test]
+    fn test_model_config_constraints_accepts_mapping_and_sequence() {
+        let mapping: ModelConfig = dbt_yaml::from_str(
+            r#"
+constraints:
+  primary_key:
+    - id
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(mapping.constraints, None);
+
+        let sequence: ModelConfig = dbt_yaml::from_str(
+            r#"
+constraints:
+  - type: primary_key
+    columns: [id]
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+
+        let constraints = sequence.constraints.expect("constraints should parse");
+        assert_eq!(constraints.len(), 1);
+        assert_eq!(constraints[0].type_, ConstraintType::PrimaryKey);
+        assert_eq!(constraints[0].columns, Some(vec!["id".to_string()]));
     }
 
     #[test]

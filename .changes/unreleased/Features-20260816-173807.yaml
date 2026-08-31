@@ -1,0 +1,7 @@
+kind: Features
+body: Fusion accepts Databricks Python environment_key and environment_dependencies and uses them on serverless job submit (https://github.com/databricks/dbt-databricks/issues/1636).
+time: 2026-08-16T17:38:07.085838+05:30
+custom:
+    author: sd-db
+    issue: "15966"
+    project: dbt-core

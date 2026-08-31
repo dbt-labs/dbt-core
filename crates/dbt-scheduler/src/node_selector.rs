@@ -6,7 +6,7 @@ use dbt_common::{
     ErrorCode, FsResult,
     constants::DBT_GENERIC_TESTS_DIR_NAME,
     err,
-    node_selector::{MethodName, SelectExpression, SelectionCriteria},
+    node_selector::{MethodName, SelectExpression, SelectionCriteria, SelectionValue},
     tracing::dbt_emit::emit_warn_log_message,
 };
 use dbt_frontend_common::Dialect;
@@ -22,6 +22,10 @@ use std::{
 };
 
 type YmlValue = dbt_yaml::Value;
+
+/// Node selections returned by an external state-selector implementation, keyed by the exact
+/// `state:` criterion value.
+pub type StateSelectorResults = BTreeMap<String, BTreeSet<String>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateModifiedSubType {
@@ -92,6 +96,31 @@ pub fn filter_select_criteria(
     previous_state: Option<&StateArtifacts>,
     adapter_type: AdapterType,
 ) -> FsResult<BTreeSet<String>> {
+    filter_select_criteria_with_state_selector_results(
+        nodes,
+        criteria,
+        previous_state,
+        None,
+        adapter_type,
+    )
+}
+
+/// Filter the manifest for a single criterion, optionally using externally evaluated state
+/// selector results.
+pub fn filter_select_criteria_with_state_selector_results(
+    nodes: &Nodes,
+    criteria: &SelectionCriteria,
+    previous_state: Option<&StateArtifacts>,
+    state_selector_results: Option<&StateSelectorResults>,
+    adapter_type: AdapterType,
+) -> FsResult<BTreeSet<String>> {
+    if criteria.method == MethodName::State
+        && let Some(selected) =
+            state_selector_results.and_then(|results| results.get(criteria.value.as_str()?))
+    {
+        return Ok(selected.iter().cloned().collect());
+    }
+
     let project_name = nodes.project_name.as_deref();
     let result = nodes
         .iter()
@@ -418,7 +447,7 @@ fn match_column(
     let node_pat = parts.next().unwrap_or(""); // e.g.  "model.jaffle_shop.orders"
     let mut new_critera = criteria.clone();
     new_critera.method = MethodName::Fqn;
-    new_critera.value = node_pat.to_string();
+    new_critera.value = SelectionValue::Scalar(node_pat.to_string());
     // check if the fqn match the node part of the column selector
     predicate_include_identifier_node(
         &new_critera,
@@ -858,7 +887,8 @@ fn predicate_include_identifier_node(
     adapter_type: AdapterType,
 ) -> FsResult<bool> {
     let method = criteria.method;
-    let pattern = &criteria.value;
+    // Deferred failure point for a non-scalar `value:` (dbt-labs/fs#13604).
+    let pattern = criteria.value.resolve(method)?;
     let args: &[String] = &criteria.method_args;
     let common_attr = node.common();
 
@@ -1052,11 +1082,15 @@ fn predicate_include_node_column(
     let mut result = BTreeMap::new();
 
     // 1) column:foo.bar.* → exact match on that table (foo.bar) and that column glob (*)
+    // `column:` is internal-only, so a non-scalar value never reaches here.
     if criteria.method == MethodName::Column {
-        let (table_pat, col_pat) = if let Some(idx) = criteria.value.rfind('.') {
-            (&criteria.value[..idx], &criteria.value[idx + 1..])
+        let Some(value) = criteria.value.as_str() else {
+            return result;
+        };
+        let (table_pat, col_pat) = if let Some(idx) = value.rfind('.') {
+            (&value[..idx], &value[idx + 1..])
         } else {
-            ("", &criteria.value[..])
+            ("", value)
         };
         // only select columns on matching tables
         if table_pat.is_empty() || fnmatch(table_pat, node.common().unique_id.as_str()) {
@@ -1317,6 +1351,38 @@ mod tests {
                 (ColId { table, column }, value)
             })
             .collect()
+    }
+
+    #[test]
+    fn filter_select_criteria_uses_service_state_selection() {
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.project.selected".to_string(),
+            create_test_node("model.project.selected", vec![]),
+        );
+
+        let select = parse_model_specifiers(&["state:modified".to_string()]).unwrap();
+        let SelectExpression::Atom(criteria) = select else {
+            panic!("expected a single selection criterion");
+        };
+        let results = StateSelectorResults::from([(
+            "modified".to_string(),
+            BTreeSet::from(["model.project.selected".to_string()]),
+        )]);
+
+        let selected = filter_select_criteria_with_state_selector_results(
+            &nodes,
+            &criteria,
+            None,
+            Some(&results),
+            AdapterType::Bigquery,
+        )
+        .unwrap();
+
+        assert_eq!(
+            selected,
+            BTreeSet::from(["model.project.selected".to_string()])
+        );
     }
 
     #[test]
@@ -2744,6 +2810,47 @@ mod tests {
             )
             .unwrap(),
             "FQN selector should match exposures by name"
+        );
+    }
+
+    #[test]
+    /// Regression (dbt-labs/fs#13604): a non-scalar `value:` must fail only once
+    /// resolved against a node, and the error must name the method.
+    fn test_unsupported_criteria_value_fails_only_on_resolution() {
+        let node = create_test_node("model.test.my_model", vec![]);
+        let mut criteria = SelectionCriteria::new(
+            MethodName::Path,
+            vec![],
+            "placeholder",
+            false,
+            None,
+            None,
+            None,
+            None,
+        );
+        criteria.value = SelectionValue::Unsupported(Box::new(dbt_yaml::Value::from(vec![
+            dbt_yaml::Value::from("models"),
+            dbt_yaml::Value::from("seeds"),
+        ])));
+        let expr = SelectExpression::Atom(criteria);
+
+        let result = select_expression_include_node(
+            &expr,
+            node.as_ref(),
+            None,
+            None,
+            None,
+            AdapterType::DuckDB,
+        );
+
+        assert!(
+            result.is_err(),
+            "resolving a criteria with an unsupported value should fail, not silently match/skip"
+        );
+        let message = result.unwrap_err().to_string();
+        assert!(
+            message.contains("path"),
+            "error should name the method that received the bad value, got: {message}"
         );
     }
 }

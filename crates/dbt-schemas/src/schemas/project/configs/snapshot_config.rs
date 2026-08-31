@@ -31,8 +31,10 @@ use crate::schemas::common::SyncConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
-use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::project::configs::common::{
+    WarehouseSpecificNodeConfig, take_databricks_catalog_alias,
+};
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::properties::ModelState;
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
@@ -165,6 +167,8 @@ pub struct ProjectSnapshotConfig {
     pub scheduler: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -327,12 +331,12 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+target_alias")]
     pub target_alias: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     // Adapter-specific fields (Redshift)
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -726,6 +730,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -894,6 +899,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -1023,6 +1029,26 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
     fn default_to(&mut self, parent: &SnapshotConfig) {
         self.default_to_fields(parent);
     }
+
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            self.database.is_some(),
+        ) {
+            self.database = Some(catalog);
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
+        //
+        // Databricks' `target_catalog` -> `target_database` has no dedicated alias field the
+        // way `catalog`/`database` do, so it cannot be canonicalized here; it is handled only
+        // where a raw config-key rename is possible, at the inline `{{ config(...) }}` layer
+        // (`ParseConfig::apply_config`). A `+target_catalog:` in `dbt_project.yml` or a
+        // schema.yml `config:` block remains an unrecognized key -- see the marker test
+        // `test_snapshot_target_catalog_in_project_yml_is_unrecognized_key` in
+        // `dbt-parser/src/dbt_project_config.rs`.
+    }
 }
 
 impl ConfigKeys for SnapshotConfig {
@@ -1057,6 +1083,23 @@ mod tests {
     use super::{AdapterType, ProjectSnapshotConfig, SnapshotConfig};
     use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
     use crate::schemas::properties::{ModelState, StatePreClone};
+
+    #[test]
+    fn test_snapshot_query_tags_propagate_through_resolved_config() {
+        let project: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"snapshot"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: SnapshotConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"snapshot"}"#)
+        );
+    }
 
     #[test]
     fn test_project_snapshot_config_resource_tags_parses() {

@@ -18,6 +18,7 @@ dbt-common = { workspace = true }
 dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-main = { workspace = true }
+dbt-runtime = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-yaml = { workspace = true }
 # abi3-py311: build a single stable-ABI wheel per platform that works on

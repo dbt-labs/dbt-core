@@ -52,9 +52,9 @@ use dbt_features::index::write_metadata_parquet;
 use dbt_index_core::backend::DuckDbViewsBackend;
 use dbt_index_core::ingest::ingest_state::IngestState;
 use dbt_index_core::ingest::metadata_to_parquet::{
-    apply_delta_direct, ingest_from_metadata_direct,
+    apply_delta_direct, has_persisted_state, ingest_from_metadata_direct,
 };
-use dbt_index_core::{WriteSource, save_artifact_meta};
+use dbt_index_core::{WriteSource, save_artifact_meta, write_info_schema};
 use dbt_init::init;
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
@@ -770,14 +770,11 @@ impl<'a> AllPhasesExecutor<'a> {
             // model to scope to, and every check reported `skipped`, so retry exited 0 on a project
             // whose check still fails. Split them: check ids become names to re-run, everything else
             // becomes the schedule.
-            //
-            // The check ids are dropped rather than turned into names to re-run: a build-shaped
-            // retry materializes tables, so it re-verifies *every* check as a precondition rather
-            // than retrying only the failed ones. See the gate in `execute`.
-            let (_retry_check_ids, retry_node_ids): (Vec<String>, Vec<String>) = retry_state
+            let (retry_check_ids, retry_node_ids): (Vec<String>, Vec<String>) = retry_state
                 .retryable_node_ids
                 .into_iter()
                 .partition(|id| id.starts_with("check."));
+            let failed_check_names = crate::retry::check_names_from_retry_ids(&retry_check_ids);
 
             // `dbt check` never needs a schedule: it compiles nothing. For build-shaped commands a
             // schedule of the failed *nodes* is still what limits the work.
@@ -801,12 +798,11 @@ impl<'a> AllPhasesExecutor<'a> {
             };
             self.cli = Cow::Owned(cli_for_retry);
             // `self.arg` was built from the *original* `retry` command, so nothing the
-            // reconstructed command carries reaches it automatically. `check_names` is what narrows
-            // a retried `dbt check` to the checks that actually failed; without copying it across,
-            // retry re-runs every check in the project.
-            if let Command::Core(Check(check_args)) = &self.cli.command {
-                self.arg.to_mut().check_names = check_args.check_names.clone();
-            }
+            // reconstructed command carries reaches it automatically. `check_names` is what
+            // narrows the gate to the checks that actually failed — for both `dbt check` and
+            // a check-blocked `dbt build`. Empty means "run every check" (a model-only
+            // failure, or a legacy artifact whose ids did not decode).
+            self.arg.to_mut().check_names = failed_check_names;
             Ok(custom_schedule)
         } else {
             Ok(None)
@@ -1154,15 +1150,26 @@ impl<'a> AllPhasesExecutor<'a> {
             .arg
             .static_analysis
             .is_some_and(dbt_common::static_analysis::is_strict_static_analysis);
+        // Name the flag the user actually passed, so the advice is actionable.
+        let advised_flag = match (self.arg.write_index, self.arg.generate_info_schema) {
+            (true, true) => "--write-index / --generate-info-schema",
+            (false, true) => "--generate-info-schema",
+            (true, false) => "--write-index",
+            (false, false) => "--write-metadata",
+        };
         if advise_index_flags && !strict_static_analysis {
             emit_warn_log_message(
                 ErrorCode::Generic,
-                "--write-index: column schemas will not be populated without `--static-analysis strict`; add `--write-lineage` to also write column-level lineage.",
+                format!(
+                    "{advised_flag}: column types will not be populated without `--static-analysis strict`, which also enables column-level lineage."
+                ),
             );
         } else if advise_index_flags && strict_static_analysis && !self.arg.write_lineage {
             emit_warn_log_message(
                 ErrorCode::Generic,
-                "--write-index: add `--write-lineage` to write column-level lineage into compile/cll parquet.",
+                format!(
+                    "{advised_flag}: add `--write-lineage` to write column-level lineage into compile/cll parquet."
+                ),
             );
         }
 
@@ -1201,9 +1208,11 @@ impl<'a> AllPhasesExecutor<'a> {
         // real cause. The publish already warned under `CheckIndexUnavailable`, which
         // `warn_error_options` can promote to an error where the gate must be mandatory.
         //
-        // `--no-write-index` (EvalArgs `write_index` false) is an opt-out, not a failure: skip
-        // with no warning. Emitting `CheckIndexUnavailable` would tell the user to undo the flag
-        // they just passed, and promoting that code would fail every opted-out build.
+        // `--no-write-index` (EvalArgs `write_index` false) is an opt-out, not a failure: the
+        // build proceeds, but the `else` branch warns under `CheckIndexDisabled` so a green exit
+        // is not mistaken for checks that passed. Not `CheckIndexUnavailable` -- that code is for
+        // a requested write that failed, and promoting it must stay able to fail those runs
+        // without also failing every deliberately opted-out build.
         //
         // `--skip-checks` is the same kind of opt-out for the gate itself: the user asked to
         // skip, so do not warn. The index is still written.
@@ -1224,15 +1233,9 @@ impl<'a> AllPhasesExecutor<'a> {
             // A selector scopes a check's *rows*, never whether it runs, so `dbt check <name>`
             // narrowing is applied here rather than by the scheduler.
             //
-            // A check is a precondition, not work to redo, so `dbt retry` re-verifies all of
-            // them rather than only the ones that failed. Skipping the ones already recorded
-            // `pass` would make the gate bypassable: retry re-parses the project, so a `pass`
-            // from the original run describes a manifest that no longer exists. Verified — with
-            // narrowing in place, editing a model to violate a check and then retrying
-            // materialized it with exit 0, while a fresh `build` on the same tree exited 1.
-            //
-            // A retried `dbt check` still narrows, via `check_names`: it materializes nothing,
-            // so there is no gate to protect and it behaves like `dbt test` retry.
+            // `dbt retry` after either `check` or `build` re-runs only the checks recorded as
+            // failed, via `check_names`. A retried build still materializes the skipped/failed
+            // nodes from the original run if those checks then pass.
             //
             // `command` is rewritten to the original command during retry, so
             // `command_entrypoint` is what still says how we were invoked.
@@ -1298,8 +1301,7 @@ impl<'a> AllPhasesExecutor<'a> {
                     // selection that contains no models leaves nothing to report and yields a green
                     // `skipped`, which is how a retry of a failing check came to exit 0.
                     // Never on a retry: its schedule holds only the failed nodes, so scoping to it
-                    // would verify a fraction of the gate. (`to_command` does not restore the original
-                    // `--select`, so this is belt-and-braces, but the intent should be explicit.)
+                    // would verify a fraction of the gate.
                     let selection_active = !retrying
                         && self.arg.check_names.is_empty()
                         && (schedule.select.is_some() || schedule.exclude.is_some());
@@ -1338,18 +1340,25 @@ impl<'a> AllPhasesExecutor<'a> {
                                     .unwrap_or_default();
                                 // Distinct codes per outcome so `warn_error_options` can target a
                                 // check without also catching every unrelated `Generic` warning.
-                                let (code, verb) = match r.status {
-                                    "fail" => (ErrorCode::CheckFailed, "failed"),
-                                    "warn" => (ErrorCode::CheckWarned, "found"),
-                                    _ => (
-                                        ErrorCode::CheckEvaluationFailed,
-                                        "could not be evaluated:",
+                                // Error-severity violations are errors; warn-severity stays a
+                                // warning so it can still be promoted.
+                                match r.status {
+                                    "fail" => emit_error_log_message(
+                                        ErrorCode::CheckFailed,
+                                        format!("check '{}' failed{count}{detail}", r.name),
                                     ),
-                                };
-                                emit_warn_log_message(
-                                    code,
-                                    format!("check '{}' {verb}{count}{detail}", r.name),
-                                );
+                                    "warn" => emit_warn_log_message(
+                                        ErrorCode::CheckWarned,
+                                        format!("check '{}' found{count}{detail}", r.name),
+                                    ),
+                                    _ => emit_warn_log_message(
+                                        ErrorCode::CheckEvaluationFailed,
+                                        format!(
+                                            "check '{}' could not be evaluated:{count}{detail}",
+                                            r.name
+                                        ),
+                                    ),
+                                }
                             }
                         }
                     }
@@ -1416,15 +1425,35 @@ impl<'a> AllPhasesExecutor<'a> {
                             self.captured_artifacts.run_results = Some(artifact);
                         }
 
-                        // Stop before the graph is built: nothing downstream has run, so there is nothing
-                        // to skip or unwind.
-                        return Err(fs_err!(
-                            ErrorCode::CheckFailed,
-                            "{} parse-time check(s) failed; no models were compiled or built",
-                            outcome.failed
-                        ));
+                        // Stop before the graph is built. Per-check CheckFailed errors are already
+                        // on the counter; ExitWithStatus fails the command without a second coded
+                        // error. "No models compiled" is recorded on skipped run_results rows.
+                        return Err(return_exit_code_from_error_counter());
                     }
                 }
+            }
+        } else if matches!(self.arg.command, FsCommand::Build | FsCommand::Check)
+            && !compilation.parse_index_publish_failed
+            && !self.arg.write_index
+            && !self.arg.skip_checks
+        {
+            // The index is off, so the gate above could not run. Say so rather than exiting 0 on a
+            // project whose checks were never evaluated -- silence here reads as "the checks
+            // passed". Only when the project defines checks: a project without any loses nothing
+            // by turning the index off, and warning there would fire on every such build.
+            //
+            // Its own code, not `CheckIndexUnavailable`: that one reports a requested write that
+            // failed, and `warn_error_options` must be able to make *that* fatal without also
+            // failing every build that deliberately opted out.
+            let check_count = compilation.resolved_state().nodes.checks.len();
+            if check_count > 0 {
+                emit_warn_log_message(
+                    ErrorCode::CheckIndexDisabled,
+                    format!(
+                        "--no-write-index: skipping {check_count} parse-time check(s); \
+                         nothing verified them for this invocation"
+                    ),
+                );
             }
         }
 
@@ -1693,6 +1722,11 @@ impl<'a> AllPhasesExecutor<'a> {
         // update_manifest IS called above). This is safe: catalog queries use resolved_state
         // only for relation identity (database/schema/table), not for compiled SQL or inferred
         // schemas added by update_manifest.
+        // `--generate-info-schema` deliberately does NOT force a catalog fetch: that
+        // stays explicit-only (#13295), so a default/info-schema build never pays the
+        // warehouse round-trip. The information schema then carries no catalog_type and
+        // `data_type` falls back to inferred_type — pass `--write-catalog` for the full
+        // warehouse-backed types.
         let catalog_data: Option<DbtCatalog> = if self.arg.write_metadata
             && (self.arg.write_catalog || self.arg.write_index)
             && !self.arg.write_index_implied
@@ -1921,6 +1955,31 @@ impl<'a> AllPhasesExecutor<'a> {
                     .await
                 {
                     emit_error_log_from_fs_error(*e);
+                }
+            }
+
+            // The information schema is written independently of the index:
+            // either, neither, or both may be requested. Its intermediate is the
+            // flat index at `target/index` when one is present — the same ingest
+            // builds both, so an index written by the block just above (or by a
+            // prior run) is reused via the delta path rather than re-ingested. With
+            // no index to reuse — e.g. `--no-write-index` — it stages privately, so
+            // requesting the information schema never materialises an index the
+            // caller opted out of.
+            if self.arg.generate_info_schema {
+                let metadata_dir = self.arg.metadata_dir();
+                let info_schema_dir = self.arg.info_schema_dir();
+                let index_dir = self.arg.index_dir();
+                let staging_dir = if has_persisted_state(&index_dir) {
+                    index_dir
+                } else {
+                    self.arg.info_schema_staging_dir()
+                };
+                if let Err(e) = write_info_schema(&metadata_dir, &info_schema_dir, &staging_dir) {
+                    emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!("dbt: generate-info-schema: {e}"),
+                    );
                 }
             }
         }
@@ -2265,6 +2324,14 @@ async fn build_index_for_docs(
     common_args.target_path = Some(target_dir.to_path_buf());
     common_args.index_dir = Some(index_dir.to_path_buf());
     common_args.metadata_dir = Some(metadata_dir.to_path_buf());
+    // `generate_info_schema` carries over from the docs invocation on its own,
+    // being a global flag; pin its directory too so it lands beside the index
+    // rather than in the project's default target directory. An explicit
+    // `--info-schema-dir` still wins.
+    if common_args.generate_info_schema && common_args.info_schema_dir.is_none() {
+        common_args.info_schema_dir =
+            Some(target_dir.join(dbt_common::constants::DBT_INFO_SCHEMA_DIR_NAME));
+    }
 
     let compile_cli = Cli {
         command: Command::Core(CoreCommand::Compile(CompileArgs {

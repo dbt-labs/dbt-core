@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
+pub mod config_aliases;
+
 pub const NON_EXPERIMENTAL_ADAPTERS: &[AdapterType] = &[
     AdapterType::Snowflake,
     AdapterType::Bigquery,

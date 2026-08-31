@@ -445,7 +445,19 @@ impl TaskRunner {
 
                         let (hook_outcome, error_message) = match &result {
                             Ok(_) => (HookOutcome::Success, None),
-                            Err(e) => (HookOutcome::Error, Some(e.message().to_string())),
+                            Err(e) => {
+                                let prefix = if stats
+                                    .run
+                                    .stats
+                                    .iter()
+                                    .any(|stat| stat.status == NodeStatus::Errored)
+                                {
+                                    "Secondary error after an earlier node failure: "
+                                } else {
+                                    ""
+                                };
+                                (HookOutcome::Error, Some(format!("{prefix}{}", e.message())))
+                            }
                         };
 
                         record_span_status_with_attrs(

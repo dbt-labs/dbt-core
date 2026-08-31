@@ -1,3 +1,4 @@
+use dbt_adapter_core::AdapterType;
 use dbt_proc_macros::DefaultTo;
 use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
@@ -7,12 +8,15 @@ use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
+use dbt_common::ErrorCode;
+use dbt_common::tracing::dbt_emit::emit_error_log_message;
 use dbt_common::tracing::emit::emit_trace_event;
 use dbt_telemetry::StateModifiedDiff;
 
 use crate::schemas::common::{ClusterConfig, DocsConfig, Schedule};
 use crate::schemas::common::{PartitionConfig, RowFilterConfig};
 use crate::schemas::manifest::GrantAccessToTarget;
+use crate::schemas::project::configs::config_merge::TblProperties;
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::{ResolvableConfig, ResolvedConfig};
 use crate::schemas::serde::PartitionsConfig;
@@ -144,7 +148,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub location_root: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_uniform: Option<bool>,
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub include_full_name_in_path: Option<bool>,
@@ -156,6 +160,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub query_tags: Option<String>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,
@@ -225,7 +230,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub backup: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     pub sort: Option<StringOrArrayOfStrings>,
     pub sort_type: Option<String>,
 
@@ -296,6 +301,37 @@ impl ResolvedConfig for WarehouseSpecificNodeConfig {
     fn enabled(&self) -> bool {
         true
     }
+}
+
+/// Takes the Databricks `catalog` alias value out of `warehouse_specific`, for the caller to
+/// move into its own `database` field -- mirroring dbt-core's `Credentials._ALIASES`
+/// (`catalog` -> `database`, `dbt/adapters/databricks/credentials.py:69-72`). `None` on every
+/// other adapter (D1) or when `catalog` was not set at this config layer.
+///
+/// Shared by every config type that embeds [`WarehouseSpecificNodeConfig`] and has its own
+/// `database` field, since that field's exact type (`Option<String>` vs
+/// `Omissible<Option<String>>`) differs by config type -- callers pass whether their own
+/// `database` is already set and wrap the returned value themselves.
+pub fn take_databricks_catalog_alias(
+    adapter_type: AdapterType,
+    warehouse_specific: &mut WarehouseSpecificNodeConfig,
+    database_already_set: bool,
+) -> Option<String> {
+    if adapter_type != AdapterType::Databricks {
+        return None;
+    }
+    if database_already_set {
+        if warehouse_specific.catalog.is_some() {
+            emit_error_log_message(
+                ErrorCode::InvalidConfig,
+                "Config keys `catalog` and `database` both resolve to `database` for adapter \
+                 'databricks'; a project cannot set the same underlying config key two different \
+                 ways in the same place.",
+            );
+        }
+        return None;
+    }
+    warehouse_specific.catalog.take()
 }
 
 impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
@@ -445,6 +481,7 @@ pub fn same_warehouse_config(
     let buckets_eq = self_wh.buckets == other_wh.buckets;
     let catalog_eq = self_wh.catalog == other_wh.catalog;
     let databricks_tags_eq = self_wh.databricks_tags == other_wh.databricks_tags;
+    let query_tags_eq = self_wh.query_tags == other_wh.query_tags;
     let compression_eq = self_wh.compression == other_wh.compression;
     let databricks_compute_eq = self_wh.databricks_compute == other_wh.databricks_compute;
     let target_alias_eq = self_wh.target_alias == other_wh.target_alias;
@@ -548,6 +585,7 @@ pub fn same_warehouse_config(
         && buckets_eq
         && catalog_eq
         && databricks_tags_eq
+        && query_tags_eq
         && compression_eq
         && databricks_compute_eq
         && target_alias_eq
@@ -1056,6 +1094,14 @@ pub fn same_warehouse_config(
                     )),
                 ),
                 (
+                    "query_tags",
+                    query_tags_eq,
+                    Some((
+                        format!("{:?}", &self_wh.query_tags),
+                        format!("{:?}", &other_wh.query_tags),
+                    )),
+                ),
+                (
                     "query_tag",
                     query_tag_eq,
                     Some((
@@ -1430,6 +1476,42 @@ pub(crate) fn unrendered_value_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_take_databricks_catalog_alias_moves_catalog_when_database_unset() {
+        let mut wh = WarehouseSpecificNodeConfig {
+            catalog: Some("my_catalog".to_string()),
+            ..Default::default()
+        };
+        let catalog = take_databricks_catalog_alias(AdapterType::Databricks, &mut wh, false);
+        assert_eq!(catalog, Some("my_catalog".to_string()));
+        assert_eq!(
+            wh.catalog, None,
+            "catalog must be cleared once moved into database"
+        );
+    }
+
+    /// An explicit `database` at the *same* config layer takes precedence over the `catalog`
+    /// alias (ordinary same-source-dict alias precedence) -- `catalog` is left untouched rather
+    /// than allowed to clobber the explicit value. This is also the D4 same-layer-duplicate case,
+    /// which now additionally emits a hard parse error (not observable from this test, which
+    /// installs no tracing subscriber); see
+    /// `test_databricks_catalog_alias_duplicate_at_same_layer_errors` (`dbt-parser/src/tests.rs`)
+    /// for that assertion.
+    #[test]
+    fn test_take_databricks_catalog_alias_defers_to_an_explicit_database_at_the_same_layer() {
+        let mut wh = WarehouseSpecificNodeConfig {
+            catalog: Some("my_catalog".to_string()),
+            ..Default::default()
+        };
+        let catalog = take_databricks_catalog_alias(AdapterType::Databricks, &mut wh, true);
+        assert_eq!(catalog, None);
+        assert_eq!(
+            wh.catalog,
+            Some("my_catalog".to_string()),
+            "catalog must be left untouched when database is already explicitly set"
+        );
+    }
 
     #[test]
     fn test_array_of_strings_eq_none_and_empty_array() {

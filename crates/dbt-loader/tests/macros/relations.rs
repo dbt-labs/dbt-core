@@ -4,10 +4,12 @@ use dbt_adapter::catalog_relation::CatalogRelation;
 use dbt_adapter_core::AdapterType;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
+use dbt_schemas::schemas::project::{ModelConfig, ProjectModelConfig};
 use dbt_schemas::schemas::relations::base::TableFormat;
+use indexmap::IndexMap;
 use minijinja::Value;
 
-use crate::macro_test_harness::MacroTestHarness;
+use crate::macro_test_harness::{MacroTestHarness, default_mock_config};
 
 mod databricks {
     use super::*;
@@ -32,6 +34,60 @@ mod databricks {
             )
             .build()
             .expect("harness should build")
+    }
+
+    #[test]
+    fn tblproperties_clause_preserves_project_declaration_order() {
+        let databricks_tblproperties_sql = include_str!(
+            "../../src/dbt_macro_assets/dbt-databricks/macros/relations/tblproperties.sql"
+        );
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_macro_at_path(
+                "dbt_databricks",
+                "databricks__tblproperties_clause",
+                databricks_tblproperties_sql,
+                "dbt-databricks/macros/relations/tblproperties.sql",
+            )
+            .build()
+            .expect("tblproperties harness should build");
+        harness.mock().on("is_uniform", |_| Ok(Value::from(false)));
+
+        let project_config: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++tblproperties:
+  zeta: last
+  alpha: first
+  middle: center
+__additional_properties__: {}
+"#,
+        )
+        .expect("project config should parse");
+        let model_config: ModelConfig = project_config.into();
+        let tblproperties = model_config
+            .__warehouse_specific_config__
+            .tblproperties
+            .expect("tblproperties should be present");
+        let config = IndexMap::from([(
+            "tblproperties".to_string(),
+            Value::from_serialize(tblproperties),
+        )]);
+
+        let rendered = harness
+            .render(
+                "{{ databricks__tblproperties_clause() }}",
+                BTreeMap::from([("config".to_string(), Value::from_serialize(config))]),
+            )
+            .expect("tblproperties clause should render");
+
+        let zeta = rendered.find("'zeta' = 'last'").expect("zeta property");
+        let alpha = rendered.find("'alpha' = 'first'").expect("alpha property");
+        let middle = rendered
+            .find("'middle' = 'center'")
+            .expect("middle property");
+        assert!(
+            zeta < alpha && alpha < middle,
+            "rendered clause: {rendered}"
+        );
     }
 
     // `databricks__create_table_as` calls these clause helpers (defined in other asset files)
@@ -87,6 +143,59 @@ mod databricks {
                 )])),
             ),
         ])
+    }
+
+    fn build_location_clause_harness() -> MacroTestHarness {
+        let databricks_location_sql =
+            include_str!("../../src/dbt_macro_assets/dbt-databricks/macros/relations/location.sql");
+
+        MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_macro(
+                "dbt",
+                "is_incremental",
+                "{% macro is_incremental() %}{{ return(false) }}{% endmacro %}",
+            )
+            .with_macro_at_path(
+                "dbt_databricks",
+                "location_clause",
+                databricks_location_sql,
+                "dbt_macro_assets/dbt-databricks/macros/relations/location.sql",
+            )
+            .build()
+            .expect("location clause harness should build")
+    }
+
+    fn render_location_clause(external_volume: Option<&str>) -> String {
+        let harness = build_location_clause_harness();
+        let relation = Value::from_object(CatalogRelation {
+            external_volume: external_volume.map(str::to_string),
+            ..CatalogRelation::default_catalog_relation_databricks()
+        });
+
+        harness
+            .render(
+                "{{ location_clause(relation) }}",
+                BTreeMap::from([("relation".to_string(), relation)]),
+            )
+            .expect("render should succeed")
+    }
+
+    #[test]
+    fn location_clause_renders_location_from_relation() {
+        let rendered = render_location_clause(Some("s3://bucket/root/a"));
+        assert!(
+            rendered.contains("location 's3://bucket/root/a'"),
+            "expected a location clause, got: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn location_clause_renders_nothing_without_location() {
+        let rendered = render_location_clause(None);
+        assert!(
+            !rendered.to_lowercase().contains("location"),
+            "expected no location clause, got: {rendered:?}"
+        );
     }
 
     #[test]
@@ -305,6 +414,74 @@ mod databricks {
         assert!(
             lower.contains("using iceberg") && !lower.contains("using delta"),
             "table_format=iceberg with use_catalogs_v2=true but no catalogs.yml must still default to managed Iceberg (`using iceberg`), got:\n{rendered}"
+        );
+    }
+
+    fn render_constraint_changeset(contract_enforced: bool) -> String {
+        let alter_sql = include_str!(
+            "../../src/dbt_macro_assets/dbt-databricks/macros/relations/table/alter.sql"
+        );
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_macro_at_path(
+                "dbt_databricks",
+                "apply_config_changeset",
+                alter_sql,
+                "dbt-databricks/macros/relations/table/alter.sql",
+            )
+            .with_macro(
+                "test_project",
+                "apply_constraints",
+                "{% macro apply_constraints(relation, constraints) %}APPLY_CONSTRAINTS_SENTINEL{% endmacro %}",
+            )
+            .with_stub_functions()
+            .build()
+            .expect("constraint changeset harness should build");
+        let config = default_mock_config();
+        config.on("get", move |args| {
+            let key = args.first().and_then(Value::as_str);
+            let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
+            match key {
+                Some("contract") => Ok(Value::from_serialize(BTreeMap::from([(
+                    "enforced",
+                    contract_enforced,
+                )]))),
+                _ => Ok(default),
+            }
+        });
+        let changes = Value::from_serialize(BTreeMap::from([(
+            "changes",
+            BTreeMap::from([("constraints", Value::from(true))]),
+        )]));
+        let ctx = harness
+            .materialization_context("constraint_table", "select 1")
+            .relation_type(RelationType::Table)
+            .config(Value::from_dyn_object(config))
+            .with("configuration_changes", changes)
+            .build();
+
+        harness
+            .render(
+                "{{ apply_config_changeset(this, model, configuration_changes) }}",
+                ctx,
+            )
+            .expect("constraint changeset should render")
+    }
+
+    #[test]
+    fn table_alter_skips_constraint_reconciliation_when_contract_is_unenforced() {
+        let rendered = render_constraint_changeset(false);
+        assert!(
+            !rendered.contains("APPLY_CONSTRAINTS_SENTINEL"),
+            "unenforced contract must not apply constraints, got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn table_alter_reconciles_constraints_when_contract_is_enforced() {
+        let rendered = render_constraint_changeset(true);
+        assert!(
+            rendered.contains("APPLY_CONSTRAINTS_SENTINEL"),
+            "enforced contract must apply constraints, got: {rendered}"
         );
     }
 }

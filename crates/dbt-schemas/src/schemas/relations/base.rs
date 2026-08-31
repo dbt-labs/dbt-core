@@ -299,6 +299,9 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     fn set_is_delta(&mut self, is_delta: Option<bool>);
 
+    /// Set the relation's table format, when the adapter tracks one.
+    fn set_table_format(&mut self, table_format: Option<TableFormat>);
+
     /// Helper: check if the relation is a CTE
     fn is_cte(&self) -> bool {
         matches!(

@@ -274,6 +274,7 @@ impl TimeMachineSerializable for crate::catalog_relation::CatalogRelation {
             is_transient: ext.opt_bool("is_transient"),
             external_volume: ext.opt_str("external_volume"),
             catalog_database: ext.opt_str("catalog_database"),
+            lakehouse_catalog: ext.opt_str("lakehouse_catalog"),
             base_location: ext.opt_str("base_location"),
             file_format: ext.opt_str("file_format"),
         };
@@ -590,6 +591,7 @@ mod tests {
             is_transient: Some(false),
             external_volume: Some("my_volume".to_string()),
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: Some("/path/to/data".to_string()),
             file_format: None,
         };

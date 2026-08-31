@@ -259,7 +259,7 @@ pub enum ErrorCode {
     // One code per outcome rather than a shared one: `warn_error_options` targets codes, so
     // collapsing these onto `Generic` would mean upgrading or silencing a check outcome also
     // upgrades or silences every unrelated `Generic` warning in the run.
-    /// A check found violations at `error` severity.
+    /// A check found violations at `error` severity. Logged as an error.
     CheckFailed = 1650,
     /// A check found violations at `warn` severity.
     CheckWarned = 1651,
@@ -269,6 +269,10 @@ pub enum ErrorCode {
     CheckEvaluationFailed = 1653,
     /// The parse-time index could not be written, so checks were skipped and the build proceeded.
     CheckIndexUnavailable = 1654,
+    /// The index was turned off (`--no-write-index`), so checks were skipped and the build
+    /// proceeded. Distinct from `CheckIndexUnavailable`: that code reports a requested write that
+    /// failed, so promoting it must not also fail every deliberately opted-out build.
+    CheckIndexDisabled = 1655,
 
     // --------------------------------------------------------------------------------------------
     // CLI errors

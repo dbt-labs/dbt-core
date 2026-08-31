@@ -28,6 +28,7 @@ use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfi
 use super::relations::base::ComponentName;
 use super::serde::{
     StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default, i64_or_string_i64,
+    yaml_11_bool_default,
 };
 
 /// Indicates where schema metadata originates from.
@@ -788,9 +789,12 @@ pub enum DbtBatchSize {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct DbtContract {
-    #[serde(default = "default_alias_types")]
+    #[serde(
+        default = "default_alias_types",
+        deserialize_with = "yaml_11_bool_default"
+    )]
     pub alias_types: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "yaml_11_bool_default")]
     pub enforced: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checksum: Option<YmlValue>,
@@ -1183,7 +1187,7 @@ pub enum Rows {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct DocsConfig {
-    #[serde(default = "default_show")]
+    #[serde(default = "default_show", deserialize_with = "yaml_11_bool_default")]
     pub show: bool,
     pub node_color: Option<String>,
 }
@@ -1204,7 +1208,9 @@ fn default_show() -> bool {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default, DbtSchema)]
 pub struct PersistDocsConfig {
+    #[serde(deserialize_with = "bool_or_string_bool", default)]
     pub columns: Option<bool>,
+    #[serde(deserialize_with = "bool_or_string_bool", default)]
     pub relation: Option<bool>,
 }
 
@@ -2976,5 +2982,50 @@ period: hour
     #[test]
     fn test_normalize_deprecation_date_unparseable_passes_through() {
         assert_eq!(normalize_deprecation_date("not-a-date"), "not-a-date");
+    }
+
+    /// PyYAML (and so dbt-core) resolves the YAML 1.1 boolean tokens that Fusion's YAML 1.2
+    /// reader hands to serde as strings. `yes` must resolve to `true`, and a token outside the
+    /// set must still error rather than silently become `false`.
+    #[test]
+    fn test_dbt_contract_resolves_yaml_11_boolean_tokens() {
+        for field in ["enforced", "alias_types"] {
+            for (token, expected) in [
+                ("no", false),
+                ("No", false),
+                ("off", false),
+                ("false", false),
+                ("yes", true),
+                ("on", true),
+                ("true", true),
+            ] {
+                let contract: DbtContract =
+                    dbt_yaml::from_str(&format!("{field}: {token}\n")).unwrap();
+                let resolved = match field {
+                    "enforced" => contract.enforced,
+                    _ => contract.alias_types,
+                };
+                assert_eq!(resolved, expected, "{field}: {token}");
+            }
+
+            for token in ["maybe", "1"] {
+                let result: Result<DbtContract, _> =
+                    dbt_yaml::from_str(&format!("{field}: {token}\n"));
+                assert!(result.is_err(), "{field}: {token}");
+            }
+        }
+    }
+
+    /// `docs: { show: no }` is the same YAML 1.1 boolean divergence as `contract.enforced`;
+    /// `show` defaults to `true`, so a silently wrong value would be invisible.
+    #[test]
+    fn test_docs_config_show_resolves_yaml_11_boolean_tokens() {
+        for (token, expected) in [("no", false), ("off", false), ("yes", true), ("on", true)] {
+            let docs: DocsConfig = dbt_yaml::from_str(&format!("show: {token}\n")).unwrap();
+            assert_eq!(docs.show, expected, "token: {token}");
+        }
+
+        let result: Result<DocsConfig, _> = dbt_yaml::from_str("show: maybe\n");
+        assert!(result.is_err());
     }
 }

@@ -43,6 +43,7 @@ dbt-login = { workspace = true }
 dbt-metadata = { workspace = true }
 dbt-metadata-parquet = { workspace = true }
 dbt-parser = { workspace = true }
+dbt-runtime = { workspace = true }
 dbt-scheduler = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }

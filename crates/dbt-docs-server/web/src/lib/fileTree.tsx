@@ -1,4 +1,4 @@
-import { ClipboardCheck, FileCode, FileText, type LucideIcon } from 'lucide-react';
+import { ClipboardCheck, FileText, type LucideIcon } from 'lucide-react';
 
 import type { FileTreeItemType } from '../components/ui/PaginatedFileTree';
 import type { FileEntry } from '../shared';
@@ -73,20 +73,16 @@ export function buildFileTreeItems(
         });
         pathToUniqueId.set(path, file.uniqueId);
       } else {
-        const segment = segments[i];
-        const isYamlDir = YAML_PATH_RE.test(segment);
+        // Any node with children renders as a plain folder, regardless of
+        // what it actually is on disk -- a multi-resource yaml file included
+        // its own icon here once, but that read as "this is a file" even
+        // though it expands like a directory. Matches dbt Platform prod:
+        // resource-specific icons only apply at leaf level (nothing nested
+        // underneath); anything with children is just a folder.
         itemsByPath.set(path, {
           id: path,
           parent,
-          data: {
-            pathType: 'directory',
-            ...(isYamlDir && {
-              iconOverride: {
-                icon: <FileCode className="size-3 shrink-0" />,
-                label: 'yaml',
-              },
-            }),
-          },
+          data: { pathType: 'directory' },
         });
       }
     }

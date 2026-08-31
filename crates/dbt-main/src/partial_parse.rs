@@ -281,6 +281,7 @@ pub fn try_load_prev_compilation(
         catalog_artifact: None,
         parse_index_publish_failed: false,
         previous_state: None,
+        run_cache_state_selector_args: None,
         invocation_id: uuid::Uuid::new_v4().to_string(),
         partial_load_filter_applied: false,
     });

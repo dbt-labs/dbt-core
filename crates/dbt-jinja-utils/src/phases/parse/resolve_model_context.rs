@@ -181,6 +181,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         sql_resources: sql_resources.clone(),
         package_dependency: package_dependency.clone(),
         error_path: Some(display_path.to_path_buf()),
+        adapter_type,
     });
     builtins.insert(
         "config".to_string(),
@@ -190,6 +191,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             sql_resources,
             package_dependency,
             error_path: Some(display_path.to_path_buf()),
+            adapter_type,
         }),
     );
 
@@ -657,6 +659,9 @@ pub struct ParseConfig<T: ResolvableConfig<T> + 'static> {
     pub package_dependency: Option<String>,
     /// Error path to be used for error reporting
     pub error_path: Option<PathBuf>,
+    /// The target's adapter type, used to canonicalize adapter config-key aliases.
+    /// [dbt-core's `credentials.translate_aliases`]
+    pub adapter_type: AdapterType,
 }
 
 impl<T: ResolvableConfig<T>> ParseConfig<T> {
@@ -677,6 +682,20 @@ impl<T: ResolvableConfig<T>> ParseConfig<T> {
         } else {
             kwargs.get("enabled").unwrap().is_true()
         };
+        // Canonicalize adapter config-key aliases
+        let kwargs =
+            dbt_adapter_core::config_aliases::canonicalize_config_keys(self.adapter_type, kwargs)
+                .map_err(|dup| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    format!(
+                        "Config keys `{}` and `{}` both resolve to `{}` for adapter '{}'; a \
+                     project cannot set the same underlying config key two different ways in \
+                     the same place.",
+                        dup.key_a, dup.key_b, dup.canonical, self.adapter_type,
+                    ),
+                )
+            })?;
         // TODO: propgate span info for individual args
         let span = {
             let Span {
@@ -982,6 +1001,7 @@ mod test {
             root_overlay_forces_enabled: false,
             package_dependency: None,
             error_path: None,
+            adapter_type: AdapterType::Postgres,
         }
     }
 
@@ -1120,5 +1140,99 @@ mod test {
             .unwrap();
         let result2 = template2.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(result2, "||");
+    }
+
+    /// fs#13424: `+target_catalog:` has no dedicated Fusion field (unlike `catalog`/`database`),
+    /// so it can only resolve via a raw config-key rename before typing -- which is exactly
+    /// what the inline `{{ config(...) }}` layer does. Canonicalizing `target_catalog` into
+    /// `target_database` (dbt-core's `Credentials._ALIASES`) here is what turns a previously
+    /// unrecognized key into a resolved one.
+    #[test]
+    fn test_parse_config_inline_target_catalog_alias_resolves_on_databricks_snapshot() {
+        use dbt_schemas::schemas::project::SnapshotConfig;
+
+        let sql_resources = Arc::new(Mutex::new(Vec::new()));
+        let config = ParseConfig::<SnapshotConfig> {
+            sql_resources: sql_resources.clone(),
+            enabled: true,
+            root_overlay_forces_enabled: false,
+            package_dependency: None,
+            error_path: None,
+            adapter_type: AdapterType::Databricks,
+        };
+
+        let mut env = minijinja::Environment::new();
+        env.add_global("config", MinijinjaValue::from_object(config));
+        let template = env
+            .template_from_str("{{ config(target_catalog='cat1') }}")
+            .unwrap();
+        template
+            .render(minijinja::context!(), &[])
+            .expect("`target_catalog` must not raise an unrecognized-key error");
+
+        let resources = sql_resources.lock().unwrap();
+        let SqlResource::ConfigCall(cfg) = resources.last().expect("config call recorded") else {
+            panic!("expected a ConfigCall resource");
+        };
+        assert_eq!(cfg.target_database, Some("cat1".to_string()));
+    }
+
+    /// fs#13424: postgres' `dbname` -> `database` alias likewise has no dedicated field of its
+    /// own and resolves only via the same raw config-key rename.
+    #[test]
+    fn test_parse_config_inline_dbname_alias_resolves_on_postgres() {
+        let sql_resources = Arc::new(Mutex::new(Vec::new()));
+        let config = ParseConfig::<ModelConfig> {
+            sql_resources: sql_resources.clone(),
+            enabled: true,
+            root_overlay_forces_enabled: false,
+            package_dependency: None,
+            error_path: None,
+            adapter_type: AdapterType::Postgres,
+        };
+
+        let mut env = minijinja::Environment::new();
+        env.add_global("config", MinijinjaValue::from_object(config));
+        let template = env
+            .template_from_str("{{ config(dbname='pgdb') }}")
+            .unwrap();
+        template
+            .render(minijinja::context!(), &[])
+            .expect("`dbname` must not raise an unrecognized-key error");
+
+        let resources = sql_resources.lock().unwrap();
+        let SqlResource::ConfigCall(cfg) = resources.last().expect("config call recorded") else {
+            panic!("expected a ConfigCall resource");
+        };
+        assert_eq!(
+            cfg.database.clone().into_inner().flatten(),
+            Some("pgdb".to_string())
+        );
+    }
+
+    /// Two keys in the same inline `{{ config(...) }}` call that canonicalize to the same
+    /// field is a `DuplicateAliasError` in dbt-core (`Translator.translate_mapping`); Fusion
+    /// must reject it too rather than silently picking one.
+    #[test]
+    fn test_parse_config_inline_duplicate_alias_key_errors() {
+        let sql_resources = Arc::new(Mutex::new(Vec::new()));
+        let config = ParseConfig::<ModelConfig> {
+            sql_resources,
+            enabled: true,
+            root_overlay_forces_enabled: false,
+            package_dependency: None,
+            error_path: None,
+            adapter_type: AdapterType::Databricks,
+        };
+
+        let mut env = minijinja::Environment::new();
+        env.add_global("config", MinijinjaValue::from_object(config));
+        let template = env
+            .template_from_str("{{ config(catalog='a', database='b') }}")
+            .unwrap();
+        let err = template
+            .render(minijinja::context!(), &[])
+            .expect_err("`catalog` and `database` both resolving to `database` must error");
+        assert_contains!(err.to_string(), "database");
     }
 }
