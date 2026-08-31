@@ -495,8 +495,8 @@ jobs:
       # `name =` line exists.
       - name: Rename pyproject for oss wheel
         run: |
-          "$MATURIN_PY" -c 'import pathlib; p = pathlib.Path("crates/dbt-python/pyproject.toml"); p.write_text(p.read_text().replace("name = \"dbt-core\"", "name = \"dbt-oss\"", 1))'
-          grep -qx 'name = "dbt-oss"' crates/dbt-python/pyproject.toml
+          "$MATURIN_PY" -c 'import pathlib; p = pathlib.Path("crates/dbt-sa-python/pyproject.toml"); p.write_text(p.read_text().replace("name = \"dbt-core\"", "name = \"dbt-oss\"", 1))'
+          grep -qx 'name = "dbt-oss"' crates/dbt-sa-python/pyproject.toml
 
       - name: Build maturin wheel (dbt-oss)
         env:
@@ -505,15 +505,15 @@ jobs:
           "$MATURIN_VENV_BIN/maturin" build --release --locked \
             --target "$TARGET" \
             --interpreter "$MATURIN_PY" \
-            -m crates/dbt-python/Cargo.toml \
+            -m crates/dbt-sa-python/Cargo.toml \
             --out target/wheels-oss
           ls -la target/wheels-oss/
 
       - name: Restore pyproject name after oss wheel
         if: always()
         run: |
-          "$MATURIN_PY" -c 'import pathlib; p = pathlib.Path("crates/dbt-python/pyproject.toml"); p.write_text(p.read_text().replace("name = \"dbt-oss\"", "name = \"dbt-core\"", 1))'
-          grep -qx 'name = "dbt-core"' crates/dbt-python/pyproject.toml
+          "$MATURIN_PY" -c 'import pathlib; p = pathlib.Path("crates/dbt-sa-python/pyproject.toml"); p.write_text(p.read_text().replace("name = \"dbt-oss\"", "name = \"dbt-core\"", 1))'
+          grep -qx 'name = "dbt-core"' crates/dbt-sa-python/pyproject.toml
 
       - name: Upload wheel artifact (dbt-oss)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
