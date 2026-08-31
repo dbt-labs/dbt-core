@@ -1,7 +1,0 @@
-kind: Features
-body: '[ClickHouse] Model settings and query_settings configs now render into DDL, and version-gated DDL uses the real server version via a once-per-process probe.'
-time: 2026-08-25T15:20:17.913808+02:00
-custom:
-    author: koletzilla
-    issue: "14585"
-    project: dbt-core
