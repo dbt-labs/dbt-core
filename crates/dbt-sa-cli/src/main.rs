@@ -20,6 +20,7 @@ fn main() -> ExitCode {
         cli.project_dir().as_ref(),
         cli.target_path().as_ref(),
         &arg.io,
+        cli.common_args().get_quiet(),
         Some(&cli.common_args().get_cli_warn_error_options()),
         cli.common_args().skip_fusion_only_upgrades(),
         "dbt",

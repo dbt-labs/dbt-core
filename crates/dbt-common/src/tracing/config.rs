@@ -14,7 +14,7 @@ use super::{
             build_json_compat_layer, build_json_compat_layer_with_background_writer,
         },
         query_log::build_query_log_layer_with_background_writer,
-        tui_layer::build_tui_layer,
+        tui_layer::{TuiConfig, build_tui_layer},
     },
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
@@ -98,6 +98,8 @@ pub struct FsTraceConfig {
     pub(super) enable_query_log: bool,
     /// Show options controlling terminal/file output visibility
     pub(super) show_options: HashSet<ShowOptions>,
+    /// Whether non-result console output is suppressed.
+    pub(super) quiet: bool,
     /// Show all deprecations warnings/errors instead of one per package
     pub(super) show_all_deprecations: bool,
     /// The initial warn-error options loaded from CLI/env before project flags are resolved.
@@ -127,6 +129,7 @@ impl Default for FsTraceConfig {
             file_log_format: None,
             enable_query_log: false,
             show_options: HashSet::default(),
+            quiet: false,
             show_all_deprecations: false,
             warn_error_options: WarnErrorOptions::default(),
             skip_fusion_only_upgrades: false,
@@ -339,6 +342,7 @@ impl FsTraceConfig {
     /// * `log_format` - The log format being used
     /// * `enable_query_log` - If true, enables writing a separate query log file
     /// * `show_options` - Set of ShowOptions controlling terminal/file output visibility
+    /// * `quiet` - Whether non-result console output is suppressed
     /// * `show_all_deprecations` - If true, show all deprecation warnings/errors instead of one per package
     /// * `warn_error_options` - Initial warn-error options from CLI/env before project flags are resolved
     /// * `skip_fusion_only_upgrades` - Withholds upgrades of warnings with no dbt-core counterpart; set while replaying
@@ -372,6 +376,7 @@ impl FsTraceConfig {
         log_format: LogFormat,
         enable_query_log: bool,
         show_options: HashSet<ShowOptions>,
+        quiet: bool,
         show_all_deprecations: bool,
         warn_error_options: WarnErrorOptions,
         skip_fusion_only_upgrades: bool,
@@ -410,6 +415,7 @@ impl FsTraceConfig {
             file_log_format: None,
             enable_query_log,
             show_options,
+            quiet,
             show_all_deprecations,
             warn_error_options,
             skip_fusion_only_upgrades,
@@ -430,6 +436,14 @@ impl FsTraceConfig {
         self
     }
 
+    fn tui_config(&self) -> TuiConfig {
+        TuiConfig {
+            show_options: self.show_options.clone(),
+            command: self.command,
+            quiet: self.quiet,
+        }
+    }
+
     /// Creates a new FsTraceConfig with proper path resolution.
     /// This method never fails - it uses fallback logic for directory resolution.
     ///
@@ -439,6 +453,7 @@ impl FsTraceConfig {
         project_dir: Option<&PathBuf>,
         target_path: Option<&PathBuf>,
         io_args: &IoArgs,
+        quiet: bool,
         warn_error_options: Option<&WarnErrorOptions>,
         skip_fusion_only_upgrades: bool,
         package: &'static str,
@@ -473,6 +488,7 @@ impl FsTraceConfig {
             io_args.log_format,
             true, // Always enable query log for now
             io_args.show.clone(),
+            quiet,
             io_args.show_all_deprecations,
             warn_error_options.cloned().unwrap_or_default(),
             skip_fusion_only_upgrades,
@@ -565,8 +581,7 @@ impl FsTraceConfig {
                 consumer_layers.push(build_tui_layer(
                     self.max_log_verbosity,
                     self.log_format,
-                    self.show_options.clone(),
-                    self.command,
+                    self.tui_config(),
                 ))
             }
             LogFormat::Json => {
