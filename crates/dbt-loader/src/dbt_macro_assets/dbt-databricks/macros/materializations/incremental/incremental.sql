@@ -148,9 +148,12 @@
         {{ set_overwrite_mode('DYNAMIC') }}
       {%- endif -%}
       {#-- Relation must be merged --#}
-      {%- set _existing_config = adapter.get_relation_config(existing_relation) -%}
-      {%- set model_config = adapter.get_config_from_model(config.model) -%}
-      {%- set _configuration_changes = model_config.get_changeset(_existing_config) -%}
+      {%- set _configuration_changes = none -%}
+      {%- if config.get('incremental_apply_config_changes', True) | as_bool -%}
+        {%- set model_config = adapter.get_config_from_model(config.model) -%}
+        {%- set _existing_config = adapter.get_relation_config(existing_relation, model_config) -%}
+        {%- set _configuration_changes = model_config.get_changeset(_existing_config) -%}
+      {%- endif -%}
       {%- call statement('create_temp_relation', language=language) -%}
         {{ create_table_as(True, temp_relation, compiled_code, language) }}
       {%- endcall -%}
@@ -262,8 +265,8 @@
 {% macro process_config_changes(target_relation) %}
   {% set apply_config_changes = config.get('incremental_apply_config_changes', True) | as_bool %}
   {% if apply_config_changes %}
-    {%- set existing_config = adapter.get_relation_config(target_relation) -%}
     {%- set model_config = adapter.get_config_from_model(config.model) -%}
+    {%- set existing_config = adapter.get_relation_config(target_relation, model_config) -%}
     {%- set configuration_changes = model_config.get_changeset(existing_config) -%}
     {{ apply_config_changeset(target_relation, model, configuration_changes) }}
   {% endif %}

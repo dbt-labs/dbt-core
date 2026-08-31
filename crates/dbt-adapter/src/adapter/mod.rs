@@ -6,6 +6,7 @@ use crate::errors::into_fs_error;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
+use crate::relation::config_v2::RelationConfig;
 use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::relation::factory::create_static_relation;
 use crate::relation::spark::DEFAULT_SPARK_DATABASE;
@@ -3273,7 +3274,7 @@ impl Adapter {
 
     /// Get the configuration of an existing relation from the remote data warehouse.
     ///
-    /// https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L797
+    /// https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1088
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn get_relation_config(
         &self,
@@ -3282,9 +3283,22 @@ impl Adapter {
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let iter = ArgsIter::new("get_relation_config", &["relation"], args);
+                let iter =
+                    ArgsIter::new("get_relation_config", &["relation", "model_config"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let model_config = iter
+                    .next_arg::<Option<&Value>>()?
+                    .filter(|value| !value.is_none() && !value.is_undefined())
+                    .map(|value| {
+                        value.downcast_object::<RelationConfig>().ok_or_else(|| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::InvalidOperation,
+                                "model_config must be a RelationConfig",
+                            )
+                        })
+                    })
+                    .transpose()?;
                 iter.finish()?;
 
                 let mut conn =
@@ -3293,6 +3307,7 @@ impl Adapter {
                     state,
                     conn.as_mut(),
                     &relation,
+                    model_config.as_deref(),
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from_object(config))
@@ -3473,7 +3488,7 @@ impl Adapter {
     /// Get configuration from a model node.
     ///
     /// Given a model, parse and build its configurations.
-    /// https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
+    /// https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1107
     #[tracing::instrument(skip_all, level = "trace")]
     pub fn get_config_from_model(
         &self,

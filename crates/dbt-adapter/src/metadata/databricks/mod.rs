@@ -41,8 +41,9 @@ use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
+use crate::relation::config_v2::RelationConfig;
 use crate::relation::databricks::config::{
-    DatabricksRelationMetadata, DatabricksRelationMetadataKey,
+    DatabricksRelationMetadata, DatabricksRelationMetadataKey, components,
 };
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{AdapterEngine, AdapterResponse};
@@ -249,13 +250,14 @@ impl DatabricksMetadataAdapter {
     }
 
     /// Given the relation, fetch its config from the remote data warehouse
-    /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L871
+    /// reference: https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1287-L1470
     // TODO: use Arrow RecordBatches for this instead of a hashmap of Agate tables, like BigQuery does
     pub(crate) fn fetch_relation_config_from_remote(
         &self,
         state: &State,
         conn: &mut dyn Connection,
         base_relation: &Arc<dyn BaseRelation>,
+        model_config: Option<&RelationConfig>,
         token: CancellationToken,
     ) -> AdapterResult<(RelationType, DatabricksRelationMetadata)> {
         let relation_type = base_relation.relation_type().ok_or_else(|| {
@@ -269,40 +271,47 @@ impl DatabricksMetadataAdapter {
         let schema = base_relation.schema_as_str()?;
         let identifier = base_relation.identifier_as_str()?;
         let rendered_relation = base_relation.render_self_as_str();
+        // Absent model_config fetches both; empty desired tags skip that query.
+        let fetch_relation_tags =
+            components::RelationTagsLoader::requires_server_metadata_for_diff(model_config);
+        let fetch_column_tags =
+            components::ColumnTagsLoader::requires_server_metadata_for_diff(model_config);
 
         let mut metadata = IndexMap::new();
         // IMPORTANT (Mantle replay): query ordering is observable in replay.
-        //
-        // dbt-databricks (Python) emits relation introspection queries in a specific sequence.
-        // Mantle recordings capture that sequence, and replay matching is order-sensitive.
-        //
-        // In particular, for `RelationType::Table`, dbt-databricks records the information_schema
-        // queries (tags/constraints/masks) before `SHOW TBLPROPERTIES` and `DESCRIBE EXTENDED`.
-        // We preserve that ordering here by deferring those two calls for tables.
-        if relation_type != RelationType::Table {
-            metadata.insert(
-                DatabricksRelationMetadataKey::DescribeExtended,
-                self.describe_extended(
-                    &database,
-                    &schema,
-                    &identifier,
-                    state,
-                    &mut *conn,
-                    token.clone(),
-                )?,
-            );
-            metadata.insert(
-                DatabricksRelationMetadataKey::ShowTblProperties,
-                self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
-            );
-        }
-
-        // Add materialization-specific metadata
-        // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/adapters/databricks/impl.py#L914-L1021
+        // Match dbt-databricks `_describe_relation`:
+        //   MV:  DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
+        //   ST:  DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
+        //   View: optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   Table: UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
         match relation_type {
             RelationType::MaterializedView => {
                 metadata.insert(
                     DatabricksRelationMetadataKey::DescribeExtended,
+                    self.describe_extended(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token.clone(),
+                    )?,
+                );
+                if fetch_relation_tags {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+                metadata.insert(
+                    DatabricksRelationMetadataKey::InfoSchemaViews,
                     self.get_view_description(
                         &database,
                         &schema,
@@ -320,11 +329,41 @@ impl DatabricksMetadataAdapter {
                         &identifier,
                         state,
                         &mut *conn,
-                        token,
+                        token.clone(),
                     )?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ShowTblProperties,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn, token)?,
                 );
             }
             RelationType::View => {
+                if fetch_relation_tags {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+                if fetch_column_tags {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaColumnTags,
+                        self.fetch_column_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
                 metadata.insert(
                     DatabricksRelationMetadataKey::InfoSchemaViews,
                     self.get_view_description(
@@ -337,19 +376,12 @@ impl DatabricksMetadataAdapter {
                     )?,
                 );
                 metadata.insert(
-                    DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                    self.fetch_tags(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
+                    DatabricksRelationMetadataKey::ShowTblProperties,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
                 );
                 metadata.insert(
-                    DatabricksRelationMetadataKey::InfoSchemaColumnTags,
-                    self.fetch_column_tags(
+                    DatabricksRelationMetadataKey::DescribeExtended,
+                    self.describe_extended(
                         &database,
                         &schema,
                         &identifier,
@@ -360,6 +392,34 @@ impl DatabricksMetadataAdapter {
                 );
             }
             RelationType::StreamingTable => {
+                metadata.insert(
+                    DatabricksRelationMetadataKey::DescribeExtended,
+                    self.describe_extended(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token.clone(),
+                    )?,
+                );
+                if fetch_relation_tags {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ShowTblProperties,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
+                );
                 metadata.insert(
                     DatabricksRelationMetadataKey::RowFilters,
                     self.fetch_row_filters(
@@ -376,28 +436,32 @@ impl DatabricksMetadataAdapter {
                 // Tags, constraints and column masks all live in `information_schema`, which
                 // Hive Metastore does not have.
                 if !base_relation.is_hive_metastore() {
-                    metadata.insert(
-                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                        self.fetch_tags(
-                            &database,
-                            &schema,
-                            &identifier,
-                            state,
-                            &mut *conn,
-                            token.clone(),
-                        )?,
-                    );
-                    metadata.insert(
-                        DatabricksRelationMetadataKey::InfoSchemaColumnTags,
-                        self.fetch_column_tags(
-                            &database,
-                            &schema,
-                            &identifier,
-                            state,
-                            &mut *conn,
-                            token.clone(),
-                        )?,
-                    );
+                    if fetch_relation_tags {
+                        metadata.insert(
+                            DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                            self.fetch_tags(
+                                &database,
+                                &schema,
+                                &identifier,
+                                state,
+                                &mut *conn,
+                                token.clone(),
+                            )?,
+                        );
+                    }
+                    if fetch_column_tags {
+                        metadata.insert(
+                            DatabricksRelationMetadataKey::InfoSchemaColumnTags,
+                            self.fetch_column_tags(
+                                &database,
+                                &schema,
+                                &identifier,
+                                state,
+                                &mut *conn,
+                                token.clone(),
+                            )?,
+                        );
+                    }
                     metadata.insert(
                         DatabricksRelationMetadataKey::NonNullConstraints,
                         self.fetch_non_null_constraint_columns(
@@ -455,7 +519,6 @@ impl DatabricksMetadataAdapter {
                     );
                 }
 
-                // Match dbt-databricks/Mantle ordering: SHOW TBLPROPERTIES then DESCRIBE EXTENDED.
                 metadata.insert(
                     DatabricksRelationMetadataKey::ShowTblProperties,
                     self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
