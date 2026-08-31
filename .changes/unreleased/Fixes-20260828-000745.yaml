@@ -1,0 +1,7 @@
+kind: Fixes
+body: Keep a singular test that refs a disabled model in the manifest nodes with enabled=false, and stop emitting a user-visible NodeNotFoundOrDisabled warning for it, matching dbt-core
+time: 2026-08-28T00:07:45.202196-05:00
+custom:
+    author: HannanNaeem
+    issue: ""
+    project: dbt-core

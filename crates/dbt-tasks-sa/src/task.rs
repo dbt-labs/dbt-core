@@ -4,10 +4,10 @@ use std::sync::mpsc;
 
 use async_trait::async_trait;
 use dbt_adapter::sql_types::TypeOps;
+use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_dag::schedule::Schedule;
-use dbt_schemas::schemas::common::ComputePlatform;
 use dbt_schemas::schemas::manifest::DbtSavedQuery;
 use dbt_schemas::schemas::profiles::Execute;
 use dbt_schemas::schemas::properties::UnitTestOverrides;
@@ -39,20 +39,25 @@ fn sender_receiver(b: bool) -> (Option<Tx>, Option<Rx>) {
     }
 }
 
-/// The `alt_compute` placement configured for `unique_id`, checking whichever
-/// node collection (models or seeds) it belongs to. `None` for any other node
-/// type, or a node with no non-`default` placement.
-fn resolve_alt_compute(nodes: &Nodes, unique_id: &str) -> Option<ComputePlatform> {
+/// Whether a node's adapter routes it to the alternate compute path.
+///
+/// `alt` is not merely another adapter -- it owns an execution path that bypasses
+/// Jinja materializations -- so routing follows the resolved type. Reads
+/// `node_adapter()` off the shared trait rather than each node type's own attr
+/// struct, so a new node type is covered the moment it exists. False for a
+/// `unique_id` that names no node.
+fn selects_alt_compute(nodes: &Nodes, unique_id: &str) -> bool {
     nodes
-        .models
-        .get(unique_id)
-        .and_then(|model| model.__model_attr__.alt_compute)
-        .or_else(|| {
-            nodes
-                .seeds
-                .get(unique_id)
-                .and_then(|seed| seed.__seed_attr__.alt_compute)
-        })
+        .get_node(unique_id)
+        .is_some_and(|node| node.node_adapter() == AdapterType::Alt)
+}
+
+pub fn effective_unit_test_execute(unit_test: &DbtUnitTest, execute: Execute) -> Execute {
+    unit_test
+        .deprecated_config
+        .compute
+        .map(|compute| Execute::from_compute_flag(compute.into()))
+        .unwrap_or(execute)
 }
 
 pub fn renderable_test_group_task(
@@ -394,8 +399,7 @@ pub trait TasksForNodeFactory: Send + Sync {
                 let unit_test_execute = nodes
                     .unit_tests
                     .get(unique_id)
-                    .and_then(|ut| ut.deprecated_config.compute)
-                    .map(|c| Execute::from_compute_flag(c.into()))
+                    .map(|unit_test| effective_unit_test_execute(unit_test, execute))
                     .unwrap_or(execute);
                 match (the_runnable_task, unit_test_execute) {
                     (Some(t), Execute::Remote) => {
@@ -418,12 +422,12 @@ pub trait TasksForNodeFactory: Send + Sync {
                     (_, Execute::Service) => (),
                 }
             } else {
-                // A model or seed configured with a non-`default` `alt_compute`
+                // A model or seed whose `+adapter` names an `alt`-typed adapter
                 // takes the compute-platform path instead of the default (remote)
                 // one; selection/execution is delegated to the run hook.
-                let alt_compute = resolve_alt_compute(nodes, unique_id);
+                let on_alt_compute = selects_alt_compute(nodes, unique_id);
                 match (the_runnable_task, execute) {
-                    (Some(t), Execute::Remote) if alt_compute == Some(ComputePlatform::Alt) => {
+                    (Some(t), Execute::Remote) if on_alt_compute => {
                         runnable = Some(Arc::new(RunTask::new(
                             t,
                             next_receiver.take(),
@@ -471,51 +475,118 @@ pub trait TasksForNodeFactory: Send + Sync {
 }
 
 #[cfg(test)]
-mod alt_compute_dispatch_tests {
+mod node_adapter_dispatch_tests {
     use super::*;
-    use dbt_schemas::schemas::{DbtModel, DbtSeed};
+    use dbt_common::io_args::ComputeArg;
+    use dbt_schemas::schemas::{DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
 
-    #[test]
-    fn seed_with_alt_compute_resolves_to_alt() {
+    fn seed_on(adapter: AdapterType) -> Nodes {
         let mut nodes = Nodes::default();
         let mut seed = DbtSeed::default();
-        seed.__seed_attr__.alt_compute = Some(ComputePlatform::Alt);
+        seed.__base_attr__.adapter = adapter;
         nodes.seeds.insert("seed.p.s".to_string(), Arc::new(seed));
-
-        assert_eq!(
-            resolve_alt_compute(&nodes, "seed.p.s"),
-            Some(ComputePlatform::Alt)
-        );
-    }
-
-    #[test]
-    fn seed_without_alt_compute_resolves_to_none() {
-        let mut nodes = Nodes::default();
         nodes
-            .seeds
-            .insert("seed.p.s".to_string(), Arc::new(DbtSeed::default()));
-
-        assert_eq!(resolve_alt_compute(&nodes, "seed.p.s"), None);
     }
 
-    #[test]
-    fn model_with_alt_compute_resolves_to_alt() {
+    fn model_on(adapter: AdapterType) -> Nodes {
         let mut nodes = Nodes::default();
         let mut model = DbtModel::default();
-        model.__model_attr__.alt_compute = Some(ComputePlatform::Alt);
+        model.__base_attr__.adapter = adapter;
         nodes
             .models
             .insert("model.p.m".to_string(), Arc::new(model));
-
-        assert_eq!(
-            resolve_alt_compute(&nodes, "model.p.m"),
-            Some(ComputePlatform::Alt)
-        );
+        nodes
     }
 
     #[test]
-    fn unknown_unique_id_resolves_to_none() {
-        let nodes = Nodes::default();
-        assert_eq!(resolve_alt_compute(&nodes, "seed.p.missing"), None);
+    fn a_seed_on_alt_routes_to_alt_compute() {
+        assert!(selects_alt_compute(&seed_on(AdapterType::Alt), "seed.p.s"));
+    }
+
+    #[test]
+    fn a_model_on_alt_routes_to_alt_compute() {
+        assert!(selects_alt_compute(
+            &model_on(AdapterType::Alt),
+            "model.p.m"
+        ));
+    }
+
+    /// `alt` owns an execution path that bypasses Jinja materializations, so every
+    /// other adapter must stay on the normal path even when it is not the target
+    /// default. DuckDB is the sharp case: `alt` inherits its macros, not its routing.
+    #[test]
+    fn no_other_adapter_routes_to_alt_compute() {
+        for adapter_type in [
+            AdapterType::DuckDB,
+            AdapterType::Snowflake,
+            AdapterType::Postgres,
+            AdapterType::Bigquery,
+        ] {
+            assert!(
+                !selects_alt_compute(&model_on(adapter_type), "model.p.m"),
+                "{adapter_type} must not take the alt-compute path"
+            );
+        }
+    }
+
+    /// Routing reads `node_adapter()` off the shared trait via `Nodes::get_node`,
+    /// so every node type is covered without naming it. These are the five that can
+    /// carry an adapter; before the trait method they each needed their own branch.
+    #[test]
+    fn every_node_type_routes_on_its_resolved_adapter() {
+        let mut nodes = Nodes::default();
+
+        let mut snapshot = DbtSnapshot::default();
+        snapshot.__base_attr__.adapter = AdapterType::Alt;
+        nodes
+            .snapshots
+            .insert("snapshot.p.snap".to_string(), Arc::new(snapshot));
+
+        let mut function = DbtFunction::default();
+        function.__base_attr__.adapter = AdapterType::Bigquery;
+        nodes
+            .functions
+            .insert("function.p.f".to_string(), Arc::new(function));
+
+        let mut test = DbtTest::default();
+        test.__base_attr__.adapter = AdapterType::Alt;
+        nodes.tests.insert("test.p.t".to_string(), Arc::new(test));
+
+        let mut unit_test = DbtUnitTest::default();
+        unit_test.__base_attr__.adapter = AdapterType::Bigquery;
+        nodes
+            .unit_tests
+            .insert("unit_test.p.u".to_string(), Arc::new(unit_test));
+
+        assert!(selects_alt_compute(&nodes, "snapshot.p.snap"));
+        assert!(selects_alt_compute(&nodes, "test.p.t"));
+        assert!(!selects_alt_compute(&nodes, "function.p.f"));
+        assert!(!selects_alt_compute(&nodes, "unit_test.p.u"));
+    }
+
+    #[test]
+    fn an_unknown_unique_id_does_not_route_to_alt_compute() {
+        assert!(!selects_alt_compute(&Nodes::default(), "seed.p.missing"));
+    }
+
+    #[test]
+    fn unit_test_compute_overrides_global_execute() {
+        let mut unit_test = DbtUnitTest::default();
+        assert_eq!(
+            effective_unit_test_execute(&unit_test, Execute::Sidecar),
+            Execute::Sidecar
+        );
+
+        unit_test.deprecated_config.compute = Some(ComputeArg::Sidecar);
+        assert_eq!(
+            effective_unit_test_execute(&unit_test, Execute::Remote),
+            Execute::Sidecar
+        );
+
+        unit_test.deprecated_config.compute = Some(ComputeArg::Remote);
+        assert_eq!(
+            effective_unit_test_execute(&unit_test, Execute::Sidecar),
+            Execute::Remote
+        );
     }
 }

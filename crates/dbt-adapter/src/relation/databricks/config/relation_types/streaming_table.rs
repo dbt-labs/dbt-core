@@ -13,15 +13,15 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 /// Create a `RelationConfigLoader` for Databricks streaming tables
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
-    // - liquid clustering
     // - relation tags
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
-        // Box::new(components::LiquidClusteringLoader),
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
+        Box::new(components::LiquidClusteringLoader),
         Box::new(components::PartitionByLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::RefreshLoader),
         // Box::new(components::RelationTagsLoader),
+        Box::new(components::RowFilterLoader),
         Box::new(components::ColumnMasksLoader),
     ];
 
@@ -53,6 +53,8 @@ mod tests {
                     cluster_by: vec!["cluster_by_old".to_string()],
                     cron: Some("* * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
+                    row_filter_function: Some("row_filter_fn".to_string()),
+                    row_filter_columns: vec!["col1".to_string()],
                     tags: IndexMap::from_iter([
                         ("a_tag".to_string(), "old".to_string()),
                         ("b_tag".to_string(), "old".to_string()),
@@ -77,6 +79,8 @@ mod tests {
                         ("a_tag".to_string(), "new".to_string()),
                         ("b_tag".to_string(), "old".to_string()),
                     ]),
+                    row_filter_function: None,
+                    row_filter_columns: vec![],
                     tbl_properties: IndexMap::from_iter([
                         // changing these key should not result in anything as these should be ignored
                         ("delta.enableRowTracking".to_string(), "true".to_string()),
@@ -94,7 +98,15 @@ mod tests {
                 expected_changeset: RelationComponentConfigChangeSet::new(
                     AdapterType::Databricks,
                     [
-                        // TODO: add liquid clustering to changeset here once that gets implemented
+                        (
+                            components::LiquidClusteringLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::LiquidClusteringLoader::new_component_type_erased(
+                                    false,
+                                    vec!["cluster_by_new".to_string()],
+                                ),
+                            ),
+                        ),
                         (
                             components::RefreshLoader.type_name(),
                             ComponentConfigChange::Some(
@@ -123,6 +135,15 @@ mod tests {
                         //     )),
                         // ),
                         (
+                            components::RowFilterLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::RowFilterLoader::new_component_type_erased(
+                                    None,
+                                    vec![],
+                                ),
+                            ),
+                        ),
+                        (
                             components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
@@ -137,6 +158,14 @@ mod tests {
                     requires_full_refresh,
                 ),
                 changeset_jinja: "
+<liquid_clustering>
+    <auto_cluster>
+        False
+    </auto_cluster>
+    <cluster_by>
+        cluster_by_new
+    </cluster_by>
+</liquid_clustering>
 <comment>
     <comment>
         new comment
@@ -147,15 +176,15 @@ mod tests {
 </comment>
 <tblproperties>
     <tblproperties>
+        <delta.enableRowTracking>
+            true
+        </delta.enableRowTracking>
         <customKey>
             new
         </customKey>
         <customKey2>
             value
         </customKey2>
-        <delta.enableRowTracking>
-            true
-        </delta.enableRowTracking>
     </tblproperties>
     <pipeline_id>
         my_new_pipeline
@@ -172,6 +201,19 @@ mod tests {
         True
     </is_altered>
 </refresh>
+<row_filter>
+    <function>
+        None
+    </function>
+    <columns>
+    </columns>
+    <should_unset>
+        True
+    </should_unset>
+    <is_change>
+        True
+    </is_change>
+</row_filter>
                     ",
                 requires_full_refresh: false,
             },

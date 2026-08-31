@@ -1,6 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use pkcs8::der::{Decode, oid::ObjectIdentifier};
-use pkcs8::{EncryptedPrivateKeyInfo, PrivateKeyInfo};
+use pkcs8::{EncodePrivateKey, EncryptedPrivateKeyInfo, LineEnding, PrivateKeyInfo};
 use rsa::{RsaPrivateKey, pkcs1::DecodeRsaPrivateKey};
 use std::sync::Once;
 
@@ -229,11 +229,20 @@ pub fn normalize_key(
     }
 }
 
+/// Re-encode a decrypted key as unencrypted PKCS#8 PEM, e.g. for a caller
+/// that needs to hand PEM text to a library expecting that input shape
+/// rather than a parsed key.
+pub fn to_pkcs8_pem(key: &RsaPrivateKey) -> Result<String, AuthError> {
+    key.to_pkcs8_pem(LineEnding::LF)
+        .map(|pem| pem.to_string())
+        .map_err(|e| AuthError::config(format!("could not re-encode private key: {e}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use dbt_test_primitives::assert_contains;
-    use pkcs8::{EncodePrivateKey, LineEnding};
+    use pkcs8::DecodePrivateKey;
     use rsa::{RsaPrivateKey, pkcs1::EncodeRsaPrivateKey, rand_core::OsRng};
 
     use crate::NoopAuthWarningPrinter;
@@ -491,5 +500,19 @@ mod tests {
             .decode(re_body.as_bytes())
             .expect("emitted body not base64");
         assert_eq!(der_roundtrip, der, "PEM rewrap must be byte-preserving");
+    }
+
+    #[test]
+    fn to_pkcs8_pem_roundtrips_a_key() {
+        let rsa = gen_rsa();
+        let pem = to_pkcs8_pem(&rsa).unwrap();
+        assert!(pem.starts_with(PEM_UNENCRYPTED_START));
+        assert!(pem.trim_end().ends_with(PEM_UNENCRYPTED_END));
+
+        let decoded = RsaPrivateKey::from_pkcs8_pem(&pem).unwrap();
+        assert_eq!(
+            decoded, rsa,
+            "re-encoded PEM must decode back to the same key"
+        );
     }
 }

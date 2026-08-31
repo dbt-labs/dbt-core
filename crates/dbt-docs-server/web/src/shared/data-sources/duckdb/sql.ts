@@ -34,6 +34,45 @@ LIMIT 1`;
 export const PROJECT_TABLES = ['dbt.project'];
 
 /**
+ * The winning `{% docs __overview__ %}` block, or no row at all.
+ *
+ * Parity with dbt-docs v1, whose `OverviewCtrl` seeds from `doc.dbt.__overview__`
+ * and then lets any doc named `__overview__` from a non-`dbt` package override it.
+ * Three things here are load-bearing:
+ *
+ * - **The default is excluded, so "no authored overview" returns zero rows.** That
+ *   is the signal the page falls back to its bundled default on. v1's built-in
+ *   default described v1's own `Project`/`Database` tabs, so surfacing it here
+ *   would be actively wrong.
+ * - **We discriminate on `unique_id`, not `package_name <> 'dbt'`.** The ingest only
+ *   started populating `package_name` recently; on an older index it is NULL
+ *   everywhere, and `NULL <> 'dbt'` is NULL, which would silently drop every row —
+ *   including a user's own overview. `unique_id` is non-null in every index ever
+ *   written, and is exactly equivalent, since it is `doc.{package}.{name}` and no
+ *   project may be named `dbt`.
+ * - **Root project first, then package name.** v1 broke ties by manifest insertion
+ *   order, which is filesystem-dependent and not reproducible here; this matches v1
+ *   for any single-project case and is at least deterministic beyond it. `CASE WHEN`
+ *   rather than `(package_name = x) DESC` keeps a NULL `package_name` in the ELSE
+ *   branch with no NULLS FIRST/LAST subtlety, and `unique_id` makes the order total.
+ */
+export function overviewSql(rootPackage: string): string {
+  return `
+SELECT unique_id, package_name, block_contents
+FROM dbt.docs
+WHERE name = '__overview__'
+  AND unique_id <> 'doc.dbt.__overview__'
+  AND block_contents IS NOT NULL
+  AND length(trim(block_contents)) > 0
+ORDER BY CASE WHEN package_name = ${sqlStr(rootPackage)} THEN 0 ELSE 1 END,
+         package_name,
+         unique_id
+LIMIT 1`;
+}
+
+export const OVERVIEW_TABLES = ['dbt.docs'];
+
+/**
  * `handlers/nodes.rs::list_node_counts` — per-resource-type tallies.
  *
  * The resource-bearing tables sit outside `dbt.nodes`, so they are counted

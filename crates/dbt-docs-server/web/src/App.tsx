@@ -1,14 +1,7 @@
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-
-import {
-  Badge,
-  Icon,
-  RyeconColorDbt,
-  RyeconMagnifyingGlass,
-  Tooltip,
-} from '@dbt-labs/sourdough';
+import { Search as SearchIcon } from 'lucide-react';
 
 import { AnalysisFilterView } from './components/AnalysisFilterView';
 import FullLineagePage from './components/FullLineagePage';
@@ -28,6 +21,9 @@ import {
 import { SourceCollectionPage } from './components/SourceCollectionPage';
 import { SourceFilterView } from './components/SourceFilterView';
 import { TestFilterView } from './components/TestFilterView';
+import { Badge } from './components/ui/Badge';
+import { Input } from './components/ui/Input';
+import { Tooltip } from './components/ui/Tooltip';
 import { useAllNodes } from './hooks/useAllNodes';
 import { deriveUpgradeCapabilities } from './hooks/useCapabilities';
 import { useIdentity } from './hooks/useIdentity';
@@ -43,19 +39,17 @@ import {
   useTelemetryInitialized,
 } from './lib/telemetry';
 import { type View, viewFromPath } from './lib/viewFromPath';
-import Home from './pages/Home';
 import NotFoundPage from './pages/NotFoundPage';
+import Overview from './pages/Overview';
 import ResourceDetails from './pages/ResourceDetails';
 import ResourceFilter from './pages/ResourceFilter';
 import Search from './pages/Search';
 import { paths, ROUTES } from './routes';
 import {
   type Asset,
-  type ModelSummary,
   type Project,
   useAssetCounts,
   useAssetDetail,
-  useAssetList,
   useCapabilities,
   useDistribution,
   useFiles,
@@ -137,13 +131,6 @@ export default function App() {
   const userState = deriveUserState(distInfo);
   const upgradeCapabilities = deriveUpgradeCapabilities(capabilities, distInfo);
 
-  // Marts list for the home page. Best-effort and isolated — section hides
-  // when the fetch returns zero or errors.
-  const { data: marts } = useAssetList<ModelSummary>(
-    { filter: { resourceTypes: ['model'], modelingLayers: ['Marts'] }, limit: 12 },
-    'marts',
-  );
-
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<AssetFilters>(() => {
     const initial = viewFromPath(window.location.pathname);
@@ -183,7 +170,7 @@ export default function App() {
     });
   }, [project, nodeTotal, identityQuery.data]);
 
-  // Analytics: `resource_viewed` on detail and list routes. Home and /search
+  // Analytics: `resource_viewed` on detail and list routes. The overview and /search
   // (a list view with no type) emit nothing — search is covered by
   // `search_performed`.
   useEffect(() => {
@@ -228,20 +215,6 @@ export default function App() {
     (detailFetchError && !detailNotFound ? detailFetchError.message : null) ??
     null;
 
-  // Spin the topbar dbt mark briefly whenever a "parent filter" changes —
-  // active view kind/type or the package filter. Detail navigations don't
-  // trigger; this is meant for orientation moments.
-  const [spinTrigger, setSpinTrigger] = useState(0);
-  const firstRender = useRef(true);
-  const parentKey = `${view.kind === 'list' ? filters.resourceType.slice().sort().join(',') || 'all' : view.kind}|${filters.pkg.slice().sort().join(',')}`;
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
-    setSpinTrigger((s) => s + 1);
-  }, [parentKey]);
-
   // URL → filters sync: when the route's `:resourceType` param changes
   // (e.g. back/forward, Asset-tab click), mirror it into filters.resourceType
   // so AssetListView's multi-select narrowing stays consistent with the URL.
@@ -285,12 +258,6 @@ export default function App() {
     },
     [navigate],
   );
-
-  const onShowMarts = useCallback(() => {
-    // ModelFilterView reads `?modeling_layer=` and passes it as a server-side
-    // list filter. dbt-docs-server's LAYER_CONDITIONS uses capitalized "Marts".
-    navigate(`${paths.resource('model')}?modeling_layer=Marts`);
-  }, [navigate]);
 
   // LocatePane's project-root row (Assets or Files tab) navigates here.
   const onShowProject = useCallback(() => {
@@ -423,7 +390,6 @@ export default function App() {
         search={search}
         onSearch={setSearch}
         onResetHome={onResetHome}
-        spinTrigger={spinTrigger}
         onSubmitSearch={onSubmitTopbarSearch}
       />
       <div
@@ -466,22 +432,7 @@ export default function App() {
         />
         <main className="main">
           <Routes>
-            <Route
-              path={ROUTES.home}
-              element={
-                <Home
-                  project={project}
-                  nodes={nodes}
-                  previewId={previewId}
-                  marts={marts}
-                  onPeek={onPeek}
-                  onShowList={onShowList}
-                  onShowMarts={onShowMarts}
-                  userState={userState}
-                  hasDbtState={upgradeCapabilities?.hasDbtState ?? false}
-                />
-              }
-            />
+            <Route path={ROUTES.home} element={<Overview />} />
             <Route
               path={ROUTES.details}
               element={
@@ -633,14 +584,12 @@ function Topbar({
   search,
   onSearch,
   onResetHome,
-  spinTrigger,
   onSubmitSearch,
 }: {
   project: Project | null;
   search: string;
   onSearch: (v: string) => void;
   onResetHome?: () => void;
-  spinTrigger?: number;
   onSubmitSearch?: () => void;
 }) {
   return (
@@ -648,47 +597,45 @@ function Topbar({
       <div className="topbar-v2__bg" aria-hidden />
       <div className="topbar-v2__left">
         <div className="topbar-v2__brand">
-          <button
-            type="button"
-            className="topbar-v2__brand-btn"
-            onClick={onResetHome}
-            aria-label="Home — reset view"
-            title="Home — reset view"
-          >
-            <span key={spinTrigger ?? 0} className="topbar-v2__brand-anim">
-              <Icon ryecon={RyeconColorDbt} size="xl" alt="dbt" />
-            </span>
-          </button>
-          <Tooltip content="This docs site is in alpha." placement="bottom">
-            <Badge text="alpha" type="purple" size="xs" />
-          </Tooltip>
           {project && (
-            <div className="topbar-v2__brand-text">
-              <div className="topbar-v2__brand-name">{project.name}</div>
-              <div className="topbar-v2__brand-sub">
-                {project.adapterType ?? ''}
-                {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}
+            <button
+              type="button"
+              className="topbar-v2__brand-btn topbar-v2__brand-btn--text"
+              onClick={onResetHome}
+              aria-label="Overview — reset view"
+              title="Overview — reset view"
+            >
+              <div className="topbar-v2__brand-text">
+                <div className="topbar-v2__brand-name">
+                  {project.name}
+                  <Tooltip content="This docs site is in beta." placement="bottom">
+                    <Badge text="beta" variant="default" size="xs" />
+                  </Tooltip>
+                </div>
+                <div className="topbar-v2__brand-sub">
+                  {project.adapterType ?? ''}
+                  {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}
+                </div>
               </div>
-            </div>
+            </button>
           )}
         </div>
       </div>
-      <label className="topbar-v2__search">
-        <Icon ryecon={RyeconMagnifyingGlass} size="sm" alt="Search" />
-        <input
-          type="search"
-          placeholder="Search models, sources, tests, metrics…"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              onSubmitSearch?.();
-            }
-          }}
-          aria-label={project ? `Search ${project.name}` : 'Search project'}
-        />
-      </label>
+      <Input
+        type="search"
+        startIcon={{ icon: <SearchIcon className="size-3" /> }}
+        placeholder="Search models, sources, tests, metrics…"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSubmitSearch?.();
+          }
+        }}
+        aria-label={project ? `Search ${project.name}` : 'Search project'}
+        className="w-full"
+      />
     </header>
   );
 }

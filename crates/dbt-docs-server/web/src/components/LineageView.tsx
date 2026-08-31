@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Expand } from 'lucide-react';
 
 import { Dag } from '@dbt-labs/dbt-dag';
-import { RyeconExpand } from '@dbt-labs/sourdough';
 
 import { useLineageData } from '../hooks/useLineageData';
 import { asToolbarItems, type LabelOnlyToolbarItem } from '../lib/dagToolbar';
@@ -49,7 +49,7 @@ export function LineageView({ rootUniqueId, modelName, onSelect }: Props) {
         className: 'max-w-md overflow-auto text-fgDisabled dark:text-fgDecorative',
       },
       {
-        ryecon: RyeconExpand,
+        ryecon: Expand,
         label: 'Fullscreen',
         tooltip: 'Open fullscreen lineage',
         action: () => navigate(paths.lineage(rootUniqueId)),

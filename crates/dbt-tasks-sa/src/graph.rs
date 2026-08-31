@@ -44,7 +44,9 @@ fn task_graph_phases_for_command(command: FsCommand) -> Option<&'static [TP]> {
         | FsCommand::Build
         | FsCommand::Seed
         | FsCommand::Snapshot => Some(PHASES_RENDER_ANALYZE_RUN),
-        FsCommand::Compile | FsCommand::Extension("lineage") => Some(PHASES_RENDER_ANALYZE),
+        FsCommand::Compile | FsCommand::Check | FsCommand::Extension("lineage") => {
+            Some(PHASES_RENDER_ANALYZE)
+        }
         FsCommand::Show => Some(PHASES_RENDER_ANALYZE_SHOW),
         _ => None,
     }
@@ -166,10 +168,10 @@ impl GraphBuilder {
                             self.arg.infer_schemas,
                         )
                     } else {
-                        // Handle unknown commands. `Source` (freshness) and
-                        // `jinja-check` legitimately produce an empty task graph.
+                        // Freshness and `jinja-check` legitimately produce an
+                        // empty task graph.
                         if self.arg.command != FsCommand::Extension("jinja-check")
-                            && self.arg.command != FsCommand::Source
+                            && !self.arg.command.is_freshness_command()
                         {
                             emit_warn_log_message(
                                 ErrorCode::Unexpected,
@@ -491,7 +493,6 @@ impl GraphBuilder {
             }
         }
 
-        // Assertion: For each (unique_id, task_type) pair, there should be exactly one task
         assert_graph(&graph);
 
         (graph, nodes_with_no_tasks)
@@ -640,6 +641,15 @@ fn initialize_graph(
 
     for unique_id in schedule.sorted_nodes.iter() {
         let mut expected_node_phases = phases.to_vec();
+
+        // Checks are not graph nodes: they run before the graph is built (see
+        // `run_parse_time_checks`), so a failing check stops the invocation rather than skipping
+        // scheduled work. Scheduling them here as well would execute every check twice — verified:
+        // a passing check reported both `PASS check x` from the pre-graph gate and `Succeeded check
+        // x` from its task.
+        if nodes.checks.contains_key(unique_id) {
+            continue;
+        }
         // Check if this frontier node is a model dependency of any selected unit test
         let is_model_dep_of_unit_test = if unique_id.starts_with("model.") {
             reverse_deps

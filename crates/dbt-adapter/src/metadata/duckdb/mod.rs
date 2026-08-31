@@ -10,11 +10,14 @@ use arrow_schema::Schema;
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 
 use dbt_adapter_core::ExecutionPhase;
-use dbt_adbc::{Connection, MapReduce, QueryCtx};
+use dbt_adapter_engine::MapReduce;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::dbt_catalogs_v2::{CatalogSpecV2View, DbtCatalogsV2View, V2CatalogType};
+use dbt_schemas::schemas::dbt_catalogs_v2::{
+    CatalogSpecV2View, CatalogType, DbtCatalogsV2View, PhysicalFormatResolver,
+};
 use dbt_schemas::schemas::{
     common::ResolvedQuoting,
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
@@ -414,10 +417,10 @@ pub(crate) struct ExternalIcebergAttach {
 /// Single answer to "is this an Iceberg REST-style attachment?" so the ATTACH
 /// composer (`engine::duckdb_attach`) and the metadata routing below can never
 /// disagree about which catalogs need REST-attachment treatment.
-pub(crate) fn attaches_via_iceberg_rest(catalog_type: V2CatalogType) -> bool {
+pub(crate) fn attaches_via_iceberg_rest(catalog_type: CatalogType) -> bool {
     matches!(
         catalog_type,
-        V2CatalogType::IcebergRest | V2CatalogType::Horizon | V2CatalogType::Unity
+        CatalogType::IcebergRest | CatalogType::Horizon | CatalogType::Unity
     )
 }
 
@@ -452,11 +455,12 @@ impl CatalogSpecDuckDbExt for CatalogSpecV2View<'_> {
     }
 
     fn resolved_attach_alias(&self) -> Option<String> {
-        // The base DuckDB adapter uses the `duckdb` block; the alt compute engine
-        // uses `alt`. Fall back so a catalog configured for either resolves.
+        // The base DuckDB adapter uses the `duckdb` block; the lake compute engine
+        // uses `lake_compute`. Fall back so a catalog configured for either
+        // resolves.
         let duckdb_block = self
-            .config_block("duckdb")
-            .or_else(|| self.config_block("alt"))?;
+            .config_block(AdapterType::DuckDB.as_ref())
+            .or_else(|| self.config_block(AdapterType::Alt.as_ref()))?;
         let alias = duckdb_block
             .get(dbt_yaml::Value::from("attach_as"))
             .and_then(|value| value.as_str())
@@ -502,11 +506,7 @@ impl CatalogsViewDuckDbExt for DbtCatalogsV2View<'_> {
             if !alias.eq_ignore_ascii_case(database) {
                 return None;
             }
-            Some(if catalog.catalog_type == V2CatalogType::DuckLake {
-                "ducklake"
-            } else {
-                catalog.table_format.as_str()
-            })
+            Some(catalog.physical_table_format().as_str())
         })
     }
 }

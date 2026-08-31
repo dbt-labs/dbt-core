@@ -8,9 +8,11 @@ use crate::release_version::semver_to_pep440;
 use crate::utils::{backoff, is_transient, require_https, sha256_hex};
 use anyhow::{Context, Result, anyhow, bail};
 use bytes::Bytes;
+use python_pkginfo::Metadata;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs::File;
+use std::io::{Cursor, Read as _};
 use std::path::{Path, PathBuf};
 
 /// Embedded PEP 517 backend baked into every sdist.
@@ -111,6 +113,7 @@ pub(crate) async fn build_release_sdist(
         let bytes = download(http, &url).await?;
         let digest = sha256_hex(bytes.as_ref());
         eprintln!("✓ {filename} ({} bytes, sha256={digest})", bytes.len());
+        check_wheel_metadata_agrees(spec, &filename, bytes.as_ref())?;
         wheels.push(WheelAsset {
             platform_tag,
             filename,
@@ -119,6 +122,71 @@ pub(crate) async fn build_release_sdist(
     }
 
     build_sdist(spec, &version_pep440, &wheels, base_url, out_dir)
+}
+
+/// Fails the release when the sdist's static metadata disagrees with a wheel it
+/// points at, in either direction. pip survives such a mismatch (it builds the
+/// wheel and reads the real metadata), but uv trusts the sdist's PKG-INFO and
+/// never re-checks — so a wrong `Requires-Python` installs on an unsupported
+/// interpreter and dies at import on an ABI symbol, and a missing `Requires-Dist`
+/// (in either direction) installs the wrong dependency set and dies on first run.
+fn check_wheel_metadata_agrees(spec: &Spec, filename: &str, wheel: &[u8]) -> Result<()> {
+    let Some(metadata) = wheel_metadata(wheel)
+        .with_context(|| format!("read METADATA from {filename}"))?
+        .map(|raw| Metadata::parse(&raw))
+        .transpose()
+        .with_context(|| format!("parse METADATA from {filename}"))?
+    else {
+        bail!("{filename} has no *.dist-info/METADATA");
+    };
+
+    let expected_python = spec.requires_python.as_deref();
+    let actual_python = metadata.requires_python.as_deref();
+    if actual_python != expected_python {
+        bail!(
+            "{filename} declares Requires-Python {actual:?} but the sdist says \
+             {expected:?}; point `--pyproject-dir` at the pyproject that built \
+             these wheels",
+            actual = actual_python.unwrap_or("(absent)"),
+            expected = expected_python.unwrap_or("(absent)"),
+        );
+    }
+
+    let expected_deps: std::collections::BTreeSet<&str> =
+        spec.dependencies.iter().map(|d| d.trim()).collect();
+    let actual_deps: std::collections::BTreeSet<&str> =
+        metadata.requires_dist.iter().map(|d| d.trim()).collect();
+    if expected_deps != actual_deps {
+        bail!(
+            "{filename}'s Requires-Dist disagrees with the sdist: sdist deps={:?}, \
+             wheel deps={:?}",
+            expected_deps,
+            actual_deps,
+        );
+    }
+    Ok(())
+}
+
+/// The `*.dist-info/METADATA` bytes from a wheel held in memory.
+fn wheel_metadata(wheel: &[u8]) -> Result<Option<Vec<u8>>> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(wheel)).context("open wheel as zip")?;
+    let name = archive
+        .file_names()
+        .find(|n| {
+            n.ends_with("/METADATA")
+                && n.split('/')
+                    .next()
+                    .is_some_and(|d| d.ends_with(".dist-info"))
+        })
+        .map(str::to_string);
+    let Some(name) = name else {
+        return Ok(None);
+    };
+
+    let mut file = archive.by_name(&name)?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)?;
+    Ok(Some(buf))
 }
 
 /// GETs `url`, retrying transient failures and 5xx. A 4xx (e.g. a missing wheel)
@@ -175,6 +243,15 @@ fn render_sdist_pyproject(spec: &Spec, version_pep440: &str) -> String {
     let _ = writeln!(out, "version = {version_pep440:?}");
     if let Some(rp) = &spec.requires_python {
         let _ = writeln!(out, "requires-python = {rp:?}");
+    }
+    // Must mirror the downloaded wheel's deps: uv trusts sdist metadata rather
+    // than rebuilding to read the wheel's, so omitting these installs broken.
+    if !spec.dependencies.is_empty() {
+        out.push_str("dependencies = [\n");
+        for dep in &spec.dependencies {
+            let _ = writeln!(out, "  {dep:?},");
+        }
+        out.push_str("]\n");
     }
     out
 }
@@ -243,6 +320,7 @@ mod tests {
             pyproject_dir: dir.to_path_buf(),
             summary: Some("dbt fusion standalone analyzer CLI".to_string()),
             requires_python: Some(">=3.9".to_string()),
+            dependencies: vec!["mashumaro[msgpack]>=3.14".to_string()],
             classifiers: vec![],
             urls: vec![],
             authors: vec![],
@@ -265,6 +343,63 @@ mod tests {
             out.insert(name, body);
         }
         out
+    }
+
+    /// A wheel carrying `METADATA` with the given headers.
+    fn wheel_with_metadata(headers: &str) -> Vec<u8> {
+        use std::io::Write as _;
+        use zip::write::{SimpleFileOptions, ZipWriter};
+
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file(
+            "dbt_sa_cli-2.0.0a1.dist-info/METADATA",
+            SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(
+            format!("Metadata-Version: 2.1\nName: dbt-sa-cli\nVersion: 2.0.0a1\n{headers}")
+                .as_bytes(),
+        )
+        .unwrap();
+        zip.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn cross_check_accepts_a_wheel_that_agrees() {
+        let tmp = tempfile::tempdir().unwrap();
+        let spec = sample_spec(tmp.path());
+        let wheel = wheel_with_metadata(
+            "Requires-Python: >=3.9\nRequires-Dist: mashumaro[msgpack]>=3.14\n",
+        );
+
+        check_wheel_metadata_agrees(&spec, "w.whl", &wheel).unwrap();
+    }
+
+    #[test]
+    fn cross_check_rejects_a_narrower_requires_python() {
+        let tmp = tempfile::tempdir().unwrap();
+        let spec = sample_spec(tmp.path());
+        // The real defect: an sdist promising 3.9 in front of abi3-py311 wheels.
+        let wheel = wheel_with_metadata(
+            "Requires-Python: >=3.11\nRequires-Dist: mashumaro[msgpack]>=3.14\n",
+        );
+
+        let err = check_wheel_metadata_agrees(&spec, "w.whl", &wheel)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Requires-Python"), "got: {err}");
+    }
+
+    #[test]
+    fn cross_check_rejects_a_wheel_missing_a_promised_dependency() {
+        let tmp = tempfile::tempdir().unwrap();
+        let spec = sample_spec(tmp.path());
+        let wheel = wheel_with_metadata("Requires-Python: >=3.9\n");
+
+        let err = check_wheel_metadata_agrees(&spec, "w.whl", &wheel)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("Requires-Dist"), "got: {err}");
     }
 
     #[test]
@@ -307,6 +442,16 @@ mod tests {
         assert!(pyproject.contains("name = \"dbt-sa-cli\""));
         assert!(pyproject.contains("version = \"2.0.0a1\""));
         assert!(pyproject.contains("requires-python = \">=3.9\""));
+        assert!(
+            pyproject.contains("\"mashumaro[msgpack]>=3.14\","),
+            "sdist pyproject dropped dependencies: {pyproject}"
+        );
+
+        let pkg_info = &files["dbt_sa_cli-2.0.0a1/PKG-INFO"];
+        assert!(
+            pkg_info.contains("Requires-Dist: mashumaro[msgpack]>=3.14"),
+            "sdist PKG-INFO dropped dependencies: {pkg_info}"
+        );
 
         let backend = &files["dbt_sa_cli-2.0.0a1/_dbt_sa_build/__init__.py"];
         assert!(backend.contains("def build_wheel("));
@@ -324,6 +469,35 @@ mod tests {
             assets["wheels"]["macosx_11_0_arm64"]["sha256"],
             "bb".repeat(32)
         );
+    }
+
+    #[test]
+    fn build_sdist_declares_wheel_dependencies() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+        let mut spec = sample_spec(dir);
+        spec.wheel_name = "dbt-oss".to_string();
+        spec.requires_python = Some(">=3.11".to_string());
+        spec.dependencies = vec!["mashumaro[msgpack]>=3.14".to_string()];
+        let wheels = vec![WheelAsset {
+            platform_tag: "macosx_11_0_arm64".to_string(),
+            filename: "dbt_oss-2.0.0a1-cp311-abi3-macosx_11_0_arm64.whl".to_string(),
+            sha256_hex: "cc".repeat(32),
+        }];
+
+        let path = build_sdist(&spec, "2.0.0a1", &wheels, "https://example.com/dl/", dir).unwrap();
+        let files = read_targz(&path);
+
+        let pyproject = &files["dbt_oss-2.0.0a1/pyproject.toml"];
+        assert!(pyproject.contains("requires-python = \">=3.11\""));
+        assert!(
+            pyproject.contains("dependencies = [\n  \"mashumaro[msgpack]>=3.14\",\n]"),
+            "sdist pyproject must declare the wheel's deps, got:\n{pyproject}"
+        );
+
+        let pkg_info = &files["dbt_oss-2.0.0a1/PKG-INFO"];
+        assert!(pkg_info.contains("Requires-Dist: mashumaro[msgpack]>=3.14"));
+        assert!(pkg_info.contains("Requires-Python: >=3.11"));
     }
 
     #[test]

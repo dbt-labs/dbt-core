@@ -6,7 +6,8 @@ use dbt_cloud_config::{
 };
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{
-    DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML, DBT_VARS_YML,
+    DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
+    DBT_PROFILES_YML, DBT_SELECTORS_YML, DBT_VARS_YML,
 };
 use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
@@ -29,6 +30,7 @@ use dbt_schemas::state::DbtProfile;
 use dbt_telemetry::GenericOpItemProcessed;
 use dbt_yaml;
 use fs_deps::get_or_install_packages;
+use fs_deps::private_package::PrivatePackageResolver;
 use indexmap::IndexMap;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -103,7 +105,7 @@ fn resolve_and_set_threads(
     iarg: &InvocationArgs,
 ) -> FsResult<Option<usize>> {
     let final_threads = if iarg.num_threads.is_none() {
-        if let Some(threads) = dbt_profile.db_config.get_threads() {
+        if let Some(threads) = dbt_profile.default_db_config().get_threads() {
             // Convert StringOrInteger to Option<usize>
             match threads {
                 StringOrInteger::Integer(n) => Some(*n as usize),
@@ -121,11 +123,15 @@ fn resolve_and_set_threads(
         iarg.num_threads
     };
 
-    dbt_profile
-        .db_config
-        .set_threads(Some(StringOrInteger::Integer(
+    dbt_profile.threads = final_threads;
+    // Thread count is a target-wide concurrency setting, so it applies to every
+    // connection of every adapter the target declares -- not just the default one,
+    // which would leave a node running on a non-default adapter with none.
+    for adapter in dbt_profile.adapters_mut() {
+        adapter.set_threads(Some(StringOrInteger::Integer(
             final_threads.unwrap_or(0) as i64
         )));
+    }
 
     Ok(final_threads)
 }
@@ -203,6 +209,7 @@ pub async fn load(
     tracing_features: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
     loader_hooks: Arc<dyn LoaderHooks>,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
 ) -> FsResult<DbtState> {
     let (simplified_dbt_project, mut dbt_profile, vars_from_file) =
         load_simplified_project_and_profiles(arg).await?;
@@ -325,8 +332,8 @@ pub async fn load(
     let env = initialize_load_jinja_environment(
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
-        dbt_state.dbt_profile.db_config.adapter_type(),
-        dbt_state.dbt_profile.db_config.clone(),
+        dbt_state.dbt_profile.default_db_config().adapter_type(),
+        dbt_state.dbt_profile.default_db_config().clone(),
         dbt_state.run_started_at,
         &flags,
         iarg.warn_error_options.clone(),
@@ -342,7 +349,7 @@ pub async fn load(
         &simplified_dbt_project,
     );
 
-    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
+    let adapter_type = dbt_state.dbt_profile.default_db_config().adapter_type();
     let arg_ref = &arg;
     if let Some(prev_dbt_state) = arg.prev_dbt_state.clone() {
         let prev_root_package = prev_dbt_state.root_package();
@@ -462,7 +469,8 @@ pub async fn load(
         // Internal packages (dbt built-ins: get_where_subquery, etc.) are embedded in the
         // binary and never written to the parquet cache, so they are absent from
         // prev_dbt_state.packages. Always load them fresh on the incremental path too.
-        let internal_pkgs = construct_internal_packages(adapter_type, &arg.io.in_dir)?;
+        let internal_pkgs =
+            construct_internal_packages(dbt_state.dbt_profile.adapter_types(), &arg.io.in_dir)?;
         dbt_state.packages.extend(internal_pkgs);
 
         // Inject inline SQL even on the incremental path.
@@ -497,6 +505,8 @@ pub async fn load(
         iarg.replay.as_ref(),
         token,
         use_v2_compatible_package_downloads,
+        private_package_resolver,
+        dbt_state.cloud_config.clone(),
     )
     .await?;
 
@@ -548,7 +558,10 @@ pub async fn load(
         let internal_pkgs = match &arg.internal_package_mode {
             InternalPackageMode::Embedded => {
                 #[allow(unused_mut)]
-                let mut pkgs = construct_internal_packages(adapter_type, &arg.io.in_dir)?;
+                let mut pkgs = construct_internal_packages(
+                    dbt_state.dbt_profile.adapter_types(),
+                    &arg.io.in_dir,
+                )?;
                 loader_hooks
                     .will_load_internal_packages(&arg, &mut pkgs)
                     .await?;
@@ -801,12 +814,6 @@ pub async fn load_simplified_project_and_profiles(
     let simplified_dbt_project: DbtProjectSimplified =
         into_typed_with_jinja(raw_dbt_project_in_val, true, &env, &ctx, &[], None, true)?;
 
-    if simplified_dbt_project.data_paths.is_some() {
-        return err!(
-            ErrorCode::InvalidConfig,
-            "'data-paths' cannot be specified in dbt_project.yml",
-        );
-    }
     if simplified_dbt_project.source_paths.is_some() {
         return err!(
             ErrorCode::InvalidConfig,
@@ -993,6 +1000,14 @@ pub async fn load_inner(
         &all_files,
     );
 
+    let check_ymls = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::CheckPaths,
+        &["yml", "yaml"],
+        &all_files,
+    );
+
     // todo: change dbt_properties to be BTreeSet, this may require many goldies updates
     for item in seed_ymls
         .iter()
@@ -1001,16 +1016,25 @@ pub async fn load_inner(
         .chain(&test_ymls)
         .chain(&function_ymls)
         .chain(&macro_ymls)
+        .chain(&check_ymls)
     {
         if !dbt_properties.contains(item) {
             dbt_properties.push(item.clone());
         }
     }
+    drop_nested_project_config_files(&mut dbt_properties);
 
     let analysis_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::AnalysisPaths,
+        &["sql"],
+        &all_files,
+    );
+    let check_files = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::CheckPaths,
         &["sql"],
         &all_files,
     );
@@ -1102,6 +1126,7 @@ pub async fn load_inner(
         package_root_path: package_path.to_path_buf(),
         dbt_properties,
         analysis_files,
+        check_files,
         model_sql_files,
         function_sql_files: function_files,
         test_files,
@@ -1129,6 +1154,39 @@ fn run_started_at() -> DateTime<Tz> {
         let tz_now: DateTime<Tz> = utc_now.with_timezone(&Tz::UTC);
         tz_now
     }
+}
+
+/// dbt config files that are only meaningful at a project root, never resource properties.
+const PROJECT_ROOT_ONLY_YML_NAMES: [&str; 8] = [
+    DBT_PROJECT_YML,
+    DBT_DEPENDENCIES_YML,
+    DBT_PACKAGES_YML,
+    DBT_PACKAGES_LOCK_FILE,
+    DBT_CATALOGS_YML,
+    DBT_VARS_YML,
+    DBT_PROFILES_YML,
+    DBT_SELECTORS_YML,
+];
+
+/// Drops a project's own config files when an outer project's resource path walks into that
+/// project. Only files next to a `dbt_project.yml` are config; elsewhere they are properties.
+fn drop_nested_project_config_files(properties: &mut Vec<DbtAsset>) {
+    let project_roots: HashSet<PathBuf> = properties
+        .iter()
+        .filter(|asset| asset.path.file_name() == Some(OsStr::new(DBT_PROJECT_YML)))
+        .filter_map(|asset| asset.path.parent().map(Path::to_path_buf))
+        .collect();
+
+    properties.retain(|asset| {
+        let Some(file_name) = asset.path.file_name().and_then(OsStr::to_str) else {
+            return true;
+        };
+        !PROJECT_ROOT_ONLY_YML_NAMES.contains(&file_name)
+            || !asset
+                .path
+                .parent()
+                .is_some_and(|parent| project_roots.contains(parent))
+    });
 }
 
 fn should_exclude_path(kind: &ResourcePathKind, path: &Path) -> bool {
@@ -1252,6 +1310,10 @@ fn collect_paths(dbt_project: &DbtProject) -> HashMap<ResourcePathKind, Vec<Stri
     all_dirs.insert(
         ResourcePathKind::AssetPaths,
         dbt_project.asset_paths.clone().unwrap_or_default(),
+    );
+    all_dirs.insert(
+        ResourcePathKind::CheckPaths,
+        dbt_project.check_paths.clone().unwrap_or_default(),
     );
     all_dirs.insert(
         ResourcePathKind::FunctionPaths,
@@ -1465,12 +1527,44 @@ async fn prepare_inline_sql(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::schemas::profiles::DbConfig;
+    use dbt_schemas::state::ProfileAdapter;
     use dbt_schemas::state::ResourcePathKind;
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
     use std::time::SystemTime;
+
+    #[test]
+    fn resolve_threads_sets_profile_threads_from_target() {
+        let db_config: DbConfig = dbt_yaml::from_str(
+            "type: duckdb\n\
+             path: db.duckdb\n\
+             threads: 4",
+        )
+        .expect("valid DuckDB profile");
+        let default_adapter = db_config.adapter_type();
+        let adapters = IndexMap::from([(default_adapter, ProfileAdapter::single(db_config))]);
+        let mut dbt_profile = DbtProfile {
+            profile: "test".to_string(),
+            target: "duckdb".to_string(),
+            defer_to_target: None,
+            allow_clones: true,
+            adapters,
+            default_adapter,
+            schema: "main".to_string(),
+            database: "db".to_string(),
+            relative_profile_path: PathBuf::from("profiles.yml"),
+            threads: None,
+        };
+
+        let resolved = resolve_and_set_threads(&mut dbt_profile, &InvocationArgs::default())
+            .expect("profile threads should resolve");
+
+        assert_eq!(resolved, Some(4));
+        assert_eq!(dbt_profile.threads, Some(4));
+    }
 
     #[test]
     fn test_find_files_by_kind_and_extension_excludes_generic_test_paths() {
@@ -1644,6 +1738,89 @@ mod tests {
             &ResourcePathKind::SeedPaths,
             &PathBuf::from("seeds/generic/seed.csv")
         ));
+    }
+
+    fn dbt_properties(paths: &[&str]) -> Vec<DbtAsset> {
+        paths
+            .iter()
+            .map(|path| DbtAsset {
+                package_name: "test_project".to_string(),
+                base_path: PathBuf::from("/project"),
+                path: PathBuf::from(path),
+                original_path: PathBuf::from(path),
+            })
+            .collect()
+    }
+
+    fn surviving_paths(properties: &[DbtAsset]) -> Vec<PathBuf> {
+        properties.iter().map(|asset| asset.path.clone()).collect()
+    }
+
+    #[test]
+    fn test_drop_nested_project_config_files_excludes_nested_project_root() {
+        let mut properties = dbt_properties(&[
+            "packages/lib/dbt_project.yml",
+            "packages/lib/packages.yml",
+            "packages/lib/package-lock.yml",
+            "packages/lib/macros/schema.yml",
+        ]);
+
+        drop_nested_project_config_files(&mut properties);
+
+        // The nested project's config files drop out; its properties files still belong to us.
+        assert_eq!(
+            surviving_paths(&properties),
+            vec![PathBuf::from("packages/lib/macros/schema.yml")]
+        );
+    }
+
+    #[test]
+    fn test_drop_nested_project_config_files_keeps_properties_without_sibling_project() {
+        let paths = [
+            "models/packages.yml",
+            "models/nested/dependencies.yml",
+            "models/schema.yml",
+        ];
+        let mut properties = dbt_properties(&paths);
+
+        drop_nested_project_config_files(&mut properties);
+
+        // Without a sibling dbt_project.yml these are ordinary properties documents.
+        assert_eq!(
+            surviving_paths(&properties),
+            paths.iter().map(PathBuf::from).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_drop_nested_project_config_files_excludes_root_project_configs() {
+        let mut properties = dbt_properties(&[
+            "dbt_project.yml",
+            "profiles.yml",
+            "selectors.yml",
+            "dependencies.yml",
+            "catalogs.yml",
+            "vars.yml",
+            "one.yml",
+        ]);
+
+        drop_nested_project_config_files(&mut properties);
+
+        // A resource path resolving to the project root, e.g. `model-paths: ["."]`.
+        assert_eq!(surviving_paths(&properties), vec![PathBuf::from("one.yml")]);
+    }
+
+    #[test]
+    fn test_drop_nested_project_config_files_excludes_project_yml_without_siblings() {
+        let mut properties = dbt_properties(&["models/dbt_project.yml", "models/schema.yml"]);
+
+        drop_nested_project_config_files(&mut properties);
+
+        // A file named dbt_project.yml is always project config, never properties.
+        assert_eq!(
+            surviving_paths(&properties),
+            vec![PathBuf::from("models/schema.yml")]
+        );
     }
 
     #[test]

@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 use dbt_schemas::schemas::relations::base::TableFormat;
 
 use crate::relation::{RelationConfig, RelationObject, do_create_relation};
@@ -257,7 +258,10 @@ impl TimeMachineSerializable for crate::catalog_relation::CatalogRelation {
             adapter_type,
             catalog_name: ext.opt_str("catalog_name"),
             integration_name: ext.opt_str("integration_name"),
-            catalog_type: ext.str_or("catalog_type", ""),
+            catalog_type: CatalogType::parse_from_str(
+                &ext.str_or("catalog_type", ""),
+                adapter_type,
+            ),
             table_format: if ext
                 .str_or("table_format", "")
                 .eq_ignore_ascii_case("iceberg")
@@ -270,6 +274,7 @@ impl TimeMachineSerializable for crate::catalog_relation::CatalogRelation {
             is_transient: ext.opt_bool("is_transient"),
             external_volume: ext.opt_str("external_volume"),
             catalog_database: ext.opt_str("catalog_database"),
+            lakehouse_catalog: ext.opt_str("lakehouse_catalog"),
             base_location: ext.opt_str("base_location"),
             file_format: ext.opt_str("file_format"),
         };
@@ -398,7 +403,7 @@ mod tests {
                 "comments": {"event_id": "A UUID for this event."},
                 "persist": true
             },
-            "column_tags": {"tags": {"event_id": {"sensitivity": "internal"}}},
+            "column_tags": {"set_column_tags": {"event_id": {"sensitivity": "internal"}}},
             "comment": {"comment": "An event sent when a purchase occurs.", "persist": true},
             "tags": {
                 "set_tags": {
@@ -430,7 +435,7 @@ mod tests {
             (
                 RelationType::View,
                 serde_json::json!({
-                    "column_tags": {"tags": {"id": {"sensitivity": "internal"}}}
+                    "column_tags": {"set_column_tags": {"id": {"sensitivity": "internal"}}}
                 }),
             ),
             (
@@ -580,12 +585,13 @@ mod tests {
             adapter_type: AdapterType::Snowflake,
             catalog_name: Some("my_catalog".to_string()),
             integration_name: Some("my_integration".to_string()),
-            catalog_type: "BUILT_IN".to_string(),
+            catalog_type: CatalogType::SnowflakeBuiltIn,
             table_format: TableFormat::Iceberg,
             adapter_properties: BTreeMap::from([("key1".to_string(), "value1".to_string())]),
             is_transient: Some(false),
             external_volume: Some("my_volume".to_string()),
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: Some("/path/to/data".to_string()),
             file_format: None,
         };

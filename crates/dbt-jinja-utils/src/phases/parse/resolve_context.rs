@@ -1,8 +1,13 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use dbt_adapter::load_store::ResultStore;
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_jinja_ctx::{DbtNamespace, DocsContext, JinjaObject, ResolveBaseCtx, to_jinja_btreemap};
+use dbt_jinja_ctx::{
+    DbtNamespace, DocsContext, JinjaObject, MacroLookupContext, ResolveBaseCtx, to_jinja_btreemap,
+};
 use dbt_jinja_vars::ConfiguredVar;
 use dbt_schemas::schemas::macros::DbtDocsMacro;
 use minijinja::value::{Enumerator, Object, Value as MinijinjaValue};
@@ -198,6 +203,9 @@ pub fn build_resolve_context(
         })
         .collect();
 
+    let mut packages: BTreeSet<String> = namespace_keys.iter().cloned().collect();
+    packages.insert(root_project_name.to_string());
+
     let dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>> = namespace_keys
         .into_iter()
         .map(|key| {
@@ -228,6 +236,11 @@ pub fn build_resolve_context(
         macro_dispatch_order,
         target_package_name: local_project_name.to_string(),
         execute: false,
+        context: JinjaObject::new(MacroLookupContext::new(
+            root_project_name.to_string(),
+            None,
+            packages,
+        )),
         node: MinijinjaValue::NONE,
         connection_name: String::new(),
         store_result: MinijinjaValue::from_function(result_store.store_result()),

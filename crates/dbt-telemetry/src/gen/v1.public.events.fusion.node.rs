@@ -21,6 +21,10 @@ pub struct TestEvaluationDetail {
     /// Whether this test passed by static checking instead of execution.
     #[prost(bool, optional, tag = "6")]
     pub statically_checked: ::core::option::Option<bool>,
+    /// unique_id of the batched test node whose single query produced this result.
+    /// Matches `QueryExecuted.unique_id` for that query. Unset when the test ran on its own.
+    #[prost(string, optional, tag = "7")]
+    pub batch_unique_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl ::dbt_tracing::StaticName for TestEvaluationDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.TestEvaluationDetail";
@@ -502,6 +506,7 @@ pub enum NodeType {
     SavedQuery = 13,
     SemanticModel = 14,
     Function = 15,
+    Check = 16,
 }
 impl NodeType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -526,6 +531,7 @@ impl NodeType {
             Self::SavedQuery => "NODE_TYPE_SAVED_QUERY",
             Self::SemanticModel => "NODE_TYPE_SEMANTIC_MODEL",
             Self::Function => "NODE_TYPE_FUNCTION",
+            Self::Check => "NODE_TYPE_CHECK",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -547,6 +553,7 @@ impl NodeType {
             "NODE_TYPE_SAVED_QUERY" => Some(Self::SavedQuery),
             "NODE_TYPE_SEMANTIC_MODEL" => Some(Self::SemanticModel),
             "NODE_TYPE_FUNCTION" => Some(Self::Function),
+            "NODE_TYPE_CHECK" => Some(Self::Check),
             _ => None,
         }
     }

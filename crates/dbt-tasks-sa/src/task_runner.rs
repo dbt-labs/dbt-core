@@ -26,6 +26,7 @@ use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::TaskRunnerStats;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
+use dbt_tasks_core::run_cache_lifecycle::RunCacheLifecycle;
 use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooks;
@@ -88,6 +89,7 @@ pub struct TaskRunner {
     compiled_sql_cache: Arc<dyn CompiledSqlCache>,
     ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
     static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+    run_cache: Arc<RunCacheLifecycle>,
 }
 
 impl TaskRunner {
@@ -101,6 +103,7 @@ impl TaskRunner {
         compiled_sql_cache: Arc<dyn CompiledSqlCache>,
         ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
         static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+        run_cache: Arc<RunCacheLifecycle>,
     ) -> Self {
         Self {
             hooks,
@@ -112,6 +115,7 @@ impl TaskRunner {
             compiled_sql_cache,
             ctx_factory,
             static_analysis_buckets,
+            run_cache,
         }
     }
 
@@ -136,7 +140,6 @@ impl TaskRunner {
         run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
     ) -> FsResult<()> {
-        let adapter_type = self.resolved_state.dbt_profile.db_config.adapter_type();
         // Pre-register only *selected* seeds (not frontier dependencies) so that
         // frontier seeds don't mask "missing in remote" static analysis errors.
         let selected_seed_ids: Vec<&String> = schedule
@@ -150,7 +153,6 @@ impl TaskRunner {
         register_seeds::pre_register_seeds(
             &selected_seed_ids,
             &self.resolved_state.nodes.seeds,
-            adapter_type,
             Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
             Arc::clone(&self.data_store),
             Arc::clone(self.adapter.engine().type_ops()),
@@ -201,6 +203,7 @@ impl TaskRunner {
                 freshness_results,
                 Arc::clone(&self.static_analysis_buckets),
                 Arc::clone(&self.adapter),
+                self.run_cache.clone(),
             )
             .await
     }
@@ -442,7 +445,19 @@ impl TaskRunner {
 
                         let (hook_outcome, error_message) = match &result {
                             Ok(_) => (HookOutcome::Success, None),
-                            Err(e) => (HookOutcome::Error, Some(e.message().to_string())),
+                            Err(e) => {
+                                let prefix = if stats
+                                    .run
+                                    .stats
+                                    .iter()
+                                    .any(|stat| stat.status == NodeStatus::Errored)
+                                {
+                                    "Secondary error after an earlier node failure: "
+                                } else {
+                                    ""
+                                };
+                                (HookOutcome::Error, Some(format!("{prefix}{}", e.message())))
+                            }
                         };
 
                         record_span_status_with_attrs(

@@ -64,7 +64,8 @@ impl SemanticCategory {
             | "has_dbr_capability"
             | "get_missing_columns"
             | "is_replaceable"
-            | "location_exists" => SemanticCategory::MetadataRead,
+            | "location_exists"
+            | "check_incremental_schema_changes" => SemanticCategory::MetadataRead,
 
             // Mutate database state (DDL/DML)
             "execute"
@@ -141,6 +142,8 @@ impl SemanticCategory {
             | "get_clickhouse_local_db_prefix"
             | "clickhouse_db_engine_clause"
             | "is_before_version"
+            | "is_at_or_after_version"
+            | "format_columns"
             | "supports_atomic_exchange"
             | "can_exchange"
             | "should_on_cluster"
@@ -151,6 +154,7 @@ impl SemanticCategory {
             | "filter_settings_by_engine"
             | "get_ch_database"
             | "get_credentials"
+            | "s3source_clause"
             | "get_csv_data"
             | "table_format" => SemanticCategory::Pure,
 
@@ -174,6 +178,9 @@ impl SemanticCategory {
             | "list_relations_schemas_by_patterns"
             | "list_relations_in_parallel"
             | "freshness"
+            | "freshness_with_overrides"
+            | "freshness_all_in_schema"
+            | "freshness_all_in_schemas"
             | "list_user_defined_functions"
             | "build_schemas_from_stats_sql"
             | "build_columns_from_get_columns"
@@ -282,6 +289,10 @@ mod tests {
         );
         assert_eq!(
             SemanticCategory::from_metadata_method("freshness"),
+            SemanticCategory::MetadataRead
+        );
+        assert_eq!(
+            SemanticCategory::from_metadata_method("freshness_all_in_schemas"),
             SemanticCategory::MetadataRead
         );
         assert_eq!(

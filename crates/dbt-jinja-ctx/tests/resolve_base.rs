@@ -1,15 +1,17 @@
 //! Tests covering `ResolveBaseCtx` end-to-end:
 //!
 //! 1. The typed ctx serializes to the same key set today's hand-built
-//!    `build_resolve_context` BTreeMap produces — nine fixed keys plus one
+//!    `build_resolve_context` BTreeMap produces — ten fixed keys plus one
 //!    top-level entry per `dbt_namespace` (via `#[serde(flatten)]`).
 //! 2. The `dbt_namespaces` flatten emits each namespace as its own
 //!    top-level Jinja key (not as a nested `dbt_namespaces.foo` path).
 //! 3. The `ResolveBaseCtx` JsonSchema has stable shape (snapshot test).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use dbt_jinja_ctx::{DbtNamespace, JinjaObject, ResolveBaseCtx, to_jinja_btreemap};
+use dbt_jinja_ctx::{
+    DbtNamespace, JinjaObject, MacroLookupContext, ResolveBaseCtx, to_jinja_btreemap,
+};
 use minijinja::Value as MinijinjaValue;
 
 fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
@@ -34,6 +36,11 @@ fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
         macro_dispatch_order,
         target_package_name: "my_project".to_string(),
         execute: false,
+        context: JinjaObject::new(MacroLookupContext::new(
+            "my_project".to_string(),
+            None,
+            BTreeSet::from(["my_project".to_string()]),
+        )),
         node: MinijinjaValue::NONE,
         connection_name: String::new(),
         store_result: MinijinjaValue::from("store-result-stub"),
@@ -55,6 +62,7 @@ fn resolve_base_ctx_serializes_to_expected_keys() {
             "MACRO_DISPATCH_ORDER",
             "TARGET_PACKAGE_NAME",
             "connection_name",
+            "context",
             "dbt",
             "doc",
             "execute",
@@ -64,9 +72,21 @@ fn resolve_base_ctx_serializes_to_expected_keys() {
             "store_raw_result",
             "store_result",
         ],
-        "resolve-base ctx must produce the nine base keys plus one entry per \
+        "resolve-base ctx must produce the ten base keys plus one entry per \
          dbt_namespace via #[serde(flatten)]"
     );
+}
+
+#[test]
+fn context_exposes_root_project_name_at_resolve_base() {
+    let registered = to_jinja_btreemap(&fixture_resolve_base_ctx());
+    let project_name = registered
+        .get("context")
+        .expect("context must be present at resolve-base scope")
+        .get_attr("project_name")
+        .expect("context.project_name must resolve");
+
+    assert_eq!(project_name.as_str(), Some("my_project"));
 }
 
 /// Regression: a custom `generate_schema_name` that calls `run_query(...)`

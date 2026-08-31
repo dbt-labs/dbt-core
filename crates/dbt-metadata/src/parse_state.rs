@@ -64,8 +64,8 @@ use serde::{Deserialize, Serialize};
 
 use dbt_schemas::{
     schemas::{
-        DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
-        DbtUnitTest, Nodes,
+        DbtAnalysis, DbtCheck, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource,
+        DbtTest, DbtUnitTest, Nodes,
         common::ConstraintType,
         macros::{DbtDocsMacro, DbtMacro, MacroArgument},
         manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
@@ -539,6 +539,7 @@ fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> V
     push_trait!(&nodes.sources, "source", 0);
     push_trait!(&nodes.snapshots, "snapshot", 0);
     push_trait!(&nodes.analyses, "analysis", 0);
+    push_trait!(&nodes.checks, "check", 0);
     push_trait!(&nodes.exposures, "exposure", 0);
     push_trait!(&nodes.semantic_models, "semantic_model", 0);
     push_trait!(&nodes.metrics, "metric", 0);
@@ -557,6 +558,7 @@ fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> V
     push_trait!(&disabled_nodes.sources, "source", 1);
     push_trait!(&disabled_nodes.snapshots, "snapshot", 1);
     push_trait!(&disabled_nodes.analyses, "analysis", 1);
+    push_trait!(&disabled_nodes.checks, "check", 1);
     push_trait!(&disabled_nodes.exposures, "exposure", 1);
     push_trait!(&disabled_nodes.semantic_models, "semantic_model", 1);
     push_trait!(&disabled_nodes.metrics, "metric", 1);
@@ -598,6 +600,7 @@ fn collect_delta_rows(
     push_if_changed!(&nodes.sources, "source", 0);
     push_if_changed!(&nodes.snapshots, "snapshot", 0);
     push_if_changed!(&nodes.analyses, "analysis", 0);
+    push_if_changed!(&nodes.checks, "check", 0);
     push_if_changed!(&nodes.exposures, "exposure", 0);
     push_if_changed!(&nodes.semantic_models, "semantic_model", 0);
     push_if_changed!(&nodes.metrics, "metric", 0);
@@ -620,6 +623,7 @@ fn collect_delta_rows(
     push_if_changed!(&disabled_nodes.sources, "source", 1);
     push_if_changed!(&disabled_nodes.snapshots, "snapshot", 1);
     push_if_changed!(&disabled_nodes.analyses, "analysis", 1);
+    push_if_changed!(&disabled_nodes.checks, "check", 1);
     push_if_changed!(&disabled_nodes.exposures, "exposure", 1);
     push_if_changed!(&disabled_nodes.semantic_models, "semantic_model", 1);
     push_if_changed!(&disabled_nodes.metrics, "metric", 1);
@@ -672,6 +676,7 @@ fn collect_alive_rows(
     push_alive!(&nodes.sources, "source");
     push_alive!(&nodes.snapshots, "snapshot");
     push_alive!(&nodes.analyses, "analysis");
+    push_alive!(&nodes.checks, "check");
     push_alive!(&nodes.exposures, "exposure");
     push_alive!(&nodes.semantic_models, "semantic_model");
     push_alive!(&nodes.metrics, "metric");
@@ -686,6 +691,7 @@ fn collect_alive_rows(
     push_alive!(&disabled_nodes.sources, "source");
     push_alive!(&disabled_nodes.snapshots, "snapshot");
     push_alive!(&disabled_nodes.analyses, "analysis");
+    push_alive!(&disabled_nodes.checks, "check");
     push_alive!(&disabled_nodes.exposures, "exposure");
     push_alive!(&disabled_nodes.semantic_models, "semantic_model");
     push_alive!(&disabled_nodes.metrics, "metric");
@@ -1576,6 +1582,7 @@ fn deserialize_into(
         "source" => deser!(nodes.sources, DbtSource),
         "snapshot" => deser!(nodes.snapshots, DbtSnapshot),
         "analysis" => deser!(nodes.analyses, DbtAnalysis),
+        "check" => deser!(nodes.checks, DbtCheck),
         "exposure" => deser!(nodes.exposures, DbtExposure),
         "semantic_model" => deser!(nodes.semantic_models, DbtSemanticModel),
         "metric" => deser!(nodes.metrics, DbtMetric),
@@ -2181,6 +2188,7 @@ mod tests {
             package_root_path: root.join(name),
             dbt_properties: vec![],
             analysis_files: vec![],
+            check_files: vec![],
             model_sql_files: vec![],
             function_sql_files: vec![],
             macro_files: vec![],
@@ -2203,6 +2211,7 @@ mod tests {
             package_root_path: internal_root,
             dbt_properties: vec![],
             analysis_files: vec![],
+            check_files: vec![],
             model_sql_files: vec![],
             function_sql_files: vec![],
             macro_files: vec![],

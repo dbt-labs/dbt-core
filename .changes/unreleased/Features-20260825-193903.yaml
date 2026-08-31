@@ -1,0 +1,7 @@
+kind: Features
+body: '[ClickHouse] clickhouse_s3source() renders the s3() table function, and model contracts are enforced end-to-end (constraint rendering, per-column codec/ttl, real column types).'
+time: 2026-08-25T19:39:03.905817+02:00
+custom:
+    author: koletzilla
+    issue: "14585"
+    project: dbt-core

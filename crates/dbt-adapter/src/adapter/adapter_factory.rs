@@ -106,6 +106,7 @@ impl DefaultAdapterFactory {
 
         let query_comment =
             QueryCommentConfig::from_query_comment(query_comment, adapter_type, true, cloud_config);
+        let dbt_cloud_project_id = cloud_config.and_then(|c| c.project_id.clone());
 
         let engine = Arc::new(AdbcEngine::new(
             adapter_type,
@@ -118,6 +119,7 @@ impl DefaultAdapterFactory {
             relation_cache,
             behavior_flag_overrides,
             threads,
+            dbt_cloud_project_id,
         ));
         Ok(engine)
     }

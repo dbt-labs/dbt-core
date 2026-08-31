@@ -7,6 +7,7 @@ pub mod feature_stack_builder;
 
 // All features:
 pub mod adapter;
+pub mod alt;
 pub mod antlr_parser;
 pub mod cli;
 pub mod index;

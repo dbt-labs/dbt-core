@@ -3,8 +3,8 @@ import { intersection } from 'lodash';
 import { twMerge } from 'tailwind-merge';
 
 import { ResourceType } from '@dbt-labs/dbt-dag';
-import { Popover, SizeType } from '@dbt-labs/sourdough';
 
+import { Popover } from '../../components/ui/Popover';
 import {
   ExposureHealthIssueType,
   HealthIssueType,
@@ -27,11 +27,16 @@ import { TrustSignalDescription } from './TrustSignalDescription';
 
 export { trustIconMap };
 
+/** Matches sourdough's SizeType structurally (same string values) so it's
+ *  still assignable everywhere that type was used -- TypeScript checks
+ *  shape, not origin, for a plain string-literal union. */
+type SourdoughSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+
 type TrustSignalsBadgeDisplayProps = {
   trustState: TrustState;
   messages: TrustSignalMessage[];
   shouldRenderStateHeader: boolean;
-  size?: SizeType;
+  size?: SourdoughSize;
   className?: string;
   showPopover?: boolean;
 };
@@ -56,7 +61,6 @@ const TrustSignalsBadgeDisplay: FC<TrustSignalsBadgeDisplayProps> = ({
             size={size}
           />
         }
-        shouldShowOnHover={true}
         zIndex={50}
       >
         <div
@@ -120,7 +124,7 @@ export const successStatuses: Record<
 export interface TrustSignalsBadgeParams {
   trustSignals: TrustSignals;
   shouldRenderStateHeader?: boolean;
-  size?: SizeType;
+  size?: SourdoughSize;
   className?: string;
   showPopover?: boolean;
 }

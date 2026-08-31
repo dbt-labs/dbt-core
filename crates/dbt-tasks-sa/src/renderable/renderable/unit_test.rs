@@ -146,7 +146,7 @@ pub(crate) async fn run_unit_test_render(
             &given_relations.relations_to_fetch,
             &node.common().unique_id,
             &mut ctx,
-            task_hooks,
+            Arc::clone(&task_hooks),
         ))
         .await;
         if let Err(e) = fetch_outcome {
@@ -167,7 +167,7 @@ pub(crate) async fn run_unit_test_render(
             .as_any()
             .downcast_ref::<DbtUnitTest>()
             .expect("run_unit_test_render called on non-DbtUnitTest");
-        let res = render_unit_test(ut_ref, &mut ctx, given_relations);
+        let res = render_unit_test(ut_ref, &mut ctx, given_relations, task_hooks.as_ref());
         handle_render_result(
             res,
             &node.unique_id(),
@@ -404,6 +404,7 @@ fn populate_schema_from_empty_relation(
     compiled_model_sql: &str,
     subqueries: &[(String, String)],
     infer_with_query_schema: bool,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<SchemaRef> {
     let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -512,6 +513,18 @@ fn populate_schema_from_empty_relation(
         })
         .collect::<Vec<_>>()
         .join(",");
+
+    if infer_with_query_schema {
+        let sql = if ctes.is_empty() {
+            Cow::Borrowed(schema_sql.as_str())
+        } else {
+            Cow::Owned(format!("WITH {ctes} {schema_sql}"))
+        };
+        // Let distribution-specific hooks handle schemas that the adapter query path cannot bind.
+        if let Some(schema) = task_hooks.try_infer_unit_test_schema(ctx, unit_test, &sql)? {
+            return Ok(schema);
+        }
+    }
 
     let template = ctx.env.template_from_str(materialization).map_err(|e| {
         fs_err!(
@@ -1023,6 +1036,7 @@ fn render_unit_test(
     node: &DbtUnitTest,
     ctx: &mut TaskRunnerCtx,
     given_relations: DiscoveredGivenRelations,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<(SqlInstruction, Arc<DashMap<String, MinijinjaValue>>)> {
     let DiscoveredGivenRelations {
         given_relations,
@@ -1349,6 +1363,7 @@ fn render_unit_test(
                     compiled_model_sql.as_str(),
                     &subqueries,
                     infer_with_query_schema,
+                    task_hooks,
                 )?
             }
         }
@@ -1597,7 +1612,7 @@ fn yml_sequence_to_sql_literal(
     };
     let mut element_type_literal = String::new();
     type_ops
-        .format_arrow_type_as_sql(element_field.data_type(), &mut element_type_literal)
+        .format_arrow_type_as_sql(element_field.data_type(), true, &mut element_type_literal)
         .map_err(|e| {
             fs_err!(
                 ErrorCode::InvalidConfig,
@@ -1762,7 +1777,7 @@ fn columns_to_formatted_types<'a>(
         .map(|f| {
             let mut formatted = String::new();
             type_ops
-                .format_arrow_type_as_sql(f.data_type(), &mut formatted)
+                .format_arrow_type_as_sql(f.data_type(), f.is_nullable(), &mut formatted)
                 .map_err(|e| {
                     fs_err!(
                         ErrorCode::InvalidConfig,
@@ -2186,6 +2201,7 @@ fn get_unique_id(
 fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
+        .flexible(true)
         .from_reader(Cursor::new(data));
 
     let headers = reader
@@ -2197,22 +2213,47 @@ fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     for result in reader.records() {
         let record = result
             .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "Failed to read record: {}", e))?;
+        if record.len() > headers.len() {
+            let error = record.position().map_or_else(
+                || {
+                    format!(
+                        "CSV error: found record with {} fields, but the previous record has {} fields",
+                        record.len(),
+                        headers.len()
+                    )
+                },
+                |position| {
+                    format!(
+                        "CSV error: record {} (line: {}, byte: {}): found record with {} fields, but the previous record has {} fields",
+                        position.record(),
+                        position.line(),
+                        position.byte(),
+                        record.len(),
+                        headers.len()
+                    )
+                },
+            );
+            return err!(ErrorCode::InvalidConfig, "Failed to read record: {}", error);
+        }
         let mut row = BTreeMap::new();
-        for (i, field) in record.iter().enumerate() {
-            let value = if field.is_empty() {
-                YmlValue::null()
-            } else if let Ok(v) = field.parse::<i64>() {
-                YmlValue::number(v.into())
-            } else if let Ok(v) = field.parse::<f64>() {
-                YmlValue::number(v.into())
-            } else if field.eq_ignore_ascii_case("true") {
-                YmlValue::bool(true)
-            } else if field.eq_ignore_ascii_case("false") {
-                YmlValue::bool(false)
-            } else {
-                YmlValue::string(field.to_string())
+        for (i, header) in headers.iter().enumerate() {
+            let value = match record.get(i) {
+                None | Some("") => YmlValue::null(),
+                Some(field) => {
+                    if let Ok(v) = field.parse::<i64>() {
+                        YmlValue::number(v.into())
+                    } else if let Ok(v) = field.parse::<f64>() {
+                        YmlValue::number(v.into())
+                    } else if field.eq_ignore_ascii_case("true") {
+                        YmlValue::bool(true)
+                    } else if field.eq_ignore_ascii_case("false") {
+                        YmlValue::bool(false)
+                    } else {
+                        YmlValue::string(field.to_string())
+                    }
+                }
             };
-            row.insert(headers[i].to_string(), value);
+            row.insert(header.to_string(), value);
         }
         rows.push(row);
     }
@@ -2257,6 +2298,27 @@ mod tests {
     use dbt_test_primitives::assert_contains;
 
     type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn test_parse_csv_rows_fills_missing_trailing_fields_with_null() {
+        let rows = parse_csv_rows(b"id,name,note\n1,alpha\n")
+            .expect("a short CSV record should match Python DictReader semantics");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("note"), Some(&YmlValue::null()));
+        assert_eq!(rows[0].len(), 3);
+    }
+
+    #[test]
+    fn test_parse_csv_rows_rejects_fields_beyond_the_header() {
+        let error = parse_csv_rows(b"id,name\n1,alpha,extra\n")
+            .expect_err("an extra CSV field must not be silently discarded");
+
+        assert_contains!(
+            error.to_string(),
+            "found record with 3 fields, but the previous record has 2 fields"
+        );
+    }
 
     /// Binds `value` as the `run_started_at` override and renders `template`,
     /// exercising the same path unit tests use.

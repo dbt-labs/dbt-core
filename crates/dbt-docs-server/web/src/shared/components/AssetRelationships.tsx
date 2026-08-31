@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
 import { DbtResourceIcon, getResourceType } from '@dbt-labs/dbt-dag';
-import { FloatingTabs } from '@dbt-labs/sourdough';
+
+import { FloatingTabs } from '../../components/ui/FloatingTabs';
 
 export type RelationshipItem = {
   uniqueId: string;
@@ -80,24 +81,15 @@ export function AssetRelationships({
         {noRelationships ? (
           <p className="italic text-fgDecorative">No relationships found.</p>
         ) : (
-          <FloatingTabs>
+          <FloatingTabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as SubTab)}
+          >
             {dependsOn.length > 0 && (
-              <FloatingTabs.Tab
-                id="dependsOn"
-                isActive={activeTab === 'dependsOn'}
-                onClick={() => setActiveTab('dependsOn')}
-              >
-                Depends on
-              </FloatingTabs.Tab>
+              <FloatingTabs.Tab id="dependsOn">Depends on</FloatingTabs.Tab>
             )}
             {referencedBy.length > 0 && (
-              <FloatingTabs.Tab
-                id="referencedBy"
-                isActive={activeTab === 'referencedBy'}
-                onClick={() => setActiveTab('referencedBy')}
-              >
-                Referenced by
-              </FloatingTabs.Tab>
+              <FloatingTabs.Tab id="referencedBy">Referenced by</FloatingTabs.Tab>
             )}
           </FloatingTabs>
         )}

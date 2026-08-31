@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Compass, Share2, X } from 'lucide-react';
 
 import { type ResourceTypeExplorer, resourceTypesWithColumns } from '@dbt-labs/dbt-dag';
-import {
-  IconButton,
-  RyeconClose,
-  RyeconCompass,
-  RyeconShare,
-  Sizes,
-} from '@dbt-labs/sourdough';
 
 import { getColumns, toRelationshipItem } from '../lib/assetView';
 import { inferResourceType } from '../lib/inferResourceType';
@@ -30,6 +24,7 @@ import {
   useAssetDetail,
 } from '../shared';
 import { NoColumnMetadataFallback } from './NoColumnMetadataFallback';
+import { Button } from './ui/Button';
 
 interface Props {
   uniqueId: string | null;
@@ -97,10 +92,11 @@ function PanelBody({ uniqueId, onClose }: { uniqueId: string; onClose: () => voi
     return (
       <div className="p-6">
         <div className="flex justify-end">
-          <IconButton
-            ryecon={RyeconClose}
-            size={Sizes.lg}
-            label="Close Panel"
+          <Button
+            variant="ghost"
+            icon={<X className="size-3" />}
+            size="icon-lg"
+            ariaLabel="Close Panel"
             tooltip="Close Panel"
             onClick={onClose}
           />
@@ -148,33 +144,30 @@ function PanelBody({ uniqueId, onClose }: { uniqueId: string; onClose: () => voi
         resourceType={explorerType}
         actions={
           <>
-            <IconButton
-              size={Sizes.lg}
-              ryecon={RyeconCompass}
-              label="Open full details"
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              icon={<Compass className="size-4" />}
+              ariaLabel="Open full details"
               tooltip="Open full details"
-              tooltipPlacement="bottom-end"
-              className="size-6 align-middle"
               onClick={() => window.location.assign(paths.details(asset.uniqueId))}
             />
-            <IconButton
-              size={Sizes.lg}
-              ryecon={RyeconShare}
-              label="Copy Link"
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              icon={<Share2 className="size-4" />}
+              ariaLabel="Copy Link"
               tooltip="Copy Link"
-              tooltipPlacement="bottom-end"
-              className="size-6 align-middle"
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href).catch(() => {});
               }}
             />
-            <IconButton
-              size={Sizes.lg}
-              ryecon={RyeconClose}
-              label="Close Panel"
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              icon={<X className="size-4" />}
+              ariaLabel="Close Panel"
               tooltip="Close Panel"
-              tooltipPlacement="bottom-end"
-              className="size-6 align-middle"
               onClick={onClose}
             />
           </>

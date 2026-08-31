@@ -58,6 +58,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
         freshness_results: Option<Box<dyn PreTaskRunData>>,
         static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
         adapter: Arc<Adapter>,
+        run_cache_lifecycle: Arc<RunCacheLifecycle>,
     ) -> Pin<Box<dyn Future<Output = Result<TaskRunnerCtx, Box<FsError>>> + Send>> {
         let rendering_listener_factory = self.rendering_listener_factory();
         let span_manager = Arc::new({
@@ -79,13 +80,6 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
         );
         Box::pin(async move {
             let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
-            let run_cache_lifecycle = RunCacheLifecycle::initialize(
-                run_task_args.as_ref(),
-                execute,
-                resolver_state.adapter_type,
-                resolver_state.cloud_config.as_ref(),
-            )
-            .await?;
 
             let extended_ctx = extended_ctx_factory
                 .build(run_cache_lifecycle.is_requested())
@@ -121,12 +115,11 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                 })
                 .collect();
 
-            let RunCacheLifecycle {
-                service: run_cache_service,
-                metadata: run_cache_metadata,
-            } = run_cache_lifecycle;
+            let run_cache_service = &run_cache_lifecycle.service;
+            let run_cache_metadata = run_cache_lifecycle.metadata.clone();
+
             let state_explain_log_path =
-                state_explain_log_path_for_run(&run_cache_service, run_task_args.as_ref());
+                state_explain_log_path_for_run(run_cache_service, run_task_args.as_ref());
             if let (Some(path), Some(config)) = (
                 state_explain_log_path.as_ref(),
                 run_cache_service.config.as_ref(),
@@ -141,8 +134,8 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                 run_cache_dev_cloned_nodes: DashMap::default(),
                 run_cache_deferred_fqns,
                 run_cache_service_requested: run_cache_service.requested,
-                run_cache_service_config: run_cache_service.config,
-                run_cache_service_client: run_cache_service.client,
+                run_cache_service_config: run_cache_service.config.clone(),
+                run_cache_service_client: run_cache_service.client.clone(),
                 state_explain_log_path,
                 view_traverser: adapter.metadata_adapter().map(|metadata_adapter| {
                     Arc::new(ViewDefinitionTraverser::new(

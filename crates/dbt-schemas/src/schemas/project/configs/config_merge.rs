@@ -12,6 +12,7 @@ use dbt_proc_macros::StringOrArrayNewtype;
 use dbt_yaml::{Spanned, Verbatim};
 use indexmap::IndexMap;
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 use crate::schemas::common::{DbtQuoting, DocsConfig, Hooks, merge_meta, merge_tags, merge_vec};
 use crate::schemas::serde::{
@@ -121,6 +122,14 @@ impl DefaultTo for Option<IndexMap<String, YmlValue>> {
         *self = merge_meta(parent.clone(), self.take());
     }
 }
+
+/// Insertion-ordered `tblproperties` map.
+///
+/// Newtype over `IndexMap` so this field can implement `ReplaceIfNone`. A bare
+/// `Option<IndexMap<String, YmlValue>>` already uses union-merge (`meta`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
+pub struct TblProperties(pub IndexMap<String, YmlValue>);
 
 // `#[derive(StringOrArrayNewtype)]` (defined in `dbt-proc-macros`) generates the
 // `AsStringOrArrayOfStrings` impl and shared accessors for newtypes wrapping
@@ -293,9 +302,11 @@ impl<T: Clone> ReplaceIfNone for Spanned<T> {}
 impl ReplaceIfNone for YmlValue {}
 
 // std collections used as replace-if-none fields.
-// BTreeMap<String, YmlValue> (replace-if-none) is distinct from
-// BTreeMap<Spanned<String>, String> (column_types, handled by special DefaultTo impl).
+// BTreeMap<String, YmlValue> is distinct from BTreeMap<Spanned<String>, String>
+// (column_types, handled by a special DefaultTo impl).
 impl ReplaceIfNone for BTreeMap<String, YmlValue> {}
+// See TblProperties: cannot use IndexMap<String, YmlValue> here (that type is meta).
+impl ReplaceIfNone for TblProperties {}
 impl<T: Clone> ReplaceIfNone for Vec<T> {}
 // IndexMap<String, String> for labels/resource_tags (replace-if-none).
 // IndexMap<String, YmlValue> for meta uses a custom merge — do NOT add ReplaceIfNone for it.
@@ -307,7 +318,7 @@ impl ReplaceIfNone for dbt_common::io_args::ComputeArg {}
 // crate::schemas::common types
 impl ReplaceIfNone for crate::schemas::common::Access {}
 impl ReplaceIfNone for crate::schemas::common::ClusterConfig {}
-impl ReplaceIfNone for crate::schemas::common::ComputePlatform {}
+impl ReplaceIfNone for dbt_adapter_core::AdapterType {}
 impl ReplaceIfNone for crate::schemas::common::DbtBatchSize {}
 impl ReplaceIfNone for crate::schemas::common::DbtContract {}
 impl ReplaceIfNone for crate::schemas::common::DbtIncrementalStrategy {}
@@ -320,6 +331,7 @@ impl ReplaceIfNone for crate::schemas::common::OnSchemaChange {}
 impl ReplaceIfNone for crate::schemas::common::PartitionConfig {}
 impl ReplaceIfNone for crate::schemas::common::PersistDocsConfig {}
 impl ReplaceIfNone for crate::schemas::common::Schedule {}
+impl ReplaceIfNone for crate::schemas::common::RowFilterConfig {}
 impl ReplaceIfNone for crate::schemas::common::SchemaOrigin {}
 impl ReplaceIfNone for crate::schemas::common::Severity {}
 impl ReplaceIfNone for crate::schemas::common::StoreFailuresAs {}
@@ -343,6 +355,7 @@ impl ReplaceIfNone for crate::schemas::properties::model_properties::ModelState 
 impl ReplaceIfNone for crate::schemas::properties::model_properties::DataTestState {}
 
 // Config-internal types
+impl ReplaceIfNone for crate::schemas::project::configs::check_config::SelectionFilterOn {}
 impl ReplaceIfNone for crate::schemas::project::configs::function_config::FunctionSnowflakeConfig {}
 impl ReplaceIfNone for crate::schemas::project::configs::model_config::DataLakeObjectCategory {}
 impl ReplaceIfNone for crate::schemas::project::configs::model_config::LatestVersionPointer {}

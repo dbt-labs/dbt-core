@@ -92,6 +92,8 @@ pub struct FsTraceConfig {
     pub(super) export_to_otlp: bool,
     /// The log format being used
     pub(super) log_format: LogFormat,
+    /// File-specific log format (`--log-format-file`), overriding `log_format` for the on-disk log sink only.
+    pub(super) file_log_format: Option<LogFormat>,
     /// If True, enables separate query log file output
     pub(super) enable_query_log: bool,
     /// Show options controlling terminal/file output visibility
@@ -100,6 +102,8 @@ pub struct FsTraceConfig {
     pub(super) show_all_deprecations: bool,
     /// The initial warn-error options loaded from CLI/env before project flags are resolved.
     pub(super) warn_error_options: WarnErrorOptions,
+    /// Withholds upgrades of warnings with no dbt-core counterpart; set while replaying.
+    pub(super) skip_fusion_only_upgrades: bool,
     /// User-facing CLI brand name shown in the version banner and JSON log lines.
     pub(super) command_name: &'static str,
 }
@@ -120,10 +124,12 @@ impl Default for FsTraceConfig {
             parent_span_id: None,
             export_to_otlp: false,
             log_format: LogFormat::Default,
+            file_log_format: None,
             enable_query_log: false,
             show_options: HashSet::default(),
             show_all_deprecations: false,
             warn_error_options: WarnErrorOptions::default(),
+            skip_fusion_only_upgrades: false,
             command_name: DBT_FUSION,
         }
     }
@@ -169,9 +175,10 @@ fn dbt_log_preprocessor_hook(record: &LogRecordInfo) -> Cow<'_, LogRecordInfo> {
 pub fn build_shared_middleware_layers(
     show_all_deprecations: bool,
     warn_error_options: WarnErrorOptions,
+    skip_fusion_only_upgrades: bool,
 ) -> (Vec<MiddlewareLayer>, Arc<RwLock<WarnErrorOptions>>) {
     let (warn_error_options_middleware, warn_error_options) =
-        TelemetryWarnErrorOptionsMiddleware::new(warn_error_options);
+        TelemetryWarnErrorOptionsMiddleware::new(warn_error_options, skip_fusion_only_upgrades);
 
     (
         vec![
@@ -334,6 +341,7 @@ impl FsTraceConfig {
     /// * `show_options` - Set of ShowOptions controlling terminal/file output visibility
     /// * `show_all_deprecations` - If true, show all deprecation warnings/errors instead of one per package
     /// * `warn_error_options` - Initial warn-error options from CLI/env before project flags are resolved
+    /// * `skip_fusion_only_upgrades` - Withholds upgrades of warnings with no dbt-core counterpart; set while replaying
     /// * `log_file_name` - Optional custom name for the log file. If None, defaults to `dbt.log`.
     ///   If Some, creates log file at `{log_path}/{log_file_name}`
     /// * `log_file_max_bytes` - Max size for rotating file logs in bytes.
@@ -366,6 +374,7 @@ impl FsTraceConfig {
         show_options: HashSet<ShowOptions>,
         show_all_deprecations: bool,
         warn_error_options: WarnErrorOptions,
+        skip_fusion_only_upgrades: bool,
         log_file_name: Option<&str>,
         log_file_max_bytes: u64,
     ) -> Self {
@@ -398,10 +407,12 @@ impl FsTraceConfig {
             parent_span_id,
             export_to_otlp,
             log_format,
+            file_log_format: None,
             enable_query_log,
             show_options,
             show_all_deprecations,
             warn_error_options,
+            skip_fusion_only_upgrades,
             command_name: DBT_FUSION,
         }
     }
@@ -410,6 +421,12 @@ impl FsTraceConfig {
     /// JSON log lines.
     pub fn with_command_name(mut self, command_name: &'static str) -> Self {
         self.command_name = command_name;
+        self
+    }
+
+    /// Override the file-specific log format. When `None` fall back to `log_format`.
+    pub fn with_file_log_format(mut self, file_log_format: Option<LogFormat>) -> Self {
+        self.file_log_format = file_log_format;
         self
     }
 
@@ -423,6 +440,7 @@ impl FsTraceConfig {
         target_path: Option<&PathBuf>,
         io_args: &IoArgs,
         warn_error_options: Option<&WarnErrorOptions>,
+        skip_fusion_only_upgrades: bool,
         package: &'static str,
     ) -> Self {
         let max_log_verbosity = io_args
@@ -457,9 +475,11 @@ impl FsTraceConfig {
             io_args.show.clone(),
             io_args.show_all_deprecations,
             warn_error_options.cloned().unwrap_or_default(),
+            skip_fusion_only_upgrades,
             None, // log_file_name - use default dbt.log
             io_args.log_file_max_bytes,
         )
+        .with_file_log_format(io_args.log_format_file)
     }
 
     /// Initializes tracing with the consumers configured for this CLI invocation.
@@ -497,6 +517,7 @@ impl FsTraceConfig {
         let (middleware_layers, warn_error_options) = build_shared_middleware_layers(
             self.show_all_deprecations,
             self.warn_error_options.clone(),
+            self.skip_fusion_only_upgrades,
         );
 
         // Create jsonl writer layer if file path provided
@@ -575,12 +596,13 @@ impl FsTraceConfig {
             crate::stdfs::create_dir_all(&self.log_path)?;
         }
 
+        // File sink honours `--log-format-file` when set, otherwise uses `log_format`
         let (file_log_layer, mut file_log_shutdown_items, file_log_path) = build_file_log_consumer(
             self.max_file_log_verbosity,
             &self.log_path,
             self.log_file_name.as_deref(),
             self.log_file_max_bytes,
-            self.log_format,
+            self.file_log_format.unwrap_or(self.log_format),
             self.invocation_id,
             self.command,
             self.command_name,

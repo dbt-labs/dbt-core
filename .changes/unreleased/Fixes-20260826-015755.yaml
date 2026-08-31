@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Databricks: emit INSERT BY NAME REPLACE WHERE only when DBR 18.0+ supports the combination, and warn when insert_overwrite cannot honor REPLACE ON on older clusters'
+time: 2026-08-26T01:57:55.110563+05:30
+custom:
+    author: sd-db
+    issue: "15999"
+    project: dbt-core

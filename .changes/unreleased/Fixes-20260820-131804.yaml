@@ -1,0 +1,7 @@
+kind: Fixes
+body: Accept sequence-valued column_types, mapping-valued event_time, scalar policy_tags, and the legacy data-paths alias to match dbt-core's YAML config acceptance
+time: 2026-08-20T13:18:04.933895-07:00
+custom:
+    author: itsannbat
+    issue: ""
+    project: dbt-core

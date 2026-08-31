@@ -80,16 +80,8 @@ fn apply_connection_args(
 ) -> Result<DatabaseBuilder, AuthError> {
     builder.with_named_option(alt::BASE_URL, config.require_str("base_url")?)?;
 
-    if let Some(org) = config.get_str("organization") {
-        builder.with_named_option(alt::ORGANIZATION, org)?;
-    }
-
     if let Some(bundle) = config.get_str("catalog_bundle") {
         builder.with_named_option(alt::CATALOG_BUNDLE, bundle)?;
-    }
-
-    if let Some(target_catalog) = config.get_str("target_catalog") {
-        builder.with_named_option(alt::TARGET_CATALOG, target_catalog)?;
     }
 
     Ok(builder)
@@ -139,30 +131,6 @@ mod tests {
             other_option_value(&builder, alt::AUTH_API_KEY),
             Some("secret-key")
         );
-    }
-
-    #[test]
-    fn target_catalog_is_forwarded() {
-        let builder = configure(Mapping::from_iter([
-            ("base_url".into(), "https://compute.example".into()),
-            ("method".into(), "api_key".into()),
-            ("api_key".into(), "secret-key".into()),
-            ("target_catalog".into(), "snowflake".into()),
-        ]));
-        assert_eq!(
-            other_option_value(&builder, alt::TARGET_CATALOG),
-            Some("snowflake")
-        );
-    }
-
-    #[test]
-    fn target_catalog_is_optional() {
-        let builder = configure(Mapping::from_iter([
-            ("base_url".into(), "https://compute.example".into()),
-            ("method".into(), "api_key".into()),
-            ("api_key".into(), "secret-key".into()),
-        ]));
-        assert_eq!(other_option_value(&builder, alt::TARGET_CATALOG), None);
     }
 
     #[test]

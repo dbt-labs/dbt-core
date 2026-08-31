@@ -1,6 +1,7 @@
 import { FC, memo, ReactNode, useState } from 'react';
 
-import { Badge, FloatingTabs } from '@dbt-labs/sourdough';
+import { Badge } from '../../components/ui/Badge';
+import { FloatingTabs } from '../../components/ui/FloatingTabs';
 
 export const tabTypes = [
   'general',
@@ -15,6 +16,7 @@ export const tabTypes = [
   'tables',
   'views',
   'relationships',
+  'config',
 ] as const;
 
 export type TabType = (typeof tabTypes)[number];
@@ -37,6 +39,7 @@ export const tabNameMap: Record<TabType, string> = {
   tables: 'Tables',
   views: 'Views',
   relationships: 'Relationships',
+  config: 'Config',
 };
 
 export const tabAnnotationMap: Partial<Record<TabType, string>> = {
@@ -85,15 +88,15 @@ const DetailTabs: FC<TabsParams> = ({
     >
       {tabs.length > 1 && (
         <div className="overflow-x-auto">
-          <FloatingTabs testId="resource-view-tabs">
+          <FloatingTabs
+            testId="resource-view-tabs"
+            value={resolvedTab.type}
+            onValueChange={(value) => handleTabChange(value as TabType)}
+          >
             {tabs.map((tabDetails) => (
               <FloatingTabs.Tab
                 key={tabNameMap[tabDetails.type]}
                 id={tabDetails.type}
-                isActive={resolvedTab.type === tabDetails.type}
-                onClick={(tab: TabType) => {
-                  handleTabChange(tab);
-                }}
                 count={tabDetails.count}
                 testId={`resource-view-tabs-${tabDetails.type}`}
               >
@@ -103,7 +106,7 @@ const DetailTabs: FC<TabsParams> = ({
                     tabDetails.count === undefined && (
                       <Badge
                         text={tabAnnotationMap[tabDetails.type]!}
-                        type="purple"
+                        variant="default"
                         size="xs"
                       />
                     )}

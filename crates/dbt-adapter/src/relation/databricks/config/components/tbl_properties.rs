@@ -142,7 +142,7 @@ fn from_local_config(
     if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr
         && let Some(props_map) = &databricks_attr.tblproperties
     {
-        for (key, value) in props_map {
+        for (key, value) in &props_map.0 {
             if let YmlValue::String(value_str, _) = value {
                 tblproperties.insert(key.clone(), value_str.clone());
             }
@@ -153,7 +153,7 @@ fn from_local_config(
         .deprecated_config
         .table_format
         .as_ref()
-        .is_some_and(|s| s == "iceberg");
+        .is_some_and(|s| s.eq_ignore_ascii_case("iceberg"));
 
     if is_iceberg {
         tblproperties.insert(

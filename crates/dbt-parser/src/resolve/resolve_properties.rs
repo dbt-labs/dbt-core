@@ -2,6 +2,8 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{
     ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
 };
+use crate::resolve::resolve_utils::deep_merge_yaml;
+use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message};
@@ -11,8 +13,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
-    AnalysesProperties, DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
-    MinimalUnitTestValue,
+    AnalysesProperties, CheckProperties, DbtPropertiesFileValues, MinimalSchemaValue,
+    MinimalTableValue, MinimalUnitTestValue,
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
@@ -45,6 +47,7 @@ pub struct MinimalProperties {
     pub source_tables: BTreeMap<(String, String), MinimalPropertiesEntry>,
     pub models: BTreeMap<String, MinimalPropertiesEntry>,
     pub analyses: BTreeMap<String, MinimalPropertiesEntry>,
+    pub checks: BTreeMap<String, MinimalPropertiesEntry>,
     pub seeds: BTreeMap<String, MinimalPropertiesEntry>,
     pub snapshots: BTreeMap<String, MinimalPropertiesEntry>,
     pub functions: BTreeMap<String, MinimalPropertiesEntry>,
@@ -87,6 +90,14 @@ impl MinimalProperties {
                             .duplicate_paths
                             .push(properties_path.to_path_buf());
                     } else {
+                        // Each version gets its own clone, so merging per version affects no sibling.
+                        let mut schema_value = model_value.clone();
+                        if let Some(version_info) = maybe_version_info.as_ref() {
+                            merge_version_config_into_schema_value(
+                                &mut schema_value,
+                                &version_info.version_config,
+                            );
+                        }
                         self.models.insert(
                             key,
                             MinimalPropertiesEntry {
@@ -94,7 +105,7 @@ impl MinimalProperties {
                                 name_span: Span::default(),
                                 relative_path: properties_path.to_path_buf(),
                                 version_info: maybe_version_info,
-                                schema_value: model_value.clone(),
+                                schema_value,
                                 table_value: None,
                                 duplicate_paths: vec![],
                             },
@@ -126,6 +137,37 @@ impl MinimalProperties {
                             name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: analysis_value,
+                            table_value: None,
+                            version_info: None,
+                            duplicate_paths: vec![],
+                        },
+                    );
+                }
+            }
+        }
+        if let Some(checks) = other.checks {
+            for check_value in checks {
+                let check = into_typed_with_jinja::<CheckProperties, _>(
+                    check_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
+                )?;
+                if let Some(existing_check) = self.checks.get_mut(&check.name) {
+                    existing_check
+                        .duplicate_paths
+                        .push(properties_path.to_path_buf());
+                } else {
+                    self.checks.insert(
+                        check.name.clone(),
+                        MinimalPropertiesEntry {
+                            name: validate_resource_name(&check.name)?,
+                            name_span: Span::default(),
+                            relative_path: properties_path.to_path_buf(),
+                            schema_value: check_value,
                             table_value: None,
                             version_info: None,
                             duplicate_paths: vec![],
@@ -592,6 +634,7 @@ pub fn resolve_minimal_properties(
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     token: &CancellationToken,
+    adapter_type: AdapterType,
 ) -> FsResult<MinimalProperties> {
     let mut minimal_resolved_properties = MinimalProperties {
         semantic_layer_spec_is_legacy: false,
@@ -608,8 +651,10 @@ pub fn resolve_minimal_properties(
                 (),
                 Some(package.dbt_project.name.as_str()),
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     for dbt_asset in package.dbt_properties.iter().dedup() {
@@ -700,9 +745,39 @@ pub struct VersionInfo {
     pub version: String,
     pub latest_version: String,
     pub versioned_name: String,
+    /// This version's raw `config:` mapping. Consumed only by
+    /// [`merge_version_config_into_schema_value`]; a second merge would apply it twice.
     pub version_config: Verbatim<Option<dbt_yaml::Value>>,
     // TODO: Remove this and figure out more efficient way to handle this
     pub all_versions: BTreeMap<String, String>,
+}
+
+/// Deep-merges a version's `config:` onto the model-level `config:` in that version's own clone of
+/// the schema.yml entry, per `deep_merge(target.config, unparsed_version.config)` in dbt-mantle
+/// `core/dbt/parser/schemas.py:1093`. Both the rendered and unrendered pipelines read
+/// `mpe.schema_value`, so merging here keeps them from disagreeing.
+fn merge_version_config_into_schema_value(
+    schema_value: &mut dbt_yaml::Value,
+    version_config: &Verbatim<Option<dbt_yaml::Value>>,
+) {
+    let Some(version_config) = (*version_config).as_ref() else {
+        return;
+    };
+    if !version_config.is_mapping() {
+        return;
+    }
+    let Some(schema_mapping) = schema_value.as_mapping_mut() else {
+        return;
+    };
+    match schema_mapping.get_mut("config") {
+        Some(model_config) => deep_merge_yaml(model_config, version_config),
+        None => {
+            schema_mapping.insert(
+                dbt_yaml::Value::string("config".to_string()),
+                version_config.clone(),
+            );
+        }
+    }
 }
 
 // Collect and build a properites config for all versions of a model

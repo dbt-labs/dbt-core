@@ -12,16 +12,15 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks incremental tables
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
-    // TODO: missing from Python dbt-databricks:
-    // - liquid clustering
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 9] = [
         // TODO: column mask
         Box::new(components::ColumnCommentsLoader),
         Box::new(components::ColumnTagsLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::ConstraintsLoader),
-        // Box::new(components::LiquidClusteringLoader),
+        Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationTagsLoader),
+        Box::new(components::RowFilterLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::ColumnMasksLoader),
     ];
@@ -74,6 +73,8 @@ mod tests {
                         }),
                     },
                 ],
+                row_filter_function: Some("row_filter_fn".to_string()),
+                row_filter_columns: vec!["col1".to_string()],
                 tags: IndexMap::from_iter([
                     ("a_tag".to_string(), "old".to_string()),
                     ("b_tag".to_string(), "old".to_string()),
@@ -115,6 +116,8 @@ mod tests {
                         ..Default::default()
                     },
                 ],
+                row_filter_function: Some("row_filter_fn_2".to_string()),
+                row_filter_columns: vec!["col1".to_string(), "col2".to_string()],
                 tags: IndexMap::from_iter([
                     ("a_tag".to_string(), "new".to_string()),
                     ("b_tag".to_string(), "old".to_string()),
@@ -136,7 +139,15 @@ mod tests {
             expected_changeset: RelationComponentConfigChangeSet::new(
                 AdapterType::Databricks,
                 [
-                    // TODO: add liquid clustering to changeset here once that gets implemented
+                    (
+                        components::LiquidClusteringLoader.type_name(),
+                        ComponentConfigChange::Some(
+                            components::LiquidClusteringLoader::new_component_type_erased(
+                                false,
+                                vec!["cluster_by_new".to_string()],
+                            ),
+                        ),
+                    ),
                     (
                         components::ColumnCommentsLoader.type_name(),
                         ComponentConfigChange::Some(
@@ -195,6 +206,15 @@ mod tests {
                         ),
                     ),
                     (
+                        components::RowFilterLoader.type_name(),
+                        ComponentConfigChange::Some(
+                            components::RowFilterLoader::new_component_type_erased(
+                                Some("test_db.test_schema.row_filter_fn_2".to_string()),
+                                vec!["col1".to_string(), "col2".to_string()],
+                            ),
+                        ),
+                    ),
+                    (
                         components::TblPropertiesLoader.type_name(),
                         ComponentConfigChange::Some(
                             components::TblPropertiesLoader::new_component_type_erased(
@@ -235,13 +255,13 @@ mod tests {
     </persist>
 </column_comments>
 <column_tags>
-    <tags>
+    <set_column_tags>
         <b_column>
             <col_tag>
                 new
             </col_tag>
         </b_column>
-    </tags>
+    </set_column_tags>
 </column_tags>
 <comment>
     <comment>
@@ -263,6 +283,14 @@ mod tests {
     <unset_constraints>
     </unset_constraints>
 </constraints>
+<liquid_clustering>
+    <auto_cluster>
+        False
+    </auto_cluster>
+    <cluster_by>
+        cluster_by_new
+    </cluster_by>
+</liquid_clustering>
 <tags>
     <set_tags>
         <a_tag>
@@ -273,17 +301,32 @@ mod tests {
         </b_tag>
     </set_tags>
 </tags>
+<row_filter>
+    <function>
+        test_db.test_schema.row_filter_fn_2
+    </function>
+    <columns>
+        col1
+        col2
+    </columns>
+    <should_unset>
+        False
+    </should_unset>
+    <is_change>
+        True
+    </is_change>
+</row_filter>
 <tblproperties>
     <tblproperties>
+        <delta.enableRowTracking>
+            true
+        </delta.enableRowTracking>
         <customKey>
             new
         </customKey>
         <customKey2>
             value
         </customKey2>
-        <delta.enableRowTracking>
-            true
-        </delta.enableRowTracking>
     </tblproperties>
     <pipeline_id>
         my_new_pipeline

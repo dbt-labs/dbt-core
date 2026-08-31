@@ -7,8 +7,8 @@ import {
   ResourceType,
   ResourceTypeExplorer,
 } from '@dbt-labs/dbt-dag';
-import { Tooltip } from '@dbt-labs/sourdough';
 
+import { Tooltip } from '../../components/ui/Tooltip';
 import {
   TrustSignals,
   trustSignalsSupportedResourceTypes,

@@ -1,12 +1,29 @@
+import { createElement } from 'react';
 import {
-  resourceIconMap,
+  Box,
+  Camera,
+  ChartColumn,
+  CircleGauge,
+  ClipboardCheck,
+  Copy,
+  Database,
+  FileText,
+  type LucideIcon,
+  Save,
+  Sprout,
+  Table,
+  Users,
+  Waypoints,
+} from 'lucide-react';
+
+import {
   resourceNameMap,
   type ResourceTypeExplorer,
   resourceTypesWithColumns,
 } from '@dbt-labs/dbt-dag';
-import { Button, RyeconShare, RyeconTable } from '@dbt-labs/sourdough';
 
 import { getColumns, toRelationshipItem } from '../lib/assetView';
+import { filterConfig } from '../lib/configView';
 import { decorateOutboundHref } from '../lib/outboundReferrer';
 import { handleUpsellEvent } from '../lib/upsellAnalytics';
 import {
@@ -21,6 +38,7 @@ import {
   type ColumnItem,
   ColumnsView,
   ColumnTable,
+  ConfigDisplay,
   DescriptionDisplay,
   DetailsSection,
   DetailTabs,
@@ -44,6 +62,8 @@ import {
 import { ColumnLineageMini, useColumnLineage } from './ColumnLineageView';
 import { LineageView } from './LineageView';
 import { NoColumnMetadataFallback } from './NoColumnMetadataFallback';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
 
 interface Props {
   asset: Asset;
@@ -53,6 +73,21 @@ interface Props {
    *  while capabilities are loading. */
   userState: UserState | null;
 }
+
+const RESOURCE_TYPE_ICON: Record<string, LucideIcon> = {
+  model: Box,
+  source: Database,
+  test: ClipboardCheck,
+  exposure: CircleGauge,
+  group: Users,
+  metric: ChartColumn,
+  semantic_model: Waypoints,
+  seed: Sprout,
+  macro: FileText,
+  snapshot: Camera,
+  saved_query: Save,
+  analysis: FileText,
+};
 
 /** Coerce a field into `string[]`. Backend may emit a bare string. */
 function toStringArray(value: unknown): string[] {
@@ -84,6 +119,14 @@ function getMaterialization(asset: Asset): string | null {
 }
 
 function getTabsForAsset(asset: Asset): TabInfo[] {
+  const hasConfig = filterConfig(asset.config ?? null) != null;
+  return [
+    ...getResourceTabsForAsset(asset),
+    ...(hasConfig ? [{ type: 'config' as TabType }] : []),
+  ];
+}
+
+function getResourceTabsForAsset(asset: Asset): TabInfo[] {
   const hasCode = Boolean(getCode(asset));
   const colCount = getColumns(asset).length;
 
@@ -166,13 +209,15 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
 
   const headerIcons: AssetHeaderIconItem[] = [
     {
-      ryecon: resourceIconMap[resourceType] ?? resourceIconMap.unknown,
+      icon: createElement(RESOURCE_TYPE_ICON[resourceType] ?? FileText, {
+        className: 'size-3 align-middle',
+      }),
       text: resourceNameMap[resourceType] ?? asset.resourceType,
     },
   ];
   if (materialization) {
     headerIcons.push({
-      ryecon: RyeconTable,
+      icon: <Table className="size-3 align-middle" />,
       text: materialization.charAt(0).toUpperCase() + materialization.slice(1),
     });
   }
@@ -189,8 +234,8 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
   const actions = (
     <div className="flex items-center gap-2">
       <Button
-        type="secondary"
-        ryecon={RyeconShare}
+        variant="outline"
+        icon={<Copy className="size-3" />}
         tooltip="Copy link"
         onClick={() => {
           void navigator.clipboard.writeText(window.location.href);
@@ -350,7 +395,7 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
                       );
                     })()}
 
-                  <DetailsSection heading="Relationships">
+                  <DetailsSection heading="Relationships" className="!p-3">
                     <AssetRelationships
                       dependsOn={(asset.dependsOn ?? []).map(toRelationshipItem)}
                       referencedBy={(asset.referencedBy ?? []).map(toRelationshipItem)}
@@ -358,6 +403,18 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
                     />
                   </DetailsSection>
                 </>
+              );
+            }
+
+            case 'config': {
+              const visibleConfig = filterConfig(asset.config ?? null);
+              if (!visibleConfig) return null;
+              return (
+                <div className="p-4">
+                  <Card className="overflow-hidden !p-3">
+                    <ConfigDisplay config={visibleConfig} />
+                  </Card>
+                </div>
               );
             }
 

@@ -30,7 +30,7 @@ impl ColumnBuilder {
             Postgres | Salesforce | DuckDB | Alt => Ok(Self::build_postgres_like(field, type_ops)),
             Fabric => Ok(Self::build_fabric(field, type_ops)),
             ClickHouse => Self::build_clickhouse(field, type_ops),
-            Exasol => Ok(Self::build_postgres_like(field, type_ops)),
+            Exasol => Ok(Self::build_exasol(field, type_ops)),
             Starburst => todo!("Starburst"),
             Athena => todo!("Athena"),
             Trino => todo!("Trino"),
@@ -209,7 +209,11 @@ impl ColumnBuilder {
             Some(s) => s.into_owned(),
             None => {
                 let mut out = String::new();
-                type_ops.format_arrow_type_as_sql(field.data_type(), &mut out)?;
+                type_ops.format_arrow_type_as_sql(
+                    field.data_type(),
+                    field.is_nullable(),
+                    &mut out,
+                )?;
                 out
             }
         };
@@ -250,7 +254,7 @@ impl ColumnBuilder {
 
         let mut type_name_or_formatted = String::new();
         if type_ops
-            .format_arrow_type_as_sql(data_type, &mut type_name_or_formatted)
+            .format_arrow_type_as_sql(data_type, field.is_nullable(), &mut type_name_or_formatted)
             .is_err()
         {
             type_name_or_formatted = data_type.to_string();
@@ -289,7 +293,7 @@ impl ColumnBuilder {
 
         let mut type_name_or_formatted = String::new();
         if type_ops
-            .format_arrow_type_as_sql(data_type, &mut type_name_or_formatted)
+            .format_arrow_type_as_sql(data_type, field.is_nullable(), &mut type_name_or_formatted)
             .is_err()
         {
             // TODO this is for sure wrong type. We should rather propagate error here
@@ -453,7 +457,11 @@ impl ColumnBuilder {
             } else {
                 let mut type_text = String::new();
                 type_ops
-                    .format_arrow_type_as_sql(field.data_type(), &mut type_text)
+                    .format_arrow_type_as_sql(
+                        field.data_type(),
+                        field.is_nullable(),
+                        &mut type_text,
+                    )
                     .unwrap();
                 if !field.is_nullable() {
                     type_text.push_str(" not null");
@@ -481,7 +489,11 @@ impl ColumnBuilder {
             DataType::Timestamp(_, _) | DataType::Time64(_) => rendered_type.push_str("datetime"),
             _ => {
                 type_ops
-                    .format_arrow_type_as_sql(data_type_ref, &mut rendered_type)
+                    .format_arrow_type_as_sql(
+                        data_type_ref,
+                        field.is_nullable(),
+                        &mut rendered_type,
+                    )
                     .unwrap();
             }
         }
@@ -511,6 +523,39 @@ impl ColumnBuilder {
         )
     }
 
+    fn build_exasol(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
+        use AdapterType::Exasol;
+        let data_type = field.data_type();
+        let char_size = sql_types::var_size(Exasol, data_type);
+        let (numeric_precision, numeric_scale) = {
+            let precision_scale = sql_types::numeric_precision_scale(Exasol, data_type)
+                .ok()
+                .flatten();
+            match precision_scale {
+                Some((p, Some(s))) => (Some(p), Some(s)),
+                Some((p, None)) => (Some(p), None),
+                None => (None, None),
+            }
+        };
+
+        let mut rendered_type = String::new();
+        if type_ops
+            .format_arrow_type_as_sql(data_type, field.is_nullable(), &mut rendered_type)
+            .is_err()
+        {
+            rendered_type = data_type.to_string();
+        }
+
+        Column::new(
+            Exasol,
+            field.name().to_string(),
+            rendered_type,
+            char_size.map(|p| p as u32),
+            numeric_precision.map(|p| p as u64),
+            numeric_scale.map(|s| s as u64),
+        )
+    }
+
     fn build_redshift(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
         use AdapterType::Redshift;
         let data_type = field.data_type();
@@ -529,7 +574,7 @@ impl ColumnBuilder {
 
         let mut type_name_or_formatted = String::new();
         if type_ops
-            .format_arrow_type_as_sql(data_type, &mut type_name_or_formatted)
+            .format_arrow_type_as_sql(data_type, field.is_nullable(), &mut type_name_or_formatted)
             .is_err()
         {
             // TODO: this is for sure wrong type. We should rather propagate error here

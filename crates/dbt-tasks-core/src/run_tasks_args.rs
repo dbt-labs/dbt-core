@@ -123,6 +123,12 @@ pub struct RunTasksArgs {
     /// Previous batch_results from run_results.json, populated during retry
     /// so that already-successful overloads can be skipped.
     pub previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
+    /// Resolved metadata directory (`--metadata-dir` or `<out_dir>/metadata`). Carried here so a
+    /// task can find it — `EvalArgs::metadata_dir()` is not reachable from the task layer, and
+    /// deriving it from `out_dir` would silently ignore the override.
+    pub metadata_dir: PathBuf,
+    /// Resolved index directory (`--index-dir` or `<out_dir>/index`). See `metadata_dir`.
+    pub index_dir: PathBuf,
 }
 
 impl RunTasksArgs {
@@ -130,6 +136,8 @@ impl RunTasksArgs {
         let run_tasks_args = Self {
             command: arg.command,
             io: arg.io.clone(),
+            metadata_dir: arg.metadata_dir(),
+            index_dir: arg.index_dir(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),
             packages_install_path: arg.packages_install_path.clone(),

@@ -54,6 +54,7 @@ import type { Distribution } from '../../typings/domain/distribution';
 import type { Facets, FacetValue } from '../../typings/domain/facets';
 import type { FileEntry } from '../../typings/domain/files';
 import type { ColumnLineageGraph, LineageGraph } from '../../typings/domain/lineage';
+import type { ProjectOverview } from '../../typings/domain/overview';
 import type { Project } from '../../typings/domain/project';
 import type {
   MatchedField,
@@ -106,6 +107,7 @@ interface RestModelDetail extends RestDetailBase {
   tags?: string[];
   fqn?: string[];
   meta?: Record<string, unknown> | null;
+  config?: Record<string, unknown> | null;
   columns?: RestNodeColumn[];
   depends_on?: RestEdgeRef[];
   referenced_by?: RestEdgeRef[];
@@ -120,6 +122,7 @@ interface RestSeedDetail extends RestDetailBase {
   schema_name?: string | null;
   identifier?: string | null;
   meta: Record<string, unknown> | null;
+  config?: Record<string, unknown> | null;
   columns: RestNodeColumn[];
   depends_on?: RestEdgeRef[];
   referenced_by: RestEdgeRef[];
@@ -136,6 +139,7 @@ interface RestSnapshotDetail extends RestDetailBase {
   raw_code?: string | null;
   compiled_code?: string | null;
   meta: Record<string, unknown> | null;
+  config?: Record<string, unknown> | null;
   depends_on: RestEdgeRef[];
   referenced_by: RestEdgeRef[];
   columns: RestNodeColumn[];
@@ -150,6 +154,7 @@ interface RestSourceDetail extends RestDetailBase {
   source_name?: string | null;
   loader?: string | null;
   meta: Record<string, unknown> | null;
+  config?: Record<string, unknown> | null;
   columns: RestNodeColumn[];
   referenced_by?: RestEdgeRef[];
   freshness: {
@@ -304,6 +309,7 @@ interface RestNodeDetail extends RestDetailBase {
   tags?: string[] | null;
   fqn?: string[] | null;
   meta?: Record<string, unknown> | null;
+  config?: Record<string, unknown> | null;
   arguments?: RestMacroArgument[] | null;
   return_type?: string | null;
   database_name?: string | null;
@@ -336,6 +342,13 @@ export interface RestProject {
   git_sha?: string | null;
   git_branch?: string | null;
   git_is_dirty?: boolean | null;
+}
+
+/** One row of `dbt.docs` — the winning `__overview__` block. */
+export interface RestProjectOverview {
+  unique_id: string;
+  package_name: string | null;
+  block_contents: string;
 }
 
 /** One row of `GET /api/v1/files`. `patch_path` is populated only for nodes
@@ -611,6 +624,7 @@ export function fromModelDetail(d: RestModelDetail): ModelAsset {
     patchPath: d.patch_path ?? null,
     fqn: d.fqn ?? null,
     meta: d.meta ?? null,
+    config: d.config ?? null,
     rawCode: d.raw_code ?? null,
     compiledCode: d.compiled_code ?? null,
     language: (d.language as ModelAsset['language']) ?? null,
@@ -637,6 +651,7 @@ export function fromSeedDetail(d: RestSeedDetail): ModelAsset {
     patchPath: d.patch_path ?? null,
     fqn: d.fqn ?? null,
     meta: d.meta ?? null,
+    config: d.config ?? null,
     rawCode: null,
     compiledCode: null,
     language: null,
@@ -663,6 +678,7 @@ export function fromSnapshotDetail(d: RestSnapshotDetail): ModelAsset {
     patchPath: d.patch_path ?? null,
     fqn: d.fqn ?? null,
     meta: null,
+    config: d.config ?? null,
     rawCode: d.raw_code ?? null,
     compiledCode: d.compiled_code ?? null,
     language: null,
@@ -688,6 +704,7 @@ export function fromSourceDetail(d: RestSourceDetail): SourceAsset {
     originalFilePath: d.original_file_path ?? null,
     fqn: d.fqn ?? null,
     meta: d.meta ?? null,
+    config: d.config ?? null,
     sourceName: d.source_name ?? '',
     identifier: d.identifier ?? '',
     loader: d.loader ?? null,
@@ -840,7 +857,11 @@ export function fromSemanticModelDetail(
 }
 
 function isUnitTest(d: RestTestDetail): d is RestUnitTestDetail {
-  return 'given' in d;
+  // Not `'given' in d`: the duckdb union query selects a `given` column on
+  // both branches (NULL for data tests), so the key is always present --
+  // `resource_type` is the actual discriminator set correctly by both the
+  // duckdb query and the real backend.
+  return d.resource_type === 'unit_test';
 }
 
 export function fromTestDetail(d: RestTestDetail): TestAsset | UnitTestAsset {
@@ -943,6 +964,7 @@ export function fromNodeDetail(d: RestNodeDetail): Asset {
     originalFilePath: d.original_file_path ?? null,
     fqn: d.fqn ?? null,
     meta: d.meta ?? null,
+    config: d.config ?? null,
     dependsOn: (d.depends_on ?? []).map((e) => e.unique_id),
     referencedBy: (d.referenced_by ?? []).map((e) => e.unique_id),
   };
@@ -1214,6 +1236,14 @@ export function fromProject(d: RestProject): Project {
     gitSha: d.git_sha,
     gitBranch: d.git_branch,
     gitIsDirty: d.git_is_dirty,
+  };
+}
+
+export function fromProjectOverview(d: RestProjectOverview): ProjectOverview {
+  return {
+    uniqueId: d.unique_id,
+    packageName: d.package_name,
+    blockContents: d.block_contents,
   };
 }
 

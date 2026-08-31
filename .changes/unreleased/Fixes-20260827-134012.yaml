@@ -1,0 +1,7 @@
+kind: Fixes
+body: The download-at-install sdist now declares the runtime dependencies and `requires-python` of the wheel it installs, so `uv pip install dbt-core`/`dbt-oss` no longer produces an unimportable package
+time: 2026-08-27T13:40:12.815018+05:30
+custom:
+    author: "tauhid621"
+    issue: ""
+    project: dbt-core

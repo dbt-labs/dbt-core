@@ -12,6 +12,16 @@ workspace `.cargo/config.toml` alias.
 - `cargo ci homebrew render --tarballs-dir DIR --version X.Y.Z --url-template URL [--out PATH] [--formula-name NAME] [--binary-name NAME] [--conflicts-with NAME]…` — writes a `Formula/<name>.rb` from release tarballs (`fs-v{version}-{target}.tar.gz`). Reads name/license/homepage from pyproject. Linux + macOS only — Windows tarballs are skipped.
 - `cargo ci homebrew publish --formula PATH --tap-repo URL --version X.Y.Z [--tap-branch B] [--token-env VAR] [--dry-run]` — clones the tap, copies the formula into `Formula/`, commits, and pushes. Idempotent: no-op if the formula is byte-identical. `--token-env` defaults to `HOMEBREW_TAP_REPO_TOKEN`.
 
+### sdist runtime metadata
+
+An sdist must declare the same `requires-python` and dependencies as the wheel it
+hands back: pip re-reads the built wheel's metadata, but uv trusts the sdist and
+installs exactly what it declares. `dbt-core` / `dbt-oss` reference the maturin
+extension wheels, so they pass `--runtime-metadata-from crates/dbt-python` to
+take those two fields from there while keeping the root pyproject's descriptive
+metadata. `dbt-core-experimental-parser` ships the `py3-none` binary CLI wheel,
+which has no Python dependencies, and needs no flag.
+
 ## Version shapes
 
 | SemVer            | PEP 440 |
@@ -42,7 +52,9 @@ cargo ci pypi publish --environment staging --version X.Y.Z   # uploads wheels
 cargo ci pypi publish --environment prod --version X.Y.Z      # uploads wheels
 
 # Publish the download-at-install sdist pointing at the release's wheel host
-# (one --target per published wheel):
+# (one --target per published wheel). For dbt-core / dbt-oss add
+# `--python-tag cp311 --abi-tag abi3 --runtime-metadata-from crates/dbt-python`,
+# since those reference the maturin extension wheels:
 cargo ci pypi publish --environment prod --version X.Y.Z \
   --download-base-url https://github.com/dbt-labs/dbt-core/releases/download/vX.Y.Z \
   --target x86_64-unknown-linux-gnu \

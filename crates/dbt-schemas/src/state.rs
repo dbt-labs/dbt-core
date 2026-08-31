@@ -53,6 +53,7 @@ pub enum ResourcePathKind {
     FixturePaths,
     SessionPaths,
     FunctionPaths,
+    CheckPaths,
 }
 
 impl fmt::Display for ResourcePathKind {
@@ -70,6 +71,7 @@ impl fmt::Display for ResourcePathKind {
             ResourcePathKind::FixturePaths => "fixture paths",
             ResourcePathKind::SessionPaths => "session paths",
             ResourcePathKind::FunctionPaths => "function paths",
+            ResourcePathKind::CheckPaths => "check paths",
         };
         write!(f, "{kind_str}")
     }
@@ -135,10 +137,16 @@ pub struct GenericTestAsset {
     pub source_name: Option<String>,
     pub test_name: String,
     pub defined_at: dbt_common::CodeLocationWithFile,
+    /// The column this test is attached to, taken from its position in the schema file
+    /// (`columns[*].data_tests`). `None` for a model-level test, regardless of any
+    /// `column_name` kwarg the test passes to its macro.
+    pub column_name: Option<String>,
     // Structured metadata for generic tests (optional; not used for singular tests)
     pub test_metadata_name: Option<String>,
     pub test_metadata_namespace: Option<String>,
-    pub test_metadata_column_name: Option<String>,
+    /// The `column_name` macro kwarg, which a generic test may set to an arbitrary
+    /// sequence. Distinct from [`GenericTestAsset::column_name`].
+    pub test_metadata_column_name: Option<StringOrArrayOfStrings>,
     pub test_metadata_combination_of_columns: Option<Vec<String>>,
     /// The model kwarg for generic tests, e.g. "{{ get_where_subquery(ref('foo')) }}"
     pub test_metadata_model: Option<String>,
@@ -193,11 +201,13 @@ pub struct DbtProfile {
     /// The active target's `allow_clones` setting, read directly from its
     /// `outputs.<target>` block in profiles.yml. Note that if omitted defaults to `true`
     pub allow_clones: bool,
-    pub db_config: DbConfig,
-    /// Connection config for the alternate compute target, from the profile's
-    /// `x_alt_target` output. `None` when the profile declares none.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub alt_target_db_config: Option<DbConfig>,
+    /// Every adapter the active target declares, keyed by adapter type, in
+    /// declaration order. A target using the legacy single-adapter
+    /// `profiles.yml` shape has exactly one entry.
+    pub adapters: IndexMap<AdapterType, ProfileAdapter>,
+    /// The adapter used by nodes that do not select one. Always a key of
+    /// [`Self::adapters`].
+    pub default_adapter: AdapterType,
     pub schema: String,
     pub database: String,
     pub relative_profile_path: PathBuf,
@@ -205,7 +215,109 @@ pub struct DbtProfile {
     pub threads: Option<usize>, // from flags in dbt
 }
 
+/// One credential set under an adapter.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileConnection {
+    /// As written in `profiles.yml`, or `default` when omitted. Diagnostics only
+    /// — nothing routes by connection name yet.
+    pub name: String,
+    pub config: DbConfig,
+}
+
+/// One adapter a target declares, and its connections.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileAdapter {
+    /// Declaration order preserved. Never empty.
+    pub connections: Vec<ProfileConnection>,
+    /// Index into [`Self::connections`] of the one that is actually used.
+    ///
+    /// Several connections may be declared but only this one is reachable; profile
+    /// load warns about the rest.
+    pub default_connection: usize,
+}
+
+impl ProfileAdapter {
+    /// A single unnamed connection — the legacy shape, and what synthetic
+    /// profiles and tests want.
+    pub fn single(config: DbConfig) -> Self {
+        ProfileAdapter {
+            connections: vec![ProfileConnection {
+                name: "default".to_string(),
+                config,
+            }],
+            default_connection: 0,
+        }
+    }
+
+    /// The connection that is actually used.
+    pub fn config(&self) -> &DbConfig {
+        &self
+            .connections
+            .get(self.default_connection)
+            .expect("ProfileAdapter::default_connection is always a valid index")
+            .config
+    }
+
+    /// Mutable access to the connection that is actually used.
+    pub fn config_mut(&mut self) -> &mut DbConfig {
+        &mut self
+            .connections
+            .get_mut(self.default_connection)
+            .expect("ProfileAdapter::default_connection is always a valid index")
+            .config
+    }
+
+    /// Whether this adapter declares connections that cannot be reached yet.
+    pub fn has_unreachable_connections(&self) -> bool {
+        self.connections.len() > 1
+    }
+
+    fn is_valid(&self) -> bool {
+        self.default_connection < self.connections.len()
+    }
+}
+
 impl DbtProfile {
+    /// The connection of the target's default adapter — the one used by nodes
+    /// that do not select an adapter.
+    ///
+    /// Most callers want exactly this. Only code that must honour a node's
+    /// adapter selection should reach for [`Self::adapter`].
+    pub fn default_db_config(&self) -> &DbConfig {
+        self.adapters
+            .get(&self.default_adapter)
+            .expect("DbtProfile::default_adapter is always a key of `adapters`")
+            .config()
+    }
+
+    /// Mutable access to every connection of every adapter, for settings that
+    /// apply target-wide (thread count, for instance).
+    pub fn adapters_mut(&mut self) -> impl Iterator<Item = &mut DbConfig> {
+        self.adapters
+            .values_mut()
+            .flat_map(|adapter| adapter.connections.iter_mut().map(|c| &mut c.config))
+    }
+
+    /// The adapter types the target declares, in declaration order.
+    ///
+    /// This is the set whose internal macro packages a run needs.
+    pub fn adapter_types(&self) -> Vec<AdapterType> {
+        self.adapters.keys().copied().collect()
+    }
+
+    /// The adapter a node's `+adapter` config selects, if the target declares it.
+    pub fn adapter(&self, adapter_type: AdapterType) -> Option<&DbConfig> {
+        self.adapters.get(&adapter_type).map(ProfileAdapter::config)
+    }
+
+    /// Whether the adapter map upholds the invariants [`Self::default_db_config`] relies
+    /// on. Checked after deserializing a persisted profile, where a stale or
+    /// hand-edited artifact could otherwise violate them.
+    pub fn has_valid_adapters(&self) -> bool {
+        self.adapters.contains_key(&self.default_adapter)
+            && self.adapters.values().all(ProfileAdapter::is_valid)
+    }
+
     pub fn blake3_hash(&self) -> String {
         let mut hasher = Hasher::new();
         // Serialize self, skipping threads due to #[serde(skip)]
@@ -220,10 +332,11 @@ impl fmt::Display for DbtProfile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DbtProfile {{ profile: {}, target: {}, db_config: {:?}, schema: {}, database: {} , path: {}, threads: {:?}}}",
+            "DbtProfile {{ profile: {}, target: {}, adapters: {:?}, default_adapter: {}, schema: {}, database: {} , path: {}, threads: {:?}}}",
             self.profile,
             self.target,
-            self.db_config,
+            self.adapters,
+            self.default_adapter,
             self.schema,
             self.database,
             self.relative_profile_path.display(),
@@ -238,6 +351,7 @@ pub struct DbtPackage {
     pub package_root_path: PathBuf,
     pub dbt_properties: Vec<DbtAsset>,
     pub analysis_files: Vec<DbtAsset>,
+    pub check_files: Vec<DbtAsset>,
     pub model_sql_files: Vec<DbtAsset>,
     pub function_sql_files: Vec<DbtAsset>,
     pub macro_files: Vec<DbtAsset>,
@@ -263,6 +377,7 @@ impl Default for DbtPackage {
             package_root_path: PathBuf::new(),
             dbt_properties: vec![],
             analysis_files: vec![],
+            check_files: vec![],
             model_sql_files: vec![],
             function_sql_files: vec![],
             macro_files: vec![],
@@ -389,15 +504,15 @@ pub trait NodeResolverTracker: fmt::Debug + Send + Sync {
     ) -> FsResult<(MinijinjaValue, Option<MinijinjaValue>)>;
     fn lookup_source(
         &self,
-        package_name: &str,
+        node_package_name: &str,
         source_name: &str,
         table_name: &str,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)>;
     fn lookup_function(
         &self,
-        maybe_package_name: &Option<String>,
+        target_package: &Option<String>,
         function_name: &str,
-        maybe_node_package_name: &Option<String>,
+        node_package: &Option<String>,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)>;
     fn compile_or_test(&self) -> bool;
     fn update_ref_with_deferral(
@@ -500,7 +615,7 @@ impl NodeResolverTracker for DummyNodeResolverTracker {
 
     fn lookup_source(
         &self,
-        _package_name: &str,
+        _node_package_name: &str,
         source_name: &str,
         table_name: &str,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
@@ -514,9 +629,9 @@ impl NodeResolverTracker for DummyNodeResolverTracker {
 
     fn lookup_function(
         &self,
-        _maybe_package_name: &Option<String>,
+        _target_package: &Option<String>,
         function_name: &str,
-        _maybe_node_package_name: &Option<String>,
+        _node_package: &Option<String>,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
         Err(fs_err!(
             ErrorCode::NotImplemented,
@@ -571,6 +686,7 @@ pub struct ManifestPathConfig {
     pub seed_paths: Vec<String>,
     pub snapshot_paths: Vec<String>,
     pub test_paths: Vec<String>,
+    pub check_paths: Vec<String>,
     pub analysis_paths: Vec<String>,
     pub function_paths: Vec<String>,
     pub macro_paths: Vec<String>,
@@ -585,6 +701,7 @@ impl ManifestPathConfig {
             seed_paths: dbt_project.seed_paths.clone().unwrap_or_default(),
             snapshot_paths: dbt_project.snapshot_paths.clone().unwrap_or_default(),
             test_paths: dbt_project.test_paths.clone().unwrap_or_default(),
+            check_paths: dbt_project.check_paths.clone().unwrap_or_default(),
             analysis_paths: dbt_project.analysis_paths.clone().unwrap_or_default(),
             function_paths: dbt_project.function_paths.clone().unwrap_or_default(),
             macro_paths: dbt_project.macro_paths.clone().unwrap_or_default(),
@@ -982,7 +1099,7 @@ impl DbtRuntimeConfig {
             profile_name: profile.profile.clone(),
             target_name: profile.target.clone(),
             threads: profile.threads,
-            credentials: Some(profile.db_config.clone()),
+            credentials: Some(profile.default_db_config().clone()),
             profile_env_vars: HashMap::new(),
 
             project_name: package.dbt_project.name.clone(),
@@ -1188,4 +1305,112 @@ pub enum ModelStatus {
     Disabled,
     /// Model failed to parse
     ParsingFailed,
+}
+
+#[cfg(test)]
+mod dbt_profile_adapter_tests {
+    use super::*;
+    use crate::schemas::profiles::{DuckDbConfig, SnowflakeDbConfig};
+
+    fn profile(
+        adapters: IndexMap<AdapterType, ProfileAdapter>,
+        default_adapter: AdapterType,
+    ) -> DbtProfile {
+        DbtProfile {
+            profile: "p".into(),
+            target: "prod".into(),
+            defer_to_target: None,
+            allow_clones: true,
+            adapters,
+            default_adapter,
+            schema: "s".into(),
+            database: "d".into(),
+            relative_profile_path: PathBuf::from("profiles.yml"),
+            threads: None,
+        }
+    }
+
+    fn duckdb() -> DbConfig {
+        DbConfig::DuckDB(Box::<DuckDbConfig>::default())
+    }
+
+    fn snowflake() -> DbConfig {
+        DbConfig::Snowflake(Box::<SnowflakeDbConfig>::default())
+    }
+
+    fn one(config: DbConfig) -> (AdapterType, ProfileAdapter) {
+        (config.adapter_type(), ProfileAdapter::single(config))
+    }
+
+    /// `default_db_config()` must follow `default_adapter`, not insertion order — the
+    /// default is frequently not the first entry.
+    #[test]
+    fn db_config_follows_default_adapter_not_declaration_order() {
+        let adapters = IndexMap::from([one(snowflake()), one(duckdb())]);
+        let p = profile(adapters, AdapterType::DuckDB);
+
+        assert_eq!(p.default_db_config().adapter_type(), AdapterType::DuckDB);
+        assert_eq!(
+            p.adapter(AdapterType::Snowflake).unwrap().adapter_type(),
+            AdapterType::Snowflake
+        );
+        assert!(p.adapter(AdapterType::Bigquery).is_none());
+    }
+
+    #[test]
+    fn has_valid_adapters_rejects_a_default_that_is_not_a_key() {
+        let adapters = IndexMap::from([one(snowflake())]);
+        let p = profile(adapters, AdapterType::DuckDB);
+
+        assert!(
+            !p.has_valid_adapters(),
+            "a default_adapter absent from `adapters` must be reported invalid"
+        );
+    }
+
+    /// A persisted profile could carry a default_connection past the end of the
+    /// list; `db_config()` would panic on it, so it must be reported invalid first.
+    #[test]
+    fn has_valid_adapters_rejects_an_out_of_range_default_connection() {
+        let mut adapter = ProfileAdapter::single(snowflake());
+        adapter.default_connection = 3;
+        let adapters = IndexMap::from([(AdapterType::Snowflake, adapter)]);
+        let p = profile(adapters, AdapterType::Snowflake);
+
+        assert!(!p.has_valid_adapters());
+    }
+
+    /// Thread count is applied target-wide, so every *connection* of every adapter
+    /// sees it -- not just the reachable one.
+    #[test]
+    fn adapters_mut_reaches_every_connection() {
+        let mut snowflake_adapter = ProfileAdapter::single(snowflake());
+        snowflake_adapter.connections.push(ProfileConnection {
+            name: "secondary".to_string(),
+            config: snowflake(),
+        });
+        let adapters = IndexMap::from([(AdapterType::Snowflake, snowflake_adapter), one(duckdb())]);
+        let mut p = profile(adapters, AdapterType::Snowflake);
+
+        for adapter in p.adapters_mut() {
+            adapter.set_threads(Some(crate::schemas::serde::StringOrInteger::Integer(7)));
+        }
+
+        let reached: Vec<_> = p
+            .adapters
+            .values()
+            .flat_map(|a| a.connections.iter())
+            .map(|c| c.config.get_threads().cloned())
+            .collect();
+        assert_eq!(reached.len(), 3, "two snowflake connections plus duckdb");
+        for threads in reached {
+            assert!(
+                matches!(
+                    threads,
+                    Some(crate::schemas::serde::StringOrInteger::Integer(7))
+                ),
+                "every connection should have threads set, got {threads:?}"
+            );
+        }
+    }
 }

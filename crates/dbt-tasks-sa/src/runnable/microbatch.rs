@@ -23,6 +23,8 @@ use dbt_jinja_utils::utils::inject_and_persist_ephemeral_models;
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode};
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use minijinja::Value;
+use minijinja::value::ValueMap;
+use minijinja::value::mutable_map::MutableMap;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use minijinja_contrib::modules::pytz::PytzTimezone;
 use tracing::warn;
@@ -208,12 +210,16 @@ pub fn extend_microbatch_node_context(
                 }
             }
 
+            // Mutable because the batch SQL only exists after rendering, so the caller
+            // writes it into this map later.
             jinja_context.insert(
                 "model".to_string(),
-                model_map
-                    .iter()
-                    .map(|(k, v)| (Value::from(k.as_str()), v.clone()))
-                    .collect::<Value>(),
+                Value::from_object(MutableMap::from(
+                    model_map
+                        .into_iter()
+                        .map(|(k, v)| (Value::from(k.as_str()), v))
+                        .collect::<ValueMap>(),
+                )),
             );
 
             let update_run_config = |config: &Value| {

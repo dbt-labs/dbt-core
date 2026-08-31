@@ -76,21 +76,12 @@ impl TaskRunnerCtxFactory for DefaultTaskRunnerCtxFactory {
 }
 
 pub struct FeatureStackBuilder {
-    send_anonymous_usage_stats: bool,
     tracing: TracingFeature,
 }
 
 impl FeatureStackBuilder {
     pub fn new(tracing: TracingFeature) -> Self {
-        Self {
-            send_anonymous_usage_stats: false,
-            tracing,
-        }
-    }
-
-    pub fn send_anonymous_usage_stats(mut self, enabled: bool) -> Self {
-        self.send_anonymous_usage_stats = enabled;
-        self
+        Self { tracing }
     }
 
     pub fn build(self) -> Box<FeatureStack> {
@@ -98,10 +89,7 @@ impl FeatureStackBuilder {
         let version_check_enabled = false;
 
         let instrumentation = InstrumentationFeature {
-            event_emitter: vortex_events::fusion_sa_event_emitter(
-                self.send_anonymous_usage_stats,
-                dbt_distribution,
-            ),
+            event_emitter: vortex_events::default_event_emitter(None, dbt_distribution),
         };
 
         let cli = CliFeatureBuilder::new("dbt-core").build();
@@ -160,6 +148,11 @@ impl FeatureStackBuilder {
             factory: Arc::new(dbt_jinja_utils::DefaultJinjaFactory),
         };
 
+        let alt = crate::alt::AltFeature {
+            propagation_checker: None,
+            catalog_attach_checker: None,
+        };
+
         let stack = FeatureStack {
             instrumentation,
             cli,
@@ -173,6 +166,7 @@ impl FeatureStackBuilder {
             resolver,
             loader,
             jinja,
+            alt,
             login_hooks,
             version_check_enabled,
         };
