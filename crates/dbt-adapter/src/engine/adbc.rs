@@ -248,8 +248,12 @@ impl AdbcEngine {
                 let database = driver
                     .new_database_with_opts(opts)
                     .map_err(adbc_error_to_adapter_error)?;
-                if self.adapter_type == AdapterType::DuckDB {
-                    self.apply_duckdb_init_sql(database.as_ref(), config)?;
+                match self.adapter_type {
+                    AdapterType::DuckDB => self.apply_duckdb_init_sql(database.as_ref(), config)?,
+                    AdapterType::ClickHouse => {
+                        super::clickhouse::ensure_database(database.as_ref(), config)?
+                    }
+                    _ => {}
                 }
                 write_guard.inner.insert(fingerprint, database.clone());
                 Ok((database, fingerprint))
@@ -517,7 +521,20 @@ impl AdapterEngine for AdbcEngine {
             return Ok(Box::new(NoopConnection));
         }
         let (mut database, fingerprint) = self.load_driver_and_configure_database(config)?;
-        let connect = || connection::Builder::default().build(&mut database);
+        let connect = || {
+            let mut builder = connection::Builder::default();
+            // dbclient.py `_set_client_database` parity; ensure_database
+            // guarantees it exists.
+            if self.adapter_type == AdapterType::ClickHouse
+                && let Some(schema) = super::clickhouse::target_schema(config)
+            {
+                builder.with_option(
+                    adbc_core::options::OptionConnection::CurrentSchema,
+                    schema.as_ref(),
+                )?;
+            }
+            builder.build(&mut database)
+        };
         let retry_policy = ConnectionRetryPolicy::new(self.adapter_type(), config);
         let mut conn = retry_policy
             .execute(config, connect)

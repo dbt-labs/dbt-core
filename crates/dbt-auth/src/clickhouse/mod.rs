@@ -1,7 +1,9 @@
+use crate::config::yml_value_to_string;
 use crate::{AdapterConfig, Auth, AuthError, AuthWarningPrinter, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 
-use dbt_adbc::{Backend, database};
+use dbt_adbc::{Backend, clickhouse, database};
+use dbt_yaml::Value as YmlValue;
 use std::borrow::Cow;
 
 const DEFAULT_HOST: &str = "localhost";
@@ -45,14 +47,19 @@ impl<'a> ClickHouseAuthIR<'a> {
     }
 }
 
+/// Accepts YAML bool or string bool ("true"/"True"/"1").
+fn bool_flag(config: &AdapterConfig, key: &str) -> bool {
+    config
+        .get_string(key)
+        .map(|s| s == "true" || s == "1" || s == "True")
+        .unwrap_or(false)
+}
+
 fn parse_auth<'a>(
     config: &'a AdapterConfig,
     _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<ClickHouseAuthIR<'a>, AuthError> {
-    let secure = config
-        .get_string("secure")
-        .map(|s| s == "true" || s == "1" || s == "True")
-        .unwrap_or(false);
+    let secure = bool_flag(config, "secure");
 
     let default_port = if secure {
         DEFAULT_HTTPS_PORT
@@ -71,11 +78,47 @@ fn parse_auth<'a>(
     })
 }
 
+/// Mirrors dbclient.py `_conn_settings` as Database-level `clickhouse.setting.*`
+/// options: profile `custom_settings` first, then setdefault-style defaults.
+/// Divergence: no `session_id` — the driver generates one per connection.
 fn apply_connection_args(
-    _config: &AdapterConfig,
-    builder: DatabaseBuilder,
+    config: &AdapterConfig,
+    mut builder: DatabaseBuilder,
     _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<DatabaseBuilder, AuthError> {
+    let mut settings: Vec<(String, String)> = Vec::new();
+    if let Some(custom) = config.get("custom_settings") {
+        let YmlValue::Mapping(custom, _) = custom else {
+            return Err(AuthError::config("custom_settings must be a map"));
+        };
+        for (name, value) in custom {
+            let Some(name) = name.as_str() else {
+                return Err(AuthError::config("custom_settings keys must be strings"));
+            };
+            settings.push((name.to_string(), yml_value_to_string(value).into_owned()));
+        }
+    }
+    let mut setdefault = |name: &str, value: &str| {
+        if !settings.iter().any(|(existing, _)| existing == name) {
+            settings.push((name.to_string(), value.to_string()));
+        }
+    };
+    let database_engine = config.get_str("database_engine").unwrap_or("");
+    let cluster_mode = bool_flag(config, "cluster_mode");
+    if cluster_mode || database_engine == "Replicated" {
+        setdefault("database_replicated_enforce_synchronous_settings", "1");
+        setdefault("insert_quorum", "auto");
+    }
+    if database_engine == "Shared" {
+        setdefault("select_sequential_consistency", "1");
+    }
+    setdefault("mutations_sync", "3");
+    setdefault("lightweight_deletes_sync", "3");
+    setdefault("alter_sync", "3");
+    setdefault("insert_distributed_sync", "1");
+    for (name, value) in settings {
+        builder.with_named_option(clickhouse::setting_key(&name), value)?;
+    }
     Ok(builder)
 }
 
@@ -102,7 +145,7 @@ impl Auth for ClickHouseAuth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_options::uri_value;
+    use crate::test_options::{other_option_value, uri_value};
     use dbt_test_primitives::assert_contains;
     use dbt_yaml::Mapping;
     use dbt_yaml::Value as YmlValue;
@@ -197,5 +240,96 @@ secure: true
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "http://ch.local:8123");
+    }
+
+    fn setting_value<'a>(builder: &'a database::Builder, name: &str) -> Option<&'a str> {
+        other_option_value(builder, &clickhouse::setting_key(name))
+    }
+
+    #[test]
+    fn test_default_connection_settings() {
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&AdapterConfig::new(Mapping::new()))
+            .expect("configure");
+
+        assert_eq!(setting_value(&builder, "mutations_sync"), Some("3"));
+        assert_eq!(
+            setting_value(&builder, "lightweight_deletes_sync"),
+            Some("3")
+        );
+        assert_eq!(setting_value(&builder, "alter_sync"), Some("3"));
+        assert_eq!(
+            setting_value(&builder, "insert_distributed_sync"),
+            Some("1")
+        );
+        // conditional settings absent without cluster_mode/database_engine
+        assert_eq!(setting_value(&builder, "insert_quorum"), None);
+        assert_eq!(
+            setting_value(&builder, "database_replicated_enforce_synchronous_settings"),
+            None
+        );
+        assert_eq!(
+            setting_value(&builder, "select_sequential_consistency"),
+            None
+        );
+        assert_eq!(setting_value(&builder, "session_id"), None);
+    }
+
+    #[test]
+    fn test_custom_settings_override_defaults() {
+        let config: Mapping = dbt_yaml::from_str(
+            r#"
+custom_settings:
+  mutations_sync: 0
+  allow_experimental_object_type: true
+  max_insert_threads: 4
+"#,
+        )
+        .expect("parse yaml");
+
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&AdapterConfig::new(config))
+            .expect("configure");
+
+        assert_eq!(setting_value(&builder, "mutations_sync"), Some("0"));
+        assert_eq!(
+            setting_value(&builder, "allow_experimental_object_type"),
+            Some("true")
+        );
+        assert_eq!(setting_value(&builder, "max_insert_threads"), Some("4"));
+        assert_eq!(setting_value(&builder, "alter_sync"), Some("3"));
+    }
+
+    #[test]
+    fn test_replicated_engine_and_cluster_mode_settings() {
+        for config in [
+            Mapping::from_iter([("database_engine".into(), "Replicated".into())]),
+            Mapping::from_iter([("cluster_mode".into(), YmlValue::bool(true))]),
+        ] {
+            let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+                .configure(&AdapterConfig::new(config))
+                .expect("configure");
+
+            assert_eq!(
+                setting_value(&builder, "database_replicated_enforce_synchronous_settings"),
+                Some("1")
+            );
+            assert_eq!(setting_value(&builder, "insert_quorum"), Some("auto"));
+        }
+    }
+
+    #[test]
+    fn test_shared_engine_settings() {
+        let config = Mapping::from_iter([("database_engine".into(), "Shared".into())]);
+
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&AdapterConfig::new(config))
+            .expect("configure");
+
+        assert_eq!(
+            setting_value(&builder, "select_sequential_consistency"),
+            Some("1")
+        );
+        assert_eq!(setting_value(&builder, "insert_quorum"), None);
     }
 }
