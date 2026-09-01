@@ -62,9 +62,12 @@ pub fn bigquery_statement_type_returns_rows(statement_type: &str) -> bool {
 
 fn is_bigquery_result_statement_token(token: &str) -> bool {
     // Conservative: only skip fetch when the first keyword cannot be a result
-    // set. WITH starts CTEs that may SELECT; CALL/SCRIPT can return rows.
+    // set. WITH starts CTEs that may SELECT; FROM/TABLE are GoogleSQL query
+    // forms (pipe syntax and TABLE <table>); CALL/SCRIPT can return rows.
     token.eq_ignore_ascii_case("SELECT")
         || token.eq_ignore_ascii_case("WITH")
+        || token.eq_ignore_ascii_case("FROM")
+        || token.eq_ignore_ascii_case("TABLE")
         || token.eq_ignore_ascii_case("SHOW")
         || token.eq_ignore_ascii_case("DESCRIBE")
         || token.eq_ignore_ascii_case("DESC")
@@ -207,6 +210,14 @@ mod tests {
         ));
         assert!(statement_returns_result_rows(
             "SHOW SCHEMAS",
+            AdapterType::Bigquery,
+        ));
+        assert!(statement_returns_result_rows(
+            "TABLE `proj`.`ds`.`target`",
+            AdapterType::Bigquery,
+        ));
+        assert!(statement_returns_result_rows(
+            "FROM `proj`.`ds`.`target` |> SELECT id",
             AdapterType::Bigquery,
         ));
     }
