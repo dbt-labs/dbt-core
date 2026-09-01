@@ -17,6 +17,7 @@ chrono = { workspace = true }
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-schemas = { workspace = true }
+dbt-telemetry = { workspace = true }
 dbt-yaml = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true }

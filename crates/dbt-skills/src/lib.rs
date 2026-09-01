@@ -17,7 +17,7 @@ pub mod yaml;
 
 use std::path::{Path, PathBuf};
 
-use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, stdfs};
 use dbt_schemas::schemas::project::{
     DEFAULT_SKILL_PATH, DbtProject, ProjectSkillConfig, disallow_plus_prefix_from_flags,
@@ -25,7 +25,9 @@ use dbt_schemas::schemas::project::{
 
 use crate::config::{filter_enabled, resolve_collisions};
 use crate::discover::{SkillSourceProject, discover_skills};
-use crate::install::{InstallOutcome, InstallReport, install_skills};
+#[cfg(test)]
+use crate::install::InstallOutcome;
+use crate::install::{InstallReport, install_skills};
 use crate::providers::{AiProvider, parse_providers, resolve_ai_provider, resolve_destinations};
 
 pub use crate::install::prune_all;
@@ -118,10 +120,11 @@ pub fn install_package_skills(
         disallow_plus_prefix_from_flags(root_project.flags.as_ref()),
     )?;
     let selected = resolve_collisions(enabled);
-    let reports = install_skills(project_root, &destinations, &selected)?;
-
-    log_summary(&reports);
-    Ok(Some(reports))
+    Ok(Some(install_skills(
+        project_root,
+        &destinations,
+        &selected,
+    )?))
 }
 
 /// Destinations for the configured providers, for callers that only need to
@@ -160,20 +163,7 @@ fn read_package_project(package: &InstalledPackage) -> SkillSourceProject {
     }
 }
 
-fn log_summary(reports: &[InstallReport]) {
-    let installed = count(reports, InstallOutcome::Installed);
-    let updated = count(reports, InstallOutcome::Updated);
-    let pruned = count(reports, InstallOutcome::Pruned);
-
-    if installed + updated + pruned == 0 {
-        return;
-    }
-
-    emit_info_log_message(format!(
-        "Agent skills: {installed} installed, {updated} updated, {pruned} removed"
-    ));
-}
-
+#[cfg(test)]
 fn count(reports: &[InstallReport], outcome: InstallOutcome) -> usize {
     reports.iter().filter(|r| r.outcome == outcome).count()
 }

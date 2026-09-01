@@ -9,8 +9,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_common::tracing::dbt_emit::{emit_info_progress_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, stdfs};
+use dbt_telemetry::ProgressMessage;
 use walkdir::WalkDir;
 
 use crate::config::SelectedSkill;
@@ -38,11 +39,58 @@ pub enum InstallOutcome {
     Pruned,
 }
 
+impl InstallOutcome {
+    /// The action word dbt prints for this outcome, or `None` when it is a
+    /// no-op worth staying quiet about.
+    ///
+    /// Matches how package installation reports itself: one right-aligned
+    /// action per item, and nothing at all for items that did not change.
+    const fn action(self) -> Option<&'static str> {
+        match self {
+            InstallOutcome::Installed => Some("Installing"),
+            InstallOutcome::Updated => Some("Updating"),
+            InstallOutcome::Pruned => Some("Removing"),
+            // Nothing happened, or the skill already warned for itself.
+            InstallOutcome::Unchanged
+            | InstallOutcome::SourceIsDestination
+            | InstallOutcome::SkippedUserModified
+            | InstallOutcome::SkippedNotOurs => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InstallReport {
+    /// Destination directory, relative to the project root.
     pub destination: PathBuf,
     pub skill_name: String,
     pub outcome: InstallOutcome,
+}
+
+/// Announce what happened to one skill, in the same shape as the rest of dbt:
+/// `Installing  <skill> (<package>) -> <destination>`.
+fn report_progress(report: &InstallReport, origin: Option<&SkillOrigin>) {
+    let Some(action) = report.outcome.action() else {
+        return;
+    };
+
+    let package = match origin {
+        Some(SkillOrigin::Package { name, version }) => match version {
+            Some(version) => format!(" ({name} {version})"),
+            None => format!(" ({name})"),
+        },
+        Some(SkillOrigin::Project) => " (this project)".to_string(),
+        None => String::new(),
+    };
+
+    emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+        action.to_string(),
+        format!(
+            "{}{package} -> {}",
+            report.skill_name,
+            report.destination.display()
+        ),
+    ));
 }
 
 /// Install `selected` into every directory in `destinations`, then prune.
@@ -57,20 +105,21 @@ pub fn install_skills(
     let mut reports = Vec::new();
 
     for destination in destinations {
-        let destination = project_root.join(destination);
+        let absolute = project_root.join(destination);
         let mut wanted = BTreeSet::new();
 
         for selection in selected {
             wanted.insert(selection.skill.name.clone());
-            let outcome = install_one(&destination, selection)?;
-            reports.push(InstallReport {
+            let report = InstallReport {
                 destination: destination.clone(),
                 skill_name: selection.skill.name.clone(),
-                outcome,
-            });
+                outcome: install_one(&absolute, selection)?,
+            };
+            report_progress(&report, Some(&selection.skill.origin));
+            reports.push(report);
         }
 
-        reports.extend(prune_destination(&destination, &wanted)?);
+        reports.extend(prune_destination(&absolute, destination, &wanted)?);
     }
 
     Ok(reports)
@@ -155,6 +204,7 @@ fn write_skill(selection: &SelectedSkill, target: &Path, source_hash: &str) -> F
 /// dbt-installed copies the user has edited are left in place too.
 fn prune_destination(
     destination: &Path,
+    relative_destination: &Path,
     wanted: &BTreeSet<String>,
 ) -> FsResult<Vec<InstallReport>> {
     let mut reports = Vec::new();
@@ -192,11 +242,13 @@ fn prune_destination(
             InstallOutcome::SkippedUserModified
         };
 
-        reports.push(InstallReport {
-            destination: destination.to_path_buf(),
+        let report = InstallReport {
+            destination: relative_destination.to_path_buf(),
             skill_name: name.to_string(),
             outcome,
-        });
+        };
+        report_progress(&report, None);
+        reports.push(report);
     }
 
     Ok(reports)
@@ -209,6 +261,7 @@ pub fn prune_all(project_root: &Path, destinations: &[PathBuf]) -> FsResult<Vec<
     for destination in destinations {
         reports.extend(prune_destination(
             &project_root.join(destination),
+            destination,
             &BTreeSet::new(),
         )?);
     }
