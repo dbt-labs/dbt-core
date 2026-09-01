@@ -140,7 +140,6 @@ impl TaskRunner {
 
     pub async fn register_seeds_for_selected_ids(
         &self,
-        run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
     ) -> FsResult<()> {
         // Pre-register only *selected* seeds (not frontier dependencies) so that
@@ -159,7 +158,6 @@ impl TaskRunner {
             Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
             Arc::clone(&self.data_store),
             Arc::clone(self.adapter.engine().type_ops()),
-            &run_task_args.io.in_dir,
         )
         .await;
 
