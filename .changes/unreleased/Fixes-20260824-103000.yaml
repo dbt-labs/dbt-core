@@ -2,6 +2,6 @@ kind: Fixes
 body: Skip materializing BigQuery DML/DDL Arrow results so run_query(INSERT) cannot Storage-Read the destination table and OOM
 time: 2026-08-24T10:30:00.000000-10:00
 custom:
-    author: ""
+    author: Kayrnt
     issue: ""
     project: dbt-core
