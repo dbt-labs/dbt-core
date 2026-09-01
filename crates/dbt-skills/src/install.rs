@@ -615,4 +615,28 @@ mod tests {
             .collect();
         assert_eq!(installed, vec!["alpha".to_string()]);
     }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlinks_inside_a_skill_are_not_followed_out_of_the_tree() {
+        // A package can ship whatever it likes inside its own skill directory,
+        // including a symlink to somewhere outside the project. Copying such a
+        // link — or worse, its target — would leak files into the install.
+        // `copy_entry` only handles regular files and directories; this pins
+        // that, since it is a security boundary and not just tidiness.
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("secret.txt"), "TOP SECRET").unwrap();
+
+        let skill = make_source(root, "leaky", "body");
+        std::os::unix::fs::symlink(root.join("secret.txt"), skill.dir.join("stolen.txt")).unwrap();
+        std::os::unix::fs::symlink(root, skill.dir.join("everything")).unwrap();
+
+        install_skills(root, &[PathBuf::from(DEST)], &[selection(skill)]).unwrap();
+
+        let installed = root.join(DEST).join("leaky");
+        assert!(installed.join(SKILL_FILE).is_file());
+        assert!(!installed.join("stolen.txt").exists());
+        assert!(!installed.join("everything").exists());
+    }
 }

@@ -389,4 +389,83 @@ mod tests {
 
         assert!(!root.join(DEFAULT_SKILLS_DIR).join("going-away").exists());
     }
+
+    #[test]
+    fn a_package_cannot_escape_its_directory_with_a_relative_skill_path() {
+        // A compromised package pointing skill-paths above itself must not make
+        // dbt copy files from outside the package into the user's project.
+        let tmp = TempDir::new().unwrap();
+        let outside = tmp.path();
+        write_skill(outside, "private/exfiltrated", "exfiltrated");
+
+        let root = outside.join("proj");
+        fs::create_dir_all(&root).unwrap();
+        let package = write_package(
+            &root,
+            "evil",
+            "name: evil\nskill-paths: [\"../../../private\"]\n",
+        );
+
+        install_package_skills(
+            &root,
+            &root_project("root_project"),
+            &[package],
+            Some(&["wizard".to_string()]),
+        )
+        .unwrap();
+
+        assert!(!root.join(DEFAULT_SKILLS_DIR).join("exfiltrated").exists());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_package_cannot_escape_its_directory_with_a_symlinked_skill_path() {
+        // Same attack without a `..` anywhere: skill-paths names a plain
+        // directory that happens to be a symlink out of the package.
+        let tmp = TempDir::new().unwrap();
+        let outside = tmp.path();
+        write_skill(outside, "private/via-symlink", "via-symlink");
+
+        let root = outside.join("proj");
+        fs::create_dir_all(&root).unwrap();
+        let package = write_package(&root, "evil", "name: evil\nskill-paths: [\"skills\"]\n");
+        std::os::unix::fs::symlink(outside.join("private"), package.root.join("skills")).unwrap();
+
+        install_package_skills(
+            &root,
+            &root_project("root_project"),
+            &[package],
+            Some(&["wizard".to_string()]),
+        )
+        .unwrap();
+
+        assert!(!root.join(DEFAULT_SKILLS_DIR).join("via-symlink").exists());
+    }
+
+    #[test]
+    fn an_escaping_skill_path_does_not_stop_a_well_behaved_one() {
+        let tmp = TempDir::new().unwrap();
+        let outside = tmp.path();
+        write_skill(outside, "private/exfiltrated", "exfiltrated");
+
+        let root = outside.join("proj");
+        fs::create_dir_all(&root).unwrap();
+        let package = write_package(
+            &root,
+            "mixed",
+            "name: mixed\nskill-paths: [\"../../../private\", \"skills\"]\n",
+        );
+        write_skill(&package.root, "skills/legitimate", "legitimate");
+
+        install_package_skills(
+            &root,
+            &root_project("root_project"),
+            &[package],
+            Some(&["wizard".to_string()]),
+        )
+        .unwrap();
+
+        assert!(!root.join(DEFAULT_SKILLS_DIR).join("exfiltrated").exists());
+        assert!(root.join(DEFAULT_SKILLS_DIR).join("legitimate").is_dir());
+    }
 }

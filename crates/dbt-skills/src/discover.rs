@@ -109,10 +109,9 @@ fn discover_under(
     precedence: usize,
     skill_path: &str,
 ) -> Vec<DiscoveredSkill> {
-    let search_root = project.root.join(skill_path);
-    if !search_root.is_dir() {
+    let Some(search_root) = contained_search_root(project, skill_path) else {
         return Vec::new();
-    }
+    };
 
     find_skill_dirs(&search_root)
         .iter()
@@ -124,6 +123,59 @@ fn discover_under(
                 .ok()
         })
         .collect()
+}
+
+/// Resolve one `skill-paths` entry, refusing anything that escapes the project
+/// that declared it.
+///
+/// `skill-paths` in an installed package's `dbt_project.yml` is untrusted
+/// input: a compromised package could set it to `../../..`, or ship its
+/// `skills/` directory as a symlink pointing anywhere on the filesystem. Either
+/// would make dbt walk outside the package and copy whatever directories it
+/// found containing a `SKILL.md` into the user's project. The same rule is
+/// applied to the root project, so there is one rule rather than two.
+///
+/// Containment is checked on the **canonical** paths, so it holds for symlinks
+/// as well as `..`. Returns the path to walk, or `None` if it must not be
+/// walked. A path that simply doesn't exist is not an error — an unused
+/// `skill-paths` default is normal.
+fn contained_search_root(project: &SkillSourceProject, skill_path: &str) -> Option<PathBuf> {
+    let search_root = project.root.join(skill_path);
+    if !search_root.is_dir() {
+        return None;
+    }
+
+    let (Ok(canonical_root), Ok(canonical_search_root)) = (
+        stdfs::canonicalize(&project.root),
+        stdfs::canonicalize(&search_root),
+    ) else {
+        emit_warn_log_message(
+            ErrorCode::SkillPathEscapesProject,
+            format!(
+                "Skipping skill-path '{skill_path}' in '{}': dbt could not resolve it to confirm \
+                 it stays inside the project.",
+                project.package_name
+            ),
+        );
+        return None;
+    };
+
+    if !canonical_search_root.starts_with(&canonical_root) {
+        emit_warn_log_message(
+            ErrorCode::SkillPathEscapesProject,
+            format!(
+                "Skipping skill-path '{skill_path}' in '{}': it resolves to {}, which is outside \
+                 that project. skill-paths must stay within the project that declares them.",
+                project.package_name,
+                canonical_search_root.display()
+            ),
+        );
+        return None;
+    }
+
+    // Walk the original path, not the canonical one, so paths recorded on each
+    // skill stay relative to the project root as configured.
+    Some(search_root)
 }
 
 /// Directories under `search_root` that directly contain a `SKILL.md`.

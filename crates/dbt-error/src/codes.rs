@@ -272,6 +272,8 @@ pub enum ErrorCode {
     SkillModifiedByUser = 1804,
     /// A user-authored skill occupies a destination dbt wanted to install into.
     SkillDestinationOccupied = 1805,
+    /// A `skill-paths` entry resolves outside the project that declared it.
+    SkillPathEscapesProject = 1806,
 
     // --------------------------------------------------------------------------------------------
     // Local execution
