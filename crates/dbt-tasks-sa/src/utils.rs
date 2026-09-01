@@ -18,8 +18,8 @@ use dbt_common::unexpected_err;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, stdfs};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_loader::internal_macro_package_names;
-use dbt_schema_store::{CanonicalFqn, SchemaStoreTrait};
+use dbt_loader::internal_macro_package_names_for;
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::relations::base::ComponentName;
@@ -428,6 +428,8 @@ pub fn update_node_columns(
             databricks_tags: existing.and_then(|col| col.databricks_tags.clone()),
             column_mask: existing.and_then(|col| col.column_mask.clone()),
             quote: existing.and_then(|col| col.quote),
+            codec: existing.and_then(|col| col.codec.clone()),
+            ttl: existing.and_then(|col| col.ttl.clone()),
             deprecated_config: existing
                 .map(|col| col.deprecated_config.clone())
                 .unwrap_or_default(),
@@ -630,66 +632,6 @@ pub fn filter_missing_schemas(
     Ok(missing_catalog_schemas)
 }
 
-pub fn mirror_schema_to_frontier_cache(
-    io_args_out_dir: &Path,
-    canonical_fqn: &CanonicalFqn,
-    unique_id: &str,
-    schema_store: &dyn SchemaStoreTrait,
-) -> FsResult<()> {
-    // For the ParquetCache store format, promote the Selected entry directly
-    // in the in-memory cache; no per-file copy is needed.
-    schema_store
-        .promote_to_frontier(canonical_fqn)
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to promote schema to frontier cache: {}",
-                e
-            )
-        })?;
-
-    // For legacy per-file formats (StoreFormat::Parquet), copy the analyzed
-    // parquet file to the sourced_remote path. This is a no-op for ParquetCache
-    // because the analyzed file no longer exists on disk.
-    let schema_root = io_args_out_dir.join("schemas");
-    let analyzed_path = schema_root
-        .join("analyzed")
-        .join(unique_id)
-        .join("output.parquet");
-    if !analyzed_path.exists() {
-        return Ok(());
-    }
-
-    let frontier_path = schema_root
-        .join("sourced_remote")
-        .join("internal")
-        .join(canonical_fqn.catalog().as_str())
-        .join(canonical_fqn.schema().as_str())
-        .join(canonical_fqn.table().as_str())
-        .join("output.parquet");
-    if let Some(parent) = frontier_path.parent() {
-        stdfs::create_dir_all(parent).map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to create schema cache directory {}: {}",
-                parent.display(),
-                e
-            )
-        })?;
-    }
-
-    stdfs::copy(&analyzed_path, &frontier_path).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to mirror seed schema from {} to {}: {}",
-            analyzed_path.display(),
-            frontier_path.display(),
-            e
-        )
-    })?;
-    Ok(())
-}
-
 pub fn typecheck_macros(
     resolver_state: &ResolverState,
     env: Arc<JinjaEnv>,
@@ -702,7 +644,10 @@ pub fn typecheck_macros(
     // mode. Skip them — they're stable and pre-tested. After the manifest parity fix,
     // original_file_path is package-relative and no longer starts with "dbt_internal_packages",
     // so we identify internal macros by package_name instead.
-    let internal_pkgs = internal_macro_package_names(resolver_state.adapter_type);
+    // Union over every adapter the target declares, not just the default one:
+    // otherwise a borrowed package's macros would not be recognised as internal.
+    let internal_pkgs =
+        internal_macro_package_names_for(resolver_state.dbt_profile.adapter_types());
     let is_internal = |m: &&DbtMacro| internal_pkgs.contains(&m.package_name);
 
     let all_files = {
@@ -784,7 +729,7 @@ pub fn typecheck_macros(
             jinja_typechecking_listener_factory.clone(),
             Some(m.package_name.clone()),
             &env.env.get_root_package_name(),
-            Value::from_dyn_object(env.env.get_dbt_and_adapters_namespace()),
+            Value::from_dyn_object(env.env.get_dbt_and_adapters_namespaces()),
             &relative_file_path.clone(),
             &content,
             &offset,

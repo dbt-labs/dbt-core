@@ -22,10 +22,23 @@ fn component_from_recorded(
 ) -> Option<Box<dyn ComponentConfig>> {
     match name {
         components::tbl_properties::TYPE_NAME => {
-            let props: IndexMap<String, String> = val
+            let mut props: IndexMap<String, String> = val
                 .get("tblproperties")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
+            // `to_jinja` splits `pipelines.pipelineId` out into a separate
+            // top-level `pipeline_id` key; re-insert it so the round-trip is
+            // lossless (Time Machine replay reserializes this component).
+            if let Some(pipeline_id) = val
+                .get("pipeline_id")
+                .and_then(|v| serde_json::from_value::<Option<String>>(v.clone()).ok())
+                .flatten()
+            {
+                props.insert(
+                    components::tbl_properties::PIPELINE_ID_KEY.to_string(),
+                    pipeline_id,
+                );
+            }
             Some(components::TblPropertiesLoader::new_component_type_erased(
                 props,
             ))
@@ -52,11 +65,10 @@ fn component_from_recorded(
                 comments,
             ))
         }
-        // {"set_column_tags": {col: {k: v}}}
+        // {"set_column_tags": {col: {k: v}}}.
         components::column_tags::TYPE_NAME => {
             let tags: IndexMap<String, IndexMap<String, String>> = val
                 .get("set_column_tags")
-                .or_else(|| val.get("tags"))
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default();
             Some(components::ColumnTagsLoader::new_component_type_erased(
@@ -165,11 +177,20 @@ fn component_from_recorded(
                 typed("unset_constraints"),
             ))
         }
-        // TODO: row_filter is recorded by Python, but fs has no row_filter
-        // ComponentConfig yet. Handling it requires adding that component to the
-        // Databricks config (and the relation-type loaders) before it can be
-        // reconstructed here.
-        "row_filter" => None,
+        // {"function": str, "columns": [str]}.
+        components::row_filter::TYPE_NAME => {
+            let function: Option<String> = val
+                .get("function")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let columns: Vec<String> = val
+                .get("columns")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            Some(components::RowFilterLoader::new_component_type_erased(
+                function, columns,
+            ))
+        }
         _ => None,
     }
 }

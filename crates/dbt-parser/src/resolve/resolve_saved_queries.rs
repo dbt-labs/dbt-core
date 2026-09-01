@@ -1,10 +1,13 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{
     extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
 };
+use dbt_adapter_core::AdapterType;
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::DbtPath;
@@ -44,6 +47,7 @@ fn extract_raw_export_configs(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_saved_queries(
+    adapter_type: AdapterType,
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_package: &DbtPackage,
@@ -69,13 +73,17 @@ pub async fn resolve_saved_queries(
 
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
     let is_dependency = dependency_package_name.is_some();
-    let _raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "saved-queries");
+    let _raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "saved-queries",
+        adapter_type,
+    )?;
     let _raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "saved-queries",
-        ))
+            adapter_type,
+        )?)
     } else {
         None
     };
@@ -88,8 +96,11 @@ pub async fn resolve_saved_queries(
                 &package.dbt_project.saved_queries,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     // Validate saved query names with regex (similar to exposures)
@@ -236,7 +247,8 @@ pub async fn resolve_saved_queries(
                 raw_properties_yml_config.as_ref(),
                 None,
                 false,
-            );
+                adapter_type,
+            )?;
 
             let dbt_saved_query = DbtSavedQuery {
                 __common_attr__: CommonAttributes {
@@ -269,6 +281,8 @@ pub async fn resolve_saved_queries(
                     meta: saved_query_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    // Not executed against a warehouse; records the target it parsed under.
+                    adapter: adapter_type,
                     database: database.unwrap_or_default(),
                     schema: schema.unwrap_or_default(),
                     alias: alias.unwrap_or_default(),

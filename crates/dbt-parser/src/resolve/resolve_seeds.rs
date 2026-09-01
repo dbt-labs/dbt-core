@@ -1,7 +1,10 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
+    validate_node_adapter,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -18,6 +21,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::dbt_utils::validate_delimiter;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -25,6 +29,7 @@ use dbt_schemas::schemas::properties::SeedProperties;
 use dbt_schemas::schemas::{CommonAttributes, DbtSeed, DbtSeedAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset};
 use dbt_schemas::state::{ModelStatus, NodeResolverTracker};
+use indexmap::IndexMap;
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -44,12 +49,13 @@ pub async fn resolve_seeds(
     arg: &ResolveArgs,
     mut seed_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
-    package_quoting: DbtQuoting,
+    // Authored quoting per declared adapter name. See `resolve_models`.
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
+    default_adapter: AdapterType,
     package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
@@ -64,13 +70,17 @@ pub async fn resolve_seeds(
     let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
 
     let is_dependency = dependency_package_name.is_some();
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "seeds");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "seeds",
+        default_adapter,
+    )?;
     let raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "seeds",
-        ))
+            default_adapter,
+        )?)
     } else {
         None
     };
@@ -113,15 +123,21 @@ pub async fn resolve_seeds(
         seed_root_dirs.push("seeds".to_string());
     }
 
-    let config_resolver =
-        ProjectConfigResolver::build(root_project_configs.seeds.clone(), is_dependency, || {
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.seeds.clone(),
+        is_dependency,
+        || {
             init_project_config(
                 &package.dbt_project.seeds,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
-        })?
-        .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
+        },
+        default_adapter,
+    )?
+    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
     // TODO: update this to be relative of the root project
     let mut duplicate_errors = Vec::new();
@@ -200,8 +216,12 @@ pub async fn resolve_seeds(
             package.dbt_project.seed_paths.as_ref().unwrap_or(&vec![]),
         );
 
-        // TODO: dbt-core deep_merges the rendered and unrendered schema.yml configs, which
-        // doubles list fields (e.g. tags), likely a bug. If state:modified parity requires it:
+        // TODO (deferred, not a bug here): dbt-core deep_merges the rendered and unrendered
+        // schema.yml configs, which doubles list fields (e.g. tags) — the same class of issue as
+        // the versioned-model `unrendered_config` divergence documented at
+        // `.agents/state-modified-conformance.md` § "Versioned models" (GT4). Seeds have no
+        // `versions:`, so there is nothing version-level to double-apply here today, but if seeds
+        // ever grow one, do not replicate the duplication for the same reason models don't:
         // https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/parser/base.py#L424-L426
         let unrendered_config = build_unrendered_config(
             &fqn,
@@ -210,7 +230,8 @@ pub async fn resolve_seeds(
             raw_schema_yml_configs.get(seed_name),
             None,
             true,
-        );
+            default_adapter,
+        )?;
 
         // Merge schema_file_info
         let (seed, patch_path) = if let Some(mpe) = seed_properties.remove(seed_name) {
@@ -244,7 +265,7 @@ pub async fn resolve_seeds(
         );
 
         // XXX: normalize column_types to uppercase if it is snowflake
-        if matches!(adapter_type, AdapterType::Snowflake)
+        if matches!(default_adapter, AdapterType::Snowflake)
             && let Some(column_types) = &properties_config.column_types
         {
             let column_types = column_types
@@ -301,10 +322,33 @@ pub async fn resolve_seeds(
 
         validate_delimiter(&properties_config.delimiter)?;
 
+        let resolved_node_adapter = validate_node_adapter(
+            properties_config.adapter,
+            arg.adapter_override,
+            &DbtMaterialization::Table,
+            properties_config.catalog_name.as_deref(),
+            default_adapter,
+            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
+            false,
+            &path,
+        )?;
+
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds
         let original_file_path =
             stdfs::diff_paths(seed_file.base_path.join(&path), &io_args.in_dir)?;
+
+        // See `resolve_models`: both remaining layers depend on the node's
+        // `+adapter`, which the config merge cannot know. Written back so
+        // `deprecated_config` carries the resolved value too.
+        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
+        properties_config.quoting = resolve_package_quoting(
+            Some(match adapter_quoting.get(&selected_adapter) {
+                Some(authored) => properties_config.quoting.filled_from(authored),
+                None => properties_config.quoting,
+            }),
+            resolved_node_adapter.unwrap_or(default_adapter),
+        );
 
         // Create initial seed with default values
         let mut dbt_seed = DbtSeed {
@@ -338,6 +382,7 @@ pub async fn resolve_seeds(
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -381,7 +426,7 @@ pub async fn resolve_seeds(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
         let status = if is_enabled {
@@ -390,7 +435,7 @@ pub async fn resolve_seeds(
             ModelStatus::Disabled
         };
 
-        match node_resolver.insert_ref(&dbt_seed, adapter_type, status, false) {
+        match node_resolver.insert_ref(&dbt_seed, default_adapter, status, false) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(path.clone());
@@ -408,7 +453,7 @@ pub async fn resolve_seeds(
                         collected_generic_tests,
                         test_name_truncations,
                         seen_generic_test_paths,
-                        adapter_type,
+                        default_adapter,
                         io_args,
                         patch_path.as_ref().unwrap_or(&path),
                         false,

@@ -17,7 +17,7 @@ pub fn execute_snapshot_remote(
     let mut base_context = ctx.inner.base_context.clone();
     add_task_context(&mut base_context, snapshot.common(), &ctx.thread_id);
 
-    let relations_map = materialize_snapshot(
+    let (relations_map, main_response) = materialize_snapshot(
         &sql_instruction.sql,
         snapshot,
         ctx.adapter_type(),
@@ -27,6 +27,11 @@ pub fn execute_snapshot_remote(
         &base_context,
         &ctx.inner.arg.io,
     )?;
+    if let Some(main_response) = main_response {
+        ctx.inner
+            .main_adapter_responses
+            .insert(snapshot.__common_attr__.unique_id.clone(), main_response);
+    }
     let _ = cache_materialization_return_value(ctx.env.clone(), &relations_map);
 
     Ok(NodeStatus::Succeeded)

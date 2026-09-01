@@ -2,11 +2,13 @@
 use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_adapter_core::AdapterType;
+use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::malformed_block_name::MalformedBlockNameListener;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -18,12 +20,14 @@ use dbt_schemas::state::DbtPackage;
 use minijinja::ArgSpec;
 use minijinja::compiler::ast::{CallArg, Expr, MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
+use minijinja::listener::TokenizerEventListener;
 use minijinja::machinery::{Span, WhitespaceConfig};
 use minijinja::syntax::SyntaxConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 /// A raw (unrendered) project config tree built from a `dbt_project.yml` models hierarchy.
@@ -59,32 +63,51 @@ impl RawProjectConfig {
     }
 }
 
-/// Merges a parent raw config map with config keys from a child raw YAML mapping.
+/// Merges a parent raw config map (already canonical) with config keys from a child raw YAML
+/// mapping, i.e. one `dbt_project.yml` hierarchy level.
 /// Keys prefixed with `+` are config keys (prefix stripped before inserting).
 /// Non-`+` keys are hierarchy keys (package/folder names) and are ignored.
-/// Child values overwrite parent values.
+///
+/// The child level's own keys are canonicalized against `adapter_type`'s alias map *before*
+/// merging, mirroring dbt-mantle's `fqn_search`/`_update_from_config`
+/// (`core/dbt/context/context_config.py:120-127,222,302`): each hierarchy level is translated on
+/// its own, then folded into the accumulating result one level at a time. Canonicalizing only
+/// the child level here -- not the already-merged `parent` -- is what makes that possible: a
+/// parent-level alias (e.g. `+catalog:`) and a child-level canonical spelling (`+database:`) are
+/// two different levels' dicts, never one dict with two colliding keys, so this cannot spuriously
+/// raise `DuplicateAliasKey` the way canonicalizing the pre-merged result of both levels at once
+/// would. A single level authoring both an alias and its canonical spelling still errors, via
+/// `canonicalize_source_config_keys`. Child values overwrite parent values.
 pub fn merge_raw_config_mappings(
     parent: &BTreeMap<String, dbt_yaml::Value>,
     child_mapping: &dbt_yaml::Mapping,
-) -> BTreeMap<String, dbt_yaml::Value> {
-    let mut merged = parent.clone();
+    adapter_type: AdapterType,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+    let mut own_level = BTreeMap::new();
     for (k, v) in child_mapping.iter() {
         if let Some(key_str) = k.as_str() {
             if let Some(stripped) = key_str.strip_prefix('+') {
-                merged.insert(stripped.to_string(), v.clone());
+                own_level.insert(stripped.to_string(), v.clone());
             }
         }
     }
-    merged
+    let own_level =
+        crate::resolve::resolve_utils::canonicalize_source_config_keys(adapter_type, own_level)?;
+    let mut merged = parent.clone();
+    merged.extend(own_level);
+    Ok(merged)
 }
 
 /// Recursively builds a `RawProjectConfig` tree from a raw YAML mapping.
-/// At each level, `+`-prefixed keys are merged into the config; non-`+` keys with mapping values are recursed into as children.
+/// At each level, `+`-prefixed keys are canonicalized and merged into the config; non-`+` keys
+/// with mapping values are recursed into as children. See [`merge_raw_config_mappings`] for why
+/// canonicalization happens per level rather than once on the fully-merged tree.
 pub fn recur_raw_project_config(
     mapping: &dbt_yaml::Mapping,
     parent_config: &BTreeMap<String, dbt_yaml::Value>,
-) -> RawProjectConfig {
-    let current_config = merge_raw_config_mappings(parent_config, mapping);
+    adapter_type: AdapterType,
+) -> FsResult<RawProjectConfig> {
+    let current_config = merge_raw_config_mappings(parent_config, mapping, adapter_type)?;
     let mut children = BTreeMap::new();
     for (k, v) in mapping.iter() {
         if let Some(key_str) = k.as_str() {
@@ -92,16 +115,16 @@ pub fn recur_raw_project_config(
                 if let Some(child_mapping) = v.as_mapping() {
                     children.insert(
                         key_str.to_string(),
-                        recur_raw_project_config(child_mapping, &current_config),
+                        recur_raw_project_config(child_mapping, &current_config, adapter_type)?,
                     );
                 }
             }
         }
     }
-    RawProjectConfig {
+    Ok(RawProjectConfig {
         config: current_config,
         children,
-    }
+    })
 }
 
 /// Coalesce a list of optional values into a single value
@@ -190,11 +213,13 @@ pub fn get_snapshot_fqn(
         .is_some_and(|ext| ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml"));
 
     if is_yaml_defined {
+        // We've already normalized the yaml snapshots here under snapshots/,
+        // so we strip the normalized snapshots path instead of the original.
         get_node_fqn(
             package_name,
             path.to_path_buf(),
             vec![snapshot_name.to_string()],
-            snapshot_paths,
+            &[DBT_SNAPSHOTS_DIR_NAME.into()],
         )
     } else {
         let original_file_stem = strip_resource_paths_from_ref_path(original_path, snapshot_paths)
@@ -646,7 +671,8 @@ pub fn update_node_relation_components(
 pub fn extract_resource_config_from_raw_project(
     raw_yml: &dbt_yaml::Value,
     resource_type: &str,
-) -> RawProjectConfig {
+    adapter_type: AdapterType,
+) -> FsResult<RawProjectConfig> {
     if let Some(raw_subtree) = raw_yml.get(resource_type).cloned().and_then(|v| {
         if let dbt_yaml::Value::Mapping(m, _) = v {
             Some(m)
@@ -654,9 +680,9 @@ pub fn extract_resource_config_from_raw_project(
             None
         }
     }) {
-        recur_raw_project_config(&raw_subtree, &BTreeMap::new())
+        recur_raw_project_config(&raw_subtree, &BTreeMap::new(), adapter_type)
     } else {
-        RawProjectConfig::empty()
+        Ok(RawProjectConfig::empty())
     }
 }
 
@@ -860,13 +886,16 @@ pub fn parse_macro_statements(
     statement_types: &[&str],
 ) -> FsResult<Vec<SqlResource<NoOpConfig>>> {
     let file_name = path.display().to_string();
-    let mut parser = Parser::new(
+    let listener: Rc<dyn TokenizerEventListener> =
+        Rc::new(MalformedBlockNameListener::new(path.to_path_buf()));
+    let mut parser = Parser::new_with_tokenizer_listeners(
         sql,
         &file_name,
         false,
         #[allow(clippy::default_constructed_unit_structs)]
         SyntaxConfig::builder().build().unwrap(),
         WhitespaceConfig::default(),
+        &[listener],
     );
     // We should throw an error here if we can't process the macro because we shouldn't see any non macro's here
     let ast = parser

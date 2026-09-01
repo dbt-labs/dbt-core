@@ -1,30 +1,59 @@
 {% materialization table, adapter='clickhouse' %}
 
+  {%- set existing_relation = load_cached_relation(this) -%}
   {%- set target_relation = this.incorporate(type='table') -%}
+  {%- set backup_relation = none -%}
+  {%- set preexisting_backup_relation = none -%}
+  {%- set preexisting_intermediate_relation = none -%}
+
+  {% if existing_relation is not none %}
+    {%- set backup_relation_type = existing_relation.type -%}
+    {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
+    {%- set preexisting_backup_relation = load_cached_relation(backup_relation) -%}
+    {# v2: no can_exchange/EXCHANGE TABLES support yet — every rebuild takes
+       upstream's intermediate+rename fallback. #}
+    {%- set intermediate_relation = make_intermediate_relation(target_relation) -%}
+    {%- set preexisting_intermediate_relation = load_cached_relation(intermediate_relation) -%}
+  {% endif %}
+
   {% set grant_config = config.get('grants') %}
 
   {{ run_hooks(pre_hooks, inside_transaction=False) }}
+
+  -- drop the temp relations if they exist already in the database
+  {{ drop_relation_if_exists(preexisting_intermediate_relation) }}
+  {{ drop_relation_if_exists(preexisting_backup_relation) }}
+
+  -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
-  {# MVP: use CREATE OR REPLACE TABLE which is atomic in ClickHouse 22.9+.
-     This handles new tables, existing tables, and full-refresh identically. #}
-  {% call statement('main') -%}
-    create or replace table {{ target_relation }}
-    {{ on_cluster_clause(target_relation) }}
-    {{ engine_clause() }}
-    {{ order_cols(label='order by') }}
-    {{ primary_key_clause(label='primary key') }}
-    {{ partition_cols(label='partition by') }}
-    {{ ttl_config(label='ttl') }}
-    {{ clickhouse_model_settings(model, config.get('engine', default='MergeTree')) }}
-    as (
-      {{ sql }}
-    )
-    {{ clickhouse_model_query_settings(model) }}
-  {%- endcall %}
+  {# If there is not existing relation, we can just create a new one #}
+  {% if existing_relation is none %}
+    {{ log('Creating new relation ' + target_relation.name )}}
+    {% call statement('main') -%}
+      {{ get_create_table_as_sql(False, target_relation, sql) }}
+    {%- endcall %}
+  {% else %}
+    -- We have to use an intermediate and rename accordingly
+    {% call statement('main') -%}
+      {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
+    {%- endcall %}
+    {{ adapter.rename_relation(existing_relation, backup_relation) }}
+    {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+  {% endif %}
+
+  -- cleanup
+  {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
+  {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
+
+  {% do persist_docs(target_relation, model) %}
 
   {{ run_hooks(post_hooks, inside_transaction=True) }}
+
   {{ adapter.commit() }}
+
+  {{ drop_relation_if_exists(backup_relation) }}
+
   {{ run_hooks(post_hooks, inside_transaction=False) }}
 
   {{ return({'relations': [target_relation]}) }}
@@ -89,7 +118,29 @@
 {%- endmacro -%}
 
 {% macro primary_key_clause(label) %}
-  {%- set primary_key = config.get('primary_key', validator=validation.any[basestring]) -%}
+  {%- set primary_key = config.get('primary_key', validator=validation.any[list, basestring]) -%}
+  {#- An empty value ('', '   ' or []) would emit "PRIMARY KEY" with no columns,
+      which is invalid DDL - treat it as unset instead. -#}
+  {%- if primary_key is string -%}
+    {%- set primary_key = primary_key | trim -%}
+  {%- endif -%}
+  {%- if primary_key is not none and primary_key | length == 0 -%}
+    {%- set primary_key = none -%}
+  {%- endif -%}
+  {#- v2 compatibility: v2's typed primary_key config arrives as a list
+      (scalar inputs are listified). Render it as a single parenthesized
+      expression, since bare "PRIMARY KEY a, b" is a ClickHouse syntax error.
+      Whitespace-only entries are dropped like the scalar case above.
+      Guarded like the incremental macros' unique_key handling. -#}
+  {%- if primary_key is not none and primary_key is iterable and (primary_key is not string and primary_key is not mapping) -%}
+    {%- set pk_cols = [] -%}
+    {%- for col in primary_key -%}
+      {%- if col | trim | length > 0 -%}
+        {%- do pk_cols.append(col | trim) -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- set primary_key = '(' ~ (pk_cols | join(', ')) ~ ')' if pk_cols else none -%}
+  {%- endif %}
 
   {%- if primary_key is not none %}
     {{ label }} {{ primary_key }}
@@ -143,18 +194,23 @@
 
 {% macro clickhouse__create_table_as(temporary, relation, sql) -%}
     {% set has_contract = config.get('contract').enforced %}
-    {% set create_table = create_table_or_empty(temporary, relation, sql, has_contract) %}
-    {% if clickhouse_is_before_version('22.7.1.2484') or temporary -%}
-        {{ create_table }}
-    {%- else %}
-        {% call statement('create_table_empty') %}
-            {{ create_table }}
-        {% endcall %}
-         {{ add_index_and_projections(relation) }}
-
+    {{ clickhouse__create_empty_table(temporary, relation, sql, has_contract) }}
+    {%- if not temporary %}
         {{ clickhouse__insert_into(relation, sql, has_contract) }}
     {%- endif %}
 {%- endmacro %}
+
+{#
+    "CREATE TABLE" step extracted from clickhouse__create_table_as so it can be used by other macros.
+#}
+{% macro clickhouse__create_empty_table(temporary, relation, sql, has_contract, statement_name='create_table_empty') %}
+    {% call statement(statement_name) %}
+        {{ create_table_or_empty(temporary, relation, sql, has_contract) }}
+    {% endcall %}
+    {%- if not temporary %}
+        {{ add_index_and_projections(relation) }}
+    {%- endif %}
+{% endmacro %}
 
 {#
     A macro that adds any configured projections or indexes at the same time.
@@ -199,7 +255,7 @@
     {% if temporary -%}
         create temporary table {{ relation.identifier }}
         engine Memory
-        {{ clickhouse_model_settings(model, 'Memory') }}
+        {{ adapter.get_model_settings(model, 'Memory') }}
         as (
           {{ sql }}
         )
@@ -215,17 +271,15 @@
         {{ primary_key_clause(label="primary key") }}
         {{ partition_cols(label="partition by") }}
         {{ ttl_config(label="ttl")}}
-        {{ clickhouse_model_settings(model, config.get('engine', default='MergeTree')) }}
+        {{ adapter.get_model_settings(model, config.get('engine', default='MergeTree')) }}
 
         {%- if not has_contract %}
-          {%- if not clickhouse_is_before_version('22.7.1.2484') %}
-            empty
-          {%- endif %}
+          empty
           as (
             {{ sql }}
           )
         {%- endif %}
-        {{ clickhouse_model_query_settings(model) }}
+        {{ adapter.get_model_query_settings(model) }}
     {%- endif %}
 
 {%- endmacro %}
@@ -254,7 +308,7 @@
   {%- else -%}
       {{ sql }}
   {%- endif -%}
-  {{ clickhouse_model_query_settings(model) }}
+  {{ adapter.get_model_query_settings(model) }}
 {%- endmacro %}
 
 {% macro codec_clause(codec_name) %}

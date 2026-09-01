@@ -299,6 +299,9 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     fn set_is_delta(&mut self, is_delta: Option<bool>);
 
+    /// Set the relation's table format, when the adapter tracks one.
+    fn set_table_format(&mut self, table_format: Option<TableFormat>);
+
     /// Helper: check if the relation is a CTE
     fn is_cte(&self) -> bool {
         matches!(
@@ -501,7 +504,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         let rendered = self.render_self_as_str();
 
         let rendered = if run_filter.empty {
-            format!("(select * from {rendered} limit 0)")
+            format!("(select * from {rendered} where false limit 0)")
         } else {
             rendered
         };
@@ -545,7 +548,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             | AdapterType::Salesforce
             | AdapterType::Spark
             | AdapterType::DuckDB
-            | AdapterType::Alt
+            | AdapterType::LakeCompute
             | AdapterType::Fabric => (
                 start.map(|start| format!("{event_time} >= '{start}'")),
                 end.map(|end| format!("{event_time} < '{end}'")),
@@ -558,7 +561,21 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
                 }),
                 end.map(|end| format!("{event_time} < parseDateTime64BestEffort('{end}', 9)")),
             ),
-            AdapterType::Exasol => todo!("Exasol"),
+            // Exasol TIMESTAMP literals take no time-zone offset; strip the
+            // (always +00:00) offset and 'T' from the UTC rfc3339 boundary.
+            AdapterType::Exasol => {
+                let to_exasol_ts = |s: &str| {
+                    let s = s
+                        .trim_end_matches("+00:00")
+                        .trim_end_matches('Z')
+                        .replace('T', " ");
+                    format!("TIMESTAMP '{s}'")
+                };
+                (
+                    start.map(|start| format!("{event_time} >= {}", to_exasol_ts(&start))),
+                    end.map(|end| format!("{event_time} < {}", to_exasol_ts(&end))),
+                )
+            }
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),
@@ -728,6 +745,34 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         _location: Option<String>,
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
         Ok(self.to_owned())
+    }
+
+    /// Derive a new relation from this one by appending `suffix` to the identifier
+    /// (or, when `interpret_suffix_as_full_identifier` is set, using `suffix` as the
+    /// whole identifier), keeping the same schema and optionally overriding the type.
+    ///
+    /// Called from the ClickHouse materialized-view and snapshot macros, e.g.
+    /// `target_relation.derivative('_mv', 'materialized_view')`.
+    /// Ref: dbt-clickhouse `relation.py::ClickHouseRelation.derivative`.
+    fn derivative(
+        &self,
+        suffix: &str,
+        relation_type: Option<RelationType>,
+        interpret_suffix_as_full_identifier: bool,
+    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+        let new_identifier = if interpret_suffix_as_full_identifier {
+            suffix.to_string()
+        } else {
+            format!("{}{}", self.identifier_as_str()?, suffix)
+        };
+        let relation_type = relation_type.or_else(|| self.relation_type());
+        self.create_relation(
+            self.database().map(|s| s.to_string()),
+            Some(self.schema_as_str()?),
+            Some(new_identifier),
+            relation_type,
+            self.quote_policy(),
+        )
     }
 
     /// Create a new relation with the specified components and policies.

@@ -13,6 +13,9 @@ pub mod serde;
 /// Module containing utility functions and helpers
 pub mod utils;
 
+/// The `info_schema()` Jinja helper for project quality checks
+pub mod info_schema;
+
 /// Module for functions implementations for the dbt jinja context
 mod functions;
 pub use functions::Var;
@@ -37,6 +40,9 @@ pub use phases::parse::init::{DefaultJinjaFactory, JinjaFactory};
 /// Module for the Invocation Args
 pub mod invocation_args;
 
+/// Module for the invocation-scoped Jinja `graph` mapping
+pub mod invocation_graph;
+
 /// Module for the Refs and Sources
 pub mod node_resolver;
 
@@ -52,3 +58,6 @@ pub mod mangled_ref;
 /// Mock Jinja object
 #[cfg(any(test, feature = "testing"))]
 pub mod mock_object;
+
+/// Parse-time listener that warns on malformed snapshot/docs block names
+pub mod malformed_block_name;

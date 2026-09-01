@@ -2,11 +2,14 @@ use std::ffi::OsString;
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::result::Result;
+use std::sync::OnceLock;
 use std::time::Duration;
 use std::{env, fmt, io};
 
 use crate::driver::DriverFilenameDisplay;
+use crate::driver_channel::foundry_driver;
 use crate::*;
+
 use adbc_core::error::{Error, Status};
 use percent_encoding::AsciiSet;
 use sha2::{Digest, Sha256};
@@ -21,7 +24,7 @@ static INSTALLABLE_DRIVERS: &[Backend; 12] = &[
     Backend::Redshift,
     Backend::DuckDB,
     Backend::DuckDBExtended,
-    Backend::Alt,
+    Backend::LakeCompute,
     Backend::Salesforce,
     Backend::Spark,
     Backend::SQLServer,
@@ -218,8 +221,36 @@ impl InstallError {
     }
 }
 
-pub fn format_driver_url(backend_name: &str, triplet: DriverTriplet) -> String {
+/// The CDN drivers are downloaded from, resolved once per process.
+///
+/// `DBT_ADBC_USE_STAGING_CDN=1` switches debug builds to the staging mirror
+/// (written by `release.adbc.yml` on a `dry_run`) to exercise a driver before
+/// it is promoted from `main`. Release builds ignore it, so a shipped binary
+/// can't be pointed at pre-release artifacts.
+///
+/// This also moves `adbc-sync`, which hashes whatever it downloads.
+pub fn cdn_host() -> &'static str {
     const PUBLIC_DBT_CDN: &str = "public.cdn.getdbt.com";
+    #[cfg(not(debug_assertions))]
+    {
+        PUBLIC_DBT_CDN
+    }
+    #[cfg(debug_assertions)]
+    {
+        const STAGING_DBT_CDN: &str = "public.staging.cdn.getdbt.com";
+        static HOST: OnceLock<&str> = OnceLock::new();
+        HOST.get_or_init(|| {
+            if env_var::env_var_bool_or_warn("DBT_ADBC_USE_STAGING_CDN") {
+                STAGING_DBT_CDN
+            } else {
+                PUBLIC_DBT_CDN
+            }
+        })
+    }
+}
+
+pub fn format_driver_url(backend_name: &str, triplet: DriverTriplet) -> String {
+    let host = cdn_host();
 
     // %-encode most non-alphanumeric characters in the version string
     const NON_ALPHANUMERIC: &AsciiSet = &percent_encoding::NON_ALPHANUMERIC
@@ -228,7 +259,7 @@ pub fn format_driver_url(backend_name: &str, triplet: DriverTriplet) -> String {
         .remove(b'_');
     format!(
         "https://{}/fs/adbc/{}/adbc_driver_{}-{}-{}-{}{}.zst",
-        PUBLIC_DBT_CDN,
+        host,
         backend_name,
         backend_name,
         percent_encoding::utf8_percent_encode(triplet.version, NON_ALPHANUMERIC),
@@ -309,6 +340,20 @@ pub fn is_installable_driver(backend: Backend) -> bool {
 /// Pre-condition: is_installable_driver(backend)
 pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str) {
     debug_assert!(is_installable_driver(backend));
+    // Logged because the channel is otherwise invisible: both drivers report
+    // the same `Backend`, so this is the only place that says which one a run
+    // actually resolved.
+    let (name, version) = if let Some((name, version)) = foundry_driver(backend) {
+        (name, version)
+    } else {
+        canonical_name_and_version(backend)
+    };
+    tracing::debug!("{backend} driver resolved: {name} {version}");
+    (name, version)
+}
+
+/// The canonical driver for `backend`, ignoring any opted-in channel.
+fn canonical_name_and_version(backend: Backend) -> (&'static str, &'static str) {
     match backend {
         Backend::Snowflake => ("snowflake", SNOWFLAKE_DRIVER_VERSION),
         Backend::BigQuery => ("bigquery", BIGQUERY_DRIVER_VERSION),
@@ -319,7 +364,7 @@ pub fn backend_name_and_version(backend: Backend) -> (&'static str, &'static str
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
         Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
         Backend::DuckDBExtended => ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION),
-        Backend::Alt => ("dbt", ALT_DRIVER_VERSION),
+        Backend::LakeCompute => ("dbt", LAKE_COMPUTE_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::ClickHouse => ("clickhouse", CLICKHOUSE_DRIVER_VERSION),
         Backend::Athena | Backend::Exasol | Backend::Generic { .. } => {
@@ -639,7 +684,23 @@ pub fn download_zst_driver_file(
 
     // fsync() the temp file and atomically rename it to the destination.
     tmp.sync_data().map_err(InstallError::SyncFile)?;
-    std::fs::rename(tmp_path, destination).map_err(InstallError::RenameFile)?;
+    finalize_install(&tmp_path, destination)
+}
+
+/// Move a fully-downloaded temporary file over the destination.
+///
+/// If the rename fails but the destination exists, another process installed the
+/// same (version-qualified) driver concurrently and we can use theirs. This is the
+/// common case on Windows, where renaming over a DLL another process has already
+/// `LoadLibrary`'d fails with "Access is denied" (os error 5).
+fn finalize_install(tmp_path: &Path, destination: &Path) -> Result<(), InstallError> {
+    if let Err(e) = std::fs::rename(tmp_path, destination) {
+        let installed_by_other_process = destination.try_exists().unwrap_or(false);
+        let _ = std::fs::remove_file(tmp_path);
+        if !installed_by_other_process {
+            return Err(InstallError::RenameFile(e));
+        }
+    }
     Ok(())
 }
 
@@ -648,6 +709,31 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
     use std::sync::Mutex;
+
+    #[test]
+    fn finalize_install_tolerates_concurrent_install() {
+        let dir = env::temp_dir().join(tmpname("finalize-install-", 12, "").unwrap());
+        std::fs::create_dir_all(&dir).unwrap();
+        let dst = dir.join("driver.bin");
+        let missing_tmp = dir.join("nonexistent.download");
+
+        // Rename failure with no destination in place is a real error.
+        assert!(finalize_install(&missing_tmp, &dst).is_err());
+
+        // Another process won the race: destination exists, so we accept it.
+        std::fs::write(&dst, b"theirs").unwrap();
+        assert!(finalize_install(&missing_tmp, &dst).is_ok());
+        assert_eq!(std::fs::read(&dst).unwrap(), b"theirs");
+
+        // Normal path still renames.
+        let tmp = dir.join("ours.download");
+        std::fs::write(&tmp, b"ours").unwrap();
+        assert!(finalize_install(&tmp, &dst).is_ok());
+        assert_eq!(std::fs::read(&dst).unwrap(), b"ours");
+        assert!(!tmp.exists());
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -915,8 +1001,17 @@ mod tests {
             (&[MACOS_TARGET_OS], vec!["x86_64", "aarch64"]),
             (&[WINDOWS_TARGET_OS], vec!["x86_64"]),
         ];
-        for backend in INSTALLABLE_DRIVERS {
-            let (backend_name, version) = backend_name_and_version(*backend);
+        // Both channels. Going around `backend_name_and_version` keeps this
+        // independent of any opt-in variable set in the environment, which
+        // would otherwise hide one channel or the other.
+        let drivers = INSTALLABLE_DRIVERS
+            .iter()
+            .map(|backend| (backend, canonical_name_and_version(*backend)))
+            .chain(INSTALLABLE_DRIVERS.iter().filter_map(|backend| {
+                driver_channel::published_foundry_driver(*backend).map(|pair| (backend, pair))
+            }));
+
+        for (backend, (backend_name, version)) in drivers {
             for (os_alternates, archs) in target_os_and_archs.iter() {
                 for arch in archs {
                     let mut count_hits = 0;

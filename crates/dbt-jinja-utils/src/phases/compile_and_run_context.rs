@@ -7,6 +7,7 @@ use std::sync::{Arc, OnceLock};
 use chrono::{DateTime, Utc};
 
 use crate::functions::build_flat_graph;
+use crate::invocation_graph::invocation_graph;
 use crate::jinja_environment::JinjaEnv;
 use crate::phases::compile::DependencyValidationConfig;
 use dbt_adapter::Adapter;
@@ -19,7 +20,7 @@ use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use dbt_telemetry::NodeType;
 use minijinja::arg_utils::ArgParser;
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::Object;
+use minijinja::value::{Object, ValueMap};
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value as MinijinjaValue,
 };
@@ -637,17 +638,36 @@ impl Object for SourceFunction {
         args: &[MinijinjaValue],
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        let num_args = parser.positional_len();
+        let mut parser = ArgParser::new(args, None);
+        let num_args = parser.positional_len() + parser.kwargs_len();
         let (source_name, table_name) = match num_args {
             0 | 1 => Err(MinijinjaError::new(
                 MinijinjaErrorKind::MissingArgument,
                 "source macro requires 2 arguments: source name and table name",
             )),
-            2 => Ok((
-                args[0].as_str().unwrap().to_string(), // source name (namespace)
-                args[1].as_str().unwrap().to_string(), // name (relation name)
-            )),
+            2 => {
+                let source_name_value = parser.get::<MinijinjaValue>("source_name")?;
+                let table_name_value = parser.get::<MinijinjaValue>("table_name")?;
+                let source_name = source_name_value.as_str().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        format!(
+                            "The source name (first) argument to source() must be a string, got {}",
+                            source_name_value.kind()
+                        ),
+                    )
+                })?;
+                let table_name = table_name_value.as_str().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        format!(
+                            "The table name (second) argument to source() must be a string, got {}",
+                            table_name_value.kind()
+                        ),
+                    )
+                })?;
+                Ok((source_name.to_string(), table_name.to_string()))
+            }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::TooManyArguments,
                 "source",
@@ -897,7 +917,15 @@ impl LazyFlatGraph {
 
     fn get_graph(&self) -> &MinijinjaValue {
         self.graph.get_or_init(|| {
-            MinijinjaValue::from(build_flat_graph(&self.nodes, self.defer_nodes.as_ref()))
+            // Seed the flat graph into the invocation-wide `graph` mapping
+            // rather than into a private map, so scratch state written by
+            // macros during parsing (and by other base contexts) survives.
+            // `update` merges, so only the derived flat-graph keys (`nodes`,
+            // `sources`, `macros`, …) are overwritten. dbt-labs/fs#13454.
+            let shared = invocation_graph();
+            let flat = build_flat_graph(&self.nodes, self.defer_nodes.as_ref());
+            shared.update(&ValueMap::from(flat));
+            MinijinjaValue::from_dyn_object(shared)
         })
     }
 }

@@ -1,13 +1,14 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use chrono::Utc;
+use dbt_adapter::response::AdapterResponse;
 use dbt_common::ErrorCode;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_schemas::schemas::RunResultOutput;
 use dbt_schemas::schemas::manifest::{DbtManifest, DbtNode};
 use dbt_schemas::stats::Stats;
-use dbt_tasks_core::stat_to_result;
+use dbt_tasks_core::generate_run_results;
 
 /// Minimal context captured before `SystemArgs` is moved into the async runtime.
 /// Passed back to `run_cli` so it can write the invocation record unconditionally at exit,
@@ -96,23 +97,27 @@ impl InvocationContext {
 
 /// Write runtime result rows to the metadata/runtime/results parquet directory.
 /// Called alongside `write_run_results_json` at end of run/test/build.
-pub(crate) fn write_runtime_results_parquet(stats: &Stats, arg: &EvalArgs) {
+pub(crate) fn write_runtime_results_parquet(
+    stats: &Stats,
+    adapter_responses: &HashMap<String, AdapterResponse>,
+    arg: &EvalArgs,
+) {
     use dbt_metadata_parquet::runtime_results::{RuntimeResultRow, write_runtime_results};
 
     let results_dir = arg.metadata_dir().join("run").join("results");
 
     let ingested_at: i64 = Utc::now().timestamp_micros();
 
-    let nodes = match stats.nodes.as_ref() {
-        Some(n) => n,
-        None => return,
-    };
+    if stats.nodes.is_none() {
+        return;
+    }
 
     let rows: Vec<RuntimeResultRow> = stats
         .stats
         .iter()
         .map(|stat| {
-            let result: RunResultOutput = stat_to_result(stat, nodes).into();
+            let result: RunResultOutput =
+                generate_run_results(stat, stats, adapter_responses).into();
             RuntimeResultRow {
                 invocation_id: arg.io.invocation_id.to_string(),
                 unique_id: result.unique_id.clone(),

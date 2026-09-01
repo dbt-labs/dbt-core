@@ -4,15 +4,24 @@
 
 use std::path::{Path, PathBuf};
 
+use dbt_common::warn_error_options::project_flags_get_value;
+use dbt_common::{ErrorCode, FsError};
 use indexmap::IndexMap;
 
-use dbt_common::{FsResult, tracing::dbt_emit::emit_strict_parse_error};
+use dbt_adapter_core::AdapterType;
+use dbt_common::{
+    FsResult,
+    tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message},
+};
 use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
+use dbt_schemas::state::ProfileAdapter;
+
+use crate::resolve::resolve_utils::authored_quoting_per_adapter;
 use dbt_schemas::schemas::{
     project::{
-        AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
-        ResolvableConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig,
-        SourceConfig, TypedRecursiveConfig, UnitTestConfig,
+        AnalysesConfig, CheckConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig,
+        ModelConfig, ResolvableConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig,
+        SnapshotConfig, SourceConfig, TypedRecursiveConfig, UnitTestConfig,
     },
     serde::yaml_to_fs_error,
 };
@@ -50,29 +59,82 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
         dbt_config: &T,
         configs: &S,
         dependency_package_name: Option<&str>,
-    ) -> FsResult<Self> {
-        let on_error = |variant: &ShouldBe<S>, key_path: &str| {
-            if let Some(err) = variant.take_err() {
-                let filename = if let Some(raw) = variant.as_ref_raw()
-                    && let Some(filename) = raw.span().get_filename()
-                {
-                    Some(filename)
-                } else {
-                    None
-                };
-                let fs_err = yaml_to_fs_error(err, filename).with_context(format!(
-                    "Invalid {} definition `{}`: {}",
-                    S::type_name(),
-                    key_path,
-                    variant
+        disallow_plus_prefix: bool,
+        default_adapter: AdapterType,
+    ) -> FsResult<Self>
+    where
+        T: PartialEq,
+    {
+        let on_error = |variant: &ShouldBe<S>, key: &str, key_path: &str| {
+            let key_path = if key_path.is_empty() {
+                key.to_string()
+            } else {
+                format!("{key_path}.{key}")
+            };
+            match variant {
+                ShouldBe::AndIs(_) => {
+                    // If we're calling `on_error` on a valid key, it must start with `+`.
+                    let detail = format!(
+                        "Unrecognized key `{key_path}`. Custom keys must go under `+meta`."
+                    );
+                    let fs_err = FsError::new(
+                        ErrorCode::SerializationError,
+                        format!(
+                            "Invalid {} definition `{}`: {}",
+                            S::type_name(),
+                            key_path,
+                            detail
+                        ),
+                    );
+                    emit_strict_parse_error(fs_err, dependency_package_name);
+                }
+                ShouldBe::ButIsnt(_) => {
+                    let filename = if let Some(raw) = variant.as_ref_raw()
+                        && let Some(filename) = raw.span().get_filename()
+                    {
+                        Some(filename)
+                    } else {
+                        None
+                    };
+
+                    // An unknown key produces the error message `expected struct <SelfType>` due to
+                    // the recursive type. Catch the error here to inject a more descriptive error.
+                    let err_msg = variant
                         .as_err_msg()
-                        .expect("Error message always present on ShouldBe::ButIsnt variant")
-                ));
-                emit_strict_parse_error(fs_err, dependency_package_name);
+                        .expect("Error message always present on ShouldBe::ButIsnt variant");
+                    let self_type = std::any::type_name::<S>()
+                        .rsplit("::")
+                        .next()
+                        .unwrap_or_default();
+                    let detail = if err_msg.contains(&format!("expected struct {self_type}")) {
+                        format!("Unrecognized key `{key_path}`. Custom keys must go under `+meta`.")
+                    } else {
+                        err_msg.to_string()
+                    };
+
+                    let err = variant
+                        .take_err()
+                        .expect("Error always present on ShouldBe::ButIsnt variant");
+                    let fs_err = yaml_to_fs_error(err, filename).with_context(format!(
+                        "Invalid {} definition `{}`: {}",
+                        S::type_name(),
+                        key_path,
+                        detail
+                    ));
+                    emit_strict_parse_error(fs_err, dependency_package_name);
+                }
             }
         };
+        if !disallow_plus_prefix {
+            warn_plus_prefixed_resource_paths::<S>("", configs, "", false);
+        }
         Ok(recur_build_dbt_project_config(
-            dbt_config, configs, "", &on_error,
+            dbt_config,
+            configs,
+            "",
+            &on_error,
+            disallow_plus_prefix,
+            default_adapter,
         ))
     }
 
@@ -138,24 +200,31 @@ pub struct ProjectConfigResolver<T: ResolvableConfig<T>> {
     local: DbtProjectConfig<T>,
     root: Option<DbtProjectConfig<T>>,
     resolve_defaults: T::ResolveDefaults,
+    default_adapter: AdapterType,
 }
 
 impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     /// Use when the current package is the root project (no root overlay needed).
-    pub fn for_root(config: DbtProjectConfig<T>) -> Self {
+    pub fn for_root(config: DbtProjectConfig<T>, default_adapter: AdapterType) -> Self {
         ProjectConfigResolver {
             local: config,
             root: None,
             resolve_defaults: T::ResolveDefaults::default(),
+            default_adapter,
         }
     }
 
     /// Use when the current package is a dependency.
-    pub fn for_dependency(local: DbtProjectConfig<T>, root: DbtProjectConfig<T>) -> Self {
+    pub fn for_dependency(
+        local: DbtProjectConfig<T>,
+        root: DbtProjectConfig<T>,
+        default_adapter: AdapterType,
+    ) -> Self {
         ProjectConfigResolver {
             local,
             root: Some(root),
             resolve_defaults: T::ResolveDefaults::default(),
+            default_adapter,
         }
     }
 
@@ -169,18 +238,22 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     /// called to construct the local package config; the closure is never called for root packages
     /// because the `root` argument itself serves as the local config (root packages have no
     /// separate overlay to apply).
+    ///
+    /// `default_adapter` is required (not an optional setter) so no resolver can be built without
+    /// wiring the per-layer alias-canonicalization hook below.
     pub fn build<F>(
         root: DbtProjectConfig<T>,
         is_dependency: bool,
         build_local: F,
+        default_adapter: AdapterType,
     ) -> FsResult<Self>
     where
         F: FnOnce() -> FsResult<DbtProjectConfig<T>>,
     {
         if is_dependency {
-            Ok(Self::for_dependency(build_local()?, root))
+            Ok(Self::for_dependency(build_local()?, root, default_adapter))
         } else {
-            Ok(Self::for_root(root))
+            Ok(Self::for_root(root, default_adapter))
         }
     }
 
@@ -188,6 +261,7 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     fn apply_root_overlay(&self, config: &mut T, fqn: &[String]) {
         if let Some(root) = &self.root {
             let mut root_config = root.get_config_for_fqn(fqn).clone();
+            root_config.canonicalize_adapter_aliases(self.default_adapter);
             root_config.default_to(config);
             *config = root_config;
         }
@@ -200,6 +274,7 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
         let mut config = self.local.get_config_for_fqn(fqn).clone();
         for c in configs.iter().flatten() {
             let mut c = (*c).clone();
+            c.canonicalize_adapter_aliases(self.default_adapter);
             c.default_to(&config);
             config = c;
         }
@@ -283,6 +358,16 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
             .map(|root| !root.get_config_for_fqn(fqn).get_enabled_with_default())
             .unwrap_or(false)
     }
+
+    /// Returns true if the root overlay explicitly sets `enabled = true` for this FQN.
+    /// The root overlay has the highest precedence for dependency packages, so an inline
+    /// `{{ config(enabled=false) }}` must not short-circuit rendering in that case.
+    pub fn is_enabled_by_root_overlay(&self, fqn: &[String]) -> bool {
+        self.root
+            .as_ref()
+            .map(|root| root.get_config_for_fqn(fqn).get_enabled() == Some(true))
+            .unwrap_or(false)
+    }
 }
 
 /// Recursively build the [DbtProjectConfig] from a parent and child configuration.
@@ -294,27 +379,40 @@ pub fn recur_build_dbt_project_config<T, S, F>(
     child: &S,
     key_path: &str,
     on_error: &F,
+    disallow_plus_prefix: bool,
+    default_adapter: AdapterType,
 ) -> DbtProjectConfig<T>
 where
-    T: ResolvableConfig<T>,
+    T: ResolvableConfig<T> + PartialEq,
     S: Into<T> + TypedRecursiveConfig,
-    F: Fn(&ShouldBe<S>, &str),
+    F: Fn(&ShouldBe<S>, &str, &str),
 {
     let mut child_config: T = child.clone().into();
+    // Canonicalize this level's own config source before merging with its (already-canonical)
+    // parent, per-layer. [dbt-core `credentials.translate_aliases`]
+    child_config.canonicalize_adapter_aliases(default_adapter);
     child_config.default_to(parent_config);
     let mut children = IndexMap::new();
 
     // Handle additional properties generically - each child inherits from current config
     for (key, maybe_child_config_variant) in child.iter_children() {
-        let key_path = if key_path.is_empty() {
+        let child_key_path = if key_path.is_empty() {
             key.clone()
         } else {
             format!("{key_path}.{key}")
         };
+
+        if key.starts_with("+") {
+            if disallow_plus_prefix {
+                on_error(maybe_child_config_variant, key, key_path);
+                continue;
+            }
+        }
+
         let child_config_variant = match maybe_child_config_variant {
             ShouldBe::AndIs(config) => config,
             ShouldBe::ButIsnt(..) => {
-                on_error(maybe_child_config_variant, &key_path);
+                on_error(maybe_child_config_variant, key, key_path);
                 continue;
             }
         };
@@ -324,8 +422,10 @@ where
             recur_build_dbt_project_config(
                 &child_config,
                 child_config_variant,
-                &key_path,
+                &child_key_path,
                 on_error,
+                disallow_plus_prefix,
+                default_adapter,
             ),
         );
     }
@@ -334,6 +434,74 @@ where
         config: child_config,
         children,
     }
+}
+
+/// Emit one warning for each `+`-prefixed resource path in the config tree.
+///
+/// A `+`-prefixed key is a resource path whose name starts with `+` when it carries a
+/// non-default config or has a `+`-prefixed child.
+///
+/// Returns whether `key` itself starts with `+`.
+fn warn_plus_prefixed_resource_paths<S>(key: &str, value: &S, path: &str, inside_plus: bool) -> bool
+where
+    S: TypedRecursiveConfig,
+{
+    let key_is_plus = key.starts_with('+');
+
+    let key_path = if path.is_empty() {
+        key.to_string()
+    } else {
+        format!("{path}.{key}")
+    };
+
+    let warn = || {
+        emit_warn_log_message(
+            ErrorCode::InvalidConfig,
+            format!(
+                "Resource path `{key_path}` in dbt_project.yml starts with `+`. This will be deprecated in future versions of dbt."
+            ),
+        );
+    };
+
+    // Case 1: `value` is non-default, meaning there is a valid config inside it somewhere.
+    // We definitely know a config value was set, because it must have this shape:
+    //
+    // ```
+    // +key:
+    //   +some_config: some_value
+    // ```
+    //
+    // This is just an approximation and will miss cases where the config is explicitly set to
+    // default.
+    let valid_config_exists = value.has_set_fields();
+
+    // We want to throw warnings at the location of the topmost +-prefixed key, so we throw exactly
+    // one warning per offending resource path.
+    let is_parent_plus = key_is_plus && !inside_plus;
+    if is_parent_plus && valid_config_exists {
+        warn();
+        return key_is_plus;
+    }
+
+    // Case 2: Any non-config children start with +, or any descendants fall under case 1.
+    let mut any_child_plus = false;
+    for (child_key, child_variant) in value.iter_children() {
+        let child_is_plus = match child_variant {
+            ShouldBe::AndIs(child) => warn_plus_prefixed_resource_paths::<S>(
+                child_key,
+                child,
+                &key_path,
+                inside_plus || key_is_plus,
+            ),
+            ShouldBe::ButIsnt(..) => child_key.starts_with('+'),
+        };
+        any_child_plus |= child_is_plus;
+    }
+    if is_parent_plus && any_child_plus {
+        warn();
+    }
+
+    key_is_plus || valid_config_exists || any_child_plus
 }
 
 /// Config wrapping propagated configs for the root project
@@ -363,12 +531,47 @@ pub struct RootProjectConfigs {
     pub analyses: DbtProjectConfig<AnalysesConfig>,
     /// Function configs
     pub functions: DbtProjectConfig<FunctionConfig>,
+    /// Check configs
+    pub checks: DbtProjectConfig<CheckConfig>,
+    /// Authored identifier quoting per declared adapter name — the adapter's
+    /// `adapters:` entry, plus the top-level `quoting:` block for the target's
+    /// default adapter only. Left unresolved so node config still wins over it.
+    ///
+    /// Root-project config, hence its home here: `adapters:` is a root-only key,
+    /// and the top-level `quoting:` block that layers under it is the root's for
+    /// every package — a dependency's own `quoting:` block was already overridden
+    /// by the root's via [`ProjectConfigResolver::apply_root_overlay`], and stays
+    /// overridden.
+    pub adapter_quoting: IndexMap<AdapterType, DbtQuoting>,
+}
+
+/// Read the `require_resource_names_without_plus_prefix` behavior flag from a
+/// project's `flags` block. Absent or non-boolean values resolve to `false`.
+pub(crate) fn disallow_plus_prefix_from_flags(flags: Option<&dbt_yaml::Value>) -> bool {
+    flags
+        .and_then(|flags| {
+            project_flags_get_value(flags, "require_resource_names_without_plus_prefix")
+        })
+        .and_then(dbt_yaml::Value::as_bool)
+        .unwrap_or(false)
 }
 
 /// Build the [RootProjectConfigs] from a [DbtProject]
+///
+/// Every resource type that carries quoting — models, seeds, snapshots, data tests
+/// and functions — is also one that can select an adapter with `+adapter`, so all
+/// of them seed **nothing** for quoting, not even the authored top-level block. The
+/// top-level block applies only to the target's *default* adapter, so it cannot be
+/// folded in before the node's adapter is known; the matching `resolve_*` layers it
+/// back on per node, out of `adapter_quoting`. Seeding all-`None` is also what keeps
+/// the subtree and node-level `+quoting:` values distinguishable from the top-level
+/// block after the field-wise merge.
+///
+/// Every other resource type has no quoting to seed at all.
 pub fn build_root_project_configs(
     root_project: &DbtProject,
-    root_project_quoting: DbtQuoting,
+    target_adapters: &IndexMap<AdapterType, ProfileAdapter>,
+    default_adapter: AdapterType,
 ) -> FsResult<RootProjectConfigs> {
     let maybe_root_project_config =
         match (root_project.tests.clone(), root_project.data_tests.clone()) {
@@ -379,33 +582,130 @@ pub fn build_root_project_configs(
             (None, Some(data_tests)) => Some(data_tests),
             (None, None) => None,
         };
+    let disallow_plus_prefix = disallow_plus_prefix_from_flags(root_project.flags.as_ref());
 
     Ok(RootProjectConfigs {
-        models: init_project_config(&root_project.models, root_project_quoting, None)?,
-        sources: init_project_config(&root_project.sources, (), None)?,
-        snapshots: init_project_config(&root_project.snapshots, root_project_quoting, None)?,
-        seeds: init_project_config(&root_project.seeds, root_project_quoting, None)?,
-        tests: init_project_config(&maybe_root_project_config, root_project_quoting, None)?,
-        unit_tests: init_project_config(&root_project.unit_tests, (), None)?,
-        exposures: init_project_config(&root_project.exposures, (), None)?,
-        semantic_models: init_project_config(&root_project.semantic_models, (), None)?,
-        metrics: init_project_config(&root_project.metrics, (), None)?,
-        saved_queries: init_project_config(&root_project.saved_queries, (), None)?,
-        analyses: init_project_config(&root_project.analyses, (), None)?,
-        functions: init_project_config(&root_project.functions, root_project_quoting, None)?,
+        models: init_project_config(
+            &root_project.models,
+            DbtQuoting::default(),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        sources: init_project_config(
+            &root_project.sources,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        snapshots: init_project_config(
+            &root_project.snapshots,
+            DbtQuoting::default(),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        seeds: init_project_config(
+            &root_project.seeds,
+            DbtQuoting::default(),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        tests: init_project_config(
+            &maybe_root_project_config,
+            DbtQuoting::default(),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        unit_tests: init_project_config(
+            &root_project.unit_tests,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        exposures: init_project_config(
+            &root_project.exposures,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        semantic_models: init_project_config(
+            &root_project.semantic_models,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        metrics: init_project_config(
+            &root_project.metrics,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        saved_queries: init_project_config(
+            &root_project.saved_queries,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        analyses: init_project_config(
+            &root_project.analyses,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        functions: init_project_config(
+            &root_project.functions,
+            DbtQuoting::default(),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        checks: init_project_config(
+            &root_project.checks,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        adapter_quoting: authored_quoting_per_adapter(
+            root_project.adapters.as_ref(),
+            target_adapters,
+            default_adapter,
+            *root_project.quoting,
+        ),
     })
 }
 
 /// generate the project config that will be inherited throughout the project
-pub fn init_project_config<T: ResolvableConfig<T>, S: TypedRecursiveConfig + Into<T>>(
+pub fn init_project_config<
+    T: ResolvableConfig<T> + PartialEq,
+    S: TypedRecursiveConfig + Into<T>,
+>(
     dbt_project_configs: &Option<S>,
     package_defaults: T::PackageDefaults,
     dependency_package_name: Option<&str>,
+    disallow_plus_prefix: bool,
+    default_adapter: AdapterType,
 ) -> FsResult<DbtProjectConfig<T>> {
     let mut default_config = T::default();
     default_config.apply_package_defaults(package_defaults);
     let project_config = if let Some(configs) = dbt_project_configs {
-        DbtProjectConfig::try_new(&default_config, configs, dependency_package_name)?
+        DbtProjectConfig::try_new(
+            &default_config,
+            configs,
+            dependency_package_name,
+            disallow_plus_prefix,
+            default_adapter,
+        )?
     } else {
         DbtProjectConfig {
             config: default_config,
@@ -992,5 +1292,411 @@ mod tests {
             result.materialized,
             Some(dbt_schemas::schemas::common::DbtMaterialization::Incremental)
         );
+    }
+}
+
+#[cfg(test)]
+mod init_project_config_tests {
+    use super::*;
+
+    use dbt_common::tracing::fs_error_log::get_log_message;
+    use dbt_schemas::schemas::project::{ProjectModelConfig, ProjectSnapshotConfig};
+    use dbt_tracing::{
+        SeverityNumber, TelemetryOutputFlags,
+        emit::create_root_info_span,
+        init::create_tracing_subcriber_with_layer,
+        layer::ConsumerLayer,
+        test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer},
+    };
+
+    #[allow(clippy::type_complexity)]
+    fn init_project_config_from_yaml<T, S>(
+        yaml: &str,
+        disallow_plus_prefix: bool,
+    ) -> (
+        FsResult<DbtProjectConfig<T>>,
+        Vec<(ErrorCode, String)>,
+        Vec<(ErrorCode, String)>,
+    )
+    where
+        T: ResolvableConfig<T> + PartialEq,
+        S: TypedRecursiveConfig + Into<T> + for<'de> serde::Deserialize<'de>,
+        T::PackageDefaults: Default,
+    {
+        // Diagnostics are emitted through the tracing layer, so capture them with a
+        // test consumer rather than a status reporter.
+        let (test_layer, _, _, log_records) = TestLayer::new();
+        let subscriber = create_tracing_subcriber_with_layer(
+            tracing::level_filters::LevelFilter::TRACE,
+            test_data_layer(
+                1,
+                None,
+                false,
+                std::iter::empty(),
+                std::iter::once(Box::new(test_layer) as ConsumerLayer),
+            ),
+            &[],
+        )
+        .expect("test tracing subscriber should be valid");
+
+        let configs: S = dbt_jinja_utils::serde::from_yaml_raw(yaml, None, false, None)
+            .expect("yaml deserializes into config type");
+
+        // The data layer only records events emitted within an active span, so run
+        // `init_project_config` inside a root span.
+        let result = tracing::subscriber::with_default(subscriber, || {
+            let _root = create_root_info_span(MockDynSpanEvent {
+                name: "root".to_string(),
+                flags: TelemetryOutputFlags::ALL,
+                ..Default::default()
+            })
+            .entered();
+
+            init_project_config::<T, S>(
+                &Some(configs),
+                Default::default(),
+                None,
+                disallow_plus_prefix,
+                AdapterType::Snowflake,
+            )
+        });
+
+        let mut errors = Vec::new();
+        let mut warnings = Vec::new();
+        for record in log_records.lock().unwrap().iter() {
+            // Diagnostics may arrive as either an `FsErrorLog` or a plain `LogMessage`
+            // attribute; `get_log_message` handles both. The tests only inspect the
+            // message string, so a placeholder `ErrorCode` is acceptable.
+            let code = get_log_message(&record.attributes)
+                .and_then(|lm| lm.code)
+                .and_then(|c| u16::try_from(c).ok())
+                .and_then(|c| ErrorCode::try_from(c).ok())
+                .unwrap_or(ErrorCode::Generic);
+            let entry = (code, record.body.clone());
+            match record.severity_number {
+                SeverityNumber::Error => errors.push(entry),
+                SeverityNumber::Warn => warnings.push(entry),
+                _ => {}
+            }
+        }
+
+        (result, errors, warnings)
+    }
+
+    #[test]
+    fn valid_config_emits_no_diagnostics() {
+        let yml = r#"
+path_1:
+  +enabled: true
+path_2:
+  +enabled: true
+  path_3:
+    +enabled: false
+"#;
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn plus_prefixed_resource_path_emits_diagnostics() {
+        let yml = r#"
++path_1:
+  +enabled: false
+  +quoting:
+    database: true
+"#;
+        // Behavior flag off
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+        assert_eq!(warnings.len(), 1);
+        let (_, msg) = &warnings[0];
+        assert!(msg.contains("Resource path `+path_1` in dbt_project.yml starts with `+`"));
+
+        // Behavior flag on
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `+path_1`"));
+    }
+
+    #[test]
+    fn nested_plus_resource_path_emits_diagnostics() {
+        let yml = r#"
+path_1:
+  +path_2:
+    path_3:
+      path_4:
+        +enabled: true
+"#;
+        // Behavior flag off
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+        assert_eq!(warnings.len(), 1);
+        let (_, msg) = &warnings[0];
+        assert!(msg.contains("Resource path `path_1.+path_2` in dbt_project.yml starts with `+`"));
+
+        // Behavior flag on
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `path_1.+path_2`"));
+    }
+
+    #[test]
+    fn ambiguous_resource_path_only_errors() {
+        let yml = r#"
+path_1:
+  path_2:
+    +enabled: true
+    path_3:
+      +not_provably_a_resource_path: {}
+"#;
+        // Behavior flag off
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+        assert!(warnings.is_empty());
+
+        // Behavior flag on
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(
+            msg.contains("Unrecognized key `path_1.path_2.path_3.+not_provably_a_resource_path`")
+        );
+    }
+
+    #[test]
+    fn meta_accepts_plus_prefixes() {
+        let yml = r#"
+path_1:
+  path_2:
+    +enabled: true
+    +meta:
+      +key_1: true
+      +key_2: 15451
+"#;
+        // Behavior flag off
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+        assert!(warnings.is_empty());
+
+        // Behavior flag on
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn exactly_one_warning_per_plus_prefixed_path() {
+        let yml = r#"
+path_1:
+  +path_2:
+    +meta:
+      +cool_key: 15451
+    path_3:
+      +quoting:
+        database: true
+        schema: false
+      path_4:
+        +enabled: true
+  +path_3:
+    +alias: cool_alias
+    path_5:
+      +description: cool_description
+  +not_provably_a_resource_path: {}
+"#;
+        // Behavior flag off
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+        assert_eq!(warnings.len(), 2);
+        let (_, msg) = &warnings[0];
+        assert!(msg.contains("Resource path `path_1.+path_2` in dbt_project.yml starts with `+`"));
+        let (_, msg) = &warnings[1];
+        assert!(msg.contains("Resource path `path_1.+path_3` in dbt_project.yml starts with `+`"));
+
+        // Behavior flag on
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 3);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `path_1.+not_provably_a_resource_path`"));
+        let (_, msg) = &errors[1];
+        assert!(msg.contains("Unrecognized key `path_1.+path_2`"));
+        let (_, msg) = &errors[2];
+        assert!(msg.contains("Unrecognized key `path_1.+path_3`"));
+    }
+
+    #[test]
+    fn unrecognized_key_always_emits_error() {
+        let yml = r#"
+path_1:
+  +bogus_key: scalar_value
+"#;
+        // Behavior flag off
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `path_1.+bogus_key`"));
+
+        // Behavior flag on
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `path_1.+bogus_key`"));
+    }
+
+    #[test]
+    fn repro_emits_error_at_key() {
+        // https://github.com/dbt-labs/dbt-core/issues/14433
+        let yml = r#"
+my_project:
+  staging:
+    +contract:
+      enforced: true
+"#;
+        // Behavior flag off
+        // With the behavior flag off, the behavior is the same as in the issue.
+        // We don't recognize that +contract is the source of the issue.
+
+        // Behavior flag on
+        // With the behavior flag on, we correctly see the unrecognized key
+        // error surface at +contract.
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<SnapshotConfig, ProjectSnapshotConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `my_project.staging.+contract`"));
+    }
+
+    /// Residual (fs#13424): Databricks' `target_catalog` -> `target_database`
+    /// alias has no dedicated field the way `catalog` -> `database` does (there is no
+    /// `target_catalog` field on `SnapshotConfig`/`ProjectSnapshotConfig` to canonicalize),
+    /// and unlike the inline `{{ config(...) }}` layer, `dbt_project.yml`'s subtree levels are
+    /// already-typed structs by the time `recur_build_dbt_project_config` runs -- there is no
+    /// raw YAML map left in which to rename the key. So `+target_catalog:` in `dbt_project.yml`
+    /// remains an unrecognized key, unlike the same alias authored via inline config (see
+    /// `test_parse_config_inline_target_catalog_alias_resolves_on_databricks_snapshot` in
+    /// `dbt-jinja-utils`). `#[ignore]`d because this pins the *gap*, not the desired behavior;
+    /// delete it and add real coverage instead if the gap is ever closed (see the comment on
+    /// `SnapshotConfig::canonicalize_adapter_aliases`).
+    #[test]
+    #[ignore = "fs#13424 residual: +target_catalog: in dbt_project.yml has no typed \
+                field to canonicalize into (see SnapshotConfig::canonicalize_adapter_aliases)"]
+    fn test_snapshot_target_catalog_in_project_yml_is_unrecognized_key() {
+        let yml = "+target_catalog: some_cat\n";
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<SnapshotConfig, ProjectSnapshotConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `+target_catalog`"));
+    }
+
+    /// Residual (fs#13424): postgres/redshift's `dbname` -> `database` alias has
+    /// the same shape of gap as `target_catalog` above, on a different config type -- `dbname`
+    /// has no dedicated field at all (unlike `catalog`, which has one to move out of), so it can
+    /// only resolve via a raw config-key rename before typing, which is only available at the
+    /// inline `{{ config(...) }}` layer (see
+    /// `test_parse_config_inline_dbname_alias_resolves_on_postgres` in `dbt-jinja-utils`).
+    /// `#[ignore]`d for the same reason as the test above: this pins the gap, not the desired
+    /// behavior.
+    #[test]
+    #[ignore = "fs#13424 residual: +dbname: in dbt_project.yml has no typed field to \
+                canonicalize into (see ResolvableConfig::canonicalize_adapter_aliases)"]
+    fn test_dbname_in_project_yml_is_unrecognized_key() {
+        let yml = "+dbname: some_db\n";
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `+dbname`"));
+    }
+
+    /// The predicate must fire only on an explicit `+enabled: true`; an absent value must not be
+    /// read as `true`, or every dependency package node would be treated as force-enabled.
+    #[test]
+    fn test_is_enabled_by_root_overlay() {
+        let fqn = vec!["pkg".to_string(), "my_model".to_string()];
+        let cases = [
+            (
+                "exact model",
+                "pkg:\n  my_model:\n    +enabled: true\n",
+                true,
+            ),
+            ("inherited from package", "pkg:\n  +enabled: true\n", true),
+            ("global", "+enabled: true\n", true),
+            (
+                "absent",
+                "pkg:\n  my_model:\n    +materialized: view\n",
+                false,
+            ),
+            (
+                "explicitly disabled",
+                "pkg:\n  my_model:\n    +enabled: false\n",
+                false,
+            ),
+        ];
+
+        for (label, yml, expected) in cases {
+            let (root, errors, _) =
+                init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+            assert!(errors.is_empty(), "{label}: {errors:?}");
+            let root = root.expect("root overlay config builds");
+            let local = DbtProjectConfig::<ModelConfig> {
+                config: ModelConfig::default(),
+                children: IndexMap::new(),
+            };
+            let resolver =
+                ProjectConfigResolver::for_dependency(local, root.clone(), AdapterType::Snowflake);
+            assert_eq!(
+                resolver.is_enabled_by_root_overlay(&fqn),
+                expected,
+                "{label}"
+            );
+
+            // Root packages have no overlay, so their own inline disable keeps winning.
+            let root_resolver = ProjectConfigResolver::for_root(root, AdapterType::Snowflake);
+            assert!(
+                !root_resolver.is_enabled_by_root_overlay(&fqn),
+                "{label}: root package must never be force-enabled"
+            );
+        }
     }
 }

@@ -10,9 +10,11 @@ use crate::utils::{
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_SNAPSHOTS_DIR_NAME, DBT_TARGET_DIR_NAME, PARSING};
-use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
+use dbt_common::io_args::{FsCommand, IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
-use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
+use dbt_common::tracing::dbt_emit::{
+    emit_debug_log_message, emit_error_log_from_fs_error, emit_warn_log_from_fs_error,
+};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsError, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -57,6 +59,8 @@ pub struct SqlFileRenderResult<T: ResolvableConfig<T>, S> {
     pub asset: DbtAsset,
     /// The status of the model
     pub status: ModelStatus,
+    /// Whether a render failure was intentionally deferred until command selection.
+    pub render_error_deferred: bool,
     /// The file info for the rendered SQL file
     pub sql_file_info: SqlFileInfo<T>,
     /// Fully resolved config for this node (project + properties + inline + root overlay).
@@ -77,18 +81,42 @@ pub struct SqlFileRenderResult<T: ResolvableConfig<T>, S> {
     pub macro_dependencies: Vec<String>,
 }
 
-/// Extracts model and version configuration from node properties
-fn extract_model_and_version_config<T: ResolvableConfig<T>, S: GetConfig<T> + Debug>(
+/// Whether `command` is one of the commands that defer a render error to
+/// compile time (see `defer_render_errors_to_compile` on [`RenderCtxInner`])
+/// instead of failing eagerly during parse.
+fn command_defers_render_errors(command: FsCommand) -> bool {
+    matches!(
+        command,
+        FsCommand::Compile
+            | FsCommand::Run
+            | FsCommand::RunOperation
+            | FsCommand::Test
+            | FsCommand::Seed
+            | FsCommand::Snapshot
+            | FsCommand::Show
+            | FsCommand::Build
+            | FsCommand::Source
+            | FsCommand::Freshness
+            | FsCommand::Clone
+            | FsCommand::Retry
+    )
+}
+
+/// Extracts the typed properties (including the `config:` block) from a node's schema.yml entry.
+/// For a versioned model this is the only properties-file config layer: the version's own
+/// `config:` is already merged into `mpe.schema_value` (see
+/// `merge_version_config_into_schema_value`), so typing it again here would apply it twice.
+fn extract_model_config<T: ResolvableConfig<T>, S: GetConfig<T> + Debug>(
     mpe: &mut MinimalPropertiesEntry,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     dependency_package_name: Option<&str>,
-) -> FsResult<(Option<S>, Option<T>)> {
+) -> FsResult<Option<S>> {
     // Note: Duplicate checking is deferred until after we determine if the model is enabled.
     // This matches dbt-core behavior which only checks for duplicates among enabled models.
     // Can occur if a model asset is duplicated, but does not have duplicate property.yml definitions.
     if mpe.schema_value.is_null() {
-        return Ok((None, None));
+        return Ok(None);
     }
 
     // Swap the schema value for Null - we are doing this so that we don't have to clone
@@ -104,26 +132,7 @@ fn extract_model_and_version_config<T: ResolvableConfig<T>, S: GetConfig<T> + De
         dependency_package_name,
     )?;
 
-    let maybe_version_config = if let Some(version_info) = mpe.version_info.as_ref() {
-        if let Some(version_config) = version_info.version_config.as_ref() {
-            let version_config = into_typed_with_jinja_error_context::<T, _>(
-                version_config.clone(),
-                false,
-                jinja_env,
-                base_ctx,
-                &[],
-                |error| format!("While parsing version config: {}", error.context),
-                dependency_package_name,
-            )?;
-
-            Some(version_config)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-    Ok((Some(maybe_model), maybe_version_config))
+    Ok(Some(maybe_model))
 }
 
 /// Appends `source()` calls discovered by static AST analysis to
@@ -285,6 +294,7 @@ where
         resource_paths,
         package_quoting,
         uses_snapshot_fqn,
+        defer_render_errors_to_compile,
     } = &**inner;
 
     token.check_cancellation()?;
@@ -300,17 +310,12 @@ where
         .map(|mpe| !mpe.duplicate_paths.is_empty())
         .unwrap_or(false);
 
-    let (maybe_model, maybe_version_config) = {
+    let maybe_model = {
         if let Some(mpe) = node_properties.get_mut(ref_name) {
-            extract_model_and_version_config::<T, S>(
-                mpe,
-                jinja_env,
-                base_ctx,
-                dependency_package_name,
-            )
-            .map_err(|e| *e)?
+            extract_model_config::<T, S>(mpe, jinja_env, base_ctx, dependency_package_name)
+                .map_err(|e| *e)?
         } else {
-            (None::<S>, None::<T>)
+            None::<S>
         }
     };
 
@@ -345,8 +350,7 @@ where
     };
 
     let model_properties_config = maybe_model.as_ref().and_then(|m| m.get_config());
-    let properties_configs: &[Option<&T>] =
-        &[model_properties_config, maybe_version_config.as_ref()];
+    let properties_configs: &[Option<&T>] = &[model_properties_config];
     let properties_config = config_resolver.with_configs(&original_fqn, properties_configs);
 
     // Early exit: the root overlay has the highest precedence for dependency packages, so if it
@@ -362,6 +366,7 @@ where
             macro_spans: MacroSpans::default(),
             properties: maybe_model,
             status: ModelStatus::Disabled,
+            render_error_deferred: false,
             patch_path: node_properties
                 .get(ref_name)
                 .map(|mpe| mpe.relative_path.clone()),
@@ -380,9 +385,14 @@ where
     // package-relative asset path so config-block reads of `model.path` match.
     let model_path = dbt_common::path::strip_resource_paths(&dbt_asset.path, resource_paths);
 
+    // A dependency package's inline `config(enabled=false)` must not abort rendering when the
+    // root project re-enables the node; the overlay outranks it.
+    let root_overlay_forces_enabled = config_resolver.is_enabled_by_root_overlay(&fqn);
+
     let mut resolve_model_context = base_ctx.clone();
     resolve_model_context.extend(build_resolve_model_context(
         &properties_config,
+        root_overlay_forces_enabled,
         *adapter_type,
         database,
         schema,
@@ -419,7 +429,7 @@ where
             jinja_type_checking_event_listener_factory.clone(),
             None,
             &jinja_env.env.get_root_package_name(),
-            MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+            MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespaces()),
             &display_path,
             &sql,
             &dbt_common::CodeLocationWithFile::new(1, 1, 0, display_path.clone()),
@@ -479,7 +489,6 @@ where
                         &fqn,
                         &[
                             model_properties_config,
-                            maybe_version_config.as_ref(),
                             temp_info.explicit_config.as_deref(),
                         ],
                     )
@@ -512,11 +521,7 @@ where
                     let cfg = config_resolver.resolve_with_configs(
                         &original_fqn,
                         &fqn,
-                        &[
-                            model_properties_config,
-                            maybe_version_config.as_ref(),
-                            info.explicit_config.as_deref(),
-                        ],
+                        &[model_properties_config, info.explicit_config.as_deref()],
                     );
                     (info, cfg)
                 };
@@ -564,15 +569,16 @@ where
                 (
                     sql_file_info,
                     resolved_config,
-                    status,
+                    (status, false),
                     rendered_sql,
                     macro_spans,
                     macro_dependencies,
                 )
             }
             Err(err) => {
-                // Build minimal info for error/disabled outcome
-                let mut was_enabled = true;
+                // Keep the partially resolved node available to selection. Executable
+                // commands render selected nodes again during compilation, so a render
+                // failure in an unselected node must not abort the parse phase.
                 let (sql_file_info, resolved_config) = {
                     let sql_resources_locked = sql_resources.lock().unwrap().clone();
                     let normalized_sql = normalize_sql(&sql);
@@ -581,36 +587,35 @@ where
                         DbtChecksum::hash(normalized_sql.as_bytes()),
                         execute_exists.load(atomic::Ordering::Relaxed),
                     );
-                    let cfg = config_resolver.resolve_with_overrides(
+                    let cfg = config_resolver.resolve_with_configs(
                         &original_fqn,
                         &fqn,
-                        &[
-                            model_properties_config,
-                            maybe_version_config.as_ref(),
-                            info.explicit_config.as_deref(),
-                        ],
-                        |c| {
-                            was_enabled = c.get_enabled_with_default();
-                            c.disable();
-                        },
+                        &[model_properties_config, info.explicit_config.as_deref()],
                     );
                     (info, cfg)
                 };
 
-                let status = match err.code {
-                    ErrorCode::DisabledModel => ModelStatus::Disabled,
+                let (status, render_error_deferred) = match err.code {
+                    ErrorCode::DisabledModel => (ModelStatus::Disabled, false),
                     ErrorCode::MacroSyntaxInvalid => {
                         let err_with_loc = err.with_location(display_path.clone());
                         emit_error_log_from_fs_error(err_with_loc);
-                        ModelStatus::ParsingFailed
+                        (ModelStatus::ParsingFailed, false)
                     }
                     _ => {
-                        if was_enabled {
+                        if resolved_config.enabled() {
                             let err_with_loc = err.with_location(display_path.clone());
-                            emit_error_log_from_fs_error(err_with_loc);
-                            ModelStatus::ParsingFailed
+                            if *defer_render_errors_to_compile
+                                && command_defers_render_errors(args.command)
+                            {
+                                emit_debug_log_message(err_with_loc.message());
+                                (ModelStatus::ParsingFailed, true)
+                            } else {
+                                emit_error_log_from_fs_error(err_with_loc);
+                                (ModelStatus::ParsingFailed, false)
+                            }
                         } else {
-                            ModelStatus::Disabled
+                            (ModelStatus::Disabled, false)
                         }
                     }
                 };
@@ -618,13 +623,15 @@ where
                 (
                     sql_file_info,
                     resolved_config,
-                    status,
+                    (status, render_error_deferred),
                     String::new(),
                     MacroSpans::default(),
                     Vec::new(),
                 )
             }
         };
+
+    let (status, render_error_deferred) = status;
 
     // Only check for duplicate resource definitions for enabled models to match dbt-core behavior.
     if status == ModelStatus::Enabled
@@ -651,6 +658,7 @@ where
         macro_spans,
         properties: maybe_model,
         status,
+        render_error_deferred,
         patch_path: node_properties
             .get(ref_name)
             .map(|mpe| mpe.relative_path.clone()),
@@ -688,6 +696,9 @@ pub struct RenderCtxInner<T: ResolvableConfig<T>> {
     /// from the rewritten `{snapshot_name}.sql` stub path and disagree with both
     /// dbt-core and the fqn stored on the node.
     pub uses_snapshot_fqn: bool,
+    /// Keep parse-failed runnable nodes available for selection so compilation
+    /// reports the error only when the command selects that node.
+    pub defer_render_errors_to_compile: bool,
 }
 
 /// Outer context for rendering sql files
@@ -923,7 +934,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             node_resolver.clone(),
             runtime_config.clone(),
             DependencyValidationConfig::new_for_node(&model).skip_validation(),
-        );
+        )?;
 
         // Inject the DbtNamespace to intercept dbt macro calls
         let dbt_namespace = DbtNamespace::new(parse_adapter.clone());
@@ -1031,7 +1042,7 @@ pub fn collect_hook_dependencies_from_config(
                 jinja_type_checking_event_listener_factory,
                 None,
                 &jinja_env.env.get_root_package_name(),
-                MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+                MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespaces()),
                 resource_path,
                 sql,
                 &dbt_common::CodeLocationWithFile::new(1, 1, 0, resource_path.to_path_buf()),
@@ -1090,4 +1101,56 @@ pub fn collect_hook_dependencies_from_config(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_defers_render_errors_covers_freshness_alongside_source() {
+        // Freshness must defer the same way `dbt source freshness` already does,
+        // so a render error in an unselected node can't abort `dbt freshness`.
+        assert!(command_defers_render_errors(FsCommand::Source));
+        assert!(command_defers_render_errors(FsCommand::Freshness));
+    }
+
+    #[test]
+    fn command_defers_render_errors_covers_every_documented_command() {
+        for command in [
+            FsCommand::Compile,
+            FsCommand::Run,
+            FsCommand::RunOperation,
+            FsCommand::Test,
+            FsCommand::Seed,
+            FsCommand::Snapshot,
+            FsCommand::Show,
+            FsCommand::Build,
+            FsCommand::Source,
+            FsCommand::Freshness,
+            FsCommand::Clone,
+            FsCommand::Retry,
+        ] {
+            assert!(
+                command_defers_render_errors(command),
+                "{command:?} should defer render errors to compile"
+            );
+        }
+    }
+
+    #[test]
+    fn command_defers_render_errors_excludes_non_executable_commands() {
+        for command in [
+            FsCommand::List,
+            FsCommand::Parse,
+            FsCommand::Deps,
+            FsCommand::Debug,
+            FsCommand::Clean,
+        ] {
+            assert!(
+                !command_defers_render_errors(command),
+                "{command:?} should not defer render errors to compile"
+            );
+        }
+    }
 }

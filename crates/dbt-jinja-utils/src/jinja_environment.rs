@@ -6,7 +6,12 @@ use minijinja::{
     value::{ValueMap, mutable_map::MutableMap},
 };
 use serde::Serialize;
-use std::{collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::Path,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 use tracy_client::span;
 
 /// A struct that wraps a Minijinja Expression.
@@ -120,6 +125,14 @@ pub struct JinjaEnv {
     pub env: Environment<'static>,
     /// The Jinja function registry.
     pub jinja_function_registry: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+    /// Macro unique-ids (as produced by `dbt-parser`'s DAG, e.g.
+    /// `macro.dbt_utils.default__unpivot`) known, via the static analysis in
+    /// `dbt_parser::resolve::resolve_macros::typecheck_macros`, to reach an
+    /// introspective (warehouse-dependent) adapter call -- directly, or
+    /// transitively through another macro they call. Populated once, after
+    /// typechecking, and shared (via the `Arc<RwLock<_>>`) with every clone
+    /// of this `JinjaEnv`; empty (and inert) outside `JinjaRenderMode::Symbolic`.
+    pub introspective_macros: Arc<RwLock<HashSet<String>>>,
 }
 
 impl AsRef<JinjaEnv> for JinjaEnv {
@@ -134,7 +147,23 @@ impl JinjaEnv {
         Self {
             env,
             jinja_function_registry: Arc::new(BTreeMap::new()),
+            introspective_macros: Arc::new(RwLock::new(HashSet::new())),
         }
+    }
+
+    /// Replace the set of macro unique-ids known to reach an introspective
+    /// adapter call. See `introspective_macros`'s doc comment.
+    pub fn set_introspective_macros(&self, macros: HashSet<String>) {
+        *self.introspective_macros.write().unwrap() = macros;
+    }
+
+    /// Whether `unique_id` is known to reach an introspective adapter call.
+    /// See `introspective_macros`'s doc comment.
+    pub fn is_introspective_macro(&self, unique_id: &str) -> bool {
+        self.introspective_macros
+            .read()
+            .unwrap()
+            .contains(unique_id)
     }
 
     /// Create a new empty state.
@@ -180,6 +209,13 @@ impl JinjaEnv {
     /// Get a global variable.
     pub fn get_global(&self, name: &str) -> Option<Value> {
         self.env.get_global(name)
+    }
+
+    /// Register a global value (e.g. a helper function) available to every
+    /// template rendered by this environment. Clone the environment first if
+    /// you want the global scoped to a single render pass.
+    pub fn add_global(&mut self, name: &str, value: Value) {
+        self.env.add_global(name.to_string(), value);
     }
 
     /// Compile an expression.
@@ -259,9 +295,14 @@ impl JinjaEnv {
         Ok(JinjaTemplate(result))
     }
 
-    /// Get the dbt and adapters namespace.
-    pub fn get_dbt_and_adapters_namespace(&self) -> Arc<ValueMap> {
-        self.env.get_dbt_and_adapters_namespace()
+    /// Get the dbt and adapters namespace for `dialect`.
+    pub fn get_dbt_and_adapters_namespace(&self, dialect: &str) -> Arc<ValueMap> {
+        self.env.get_dbt_and_adapters_namespace(dialect)
+    }
+
+    /// The full `dialect -> namespace` map, for passing into a typecheck context.
+    pub fn get_dbt_and_adapters_namespaces(&self) -> Arc<ValueMap> {
+        self.env.get_dbt_and_adapters_namespaces()
     }
 
     /// Get the target context.

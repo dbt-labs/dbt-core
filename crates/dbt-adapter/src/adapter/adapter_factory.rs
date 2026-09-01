@@ -39,7 +39,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Salesforce => Backend::Salesforce,
         AdapterType::Spark => Backend::Spark,
         AdapterType::DuckDB => Backend::DuckDB,
-        AdapterType::Alt => Backend::Alt,
+        AdapterType::LakeCompute => Backend::LakeCompute,
         AdapterType::Fabric => Backend::SQLServer,
         AdapterType::ClickHouse => Backend::ClickHouse,
         AdapterType::Exasol => Backend::Exasol,
@@ -106,6 +106,7 @@ impl DefaultAdapterFactory {
 
         let query_comment =
             QueryCommentConfig::from_query_comment(query_comment, adapter_type, true, cloud_config);
+        let dbt_cloud_project_id = cloud_config.and_then(|c| c.project_id.clone());
 
         let engine = Arc::new(AdbcEngine::new(
             adapter_type,
@@ -118,6 +119,7 @@ impl DefaultAdapterFactory {
             relation_cache,
             behavior_flag_overrides,
             threads,
+            dbt_cloud_project_id,
         ));
         Ok(engine)
     }

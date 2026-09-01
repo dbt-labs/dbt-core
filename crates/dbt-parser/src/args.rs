@@ -1,7 +1,8 @@
 //! Module defines the input arguments required for resolution
 
-use dbt_common::FsResult;
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_common::{
     io_args::{EvalArgs, FsCommand},
     node_selector::{IndirectSelection, SelectExpression},
@@ -50,6 +51,12 @@ pub struct ResolveArgs {
     /// Maximum size (MiB) for seed files whose contents are hashed
     /// 1 MiB default); `0` means "no limit".
     pub maximum_seed_size_mib: u64,
+    /// `--adapter <type>`, resolved once.
+    ///
+    /// Overrides every node's `+adapter` when set, so the flag reaches the run
+    /// through the same field an authored selection does -- and is validated by
+    /// the same rules -- rather than swapping the run's adapter afterwards.
+    pub adapter_override: Option<AdapterType>,
 }
 
 impl ResolveArgs {
@@ -73,6 +80,18 @@ impl ResolveArgs {
             store_failures: arg.store_failures,
             skip_creating_generic_tests: arg.skip_creating_generic_tests,
             maximum_seed_size_mib: arg.maximum_seed_size_mib,
+            adapter_override: arg
+                .adapter_override
+                .as_deref()
+                .map(|written| {
+                    written.parse::<AdapterType>().map_err(|_| {
+                        fs_err!(
+                            ErrorCode::InvalidArgument,
+                            "--adapter '{written}' is not a recognized adapter type"
+                        )
+                    })
+                })
+                .transpose()?,
         })
     }
 }

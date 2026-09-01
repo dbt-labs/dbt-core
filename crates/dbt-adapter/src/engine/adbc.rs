@@ -9,25 +9,24 @@ use dbt_adapter_core::AdapterType;
 use dbt_adbc::semaphore::Semaphore;
 use dbt_adbc::*;
 use dbt_agate::hashers::IdentityBuildHasher;
-use dbt_auth::{AdapterConfig, Auth};
+use dbt_auth::{AdapterConfig, Auth, AuthError};
 use dbt_common::AdapterResult;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_trace_event;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use dbt_telemetry::AdapterConnectionOpen;
 use minijinja::State;
 use parking_lot::RwLock;
-use serde::Deserialize;
 
 use crate::cache::RelationCache;
 use crate::engine::query_comment::QueryCommentConfig;
-use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
+use crate::errors::{AdapterError, adbc_error_to_adapter_error};
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
 
 use super::adapter_engine::*;
+use super::databricks;
 use super::make_behavior;
 use super::noop_connection::NoopConnection;
 use super::retry::ConnectionRetryPolicy;
@@ -88,6 +87,9 @@ pub struct AdbcEngine {
     /// set: `0` until the first real connection is created, then the config
     /// fingerprint of that connection.
     connection_fingerprint: std::sync::atomic::AtomicU64,
+    /// `ResolvedCloudConfig::project_id`, forwarded as the `dbt_cloud.project_id`
+    /// flock-adbc driver option alongside whichever credential is resolved.
+    dbt_cloud_project_id: Option<String>,
 }
 
 impl AdbcEngine {
@@ -104,6 +106,7 @@ impl AdbcEngine {
         behavior_flag_overrides: BTreeMap<String, bool>,
         mode: EngineMode,
         threads: Option<usize>,
+        dbt_cloud_project_id: Option<String>,
     ) -> Self {
         let permits = if mode.has_real_connections() {
             threads.map(|t| (t as u32).max(1)).unwrap_or(u32::MAX)
@@ -127,6 +130,7 @@ impl AdbcEngine {
             mode,
             threads,
             connection_fingerprint: std::sync::atomic::AtomicU64::new(0),
+            dbt_cloud_project_id,
         }
     }
 
@@ -142,6 +146,7 @@ impl AdbcEngine {
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
         threads: Option<usize>,
+        dbt_cloud_project_id: Option<String>,
     ) -> Self {
         Self::build(
             adapter_type,
@@ -155,6 +160,7 @@ impl AdbcEngine {
             behavior_flag_overrides,
             EngineMode::Live,
             threads,
+            dbt_cloud_project_id,
         )
     }
 
@@ -185,6 +191,7 @@ impl AdbcEngine {
             behavior_flag_overrides,
             EngineMode::Mock,
             None,
+            None,
         )
     }
 
@@ -205,32 +212,21 @@ impl AdbcEngine {
         let use_cloud_credentials = config.use_dbt_cloud_credentials();
         let backend = self.auth.backend();
 
-        let (database_builder, load_strategy) = if use_cloud_credentials {
-            // Cloud credentials are used to connect to a service that manages
-            // drivers and warehouse credentials for us. The "flock" driver takes
-            // these credentials and behaves as a proxy to the actual.
-            let builder = Self::configure_cloud_database(backend)?;
-            (builder, LoadStrategy::Remote)
-        } else {
-            // Delegate configuration to the Auth implementation configuring
-            // the warehouse driver locally.
-            let auth_result = self
-                .auth
-                .configure(config)
-                .map_err(crate::errors::auth_error_to_adapter_error)?;
-
-            for warning in &auth_result.warnings {
-                dbt_common::tracing::dbt_emit::emit_warn_log_message(
-                    dbt_common::ErrorCode::InvalidConfig,
-                    warning,
-                );
-            }
-
-            let load_strategy = match self.adapter_type {
-                AdapterType::DuckDB => LoadStrategy::SystemThenCdnCache,
-                _ => LoadStrategy::CdnCache,
-            };
-            (auth_result.builder, load_strategy)
+        let (database_builder, warnings) = config
+            .build_connection_builder(self.auth.as_ref(), |backend| {
+                self.configure_cloud_database(backend)
+            })
+            .map_err(crate::errors::auth_error_to_adapter_error)?;
+        for warning in &warnings {
+            dbt_common::tracing::dbt_emit::emit_warn_log_message(
+                dbt_common::ErrorCode::InvalidConfig,
+                warning,
+            );
+        }
+        let load_strategy = match (use_cloud_credentials, self.adapter_type) {
+            (true, _) => LoadStrategy::Remote,
+            (false, AdapterType::DuckDB) => LoadStrategy::SystemThenCdnCache,
+            (false, _) => LoadStrategy::CdnCache,
         };
 
         // This will load the "flock" driver if load_strategy is Remote.
@@ -267,25 +263,64 @@ impl AdbcEngine {
         }
     }
 
-    /// Build a [database::Builder] configured with dbt Cloud credentials
-    /// read from `~/.dbt/dbt_cloud.yml` (with env-var overrides applied).
-    fn configure_cloud_database(backend: Backend) -> AdapterResult<database::Builder> {
+    /// Build a [database::Builder] configured with dbt platform credentials, resolved via
+    /// `dbt-platform-auth`'s credential chain. Platform credentials are only used when the
+    /// user has explicitly opted in via configuration (`use_dbt_cloud_credentials`), so a
+    /// resolution failure here is a hard configuration error rather than a silent no-op.
+    fn configure_cloud_database(&self, backend: Backend) -> Result<database::Builder, AuthError> {
+        Self::configure_cloud_database_with_chain(
+            backend,
+            dbt_platform_auth::AuthChainBuilder::default().build(),
+            self.dbt_cloud_project_id.as_deref(),
+        )
+    }
+
+    /// Split out of [`Self::configure_cloud_database`] so tests can supply an `AuthChain`
+    /// pointed at a fixture instead of the real `~/.dbt/*`.
+    fn configure_cloud_database_with_chain(
+        backend: Backend,
+        chain: dbt_platform_auth::AuthChain,
+        project_id: Option<&str>,
+    ) -> Result<database::Builder, AuthError> {
+        let credential: Result<dbt_platform_auth::Credential, dbt_platform_auth::AuthError> =
+            dbt_common::tracing::spawn_traced_block_in_place(async move { chain.resolve().await });
+        Self::apply_cloud_credential(backend, credential, project_id)
+    }
+
+    /// Pure helper split out of [`Self::configure_cloud_database`] so the credential →
+    /// driver-option mapping can be unit tested without needing a real `AuthChain`/
+    /// `~/.dbt/*` on disk.
+    fn apply_cloud_credential(
+        backend: Backend,
+        credential: Result<dbt_platform_auth::Credential, dbt_platform_auth::AuthError>,
+        project_id: Option<&str>,
+    ) -> Result<database::Builder, AuthError> {
+        use dbt_platform_auth::Credential;
+
         let mut builder = database::Builder::new(backend);
-        let cloud_config_path = dbt_cloud_config::get_cloud_project_path()
-            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
-        let cloud_yml = dbt_cloud_config::parse_cloud_config(&cloud_config_path)
-            .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
-        let resolved = dbt_cloud_config::resolve_cloud_config(cloud_yml.as_ref(), None);
-        if let Some(credentials) = resolved.and_then(|r| r.credentials) {
-            builder
-                .with_named_option("dbt_cloud.token", credentials.token)
-                .map_err(adbc_error_to_adapter_error)?;
-            builder
-                .with_named_option("dbt_cloud.host", credentials.host)
-                .map_err(adbc_error_to_adapter_error)?;
-            builder
-                .with_named_option("dbt_cloud.account_id", credentials.account_id)
-                .map_err(adbc_error_to_adapter_error)?;
+        let credential = credential.map_err(|e| {
+            let hint = e
+                .login_hint()
+                .map(|h| format!(" — {h}"))
+                .unwrap_or_default();
+            AuthError::config(format!("{e}{hint}"))
+        })?;
+
+        // See NOTE [flock-service-token-support] in flock-service/src/flight/handshake.rs:
+        // flock-service doesn't support service-credential fetching yet, so reject this
+        // client-side instead of sending a token the server will reject anyway.
+        if matches!(credential, Credential::ServiceToken { .. }) {
+            return Err(AuthError::config(
+                "service token credentials are not yet supported for dbt Cloud/flock \
+                 connections; use a personal access token or run `dbt login` instead",
+            ));
+        }
+
+        builder.with_named_option("dbt_cloud.token", credential.token())?;
+        builder.with_named_option("dbt_cloud.host", credential.account_host())?;
+        builder.with_named_option("dbt_cloud.account_id", credential.account_id().to_string())?;
+        if let Some(project_id) = project_id {
+            builder.with_named_option("dbt_cloud.project_id", project_id)?;
         }
         Ok(builder)
     }
@@ -341,15 +376,37 @@ impl AdbcEngine {
         let Ok(view) = catalogs.view_v2() else {
             return Ok(Vec::new());
         };
-        // The compute engine (Alt) attaches via each catalog's `alt` block when
-        // present; the base DuckDB adapter uses the `duckdb` block. Both fall back
-        // to `duckdb`.
-        let platform = if self.adapter_type == AdapterType::Alt {
-            "alt"
+        // The compute engine attaches via each catalog's `lake_compute`
+        // block when present; the base DuckDB adapter uses the `duckdb` block.
+        // Both fall back to `duckdb`.
+        let platform = if self.adapter_type == AdapterType::LakeCompute {
+            AdapterType::LakeCompute.as_ref()
         } else {
-            "duckdb"
+            AdapterType::DuckDB.as_ref()
         };
         super::duckdb_attach::compose_v2_catalog_attach_stmts(&view, platform)
+    }
+}
+
+/// Ignored under dbt-platform brokered credentials — per-model routing
+/// doesn't apply there.
+pub(crate) fn resolve_connection_config<'a>(
+    adapter_type: AdapterType,
+    base_config: &'a AdapterConfig,
+    state: Option<&State>,
+) -> Cow<'a, AdapterConfig> {
+    match adapter_type {
+        AdapterType::Databricks if base_config.contains_key("compute") => {
+            match state.and_then(databricks::compute_from_state) {
+                Some(databricks_compute) => {
+                    let mut mapping = base_config.repr().clone();
+                    mapping.insert("databricks_compute".into(), databricks_compute.into());
+                    Cow::Owned(AdapterConfig::new(mapping))
+                }
+                None => Cow::Borrowed(base_config),
+            }
+        }
+        _ => Cow::Borrowed(base_config),
     }
 }
 
@@ -409,29 +466,6 @@ impl AdapterEngine for AdbcEngine {
         state: Option<&State>,
         _node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        let do_create_connection =
-            |adapter_type: AdapterType| -> AdapterResult<Box<dyn Connection>> {
-                let config = match adapter_type {
-                    AdapterType::Databricks => {
-                        if let Some(databricks_compute) =
-                            state.and_then(databricks_compute_from_state)
-                        {
-                            let augmented_config = {
-                                let mut mapping = self.config.repr().clone();
-                                mapping
-                                    .insert("databricks_compute".into(), databricks_compute.into());
-                                AdapterConfig::new(mapping)
-                            };
-                            Cow::Owned(augmented_config)
-                        } else {
-                            Cow::Borrowed(&self.config)
-                        }
-                    }
-                    _ => Cow::Borrowed(&self.config),
-                };
-                self.new_connection_with_config(config.as_ref())
-            };
-
         match &self.mode {
             EngineMode::Mock => {
                 emit_trace_event(|| {
@@ -446,7 +480,28 @@ impl AdapterEngine for AdbcEngine {
                 });
                 Ok(Box::new(NoopConnection))
             }
-            EngineMode::Live => do_create_connection(self.adapter_type),
+            EngineMode::Live => {
+                let config = resolve_connection_config(self.adapter_type, &self.config, state);
+                self.new_connection_with_config(config.as_ref())
+            }
+        }
+    }
+
+    /// Fingerprints `config` without opening a connection, so the pool can
+    /// decide reuse before creating one. Must stay I/O-free.
+    fn fingerprint_for_config(&self, config: &AdapterConfig) -> AdapterResult<u64> {
+        match self.mode {
+            // Mock mode never connects, so mock configs don't need real auth data.
+            EngineMode::Mock => Ok(self.fingerprint()),
+            EngineMode::Live => {
+                let (builder, _warnings) = config
+                    .build_connection_builder(self.auth.as_ref(), |backend| {
+                        self.configure_cloud_database(backend)
+                    })
+                    .map_err(crate::errors::auth_error_to_adapter_error)?;
+                let opts = builder.into_iter().collect::<Vec<_>>();
+                Ok(database::Builder::fingerprint(opts.iter()).as_u64())
+            }
         }
     }
 
@@ -522,29 +577,6 @@ impl AdapterEngine for AdbcEngine {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Get the Databricks compute engine configured for this model/snapshot
-///
-/// https://docs.getdbt.com/reference/resource-configs/databricks-configs#selecting-compute-per-model
-fn databricks_compute_from_state(state: &State) -> Option<String> {
-    let yaml_node = dbt_yaml::to_value(state.lookup("model", &[]).as_ref()?).ok()?;
-
-    if let Ok(model) = DbtModel::deserialize(&yaml_node) {
-        if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr {
-            databricks_attr.databricks_compute.clone()
-        } else {
-            None
-        }
-    } else if let Ok(snapshot) = DbtSnapshot::deserialize(&yaml_node) {
-        if let Some(databricks_attr) = &snapshot.__adapter_attr__.databricks_attr {
-            databricks_attr.databricks_compute.clone()
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 /// Enrich connection errors with adapter-specific hints where possible.
 fn enrich_connection_error(
     adapter_type: AdapterType,
@@ -584,5 +616,254 @@ Original error: {}",
             AdapterError::new(adbc_error_to_adapter_error(err).kind(), message)
         }
         _ => adbc_error_to_adapter_error(err),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_yaml::Mapping;
+    use minijinja::Environment;
+    use minijinja::value::Value;
+    use std::collections::BTreeMap;
+
+    fn config_with_compute_block() -> AdapterConfig {
+        AdapterConfig::new(Mapping::from_iter([("compute".into(), true.into())]))
+    }
+
+    /// dbt_yaml's dunder-key flatten mechanism wants `databricks_attr` as a
+    /// sibling at the model's top level, not nested under `__adapter_attr__`.
+    fn model_with_databricks_compute(compute: &str) -> Value {
+        let databricks_attr = BTreeMap::from([("databricks_compute", compute)]);
+        let model = BTreeMap::from([("databricks_attr", databricks_attr)]);
+        Value::from_serialize(&model)
+    }
+
+    #[test]
+    fn resolve_connection_config_non_databricks_ignores_compute_override() {
+        let config = config_with_compute_block();
+        let mut env = Environment::new();
+        env.add_global("model", model_with_databricks_compute("large_warehouse"));
+        let state = State::new_for_env(&env);
+
+        let resolved = resolve_connection_config(AdapterType::Snowflake, &config, Some(&state));
+
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn resolve_connection_config_databricks_without_compute_block_returns_borrowed() {
+        let config = AdapterConfig::new(Mapping::new());
+        let mut env = Environment::new();
+        env.add_global("model", model_with_databricks_compute("large_warehouse"));
+        let state = State::new_for_env(&env);
+
+        let resolved = resolve_connection_config(AdapterType::Databricks, &config, Some(&state));
+
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn resolve_connection_config_databricks_with_compute_block_no_state_returns_borrowed() {
+        let config = config_with_compute_block();
+
+        let resolved = resolve_connection_config(AdapterType::Databricks, &config, None);
+
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn resolve_connection_config_databricks_with_compute_override_returns_owned() {
+        let config = config_with_compute_block();
+        let mut env = Environment::new();
+        env.add_global("model", model_with_databricks_compute("large_warehouse"));
+        let state = State::new_for_env(&env);
+
+        let resolved = resolve_connection_config(AdapterType::Databricks, &config, Some(&state));
+
+        match resolved {
+            Cow::Owned(overridden) => {
+                assert_eq!(
+                    overridden.get_string("databricks_compute").as_deref(),
+                    Some("large_warehouse")
+                );
+            }
+            Cow::Borrowed(_) => {
+                panic!("expected an overridden config with the compute override applied")
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod cloud_credential_tests {
+    use std::time::{Duration, SystemTime};
+
+    use adbc_core::options::{OptionDatabase, OptionValue};
+    use dbt_platform_auth::resolver::{AuthResolver, OAuthPassiveResolver};
+    use dbt_platform_auth::{AuthChain, AuthError, Credential, OAuthSession, OAuthSessionCache};
+
+    use super::AdbcEngine;
+    use dbt_adbc::Backend;
+
+    fn opt_string(opts: &[(OptionDatabase, OptionValue)], name: &str) -> Option<String> {
+        opts.iter().find_map(|(key, value)| {
+            let matches_name = matches!(key, OptionDatabase::Other(n) if n == name);
+            if !matches_name {
+                return None;
+            }
+            match value {
+                OptionValue::String(s) => Some(s.clone()),
+                _ => None,
+            }
+        })
+    }
+
+    fn oauth_credential() -> Credential {
+        Credential::OAuth(OAuthSession {
+            access_token: "access-token-123".to_string(),
+            refresh_token: None,
+            scopes: vec![],
+            id_token: None,
+            expires_at: SystemTime::now() + Duration::from_secs(3600),
+            account_host: "ab123.us1.dbt.com".to_string(),
+            account_id: 42,
+            user_id: 7,
+            client_id: "test-client".to_string(),
+        })
+    }
+
+    #[test]
+    fn oauth_credential_sets_token_host_account_id_and_project_id() {
+        let builder = AdbcEngine::apply_cloud_credential(
+            Backend::Snowflake,
+            Ok(oauth_credential()),
+            Some("proj-1"),
+        )
+        .expect("should succeed");
+        let opts: Vec<_> = builder.into_iter().collect();
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.token"),
+            Some("access-token-123".to_string())
+        );
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.host"),
+            Some("ab123.us1.dbt.com".to_string())
+        );
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.account_id"),
+            Some("42".to_string())
+        );
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.project_id"),
+            Some("proj-1".to_string())
+        );
+    }
+
+    #[test]
+    fn pat_credential_sets_token_host_account_id_with_no_project_id() {
+        let credential = Credential::Pat {
+            token: "dbtu_pat_token".to_string(),
+            account_host: "ab123.us1.dbt.com".to_string(),
+            account_id: 99,
+        };
+        let builder = AdbcEngine::apply_cloud_credential(Backend::Snowflake, Ok(credential), None)
+            .expect("should succeed");
+        let opts: Vec<_> = builder.into_iter().collect();
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.token"),
+            Some("dbtu_pat_token".to_string())
+        );
+        assert_eq!(opt_string(&opts, "dbt_cloud.project_id"), None);
+    }
+
+    #[test]
+    fn service_token_credential_is_rejected() {
+        let credential = Credential::ServiceToken {
+            token: "dbtc_service_token".to_string(),
+            account_host: "ab123.us1.dbt.com".to_string(),
+            account_id: 99,
+        };
+        let err = AdbcEngine::apply_cloud_credential(Backend::Snowflake, Ok(credential), None)
+            .expect_err("service tokens must be rejected");
+        let message = err.msg();
+        assert!(message.contains("service token"));
+        assert!(message.contains("dbt login") || message.contains("personal access token"));
+    }
+
+    #[test]
+    fn not_authenticated_surfaces_login_hint() {
+        let err = AdbcEngine::apply_cloud_credential(
+            Backend::Snowflake,
+            Err(AuthError::NotAuthenticated),
+            None,
+        )
+        .expect_err("no credentials must be a hard error, not a silent no-op");
+        assert!(err.msg().contains("dbt login"));
+    }
+
+    #[test]
+    fn malformed_error_propagates_without_a_login_hint() {
+        let err = AdbcEngine::apply_cloud_credential(
+            Backend::Snowflake,
+            Err(AuthError::Malformed("bad yaml".to_string())),
+            None,
+        )
+        .expect_err("malformed config must error");
+        let message = err.msg();
+        assert!(message.contains("bad yaml"));
+        assert!(!message.contains("dbt login"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn configure_cloud_database_with_chain_reads_seeded_oauth_session() {
+        // No dbt_cloud.yml involved in this test — the OAuth session file is the only
+        // credential source, and project_id is passed in directly.
+        let dir = tempfile::tempdir().unwrap();
+        let cache_path = dir.path().join("oauth_sessions.json");
+        let session = OAuthSession {
+            access_token: "seeded-access-token".to_string(),
+            refresh_token: None,
+            scopes: vec![],
+            id_token: None,
+            expires_at: SystemTime::now() + Duration::from_secs(3600),
+            account_host: "seeded.us1.dbt.com".to_string(),
+            account_id: 555,
+            user_id: 1,
+            client_id: dbt_platform_auth::OAUTH_CLIENT_ID.to_string(),
+        };
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![session],
+        };
+        std::fs::write(&cache_path, serde_json::to_vec(&cache).unwrap()).unwrap();
+
+        let mut resolver = OAuthPassiveResolver::new(dbt_platform_auth::OAUTH_CLIENT_ID);
+        resolver.cache_path = Some(cache_path);
+        let chain = AuthChain::new(vec![AuthResolver::OAuthPassive(resolver)]);
+
+        let builder = AdbcEngine::configure_cloud_database_with_chain(
+            Backend::Snowflake,
+            chain,
+            Some("proj-999"),
+        )
+        .expect("should resolve the seeded OAuth session");
+        let opts: Vec<_> = builder.into_iter().collect();
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.token"),
+            Some("seeded-access-token".to_string())
+        );
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.host"),
+            Some("seeded.us1.dbt.com".to_string())
+        );
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.account_id"),
+            Some("555".to_string())
+        );
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.project_id"),
+            Some("proj-999".to_string())
+        );
     }
 }

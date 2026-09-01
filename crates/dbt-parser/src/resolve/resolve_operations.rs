@@ -131,12 +131,26 @@ fn new_operation(
                 checksum: DbtChecksum::hash(operation_sql.trim().as_bytes()),
                 raw_code: Some(operation_sql.to_string()),
                 language: Some("sql".to_string()),
+                // Stored as a plain field (unlike `Spanned<T>`'s own span) so it
+                // survives the `--partial-parse` cache's JSON round-trip; see
+                // `run_operation_on_run` in dbt-tasks-sa, which relies on this to
+                // attribute hook-execution errors back to their real location.
+                name_span: dbt_common::Span::from_serde_span(
+                    operation_sql_spanned.span().clone(),
+                    original_file_path.clone(),
+                ),
                 ..Default::default()
             },
             __base_attr__: NodeBaseAttributes {
                 alias: name,
                 database: database.to_string(),
                 schema: schema.to_string(),
+                // A hook is not a node the user configures, so it runs on the
+                // target default. This must be set rather than defaulted: the
+                // adapter decides which dialect's internal-macro namespace the
+                // hook resolves `dbt.run_query` and friends through, and a wrong
+                // one yields an empty namespace rather than an error.
+                adapter: adapter_type,
                 ..Default::default()
             },
             __other__: BTreeMap::new(),
@@ -153,6 +167,7 @@ fn new_operation(
             let mut operation_ctx = BTreeMap::new();
             operation_ctx.extend(build_resolve_model_context(
                 &NoOpConfig {},
+                false,
                 adapter_type,
                 database,
                 schema,

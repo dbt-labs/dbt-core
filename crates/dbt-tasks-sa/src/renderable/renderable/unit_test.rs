@@ -146,7 +146,7 @@ pub(crate) async fn run_unit_test_render(
             &given_relations.relations_to_fetch,
             &node.common().unique_id,
             &mut ctx,
-            task_hooks,
+            Arc::clone(&task_hooks),
         ))
         .await;
         if let Err(e) = fetch_outcome {
@@ -167,7 +167,7 @@ pub(crate) async fn run_unit_test_render(
             .as_any()
             .downcast_ref::<DbtUnitTest>()
             .expect("run_unit_test_render called on non-DbtUnitTest");
-        let res = render_unit_test(ut_ref, &mut ctx, given_relations);
+        let res = render_unit_test(ut_ref, &mut ctx, given_relations, task_hooks.as_ref());
         handle_render_result(
             res,
             &node.unique_id(),
@@ -404,6 +404,7 @@ fn populate_schema_from_empty_relation(
     compiled_model_sql: &str,
     subqueries: &[(String, String)],
     infer_with_query_schema: bool,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<SchemaRef> {
     let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -412,7 +413,7 @@ fn populate_schema_from_empty_relation(
         )
     })?;
 
-    let mut run_context = build_run_node_context(
+    let (mut run_context, _result_store) = build_run_node_context(
         unit_test,
         &unit_test.deprecated_config,
         ctx.adapter_type(),
@@ -512,6 +513,18 @@ fn populate_schema_from_empty_relation(
         })
         .collect::<Vec<_>>()
         .join(",");
+
+    if infer_with_query_schema {
+        let sql = if ctes.is_empty() {
+            Cow::Borrowed(schema_sql.as_str())
+        } else {
+            Cow::Owned(format!("WITH {ctes} {schema_sql}"))
+        };
+        // Let distribution-specific hooks handle schemas that the adapter query path cannot bind.
+        if let Some(schema) = task_hooks.try_infer_unit_test_schema(ctx, unit_test, &sql)? {
+            return Ok(schema);
+        }
+    }
 
     let template = ctx.env.template_from_str(materialization).map_err(|e| {
         fs_err!(
@@ -896,7 +909,7 @@ fn discover_given_relations(
         ut,
         &base_context,
         DependencyValidationConfig::new_unvalidated(),
-    );
+    )?;
 
     let mut given_relations = Vec::new();
     let mut relations_to_fetch = Vec::new();
@@ -1023,6 +1036,7 @@ fn render_unit_test(
     node: &DbtUnitTest,
     ctx: &mut TaskRunnerCtx,
     given_relations: DiscoveredGivenRelations,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<(SqlInstruction, Arc<DashMap<String, MinijinjaValue>>)> {
     let DiscoveredGivenRelations {
         given_relations,
@@ -1097,7 +1111,7 @@ fn render_unit_test(
             .validate()
             .allow_dependencies(given_relation_ids.iter())
             .allow_dependencies(tested_model_function_deps),
-    );
+    )?;
 
     // Apply overrides to the compile context
     if let Some(overrides) = &node.__unit_test_attr__.overrides {
@@ -1349,6 +1363,7 @@ fn render_unit_test(
                     compiled_model_sql.as_str(),
                     &subqueries,
                     infer_with_query_schema,
+                    task_hooks,
                 )?
             }
         }
@@ -1597,7 +1612,7 @@ fn yml_sequence_to_sql_literal(
     };
     let mut element_type_literal = String::new();
     type_ops
-        .format_arrow_type_as_sql(element_field.data_type(), &mut element_type_literal)
+        .format_arrow_type_as_sql(element_field.data_type(), true, &mut element_type_literal)
         .map_err(|e| {
             fs_err!(
                 ErrorCode::InvalidConfig,
@@ -1686,6 +1701,16 @@ fn yml_mapping_to_sql_literal(
     }
 }
 
+/// BigQuery has no `STRING -> JSON` cast, so `PARSE_JSON` is the only constructor, and its
+/// result is already typed - callers must not wrap it (dbt-labs/dbt-core#15708).
+fn is_bigquery_json_literal(
+    adapter_type: AdapterType,
+    data_type: &DataType,
+    value: &YmlValue,
+) -> bool {
+    adapter_type == AdapterType::Bigquery && BigqueryTyping::is_json(data_type) && !value.is_null()
+}
+
 /// Converts a yaml value to a String literal for the given adapter type
 fn yml_value_to_sql_literal(
     adapter_type: AdapterType,
@@ -1694,6 +1719,25 @@ fn yml_value_to_sql_literal(
     data_type: &DataType,
 ) -> FsResult<String> {
     let literal_formatter = SqlLiteralFormatter::new(adapter_type);
+
+    if is_bigquery_json_literal(adapter_type, data_type, &value) {
+        // A string fixture is the JSON document itself; anything else is serialized to JSON.
+        let json_str = match &value {
+            YmlValue::String(s, _) => s.clone(),
+            _ => serde_json::to_string(&value).map_err(|_| {
+                fs_err!(
+                    ErrorCode::InvalidArgument,
+                    "Unable to serialize JSON fixture value"
+                )
+            })?,
+        };
+        // `format_str` does not escape backslashes for BigQuery; JSON text is full of them.
+        let json_str = json_str.replace('\\', "\\\\");
+        return Ok(format!(
+            "PARSE_JSON({})",
+            literal_formatter.format_str(&json_str)
+        ));
+    }
 
     match value {
         // Scalars are handled the same across dialects
@@ -1733,7 +1777,7 @@ fn columns_to_formatted_types<'a>(
         .map(|f| {
             let mut formatted = String::new();
             type_ops
-                .format_arrow_type_as_sql(f.data_type(), &mut formatted)
+                .format_arrow_type_as_sql(f.data_type(), f.is_nullable(), &mut formatted)
                 .map_err(|e| {
                     fs_err!(
                         ErrorCode::InvalidConfig,
@@ -2093,6 +2137,10 @@ fn create_bigquery_relation_to_select_from(
                         )
                     })?;
 
+                    let data_type = schema.field(i).data_type();
+                    let skip_cast =
+                        is_bigquery_json_literal(AdapterType::Bigquery, data_type, &value);
+
                     // Complex-type handling (verbatim SQL-expression injection
                     // for STRUCT/GEOGRAPHY, STRUCT(...) for mappings, arrays for
                     // sequences) lives in `yml_value_to_sql_literal`.
@@ -2100,12 +2148,16 @@ fn create_bigquery_relation_to_select_from(
                         AdapterType::Bigquery,
                         type_ops,
                         value,
-                        schema.field(i).data_type(),
+                        data_type,
                     )?;
 
-                    Ok(format!(
-                        "CAST({formatted_value} AS {bigquery_type}) AS {formatted_name}"
-                    ))
+                    if skip_cast {
+                        Ok(format!("{formatted_value} AS {formatted_name}"))
+                    } else {
+                        Ok(format!(
+                            "CAST({formatted_value} AS {bigquery_type}) AS {formatted_name}"
+                        ))
+                    }
                 })
                 .collect::<FsResult<Vec<_>>>()?;
             Ok(format!("STRUCT({})", struct_fields.join(", ")))
@@ -2149,6 +2201,7 @@ fn get_unique_id(
 fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
+        .flexible(true)
         .from_reader(Cursor::new(data));
 
     let headers = reader
@@ -2160,22 +2213,35 @@ fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     for result in reader.records() {
         let record = result
             .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "Failed to read record: {}", e))?;
+        if record.len() > headers.len() {
+            let error = record.position().map_or_else(
+                || {
+                    format!(
+                        "CSV error: found record with {} fields, but the previous record has {} fields",
+                        record.len(),
+                        headers.len()
+                    )
+                },
+                |position| {
+                    format!(
+                        "CSV error: record {} (line: {}, byte: {}): found record with {} fields, but the previous record has {} fields",
+                        position.record(),
+                        position.line(),
+                        position.byte(),
+                        record.len(),
+                        headers.len()
+                    )
+                },
+            );
+            return err!(ErrorCode::InvalidConfig, "Failed to read record: {}", error);
+        }
         let mut row = BTreeMap::new();
-        for (i, field) in record.iter().enumerate() {
-            let value = if field.is_empty() {
-                YmlValue::null()
-            } else if let Ok(v) = field.parse::<i64>() {
-                YmlValue::number(v.into())
-            } else if let Ok(v) = field.parse::<f64>() {
-                YmlValue::number(v.into())
-            } else if field.eq_ignore_ascii_case("true") {
-                YmlValue::bool(true)
-            } else if field.eq_ignore_ascii_case("false") {
-                YmlValue::bool(false)
-            } else {
-                YmlValue::string(field.to_string())
+        for (i, header) in headers.iter().enumerate() {
+            let value = match record.get(i) {
+                None => YmlValue::null(),
+                Some(field) => YmlValue::string(field.to_string()),
             };
-            row.insert(headers[i].to_string(), value);
+            row.insert(header.to_string(), value);
         }
         rows.push(row);
     }
@@ -2220,6 +2286,47 @@ mod tests {
     use dbt_test_primitives::assert_contains;
 
     type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn test_parse_csv_rows_fills_missing_trailing_fields_with_null() {
+        let rows = parse_csv_rows(b"id,name,note\n1,alpha\n")
+            .expect("a short CSV record should match Python DictReader semantics");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("note"), Some(&YmlValue::null()));
+        assert_eq!(rows[0].len(), 3);
+    }
+
+    #[test]
+    fn test_parse_csv_rows_preserves_scalar_text() {
+        let rows = parse_csv_rows(b"id,code,enabled,ratio,empty\n1,000001,true,1.5,\n")
+            .expect("present CSV cells should preserve DictReader string semantics");
+
+        assert_eq!(rows.len(), 1);
+        for (column, expected) in [
+            ("id", "1"),
+            ("code", "000001"),
+            ("enabled", "true"),
+            ("ratio", "1.5"),
+            ("empty", ""),
+        ] {
+            assert_eq!(
+                rows[0].get(column),
+                Some(&YmlValue::string(expected.to_string()))
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_csv_rows_rejects_fields_beyond_the_header() {
+        let error = parse_csv_rows(b"id,name\n1,alpha,extra\n")
+            .expect_err("an extra CSV field must not be silently discarded");
+
+        assert_contains!(
+            error.to_string(),
+            "found record with 3 fields, but the previous record has 2 fields"
+        );
+    }
 
     /// Binds `value` as the `run_started_at` override and renders `template`,
     /// exercising the same path unit tests use.
@@ -3161,10 +3268,94 @@ mod tests {
         );
     }
 
+    /// Regression for dbt-labs/dbt-core#15708: a BigQuery `JSON` column is
+    /// mockable from either an object or a JSON string, both rendered with
+    /// `PARSE_JSON` and no enclosing cast.
+    #[test]
+    fn test_create_values_bigquery_json_column() {
+        let json_type =
+            DataType::FixedSizeList(Arc::new(Field::new("json", DataType::Utf8, true)), 1);
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("from_object", json_type.clone(), true),
+            Field::new("from_string", json_type.clone(), true),
+            Field::new("with_escapes", json_type.clone(), true),
+            Field::new("missing", json_type, true),
+        ]));
+        let type_ops = DefaultTypeOps::new(AdapterType::Bigquery);
+
+        let mut object_map = dbt_yaml::mapping::Mapping::new();
+        object_map.insert(
+            YmlValue::string("segmentCode".to_string()),
+            YmlValue::string("HORECA".to_string()),
+        );
+        let mut escaped_map = dbt_yaml::mapping::Mapping::new();
+        escaped_map.insert(
+            YmlValue::string("note".to_string()),
+            YmlValue::string("a\nb".to_string()),
+        );
+
+        let rows = vec![BTreeMap::from([
+            (
+                "from_object".to_string(),
+                YmlValue::Mapping(object_map, Default::default()),
+            ),
+            (
+                "from_string".to_string(),
+                YmlValue::string(r#"{"segmentCode":"HORECA"}"#.to_string()),
+            ),
+            (
+                "with_escapes".to_string(),
+                YmlValue::Mapping(escaped_map, Default::default()),
+            ),
+            ("missing".to_string(), YmlValue::null()),
+        ])];
+
+        // `allow_pseudocolumns` is the only thing separating given from expect
+        for allow_pseudocolumns in [true, false] {
+            let result = create_values(
+                &schema,
+                &rows,
+                AdapterType::Bigquery,
+                &type_ops,
+                None,
+                "json_source",
+                allow_pseudocolumns,
+            )
+            .expect("JSON fixture should render");
+
+            assert_contains!(
+                result,
+                r#"PARSE_JSON('{"segmentCode":"HORECA"}') AS from_object"#,
+                "object fixture should render as PARSE_JSON"
+            );
+            assert_contains!(
+                result,
+                r#"PARSE_JSON('{"segmentCode":"HORECA"}') AS from_string"#,
+                "JSON string fixture should render as PARSE_JSON"
+            );
+            // BigQuery unescapes `\\` back to a single backslash, so PARSE_JSON
+            // receives the `\n` escape rather than a literal newline.
+            assert_contains!(
+                result,
+                r#"PARSE_JSON('{"note":"a\\nb"}') AS with_escapes"#,
+                "backslashes in JSON text must survive the string literal"
+            );
+            assert_contains!(
+                result,
+                "CAST(NULL AS JSON) AS missing",
+                "a null JSON value keeps the cast that carries the column type"
+            );
+            assert!(
+                !result.contains("CAST(PARSE_JSON"),
+                "PARSE_JSON is already typed JSON and must not be cast: {result}"
+            );
+        }
+    }
+
     fn row(pairs: &[(&str, i64)]) -> BTreeMap<String, YmlValue> {
         pairs
             .iter()
-            .map(|(k, v)| (k.to_string(), YmlValue::number((*v).into())))
+            .map(|(k, v)| ((*k).to_string(), YmlValue::number((*v).into())))
             .collect()
     }
 

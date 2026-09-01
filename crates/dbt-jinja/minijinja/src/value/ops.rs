@@ -162,7 +162,7 @@ pub fn slice(value: Value, start: Value, stop: Value, step: Value) -> Result<Val
             };
             Ok(Value::from_bytes(bytes))
         }
-        ValueRepr::Undefined | ValueRepr::None => Ok(Value::from(Vec::<Value>::new())),
+        ValueRepr::Undefined(_) | ValueRepr::None => Ok(Value::from(Vec::<Value>::new())),
         ValueRepr::Object(obj) if matches!(obj.repr(), ObjectRepr::Seq | ObjectRepr::Iterable) => {
             let len = obj.enumerator_len().unwrap_or_default();
             let (start, len) = get_offset_and_len(start, stop, || len);
@@ -193,6 +193,12 @@ fn int_as_value(val: i128) -> Value {
 }
 
 fn impossible_op(op: &str, lhs: &Value, rhs: &Value) -> Error {
+    if let Some(name) = lhs.undefined_name().or(rhs.undefined_name()) {
+        let mut error = Error::from(ErrorKind::UndefinedError);
+        error.set_detail(format!("`{name}` is undefined"));
+        return error;
+    }
+
     Error::new(
         ErrorKind::InvalidOperation,
         format!(

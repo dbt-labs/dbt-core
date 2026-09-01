@@ -21,6 +21,7 @@ use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
+use dbt_schemas::schemas::relations::default_resolved_quoting_for;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 
 use arrow::array::RecordBatch;
@@ -80,6 +81,10 @@ impl StaticBaseRelation for RelationStatic {
         self.adapter_type.as_ref().to_string()
     }
 
+    fn get_default_quoting(&self) -> ResolvedQuoting {
+        default_resolved_quoting_for(self.adapter_type)
+    }
+
     fn create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         match self.adapter_type {
             AdapterType::Snowflake => {
@@ -103,12 +108,10 @@ impl StaticBaseRelation for RelationStatic {
                     })
                     .unwrap_or(self.quoting);
 
-                let table_format =
-                    if table_format.is_some_and(|s| s.eq_ignore_ascii_case("iceberg")) {
-                        TableFormat::Iceberg
-                    } else {
-                        TableFormat::Default
-                    };
+                let table_format = match table_format.as_deref() {
+                    Some(s) if s.eq_ignore_ascii_case("iceberg") => TableFormat::Iceberg,
+                    _ => TableFormat::Default,
+                };
 
                 let relation = Relation::new(AdapterType::Snowflake, database, schema, identifier)
                     .with_relation_type(relation_type.map(|s| RelationType::from(s.as_str())))
@@ -694,6 +697,14 @@ impl BaseRelation for Relation {
         }
     }
 
+    fn set_table_format(&mut self, table_format: Option<TableFormat>) {
+        if self.adapter_type == AdapterType::Snowflake
+            && let Some(table_format) = table_format
+        {
+            self.table_format = table_format;
+        }
+    }
+
     fn is_materialized_view(&self) -> bool {
         let result = matches!(self.relation_type, Some(RelationType::MaterializedView));
         result
@@ -1167,6 +1178,12 @@ impl BaseRelation for Relation {
                 }
             }
             Bigquery => {
+                if remote_state_value.is_none() {
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        "remote_state cannot be None",
+                    ));
+                }
                 let current_state = remote_state_value
                     .as_object()
                     .ok_or_else(|| {
@@ -1401,7 +1418,10 @@ mod tests {
                 sample: None,
             };
             let result = filter_relation().render_with_run_filter(&run_filter, &None);
-            assert_eq!(result, "(select * from my_db.my_schema.my_table limit 0)");
+            assert_eq!(
+                result,
+                "(select * from my_db.my_schema.my_table where false limit 0)"
+            );
         }
 
         #[test]
@@ -1557,7 +1577,7 @@ mod tests {
             let result = filter_relation().render_with_run_filter(&run_filter, &event_time);
             assert_eq!(
                 result,
-                "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
+                "(select * from (select * from my_db.my_schema.my_table where false limit 0) where created_at >= '2024-07-01T00:00:00+00:00' and created_at < '2024-07-08T18:00:00+00:00')"
             );
         }
 
@@ -1605,7 +1625,7 @@ mod tests {
             let rendered = format!("{}", Value::from_object(filtered));
             assert_eq!(
                 rendered,
-                "(select * from (select * from my_db.my_schema.my_table limit 0) where event_date >= '2026-07-13T00:00:00+00:00' and event_date < '2026-07-14T00:00:00+00:00')"
+                "(select * from (select * from my_db.my_schema.my_table where false limit 0) where event_date >= '2026-07-13T00:00:00+00:00' and event_date < '2026-07-14T00:00:00+00:00')"
             );
         }
     }

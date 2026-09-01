@@ -1,5 +1,7 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
@@ -58,16 +60,29 @@ pub async fn resolve_exposures(
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.exposures.clone(),
         is_dependency,
-        || init_project_config(&package.dbt_project.exposures, (), dependency_package_name),
+        || {
+            init_project_config(
+                &package.dbt_project.exposures,
+                (),
+                dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
+            )
+        },
+        adapter_type,
     )?;
 
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "exposures");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "exposures",
+        adapter_type,
+    )?;
     let raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "exposures",
-        ))
+            adapter_type,
+        )?)
     } else {
         None
     };
@@ -146,7 +161,8 @@ pub async fn resolve_exposures(
                 raw_properties_yml_config.as_ref(),
                 None,
                 false,
-            );
+                adapter_type,
+            )?;
 
             let dbt_exposure = DbtExposure {
                 __common_attr__: CommonAttributes {
@@ -176,6 +192,7 @@ pub async fn resolve_exposures(
                     meta: exposure_properties_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    adapter: adapter_type,
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -252,6 +269,7 @@ pub fn resolve_yaml_depends_on(
         let mut resolve_model_context = base_ctx.clone();
         resolve_model_context.extend(build_resolve_model_context(
             &exposure_config,
+            false,
             adapter_type,
             database,
             schema,

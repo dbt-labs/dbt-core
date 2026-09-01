@@ -7,7 +7,10 @@ use dbt_adbc::QueryCtx;
 use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
 };
-use minijinja::{State, constants::CURRENT_EXECUTION_PHASE};
+use minijinja::{
+    State,
+    constants::{CURRENT_EXECUTION_PHASE, TARGET_UNIQUE_ID},
+};
 use serde::Deserialize;
 
 pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
@@ -25,6 +28,9 @@ pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
     // TODO: use node_metadata_from_state
     if let Some(node_id) = node_id_from_state(state) {
         query = query.with_node_id(node_id);
+    }
+    if let Some(target_unique_id) = target_unique_id_from_state(state) {
+        query = query.with_target_unique_id(target_unique_id);
     }
     if let Some(phase) = execution_phase_from_state(state) {
         query = query.with_phase(phase);
@@ -59,6 +65,19 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
     }
 }
 
+/// Read the `TARGET_UNIQUE_ID` Jinja key, the unique id the current adapter calls target.
+///
+/// This is the node's own unique id everywhere except where a node materializes an additional
+/// relation on its own behalf and sets the key to a distinct id for it. Deliberately kept
+/// separate from [`node_id_from_state`] so that identity never overwrites the node's own — see
+/// [`QueryCtx::target_unique_id`].
+pub fn target_unique_id_from_state(state: &State) -> Option<String> {
+    state
+        .lookup(TARGET_UNIQUE_ID, &[])?
+        .as_str()
+        .map(|s| s.to_string())
+}
+
 pub fn execution_phase_from_state(state: &State) -> Option<&'static str> {
     let value = state.lookup(CURRENT_EXECUTION_PHASE, &[])?;
     let s = value.as_str()?;
@@ -66,4 +85,85 @@ pub fn execution_phase_from_state(state: &State) -> Option<&'static str> {
         .iter()
         .position(|&p| p == s)
         .map(|idx| DBT_EXECUTION_PHASES[idx])
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use minijinja::{Environment, Value};
+
+    use super::*;
+    use crate::LATEST_VERSION_POINTER_SUFFIX;
+
+    /// Build a `State` carrying `ctx` and hand it to `f`, mirroring how the Jinja `execute()`
+    /// builtin reaches `query_ctx_from_state`.
+    fn with_state(ctx: BTreeMap<String, Value>, f: impl FnOnce(&State)) {
+        let env = Environment::new();
+        let template = env.template_from_str("").expect("state template");
+        let state = template
+            .eval_to_state(ctx, &[])
+            .expect("state should build");
+        f(&state);
+    }
+
+    /// Regression guard: a node's identity must survive `TARGET_UNIQUE_ID` diverging from it.
+    ///
+    /// `materialize_latest_version_pointer` sets `TARGET_UNIQUE_ID` to a synthetic pointer id so
+    /// the pointer view's adapter calls can be told apart from the base model's, and it once did
+    /// so by overwriting the cloned model's `unique_id` as well. That leaked the synthetic id
+    /// into everything keyed on node identity — including cross-version record/replay recording
+    /// keys, which then could not find the events earlier versions had recorded under the real
+    /// node id. The two ids must stay on separate channels.
+    #[test]
+    fn target_unique_id_does_not_displace_the_node_id() {
+        let node_id = "model.pkg.my_model.v1";
+        let pointer_id = format!("{node_id}{LATEST_VERSION_POINTER_SUFFIX}");
+
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = node_id.to_string();
+        let yaml_model = dbt_yaml::to_value(&model).expect("model yaml");
+
+        let mut ctx: BTreeMap<String, Value> = BTreeMap::new();
+        ctx.insert("model".to_string(), Value::from_serialize(&yaml_model));
+        ctx.insert(
+            TARGET_UNIQUE_ID.to_string(),
+            Value::from(pointer_id.as_str()),
+        );
+        with_state(ctx, |state| {
+            let query_ctx = query_ctx_from_state(state).expect("query ctx");
+            assert_eq!(query_ctx.node_id().map(String::as_str), Some(node_id));
+            assert_eq!(
+                query_ctx.target_unique_id().map(String::as_str),
+                Some(pointer_id.as_str())
+            );
+            assert_eq!(
+                query_ctx.target_or_node_id().map(String::as_str),
+                Some(pointer_id.as_str())
+            );
+        });
+    }
+
+    /// For ordinary work the two ids agree, and `target_or_node_id` still resolves when only the
+    /// `model` key is present (no `TARGET_UNIQUE_ID` seeded).
+    #[test]
+    fn target_unique_id_defaults_to_the_node_id() {
+        let node_id = "model.pkg.my_model";
+
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = node_id.to_string();
+        let yaml_model = dbt_yaml::to_value(&model).expect("model yaml");
+
+        let mut ctx: BTreeMap<String, Value> = BTreeMap::new();
+        ctx.insert("model".to_string(), Value::from_serialize(&yaml_model));
+        with_state(ctx, |state| {
+            let query_ctx = query_ctx_from_state(state).expect("query ctx");
+            assert_eq!(query_ctx.node_id().map(String::as_str), Some(node_id));
+            assert_eq!(query_ctx.target_unique_id(), None);
+            assert_eq!(
+                query_ctx.target_or_node_id().map(String::as_str),
+                Some(node_id)
+            );
+        });
+    }
 }

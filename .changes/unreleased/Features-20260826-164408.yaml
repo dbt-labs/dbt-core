@@ -1,0 +1,7 @@
+kind: Features
+body: '[ClickHouse] Incremental strategies now resolve and validate exactly like the Python adapter (delete+insert, insert_overwrite, microbatch), and on_schema_change (fail/append_new_columns/sync_all_columns) works on incremental models with codec-aware ALTERs.'
+time: 2026-08-26T16:44:08.411476+02:00
+custom:
+    author: koletzilla
+    issue: "14585"
+    project: dbt-core

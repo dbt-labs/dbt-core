@@ -19,7 +19,13 @@ use dbt_common::serde_utils::try_get_bool;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
-const ALL_V2_PLATFORMS: &[&str] = &["snowflake", "databricks", "bigquery", "duckdb", "alt"];
+const ALL_V2_PLATFORMS: &[&str] = &[
+    "snowflake",
+    "databricks",
+    "bigquery",
+    "duckdb",
+    "lake_compute",
+];
 
 const TARGET_FILE_SIZES: &[&str] = &["AUTO", "16MB", "32MB", "64MB", "128MB"];
 const STORAGE_SERIALIZATION_POLICIES: &[&str] = &["COMPATIBLE", "OPTIMIZED"];
@@ -140,6 +146,32 @@ const LINKED_SNOWFLAKE_FIELDS: &[FieldSpec] = &[
     FieldSpec::u32_plain("iceberg_version").doc("Iceberg spec version, e.g. 3 for Iceberg V3."),
 ];
 
+// Direct AWS creds for the lake compute backend, which signs Glue's
+// Iceberg REST endpoint itself (SigV4) server-side rather than attaching via
+// a local DuckDB secret -- so it needs the raw credential fields, not a
+// `secret`/`endpoint_type` reference like DUCKDB_ICEBERG_FIELDS.
+const GLUE_LAKE_COMPUTE_FIELDS: &[FieldSpec] = &[
+    FieldSpec::string("catalog_id")
+        .required()
+        .non_empty()
+        .doc("Glue catalog identifier passed to ATTACH. Accepted forms: a 12-digit AWS account ID, ':' for the caller's own account, 'catalog1/catalog2', or '<account_id>:catalog1/catalog2'."),
+    FieldSpec::string("region")
+        .required()
+        .non_empty()
+        .doc("AWS region of the Glue catalog. Determines the REST endpoint and SigV4 signing region."),
+    FieldSpec::string("access_key_id")
+        .required()
+        .non_empty()
+        .doc("AWS access key ID."),
+    FieldSpec::string("secret_access_key")
+        .required()
+        .non_empty()
+        .doc("AWS secret access key."),
+    FieldSpec::string("session_token")
+        .non_empty()
+        .doc("AWS session token; only for temporary/STS credentials."),
+];
+
 const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("endpoint")
         .non_empty()
@@ -198,6 +230,9 @@ const BIGLAKE_BIGQUERY_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("catalog_database")
         .non_empty()
         .doc("GCP project where models using this catalog should land. When set, takes precedence over model database config and target.database."),
+    FieldSpec::string("lakehouse_catalog")
+        .non_empty()
+        .doc("Lakehouse Runtime Catalog (LRC) catalog name. When set, models using this catalog render a 4-part BigQuery FQN (project.lakehouse_catalog.namespace.table) instead of the standard 3-part project.dataset.table."),
     FieldSpec::string("base_location_root").non_empty(),
     FieldSpec::string("connection_id").non_empty(),
 ];
@@ -243,7 +278,7 @@ enum ConfigPresence {
 
 #[derive(Debug, Clone, Copy)]
 struct CatalogTypeSchema {
-    type_name: &'static str,
+    catalog_type: CatalogType,
     table_format: &'static str,
     description: &'static str,
     presence: ConfigPresence,
@@ -252,7 +287,7 @@ struct CatalogTypeSchema {
 
 const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
-        type_name: "horizon",
+        catalog_type: CatalogType::Horizon,
         table_format: "iceberg",
         description: "Snowflake-managed Iceberg catalog (Horizon). Supports snowflake (native), databricks, and/or duckdb (read-only attach) connection blocks.",
         presence: ConfigPresence::AtLeastOne,
@@ -260,34 +295,33 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            // The alt adapter attaches this catalog the same way DuckDB does.
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
-        type_name: "glue",
+        catalog_type: CatalogType::Glue,
         table_format: "iceberg",
         description: "AWS Glue catalog. Supports snowflake and/or duckdb connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", GLUE_LAKE_COMPUTE_FIELDS),
         ],
     },
     CatalogTypeSchema {
-        type_name: "iceberg_rest",
+        catalog_type: CatalogType::IcebergRest,
         table_format: "iceberg",
         description: "Iceberg REST catalog. Supports snowflake and/or duckdb connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
-        type_name: "unity",
+        catalog_type: CatalogType::Unity,
         table_format: "iceberg",
         description: "Databricks Unity catalog. Supports snowflake, databricks, and/or duckdb (read-only attach) connection blocks.",
         presence: ConfigPresence::AtLeastOne,
@@ -295,11 +329,11 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", UNITY_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("alt", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
-        type_name: "hive_metastore",
+        catalog_type: CatalogType::HiveMetastore,
         table_format: "default",
         description: "Databricks Hive Metastore catalog. Databricks platform only.",
         presence: ConfigPresence::AllRequired,
@@ -309,24 +343,24 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         )],
     },
     CatalogTypeSchema {
-        type_name: "biglake_metastore",
+        catalog_type: CatalogType::BiglakeMetastore,
         table_format: "iceberg",
         description: "BigLake Metastore catalog. BigQuery platform only.",
         presence: ConfigPresence::AllRequired,
         platforms: &[PlatformBlock::new("bigquery", BIGLAKE_BIGQUERY_FIELDS)],
     },
     CatalogTypeSchema {
-        type_name: "ducklake",
+        catalog_type: CatalogType::DuckLake,
         table_format: "default",
-        description: "DuckLake metadata store catalog. Supports duckdb and/or alt connection blocks.",
+        description: "DuckLake metadata store catalog. Supports duckdb and/or lake_compute connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("duckdb", DUCKLAKE_DUCKDB_FIELDS),
-            PlatformBlock::new("alt", DUCKLAKE_DUCKDB_FIELDS),
+            PlatformBlock::new("lake_compute", DUCKLAKE_DUCKDB_FIELDS),
         ],
     },
     CatalogTypeSchema {
-        type_name: "local_filesystem",
+        catalog_type: CatalogType::LocalFilesystem,
         table_format: "default",
         description: "Local filesystem catalog. DuckDB platform only.",
         presence: ConfigPresence::AllRequired,
@@ -585,8 +619,14 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
 // Postconditions:
 // - Every catalog entry is fully valid for its type and platform mix.
 
+// Two planes render CatalogType, in different casings. The legacy Jinja/
+// relation-config plane string-compares a few types (Iceberg-on-Snowflake,
+// BigQuery/Snowflake INFO_SCHEMA) against exact uppercase literals inherited
+// from pre-v2 code. Everywhere else, YAML config, diagnostics, logs, spells
+// types lowercase. Diagnostic/log call sites should to_lowercase() on egress
+// so they don't leak the Jinja plane's casing into user-facing output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum V2CatalogType {
+pub enum CatalogType {
     Horizon,
     Glue,
     IcebergRest,
@@ -595,9 +635,16 @@ pub enum V2CatalogType {
     BiglakeMetastore,
     DuckLake,
     LocalFilesystem,
+
+    // Has no explicit v2 catalog.
+    SnowflakeBuiltIn, // superceded by Horizon above
+    // native == default platform storage
+    SnowflakeNative,
+    BigqueryNative,
+    DuckdbNative,
 }
 
-impl V2CatalogType {
+impl CatalogType {
     fn parse(raw: &str, span: &yml::Span) -> FsResult<Self> {
         if raw.eq_ignore_ascii_case("horizon") {
             Ok(Self::Horizon)
@@ -629,23 +676,49 @@ impl V2CatalogType {
         match self {
             Self::Horizon => "horizon",
             Self::Glue => "glue",
-            Self::IcebergRest => "iceberg_rest",
+            Self::IcebergRest => "ICEBERG_REST", // required by legacy dbt core v1 Jinja macros
             Self::HiveMetastore => "hive_metastore",
             Self::Unity => "unity",
             Self::BiglakeMetastore => "biglake_metastore",
             Self::DuckLake => "ducklake",
             Self::LocalFilesystem => "local_filesystem",
+            Self::SnowflakeBuiltIn => "BUILT_IN",
+            Self::SnowflakeNative => "INFO_SCHEMA",
+            Self::BigqueryNative => "INFO_SCHEMA",
+            Self::DuckdbNative => "duckdb",
+        }
+    }
+
+    pub fn parse_from_str(raw: &str, adapter_type: dbt_adapter_core::AdapterType) -> Self {
+        match raw {
+            "horizon" => Self::Horizon,
+            "glue" => Self::Glue,
+            // "ICEBERG_REST" only exists on the Jinja plane. Model configs should
+            // be lowercase to obscure the internal uppercase as much as possible.
+            "iceberg_rest" => Self::IcebergRest,
+            "hive_metastore" => Self::HiveMetastore,
+            "unity" => Self::Unity,
+            "biglake_metastore" => Self::BiglakeMetastore,
+            "ducklake" => Self::DuckLake,
+            "local_filesystem" => Self::LocalFilesystem,
+            "BUILT_IN" => Self::SnowflakeBuiltIn,
+            "duckdb" => Self::DuckdbNative,
+            "INFO_SCHEMA" => match adapter_type {
+                dbt_adapter_core::AdapterType::Bigquery => Self::BigqueryNative,
+                dbt_adapter_core::AdapterType::Snowflake => Self::SnowflakeNative,
+                _ => unreachable!("only Snowflake/Bigquery ever egress INFO_SCHEMA"),
+            },
+            _ => unreachable!("not a CatalogType::as_str() output"),
         }
     }
 }
 
-// FIXME: TableFormat currently mirrors the two user-facing YAML values (default|iceberg).
-// It should become a richer internal representation resolved from (catalog_type, table_format)
-// at parse time — e.g. type=ducklake → DuckLake, type=hive_metastore → Delta,
-// type=iceberg_rest → Iceberg, etc. That would let downstream code branch on a single
-// enum without ad-hoc catalog_type string checks (see CatalogRelation Jinja egress).
-// Doing this right requires extending CatalogTypeSchema with a canonical internal TableFormat
-// per type, then resolving in CatalogSpecV2View::from_mapping.
+impl serde::Serialize for CatalogType {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TableFormat {
@@ -654,7 +727,7 @@ pub enum TableFormat {
 }
 
 impl TableFormat {
-    fn parse_from_yaml(raw: &str, span: &yml::Span) -> FsResult<Self> {
+    pub(crate) fn parse_from_yaml(raw: &str, span: &yml::Span) -> FsResult<Self> {
         if raw.eq_ignore_ascii_case("default") {
             Ok(Self::Default)
         } else if raw.eq_ignore_ascii_case("iceberg") {
@@ -663,8 +736,9 @@ impl TableFormat {
             err!(
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => Some(span.clone()),
-                "table_format '{}' invalid. choose one of (default|iceberg)",
-                raw
+                "table_format '{}' invalid. choose one of ({})",
+                raw,
+                Self::opts_display()
             )
         }
     }
@@ -676,8 +750,99 @@ impl TableFormat {
         }
     }
 
+    pub fn opts_display() -> String {
+        [Self::Default, Self::Iceberg]
+            .iter()
+            .map(Self::as_str)
+            .collect::<Vec<_>>()
+            .join("|")
+    }
+
     pub fn is_iceberg(&self) -> bool {
         matches!(self, Self::Iceberg)
+    }
+
+    pub fn parse(value: Option<&str>) -> FsResult<Self> {
+        match value {
+            Some(s) if s.eq_ignore_ascii_case("iceberg") => Ok(Self::Iceberg),
+            Some(s) if s.eq_ignore_ascii_case("default") => Ok(Self::Default),
+            Some(other) => err!(
+                ErrorCode::InvalidConfig,
+                "Unsupported table_format '{}'. Must be one of ({})",
+                other,
+                Self::opts_display()
+            ),
+            None => Ok(Self::Default),
+        }
+    }
+}
+
+/// The format used to describe the table format at the materialization layer.
+///
+/// Often corresponds to predicates used in DDL or the storage format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhysicalTableFormat {
+    Default,
+    Iceberg,
+    DuckLake,
+}
+
+/// Implementors know how to resolve a table format and catalog_type to the physical table format
+pub trait PhysicalFormatResolver {
+    fn table_format(&self) -> TableFormat;
+    fn catalog_type(&self) -> CatalogType;
+
+    fn physical_table_format(&self) -> PhysicalTableFormat {
+        match self.table_format() {
+            TableFormat::Default => match self.catalog_type() {
+                CatalogType::Horizon
+                | CatalogType::Glue
+                | CatalogType::IcebergRest
+                | CatalogType::HiveMetastore
+                | CatalogType::Unity
+                | CatalogType::BiglakeMetastore
+                | CatalogType::LocalFilesystem
+                | CatalogType::SnowflakeBuiltIn
+                | CatalogType::SnowflakeNative
+                | CatalogType::BigqueryNative
+                | CatalogType::DuckdbNative => PhysicalTableFormat::Default,
+                CatalogType::DuckLake => PhysicalTableFormat::DuckLake,
+            },
+            TableFormat::Iceberg => match self.catalog_type() {
+                CatalogType::Horizon
+                | CatalogType::Glue
+                | CatalogType::IcebergRest
+                | CatalogType::HiveMetastore
+                | CatalogType::Unity
+                | CatalogType::BiglakeMetastore
+                | CatalogType::LocalFilesystem
+                | CatalogType::SnowflakeBuiltIn
+                | CatalogType::SnowflakeNative
+                | CatalogType::BigqueryNative
+                | CatalogType::DuckdbNative => PhysicalTableFormat::Iceberg,
+                CatalogType::DuckLake => PhysicalTableFormat::DuckLake,
+            },
+        }
+    }
+}
+
+impl PhysicalFormatResolver for CatalogSpecV2View<'_> {
+    fn table_format(&self) -> TableFormat {
+        self.table_format
+    }
+
+    fn catalog_type(&self) -> CatalogType {
+        self.catalog_type
+    }
+}
+
+impl PhysicalTableFormat {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Iceberg => "iceberg",
+            Self::DuckLake => "ducklake",
+        }
     }
 }
 
@@ -727,7 +892,7 @@ impl UniformMode {
 pub struct CatalogSpecV2View<'a> {
     repr: &'a yml::Mapping,
     pub name: &'a str,
-    pub catalog_type: V2CatalogType,
+    pub catalog_type: CatalogType,
     pub table_format: TableFormat,
     config: &'a yml::Mapping,
 }
@@ -746,7 +911,7 @@ impl<'a> CatalogSpecV2View<'a> {
         let type_span = field_span(map, "type").ok_or_else(|| key_err("type", Some(span)))?;
         let table_format_span =
             field_span(map, "table_format").ok_or_else(|| key_err("table_format", Some(span)))?;
-        let catalog_type = V2CatalogType::parse(raw_type, type_span)?;
+        let catalog_type = CatalogType::parse(raw_type, type_span)?;
         let table_format = TableFormat::parse_from_yaml(raw_table_format, table_format_span)?;
         let config_map = get_map(map, "config")?.ok_or_else(|| key_err("config", Some(span)))?;
 
@@ -953,16 +1118,15 @@ impl CatalogRegistry {
         }
     }
 
-    fn type_schema(&self, ct: V2CatalogType) -> FsResult<&'static CatalogTypeSchema> {
-        let type_name = ct.as_str();
+    fn type_schema(&self, ct: CatalogType) -> FsResult<&'static CatalogTypeSchema> {
         self.schemas
             .iter()
-            .find(|s| s.type_name == type_name)
+            .find(|s| s.catalog_type == ct)
             .ok_or_else(|| {
                 fs_err!(
                     ErrorCode::InvalidConfig,
                     "Unknown catalog type '{}'",
-                    type_name
+                    ct.as_str()
                 )
             })
     }
@@ -975,7 +1139,7 @@ impl CatalogRegistry {
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => catalog.field_span("table_format").cloned(),
                 "Catalog '{}' type '{}' requires table_format='{}'",
-                catalog.name, schema.type_name, schema.table_format
+                catalog.name, schema.catalog_type.as_str().to_lowercase(), schema.table_format
             );
         }
 
@@ -999,7 +1163,7 @@ impl CatalogRegistry {
                 code => ErrorCode::InvalidConfig,
                 hacky_yml_loc => catalog.field_span("type").cloned(),
                 "dbt does not support {} on the {} 'type'",
-                platform, schema.type_name
+                platform, schema.catalog_type.as_str().to_lowercase()
             );
         }
 
@@ -1014,7 +1178,7 @@ impl CatalogRegistry {
                         code => ErrorCode::InvalidConfig,
                         hacky_yml_loc => catalog.field_span("type").cloned(),
                         "Catalog '{}' type '{}' requires config.{}",
-                        catalog.name, schema.type_name, missing.key
+                        catalog.name, schema.catalog_type.as_str().to_lowercase(), missing.key
                     );
                 }
             }
@@ -1029,7 +1193,7 @@ impl CatalogRegistry {
                         code => ErrorCode::InvalidConfig,
                         hacky_yml_loc => catalog.field_span("type").cloned(),
                         "Catalog '{}' of type '{}' requires at least one config block: {}",
-                        catalog.name, schema.type_name, keys.join(" or ")
+                        catalog.name, schema.catalog_type.as_str().to_lowercase(), keys.join(" or ")
                     );
                 }
             }
@@ -1040,7 +1204,12 @@ impl CatalogRegistry {
                 Self::validate_fields(
                     block,
                     platform.fields,
-                    &format!("catalogs[].config.{} ({})", platform.key, schema.type_name),
+                    &format!(
+                        "config.{} of catalog '{}' of type '{}'",
+                        platform.key,
+                        catalog.name,
+                        schema.catalog_type.as_str().to_lowercase()
+                    ),
                     catalog.name,
                 )?;
             }
@@ -1051,23 +1220,23 @@ impl CatalogRegistry {
 
     fn validate_semantic(&self, catalog: &CatalogSpecV2View<'_>) -> FsResult<()> {
         match catalog.catalog_type {
-            V2CatalogType::Glue => {
+            CatalogType::Glue => {
                 if let Some(duckdb) = catalog.config_block("duckdb") {
                     catalog.validate_duckdb_semantics(duckdb, "glue")?;
                 }
             }
-            V2CatalogType::IcebergRest => {
+            CatalogType::IcebergRest => {
                 if let Some(duckdb) = catalog.config_block("duckdb") {
                     catalog.validate_duckdb_semantics(duckdb, "iceberg_rest")?;
                 }
             }
-            V2CatalogType::Horizon => {
+            CatalogType::Horizon => {
                 if let Some(duckdb) = catalog.config_block("duckdb") {
                     catalog.validate_duckdb_semantics(duckdb, "horizon")?;
                     catalog.validate_horizon_duckdb_semantics(duckdb)?;
                 }
             }
-            V2CatalogType::Unity => {
+            CatalogType::Unity => {
                 if let Some(databricks) = catalog.config_block("databricks") {
                     catalog.validate_unity_semantics(databricks)?;
                 }
@@ -1075,14 +1244,22 @@ impl CatalogRegistry {
                     catalog.validate_duckdb_semantics(duckdb, "unity")?;
                 }
             }
-            V2CatalogType::BiglakeMetastore => {
+            CatalogType::BiglakeMetastore => {
                 if let Some(bigquery) = catalog.config_block("bigquery") {
                     catalog.validate_biglake_semantics(bigquery)?;
                 }
             }
-            V2CatalogType::HiveMetastore
-            | V2CatalogType::DuckLake
-            | V2CatalogType::LocalFilesystem => {}
+            CatalogType::HiveMetastore | CatalogType::DuckLake | CatalogType::LocalFilesystem => {}
+            // These are not supported as explicit catalog types in catalogs.yml's `type` field.
+            CatalogType::SnowflakeBuiltIn
+            | CatalogType::SnowflakeNative
+            | CatalogType::BigqueryNative
+            | CatalogType::DuckdbNative => {
+                unreachable!(
+                    "catalogs.yml has no support for an explicit catalog type of {}",
+                    catalog.catalog_type.as_str()
+                )
+            }
         }
         Ok(())
     }
@@ -1123,7 +1300,8 @@ impl CatalogRegistry {
                             "minLength": 1,
                             "description": "Unique catalog name within this project.",
                         },
-                        "type": { "const": cts.type_name },
+                        // as_str() is uppercase for the legacy Snowflake variants (Jinja egress); lowercase to get the YAML-facing type name.
+                        "type": { "const": cts.catalog_type.as_str().to_lowercase() },
                         "table_format": { "const": cts.table_format },
                         "config": config,
                     },
@@ -1349,14 +1527,31 @@ mod tests {
     use dbt_yaml as yml;
     use std::path::Path;
 
-    fn parse_and_validate(yaml: &str) -> FsResult<()> {
-        let v: yml::Value = yml::from_str(yaml).unwrap();
+    fn parse_and_validate_with<F: FnOnce(&DbtCatalogsV2View<'_>)>(
+        yaml: &str,
+        inspect: F,
+    ) -> FsResult<()> {
+        let v: yml::Value = yml::from_str(yaml)?;
         let v_span = v.span();
         let m = v.as_mapping().expect("top-level YAML must be a mapping");
         validate_catalogs_v2_shape(m, v_span)?;
         let view = DbtCatalogsV2View::from_mapping(m, v_span)?;
+        inspect(&view);
         validate_catalogs_v2(&view, Path::new("<test>"))?;
         Ok(())
+    }
+
+    fn parse_and_validate(yaml: &str) -> FsResult<()> {
+        parse_and_validate_with(yaml, |_| {})
+    }
+
+    #[test]
+    fn catalog_type_as_str_matches_snowflake_jinja_macros() {
+        // crates/dbt-loader/src/dbt_macro_assets/dbt-snowflake/macros/relations/table/create.sql
+        // string-compares catalog_relation.catalog_type against these exact uppercase literals.
+        assert_eq!(CatalogType::SnowflakeNative.as_str(), "INFO_SCHEMA");
+        assert_eq!(CatalogType::SnowflakeBuiltIn.as_str(), "BUILT_IN");
+        assert_eq!(CatalogType::IcebergRest.as_str(), "ICEBERG_REST");
     }
 
     #[test]
@@ -1525,6 +1720,56 @@ catalogs:
         connection_id: "cool_connection"
 "#;
         parse_and_validate(yaml).expect("v2 bigquery should validate");
+    }
+
+    #[test]
+    fn biglake_accepts_lakehouse_catalog() {
+        let yaml = r#"
+catalogs:
+  - name: cat1
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: "gs://bucket"
+        file_format: parquet
+        lakehouse_catalog: "sales_catalog"
+"#;
+        parse_and_validate_with(yaml, |view| {
+            let bigquery_config = view.catalogs[0]
+                .config_block("bigquery")
+                .expect("bigquery config block");
+            assert_eq!(
+                get_str(bigquery_config, "external_volume").unwrap(),
+                Some("gs://bucket")
+            );
+            assert_eq!(
+                get_str(bigquery_config, "file_format").unwrap(),
+                Some("parquet")
+            );
+            assert_eq!(
+                get_str(bigquery_config, "lakehouse_catalog").unwrap(),
+                Some("sales_catalog")
+            );
+        })
+        .expect("v2 bigquery LRC catalog should validate");
+    }
+
+    #[test]
+    fn biglake_rejects_blank_lakehouse_catalog() {
+        let yaml = r#"
+catalogs:
+  - name: cat1
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: "gs://bucket"
+        file_format: parquet
+        lakehouse_catalog: ""
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error but got Ok");
     }
 
     #[test]
@@ -2424,10 +2669,10 @@ catalogs:
             .filter_map(|i| i["properties"]["type"]["const"].as_str())
             .collect();
         for cts in CATALOG_SCHEMAS {
+            let type_name = cts.catalog_type.as_str().to_lowercase();
             assert!(
-                type_names.contains(&cts.type_name),
-                "missing {}",
-                cts.type_name
+                type_names.contains(&type_name.as_str()),
+                "missing {type_name}"
             );
         }
     }
@@ -2444,10 +2689,11 @@ catalogs:
             .as_array()
             .expect("oneOf array");
         for cts in CATALOG_SCHEMAS {
+            let type_name = cts.catalog_type.as_str().to_lowercase();
             let branch = branches
                 .iter()
-                .find(|b| b["properties"]["type"]["const"] == serde_json::json!(cts.type_name))
-                .unwrap_or_else(|| panic!("missing schema branch for {}", cts.type_name));
+                .find(|b| b["properties"]["type"]["const"] == serde_json::json!(type_name))
+                .unwrap_or_else(|| panic!("missing schema branch for {type_name}"));
             let config_props = branch["properties"]["config"]["properties"]
                 .as_object()
                 .expect("config properties");
@@ -2458,8 +2704,7 @@ catalogs:
             table_platforms.sort_unstable();
             assert_eq!(
                 schema_platforms, table_platforms,
-                "platform blocks for {} diverge",
-                cts.type_name
+                "platform blocks for {type_name} diverge"
             );
 
             for platform in cts.platforms {
@@ -2479,8 +2724,8 @@ catalogs:
                 table_fields.sort_unstable();
                 assert_eq!(
                     schema_fields, table_fields,
-                    "schema fields for {}/{} diverge from the descriptor table",
-                    cts.type_name, platform.key
+                    "schema fields for {type_name}/{} diverge from the descriptor table",
+                    platform.key
                 );
             }
         }

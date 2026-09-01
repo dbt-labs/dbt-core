@@ -15,7 +15,7 @@
     {% set staging_relation = make_staging_relation(target_relation) %}
 
     {{ run_pre_hooks() }}
-    
+
     {% call statement('main', language=language) %}
       {{ get_create_intermediate_table(intermediate_relation, compiled_code, language) }}
     {% endcall %}

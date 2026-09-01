@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Pre-release `dbt-core` sdists (2.x and up) now print an install-time notice pointing at the `dbt` and `dbt-oss` distributions
+time: 2026-08-27T10:28:33.153501+05:30
+custom:
+    author: ""
+    issue: ""
+    project: dbt-core

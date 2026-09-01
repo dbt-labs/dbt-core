@@ -1012,6 +1012,9 @@ impl Object for AgateTable {
                 let tuple = ColumnNamesAsTuple::of_table(&self.repr).into_tuple();
                 Some(Value::from_object(tuple))
             }
+            "top_level_column_names" => {
+                Some(Value::from_iter(self.repr.flat.top_level_column_names()))
+            }
             "rows" => {
                 let rows = self.rows();
                 Some(Value::from_object(rows))
@@ -1405,10 +1408,11 @@ mod tests {
     use arrow::record_batch::RecordBatch;
     use arrow_array::{Array, ListArray, RecordBatchOptions, UInt64Array};
     use arrow_schema::Fields;
-    use minijinja::Environment;
     use minijinja::value::Kwargs;
     use minijinja::value::ValueMap;
     use minijinja::value::mutable_map::MutableMap;
+    use minijinja::{Environment, context};
+    use minijinja_contrib::testing::jinja_assert;
     use std::io;
     use std::sync::Arc;
 
@@ -1425,6 +1429,39 @@ mod tests {
         ]));
         let batch = RecordBatch::try_new(schema, vec![id_array, country_array]).unwrap();
         Arc::new(batch)
+    }
+
+    #[test]
+    fn jinja_sequence_value_matrix() {
+        let table = Arc::new(main_table(&[1, 2], &["a", "b"], &[None, Some(1)]));
+        let columns = Value::from_object(table.columns());
+        let rows = Value::from_object(table.rows());
+        let values = [
+            ("columns", columns.clone(), 3),
+            ("column", columns.get_item(&Value::from(0)).unwrap(), 2),
+            ("rows", rows.clone(), 2),
+            ("row", rows.get_item(&Value::from(0)).unwrap(), 3),
+            (
+                "tuple",
+                Value::from_object(table.column_names_as_tuple().into_tuple()),
+                3,
+            ),
+        ];
+        let env = Environment::new();
+
+        for (name, value, expected_len) in values {
+            assert_eq!(value.kind(), minijinja::value::ValueKind::Seq, "{name}");
+            assert_eq!(
+                env.render_str(
+                    "{{ value | list | length }}",
+                    context! { value => value },
+                    &[],
+                )
+                .unwrap(),
+                expected_len.to_string(),
+                "{name}",
+            );
+        }
     }
 
     #[test]
@@ -2114,6 +2151,10 @@ mod tests {
     #[test]
     #[allow(clippy::cognitive_complexity)]
     fn test_empty_batch_column_types_and_names() {
+        let contact_fields = Fields::from(vec![
+            Field::new("first", DataType::Utf8, true),
+            Field::new("last", DataType::Utf8, true),
+        ]);
         let schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int32, false),
             Field::new("name", DataType::Utf8, false),
@@ -2122,7 +2163,9 @@ mod tests {
                 DataType::List(Arc::new(Field::new("item", DataType::Utf8, false))),
                 true,
             ),
+            Field::new("contact", DataType::Struct(contact_fields.clone()), true),
         ]));
+        let mut contact_builder = StructBuilder::from_fields(contact_fields, 0);
         let opts = RecordBatchOptions::default().with_row_count(Some(0));
         let batch = RecordBatch::try_new_with_options(
             schema,
@@ -2136,6 +2179,7 @@ mod tests {
                     )),
                     0,
                 )) as ArrayRef,
+                Arc::new(contact_builder.finish()) as ArrayRef,
             ],
             &opts,
         )
@@ -2148,13 +2192,37 @@ mod tests {
                 crate::DataType::new("Number".to_string()),
                 crate::DataType::new("Text".to_string()),
                 crate::DataType::new("Text".to_string()),
+                crate::DataType::new("Text".to_string()),
+                crate::DataType::new("Text".to_string()),
             ]
         );
         let column_names = table.column_names();
-        assert_eq!(column_names, vec!["id", "name", "event_tags.0"]);
+        assert_eq!(
+            column_names,
+            vec![
+                "id",
+                "name",
+                "event_tags.0",
+                "contact/first",
+                "contact/last",
+            ]
+        );
+        assert_eq!(
+            table
+                .repr
+                .flat
+                .top_level_column_names()
+                .collect::<Vec<&String>>(),
+            vec!["id", "name", "event_tags", "contact"]
+        );
+        jinja_assert(
+            table.clone(),
+            "{{ obj.top_level_column_names | join(',') }}",
+            "id,name,event_tags,contact",
+        );
 
         let column_types = table.column_types_as_tuple();
-        assert_eq!(column_types.len(), 3);
+        assert_eq!(column_types.len(), 5);
 
         // column_types now returns DataType objects, not strings
         let dt0 = column_types.get_item_by_index(0).unwrap();
@@ -2169,8 +2237,16 @@ mod tests {
         let dt2_obj = dt2.downcast_object_ref::<crate::DataType>().unwrap();
         assert_eq!(dt2_obj.type_name(), "Text");
 
+        let dt3 = column_types.get_item_by_index(3).unwrap();
+        let dt3_obj = dt3.downcast_object_ref::<crate::DataType>().unwrap();
+        assert_eq!(dt3_obj.type_name(), "Text");
+
+        let dt4 = column_types.get_item_by_index(4).unwrap();
+        let dt4_obj = dt4.downcast_object_ref::<crate::DataType>().unwrap();
+        assert_eq!(dt4_obj.type_name(), "Text");
+
         assert_eq!(column_types.count_occurrences_of(&Value::from("Number")), 1);
-        assert_eq!(column_types.count_occurrences_of(&Value::from("Text")), 2);
+        assert_eq!(column_types.count_occurrences_of(&Value::from("Text")), 4);
         assert_eq!(
             column_types.count_occurrences_of(&Value::from("DateTime")),
             0
@@ -2182,7 +2258,7 @@ mod tests {
         assert!(column_types.eq_repr(&column_types2 as &dyn TupleRepr));
 
         let column_names = table.column_names_as_tuple();
-        assert_eq!(column_names.len(), 3);
+        assert_eq!(column_names.len(), 5);
         assert_eq!(
             column_names.get_item_by_index(0).unwrap().as_str().unwrap(),
             "id"
@@ -2195,10 +2271,26 @@ mod tests {
             column_names.get_item_by_index(2).unwrap().as_str().unwrap(),
             "event_tags.0"
         );
+        assert_eq!(
+            column_names.get_item_by_index(3).unwrap().as_str().unwrap(),
+            "contact/first"
+        );
+        assert_eq!(
+            column_names.get_item_by_index(4).unwrap().as_str().unwrap(),
+            "contact/last"
+        );
         assert_eq!(column_names.count_occurrences_of(&Value::from("id")), 1);
         assert_eq!(column_names.count_occurrences_of(&Value::from("name")), 1);
         assert_eq!(
             column_names.count_occurrences_of(&Value::from("event_tags.0")),
+            1
+        );
+        assert_eq!(
+            column_names.count_occurrences_of(&Value::from("contact/first")),
+            1
+        );
+        assert_eq!(
+            column_names.count_occurrences_of(&Value::from("contact/last")),
             1
         );
         assert_eq!(
@@ -2208,6 +2300,11 @@ mod tests {
         assert_eq!(column_names.index_of(&Value::from("id")), Some(0));
         assert_eq!(column_names.index_of(&Value::from("name")), Some(1));
         assert_eq!(column_names.index_of(&Value::from("event_tags.0")), Some(2));
+        assert_eq!(
+            column_names.index_of(&Value::from("contact/first")),
+            Some(3)
+        );
+        assert_eq!(column_names.index_of(&Value::from("contact/last")), Some(4));
         assert_eq!(column_names.index_of(&Value::from("nonexistent")), None);
         let column_names2 = table.column_names_as_tuple();
         assert!(column_names.eq_repr(&column_names2 as &dyn TupleRepr));

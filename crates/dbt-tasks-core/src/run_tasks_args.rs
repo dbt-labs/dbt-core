@@ -104,6 +104,8 @@ pub struct RunTasksArgs {
     pub event_time_end: Option<String>,
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
     pub event_time_start: Option<String>,
+    /// The raw `--sample` spec (e.g. `"30 days"` or a `{start, end}` JSON range), if passed.
+    pub sample: Option<String>,
     /// Per-invocation fail-fast signal.
     pub fail_fast: FailFast,
     /// Whether the user passed `--fail-fast`. The signal above is triggered on
@@ -121,6 +123,12 @@ pub struct RunTasksArgs {
     /// Previous batch_results from run_results.json, populated during retry
     /// so that already-successful overloads can be skipped.
     pub previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
+    /// Resolved metadata directory (`--metadata-dir` or `<out_dir>/metadata`). Carried here so a
+    /// task can find it — `EvalArgs::metadata_dir()` is not reachable from the task layer, and
+    /// deriving it from `out_dir` would silently ignore the override.
+    pub metadata_dir: PathBuf,
+    /// Resolved index directory (`--index-dir` or `<out_dir>/index`). See `metadata_dir`.
+    pub index_dir: PathBuf,
 }
 
 impl RunTasksArgs {
@@ -128,6 +136,8 @@ impl RunTasksArgs {
         let run_tasks_args = Self {
             command: arg.command,
             io: arg.io.clone(),
+            metadata_dir: arg.metadata_dir(),
+            index_dir: arg.index_dir(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),
             packages_install_path: arg.packages_install_path.clone(),
@@ -165,6 +175,7 @@ impl RunTasksArgs {
             full_refresh: arg.full_refresh,
             event_time_start: arg.event_time_start.clone(),
             event_time_end: arg.event_time_end.clone(),
+            sample: arg.sample.clone(),
             fail_fast,
             fail_fast_flag: arg.fail_fast,
             skip_post_hooks: arg.skip_post_hooks,

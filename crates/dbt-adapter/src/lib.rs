@@ -17,6 +17,7 @@ pub mod engine;
 pub mod errors;
 pub mod format_ident;
 pub mod formatter;
+pub mod introspective_taint;
 pub mod load_catalogs;
 pub mod metadata;
 pub mod need_quotes;
@@ -59,6 +60,7 @@ pub mod load_store;
 
 pub use adapter::Adapter;
 pub use adapter::AdapterImpl;
+pub use adapter::store::{AdapterBuilder, AdapterStore};
 pub use column::{Column, ColumnBuilder};
 pub use dbt_adapter_core::AdapterType;
 pub use errors::AdapterResult;
@@ -67,6 +69,17 @@ pub use macro_exec::{
     execute_macro_wrapper_with_package,
 };
 pub use response::AdapterResponse;
+
+/// Suffix appended to a versioned model's `unique_id` to identify the un-versioned
+/// latest-version pointer view's own adapter calls.
+///
+/// A versioned model with an explicit `latest_version` gets a second relation — the
+/// un-versioned pointer view — materialized after the base model's own materialization
+/// completes. `materialize_latest_version_pointer` tags that view's adapter calls with
+/// `{base_unique_id}{LATEST_VERSION_POINTER_SUFFIX}` so replay can tell them apart from the
+/// base model's. Anything that resolves a node id back to recorded events has to know about
+/// this suffix; keep the single definition here so the producer and the consumers can't drift.
+pub const LATEST_VERSION_POINTER_SUFFIX: &str = "__latest_version_pointer";
 
 /// IMPORTANT: don't change this function to add a new adapter!!! Change the
 /// [NON_EXPERIMENTAL_ADAPTERS](dbt_adapter_core::NON_EXPERIMENTAL_ADAPTERS)

@@ -20,6 +20,8 @@ pub(crate) const SNOWFLAKE_DML_COLUMNS: &[&str] = &[
     "number of rows deleted",
 ];
 
+pub(crate) const ROWS_AFFECTED_META: &str = "rows_affected";
+
 /// Information about a column that was renamed during disambiguation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenamedColumn<'a> {
@@ -30,14 +32,14 @@ pub struct RenamedColumn<'a> {
 }
 
 pub trait RecordBatchExt {
+    fn meta_string(&self, key: &str) -> Option<String>;
+    fn meta_i64(&self, key: &str) -> Option<i64>;
     fn first_value_as_i64(&self) -> Option<i64>;
     fn named_value_as_i64(&self, column_name: &str) -> Option<i64>;
     fn column_typed<'a>(&'a self, name: &str) -> AdapterResult<&'a Arc<dyn Array>>;
     fn column_values<T>(&self, column_name: &str) -> AdapterResult<T>
     where
         T: std::any::Any + Clone;
-    fn rows_affected(&self, adapter_type: AdapterType) -> i64;
-    fn query_id(&self, adapter_type: AdapterType) -> Option<String>;
     fn disambiguate_column_names(
         self,
         on_disambiguate: Option<impl FnOnce(&[RenamedColumn<'_>])>,
@@ -51,6 +53,17 @@ pub trait RecordBatchExt {
 }
 
 impl RecordBatchExt for RecordBatch {
+    fn meta_string(&self, key: &str) -> Option<String> {
+        self.schema().metadata().get(key).cloned()
+    }
+
+    fn meta_i64(&self, key: &str) -> Option<i64> {
+        self.schema()
+            .metadata()
+            .get(key)
+            .and_then(|v| v.parse::<i64>().ok())
+    }
+
     fn first_value_as_i64(&self) -> Option<i64> {
         cast_column_to_i64(self.columns().first()?.as_ref())
     }
@@ -58,30 +71,6 @@ impl RecordBatchExt for RecordBatch {
     fn named_value_as_i64(&self, column_name: &str) -> Option<i64> {
         let idx = self.schema().index_of(column_name).ok()?;
         cast_column_to_i64(self.column(idx).as_ref())
-    }
-
-    fn rows_affected(&self, adapter_type: AdapterType) -> i64 {
-        if self.num_rows() == 0 {
-            return 0;
-        }
-        if self.schema().has_dml_columns(adapter_type) {
-            return SNOWFLAKE_DML_COLUMNS
-                .iter()
-                .filter_map(|col| self.named_value_as_i64(col))
-                .sum();
-        }
-        self.num_rows() as i64
-    }
-
-    fn query_id(&self, adapter_type: AdapterType) -> Option<String> {
-        let meta = self.schema();
-        let meta = meta.metadata();
-        match adapter_type {
-            AdapterType::Snowflake => meta.get("SNOWFLAKE_QUERY_ID").cloned(),
-            AdapterType::Bigquery => meta.get("BIGQUERY:query_id").cloned(),
-            AdapterType::Databricks => meta.get("DATABRICKS_QUERY_ID").cloned(),
-            _ => None,
-        }
     }
 
     fn column_typed<'a>(&'a self, name: &str) -> AdapterResult<&'a Arc<dyn Array>> {
@@ -99,8 +88,26 @@ impl RecordBatchExt for RecordBatch {
     where
         T: std::any::Any + Clone,
     {
-        Ok(self
-            .column_typed(column_name)?
+        let column = self.column_typed(column_name)?;
+
+        // Metadata/catalog queries are parsed by downcasting straight to a
+        // concrete `StringArray`, but drivers/engines may now return
+        // `Utf8View`/`LargeUtf8` for what used to always be plain `Utf8`
+        // (e.g. the query-execution path unconditionally widens to view
+        // types). Normalize down to `Utf8` first so callers expecting
+        // `StringArray` keep working regardless of which string
+        // representation produced the result.
+        let normalized: ArrayRef = if std::any::TypeId::of::<T>()
+            == std::any::TypeId::of::<StringArray>()
+            && matches!(column.data_type(), DataType::Utf8View | DataType::LargeUtf8)
+        {
+            cast_with_options(column.as_ref(), &DataType::Utf8, &CastOptions::default())
+                .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?
+        } else {
+            column.clone()
+        };
+
+        Ok(normalized
             .as_any()
             .downcast_ref::<T>()
             .ok_or_else(|| {
@@ -239,6 +246,25 @@ impl RecordBatchExt for RecordBatch {
     }
 }
 
+pub trait StructArrayExt {
+    /// Looks up a named field in the struct and returns it as a typed array `T`.
+    /// Errors if the field is absent or is not of type `T`.
+    fn column_as<T: 'static>(&self, name: &str) -> AdapterResult<&T>;
+}
+
+impl StructArrayExt for StructArray {
+    fn column_as<T: 'static>(&self, name: &str) -> AdapterResult<&T> {
+        self.column_by_name(name)
+            .and_then(|c| c.as_any().downcast_ref::<T>())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    format!("Missing or invalid '{name}' column"),
+                )
+            })
+    }
+}
+
 pub trait SchemaExt {
     fn has_dml_columns(&self, adapter_type: AdapterType) -> bool;
 }
@@ -301,21 +327,23 @@ fn jsonify_map_keys(
             let (new_value_field, new_value_arr) =
                 jsonify_map_keys(value_field, map.values(), options);
 
-            let (new_key_field, new_key_arr): (FieldRef, ArrayRef) =
-                if matches!(key_field.data_type(), DataType::Utf8 | DataType::LargeUtf8) {
-                    (key_field.clone(), map.keys().clone())
-                } else {
-                    let (norm_key_field, norm_key_arr) =
-                        jsonify_map_keys(key_field, map.keys(), options);
-                    let key_strs = encode_array_to_strings(&norm_key_field, &norm_key_arr, options);
-                    (
-                        Arc::new(
-                            Field::new(key_field.name(), DataType::Utf8, key_field.is_nullable())
-                                .with_metadata(key_field.metadata().clone()),
-                        ),
-                        Arc::new(key_strs),
-                    )
-                };
+            let (new_key_field, new_key_arr): (FieldRef, ArrayRef) = if matches!(
+                key_field.data_type(),
+                DataType::Utf8 | DataType::LargeUtf8 | DataType::Utf8View
+            ) {
+                (key_field.clone(), map.keys().clone())
+            } else {
+                let (norm_key_field, norm_key_arr) =
+                    jsonify_map_keys(key_field, map.keys(), options);
+                let key_strs = encode_array_to_strings(&norm_key_field, &norm_key_arr, options);
+                (
+                    Arc::new(
+                        Field::new(key_field.name(), DataType::Utf8, key_field.is_nullable())
+                            .with_metadata(key_field.metadata().clone()),
+                    ),
+                    Arc::new(key_strs),
+                )
+            };
 
             let new_entry_fields = Fields::from(vec![new_key_field, new_value_field]);
             let new_entries = StructArray::new(
@@ -457,8 +485,8 @@ fn cast_column_to_i64(column: &dyn Array) -> Option<i64> {
 mod tests {
     use super::*;
     use arrow::array::{
-        ArrayRef, Decimal128Array, Float64Array, Float64Builder, Int32Array, Int32Builder,
-        Int64Array, ListArray, MapBuilder, StringArray, StringBuilder, StructArray,
+        ArrayRef, Float64Array, Float64Builder, Int32Array, Int32Builder, Int64Array, ListArray,
+        MapBuilder, StringArray, StringBuilder, StructArray,
     };
     use arrow::buffer::OffsetBuffer;
     use arrow::datatypes::{DataType, Field, Int32Type};
@@ -486,116 +514,6 @@ mod tests {
         assert!(batch.named_value_as_i64("nonexistent").is_none());
     }
 
-    #[test]
-    fn snowflake_merge_sums_dml_counts() {
-        let schema = Schema::new(vec![
-            Field::new("number of rows inserted", DataType::Int64, false),
-            Field::new("number of rows updated", DataType::Int64, false),
-            Field::new("number of rows deleted", DataType::Int64, false),
-        ]);
-        let batch = RecordBatch::try_new(
-            Arc::new(schema),
-            vec![
-                Arc::new(Int64Array::from(vec![100])),
-                Arc::new(Int64Array::from(vec![50])),
-                Arc::new(Int64Array::from(vec![10])),
-            ],
-        )
-        .unwrap();
-        assert_eq!(batch.rows_affected(AdapterType::Snowflake), 160);
-        assert_eq!(batch.rows_affected(AdapterType::Bigquery), 1);
-    }
-
-    #[test]
-    fn snowflake_merge_decimal128_high_precision() {
-        let schema = Schema::new(vec![
-            Field::new(
-                "number of rows inserted",
-                DataType::Decimal128(38, 0),
-                false,
-            ),
-            Field::new("number of rows updated", DataType::Decimal128(38, 0), false),
-            Field::new("number of rows deleted", DataType::Decimal128(38, 0), false),
-        ]);
-        let batch = RecordBatch::try_new(
-            Arc::new(schema),
-            vec![
-                Arc::new(
-                    Decimal128Array::from(vec![200])
-                        .with_precision_and_scale(38, 0)
-                        .unwrap(),
-                ),
-                Arc::new(
-                    Decimal128Array::from(vec![75])
-                        .with_precision_and_scale(38, 0)
-                        .unwrap(),
-                ),
-                Arc::new(
-                    Decimal128Array::from(vec![25])
-                        .with_precision_and_scale(38, 0)
-                        .unwrap(),
-                ),
-            ],
-        )
-        .unwrap();
-        assert_eq!(batch.rows_affected(AdapterType::Snowflake), 300);
-    }
-
-    #[test]
-    fn snowflake_insert_only_partial_dml_columns() {
-        let schema = Schema::new(vec![Field::new(
-            "number of rows inserted",
-            DataType::Int64,
-            false,
-        )]);
-        let batch =
-            RecordBatch::try_new(Arc::new(schema), vec![Arc::new(Int64Array::from(vec![42]))])
-                .unwrap();
-        assert_eq!(batch.rows_affected(AdapterType::Snowflake), 42);
-    }
-
-    #[test]
-    fn snowflake_empty_batch_returns_zero() {
-        let schema = Schema::new(vec![
-            Field::new("number of rows inserted", DataType::Int64, false),
-            Field::new("number of rows updated", DataType::Int64, false),
-            Field::new("number of rows deleted", DataType::Int64, false),
-        ]);
-        assert_eq!(
-            RecordBatch::new_empty(Arc::new(schema)).rows_affected(AdapterType::Snowflake),
-            0
-        );
-    }
-
-    #[test]
-    fn snowflake_null_dml_values_treated_as_zero() {
-        let schema = Schema::new(vec![
-            Field::new("number of rows inserted", DataType::Int64, true),
-            Field::new("number of rows updated", DataType::Int64, true),
-            Field::new("number of rows deleted", DataType::Int64, true),
-        ]);
-        let batch = RecordBatch::try_new(
-            Arc::new(schema),
-            vec![
-                Arc::new(Int64Array::from(vec![Some(50)])),
-                Arc::new(Int64Array::from(vec![None::<i64>])),
-                Arc::new(Int64Array::from(vec![None::<i64>])),
-            ],
-        )
-        .unwrap();
-        assert_eq!(batch.rows_affected(AdapterType::Snowflake), 50);
-    }
-
-    #[test]
-    fn snowflake_select_uses_num_rows() {
-        let schema = Schema::new(vec![Field::new("id", DataType::Int64, false)]);
-        let batch = RecordBatch::try_new(
-            Arc::new(schema),
-            vec![Arc::new(Int64Array::from(vec![1, 2, 3]))],
-        )
-        .unwrap();
-        assert_eq!(batch.rows_affected(AdapterType::Snowflake), 3);
-    }
     use std::sync::LazyLock;
 
     static TEST_DATA: LazyLock<RecordBatch> = LazyLock::new(|| {
@@ -632,6 +550,36 @@ mod tests {
     }
 
     #[test]
+    fn column_values_normalizes_utf8_view_to_string_array() {
+        let batch = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "name",
+                DataType::Utf8View,
+                false,
+            )])),
+            vec![Arc::new(arrow_array::StringViewArray::from(vec!["FOO"]))],
+        )
+        .unwrap();
+        let result: AdapterResult<StringArray> = batch.column_values("name");
+        assert_eq!(result.unwrap(), StringArray::from(vec!["FOO"]));
+    }
+
+    #[test]
+    fn column_values_normalizes_large_utf8_to_string_array() {
+        let batch = RecordBatch::try_new(
+            Arc::new(Schema::new(vec![Field::new(
+                "name",
+                DataType::LargeUtf8,
+                false,
+            )])),
+            vec![Arc::new(arrow_array::LargeStringArray::from(vec!["FOO"]))],
+        )
+        .unwrap();
+        let result: AdapterResult<StringArray> = batch.column_values("name");
+        assert_eq!(result.unwrap(), StringArray::from(vec!["FOO"]));
+    }
+
+    #[test]
     fn column_values_wrong_type() {
         let result: AdapterResult<Int32Array> = TEST_DATA.column_values("name");
         assert!(result.is_err());
@@ -641,6 +589,61 @@ mod tests {
         assert!(error.message().contains(
             "arrow_array::array::primitive_array::PrimitiveArray<arrow_array::types::Int32Type>"
         ));
+    }
+
+    fn string_struct() -> StructArray {
+        StructArray::from(vec![(
+            Arc::new(Field::new("col", DataType::Utf8, false)),
+            Arc::new(StringArray::from(vec!["a", "b"])) as ArrayRef,
+        )])
+    }
+
+    #[test]
+    fn column_as_success() {
+        let s = string_struct();
+        let col = s.column_as::<StringArray>("col").unwrap();
+        assert_eq!(col.value(0), "a");
+        assert_eq!(col.value(1), "b");
+    }
+
+    #[test]
+    fn column_as_missing_column() {
+        let s = string_struct();
+        let error = s.column_as::<StringArray>("missing").unwrap_err();
+        assert_eq!(error.kind(), AdapterErrorKind::UnexpectedResult);
+        assert_eq!(error.message(), "Missing or invalid 'missing' column");
+    }
+
+    #[test]
+    fn column_as_wrong_type() {
+        let s = string_struct();
+        let error = s.column_as::<Int32Array>("col").unwrap_err();
+        assert_eq!(error.kind(), AdapterErrorKind::UnexpectedResult);
+        assert_eq!(error.message(), "Missing or invalid 'col' column");
+    }
+
+    #[test]
+    fn column_as_nested_struct() {
+        let inner = string_struct();
+        let outer = StructArray::from(vec![(
+            Arc::new(Field::new("inner", inner.data_type().clone(), false)),
+            Arc::new(inner) as ArrayRef,
+        )]);
+        let got_inner = outer.column_as::<StructArray>("inner").unwrap();
+        let col = got_inner.column_as::<StringArray>("col").unwrap();
+        assert_eq!(col.value(0), "a");
+        assert_eq!(col.value(1), "b");
+    }
+
+    #[test]
+    fn column_as_i32() {
+        let s = StructArray::from(vec![(
+            Arc::new(Field::new("col", DataType::Int32, false)),
+            Arc::new(Int32Array::from(vec![1, 2])) as ArrayRef,
+        )]);
+        let col = s.column_as::<Int32Array>("col").unwrap();
+        assert_eq!(col.value(0), 1);
+        assert_eq!(col.value(1), 2);
     }
 
     #[test]

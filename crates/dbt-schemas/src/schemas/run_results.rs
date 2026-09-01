@@ -10,6 +10,7 @@ use crate::schemas::InternalDbtNodeAttributes;
 use crate::schemas::legacy_catalog::DbtCatalog;
 use crate::schemas::manifest::DbtManifest;
 use crate::schemas::serde::typed_struct_from_json_file;
+use crate::schemas::sources::FreshnessResultsArtifact;
 
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -93,6 +94,8 @@ pub struct ContextRunResult {
     /// Results specific to batch processing, if applicable.
     #[serde(default)]
     pub batch_results: Option<BatchResults>,
+    /// Compiled SQL code for the node.
+    pub compiled_code: Option<String>,
     /// Reason why static analysis was disabled for this node (Fusion-only; omitted when absent).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
@@ -121,7 +124,7 @@ impl From<ContextRunResult> for RunResultOutput {
             failures: result.failures,
             unique_id,
             compiled: None, // TODO: Handle compiled i think its a deprecated field
-            compiled_code: None, // TODO: Handle compiled_code i think its a deprecated field
+            compiled_code: result.compiled_code,
             relation_name,
             batch_results: result.batch_results,
             static_analysis_off_reason: result.static_analysis_off_reason,
@@ -175,6 +178,35 @@ pub struct RunResultOutput {
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
 }
 
+impl RunResultOutput {
+    /// A result row synthesized outside the task graph (e.g. a parse-time check, or a node
+    /// reported `skipped` because one failed) — every per-node field that only a real task
+    /// execution could populate (timing, compiled SQL, batch results, …) is left at its
+    /// "nothing ran" value.
+    pub fn synthetic(
+        unique_id: String,
+        status: impl Into<String>,
+        message: Option<String>,
+        failures: Option<i64>,
+    ) -> Self {
+        Self {
+            status: status.into(),
+            timing: Vec::new(),
+            thread_id: "main".to_string(),
+            execution_time: 0.0,
+            adapter_response: BTreeMap::new(),
+            message,
+            failures,
+            unique_id,
+            compiled: None,
+            compiled_code: None,
+            relation_name: None,
+            batch_results: None,
+            static_analysis_off_reason: None,
+        }
+    }
+}
+
 /// Arguments passed to the dbt command.
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -218,6 +250,8 @@ pub struct DbtCommandExecutionArtifacts {
     pub manifest: Option<DbtManifest>,
     pub run_results: Option<RunResultsArtifact>,
     pub catalog: Option<DbtCatalog>,
+    /// `source freshness`'s results, as written to `sources.json`.
+    pub sources: Option<FreshnessResultsArtifact>,
     /// `list`'s selected nodes in selector format.
     pub list_items: Option<Vec<String>>,
     /// Rendered message of a real (non-exit-status) error, captured before it is
@@ -234,7 +268,7 @@ mod tests {
     /// Build a `RunResultOutput` representing a skipped node: every optional per-node field is
     /// `None`, mirroring what Fusion produces for a skipped test/model (e.g. during Selective
     /// Apply Optimization model reuse).
-    fn skipped_run_result_output() -> RunResultOutput {
+    pub fn skipped_run_result_output() -> RunResultOutput {
         RunResultOutput {
             status: "skipped".to_string(),
             timing: vec![],
@@ -299,6 +333,7 @@ mod tests {
             node: None,
             unique_id: "test.test.not_null_view_model_id.c9346154f2".to_string(),
             batch_results: None,
+            compiled_code: None,
             static_analysis_off_reason: None,
         };
 

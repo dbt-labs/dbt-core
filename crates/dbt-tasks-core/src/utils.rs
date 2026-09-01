@@ -1,6 +1,10 @@
-use std::{collections::BTreeMap, time::SystemTime};
+use std::{
+    collections::{BTreeMap, HashMap},
+    time::SystemTime,
+};
 
 use chrono::{DateTime, Utc};
+use dbt_adapter::response::AdapterResponse;
 use dbt_common::{
     ErrorCode, FsResult, io_args::EvalArgs, stdfs::File, tracing::dbt_emit::emit_warn_log_message,
 };
@@ -9,17 +13,21 @@ use dbt_schemas::{
     stats::Stats,
 };
 
-use crate::stats_to_results;
+use crate::generate_run_results;
 
 /// Build a `RunResultsArtifact` from run stats.
-pub fn build_run_results_artifact(stats: &Stats, arg: &EvalArgs) -> RunResultsArtifact {
+pub fn build_run_results_artifact(
+    stats: &Stats,
+    adapter_responses: &HashMap<String, AdapterResponse>,
+    arg: &EvalArgs,
+) -> RunResultsArtifact {
     let now = SystemTime::now();
     let generated_at: DateTime<Utc> = DateTime::from(now);
 
     let results: Vec<RunResultOutput> = stats
         .stats
         .iter()
-        .map(|stat| stats_to_results(stat, stats).into())
+        .map(|stat| generate_run_results(stat, stats, adapter_responses).into())
         .collect();
 
     let total_elapsed_time: f64 = stats
@@ -120,8 +128,13 @@ mod tests {
             stats: vec![],
             nodes: None,
             batch_results: Default::default(),
+            compiled_code: Default::default(),
         };
-        write_run_results_json(&build_run_results_artifact(&stats, &arg), &arg).unwrap();
+        write_run_results_json(
+            &build_run_results_artifact(&stats, &HashMap::new(), &arg),
+            &arg,
+        )
+        .unwrap();
 
         let artifact = RunResultsArtifact::from_file(&tmp.path().join("run_results.json")).unwrap();
         assert_eq!(

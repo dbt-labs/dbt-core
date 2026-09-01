@@ -127,7 +127,16 @@ fn build_model_context_fields<S: Serialize>(
 
     let config_yml = dbt_yaml::to_value(deprecated_config).expect("Failed to serialize object");
 
-    let pre_hooks = config_yml.get("pre_hook").map(|pre_hook| {
+    // `ModelConfig`/`SeedConfig`/`SnapshotConfig` serialize hooks under the underscored
+    // name; `FunctionConfig` doubles as its own manifest type and so uses dbt-core's
+    // hyphenated key. Accept either.
+    let hooks_of = |underscored: &str, hyphenated: &str| {
+        config_yml
+            .get(underscored)
+            .or_else(|| config_yml.get(hyphenated))
+    };
+
+    let pre_hooks = hooks_of("pre_hook", "pre-hook").map(|pre_hook| {
         let values: Vec<HookConfig> = match pre_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(pre_hook).into_iter().collect()
@@ -149,7 +158,7 @@ fn build_model_context_fields<S: Serialize>(
             .into()
     });
 
-    let post_hooks = config_yml.get("post_hook").map(|post_hook| {
+    let post_hooks = hooks_of("post_hook", "post-hook").map(|post_hook| {
         let values: Vec<HookConfig> = match post_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(post_hook).into_iter().collect()
@@ -296,7 +305,7 @@ pub fn extend_base_context_stateful_fn(
 ///
 /// Calling this on each per-batch context gives every batch its own registry,
 /// mirroring dbt-core where each batch runner builds its own model context.
-pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
+pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) -> ResultStore {
     let result_store = ResultStore::default();
     context.insert(
         "store_result".to_owned(),
@@ -310,6 +319,7 @@ pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
         "store_raw_result".to_owned(),
         MinijinjaValue::from_function(result_store.store_raw_result()),
     );
+    result_store
 }
 
 /// Downcast a base context's `builtins` Object back to its concrete
@@ -342,7 +352,7 @@ fn build_run_node_overlay<S: Serialize>(
     phase: ExecutionPhase,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
-) -> RunNodeCtx {
+) -> (RunNodeCtx, ResultStore) {
     let common_attr = node.common();
     let resource_type = node.resource_type();
 
@@ -408,7 +418,7 @@ fn build_run_node_overlay<S: Serialize>(
         .map(|p| p.to_path_buf())
         .unwrap_or(abs_current_path);
 
-    RunNodeCtx {
+    let ctx = RunNodeCtx {
         base: None,
         this: model_fields.this,
         database: model_fields.database,
@@ -431,7 +441,9 @@ fn build_run_node_overlay<S: Serialize>(
         target_package_name: common_attr.package_name.clone(),
         current_path: relative_path.to_string_lossy().into_owned(),
         current_span: MinijinjaValue::from_serialize(Span::default()),
-    }
+    };
+
+    (ctx, result_store)
 }
 
 /// Build a run context as a `BTreeMap` overlaid onto `base_context`.
@@ -457,11 +469,11 @@ pub fn build_run_node_context<S: Serialize>(
     phase: ExecutionPhase,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
-) -> BTreeMap<String, MinijinjaValue> {
+) -> (BTreeMap<String, MinijinjaValue>, ResultStore) {
     // Downcast the base `builtins` Object to its concrete map here so the
     // shared overlay builder receives a typed map (no downcast on its side).
     let base_builtins = base_context.get("builtins").map(downcast_builtins_map);
-    let overlay = build_run_node_overlay(
+    let (overlay, result_store) = build_run_node_overlay(
         node,
         deprecated_config,
         adapter_type,
@@ -475,7 +487,7 @@ pub fn build_run_node_context<S: Serialize>(
 
     let mut context = base_context.clone();
     context.extend(to_jinja_btreemap(&overlay));
-    context
+    (context, result_store)
 }
 
 /// Build a run context as a typed [`RunNodeCtx`] composed onto `base` via the
@@ -501,7 +513,7 @@ pub fn build_run_node_ctx<S: Serialize>(
     // `CompileBaseCtx::builtins` is a `MinijinjaValue` (Jinja-facing Object
     // slot), so downcast it to the concrete map for the shared overlay builder.
     let base_builtins = downcast_builtins_map(&base.builtins);
-    let mut overlay = build_run_node_overlay(
+    let (mut overlay, _result_store) = build_run_node_overlay(
         node,
         deprecated_config,
         adapter_type,

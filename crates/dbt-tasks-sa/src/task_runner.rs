@@ -1,8 +1,9 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use dbt_adapter::Adapter;
+use dbt_adapter::response::AdapterResponse;
+use dbt_adapter::{Adapter, AdapterStore};
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -25,6 +26,7 @@ use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::TaskRunnerStats;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
+use dbt_tasks_core::run_cache_lifecycle::RunCacheLifecycle;
 use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooks;
@@ -54,6 +56,7 @@ pub fn summarize_task_runner_stats(
         stats: summarize_stats(schedule, &ctx.inner.analyze_stats),
         nodes: None,
         batch_results: Default::default(),
+        compiled_code: Default::default(),
     };
     let batch_results = ctx
         .inner
@@ -61,10 +64,17 @@ pub fn summarize_task_runner_stats(
         .iter()
         .map(|entry| (entry.key().clone(), entry.value().clone()))
         .collect();
+    let compiled_code = ctx
+        .inner
+        .rendered_sql
+        .iter()
+        .map(|entry| (entry.key().clone(), entry.value().sql.clone()))
+        .collect();
     let run = Stats {
         stats: summarize_stats(schedule, &ctx.inner.run_stats),
         nodes: Some(resolved_state.nodes.clone()),
         batch_results,
+        compiled_code,
     };
     TaskRunnerStats { compile, run }
 }
@@ -72,6 +82,7 @@ pub fn summarize_task_runner_stats(
 pub struct TaskRunner {
     hooks: Box<dyn TaskRunnerHooks>,
     adapter: Arc<Adapter>,
+    adapter_store: Arc<AdapterStore>,
     pub resolved_state: Arc<ResolverState>,
     jinja_env: Arc<JinjaEnv>,
     schema_store: Arc<SchemaStore>,
@@ -79,12 +90,14 @@ pub struct TaskRunner {
     compiled_sql_cache: Arc<dyn CompiledSqlCache>,
     ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
     static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+    run_cache: Arc<RunCacheLifecycle>,
 }
 
 impl TaskRunner {
     pub fn new(
         hooks: Box<dyn TaskRunnerHooks>,
         adapter: Arc<Adapter>,
+        adapter_store: Arc<AdapterStore>,
         resolved_state: Arc<ResolverState>,
         jinja_env: Arc<JinjaEnv>,
         schema_store: Arc<SchemaStore>,
@@ -92,10 +105,12 @@ impl TaskRunner {
         compiled_sql_cache: Arc<dyn CompiledSqlCache>,
         ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
         static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+        run_cache: Arc<RunCacheLifecycle>,
     ) -> Self {
         Self {
             hooks,
             adapter,
+            adapter_store,
             resolved_state,
             jinja_env,
             schema_store,
@@ -103,6 +118,7 @@ impl TaskRunner {
             compiled_sql_cache,
             ctx_factory,
             static_analysis_buckets,
+            run_cache,
         }
     }
 
@@ -112,6 +128,7 @@ impl TaskRunner {
                 compile: Stats::default(),
                 run: Stats::default(),
             },
+            adapter_responses: HashMap::new(),
             storeables: Vec::new(),
             showables: Vec::new(),
             jinja_env: self.jinja_env,
@@ -126,7 +143,6 @@ impl TaskRunner {
         run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
     ) -> FsResult<()> {
-        let adapter_type = self.resolved_state.dbt_profile.db_config.adapter_type();
         // Pre-register only *selected* seeds (not frontier dependencies) so that
         // frontier seeds don't mask "missing in remote" static analysis errors.
         let selected_seed_ids: Vec<&String> = schedule
@@ -140,7 +156,6 @@ impl TaskRunner {
         register_seeds::pre_register_seeds(
             &selected_seed_ids,
             &self.resolved_state.nodes.seeds,
-            adapter_type,
             Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
             Arc::clone(&self.data_store),
             Arc::clone(self.adapter.engine().type_ops()),
@@ -191,6 +206,8 @@ impl TaskRunner {
                 freshness_results,
                 Arc::clone(&self.static_analysis_buckets),
                 Arc::clone(&self.adapter),
+                Arc::clone(&self.adapter_store),
+                self.run_cache.clone(),
             )
             .await
     }
@@ -335,7 +352,13 @@ impl TaskRunner {
             .await?;
 
         let mut stats = summarize_task_runner_stats(&ctx, &schedule, self.resolved_state.as_ref());
-        let results = stats.collect_as_results();
+        let adapter_responses: HashMap<String, AdapterResponse> = ctx
+            .inner
+            .main_adapter_responses
+            .iter()
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
+            .collect();
+        let results = stats.collect_as_results(&adapter_responses);
         let successful_relational_nodes =
             stats.collect_successful_relational_nodes(&self.resolved_state);
 
@@ -426,7 +449,19 @@ impl TaskRunner {
 
                         let (hook_outcome, error_message) = match &result {
                             Ok(_) => (HookOutcome::Success, None),
-                            Err(e) => (HookOutcome::Error, Some(e.message().to_string())),
+                            Err(e) => {
+                                let prefix = if stats
+                                    .run
+                                    .stats
+                                    .iter()
+                                    .any(|stat| stat.status == NodeStatus::Errored)
+                                {
+                                    "Secondary error after an earlier node failure: "
+                                } else {
+                                    ""
+                                };
+                                (HookOutcome::Error, Some(format!("{prefix}{}", e.message())))
+                            }
                         };
 
                         record_span_status_with_attrs(
@@ -489,6 +524,7 @@ impl TaskRunner {
 
         Ok(RunTaskResults {
             stats,
+            adapter_responses,
             storeables,
             showables,
             jinja_env: self.jinja_env,

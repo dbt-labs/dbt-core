@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
+use crate::utils::UndefinedBehavior;
+use crate::value::introspective::IntrospectiveValue;
 use crate::value::{intern, intern_into_value, Value};
 use crate::vm::State;
 
@@ -225,6 +227,19 @@ pub trait Object: fmt::Debug + Send + Sync {
     /// objects: immutable sequences are rendered as tuples (e.g. "(1, 2)"),
     /// while mutable sequences are rendered as lists (e.g. "[1, 2]").
     fn is_mutable(self: &Arc<Self>) -> bool {
+        false
+    }
+
+    /// Returns `true` if this value is a stand-in for an unknowable value
+    /// produced by an introspective (warehouse-dependent) call evaluated
+    /// without a real connection.
+    ///
+    /// Defaults to `false` for every object. A single wrapper type is
+    /// expected to override this to `true`; the VM checks this flag at a
+    /// small number of choke points (emit, loop iteration, branching, binary
+    /// operators) to decide whether to substitute a hole marker instead of
+    /// treating the value as real.
+    fn is_introspective_stub(self: &Arc<Self>) -> bool {
         false
     }
 
@@ -687,6 +702,8 @@ type_erase! {
 
         fn is_mutable(&self) -> bool;
 
+        fn is_introspective_stub(&self) -> bool;
+
         fn custom_cmp(&self, other: &DynObject) -> Option<Ordering>;
 
         fn enumerator_len(&self) -> Option<usize>;
@@ -1119,6 +1136,16 @@ pub mod mutable_vec {
     #[derive(Debug)]
     pub struct MutableVec<T> {
         inner: RwLock<Vec<T>>,
+        // Set once an introspective-stub value (see `Object::is_introspective_stub`)
+        // is ever pushed/inserted into this vector, and never cleared. A
+        // container built up across a loop (`{% do include_cols.append(col)
+        // %}`) is otherwise indistinguishable from an ordinary one once even
+        // a single tainted element has been absorbed into it -- the taint on
+        // that one element doesn't make the *container* report tainted on
+        // its own, so a later `{{ include_cols }}`/`.join()`/hash of the
+        // whole container would silently look fully-known. This flag is
+        // read by `is_introspective_stub` below.
+        tainted: std::sync::atomic::AtomicBool,
     }
 
     impl<T> MutableVec<T>
@@ -1129,6 +1156,7 @@ pub mod mutable_vec {
         pub fn new() -> Self {
             MutableVec {
                 inner: RwLock::new(Vec::new()),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1137,6 +1165,7 @@ pub mod mutable_vec {
         pub fn with_capacity(capacity: usize) -> Self {
             MutableVec {
                 inner: RwLock::new(Vec::with_capacity(capacity)),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1224,6 +1253,10 @@ pub mod mutable_vec {
 
         fn is_mutable(self: &Arc<Self>) -> bool {
             true
+        }
+
+        fn is_introspective_stub(self: &Arc<Self>) -> bool {
+            self.tainted.load(std::sync::atomic::Ordering::Relaxed)
         }
 
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
@@ -1315,8 +1348,11 @@ pub mod mutable_vec {
         T: Into<Value> + Clone + Send + Sync + fmt::Debug + 'static,
     {
         fn from(val: Vec<T>) -> Self {
+            let values: Vec<Value> = val.into_iter().map(Into::into).collect();
+            let tainted = values.iter().any(|v| v.is_introspective_stub());
             MutableVec {
-                inner: RwLock::new(val.into_iter().map(Into::into).collect()),
+                inner: RwLock::new(values),
+                tainted: std::sync::atomic::AtomicBool::new(tainted),
             }
         }
     }
@@ -1326,8 +1362,11 @@ pub mod mutable_vec {
         T: Into<Value> + Clone + Send + Sync + fmt::Debug + 'static,
     {
         fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+            let values: Vec<Value> = iter.into_iter().map(Into::into).collect();
+            let tainted = values.iter().any(|v| v.is_introspective_stub());
             MutableVec {
-                inner: RwLock::new(iter.into_iter().map(Into::into).collect()),
+                inner: RwLock::new(values),
+                tainted: std::sync::atomic::AtomicBool::new(tainted),
             }
         }
     }
@@ -1341,6 +1380,10 @@ pub mod mutable_vec {
     fn append_impl(vec: &Arc<MutableVec<Value>>, args: &[Value]) -> Result<Value, Error> {
         match args {
             [value] => {
+                if value.is_introspective_stub() {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 vec.push(value.clone());
                 Ok(ValueRepr::None.into())
             }
@@ -1361,6 +1404,10 @@ pub mod mutable_vec {
     fn extend_impl(vec: &Arc<MutableVec<Value>>, args: &[Value]) -> Result<Value, Error> {
         match args {
             [iter] => {
+                if iter.is_introspective_stub() {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 let iter = ok!(iter
                     .as_object()
                     .and_then(|x| x.try_iter())
@@ -1370,7 +1417,12 @@ pub mod mutable_vec {
                             "extend() expects an iterable as argument, but given argument is not iterable"
                     )));
 
-                vec.extend(iter);
+                let items: Vec<Value> = iter.collect();
+                if items.iter().any(|v| v.is_introspective_stub()) {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                vec.extend(items);
                 Ok(Value::from_dyn_object(vec.clone()))
             }
             _ if args.len() > 1 => Err(Error::new(
@@ -1395,12 +1447,10 @@ pub mod mutable_vec {
                     "insert() expects an integer as first argument"
                 )));
                 let mut inner = lock_write!(vec);
-                let len = inner.len();
-                if idx > len {
-                    return Err(Error::new(
-                        ErrorKind::InvalidOperation,
-                        format!("insert() index {idx} is out of bounds for list of length {len}"),
-                    ));
+                let idx = idx.min(inner.len());
+                if value.is_introspective_stub() {
+                    vec.tainted
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 inner.insert(idx, value.clone());
                 drop(inner);
@@ -1425,7 +1475,26 @@ pub mod mutable_vec {
 
     fn remove_impl(vec: &Arc<MutableVec<Value>>, args: &[Value]) -> Result<Value, Error> {
         match args {
-            [value] => vec.remove(value),
+            [value] => match vec.remove(value) {
+                Ok(removed) => Ok(removed),
+                Err(_)
+                    if vec.tainted.load(std::sync::atomic::Ordering::Relaxed)
+                        || value.is_introspective_stub() =>
+                {
+                    // `append`/`insert`/`extend` mark the container tainted the
+                    // moment a fabricated (introspective-stub) item enters it
+                    // (see e.g. `append_impl` above), because from then on the
+                    // container's real contents can't be trusted to match what
+                    // template logic assumes is in there. A `remove()` the
+                    // caller "knows" should succeed can therefore legitimately
+                    // find nothing to remove -- degrade like every other
+                    // introspective-stub operation (see
+                    // `IntrospectiveValue::call`/`call_method`) instead of
+                    // raising a hard render error over fabricated data.
+                    Ok(IntrospectiveValue::wrap_leaf(Value::UNDEFINED))
+                }
+                Err(err) => Err(err),
+            },
             _ if args.len() > 1 => Err(Error::new(
                 ErrorKind::TooManyArguments,
                 format!(
@@ -1497,7 +1566,8 @@ pub mod mutable_vec {
 pub mod mutable_map {
     use std::sync::RwLock;
 
-    use crate::value::{value_map_with_capacity, ValueMap};
+    use crate::arg_utils::ArgParser;
+    use crate::value::{value_map_with_capacity, ValueKind, ValueMap};
 
     use super::*;
 
@@ -1524,12 +1594,20 @@ pub mod mutable_map {
     #[derive(Debug)]
     pub struct MutableMap {
         inner: RwLock<ValueMap>,
+        // See `MutableVec`'s `tainted` field for why this exists: a value
+        // absorbed via `.update()`/`.insert()`/`setdefault()` can be
+        // individually tainted without the map itself reporting tainted,
+        // silently hiding unknowable data from a later `{{ map }}`/hash/etc.
+        tainted: std::sync::atomic::AtomicBool,
     }
 
     impl Clone for MutableMap {
         fn clone(&self) -> Self {
             MutableMap {
                 inner: RwLock::new(lock_read!(self).clone()),
+                tainted: std::sync::atomic::AtomicBool::new(
+                    self.tainted.load(std::sync::atomic::Ordering::Relaxed),
+                ),
             }
         }
     }
@@ -1539,6 +1617,7 @@ pub mod mutable_map {
         pub fn new() -> Self {
             MutableMap {
                 inner: RwLock::new(ValueMap::new()),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1546,6 +1625,7 @@ pub mod mutable_map {
         pub fn with_capacity(capacity: usize) -> Self {
             MutableMap {
                 inner: RwLock::new(value_map_with_capacity(capacity)),
+                tainted: std::sync::atomic::AtomicBool::new(false),
             }
         }
 
@@ -1566,11 +1646,22 @@ pub mod mutable_map {
 
         /// Insert a key-value pair into the map.
         pub fn insert(&self, key: Value, value: Value) {
+            if key.is_introspective_stub() || value.is_introspective_stub() {
+                self.tainted
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             lock_write!(self).insert(key, value);
         }
 
         /// Update the map with the contents of another map.
         pub fn update(&self, other: &ValueMap) {
+            if other
+                .iter()
+                .any(|(k, v)| k.is_introspective_stub() || v.is_introspective_stub())
+            {
+                self.tainted
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             lock_write!(self).extend(other.clone());
         }
 
@@ -1601,6 +1692,10 @@ pub mod mutable_map {
             true
         }
 
+        fn is_introspective_stub(self: &Arc<Self>) -> bool {
+            self.tainted.load(std::sync::atomic::Ordering::Relaxed)
+        }
+
         fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
             self.get(key)
         }
@@ -1623,7 +1718,7 @@ pub mod mutable_map {
             listeners: &[Rc<dyn RenderingEventListener>],
         ) -> Result<Value, Error> {
             match method {
-                "update" => update_impl(self, args),
+                "update" => update_impl(state, self, args),
                 "pop" => pop_impl(self, args),
                 "popitem" => popitem_impl(self, args),
                 "clear" => {
@@ -1681,8 +1776,12 @@ pub mod mutable_map {
 
     impl From<ValueMap> for MutableMap {
         fn from(val: ValueMap) -> Self {
+            let tainted = val
+                .iter()
+                .any(|(k, v)| k.is_introspective_stub() || v.is_introspective_stub());
             MutableMap {
                 inner: RwLock::new(val),
+                tainted: std::sync::atomic::AtomicBool::new(tainted),
             }
         }
     }
@@ -1693,34 +1792,93 @@ pub mod mutable_map {
         }
     }
 
-    fn update_impl(map: &Arc<MutableMap>, args: &[Value]) -> Result<Value, Error> {
-        match args {
-            [other] => {
-                let other = ok!(other
-                    .as_object()
-                    .and_then(|x| x.try_iter_pairs())
-                    .ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::CannotUnpack,
-                            "update() expects an object as argument, but given argument is not an object",
-                        )
-                    }));
-
-                map.update(&other.collect::<ValueMap>());
-                Ok(Value::from_dyn_object(map.clone()))
-            }
-            _ if args.len() > 1 => Err(Error::new(
+    fn update_impl(
+        state: &State<'_, '_>,
+        map: &Arc<MutableMap>,
+        args: &[Value],
+    ) -> Result<Value, Error> {
+        let parser = ArgParser::new(args, None);
+        if parser.positional_len() > 1 {
+            return Err(Error::new(
                 ErrorKind::TooManyArguments,
                 format!(
-                    "update() takes exactly one argument, but {} were given",
-                    args.len()
+                    "update() takes at most one positional argument, but {} were given",
+                    parser.positional_len()
                 ),
-            )),
-            _ => Err(Error::new(
-                ErrorKind::MissingArgument,
-                "update() takes exactly one argument, but none were given",
-            )),
+            ));
         }
+
+        let mut entries = ValueMap::new();
+        if let Some(other) = parser.get_args_as_vec_of_values().first() {
+            let is_allow_all = state.env().undefined_behavior() == UndefinedBehavior::AllowAll;
+            if other.kind() == ValueKind::Map {
+                if let Some(pairs) = other.as_object().and_then(|obj| obj.try_iter_pairs()) {
+                    entries.extend(pairs);
+                }
+            } else if other.kind() == ValueKind::Undefined && is_allow_all {
+                // Under `AllowAll` (dbt parse), dbt-common's Undefined is an
+                // empty iterable that chains attribute/call access, so
+                // `d.update(missing, owner='x')` applies the kwargs without
+                // error instead of raising like Python's `dict.update(None)`.
+            } else if matches!(other.kind(), ValueKind::None | ValueKind::Undefined) {
+                // `Value::try_iter` treats None/Undefined as an empty
+                // iterator for template convenience, but Python's
+                // `dict.update(None)` raises TypeError rather than no-op.
+                return Err(Error::new(
+                    ErrorKind::CannotUnpack,
+                    format!(
+                        "update() expects a mapping or iterable of pairs, not {}",
+                        other.kind()
+                    ),
+                ));
+            } else {
+                let iter = other.try_iter().map_err(|_| {
+                    Error::new(
+                        ErrorKind::CannotUnpack,
+                        "update() expects a mapping or iterable of pairs",
+                    )
+                })?;
+                for item in iter {
+                    let mut pair = item.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::CannotUnpack,
+                            "update() sequence element is not iterable",
+                        )
+                    })?;
+                    let key = pair.next().ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::CannotUnpack,
+                            "update() sequence element must have length 2",
+                        )
+                    })?;
+                    let value = pair.next().ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::CannotUnpack,
+                            "update() sequence element must have length 2",
+                        )
+                    })?;
+                    if pair.next().is_some() {
+                        return Err(Error::new(
+                            ErrorKind::CannotUnpack,
+                            "update() sequence element must have length 2",
+                        ));
+                    }
+                    entries.insert(key, value);
+                }
+            }
+        }
+
+        // `ArgParser` collects kwargs into a `BTreeMap`, which would sort them
+        // alphabetically; Python (and dbt-common) preserves the caller's
+        // keyword order, so pull the trailing kwargs value's pairs directly
+        // instead of going through the parser for this part.
+        if let Some(kwargs) = args.iter().find(|arg| arg.is_kwargs()) {
+            if let Some(pairs) = kwargs.as_object().and_then(|obj| obj.try_iter_pairs()) {
+                entries.extend(pairs);
+            }
+        }
+        map.update(&entries);
+        Ok(Value::from_dyn_object(map.clone()))
     }
 
     fn pop_impl(map: &Arc<MutableMap>, args: &[Value]) -> Result<Value, Error> {
