@@ -55,24 +55,20 @@ pub fn statement_returns_result_rows(sql: &str, adapter_type: AdapterType) -> bo
 
 /// BigQuery job `statistics.query.statementType` values that return rows.
 pub fn bigquery_statement_type_returns_rows(statement_type: &str) -> bool {
-    statement_type.eq_ignore_ascii_case("SELECT")
-        || statement_type.eq_ignore_ascii_case("CALL")
-        || statement_type.eq_ignore_ascii_case("SCRIPT")
+    ["SELECT", "CALL", "SCRIPT"]
+        .iter()
+        .any(|token| statement_type.eq_ignore_ascii_case(token))
 }
 
 fn is_bigquery_result_statement_token(token: &str) -> bool {
     // Conservative: only skip fetch when the first keyword cannot be a result
     // set. WITH starts CTEs that may SELECT; FROM/TABLE are GoogleSQL query
     // forms (pipe syntax and TABLE <table>); CALL/SCRIPT can return rows.
-    token.eq_ignore_ascii_case("SELECT")
-        || token.eq_ignore_ascii_case("WITH")
-        || token.eq_ignore_ascii_case("FROM")
-        || token.eq_ignore_ascii_case("TABLE")
-        || token.eq_ignore_ascii_case("SHOW")
-        || token.eq_ignore_ascii_case("DESCRIBE")
-        || token.eq_ignore_ascii_case("DESC")
-        || token.eq_ignore_ascii_case("EXPLAIN")
-        || token.eq_ignore_ascii_case("CALL")
+    [
+        "SELECT", "WITH", "FROM", "TABLE", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "CALL",
+    ]
+    .iter()
+    .any(|keyword| token.eq_ignore_ascii_case(keyword))
 }
 
 fn trim_leading_sql_comments(mut sql: &str) -> &str {
