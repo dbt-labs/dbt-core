@@ -1,83 +1,155 @@
-//! `ai_provider` resolution and the provider → destination-directory map.
+//! The coding agents dbt can install skills for, and where each one reads them
+//! from.
 
 use std::collections::BTreeSet;
+use std::fmt;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use dbt_common::ErrorCode;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::warn_error_options::project_flags_get_value;
 
 /// The de-facto cross-tool skills directory. Read by dbt Wizard, Codex, Cursor
-/// and Gemini CLI; the default for any known provider that isn't Claude Code.
+/// and Gemini CLI; the destination for every provider except Claude Code.
 pub const DEFAULT_SKILLS_DIR: &str = ".agents/skills";
 /// Claude Code only discovers skills under its own directory.
 pub const CLAUDE_SKILLS_DIR: &str = ".claude/skills";
 
-/// Providers dbt knows how to install for, and where each one reads skills from.
+/// A coding agent dbt knows how to install skills for.
 ///
-/// Kept data-driven so adding a provider is a one-line change.
-const PROVIDER_DESTINATIONS: &[(&str, &str)] = &[
-    ("wizard", DEFAULT_SKILLS_DIR),
-    ("claude", CLAUDE_SKILLS_DIR),
-    ("openai", DEFAULT_SKILLS_DIR),
-    ("codex", DEFAULT_SKILLS_DIR),
-    ("cursor", DEFAULT_SKILLS_DIR),
-    ("gemini", DEFAULT_SKILLS_DIR),
-];
-
-/// The destination directory for a provider, or `None` if dbt doesn't know it.
-pub fn provider_destination(provider: &str) -> Option<&'static str> {
-    let provider = provider.trim().to_ascii_lowercase();
-    PROVIDER_DESTINATIONS
-        .iter()
-        .find(|(name, _)| *name == provider)
-        .map(|(_, dest)| *dest)
+/// The set is fixed and small, so it is an enum rather than free-form strings:
+/// once a user's `ai_provider` value has been parsed into one of these, every
+/// downstream step is total and no code has to re-handle "what if it isn't a
+/// provider we know". Adding a provider means adding a variant and its two
+/// `match` arms, which the compiler will insist on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AiProvider {
+    /// dbt's own agent harness.
+    Wizard,
+    Claude,
+    Openai,
+    Codex,
+    Cursor,
+    Gemini,
 }
 
-/// Every provider dbt knows about, for use in warning messages.
-pub fn known_providers() -> Vec<&'static str> {
-    PROVIDER_DESTINATIONS
-        .iter()
-        .map(|(name, _)| *name)
-        .collect()
-}
+impl AiProvider {
+    /// Every provider dbt knows about, in the order shown to users.
+    pub const ALL: [AiProvider; 6] = [
+        AiProvider::Wizard,
+        AiProvider::Claude,
+        AiProvider::Openai,
+        AiProvider::Codex,
+        AiProvider::Cursor,
+        AiProvider::Gemini,
+    ];
 
-/// Map `ai_provider` values to destination directories relative to the project root.
-///
-/// Unknown providers WARN and contribute nothing. Providers that share a
-/// destination (the common case — everything except `claude` writes to
-/// `.agents/skills/`) are deduplicated, so a skill is written once per distinct
-/// directory rather than once per provider.
-pub fn resolve_destinations(providers: &[String]) -> Vec<PathBuf> {
-    let mut seen = BTreeSet::new();
-    let mut destinations = Vec::new();
-
-    for provider in providers {
-        match provider_destination(provider) {
-            Some(dest) => {
-                if seen.insert(dest) {
-                    destinations.push(PathBuf::from(dest));
-                }
-            }
-            None => emit_warn_log_message(
-                ErrorCode::UnknownAiProvider,
-                format!(
-                    "Unknown ai_provider '{}'; no skills will be installed for it. Known providers: {}.",
-                    provider.trim(),
-                    known_providers().join(", ")
-                ),
-            ),
+    /// The name users write in `ai_provider`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            AiProvider::Wizard => "wizard",
+            AiProvider::Claude => "claude",
+            AiProvider::Openai => "openai",
+            AiProvider::Codex => "codex",
+            AiProvider::Cursor => "cursor",
+            AiProvider::Gemini => "gemini",
         }
     }
 
-    destinations
+    /// The directory this provider reads skills from, relative to the project root.
+    pub const fn destination(self) -> &'static str {
+        match self {
+            AiProvider::Claude => CLAUDE_SKILLS_DIR,
+            AiProvider::Wizard
+            | AiProvider::Openai
+            | AiProvider::Codex
+            | AiProvider::Cursor
+            | AiProvider::Gemini => DEFAULT_SKILLS_DIR,
+        }
+    }
+
+    /// Comma-separated list of every provider, for diagnostics.
+    pub fn all_names() -> String {
+        AiProvider::ALL
+            .iter()
+            .map(|provider| provider.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
-/// Resolve `ai_provider` from the CLI/env value and the project's `flags:` block.
+impl fmt::Display for AiProvider {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Returned when `ai_provider` names something dbt has no destination for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownAiProvider(pub String);
+
+impl FromStr for AiProvider {
+    type Err = UnknownAiProvider;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let normalized = value.trim().to_ascii_lowercase();
+        AiProvider::ALL
+            .into_iter()
+            .find(|provider| provider.as_str() == normalized)
+            .ok_or_else(|| UnknownAiProvider(value.trim().to_string()))
+    }
+}
+
+/// Parse raw `ai_provider` values into known providers.
+///
+/// Unknown values warn and are dropped rather than failing: an `ai_provider`
+/// dbt doesn't recognize should not break package installation, and a newer dbt
+/// may well know it.
+pub fn parse_providers(raw: &[String]) -> Vec<AiProvider> {
+    raw.iter()
+        .filter_map(|value| match value.parse::<AiProvider>() {
+            Ok(provider) => Some(provider),
+            Err(UnknownAiProvider(name)) => {
+                emit_warn_log_message(
+                    ErrorCode::UnknownAiProvider,
+                    format!(
+                        "Unknown ai_provider '{name}'; no skills will be installed for it. \
+                         Known providers: {}.",
+                        AiProvider::all_names()
+                    ),
+                );
+                None
+            }
+        })
+        .collect()
+}
+
+/// Destination directories for the given providers, relative to the project root.
+///
+/// Providers that share a destination — everything except `claude` writes to
+/// `.agents/skills/` — are deduplicated, so a skill is written once per distinct
+/// directory rather than once per provider.
+pub fn resolve_destinations(providers: &[AiProvider]) -> Vec<PathBuf> {
+    let mut seen = BTreeSet::new();
+    providers
+        .iter()
+        .map(|provider| provider.destination())
+        .filter(|destination| seen.insert(*destination))
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// Resolve the raw `ai_provider` setting from the CLI/env value and the
+/// project's `flags:` block.
 ///
 /// CLI (which clap also populates from `DBT_AI_PROVIDER`) wins over
 /// `dbt_project.yml`, matching how every other dual-source flag resolves.
 /// Accepts either a single string or a list in the project file.
+///
+/// Values are left as written so the caller can tell "unset" apart from "set to
+/// something dbt doesn't recognize" — the two produce different warnings. Use
+/// [`parse_providers`] to turn the result into [`AiProvider`]s.
 pub fn resolve_ai_provider(
     from_cli: Option<&[String]>,
     project_flags: Option<&dbt_yaml::Value>,
@@ -109,22 +181,55 @@ pub fn resolve_ai_provider(
 mod tests {
     use super::*;
 
-    #[test]
-    fn claude_gets_its_own_dir_and_everything_else_shares_agents() {
-        assert_eq!(provider_destination("claude"), Some(CLAUDE_SKILLS_DIR));
-        assert_eq!(provider_destination("wizard"), Some(DEFAULT_SKILLS_DIR));
-        assert_eq!(provider_destination("codex"), Some(DEFAULT_SKILLS_DIR));
-        assert_eq!(provider_destination("nope"), None);
+    fn raw(values: &[&str]) -> Vec<String> {
+        values.iter().map(|v| v.to_string()).collect()
     }
 
     #[test]
-    fn provider_lookup_is_case_and_whitespace_insensitive() {
-        assert_eq!(provider_destination("  Claude "), Some(CLAUDE_SKILLS_DIR));
+    fn claude_gets_its_own_dir_and_everything_else_shares_agents() {
+        assert_eq!(AiProvider::Claude.destination(), CLAUDE_SKILLS_DIR);
+        for provider in AiProvider::ALL {
+            if provider != AiProvider::Claude {
+                assert_eq!(provider.destination(), DEFAULT_SKILLS_DIR, "{provider}");
+            }
+        }
+    }
+
+    #[test]
+    fn every_provider_round_trips_through_its_name() {
+        for provider in AiProvider::ALL {
+            assert_eq!(provider.as_str().parse::<AiProvider>(), Ok(provider));
+        }
+    }
+
+    #[test]
+    fn parsing_is_case_and_whitespace_insensitive() {
+        assert_eq!("  Claude ".parse::<AiProvider>(), Ok(AiProvider::Claude));
+        assert_eq!("CODEX".parse::<AiProvider>(), Ok(AiProvider::Codex));
+    }
+
+    #[test]
+    fn an_unrecognized_name_reports_itself_trimmed() {
+        assert_eq!(
+            "  nope ".parse::<AiProvider>(),
+            Err(UnknownAiProvider("nope".to_string()))
+        );
+    }
+
+    #[test]
+    fn unknown_providers_are_dropped_and_known_ones_kept() {
+        let parsed = parse_providers(&raw(&["claude", "definitely-not-a-harness", "wizard"]));
+        assert_eq!(parsed, vec![AiProvider::Claude, AiProvider::Wizard]);
     }
 
     #[test]
     fn destinations_are_deduplicated() {
-        let providers = ["wizard", "codex", "cursor", "claude"].map(String::from);
+        let providers = [
+            AiProvider::Wizard,
+            AiProvider::Codex,
+            AiProvider::Cursor,
+            AiProvider::Claude,
+        ];
         assert_eq!(
             resolve_destinations(&providers),
             vec![
@@ -135,18 +240,18 @@ mod tests {
     }
 
     #[test]
-    fn unknown_provider_contributes_nothing() {
-        let providers = ["definitely-not-a-harness".to_string()];
-        assert!(resolve_destinations(&providers).is_empty());
+    fn only_unknown_providers_yields_no_destinations() {
+        let parsed = parse_providers(&raw(&["definitely-not-a-harness"]));
+        assert!(parsed.is_empty());
+        assert!(resolve_destinations(&parsed).is_empty());
     }
 
     #[test]
     fn cli_wins_over_project_flags() {
         let flags: dbt_yaml::Value = dbt_yaml::from_str("ai_provider: claude").unwrap();
-        let from_cli = ["wizard".to_string()];
         assert_eq!(
-            resolve_ai_provider(Some(&from_cli), Some(&flags)),
-            Some(vec!["wizard".to_string()])
+            resolve_ai_provider(Some(&raw(&["wizard"])), Some(&flags)),
+            Some(raw(&["wizard"]))
         );
     }
 
@@ -155,7 +260,7 @@ mod tests {
         let flags: dbt_yaml::Value = dbt_yaml::from_str("ai_provider: claude").unwrap();
         assert_eq!(
             resolve_ai_provider(None, Some(&flags)),
-            Some(vec!["claude".to_string()])
+            Some(raw(&["claude"]))
         );
     }
 
@@ -165,7 +270,7 @@ mod tests {
             dbt_yaml::from_str("ai_provider:\n  - claude\n  - wizard\n").unwrap();
         assert_eq!(
             resolve_ai_provider(None, Some(&flags)),
-            Some(vec!["claude".to_string(), "wizard".to_string()])
+            Some(raw(&["claude", "wizard"]))
         );
     }
 
@@ -174,5 +279,17 @@ mod tests {
         assert_eq!(resolve_ai_provider(None, None), None);
         let flags: dbt_yaml::Value = dbt_yaml::from_str("something_else: true").unwrap();
         assert_eq!(resolve_ai_provider(Some(&[]), Some(&flags)), None);
+    }
+
+    #[test]
+    fn set_but_unrecognized_is_distinguishable_from_unset() {
+        // The two produce different warnings, so the raw resolution must not
+        // collapse them.
+        let flags: dbt_yaml::Value = dbt_yaml::from_str("ai_provider: nope").unwrap();
+        assert_eq!(
+            resolve_ai_provider(None, Some(&flags)),
+            Some(raw(&["nope"]))
+        );
+        assert!(parse_providers(&raw(&["nope"])).is_empty());
     }
 }

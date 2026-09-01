@@ -26,7 +26,7 @@ use dbt_schemas::schemas::project::{
 use crate::config::{filter_enabled, resolve_collisions};
 use crate::discover::{SkillSourceProject, discover_skills};
 use crate::install::{InstallOutcome, InstallReport, install_skills};
-use crate::providers::{resolve_ai_provider, resolve_destinations};
+use crate::providers::{AiProvider, parse_providers, resolve_ai_provider, resolve_destinations};
 
 pub use crate::install::prune_all;
 pub use crate::providers::{CLAUDE_SKILLS_DIR, DEFAULT_SKILLS_DIR};
@@ -83,15 +83,15 @@ pub fn install_package_skills(
     if discovered.is_empty() {
         // Nothing to install, but dbt may still own installs from a previous run.
         return match resolved_providers {
-            Some(providers) => {
-                let destinations = resolve_destinations(&providers);
+            Some(raw) => {
+                let destinations = resolve_destinations(&parse_providers(&raw));
                 Ok(Some(install_skills(project_root, &destinations, &[])?))
             }
             None => Ok(None),
         };
     }
 
-    let Some(providers) = resolved_providers else {
+    let Some(raw_providers) = resolved_providers else {
         emit_warn_log_message(
             ErrorCode::AiProviderUnset,
             format!(
@@ -99,13 +99,15 @@ pub fn install_package_skills(
                  not set, so none were installed. Set it in dbt_project.yml (flags: {{ai_provider: \
                  claude}}), via --ai-provider, or with DBT_AI_PROVIDER. Known providers: {}.",
                 discovered.len(),
-                providers::known_providers().join(", ")
+                AiProvider::all_names()
             ),
         );
         return Ok(None);
     };
 
-    let destinations = resolve_destinations(&providers);
+    // Unknown provider names have already warned on their own behalf; if none
+    // survive there is nowhere to install to.
+    let destinations = resolve_destinations(&parse_providers(&raw_providers));
     if destinations.is_empty() {
         return Ok(None);
     }
@@ -129,7 +131,7 @@ pub fn skill_destinations(
     ai_provider: Option<&[String]>,
 ) -> Vec<PathBuf> {
     match resolve_ai_provider(ai_provider, root_project.flags.as_ref()) {
-        Some(providers) => resolve_destinations(&providers),
+        Some(raw) => resolve_destinations(&parse_providers(&raw)),
         None => Vec::new(),
     }
 }
