@@ -581,6 +581,11 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
+        if let Some(asset_parsed) = span.attributes.downcast_ref::<AssetParsed>() {
+            self.handle_asset_parsed_end(span, asset_parsed);
+            return;
+        }
+
         if let Some(ne) = span.attributes.downcast_ref::<PhaseExecuted>() {
             self.handle_phase_executed_end(span, ne);
             return;
@@ -1520,14 +1525,23 @@ impl TuiLayer {
     }
 
     fn handle_asset_parsed_start(&self, _span: &SpanStartInfo, asset: &AssetParsed) {
+        // Legacy filter exclusion for generic tests, which are generated rather than
+        // authored and so are noise in both the progress indicator and the log line.
+        if asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME) {
+            return;
+        }
+
+        // Show the file on the phase's progress indicator. Keyed on the asset's own
+        // phase so this is a no-op for phases that register no spinner.
+        if let Some(ref progress) = self.progress {
+            progress.add_spinner_context(&ProgressId::Phase(asset.phase()), &asset.display_path);
+        }
+
         // TODO: This is temporary legacy rendering for parse progress and should
         // be replaced with the new end-span rendering (matching file log) once fully migrated.
         // We ignore this span severity level and only check show options for progress.
 
-        if !should_show_progress_message(asset.phase(), &self.show_options)
-            // Legacy filter exclusion for generic tests
-            || asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME)
-        {
+        if !should_show_progress_message(asset.phase(), &self.show_options) {
             return;
         }
 
@@ -1538,6 +1552,24 @@ impl TuiLayer {
                 .write_all(format!("{}\n", formatted).as_bytes())
                 .expect("failed to write to stdout");
         });
+    }
+
+    fn handle_asset_parsed_end(&self, _span: &SpanEndInfo, asset: &AssetParsed) {
+        let Some(ref progress) = self.progress else {
+            return;
+        };
+
+        // Must mirror the exclusion in `handle_asset_parsed_start`, or the excluded
+        // assets would decrement a counter they never incremented.
+        if asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME) {
+            return;
+        }
+
+        progress.finish_spinner_context(
+            &ProgressId::Phase(asset.phase()),
+            &asset.display_path,
+            Some("parsed"),
+        );
     }
 
     fn handle_deps_all_packages_installing_start(&self, ev: &DepsAllPackagesInstalled) {

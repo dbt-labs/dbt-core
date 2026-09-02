@@ -6,14 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-
-import {
-  RyeconDataGeography,
-  RyeconFile,
-  RyeconThemeDark,
-  RyeconThemeLight,
-  RyeconThemeSystem,
-} from '@dbt-labs/sourdough';
+import { Globe, Moon, Sun, SunMoon } from 'lucide-react';
 
 import type { AssetFilters } from '../App';
 import { FEATURE_FLAGS } from '../lib/featureFlags';
@@ -23,7 +16,7 @@ import {
   inferModelingLayer,
   RESOURCE_TYPE_LABEL,
   RESOURCE_TYPE_ORDER,
-  RESOURCE_TYPE_RYECON,
+  ResourceTypeIcon,
 } from '../lib/resourceType';
 import { handleUpsellEvent } from '../lib/upsellAnalytics';
 import type { FileEntry, Project } from '../shared';
@@ -197,7 +190,7 @@ export function LocatePane({
       if (aSelf !== bSelf) return aSelf - bSelf;
       return a.localeCompare(b);
     });
-  }, [filtered, project.name]);
+  }, [filtered, project]);
 
   // Hide analysis files from the File tree until FEATURE_FLAGS.hasAnalysis flips on.
   const visibleFiles = useMemo(
@@ -300,13 +293,13 @@ export function LocatePane({
               {
                 label: 'Light',
                 value: 'light',
-                startIcon: { ryecon: RyeconThemeLight },
+                startIcon: <Sun className="size-3" />,
               },
-              { label: 'Dark', value: 'dark', startIcon: { ryecon: RyeconThemeDark } },
+              { label: 'Dark', value: 'dark', startIcon: <Moon className="size-3" /> },
               {
                 label: 'System',
                 value: 'system',
-                startIcon: { ryecon: RyeconThemeSystem },
+                startIcon: <SunMoon className="size-3" />,
               },
             ]}
             selectedValue={theme}
@@ -378,7 +371,10 @@ function AssetMode({
         data: {
           pathType: 'directory',
           name: rootLabel,
-          iconOverride: { ryecon: RyeconDataGeography, label: rootLabel },
+          iconOverride: {
+            icon: <Globe className="size-3 shrink-0" />,
+            label: rootLabel,
+          },
           info: {
             text: [...typeCounts.values()].reduce((s, n) => s + n, 0).toLocaleString(),
           },
@@ -393,7 +389,7 @@ function AssetMode({
           pathType: 'file',
           name: RESOURCE_TYPE_LABEL[t] ?? t,
           iconOverride: {
-            ryecon: RESOURCE_TYPE_RYECON[t] ?? RyeconFile,
+            icon: <ResourceTypeIcon type={t} className="size-3 shrink-0" />,
             label: RESOURCE_TYPE_LABEL[t] ?? t,
           },
           info: { text: (typeCounts.get(t) ?? 0).toLocaleString() },

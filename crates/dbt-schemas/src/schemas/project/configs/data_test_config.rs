@@ -17,8 +17,10 @@ use crate::schemas::common::{
     ClusterConfig, DbtMaterialization, DbtQuoting, Schedule, Severity, StoreFailuresAs,
 };
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::project::configs::common::{
+    WarehouseSpecificNodeConfig, take_databricks_catalog_alias,
+};
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::properties::DataTestState;
 use dbt_proc_macros::DefaultTo;
 use dbt_proc_macros::Resolvable;
@@ -119,6 +121,8 @@ pub struct ProjectDataTestConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -218,7 +222,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -240,7 +244,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+catalog")]
     pub catalog: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]
@@ -288,7 +292,7 @@ pub struct ProjectDataTestConfig {
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -534,6 +538,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -544,6 +549,12 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
+
+                partition_by_config: None,
+
+                distribute_by_config: None,
+
+                primary_key_config: None,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
@@ -577,6 +588,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
                 zorder: None,
+                skip_optimize: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -690,6 +702,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -829,6 +842,18 @@ impl ResolvableConfig<DataTestConfig> for DataTestConfig {
     fn default_to(&mut self, parent: &DataTestConfig) {
         self.default_to_fields(parent);
     }
+
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            self.database.is_some(),
+        ) {
+            self.database = Some(catalog);
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
+    }
 }
 
 impl ConfigKeys for DataTestConfig {
@@ -860,6 +885,23 @@ impl ConfigKeys for DataTestConfig {
 mod tests {
     use super::{AdapterType, DataTestConfig, ProjectDataTestConfig};
     use crate::schemas::common::UpdatesOn;
+
+    #[test]
+    fn test_data_test_query_tags_propagate_through_resolved_config() {
+        let project: ProjectDataTestConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"data-test"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: DataTestConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"data-test"}"#)
+        );
+    }
 
     #[test]
     fn test_project_data_test_config_state_parses_with_plus_prefix() {
@@ -919,6 +961,37 @@ __warehouse_specific_config__: {}
             .expect("state should propagate from parent to child via default_to");
         assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
         assert_eq!(state.evaluate_volatile_sql, Some(true));
+    }
+
+    /// Regression for #16135: a data test that sets one `state:` key keeps the keys
+    /// the project layer set.
+    #[test]
+    fn test_data_test_config_state_merges_field_by_field() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+        use crate::schemas::properties::DataTestState;
+
+        let parent = DataTestConfig {
+            state: Some(DataTestState {
+                require_fresh_data_from: None,
+                evaluate_volatile_sql: Some(true),
+                compare_unrendered_code: Some(true),
+            }),
+            ..Default::default()
+        };
+        let mut child = DataTestConfig {
+            state: Some(DataTestState {
+                require_fresh_data_from: Some(UpdatesOn::All),
+                evaluate_volatile_sql: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        child.default_to(&parent);
+
+        let state = child.state.expect("state should survive the merge");
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+        assert_eq!(state.compare_unrendered_code, Some(true));
     }
 
     #[test]

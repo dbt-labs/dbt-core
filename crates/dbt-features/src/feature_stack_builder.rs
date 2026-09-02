@@ -148,7 +148,7 @@ impl FeatureStackBuilder {
             factory: Arc::new(dbt_jinja_utils::DefaultJinjaFactory),
         };
 
-        let alt = crate::alt::AltFeature {
+        let lake_compute = crate::lake_compute::LakeComputeFeature {
             propagation_checker: None,
             catalog_attach_checker: None,
         };
@@ -166,7 +166,7 @@ impl FeatureStackBuilder {
             resolver,
             loader,
             jinja,
-            alt,
+            lake_compute,
             login_hooks,
             version_check_enabled,
         };

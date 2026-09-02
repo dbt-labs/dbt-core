@@ -2,9 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { type ColumnDef } from '@tanstack/react-table';
 
-import { resourceIconMap } from '@dbt-labs/dbt-dag';
-import { Icon } from '@dbt-labs/sourdough';
-
 import { paths } from '../routes';
 import type { SourceSummary } from '../shared';
 import type { Project } from '../shared';
@@ -103,12 +100,6 @@ export function SourceFilterView({ project }: Props) {
         size: 280,
         cell: (info) => (
           <div className="flex min-w-0 items-center gap-2">
-            <Icon
-              ryecon={resourceIconMap.source}
-              size="xs"
-              alt=""
-              className="shrink-0"
-            />
             <Tooltip
               displayOnlyWhenTruncated
               content={info.row.original.sourceName}

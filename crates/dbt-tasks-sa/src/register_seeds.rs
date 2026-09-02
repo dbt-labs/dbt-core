@@ -63,9 +63,6 @@ fn register_seed_csv(
         .map(|s| s.chars().next().unwrap_or(','))
         .unwrap_or(',');
     let seed_path = resolve_seed_path(&ctx.in_dir, &seed);
-    if let Some(relation_name) = &seed.__base_attr__.relation_name {
-        dbt_common::seed_path_registry::register(relation_name, seed_path.clone());
-    }
     let infer_column_name_strategy =
         infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 

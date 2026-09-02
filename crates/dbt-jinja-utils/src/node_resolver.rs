@@ -14,7 +14,8 @@ use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err,
     io_args::resolve_require_ref_searches_node_package_before_root,
     tracing::dbt_emit::{
-        emit_error_log_from_fs_error, emit_warn_log_from_fs_error, emit_warn_log_message,
+        emit_debug_log_message, emit_error_log_from_fs_error, emit_warn_log_from_fs_error,
+        emit_warn_log_message,
     },
 };
 use dbt_schemas::dbt_types::RelationType;
@@ -1010,14 +1011,17 @@ pub fn resolve_dependencies(
                     }
                 }
                 Err(e) => {
-                    // For tests and exposures, warn on missing or disabled dependencies instead of erroring
-                    if (is_test || is_exposure)
+                    // A test whose ref target is merely disabled is excluded silently:
+                    // dbt-core reports this at debug level only.
+                    if is_test && e.code == ErrorCode::DisabledDependency {
+                        has_disabled_or_missing_dependency = true;
+                        emit_debug_log_message(format!("{node_unique_id} ({location}): {e}"));
+                    } else if (is_test || is_exposure)
                         && let Some((warning, disable)) =
                             downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        // Whether the dep is disabled or simply missing, the test must be
-                        // excluded — dbt-core issues NodeNotFoundOrDisabled in both cases and
-                        // never executes the test.
+                        // A missing target stays a user-visible warning, and the node is
+                        // still excluded.
                         has_disabled_or_missing_dependency = disable;
                         emit_warn_log_from_fs_error(warning);
                     } else {
@@ -1060,9 +1064,8 @@ pub fn resolve_dependencies(
                         && let Some((warning, disable)) =
                             downgraded_node_dependency_warning(&e, location.clone())
                     {
-                        // Whether the dep is disabled or simply missing, the test must be
-                        // excluded — dbt-core issues NodeNotFoundOrDisabled in both cases and
-                        // never executes the test.
+                        // Both cases exclude the test. Unlike its ref path, dbt-core warns for
+                        // a disabled source too, so this stays user-visible.
                         has_disabled_or_missing_dependency = disable;
                         emit_warn_log_from_fs_error(warning);
                     } else {
@@ -1126,13 +1129,18 @@ pub fn resolve_dependencies(
         }
     }
 
-    // Second pass: move disabled tests and exposures to disabled_nodes
+    // Second pass: dbt-core disables such a test in place, so it stays in `nodes` with
+    // `enabled = false`. Mirrors the generic-test path in resolve_data_tests.rs.
     for test_id in &tests_to_disable {
-        if let Some(node) = nodes.tests.remove(test_id) {
-            disabled_nodes.tests.insert(test_id.clone(), node);
+        if let Some(node) = nodes.tests.get_mut(test_id) {
+            let test = Arc::make_mut(node);
+            test.__base_attr__.enabled = false;
+            test.deprecated_config.enabled = Some(false);
         }
     }
 
+    // Exposures still change buckets: dbt-core raises for them, and `retain_schedulable` omits
+    // NodeType::Exposure, so one disabled in place would still be selected and scheduled.
     for exposure_id in &exposures_to_disable {
         if let Some(node) = nodes.exposures.remove(exposure_id) {
             disabled_nodes.exposures.insert(exposure_id.clone(), node);

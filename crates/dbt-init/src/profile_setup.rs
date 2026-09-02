@@ -1,7 +1,10 @@
 use crate::adapter_config::{
     setup_bigquery_profile, setup_clickhouse_profile, setup_databricks_profile,
-    setup_fabric_profile, setup_postgres_profile, setup_redshift_profile, setup_snowflake_profile,
+    setup_exasol_profile, setup_fabric_profile, setup_postgres_profile, setup_redshift_profile,
+    setup_snowflake_profile,
 };
+// Re-exported so `crate::profile_setup::{ProfileTarget, Profiles}` keeps resolving.
+pub use crate::adapter_config::{ProfileTarget, Profiles};
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{
     has_top_level_key_parsed_file, list_top_level_keys_from_file, remove_top_level_key_from_str,
@@ -19,18 +22,9 @@ use dbt_schemas::schemas::project::DbtProjectSimplified;
 
 use dialoguer::{Confirm, Select};
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProfileTarget {
-    pub target: String,
-    pub outputs: HashMap<String, DbConfig>,
-}
-
-pub type Profiles = HashMap<String, ProfileTarget>;
 
 /// Load profile using the standard dbt-loader infrastructure
 fn load_profile_with_loader(
@@ -184,6 +178,7 @@ impl ProfileSetup {
             AdapterType::Databricks,
             AdapterType::Bigquery,
             AdapterType::ClickHouse,
+            AdapterType::Exasol,
             AdapterType::Postgres,
             AdapterType::Redshift,
             AdapterType::Fabric,
@@ -391,7 +386,7 @@ impl ProfileSetup {
                     "DuckDB profile setup not yet implemented. DuckDB runs locally without credentials."
                 ));
             }
-            AdapterType::Alt => {
+            AdapterType::LakeCompute => {
                 // TODO: Create proper lake compute profile setup
                 return Err(fs_err!(
                     ErrorCode::Generic,
@@ -407,7 +402,13 @@ impl ProfileSetup {
                     clickhouse_config.map(Box::as_ref),
                 )?)
             }
-            AdapterType::Exasol => todo!("Exasol"),
+            AdapterType::Exasol => {
+                let exasol_config = match existing_config {
+                    Some(DbConfig::Exasol(config)) => Some(config),
+                    _ => None,
+                };
+                DbConfig::Exasol(setup_exasol_profile(exasol_config.map(Box::as_ref))?)
+            }
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),

@@ -13,11 +13,10 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 /// Create a `RelationConfigLoader` for Databricks materialized views
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
-    // - liquid clustering
     // - relation tags
     // - query
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 6] = [
-        // Box::new(components::LiquidClusteringLoader),
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
+        Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::PartitionByLoader),
         // Box::new(components::QueryLoader),
@@ -111,12 +110,12 @@ mod tests {
 </partitioned_by>
 <tblproperties>
     <tblproperties>
-        <custom.key>
-            new
-        </custom.key>
         <delta.enableRowTracking>
             true
         </delta.enableRowTracking>
+        <custom.key>
+            new
+        </custom.key>
     </tblproperties>
     <pipeline_id>
         my_old_pipeline

@@ -1,9 +1,8 @@
 import { FC, isValidElement, ReactElement } from 'react';
 import toast from 'react-hot-toast';
+import { type CellContext, type ColumnDef } from '@tanstack/react-table';
 import { Copy } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
-
-import { CellContext, ColumnDef } from '@dbt-labs/sourdough';
 
 import { Tooltip } from '../../components/ui/Tooltip';
 import { formatAbsoluteLocalDate, formatDateCommon } from '../util/dateUtils';

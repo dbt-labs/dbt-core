@@ -359,12 +359,12 @@ fn test_render_equals_flag_on_databricks_is_not_distinct_from() {
     assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
 }
 
-/// `Alt` defines no null-comparison form of its own, so it must answer as
+/// `LakeCompute` defines no null-comparison form of its own, so it must answer as
 /// DuckDB. It previously fell into the `_` arm and emitted the verbose
 /// `case when ... end = 0` form.
 #[test]
-fn test_render_equals_flag_on_alt_matches_duckdb() {
-    let adapter = make_adapter_with_truthy_nulls(AdapterType::Alt);
+fn test_render_equals_flag_on_lake_compute_matches_duckdb() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::LakeCompute);
     let result = dispatch_test(
         &adapter,
         "render_equals",

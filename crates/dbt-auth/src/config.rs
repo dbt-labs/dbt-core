@@ -111,12 +111,11 @@ impl AdapterConfig {
         &self,
         auth: &dyn Auth,
         configure_cloud_database: impl FnOnce(Backend) -> Result<database::Builder, AuthError>,
-    ) -> Result<(database::Builder, Vec<String>), AuthError> {
+    ) -> Result<database::Builder, AuthError> {
         if self.use_dbt_cloud_credentials() {
-            Ok((configure_cloud_database(auth.backend())?, Vec::new()))
+            configure_cloud_database(auth.backend())
         } else {
-            let outcome = auth.configure(self)?;
-            Ok((outcome.builder, outcome.warnings))
+            auth.configure(self)
         }
     }
 }

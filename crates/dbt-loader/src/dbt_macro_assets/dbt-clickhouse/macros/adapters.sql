@@ -25,18 +25,6 @@
   {%- endif -%}
 {% endmacro %}
 
-{% macro clickhouse_model_settings(model, engine) %}
-  {{ return('') }}
-{% endmacro %}
-
-{% macro clickhouse_model_query_settings(model) %}
-  {{ return('') }}
-{% endmacro %}
-
-{% macro clickhouse_is_before_version(version) %}
-  {{ return(false) }}
-{% endmacro %}
-
 {% macro clickhouse_can_exchange(schema, relation_type) %}
   {{ return(false) }}
 {% endmacro %}
@@ -81,7 +69,8 @@
         name as mv_name,
         database as mv_database,
         any(as_select) as mv_sql,
-        any(replaceRegexpOne(create_table_query, '.*TO\\s+`?([^`\\s(]+)`?\\.`?([^`\\s(]+)`?.*', '\\1.\\2')) as target_fqn
+        {#- '\x3F' is the ClickHouse string-literal escape for '?' (regex quantifier); some drivers treat a literal '?' in query text as a bind parameter -#}
+        any(replaceRegexpOne(create_table_query, '.*TO\\s+`\x3F([^`\\s(]+)`\x3F\\.`\x3F([^`\\s(]+)`\x3F.*', '\\1.\\2')) as target_fqn
       {% if get_clickhouse_cluster_name() -%}
       from clusterAllReplicas({{ get_clickhouse_cluster_name() }}, system.tables)
       {% else %}

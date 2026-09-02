@@ -228,11 +228,37 @@ impl AdapterEngine for RecordReplayEngine {
 
 struct DbtSqlNormalizer;
 
+/// Matches the token name `mint_snowflake_catalog_credential` mints
+/// (`compute_platform.rs`'s `token_name`), e.g. `dbt_compute_1725000000000`.
+/// It embeds a real wall-clock millisecond timestamp, so record and replay
+/// runs never mint the literal same name -- mask it out for comparison the
+/// same way ephemeral warehouse names already are, below.
+static DBT_COMPUTE_TOKEN_NAME: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"dbt_compute_\d+").unwrap());
+
+/// Matches the quoted Snowflake username in `alter user "<user>" add/remove
+/// programmatic access token ...` (`mint_snowflake_catalog_credential` /
+/// `drop_minted_token` in `compute_platform.rs`). The user is whichever real
+/// Snowflake identity recorded the fixture, which will never match another
+/// engineer's identity or the `fake_user`/`FAKE_USER` fallback used at
+/// pure-replay time -- mask it out the same way as the timestamp above.
+/// Mirrors `cleanup_alter_user_identifier` in `adbc-record-replay`'s
+/// `naming.rs`, which does the same masking for the recording lookup key;
+/// this one is for the post-lookup text-equality check below.
+static ALTER_USER_IDENTIFIER: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r#"(?i)(alter user )"[^"]+""#).unwrap());
+
 impl adbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
     fn normalize(&self, sql: &str) -> String {
         use crate::sql::normalize::normalize_dbt_tmp_name;
         let normalized = normalize_dbt_tmp_name(sql);
         let collapsed = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
+        let collapsed = DBT_COMPUTE_TOKEN_NAME
+            .replace_all(&collapsed, "dbt_compute_[MASKED_TS]")
+            .into_owned();
+        let collapsed = ALTER_USER_IDENTIFIER
+            .replace_all(&collapsed, r#"$1"[MASKED_USER]""#)
+            .into_owned();
         collapsed
             .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")
             .replace("DBT_TESTING", "[MASKED_WH]")

@@ -14,8 +14,8 @@ pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {
         // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
         // falls back to Postgresql at the moment
         Salesforce => Dialect::Postgresql,
-        // `Alt` defines no dialect of its own, so it falls back to DuckDB's
-        DuckDB | Alt => Dialect::Duckdb,
+        // `LakeCompute` defines no dialect of its own, so it falls back to DuckDB's
+        DuckDB | LakeCompute => Dialect::Duckdb,
         Trino => Dialect::Trino,
         _ => return None,
     };

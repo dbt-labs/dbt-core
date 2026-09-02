@@ -1,15 +1,14 @@
+import type { ReactNode } from 'react';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import { cva, type VariantProps } from 'class-variance-authority';
-
-import { Icon, type IconProps } from '@dbt-labs/sourdough';
 
 import { cn } from '../../lib/utils';
 
 export type Segment = {
   label: string;
   value: string;
-  startIcon?: IconProps;
-  endIcon?: IconProps;
+  startIcon?: ReactNode;
+  endIcon?: ReactNode;
 };
 
 const rootVariants = cva(
@@ -76,9 +75,9 @@ export function SegmentedButton({
           value={segment.value}
           className={cn(segmentVariants({ size, variant }))}
         >
-          {segment.startIcon && <Icon size="xs" {...segment.startIcon} />}
+          {segment.startIcon}
           {segment.label}
-          {segment.endIcon && <Icon size="xs" {...segment.endIcon} />}
+          {segment.endIcon}
         </ToggleGroupPrimitive.Item>
       ))}
     </ToggleGroupPrimitive.Root>

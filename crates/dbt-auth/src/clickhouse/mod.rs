@@ -1,4 +1,4 @@
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, AuthWarningPrinter, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 
 use dbt_adbc::{Backend, database};
@@ -21,7 +21,11 @@ enum ClickHouseAuthIR<'a> {
 }
 
 impl<'a> ClickHouseAuthIR<'a> {
-    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+    pub fn apply(
+        self,
+        mut builder: DatabaseBuilder,
+        _warning_printer: &dyn AuthWarningPrinter,
+    ) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::UserPass {
                 user,
@@ -41,7 +45,10 @@ impl<'a> ClickHouseAuthIR<'a> {
     }
 }
 
-fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<ClickHouseAuthIR<'a>, AuthError> {
+fn parse_auth<'a>(
+    config: &'a AdapterConfig,
+    _warning_printer: &dyn AuthWarningPrinter,
+) -> Result<ClickHouseAuthIR<'a>, AuthError> {
     let secure = config
         .get_string("secure")
         .map(|s| s == "true" || s == "1" || s == "True")
@@ -67,19 +74,28 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<ClickHouseAuthIR<'a>, Aut
 fn apply_connection_args(
     _config: &AdapterConfig,
     builder: DatabaseBuilder,
+    _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<DatabaseBuilder, AuthError> {
     Ok(builder)
 }
 
-pub struct ClickHouseAuth;
+pub struct ClickHouseAuth {
+    pub warning_printer: Box<dyn AuthWarningPrinter>,
+}
+
+impl ClickHouseAuth {
+    pub fn new(warning_printer: Box<dyn AuthWarningPrinter>) -> Self {
+        Self { warning_printer }
+    }
+}
 
 impl Auth for ClickHouseAuth {
     fn backend(&self) -> Backend {
         Backend::ClickHouse
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
-        auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
+    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+        auth_configure_pipeline!(self, &config, parse_auth, apply_connection_args)
     }
 }
 
@@ -95,10 +111,9 @@ mod tests {
     fn test_defaults_produce_valid_uri() {
         let config = Mapping::new();
 
-        let builder = ClickHouseAuth {}
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
+            .expect("configure");
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "http://localhost:8123");
@@ -113,10 +128,9 @@ mod tests {
             ("password".into(), "secret".into()),
         ]);
 
-        let builder = ClickHouseAuth {}
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
+            .expect("configure");
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "http://ch.prod.internal:9000");
@@ -129,10 +143,9 @@ mod tests {
             ("secure".into(), "true".into()),
         ]);
 
-        let builder = ClickHouseAuth {}
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
+            .expect("configure");
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "https://ch.cloud:8443");
@@ -148,10 +161,9 @@ secure: true
         )
         .expect("parse yaml");
 
-        let builder = ClickHouseAuth {}
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
+            .expect("configure");
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "https://ch.cloud:8443");
@@ -164,10 +176,9 @@ secure: true
             ("secure".into(), YmlValue::number(1i64.into())),
         ]);
 
-        let builder = ClickHouseAuth {}
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
+            .expect("configure");
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "https://ch.local:8443");
@@ -180,10 +191,9 @@ secure: true
             ("secure".into(), YmlValue::number(42i64.into())),
         ]);
 
-        let builder = ClickHouseAuth {}
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .expect("configure")
-            .builder;
+            .expect("configure");
 
         let uri = uri_value(&builder);
         assert_contains!(&uri, "http://ch.local:8123");

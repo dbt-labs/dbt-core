@@ -58,6 +58,7 @@ pub async fn get_or_install_packages(
     replay_mode: Option<&ReplayMode>,
     token: &CancellationToken,
     use_v2_compatible_package_downloads: bool,
+    require_hub_verified_downloads: bool,
     private_package_resolver: Arc<dyn PrivatePackageResolver>,
     cloud_config: Option<ResolvedCloudConfig>,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
@@ -103,6 +104,7 @@ pub async fn get_or_install_packages(
         skip_private_deps,
         version_check,
         use_v2_compatible_package_downloads,
+        require_hub_verified_downloads,
         private_package_resolver,
         cloud_config,
     );

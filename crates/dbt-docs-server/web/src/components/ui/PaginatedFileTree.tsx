@@ -1,6 +1,4 @@
-import { type MouseEvent, useMemo } from 'react';
-
-import { type Ryecon } from '@dbt-labs/sourdough';
+import { type MouseEvent, type ReactNode, useMemo } from 'react';
 
 import { FileTreeNode } from './FileTreeNode';
 
@@ -10,7 +8,7 @@ export type FileTreeItemType = {
   data: {
     pathType: 'file' | 'directory';
     name?: string;
-    iconOverride?: { ryecon: Ryecon; label?: string };
+    iconOverride?: { icon: ReactNode; label?: string };
     info?: { text?: string };
   };
 };

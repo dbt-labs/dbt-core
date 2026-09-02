@@ -5,7 +5,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_adbc::Backend;
 use dbt_auth::AdapterConfig;
 use dbt_auth::Auth;
-use dbt_auth::{NoopAuthWarningPrinter, auth_for_backend};
+use dbt_auth::auth_for_backend;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
@@ -39,7 +39,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Salesforce => Backend::Salesforce,
         AdapterType::Spark => Backend::Spark,
         AdapterType::DuckDB => Backend::DuckDB,
-        AdapterType::Alt => Backend::Alt,
+        AdapterType::LakeCompute => Backend::LakeCompute,
         AdapterType::Fabric => Backend::SQLServer,
         AdapterType::ClickHouse => Backend::ClickHouse,
         AdapterType::Exasol => Backend::Exasol,
@@ -98,8 +98,7 @@ impl DefaultAdapterFactory {
         threads: Option<usize>,
     ) -> FsResult<Arc<dyn AdapterEngine>> {
         let backend = backend_of(adapter_type);
-        let auth: Arc<dyn Auth> =
-            auth_for_backend(Box::new(NoopAuthWarningPrinter), backend).into();
+        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
         let stmt_splitter = self.stmt_splitter();
         let type_ops = type_ops_factory.create(adapter_type);
         let relation_cache = Arc::new(RelationCache::default());

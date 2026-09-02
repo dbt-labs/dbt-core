@@ -15,18 +15,25 @@ use dbt_compilation::core::DbtLoadedProject;
 use dbt_dag::schedule::Schedule;
 use dbt_scheduler::{
     args::SchedulerArgs,
-    schedule::{build_schedule, modify_schedule_for_sidecar_compute_boundaries},
+    node_selector::StateSelectorResults,
+    schedule::{
+        build_schedule_with_state_selector_results, modify_schedule_for_sidecar_compute_boundaries,
+    },
 };
 use dbt_schemas::IndexMap;
-use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::ProfileAdapter;
 use dbt_schemas::{
     schemas::{
-        InternalDbtNodeAttributes, StateArtifacts, common::DbtMaterialization, profiles::Execute,
+        InternalDbtNodeAttributes, Nodes, StateArtifacts,
+        common::DbtMaterialization,
+        profiles::Execute,
+        selectors::{ResolvedSelector, SelectorEntry},
     },
     state::{CacheState, ResolverState},
 };
+use dbt_state::selector::{RunCacheStateSelectorArgs, evaluate_state_selector};
 use dbt_telemetry::{ExecutionPhase, PhaseExecuted};
+use std::collections::{BTreeSet, HashMap};
 
 use tracing::Instrument as _;
 
@@ -42,6 +49,7 @@ impl CompilationPipeline {
         schedule_args: SchedulerArgs,
         resolved_state: &ResolverState,
         previous_state: Option<&StateArtifacts>,
+        run_cache_state_selector_args: Option<&RunCacheStateSelectorArgs>,
         atoms: Option<Vec<SelectExpression>>,
         local_execution_backend: LocalExecutionBackendKind,
         token: &CancellationToken,
@@ -63,7 +71,7 @@ impl CompilationPipeline {
             resolved_selectors.include = Some(SelectExpression::Atom(SelectionCriteria {
                 method: MethodName::Fqn,
                 method_args: vec![],
-                value: inline_model,
+                value: inline_model.into(),
                 childrens_parents: false,
                 parents_depth: None,
                 children_depth: None,
@@ -86,11 +94,19 @@ impl CompilationPipeline {
         }
 
         // Create schedule
-        let mut schedule = build_schedule(
+        let state_selector_results = state_selector_results(
+            &resolved_state.nodes,
+            &resolved_selectors,
+            previous_state,
+            run_cache_state_selector_args,
+        )
+        .await?;
+        let mut schedule = build_schedule_with_state_selector_results(
             &schedule_args,
             &resolved_state.nodes,
             previous_state,
             &resolved_selectors,
+            state_selector_results.as_ref(),
             token,
             resolved_state.adapter_type,
         )?;
@@ -176,7 +192,7 @@ impl CompilationPipeline {
             let criteria = SelectionCriteria {
                 method: MethodName::Path,
                 method_args: vec![],
-                value: path.to_str().unwrap_or_default().to_string(),
+                value: path.to_str().unwrap_or_default().into(),
                 childrens_parents: false,
                 parents_depth: Some(u32::MAX),
                 children_depth: Some(u32::MAX),
@@ -213,7 +229,7 @@ impl CompilationPipeline {
             let criteria = SelectionCriteria {
                 method,
                 method_args: vec![],
-                value,
+                value: value.into(),
                 childrens_parents: false,
                 parents_depth: {
                     if include_parents {
@@ -238,10 +254,98 @@ impl CompilationPipeline {
     }
 }
 
+async fn state_selector_results(
+    nodes: &Nodes,
+    selectors: &ResolvedSelector,
+    previous_state: Option<&StateArtifacts>,
+    args: Option<&RunCacheStateSelectorArgs>,
+) -> FsResult<Option<StateSelectorResults>> {
+    let Some(args) = args else {
+        return Ok(None);
+    };
+    if previous_state.is_some() {
+        return Ok(None);
+    }
+
+    let mut values = BTreeSet::new();
+    // Traverse include expression
+    if let Some(include) = &selectors.include {
+        collect_service_state_selector_values(
+            include,
+            &mut values,
+            &selectors.selector_definitions,
+        );
+    }
+    // Also traverse exclude expression - state selectors there need service results too
+    if let Some(exclude) = &selectors.exclude {
+        collect_service_state_selector_values(
+            exclude,
+            &mut values,
+            &selectors.selector_definitions,
+        );
+    }
+
+    let mut results = StateSelectorResults::new();
+    for value in values {
+        let selected = evaluate_state_selector(nodes, args, &value)
+            .await
+            .map_err(|err| {
+                fs_err!(
+                    ErrorCode::SelectorError,
+                    "Failed to evaluate state:{value}: {err}"
+                )
+            })?;
+        results.insert(value, selected);
+    }
+    Ok(Some(results))
+}
+
+fn collect_service_state_selector_values(
+    expr: &SelectExpression,
+    values: &mut BTreeSet<String>,
+    selector_definitions: &HashMap<String, SelectorEntry>,
+) {
+    match expr {
+        SelectExpression::Atom(criteria) => {
+            if criteria.method == MethodName::State {
+                if let Some(value) = criteria.value.as_str() {
+                    values.insert(value.to_string());
+                }
+            } else if criteria.method == MethodName::Selector {
+                // Handle selector:name references by looking up the named selector
+                if let Some(entry) = criteria
+                    .value
+                    .as_str()
+                    .and_then(|name| selector_definitions.get(name))
+                {
+                    collect_service_state_selector_values(
+                        &entry.include,
+                        values,
+                        selector_definitions,
+                    );
+                }
+            }
+            // Also traverse nested excludes within the atom
+            if let Some(ref exclude) = criteria.exclude {
+                collect_service_state_selector_values(exclude, values, selector_definitions);
+            }
+        }
+        SelectExpression::And(children) | SelectExpression::Or(children) => {
+            for child in children {
+                collect_service_state_selector_values(child, values, selector_definitions);
+            }
+        }
+        SelectExpression::Exclude(inner) => {
+            collect_service_state_selector_values(inner, values, selector_definitions);
+        }
+    }
+}
+
 pub async fn schedule(
     resolved_state: &ResolverState,
     schedule_args: SchedulerArgs,
     previous_state: Option<&StateArtifacts>,
+    run_cache_state_selector_args: Option<&RunCacheStateSelectorArgs>,
     local_execution_backend: LocalExecutionBackendKind,
     token: &CancellationToken,
 ) -> FsResult<Schedule<String>> {
@@ -249,6 +353,7 @@ pub async fn schedule(
         schedule_args,
         resolved_state,
         previous_state,
+        run_cache_state_selector_args,
         None,
         local_execution_backend,
         token,
@@ -263,6 +368,7 @@ pub async fn schedule_with_select(
     resolved_state: &ResolverState,
     mut schedule_args: SchedulerArgs,
     previous_state: Option<&StateArtifacts>,
+    run_cache_state_selector_args: Option<&RunCacheStateSelectorArgs>,
     select_expr: SelectExpression,
     exclude_expr: Option<SelectExpression>,
     local_execution_backend: LocalExecutionBackendKind,
@@ -274,18 +380,26 @@ pub async fn schedule_with_select(
     schedule_args.exclude_resource_types.clear();
 
     // Create a modified resolved_state with the select expression as the selector
-    let resolved_selectors = dbt_schemas::schemas::selectors::ResolvedSelector {
+    let resolved_selectors = ResolvedSelector {
         include: Some(select_expr),
         exclude: exclude_expr,
         ..Default::default()
     };
 
     // Call build_schedule directly with the overridden selectors
-    let mut schedule = build_schedule(
+    let state_selector_results = state_selector_results(
+        &resolved_state.nodes,
+        &resolved_selectors,
+        previous_state,
+        run_cache_state_selector_args,
+    )
+    .await?;
+    let mut schedule = build_schedule_with_state_selector_results(
         &schedule_args,
         &resolved_state.nodes,
         previous_state,
         &resolved_selectors,
+        state_selector_results.as_ref(),
         token,
         resolved_state.adapter_type,
     )?;
@@ -301,6 +415,7 @@ pub async fn schedule_with_unique_ids(
     resolved_state: &ResolverState,
     schedule_args: SchedulerArgs,
     previous_state: Option<&StateArtifacts>,
+    run_cache_state_selector_args: Option<&RunCacheStateSelectorArgs>,
     unique_ids: &[String],
     include_parents: bool,
     include_children: bool,
@@ -318,6 +433,7 @@ pub async fn schedule_with_unique_ids(
         schedule_args,
         resolved_state,
         previous_state,
+        run_cache_state_selector_args,
         Some(atoms),
         local_execution_backend,
         token,
@@ -329,6 +445,7 @@ pub async fn schedule_with_cache_state(
     resolved_state: &ResolverState,
     schedule_args: SchedulerArgs,
     previous_state: Option<&StateArtifacts>,
+    run_cache_state_selector_args: Option<&RunCacheStateSelectorArgs>,
     cache_state: &CacheState,
     local_execution_backend: LocalExecutionBackendKind,
     token: &CancellationToken,
@@ -338,6 +455,7 @@ pub async fn schedule_with_cache_state(
         schedule_args,
         resolved_state,
         previous_state,
+        run_cache_state_selector_args,
         Some(atoms),
         local_execution_backend,
         token,
@@ -367,8 +485,9 @@ pub mod loaded_project {
 #[cfg(test)]
 mod scheduled_adapter_tests {
     use super::*;
-    use dbt_schemas::schemas::DbtModel;
+    use dbt_common::cancellation::never_cancels;
     use dbt_schemas::schemas::profiles::{DbConfig, SnowflakeDbConfig};
+    use dbt_schemas::schemas::{CommonAttributes, DbtModel};
     use std::sync::Arc;
 
     /// A target declaring `declared`, with `scheduled` selected for execution.
@@ -456,5 +575,51 @@ mod scheduled_adapter_tests {
         .expect_err("bigquery is not declared");
         let msg = err.to_string();
         assert_eq!(msg.matches("bigquery").count(), 1, "reported twice: {msg}");
+    }
+
+    #[test]
+    fn state_selector_results_are_used_when_building_the_schedule() {
+        let unique_id = "model.project.selected".to_string();
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            unique_id.clone(),
+            Arc::new(DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: unique_id.clone(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        );
+        let selectors = ResolvedSelector {
+            include: Some(SelectExpression::Atom(SelectionCriteria {
+                method: MethodName::State,
+                method_args: vec![],
+                value: "modified".into(),
+                childrens_parents: false,
+                parents_depth: None,
+                children_depth: None,
+                indirect: None,
+                exclude: None,
+            })),
+            ..Default::default()
+        };
+        let state_selector_results = StateSelectorResults::from([(
+            "modified".to_string(),
+            BTreeSet::from([unique_id.clone()]),
+        )]);
+
+        let schedule = build_schedule_with_state_selector_results(
+            &SchedulerArgs::default(),
+            &nodes,
+            None,
+            &selectors,
+            Some(&state_selector_results),
+            &never_cancels(),
+            AdapterType::Bigquery,
+        )
+        .expect("the externally evaluated state selector result is scheduled");
+
+        assert_eq!(schedule.selected_nodes, BTreeSet::from([unique_id]));
     }
 }

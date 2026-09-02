@@ -26,6 +26,11 @@ const KEY_SLOT_MS: &str = "slot_ms";
 const KEY_LOCATION: &str = "location";
 const KEY_PROJECT_ID: &str = "project_id";
 const KEY_JOB_ID: &str = "job_id";
+/// Non-fatal backend warning text (e.g. a dbt-compute export-limit
+/// truncation notice), kept distinct from `message` (which always carries
+/// a status/row-count summary) so callers can detect "was there a warning"
+/// without parsing prose.
+const KEY_WARNING: &str = "warning";
 
 const KNOWN_KEYS: &[&str] = &[KEY_MESSAGE, KEY_CODE, KEY_ROWS_AFFECTED, KEY_QUERY_ID];
 
@@ -94,6 +99,12 @@ impl AdapterResponse {
         self.get_str(KEY_QUERY_ID)
     }
 
+    /// Non-fatal backend warning text, if the executed statement's response
+    /// carried one (e.g. a dbt-compute export-limit truncation notice).
+    pub fn warning(&self) -> Option<String> {
+        self.get_str(KEY_WARNING)
+    }
+
     /// Rows affected, clamping the `-1` unknown sentinel (and any negative) to 0.
     pub fn rows_affected(&self) -> u64 {
         u64::try_from(self.rows_affected_i64()).unwrap_or(0)
@@ -145,6 +156,14 @@ impl AdapterResponse {
         let query_id = query_id_from_record_batch(batch, adapter_type);
         if let Some(query_id) = query_id {
             response = response.with_query_id(query_id);
+        }
+
+        if adapter_type == AdapterType::LakeCompute
+            && let Some(warnings) = batch.meta_string(adbc::lake_compute::schema_metadata::WARNINGS)
+            && !warnings.is_empty()
+        {
+            let message = format!("{} {warnings}", response.message());
+            response = response.with_message(message).with(KEY_WARNING, warnings);
         }
 
         // Add adapter-specific fields to the AdapterResponse
@@ -531,6 +550,38 @@ mod from_record_batch_tests {
         let response = AdapterResponse::from_record_batch(&batch, AdapterType::Snowflake);
         assert_eq!(response.rows_affected_i64(), 0);
         assert_eq!(response.message(), "SUCCESS 0");
+    }
+
+    #[test]
+    fn test_alt_warning_metadata_surfaces_in_message_and_warning_key() {
+        let batch = select_batch(
+            3,
+            &[(
+                adbc::lake_compute::schema_metadata::WARNINGS,
+                "lake_compute_information_schema.jobs: matched 50001 rows, which exceeds the 50000-row export limit",
+            )],
+        );
+        let response = AdapterResponse::from_record_batch(&batch, AdapterType::LakeCompute);
+        assert_eq!(
+            response.warning().as_deref(),
+            Some(
+                "lake_compute_information_schema.jobs: matched 50001 rows, which exceeds the 50000-row export limit"
+            )
+        );
+        assert!(
+            response
+                .message()
+                .contains("lake_compute_information_schema.jobs: matched 50001 rows"),
+            "expected warning text to be folded into the message, got: {:?}",
+            response.message()
+        );
+    }
+
+    #[test]
+    fn test_alt_without_warning_metadata_has_no_warning() {
+        let batch = select_batch(3, &[]);
+        let response = AdapterResponse::from_record_batch(&batch, AdapterType::LakeCompute);
+        assert_eq!(response.warning(), None);
     }
 
     #[test]

@@ -12,7 +12,7 @@
     {%- set query_columns = get_columns_in_query(sql) -%}
     {%- if query_columns %}
   (
-    {{ get_persist_docs_column_list(model_columns, query_columns) }}
+    {{ get_persist_docs_column_list(relation, model_columns, query_columns) }}
   )
     {%- endif -%}
   {%- endif %}
@@ -38,7 +38,9 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro get_persist_docs_column_list(model_columns, query_columns) -%}
+{% macro get_persist_docs_column_list(relation, model_columns, query_columns) -%}
+  {#- Warns about any model_columns absent from the view's own query output.  -#}
+  {%- do validate_doc_columns(relation, model_columns, query_columns, case_insensitive=true) -%}
   {%- for column_name in query_columns -%}
     {{ get_column_comment_sql(column_name, model_columns) }}{{",\n\t" if not loop.last else "" }}
   {%- endfor -%}

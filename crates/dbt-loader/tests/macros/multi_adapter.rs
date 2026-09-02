@@ -3,7 +3,7 @@
 //! Two properties have to hold together, and neither is provable from a
 //! single-adapter harness:
 //!
-//! * *intra-chain overriding is preserved* — an `alt` node gets DuckDB's
+//! * *intra-chain overriding is preserved* — an `lake_compute` node gets DuckDB's
 //!   `run_hooks`, which overrides `dbt-adapters`' by being later in the chain;
 //! * *chains stay isolated* — a Snowflake node in the same environment gets
 //!   `dbt-adapters`' `run_hooks`, not DuckDB's.
@@ -33,14 +33,14 @@ const RENDER_STUB: &str = r#"
 {% macro render(sql) %}{{ sql }}{% endmacro %}
 "#;
 
-/// One environment serving Snowflake (the target default) plus `alt`.
+/// One environment serving Snowflake (the target default) plus `lake_compute`.
 ///
 /// Loads the real internal packages, so this also exercises
 /// `construct_internal_packages` over the union of both adapters' chains --
 /// `dbt-adapters`, `dbt-snowflake`, `dbt-lake_compute`, `dbt-duckdb`.
-fn snowflake_plus_alt() -> MacroTestHarness {
+fn snowflake_plus_lake_compute() -> MacroTestHarness {
     MacroTestHarness::for_adapter(AdapterType::Snowflake)
-        .with_extra_adapters([AdapterType::Alt])
+        .with_extra_adapters([AdapterType::LakeCompute])
         .load_all_macros()
         .with_macro("dbt", "statement", STATEMENT_STUB)
         .with_macro("dbt", "render", RENDER_STUB)
@@ -76,10 +76,10 @@ fn hooks_ctx() -> BTreeMap<String, Value> {
 const TEMPLATE: &str = "{{ run_hooks(hooks, inside_transaction=False) }}";
 
 #[test]
-fn alt_node_gets_duckdbs_run_hooks_override() {
-    let harness = snowflake_plus_alt();
+fn lake_compute_node_gets_duckdbs_run_hooks_override() {
+    let harness = snowflake_plus_lake_compute();
     let rendered = harness
-        .render_for(AdapterType::Alt, TEMPLATE, hooks_ctx())
+        .render_for(AdapterType::LakeCompute, TEMPLATE, hooks_ctx())
         .expect("render should succeed");
 
     assert!(
@@ -88,7 +88,7 @@ fn alt_node_gets_duckdbs_run_hooks_override() {
     );
     assert!(
         !rendered.contains("commit;"),
-        "an `alt` node must get DuckDB's `run_hooks`, which drops the extra \
+        "an `lake_compute` node must get DuckDB's `run_hooks`, which drops the extra \
          `commit;`. Getting `dbt-adapters`' version means the inheritance chain \
          is not being walked. Rendered: {rendered:?}"
     );
@@ -96,7 +96,7 @@ fn alt_node_gets_duckdbs_run_hooks_override() {
 
 #[test]
 fn snowflake_node_gets_dbt_adapters_run_hooks() {
-    let harness = snowflake_plus_alt();
+    let harness = snowflake_plus_lake_compute();
     let rendered = harness
         .render(TEMPLATE, hooks_ctx())
         .expect("render should succeed");
@@ -104,7 +104,7 @@ fn snowflake_node_gets_dbt_adapters_run_hooks() {
     assert!(
         rendered.contains("commit;"),
         "a Snowflake node must get `dbt-adapters`' `run_hooks`; DuckDB's must not \
-         leak across chains just because `alt` is also declared. Rendered: {rendered:?}"
+         leak across chains just because `lake_compute` is also declared. Rendered: {rendered:?}"
     );
 }
 
@@ -114,17 +114,17 @@ fn snowflake_node_gets_dbt_adapters_run_hooks() {
 /// definition happened to match.
 #[test]
 fn the_two_dialects_resolve_to_different_definitions() {
-    let harness = snowflake_plus_alt();
-    let as_alt = harness
-        .render_for(AdapterType::Alt, TEMPLATE, hooks_ctx())
+    let harness = snowflake_plus_lake_compute();
+    let as_lake_compute = harness
+        .render_for(AdapterType::LakeCompute, TEMPLATE, hooks_ctx())
         .expect("render should succeed");
     let as_snowflake = harness
         .render(TEMPLATE, hooks_ctx())
         .expect("render should succeed");
 
     assert_ne!(
-        as_alt.split_whitespace().collect::<Vec<_>>(),
+        as_lake_compute.split_whitespace().collect::<Vec<_>>(),
         as_snowflake.split_whitespace().collect::<Vec<_>>(),
-        "`alt` and Snowflake must resolve `run_hooks` to different definitions"
+        "`lake_compute` and Snowflake must resolve `run_hooks` to different definitions"
     );
 }

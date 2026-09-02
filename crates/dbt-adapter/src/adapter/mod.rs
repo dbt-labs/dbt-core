@@ -18,12 +18,11 @@ use crate::time_machine::TimeMachine;
 use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
 
-use crate::auth::DefaultAuthWarningPrinter;
 use adbc_core::options::OptionValue;
 use dbt_adapter_core::AdapterType;
 use dbt_adbc::QueryCtx;
 use dbt_agate::AgateTable;
-use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
+use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
@@ -55,8 +54,10 @@ use std::sync::Arc;
 
 pub mod adapter_factory;
 pub mod adapter_impl;
+pub mod store;
 pub use adapter_factory::*;
 pub use adapter_impl::{AdapterImpl, alias_types_from_state, quote_component, quote_ident};
+pub use store::{AdapterBuilder, AdapterStore};
 #[cfg(test)]
 mod tests;
 
@@ -181,9 +182,7 @@ impl Adapter {
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
 
-        let warning_printer =
-            Box::new(DefaultAuthWarningPrinter::new()) as Box<dyn AuthWarningPrinter>;
-        let auth: Arc<dyn Auth> = auth_for_backend(warning_printer, backend).into();
+        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
         let adapter_config = AdapterConfig::new(config);
         let quoting = package_quoting
             .try_into()
@@ -706,7 +705,7 @@ impl Adapter {
                 | AdapterType::Spark
                 | AdapterType::Databricks
                 | AdapterType::DuckDB
-                | AdapterType::Alt => {
+                | AdapterType::LakeCompute => {
                     format!("({expr1} IS NOT DISTINCT FROM {expr2})")
                 }
                 _ => format!(
@@ -800,7 +799,7 @@ impl Adapter {
                         constraint.warn_unenforced,
                     );
                     let rendered =
-                        render_model_constraint(adapter.adapter_type(), constraint.clone());
+                        render_model_constraint(adapter.adapter_type(), constraint.clone())?;
                     if let Some(rendered) = rendered {
                         result.push(rendered)
                     }
@@ -1756,6 +1755,9 @@ impl Adapter {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new("get_column_schema_from_query", &["sql"], args);
                 let sql = iter.next_arg::<&str>()?;
+                // dbt-clickhouse: column_spec_ddl.sql passes the model's
+                // query_settings so introspected types match runtime settings.
+                let query_settings = iter.next_kwarg::<Option<&Value>>("query_settings")?;
                 iter.finish()?;
 
                 let ctx = query_ctx_from_state(state)?
@@ -1767,6 +1769,7 @@ impl Adapter {
                     conn.as_mut(),
                     &ctx,
                     sql,
+                    query_settings,
                     self.cancellation_token.clone(),
                 )?;
                 Ok(Value::from(result))
@@ -1980,6 +1983,40 @@ impl Adapter {
                     None
                 };
 
+                if adapter.adapter_type() == AdapterType::Bigquery {
+                    if let Some(replay_adapter) = adapter.as_replay() {
+                        let is_replaceable_next = replay_adapter
+                            .replay_peek_is_replaceable_next(state)
+                            .map_err(|e| {
+                                minijinja::Error::new(
+                                    minijinja::ErrorKind::UndefinedError,
+                                    e.to_string(),
+                                )
+                            })?;
+                        if is_replaceable_next {
+                            let val = replay_adapter.replay_is_replaceable(state).map_err(|e| {
+                                minijinja::Error::new(
+                                    minijinja::ErrorKind::UndefinedError,
+                                    e.to_string(),
+                                )
+                            })?;
+                            return Ok(Value::from(val));
+                        } else if relation.is_some() {
+                            let execute_next = replay_adapter
+                                .replay_peek_execute_next(state)
+                                .map_err(|e| {
+                                    minijinja::Error::new(
+                                        minijinja::ErrorKind::UndefinedError,
+                                        e.to_string(),
+                                    )
+                                })?;
+                            if execute_next {
+                                return Ok(Value::from(true));
+                            }
+                        }
+                    }
+                }
+
                 let relation = match relation.as_ref() {
                     None => {
                         // Replay compatibility: Mantle recordings may include an is_replaceable call even
@@ -1987,29 +2024,6 @@ impl Adapter {
                         //
                         // Our typed adapter short-circuits relation=None to true, but in replay mode
                         // we must optionally consume a recorded is_replaceable to keep the stream aligned.
-                        if adapter.adapter_type() == AdapterType::Bigquery {
-                            if let Some(replay_adapter) = adapter.as_replay() {
-                                if replay_adapter
-                                    .replay_peek_is_replaceable_next(state)
-                                    .map_err(|e| {
-                                        minijinja::Error::new(
-                                            minijinja::ErrorKind::UndefinedError,
-                                            e.to_string(),
-                                        )
-                                    })?
-                                {
-                                    let val = replay_adapter.replay_is_replaceable(state).map_err(
-                                        |e| {
-                                            minijinja::Error::new(
-                                                minijinja::ErrorKind::UndefinedError,
-                                                e.to_string(),
-                                            )
-                                        },
-                                    )?;
-                                    return Ok(Value::from(val));
-                                }
-                            }
-                        }
                         return Ok(Value::from(true));
                     }
                     Some(r) => r,
@@ -2546,7 +2560,7 @@ impl Adapter {
                     | AdapterType::Datafusion
                     | AdapterType::Dremio
                     | AdapterType::Oracle
-                    | AdapterType::Alt => Err(AdapterError::new(
+                    | AdapterType::LakeCompute => Err(AdapterError::new(
                         AdapterErrorKind::NotSupported,
                         format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
                     )
@@ -2576,7 +2590,7 @@ impl Adapter {
                 | AdapterType::Datafusion
                 | AdapterType::Dremio
                 | AdapterType::Oracle
-                | AdapterType::Alt => Ok(Value::from(false)),
+                | AdapterType::LakeCompute => Ok(Value::from(false)),
             },
         }
     }
@@ -2889,7 +2903,7 @@ impl Adapter {
 
                 let mut tblproperties = match tblproperties_val {
                     Some(v) if !v.is_none() => minijinja_value_to_typed_struct::<
-                        BTreeMap<String, Value>,
+                        IndexMap<String, Value>,
                     >(v)
                     .map_err(|e| {
                         minijinja::Error::new(
@@ -2902,6 +2916,7 @@ impl Adapter {
                         .tblproperties
                         .clone()
                         .unwrap_or_default()
+                        .0
                         .into_iter()
                         .map(|(k, v)| (k, yml_value_to_minijinja(v)))
                         .collect(),
@@ -3064,14 +3079,21 @@ impl Adapter {
                 let iter = ArgsIter::new("describe_relation", &["relation"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let include_transient = iter
+                    .next_kwarg::<Option<bool>>("include_transient")?
+                    .unwrap_or(false);
                 iter.finish()?;
 
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                Ok(adapter
-                    .describe_relation(conn.as_mut(), &relation, Some(state))?
-                    .map(Value::from_object)
-                    .unwrap_or_else(none_value))
+
+                adapter.describe_relation(
+                    state,
+                    conn.as_mut(),
+                    &relation,
+                    include_transient,
+                    self.cancellation_token.clone(),
+                )
             }
             Parse(_) => Ok(none_value()),
         }
@@ -3234,12 +3256,20 @@ impl Adapter {
             Typed { adapter, .. } => {
                 let iter = ArgsIter::new(
                     "parse_columns_and_constraints",
-                    &["existing_columns", "model_columns", "model_constraints"],
+                    &[
+                        "existing_columns",
+                        "model_columns",
+                        "model_constraints",
+                        "contract_enforced",
+                        "model_name",
+                    ],
                     args,
                 );
                 let existing_columns = iter.next_arg::<&Value>()?;
                 let model_columns = iter.next_arg::<&Value>()?;
                 let model_constraints = iter.next_arg::<&Value>()?;
+                let contract_enforced = iter.next_arg::<Option<bool>>()?.unwrap_or(false);
+                let model_name = iter.next_arg::<Option<&str>>()?.unwrap_or("");
                 iter.finish()?;
 
                 adapter.parse_columns_and_constraints(
@@ -3247,6 +3277,8 @@ impl Adapter {
                     existing_columns,
                     model_columns,
                     model_constraints,
+                    contract_enforced,
+                    model_name,
                 )
             }
             Parse(_) => Ok(Value::from(vec![
@@ -3283,6 +3315,175 @@ impl Adapter {
                 Ok(Value::from_object(config))
             }
             Parse(_) => Ok(none_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::get_model_settings].
+    pub fn get_model_settings(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_model_settings", &["model", "engine"], args);
+        let model = iter.next_arg::<&Value>()?;
+        let engine = iter.next_arg::<Option<&str>>()?.unwrap_or("MergeTree");
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_settings(model, engine))),
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::get_model_query_settings].
+    pub fn get_model_query_settings(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("get_model_query_settings", &["model"], args);
+        let model = iter.next_arg::<&Value>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.get_model_query_settings(model))),
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::check_incremental_schema_changes].
+    pub fn check_incremental_schema_changes(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new(
+            "check_incremental_schema_changes",
+            &["on_schema_change", "existing_relation", "target_sql"],
+            args,
+        );
+        let on_schema_change = iter.next_arg::<&str>()?;
+        let existing_relation = iter.next_arg::<&Value>()?;
+        let target_sql = iter.next_arg::<&str>()?;
+        let materialization = iter
+            .next_kwarg::<Option<&str>>("materialization")?
+            .unwrap_or("incremental");
+        let query_settings = iter.next_kwarg::<Option<&Value>>("query_settings")?;
+        iter.finish()?;
+        let existing = existing_relation
+            .downcast_object::<RelationObject>()
+            .map(|ro| ro.inner());
+        match &self.inner {
+            Typed { adapter, .. } => Ok(adapter.check_incremental_schema_changes(
+                state,
+                on_schema_change,
+                existing,
+                target_sql,
+                materialization,
+                query_settings,
+                self.cancellation_token.clone(),
+            )?),
+            Parse(_) => Ok(none_value()),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::is_before_version].
+    pub fn is_before_version(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("is_before_version", &["version"], args);
+        let version = iter.next_arg::<&str>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.is_before_version(
+                state,
+                version,
+                self.cancellation_token.clone(),
+            )?)),
+            Parse(_) => Ok(Value::from(false)),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::is_at_or_after_version].
+    pub fn is_at_or_after_version(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("is_at_or_after_version", &["version"], args);
+        let version = iter.next_arg::<&str>()?;
+        iter.finish()?;
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.is_at_or_after_version(
+                state,
+                version,
+                self.cancellation_token.clone(),
+            )?)),
+            Parse(_) => Ok(Value::from(true)),
+        }
+    }
+
+    /// ClickHouse: see [AdapterImpl::s3source_clause].
+    pub fn s3source_clause(
+        &self,
+        state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new(
+            "s3source_clause",
+            &[
+                "config_name",
+                "s3_model_config",
+                "bucket",
+                "path",
+                "fmt",
+                "structure",
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "role_arn",
+                "compression",
+                "external_id",
+            ],
+            args,
+        );
+        let config_name = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let s3_model_config = iter.next_arg::<Option<&Value>>()?;
+        let bucket = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let path = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let fmt = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let structure = iter.next_arg::<Option<&Value>>()?;
+        let aws_access_key_id = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let aws_secret_access_key = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let role_arn = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let compression = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        let external_id = iter.next_arg::<Option<&str>>()?.unwrap_or_default();
+        iter.finish()?;
+
+        match &self.inner {
+            Typed { adapter, .. } => {
+                // impl.py's `self.config.vars` is the Jinja `var(...)` function here.
+                let vars_config = if config_name.is_empty() {
+                    None
+                } else {
+                    state
+                        .lookup("var", &[])
+                        .and_then(|f| f.call(state, &[Value::from(config_name)], &[]).ok())
+                };
+                Ok(Value::from(adapter.s3source_clause(
+                    vars_config.as_ref(),
+                    s3_model_config,
+                    structure.unwrap_or(&Value::UNDEFINED),
+                    bucket,
+                    path,
+                    fmt,
+                    aws_access_key_id,
+                    aws_secret_access_key,
+                    role_arn,
+                    compression,
+                    external_id,
+                )?))
+            }
+            Parse(_) => Ok(empty_string_value()),
         }
     }
 
@@ -3583,48 +3784,6 @@ impl Adapter {
         }
     }
 
-    /// Get all relevant metadata about a dynamic table to return as a dict to Agate Table row
-    ///
-    /// https://github.com/dbt-labs/dbt-adapters/blob/703180a871f2960cd0c91765ffc4b1dc111d615b/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L510
-    ///
-    /// ```python
-    /// def describe_dynamic_table(self, relation: SnowflakeRelation) -> Dict[str, Any]
-    /// ```
-    #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn describe_dynamic_table(
-        &self,
-        state: &State,
-        args: &[Value],
-    ) -> Result<Value, minijinja::Error> {
-        match &self.inner {
-            Typed { adapter, .. } => {
-                let iter = ArgsIter::new("describe_dynamic_table", &["relation"], args);
-                let relation_val = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
-                let include_transient = iter
-                    .next_kwarg::<Option<bool>>("include_transient")?
-                    .unwrap_or(false);
-                iter.finish()?;
-
-                let mut conn =
-                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                adapter.describe_dynamic_table(
-                    state,
-                    conn.as_mut(),
-                    &relation,
-                    include_transient,
-                    self.cancellation_token.clone(),
-                )
-            }
-            Parse(_) => {
-                let map = [("dynamic_table", none_value())]
-                    .into_iter()
-                    .collect::<HashMap<_, _>>();
-                Ok(Value::from_serialize(map))
-            }
-        }
-    }
-
     /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L334
     ///
     /// ```python
@@ -3784,8 +3943,6 @@ impl Adapter {
 
                 self.build_catalog_relation(model)
             }
-            // relation: BaseRelation, include_transient: bool = False
-            "describe_dynamic_table" => self.describe_dynamic_table(state, args),
             "get_catalog_integration" => self.get_catalog_integration(state, args),
             "type" => Ok(Value::from(self.effective_adapter_type(state).to_string())),
             // config: dict
@@ -3912,8 +4069,11 @@ impl Adapter {
             "upload_file" => self.upload_file(state, args),
             // relation: BaseRelation
             "get_bq_table" => self.get_bq_table(state, args),
-            // relation: BaseRelation
+            // relation: BaseRelation, include_transient: Optional[bool] = False
             "describe_relation" => self.describe_relation(state, args),
+            // Backwards-compatible alias: "describe_dynamic_table" was shipped Jinja surface
+            // (changelogged in 2.0.0-preview.71) before it was consolidated into describe_relation.
+            "describe_dynamic_table" => self.describe_relation(state, args),
             // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
             "grant_access_to" => self.grant_access_to(state, args),
             // relation: BaseRelation
@@ -4088,20 +4248,34 @@ impl Adapter {
                 Ok(Value::from(()))
             }
             "get_model_settings" => {
-                // model: dict, engine: str = "MergeTree"  -> "" (no settings)
-                Ok(Value::from(""))
+                // model: dict, engine: str = "MergeTree" -> SETTINGS section of CREATE DDL
+                self.get_model_settings(state, args)
             }
             "get_model_query_settings" => {
                 // model: dict -> SETTINGS clause appended to CREATE TABLE ... AS (SELECT ...)
-                // Default join_use_nulls=1 makes unmatched LEFT JOIN rows produce NULL
-                // instead of ClickHouse's default type-zero values (0 for Int64, etc.),
-                // restoring standard SQL semantics.
-                // Users can override via model config `query_settings`.
-                Ok(Value::from("SETTINGS join_use_nulls = 1"))
+                self.get_model_query_settings(state, args)
             }
             "is_before_version" => {
-                // version: str -> false (assume modern server)
-                Ok(Value::from(false))
+                // version: str -> bool (server version < given version)
+                self.is_before_version(state, args)
+            }
+            "is_at_or_after_version" => {
+                // version: str -> bool (server version >= given version)
+                self.is_at_or_after_version(state, args)
+            }
+            "s3source_clause" => {
+                // config_name: str, s3_model_config: dict, bucket: str, path: str, fmt: str,
+                // structure: str|list|dict, aws_access_key_id: str, aws_secret_access_key: str,
+                // role_arn: str, compression: str = '', external_id: str = ''
+                // -> s3(...) table function clause
+                self.s3source_clause(state, args)
+            }
+            "format_columns" => {
+                // columns: List[Column] -> List[dict] of {name, data_type}
+                let iter = ArgsIter::new("format_columns", &["columns"], args);
+                let columns = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                Ok(clickhouse::format_columns(columns))
             }
             "can_exchange" => {
                 // schema: str, type: str -> false (don't use EXCHANGE TABLES)
@@ -4112,23 +4286,53 @@ impl Adapter {
                 Ok(Value::from(false))
             }
             "calculate_incremental_strategy" => {
-                // strategy: Optional[str] -> str (default to "append" if not set)
-                let strategy = args
-                    .first()
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or("append");
-                Ok(Value::from(strategy))
+                // strategy: str -> str (''/'default' resolves to delete_insert or legacy; '+' -> '_')
+                let iter = ArgsIter::new("calculate_incremental_strategy", &["strategy"], args);
+                let strategy = iter.next_arg::<Option<&str>>()?;
+                iter.finish()?;
+                match &self.inner {
+                    Typed { adapter, .. } => {
+                        Ok(Value::from(adapter.calculate_incremental_strategy(
+                            state,
+                            strategy,
+                            self.cancellation_token.clone(),
+                        )))
+                    }
+                    Parse(_) => Ok(Value::from(clickhouse::calculate_incremental_strategy(
+                        strategy, false,
+                    ))),
+                }
             }
             "validate_incremental_strategy" => {
-                // strategy: str, predicates: list, unique_key: ?, partition_by: ? -> None
-                // Stub: all strategies accepted for MVP
-                Ok(Value::from(()))
+                // strategy: str, predicates: list, unique_key: str, partition_by: str -> None (raises on invalid combos)
+                let iter = ArgsIter::new(
+                    "validate_incremental_strategy",
+                    &["strategy", "predicates", "unique_key", "partition_by"],
+                    args,
+                );
+                let strategy = iter.next_arg::<&str>()?;
+                let predicates = iter.next_arg::<&Value>()?;
+                let unique_key = iter.next_arg::<&Value>()?;
+                let partition_by = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                match &self.inner {
+                    Typed { adapter, .. } => {
+                        adapter.validate_incremental_strategy(
+                            state,
+                            strategy,
+                            predicates.is_true(),
+                            unique_key.is_true(),
+                            partition_by.is_true(),
+                            self.cancellation_token.clone(),
+                        )?;
+                        Ok(none_value())
+                    }
+                    Parse(_) => Ok(none_value()),
+                }
             }
             "check_incremental_schema_changes" => {
-                // on_schema_change: str, existing_relation: Relation, sql: str -> None
-                // Stub: return None (no schema changes tracked); only reached when on_schema_change != 'ignore'
-                Ok(Value::from(()))
+                // on_schema_change: str, existing: Relation, target_sql: str, materialization: str = 'incremental', query_settings: dict = None -> ClickHouseColumnChanges | none
+                self.check_incremental_schema_changes(state, args)
             }
             "filter_settings_by_engine" => {
                 // model: dict, settings: str -> str

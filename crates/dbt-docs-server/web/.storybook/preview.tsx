@@ -14,6 +14,7 @@ import {
 import type { BootstrapData } from '../src/shared/data-sources/duckdb/bootstrap';
 import { storyBootstrapData } from '../src/shared/testing/storyFixtures';
 import { storyDataSource } from '../src/shared/testing/storySources';
+import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
 
 // The whole app stylesheet: biga tokens, dbt-dag's react-flow CSS, sourdough, tailwind,
 // then `app.css`. Components here are styled almost entirely by CSS custom properties
@@ -69,9 +70,11 @@ function Providers({
               renders the same hrefs the shipped app does. */}
           <LinkPrefixProvider prefix="#/">
             <BootstrapProvider value={read}>
-              <MemoryRouter initialEntries={initialEntries ?? ['/']}>
-                {children}
-              </MemoryRouter>
+              <ReactFlowProvider>
+                <MemoryRouter initialEntries={initialEntries ?? ['/']}>
+                  {children}
+                </MemoryRouter>
+              </ReactFlowProvider>
             </BootstrapProvider>
           </LinkPrefixProvider>
         </MetadataDataProvider>

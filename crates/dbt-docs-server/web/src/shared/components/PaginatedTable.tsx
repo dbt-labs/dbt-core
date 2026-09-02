@@ -23,7 +23,7 @@ import {
   TableRow,
 } from '../../components/ui/Table';
 
-type DefaultTData = object & {
+export type DefaultTData = object & {
   isLoadingRow?: boolean;
   testId?: string;
 };

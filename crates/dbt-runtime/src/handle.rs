@@ -112,6 +112,19 @@ impl Handle {
         }
     }
 
+    /// Like [`Handle::enter`] but returns a guard that the caller can store
+    /// outside of the call stack (this requires more care).
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the returned [`SetCurrentGuard`] is dropped on
+    /// the same thread that called this method, and in reverse order relative
+    /// to any other entered guards on that thread.
+    pub unsafe fn enter_owned(&self) -> crate::context::SetCurrentGuard {
+        current::try_set_current(self)
+            .expect("cannot enter a runtime handle while the thread is shutting down")
+    }
+
     /// The runtime's blocking pool.
     pub(crate) fn blocking_spawner(&self) -> &Spawner {
         &self.inner.blocking_spawner

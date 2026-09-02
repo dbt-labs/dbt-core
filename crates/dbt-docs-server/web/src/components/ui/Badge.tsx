@@ -1,7 +1,5 @@
-import { type HTMLAttributes } from 'react';
+import { type HTMLAttributes, type ReactNode } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-
-import { Icon, type Ryecon } from '@dbt-labs/sourdough';
 
 import { cn } from '../../lib/utils';
 
@@ -36,21 +34,14 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {
   text: string;
   /** Optional icon rendered left of the badge text. */
-  ryecon?: Ryecon;
+  icon?: ReactNode;
   className?: string;
 }
 
-export function Badge({
-  text,
-  variant,
-  size,
-  ryecon,
-  className,
-  ...props
-}: BadgeProps) {
+export function Badge({ text, variant, size, icon, className, ...props }: BadgeProps) {
   return (
     <span className={cn(badgeVariants({ variant, size }), className)} {...props}>
-      {ryecon && <Icon ryecon={ryecon} size="xs" />}
+      {icon}
       {text}
     </span>
   );

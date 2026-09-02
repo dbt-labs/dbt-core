@@ -204,6 +204,45 @@ pub fn apply_engine_env_var_aliases() {
     }
 }
 
+/// Translates the `FORCE_COLOR` convention (<https://force-color.org>) into the
+/// `CLICOLOR`/`CLICOLOR_FORCE` variables that the `console` crate (all terminal
+/// output styling) and `anstream` (clap usage and error text) already honor.
+///
+/// Without this, colored output is dropped whenever stdout is not a terminal --
+/// for example when a wrapper process captures it for logging or reformatting.
+///
+/// `NO_COLOR` needs no translation: both libraries honor it natively, so it is
+/// only checked here to make sure it wins over `FORCE_COLOR`.
+///
+/// # Safety
+///
+/// This function modifies the process environment. It must be called before
+/// spawning any threads and before CLI parsing.
+pub fn apply_color_env_overrides() {
+    // Per <https://no-color.org>, honored when present and non-empty.
+    if std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()) {
+        return;
+    }
+
+    let Some(force_color) = std::env::var_os("FORCE_COLOR") else {
+        return;
+    };
+
+    // `FORCE_COLOR=0` means off, matching npm's `supports-color`. Any other
+    // value, including an empty one, means force on.
+    let (var, value) = if force_color == "0" {
+        ("CLICOLOR", "0")
+    } else {
+        ("CLICOLOR_FORCE", "1")
+    };
+
+    // SAFETY: Called before any threads are spawned
+    #[allow(clippy::disallowed_methods)]
+    unsafe {
+        std::env::set_var(var, value);
+    }
+}
+
 /// Warns about environment variables that are recognized but not supported by fusion.
 ///
 /// These are typically dbt-core specific variables that have no effect in fusion.
@@ -542,6 +581,111 @@ mod tests {
         unsafe {
             #[allow(clippy::disallowed_methods)]
             std::env::remove_var("DBT_ENGINE_FAIL_FAST");
+        }
+    }
+
+    /// Every variable `apply_color_env_overrides` reads or writes.
+    const COLOR_ENV_VARS: [&str; 4] = ["NO_COLOR", "FORCE_COLOR", "CLICOLOR", "CLICOLOR_FORCE"];
+
+    /// Clears the color variables so a case starts from a known state regardless
+    /// of the developer's shell, then restores the original values on drop so the
+    /// tests do not change color settings for the rest of the process (under
+    /// `cargo test` all tests share one process).
+    struct ColorEnvGuard {
+        saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
+    }
+
+    impl ColorEnvGuard {
+        fn new(set: &[(&str, &str)]) -> Self {
+            let saved = COLOR_ENV_VARS
+                .iter()
+                .map(|var| (*var, std::env::var_os(var)))
+                .collect();
+
+            for var in COLOR_ENV_VARS {
+                unsafe {
+                    #[allow(clippy::disallowed_methods)]
+                    std::env::remove_var(var);
+                }
+            }
+            for (var, value) in set {
+                unsafe {
+                    #[allow(clippy::disallowed_methods)]
+                    std::env::set_var(var, value);
+                }
+            }
+
+            Self { saved }
+        }
+    }
+
+    impl Drop for ColorEnvGuard {
+        fn drop(&mut self) {
+            for (var, value) in &self.saved {
+                unsafe {
+                    #[allow(clippy::disallowed_methods)]
+                    match value {
+                        Some(value) => std::env::set_var(var, value),
+                        None => std::env::remove_var(var),
+                    }
+                }
+            }
+        }
+    }
+
+    /// One `apply_color_env_overrides` case: a name, the color variables to start
+    /// from, and the `CLICOLOR`/`CLICOLOR_FORCE` values expected afterwards.
+    type ColorCase = (
+        &'static str,
+        &'static [(&'static str, &'static str)],
+        Option<&'static str>,
+        Option<&'static str>,
+    );
+
+    #[test]
+    fn apply_color_env_overrides_translates_force_color() {
+        let cases: &[ColorCase] = &[
+            ("nothing set", &[], None, None),
+            ("FORCE_COLOR=1", &[("FORCE_COLOR", "1")], None, Some("1")),
+            // Any value other than `0` forces color on, matching npm's
+            // `supports-color`.
+            ("FORCE_COLOR=2", &[("FORCE_COLOR", "2")], None, Some("1")),
+            ("empty FORCE_COLOR", &[("FORCE_COLOR", "")], None, Some("1")),
+            ("FORCE_COLOR=0", &[("FORCE_COLOR", "0")], Some("0"), None),
+            // NO_COLOR is honored natively by `console` and `anstream`, so
+            // neither variable is written and thus neither can override it.
+            (
+                "NO_COLOR beats FORCE_COLOR",
+                &[("NO_COLOR", "1"), ("FORCE_COLOR", "1")],
+                None,
+                None,
+            ),
+            // Per <https://no-color.org>, an empty NO_COLOR is not honored.
+            (
+                "empty NO_COLOR is ignored",
+                &[("NO_COLOR", ""), ("FORCE_COLOR", "1")],
+                None,
+                Some("1"),
+            ),
+        ];
+
+        let _lock = ENV_MUTEX.lock().unwrap();
+
+        for (case, set, clicolor, clicolor_force) in cases {
+            let _guard = ColorEnvGuard::new(set);
+
+            apply_color_env_overrides();
+
+            assert_eq!(
+                std::env::var("CLICOLOR").ok().as_deref(),
+                *clicolor,
+                "unexpected CLICOLOR for case: {case}"
+            );
+            assert_eq!(
+                std::env::var("CLICOLOR_FORCE").ok().as_deref(),
+                *clicolor_force,
+                "unexpected CLICOLOR_FORCE for case: {case}"
+            );
         }
     }
 }

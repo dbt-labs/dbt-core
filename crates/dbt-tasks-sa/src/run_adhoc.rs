@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use adbc_core::options::OptionStatement;
 use arrow::array::RecordBatch;
 use arrow_schema::{Schema, SchemaRef};
 use datafusion_expr::LogicalPlan;
@@ -149,6 +150,14 @@ async fn run_remote_adhoc_with_connection(
 
     let records: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
 
+    // `reader` holds `stmt` borrowed; drop it before reading the statement's
+    // `LAST_WARNINGS` option below, mirroring the sequencing
+    // `adapter_engine.rs`'s `adbc_execute_with_options` already relies on for
+    // the same option (the driver may only populate it once the reader is
+    // fully drained).
+    drop(reader);
+    warn_if_last_warnings(stmt.as_ref());
+
     if let Some(recorder) = dbt_adapter::time_machine::global_recorder() {
         recorder.record_run_remote_adhoc(rendered_sql, &records, &schema, true, None);
     }
@@ -170,4 +179,118 @@ fn replay_run_remote_adhoc_result() -> Option<FsResult<(Vec<RecordBatch>, Schema
 
 fn from_adbc_error(err: adbc_core::error::Error) -> Box<FsError> {
     fs_err!(ErrorCode::Generic, "{}", err)
+}
+
+/// Surface any non-fatal backend warning attached to the just-executed
+/// statement (e.g. dbt-compute's export-limit truncation notice) via
+/// `tracing::warn!`, matching `compute_platform.rs`'s
+/// `warn_if_response_has_message` so warning formatting is consistent across
+/// both `show --inline` and normal model execution.
+///
+/// Not gated to a specific adapter: only the `LakeCompute` (dbt-compute) driver ever
+/// populates `LAST_WARNINGS`, but calling this unconditionally is safe --
+/// every concrete `Statement` implementation in this codebase (the
+/// driver-manager's generic wrapper used by every non-lake-compute backend, and the
+/// record/replay wrapper) overrides `get_option_string` and returns a clean
+/// `Err` for an option it doesn't recognize, never the trait default's
+/// `unimplemented!()` panic. This also avoids needing to determine "which
+/// adapter is this statement actually running against" here at all -- no
+/// adapter-type label available at this call site reliably reflects a
+/// per-command `--adapter <type>` override (see git history for the bug this
+/// replaced: gating on `RemoteAdhocRunner`'s static `adapter_type` field, and
+/// later on `env.get_base_adapter()`'s reported type, both disagreed with
+/// the connection actually in use).
+fn warn_if_last_warnings(stmt: &dyn dbt_adbc::statement::Statement) {
+    let warning = stmt
+        .get_option_string(OptionStatement::Other(
+            dbt_adbc::lake_compute::LAST_WARNINGS.to_string(),
+        ))
+        .unwrap_or_default();
+    if !warning.is_empty() {
+        tracing::warn!("{warning}");
+    }
+}
+
+#[cfg(test)]
+mod warn_if_last_warnings_tests {
+    use super::*;
+
+    struct FakeStatement {
+        warning: Result<String, adbc_core::error::Error>,
+    }
+
+    impl dbt_adbc::statement::Statement for FakeStatement {
+        fn bind(&mut self, _batch: RecordBatch) -> adbc_core::error::Result<()> {
+            unimplemented!()
+        }
+        fn bind_stream(
+            &mut self,
+            _reader: Box<dyn arrow::array::RecordBatchReader + Send>,
+        ) -> adbc_core::error::Result<()> {
+            unimplemented!()
+        }
+        fn execute<'a>(
+            &'a mut self,
+        ) -> adbc_core::error::Result<Box<dyn arrow::array::RecordBatchReader + Send + 'a>>
+        {
+            unimplemented!()
+        }
+        fn execute_update(&mut self) -> adbc_core::error::Result<Option<i64>> {
+            unimplemented!()
+        }
+        fn execute_schema(&mut self) -> adbc_core::error::Result<Schema> {
+            unimplemented!()
+        }
+        fn execute_partitions(&mut self) -> adbc_core::error::Result<adbc_core::PartitionedResult> {
+            unimplemented!()
+        }
+        fn get_parameter_schema(&self) -> adbc_core::error::Result<Schema> {
+            unimplemented!()
+        }
+        fn prepare(&mut self) -> adbc_core::error::Result<()> {
+            unimplemented!()
+        }
+        fn set_sql_query(&mut self, _sql: &str) -> adbc_core::error::Result<()> {
+            unimplemented!()
+        }
+        fn set_substrait_plan(&mut self, _plan: &[u8]) -> adbc_core::error::Result<()> {
+            unimplemented!()
+        }
+        fn cancel(&mut self) -> adbc_core::error::Result<()> {
+            unimplemented!()
+        }
+        fn get_option_string(&self, _key: OptionStatement) -> adbc_core::error::Result<String> {
+            self.warning.clone()
+        }
+    }
+
+    #[test]
+    fn unsupported_option_error_does_not_panic() {
+        // Proves an `Err` from `get_option_string` (the real behavior of every
+        // non-lake-compute backend's driver-manager wrapper for an option it doesn't
+        // recognize) is handled gracefully, not propagated/panicked on.
+        let stmt = FakeStatement {
+            warning: Err(adbc_core::error::Error::with_message_and_status(
+                "unrecognized option",
+                adbc_core::error::Status::InvalidArguments,
+            )),
+        };
+        warn_if_last_warnings(&stmt);
+    }
+
+    #[test]
+    fn empty_warning_does_not_panic() {
+        let stmt = FakeStatement {
+            warning: Ok(String::new()),
+        };
+        warn_if_last_warnings(&stmt);
+    }
+
+    #[test]
+    fn non_empty_warning_does_not_panic() {
+        let stmt = FakeStatement {
+            warning: Ok("matched 50001 rows, which exceeds the 50000-row export limit".to_string()),
+        };
+        warn_if_last_warnings(&stmt);
+    }
 }

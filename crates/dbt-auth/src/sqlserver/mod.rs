@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
+use crate::{AdapterConfig, Auth, AuthError, AuthWarningPrinter};
 
 use dbt_adbc::{
     Backend,
@@ -85,7 +85,11 @@ enum SQLServerAuthIR<'a> {
 }
 
 impl<'a> SQLServerAuthIR<'a> {
-    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+    pub fn apply(
+        self,
+        mut builder: DatabaseBuilder,
+        _warning_printer: &dyn AuthWarningPrinter,
+    ) -> Result<DatabaseBuilder, AuthError> {
         // nearly all auth parameters are set in the URI
         // There are quite a few parameters that can be set
         // See: https://github.com/microsoft/go-mssqldb/tree/main?tab=readme-ov-file#connection-parameters-and-dsn
@@ -144,7 +148,10 @@ impl<'a> SQLServerAuthIR<'a> {
     }
 }
 
-fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SQLServerAuthIR<'a>, AuthError> {
+fn parse_auth<'a>(
+    config: &'a AdapterConfig,
+    _warning_printer: &dyn AuthWarningPrinter,
+) -> Result<SQLServerAuthIR<'a>, AuthError> {
     let mut authentication = config.get_str("authentication").unwrap_or(DEFAULT_AUTH);
 
     // https://github.com/microsoft/dbt-fabric/blob/0de219082282724a789b0d1b18509d39899da8e1/dbt/adapters/fabric/fabric_credentials.py#L78-L79
@@ -194,6 +201,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SQLServerAuthIR<'a>, Auth
 fn apply_connection_args(
     config: &AdapterConfig,
     mut builder: DatabaseBuilder,
+    _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<DatabaseBuilder, AuthError> {
     let host = config.require_str("host")?;
     let port = config
@@ -226,22 +234,27 @@ fn apply_connection_args(
     Ok(builder)
 }
 
-pub struct SQLServerAuth;
+pub struct SQLServerAuth {
+    pub warning_printer: Box<dyn AuthWarningPrinter>,
+}
+
+impl SQLServerAuth {
+    pub fn new(warning_printer: Box<dyn AuthWarningPrinter>) -> Self {
+        Self { warning_printer }
+    }
+}
 
 impl Auth for SQLServerAuth {
     fn backend(&self) -> Backend {
         Backend::SQLServer
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
-        let authentication_args = parse_auth(config)?;
+    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+        let authentication_args = parse_auth(config, self.warning_printer.as_ref())?;
         let builder = database::Builder::new(self.backend());
-        let builder = apply_connection_args(config, builder)?;
-        let builder = authentication_args.apply(builder)?;
-        Ok(AuthOutcome {
-            builder,
-            warnings: vec![],
-        })
+        let builder = apply_connection_args(config, builder, self.warning_printer.as_ref())?;
+        let builder = authentication_args.apply(builder, self.warning_printer.as_ref())?;
+        Ok(builder)
     }
 }
 
@@ -269,8 +282,10 @@ mod tests {
             ("client_secret", "my-secret"),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, "sqlserver://myserver.database.windows.net:1433");
         assert_contains!(&uri, "database=mydb");
@@ -289,8 +304,10 @@ mod tests {
             ("client_secret", "my-secret"),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, "fedauth=ActiveDirectoryServicePrincipal");
         assert_contains!(&uri, "user+id=my-client");
@@ -308,8 +325,10 @@ mod tests {
             ("PWD", "hunter2"),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, "sqlserver://myserver.database.windows.net:1433");
         assert_contains!(&uri, "fedauth=ActiveDirectoryPassword");
@@ -326,8 +345,10 @@ mod tests {
             ("database", "mydb"),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, "sqlserver://myserver.database.windows.net:1433");
         assert_contains!(&uri, "database=mydb");
@@ -342,8 +363,10 @@ mod tests {
             ("database", "mydb"),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, ":1433");
     }
@@ -357,8 +380,10 @@ mod tests {
             ("database", "mydb"),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, ":1434");
     }
@@ -374,8 +399,10 @@ mod tests {
             ("client_secret", "my-secret"),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, "fedauth=ActiveDirectoryServicePrincipal");
     }
@@ -391,8 +418,10 @@ mod tests {
             ("access_token", FAKE_ACCESS_TOKEN),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, "sqlserver://myserver.database.windows.net:1433");
         assert_contains!(&uri, "database=mydb");
@@ -418,8 +447,10 @@ mod tests {
             ("access_token", FAKE_ACCESS_TOKEN),
         ]);
 
-        let outcome = SQLServerAuth.configure(&config).expect("configure");
-        let uri = uri_value(&outcome.builder);
+        let outcome = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&config)
+            .expect("configure");
+        let uri = uri_value(&outcome);
 
         assert_contains!(&uri, "fedauth=ActiveDirectoryServicePrincipalAccessToken");
     }
@@ -432,7 +463,7 @@ mod tests {
             ("database", "mydb"),
         ]);
 
-        let err = SQLServerAuth
+        let err = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&config)
             .expect_err("missing access_token must fail");
 
@@ -453,7 +484,7 @@ mod tests {
             ("access_token", ""),
         ]);
 
-        let err = SQLServerAuth
+        let err = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&config)
             .expect_err("empty access_token must fail");
 
@@ -468,7 +499,7 @@ mod tests {
             ("database", "mydb"),
         ]);
 
-        let err = SQLServerAuth
+        let err = SQLServerAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&config)
             .expect_err("invalid authentication must fail");
 

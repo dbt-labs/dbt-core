@@ -28,6 +28,7 @@ pub struct DepsOperationContext<'a> {
     #[allow(dead_code)]
     pub version_check: bool,
     pub use_v2_compatible_package_downloads: bool,
+    pub require_hub_verified_downloads: bool,
     pub private_package_resolver: Arc<dyn PrivatePackageResolver>,
     pub cloud_config: Option<ResolvedCloudConfig>,
     pub notices: NoticeBuffer,
@@ -43,6 +44,7 @@ impl<'a> DepsOperationContext<'a> {
         skip_private_deps: bool,
         version_check: bool,
         use_v2_compatible_package_downloads: bool,
+        require_hub_verified_downloads: bool,
         private_package_resolver: Arc<dyn PrivatePackageResolver>,
         cloud_config: Option<ResolvedCloudConfig>,
     ) -> Self {
@@ -72,6 +74,7 @@ impl<'a> DepsOperationContext<'a> {
             skip_private_deps,
             version_check,
             use_v2_compatible_package_downloads,
+            require_hub_verified_downloads,
             private_package_resolver,
             cloud_config,
             notices: NoticeBuffer::new(EmitPolicy::from_inputs(version_check)),

@@ -857,7 +857,11 @@ export function fromSemanticModelDetail(
 }
 
 function isUnitTest(d: RestTestDetail): d is RestUnitTestDetail {
-  return 'given' in d;
+  // Not `'given' in d`: the duckdb union query selects a `given` column on
+  // both branches (NULL for data tests), so the key is always present --
+  // `resource_type` is the actual discriminator set correctly by both the
+  // duckdb query and the real backend.
+  return d.resource_type === 'unit_test';
 }
 
 export function fromTestDetail(d: RestTestDetail): TestAsset | UnitTestAsset {

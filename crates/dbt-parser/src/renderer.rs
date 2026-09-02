@@ -81,6 +81,27 @@ pub struct SqlFileRenderResult<T: ResolvableConfig<T>, S> {
     pub macro_dependencies: Vec<String>,
 }
 
+/// Whether `command` is one of the commands that defer a render error to
+/// compile time (see `defer_render_errors_to_compile` on [`RenderCtxInner`])
+/// instead of failing eagerly during parse.
+fn command_defers_render_errors(command: FsCommand) -> bool {
+    matches!(
+        command,
+        FsCommand::Compile
+            | FsCommand::Run
+            | FsCommand::RunOperation
+            | FsCommand::Test
+            | FsCommand::Seed
+            | FsCommand::Snapshot
+            | FsCommand::Show
+            | FsCommand::Build
+            | FsCommand::Source
+            | FsCommand::Freshness
+            | FsCommand::Clone
+            | FsCommand::Retry
+    )
+}
+
 /// Extracts the typed properties (including the `config:` block) from a node's schema.yml entry.
 /// For a versioned model this is the only properties-file config layer: the version's own
 /// `config:` is already merged into `mpe.schema_value` (see
@@ -585,20 +606,7 @@ where
                         if resolved_config.enabled() {
                             let err_with_loc = err.with_location(display_path.clone());
                             if *defer_render_errors_to_compile
-                                && matches!(
-                                    args.command,
-                                    FsCommand::Compile
-                                        | FsCommand::Run
-                                        | FsCommand::RunOperation
-                                        | FsCommand::Test
-                                        | FsCommand::Seed
-                                        | FsCommand::Snapshot
-                                        | FsCommand::Show
-                                        | FsCommand::Build
-                                        | FsCommand::Source
-                                        | FsCommand::Clone
-                                        | FsCommand::Retry
-                                )
+                                && command_defers_render_errors(args.command)
                             {
                                 emit_debug_log_message(err_with_loc.message());
                                 (ModelStatus::ParsingFailed, true)
@@ -1093,4 +1101,56 @@ pub fn collect_hook_dependencies_from_config(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_defers_render_errors_covers_freshness_alongside_source() {
+        // Freshness must defer the same way `dbt source freshness` already does,
+        // so a render error in an unselected node can't abort `dbt freshness`.
+        assert!(command_defers_render_errors(FsCommand::Source));
+        assert!(command_defers_render_errors(FsCommand::Freshness));
+    }
+
+    #[test]
+    fn command_defers_render_errors_covers_every_documented_command() {
+        for command in [
+            FsCommand::Compile,
+            FsCommand::Run,
+            FsCommand::RunOperation,
+            FsCommand::Test,
+            FsCommand::Seed,
+            FsCommand::Snapshot,
+            FsCommand::Show,
+            FsCommand::Build,
+            FsCommand::Source,
+            FsCommand::Freshness,
+            FsCommand::Clone,
+            FsCommand::Retry,
+        ] {
+            assert!(
+                command_defers_render_errors(command),
+                "{command:?} should defer render errors to compile"
+            );
+        }
+    }
+
+    #[test]
+    fn command_defers_render_errors_excludes_non_executable_commands() {
+        for command in [
+            FsCommand::List,
+            FsCommand::Parse,
+            FsCommand::Deps,
+            FsCommand::Debug,
+            FsCommand::Clean,
+        ] {
+            assert!(
+                !command_defers_render_errors(command),
+                "{command:?} should not defer render errors to compile"
+            );
+        }
+    }
 }

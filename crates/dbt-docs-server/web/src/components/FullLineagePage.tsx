@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Crosshair, ExternalLink, X } from 'lucide-react';
 
 import { Dag } from '@dbt-labs/dbt-dag';
-import { RyeconClose, RyeconCrosshair, RyeconLinkExternal } from '@dbt-labs/sourdough';
 
 import { useLineageData } from '../hooks/useLineageData';
 import { asToolbarItems, type LabelOnlyToolbarItem } from '../lib/dagToolbar';
@@ -103,12 +103,12 @@ export default function FullLineagePage() {
       },
       {
         label: 'Refocus lineage here',
-        ryecon: RyeconCrosshair,
+        ryecon: Crosshair,
         onSelect: () => refocus(node.id),
       },
       {
         label: 'Open in new tab',
-        ryecon: RyeconLinkExternal,
+        ryecon: ExternalLink,
         onSelect: () => {
           window.open(paths.details(node.id), '_blank', 'noopener,noreferrer');
         },
@@ -190,7 +190,7 @@ export default function FullLineagePage() {
             <div className="pointer-events-auto">
               <Button
                 variant="outline"
-                ryecon={RyeconClose}
+                icon={<X className="size-3" />}
                 tooltip="Close full lineage"
                 onClick={onClose}
               />

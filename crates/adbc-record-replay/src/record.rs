@@ -3,6 +3,7 @@ use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_schema::{ArrowError, Schema};
 use dbt_adbc::{Connection, Statement};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
@@ -15,6 +16,36 @@ use crate::naming::{
     compute_file_name, compute_file_name_for_get_objects, compute_file_name_for_table_schema,
 };
 use crate::storage::sqlite::SqliteHandler;
+
+/// Read-only statement options captured off the live statement after every
+/// successful recorded execute, so that a replay can serve them back.
+///
+/// Pull-based options can't be captured generically: `get_option_string` is a
+/// lookup, so the record layer has no way to enumerate what a caller will ask
+/// for later. This allowlist is the set a replay is expected to answer; add to
+/// it when a caller starts depending on another option surviving replay.
+const RECORDED_STATEMENT_OPTIONS: &[&str] = &[dbt_adbc::lake_compute::LAST_WARNINGS];
+
+/// Read [`RECORDED_STATEMENT_OPTIONS`] off `stmt`, keeping only the ones it
+/// actually answered with a non-empty value.
+///
+/// Must be called after the statement's reader has been fully drained: drivers
+/// may only populate per-statement options (e.g. dbt-compute's export-limit
+/// notice) once the result is complete, which is the same sequencing
+/// `adapter_engine.rs` and `run_adhoc.rs` already rely on when they read the
+/// option live. An `Err` means the driver doesn't recognize the option -- the
+/// normal case for every backend but dbt-compute -- and is skipped.
+fn capture_statement_options(stmt: &dyn Statement) -> BTreeMap<String, String> {
+    RECORDED_STATEMENT_OPTIONS
+        .iter()
+        .filter_map(|name| {
+            let value = stmt
+                .get_option_string(OptionStatement::Other((*name).to_string()))
+                .ok()?;
+            (!value.is_empty()).then(|| ((*name).to_string(), value))
+        })
+        .collect()
+}
 
 pub struct RecordConnection {
     recordings_path: PathBuf,
@@ -217,7 +248,14 @@ impl Statement for RecordStatement {
             None => "none",
         };
 
-        let result = self.inner_stmt.execute();
+        // Drain the reader inside the closure so its mutable borrow of
+        // `inner_stmt` ends here, before `capture_statement_options` reads the
+        // statement's post-execute options below.
+        let result = self.inner_stmt.execute().map(|mut reader| {
+            let schema = reader.schema();
+            let batches: Result<Vec<RecordBatch>, ArrowError> = reader.by_ref().collect();
+            (schema, batches)
+        });
 
         let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| to_adbc_error(e.into(), Some(&path)))?;
@@ -232,12 +270,12 @@ impl Statement for RecordStatement {
         let sqlite_handler = SqliteHandler::new(&path);
 
         match result {
-            Ok(mut reader) => {
-                let schema = reader.schema();
-                let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
+            Ok((schema, batches)) => {
+                let batches = batches?;
+                let options = capture_statement_options(self.inner_stmt.as_ref());
 
                 sqlite_handler
-                    .write_execute(&unique_id, sql, &batches, schema.clone())
+                    .write_execute(&unique_id, sql, &batches, schema.clone(), &options)
                     .map_err(|e| to_adbc_error(e, Some(&path)))?;
 
                 let results = batches
@@ -280,8 +318,9 @@ impl Statement for RecordStatement {
 
         match result {
             Ok(rows_affected) => {
+                let options = capture_statement_options(self.inner_stmt.as_ref());
                 sqlite_handler
-                    .write_execute(&unique_id, sql, &[], Arc::new(Schema::empty()))
+                    .write_execute(&unique_id, sql, &[], Arc::new(Schema::empty()), &options)
                     .map_err(|e| to_adbc_error(e, Some(&path)))?;
                 Ok(rows_affected)
             }
@@ -346,6 +385,9 @@ mod tests {
 
     struct MockStatement {
         result: Option<AdbcResult<Option<i64>>>,
+        /// What this "driver" reports for `LAST_WARNINGS`; `None` means it
+        /// doesn't recognize the option, like every non-dbt-compute backend.
+        last_warnings: Option<String>,
     }
 
     impl Statement for MockStatement {
@@ -382,6 +424,21 @@ mod tests {
         fn cancel(&mut self) -> AdbcResult<()> {
             unimplemented!()
         }
+        fn get_option_string(&self, key: OptionStatement) -> AdbcResult<String> {
+            match (&key, &self.last_warnings) {
+                (OptionStatement::Other(name), Some(warnings))
+                    if name == dbt_adbc::lake_compute::LAST_WARNINGS =>
+                {
+                    Ok(warnings.clone())
+                }
+                // Real drivers report an error for an option they don't know,
+                // rather than an empty string.
+                _ => Err(AdbcError::with_message_and_status(
+                    "unknown option".to_string(),
+                    AdbcStatus::NotFound,
+                )),
+            }
+        }
     }
 
     fn ctx_with_node_id(node_id: &str) -> RecordingContext {
@@ -396,6 +453,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mock = MockStatement {
             result: Some(Ok(Some(3))),
+            last_warnings: None,
         };
         let mut recorder = RecordStatement::new(
             dir.path().to_path_buf(),
@@ -412,6 +470,92 @@ mod tests {
     }
 
     #[test]
+    fn recorded_last_warnings_is_served_back_on_replay() {
+        // The warning only ever exists as a live statement option, so a replay
+        // can reproduce it solely by having recorded it.
+        let warning = "matched 310 rows, which exceeds the 3-row export limit";
+        let dir = tempfile::tempdir().unwrap();
+        let mock = MockStatement {
+            result: Some(Ok(None)),
+            last_warnings: Some(warning.to_string()),
+        };
+        let mut recorder = RecordStatement::new(
+            dir.path().to_path_buf(),
+            Box::new(mock),
+            ctx_with_node_id("model.test.a"),
+        );
+        recorder
+            .set_sql_query("CREATE TABLE t AS SELECT 1")
+            .unwrap();
+        recorder.execute_update().unwrap();
+
+        // A real replay run is a fresh session, so sequence numbering restarts.
+        crate::reset_counters(dir.path());
+
+        let mut replayer = ReplayStatement::new(
+            dir.path().to_path_buf(),
+            SharedConfig::default(),
+            ctx_with_node_id("model.test.a"),
+        );
+        replayer
+            .set_sql_query("CREATE TABLE t AS SELECT 1")
+            .unwrap();
+        replayer.execute_update().unwrap();
+
+        assert_eq!(
+            replayer
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_WARNINGS.to_string()
+                ))
+                .unwrap(),
+            warning
+        );
+    }
+
+    #[test]
+    fn replay_reports_empty_for_options_that_were_never_recorded() {
+        // Covers both a driver that doesn't know the option (so nothing was
+        // captured) and every recording made before options were captured at
+        // all: the historical empty-string answer, not an error.
+        let dir = tempfile::tempdir().unwrap();
+        let mock = MockStatement {
+            result: Some(Ok(None)),
+            last_warnings: None,
+        };
+        let mut recorder = RecordStatement::new(
+            dir.path().to_path_buf(),
+            Box::new(mock),
+            ctx_with_node_id("model.test.a"),
+        );
+        recorder
+            .set_sql_query("CREATE TABLE t AS SELECT 1")
+            .unwrap();
+        recorder.execute_update().unwrap();
+
+        // A real replay run is a fresh session, so sequence numbering restarts.
+        crate::reset_counters(dir.path());
+
+        let mut replayer = ReplayStatement::new(
+            dir.path().to_path_buf(),
+            SharedConfig::default(),
+            ctx_with_node_id("model.test.a"),
+        );
+        replayer
+            .set_sql_query("CREATE TABLE t AS SELECT 1")
+            .unwrap();
+        replayer.execute_update().unwrap();
+
+        assert_eq!(
+            replayer
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_WARNINGS.to_string()
+                ))
+                .unwrap(),
+            ""
+        );
+    }
+
+    #[test]
     fn replay_execute_update_matches_recording_made_via_execute() {
         let dir = tempfile::tempdir().unwrap();
         SqliteHandler::new(dir.path())
@@ -420,6 +564,7 @@ mod tests {
                 "CREATE SCHEMA IF NOT EXISTS x",
                 &[],
                 Arc::new(Schema::empty()),
+                &BTreeMap::new(),
             )
             .unwrap();
 
@@ -444,6 +589,7 @@ mod tests {
                 "CREATE SCHEMA IF NOT EXISTS x",
                 &[],
                 Arc::new(Schema::empty()),
+                &BTreeMap::new(),
             )
             .unwrap();
 

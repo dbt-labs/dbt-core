@@ -1,8 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Copy, GitBranch } from 'lucide-react';
 
-import { RyeconCopy, RyeconLineage } from '@dbt-labs/sourdough';
-import { IconButton } from '@dbt-labs/sourdough';
-
+import { Button } from '../../components/ui/Button';
 import { DataPlatformChip } from './DataPlatformChip';
 import { ResourcePanelHeader } from './ResourcePanelHeader';
 
@@ -12,8 +11,20 @@ const meta: Meta<typeof ResourcePanelHeader> = {
     resourceType: 'model',
     actions: (
       <>
-        <IconButton ryecon={RyeconLineage} size="sm" tooltip="View lineage" />
-        <IconButton ryecon={RyeconCopy} size="sm" tooltip="Copy link" />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          icon={<GitBranch className="size-4" />}
+          ariaLabel="View lineage"
+          tooltip="View lineage"
+        />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          icon={<Copy className="size-4" />}
+          ariaLabel="Copy link"
+          tooltip="Copy link"
+        />
       </>
     ),
   },

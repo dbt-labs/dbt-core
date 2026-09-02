@@ -128,6 +128,12 @@ pub fn load_profiles(
                     )
                 })?;
                 enforce_adapter_gating(config.adapter_type(), allow_experimental_adapters)?;
+                warn_on_ignored_threads(
+                    &connection.credentials,
+                    &adapter.adapter_type,
+                    connection.named.then_some(connection.name.as_str()),
+                    &resolved.target_name,
+                );
                 config
             };
             connections.push(ProfileConnection {
@@ -222,6 +228,40 @@ fn target_allow_clones(credentials: &dbt_yaml::Mapping) -> bool {
         }
         _ => true, //if not specified, defaults to true
     }
+}
+
+/// Warn that a connection other than the target's default sets `threads:`, which
+/// does nothing.
+///
+/// Thread count is target-wide: `resolve_and_set_threads` reads it from the
+/// target's default connection (or `--threads`) and then overwrites every other
+/// connection's with that value, so a `threads:` written anywhere else is dropped
+/// before anything reads it. Staying silent would leave the author believing their
+/// secondary adapter -- lake compute, typically -- runs at its own concurrency.
+///
+/// `connection_name` is `None` for a connection whose name was defaulted rather
+/// than written: only an author-written name is worth quoting back, and an unnamed
+/// connection is identified by its adapter alone.
+fn warn_on_ignored_threads(
+    credentials: &dbt_yaml::Mapping,
+    adapter_type: &str,
+    connection_name: Option<&str>,
+    target: &str,
+) {
+    if credentials.get("threads").is_none() {
+        return;
+    }
+    let which = match connection_name {
+        Some(name) => format!("connection '{name}' of adapter '{adapter_type}'"),
+        None => format!("adapter '{adapter_type}'"),
+    };
+    emit_warn_log_message(
+        ErrorCode::UnusedConfigKey,
+        format!(
+            "{which} in target '{target}' sets 'threads:', which is ignored. Thread count is \
+             target-wide, taken from the target's default connection or --threads. Remove it."
+        ),
+    );
 }
 
 /// Resolve the profile name to use.

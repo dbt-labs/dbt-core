@@ -39,7 +39,7 @@ export function devSite(): Plugin {
         console.log(
           `dbt docs dev: no generated site at ${dataDir}\n` +
             '  Generate one, then set DBT_DOCS_DEV_SITE if it lives elsewhere:\n' +
-            '    dbt compile --write-index --static-analysis strict\n' +
+            '    dbt build --static-analysis strict\n' +
             '    dbt docs generate',
         );
       }

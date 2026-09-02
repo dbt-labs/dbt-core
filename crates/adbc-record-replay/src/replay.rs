@@ -4,6 +4,7 @@ use arrow::array::{RecordBatch, RecordBatchReader};
 use arrow::record_batch::RecordBatchIterator;
 use arrow_schema::{ArrowError, Schema};
 use dbt_adbc::{Connection, Statement};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -188,6 +189,11 @@ pub(crate) struct ReplayStatement {
     config: SharedConfig,
     ctx: RecordingContext,
     sql: Option<String>,
+    /// Statement options captured off the live driver when this recording was
+    /// made, populated by the last `execute`/`execute_update` and served by
+    /// `get_option_string`. Empty until then, and for recordings made before
+    /// options were captured.
+    recorded_options: BTreeMap<String, String>,
 }
 
 impl ReplayStatement {
@@ -201,6 +207,7 @@ impl ReplayStatement {
             config,
             ctx,
             sql: None,
+            recorded_options: BTreeMap::new(),
         }
     }
 }
@@ -251,6 +258,8 @@ impl Statement for ReplayStatement {
                         AdbcStatus::Internal,
                     ));
                 }
+
+                self.recorded_options = entry.options;
 
                 entry
                     .data
@@ -311,6 +320,8 @@ impl Statement for ReplayStatement {
                     ));
                 }
 
+                self.recorded_options = entry.options;
+
                 Ok(None)
             }
             StorageType::FileArrowIpc | StorageType::FileParquet => Ok(None),
@@ -353,7 +364,16 @@ impl Statement for ReplayStatement {
         Ok(())
     }
 
-    fn get_option_string(&self, _key: OptionStatement) -> AdbcResult<String> {
+    fn get_option_string(&self, key: OptionStatement) -> AdbcResult<String> {
+        // Serve back what the live driver reported for this option when the
+        // recording was made. Anything not captured keeps the historical
+        // behavior of reporting an empty value rather than an error, so replays
+        // that never depended on an option are unaffected.
+        if let OptionStatement::Other(ref name) = key
+            && let Some(value) = self.recorded_options.get(name)
+        {
+            return Ok(value.clone());
+        }
         Ok(String::new())
     }
 }

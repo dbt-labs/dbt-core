@@ -73,13 +73,17 @@ pub async fn resolve_saved_queries(
 
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
     let is_dependency = dependency_package_name.is_some();
-    let _raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "saved-queries");
+    let _raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "saved-queries",
+        adapter_type,
+    )?;
     let _raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "saved-queries",
-        ))
+            adapter_type,
+        )?)
     } else {
         None
     };
@@ -93,8 +97,10 @@ pub async fn resolve_saved_queries(
                 (),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     // Validate saved query names with regex (similar to exposures)
@@ -241,7 +247,8 @@ pub async fn resolve_saved_queries(
                 raw_properties_yml_config.as_ref(),
                 None,
                 false,
-            );
+                adapter_type,
+            )?;
 
             let dbt_saved_query = DbtSavedQuery {
                 __common_attr__: CommonAttributes {
@@ -276,6 +283,8 @@ pub async fn resolve_saved_queries(
                 __base_attr__: NodeBaseAttributes {
                     // Not executed against a warehouse; records the target it parsed under.
                     adapter: adapter_type,
+                    // This node type has no `+propagate` config; nothing is published.
+                    propagate: Vec::new(),
                     database: database.unwrap_or_default(),
                     schema: schema.unwrap_or_default(),
                     alias: alias.unwrap_or_default(),

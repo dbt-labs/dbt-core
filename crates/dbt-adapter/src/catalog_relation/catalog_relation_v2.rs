@@ -34,6 +34,7 @@ const ADAPTER_PROP_LOCATION_ROOT: &str = "location_root";
 const ADAPTER_PROP_USE_UNIFORM: &str = "use_uniform";
 
 const FIELD_CATALOG_DATABASE: &str = "catalog_database";
+const FIELD_LAKEHOUSE_CATALOG: &str = "lakehouse_catalog";
 const ADAPTER_PROP_AUTO_REFRESH: &str = "auto_refresh";
 const ADAPTER_PROP_MAX_DATA_EXTENSION_TIME_IN_DAYS: &str = "max_data_extension_time_in_days";
 const ADAPTER_PROP_TARGET_FILE_SIZE: &str = "target_file_size";
@@ -81,7 +82,9 @@ pub(super) fn from_model_config_and_catalogs_v2(
 
             match model_catalog_name {
                 None if !wants_iceberg => {
-                    return Ok(CatalogRelation::default_catalog_relation_databricks());
+                    return Ok(
+                        CatalogRelation::default_catalog_relation_databricks_for_model(model),
+                    );
                 }
                 None => {
                     let use_uniform =
@@ -130,11 +133,13 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 Some(catalog_name) => catalog_name,
             }
         }
-        // Alt behaves as DuckDB-backed for relation-building purposes.
-        AdapterType::DuckDB | AdapterType::Alt => match model_catalog_name(model, adapter_type) {
-            None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
-            Some(catalog_name) => catalog_name,
-        },
+        // Lake compute behaves as DuckDB-backed for relation-building purposes.
+        AdapterType::DuckDB | AdapterType::LakeCompute => {
+            match model_catalog_name(model, adapter_type) {
+                None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
+                Some(catalog_name) => catalog_name,
+            }
+        }
         _ => Err(AdapterError::new(
             AdapterErrorKind::Internal,
             format!("build_relation_catalog cannot be invoked by an adapter {adapter_type:?}"),
@@ -213,21 +218,21 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 other.as_str()
             ),
         )),
-        // Alt never issues its own ATTACH: the dbt-compute
+        // Lake compute never issues its own ATTACH: the dbt-compute
         // service auto-attaches the org's MDLS catalog server-side via the
-        // caller's bearer token. All Alt needs from catalogs.yml is the
+        // caller's bearer token. All lake compute needs from catalogs.yml is the
         // Snowflake-cased `catalog_database` these catalog types carry --
         // see `catalog_attach_database()` in dbt-tasks'
         // local_engine::runnable::compute_platform, which reads the exact
         // same field and nothing else.
         (
-            AdapterType::Alt,
+            AdapterType::LakeCompute,
             CatalogType::Horizon | CatalogType::IcebergRest | CatalogType::Unity,
-        ) => CatalogRelation::build_alt_with_catalogs_v2(catalog, &catalog_name),
-        (AdapterType::Alt, other) => Err(AdapterError::new(
+        ) => CatalogRelation::build_lake_compute_with_catalogs_v2(catalog, &catalog_name),
+        (AdapterType::LakeCompute, other) => Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             format!(
-                "Catalog '{catalog_name}' has type '{}'; Alt (dbt Compute) v2 mapping supports only 'horizon', 'iceberg_rest', and 'unity'",
+                "Catalog '{catalog_name}' has type '{}'; lake compute v2 mapping supports only 'horizon', 'iceberg_rest', and 'unity'",
                 other.as_str()
             ),
         )),
@@ -485,6 +490,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume,
             catalog_database,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -523,6 +529,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -597,6 +604,7 @@ impl CatalogRelation {
             table_format,
             external_volume: None,
             catalog_database: Some(catalog_database),
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: Some(false),
@@ -621,6 +629,10 @@ impl CatalogRelation {
         let external_volume =
             Self::get_model_config_value(model, FIELD_EXTERNAL_VOLUME, AdapterType::Snowflake)
                 .or_else(|| get_yaml_str(snowflake, FIELD_EXTERNAL_VOLUME).map(|s| s.to_string()));
+        // catalogs.yml schema validation requires `external_volume` on every
+        // Horizon+Snowflake platform block, so this default never actually
+        // triggers for a valid config -- kept only so `external_volume` stays
+        // `Option<String>` consistently with the legacy (no catalogs.yml) path.
         let external_volume =
             Some(external_volume.unwrap_or_else(|| SNOWFLAKE_MANAGED_EXTERNAL_VOLUME.to_string()));
 
@@ -724,6 +736,7 @@ impl CatalogRelation {
             table_format: catalog.table_format,
             external_volume,
             catalog_database,
+            lakehouse_catalog: None,
             base_location,
             adapter_properties,
             is_transient: Some(false),
@@ -827,6 +840,8 @@ impl CatalogRelation {
 
         let catalog_database =
             get_yaml_str(bigquery, FIELD_CATALOG_DATABASE).map(|s| s.to_string());
+        let lakehouse_catalog =
+            get_yaml_str(bigquery, FIELD_LAKEHOUSE_CATALOG).map(|s| s.to_string());
 
         let mut adapter_properties = BTreeMap::new();
 
@@ -845,18 +860,19 @@ impl CatalogRelation {
             is_transient: None,
             external_volume: None,
             catalog_database,
+            lakehouse_catalog,
             base_location: None,
             file_format: Some(file_format),
         })
     }
 
-    /// Alt equivalent of `build_horizon_with_catalogs_v2` /
+    /// Lake compute equivalent of `build_horizon_with_catalogs_v2` /
     /// `build_snowflake_linked_with_catalogs_v2`, pared down to the single
-    /// field the Alt runtime actually consults: `catalog_database` from
-    /// `config.snowflake`. Alt attaches server-side (see module doc on
+    /// field the lake compute runtime actually consults: `catalog_database` from
+    /// `config.snowflake`. Lake compute attaches server-side (see module doc on
     /// `build_duckdb_with_catalogs_v2` and `catalog_attach_database()` in
     /// dbt-tasks), so none of the ATTACH/endpoint fields apply here.
-    fn build_alt_with_catalogs_v2(
+    fn build_lake_compute_with_catalogs_v2(
         catalog: &CatalogSpecV2View<'_>,
         catalog_name: &str,
     ) -> AdapterResult<CatalogRelation> {
@@ -868,13 +884,13 @@ impl CatalogRelation {
                 AdapterError::new(
                     AdapterErrorKind::Configuration,
                     format!(
-                        "Catalog '{catalog_name}' requires config.snowflake.catalog_database for the Alt (dbt Compute) adapter"
+                        "Catalog '{catalog_name}' requires config.snowflake.catalog_database for the lake compute adapter"
                     ),
                 )
             })?;
 
         Ok(CatalogRelation {
-            adapter_type: AdapterType::Alt,
+            adapter_type: AdapterType::LakeCompute,
             catalog_name: Some(catalog_name.to_string()),
             integration_name: None,
             catalog_type: catalog.catalog_type,
@@ -882,6 +898,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: Some(catalog_database),
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
             is_transient: None,
@@ -942,6 +959,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -988,6 +1006,7 @@ impl CatalogRelation {
             file_format: None,
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -1029,6 +1048,7 @@ impl CatalogRelation {
             file_format: Some(file_format),
             external_volume: None,
             catalog_database: None,
+            lakehouse_catalog: None,
             base_location: None,
             adapter_properties,
             is_transient: None,
@@ -1367,6 +1387,34 @@ catalogs:
     }
 
     #[test]
+    fn databricks_v2_no_catalog_name_default_honors_location_root() {
+        let catalogs = load_catalogs_yaml("catalogs: []\n");
+        let conf = json!({
+            "location_root": "s3://bucket/root",
+            "database": "db",
+            "schema": "sc",
+            "alias": "a",
+        });
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Databricks,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert!(r.catalog_name.is_none());
+            assert_eq!(r.catalog_type, CatalogType::Unity);
+            assert_eq!(r.external_volume.as_deref(), Some("s3://bucket/root/a"));
+        }
+    }
+
+    #[test]
     fn snowflake_v2_horizon_iceberg_with_external_volume_synthesizes_base_location() {
         let catalogs = load_catalogs_yaml(
             r#"
@@ -1448,8 +1496,7 @@ catalogs:
     }
 
     #[test]
-    fn snowflake_v2_horizon_iceberg_without_catalog_templates_snowflake_managed_and_omits_base_location()
-     {
+    fn snowflake_v2_horizon_iceberg_without_catalog_omits_external_volume_and_base_location() {
         let catalogs = load_catalogs_yaml(
             r#"
 catalogs:
@@ -1478,10 +1525,11 @@ catalogs:
             assert!(r.catalog_name.is_none());
             assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.catalog_type, CatalogType::SnowflakeBuiltIn);
-            assert_eq!(
-                r.external_volume.as_deref(),
-                Some(SNOWFLAKE_MANAGED_EXTERNAL_VOLUME)
-            );
+            // No `+catalog_name`, so this dispatches to `build_without_catalogs_yml`
+            // (the legacy path) -- no `external_volume` configured there either,
+            // so it stays unset rather than templating the literal (bogus)
+            // `SNOWFLAKE_MANAGED` string into the DDL.
+            assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
         }
     }
@@ -1521,6 +1569,45 @@ catalogs:
             .unwrap();
 
             assert_eq!(r.catalog_database.as_deref(), Some("analytics-project"));
+        }
+    }
+
+    #[test]
+    fn bigquery_v2_biglake_lakehouse_catalog() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: BQ
+    type: biglake_metastore
+    table_format: iceberg
+    config:
+      bigquery:
+        external_volume: gs://bucket
+        file_format: parquet
+        base_location_root: root
+        lakehouse_catalog: "sales_catalog"
+"#,
+        );
+        let conf = json!({
+            "catalog_name": "BQ",
+            "schema": "analytics",
+            "alias": "events"
+        });
+        let ms = [
+            model(AdapterType::Bigquery, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+
+        for m in ms {
+            let r = from_model_config_and_catalogs_v2(
+                AdapterType::Bigquery,
+                &m,
+                Arc::new(catalogs.clone()),
+            )
+            .unwrap();
+
+            assert_eq!(r.lakehouse_catalog.as_deref(), Some("sales_catalog"));
+            assert!(r.catalog_database.is_none());
         }
     }
 

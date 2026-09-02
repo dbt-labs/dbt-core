@@ -2480,7 +2480,7 @@ mod tests {
             PythonManifest::detect(dir).unwrap().unwrap()
         }
 
-        fn fusion_spec() -> PackageSpec {
+        fn proprietary_spec() -> PackageSpec {
             PackageSpec {
                 name: "dbt".to_string(),
                 version: PackageVersion::Exact("2.0.0".to_string()),
@@ -2496,7 +2496,7 @@ mod tests {
                 "[project]\nname = \"x\"\ndependencies = [\"dbt-core>=1.2.3,<2\"]\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2517,7 +2517,7 @@ mod tests {
                 "[project]\nname = \"x\"\ndependencies = [\"dbt-core\"]\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2538,7 +2538,7 @@ mod tests {
                 "[tool.poetry.dependencies]\ndbt-core = \"^1.2.3\"\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2556,7 +2556,7 @@ mod tests {
                 "[tool.pdm.dev-dependencies]\ntest = [\"dbt-core>=1.2.3,<2\"]\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2577,7 +2577,7 @@ mod tests {
                 "[tool.pdm.dev-dependencies]\ntest = [\"dbt-core\"]\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2598,7 +2598,7 @@ mod tests {
                 "[tool.uv]\ndev-dependencies = [\"dbt-core>=1.2.3,<2\"]\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2616,7 +2616,7 @@ mod tests {
                 "[packages]\ndbt-core = \"==1.2.3\"\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2639,7 +2639,7 @@ mod tests {
                 "name: env\ndependencies:\n  - python=3.11\n  - dbt-core=1.2.3\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2662,7 +2662,7 @@ mod tests {
                 "name: env\ndependencies:\n  - python=3.11\n  - dbt-core\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2683,7 +2683,7 @@ mod tests {
                 "name: env\ndependencies:\n  - python=3.11\n  - pip:\n    - dbt-core==1.2.3\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2704,7 +2704,7 @@ mod tests {
                 "name: env\ndependencies:\n  - python=3.11\n  - pip:\n    - dbt-core\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2725,7 +2725,7 @@ mod tests {
                 "[options]\ninstall_requires =\n    other-package==0.1.0\n    dbt-core>=1.2.3\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2746,7 +2746,7 @@ mod tests {
                 "[options]\ninstall_requires =\n    other-package==0.1.0\n    dbt-core\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2772,7 +2772,7 @@ mod tests {
                 "[options]\ninstall_requires =\n    other-package==0.1.0\ndbt-core = 1\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap();
             assert!(
                 replacements.is_none(),
@@ -2789,7 +2789,7 @@ mod tests {
                 "other-package==0.1.0\ndbt-core==1.2.3\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2803,7 +2803,7 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let mut manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-core\n");
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2821,7 +2821,7 @@ mod tests {
                 "dbt-core[bigquery]==1.2.3\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2835,7 +2835,7 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let manifest = manifest_with(tmp.path(), "requirements.txt", "other-package==0.1.0\n");
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap();
             assert!(replacements.is_none());
         }
@@ -2849,7 +2849,7 @@ mod tests {
                 "dbt-core==1.2.3\ndbt==2.0.0\n",
             );
             let err = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap_err();
             assert_eq!(err.code, ErrorCode::DepsDuplicatePackage);
         }
@@ -2867,7 +2867,7 @@ mod tests {
                 "other-package==0.1.0\ndbt-core==1.2.3\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
 
@@ -2903,7 +2903,7 @@ mod tests {
                 "[tool.poetry.dependencies]\ndbt-core = { extras = [\"postgres\"] }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap();
             assert!(replacements.is_none());
         }
@@ -2917,7 +2917,7 @@ mod tests {
                 "[tool.poetry.dependencies]\ndbt-core = { version = \"^1.2.3\", extras = [\"postgres\"] }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2942,7 +2942,7 @@ mod tests {
                 "[tool.poetry.dependencies]\ndbt-core = { extras = [\"postgres\"], version = \"^1.2.3\" }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -2963,7 +2963,7 @@ mod tests {
                 "[tool.poetry.dependencies]\ndbt-core = { version = \"^1.2.3\", extras = [\"postgres\"], optional = true }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -3017,7 +3017,7 @@ mod tests {
                 "[packages]\ndbt-core = { extras = [\"postgres\"] }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap();
             assert!(replacements.is_none());
         }
@@ -3031,7 +3031,7 @@ mod tests {
                 "[packages]\ndbt-core = { version = \"==1.2.3\", extras = [\"postgres\"] }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -3052,7 +3052,7 @@ mod tests {
                 "[packages]\ndbt-core = { extras = [\"postgres\"], version = \"==1.2.3\" }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -3073,7 +3073,7 @@ mod tests {
                 "[packages]\ndbt-core = { version = \"==1.2.3\", extras = [\"postgres\"], editable = true }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
             replacements.apply_to(&mut manifest).unwrap();
@@ -3104,7 +3104,7 @@ mod tests {
                 "[tool.poetry.dependencies]\ndbt-core = { version = \"^1.2.3\", extras = [\"postgres\"] }\n",
             );
             let replacements = manifest
-                .get_rename_replacement("dbt-core", &fusion_spec())
+                .get_rename_replacement("dbt-core", &proprietary_spec())
                 .unwrap()
                 .expect("dbt-core is declared");
 

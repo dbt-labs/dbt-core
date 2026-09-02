@@ -5,6 +5,7 @@ import {
   ChartColumn,
   CircleGauge,
   ClipboardCheck,
+  Copy,
   Database,
   FileText,
   type LucideIcon,
@@ -15,16 +16,14 @@ import {
   Waypoints,
 } from 'lucide-react';
 
-import {
-  resourceNameMap,
-  type ResourceTypeExplorer,
-  resourceTypesWithColumns,
-} from '@dbt-labs/dbt-dag';
-import { RyeconShare } from '@dbt-labs/sourdough';
-
 import { getColumns, toRelationshipItem } from '../lib/assetView';
 import { filterConfig } from '../lib/configView';
 import { decorateOutboundHref } from '../lib/outboundReferrer';
+import {
+  RESOURCE_TYPE_SINGULAR,
+  RESOURCE_TYPES_WITH_COLUMNS,
+  type ResourceTypeExplorer,
+} from '../lib/resourceType';
 import { handleUpsellEvent } from '../lib/upsellAnalytics';
 import {
   ArgumentsView,
@@ -169,7 +168,7 @@ function getResourceTabsForAsset(asset: Asset): TabInfo[] {
       ];
     }
     default: {
-      const showColumns = (resourceTypesWithColumns as readonly string[]).includes(
+      const showColumns = (RESOURCE_TYPES_WITH_COLUMNS as readonly string[]).includes(
         asset.resourceType,
       );
       return [
@@ -212,7 +211,7 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
       icon: createElement(RESOURCE_TYPE_ICON[resourceType] ?? FileText, {
         className: 'size-3 align-middle',
       }),
-      text: resourceNameMap[resourceType] ?? asset.resourceType,
+      text: RESOURCE_TYPE_SINGULAR[resourceType] ?? asset.resourceType,
     },
   ];
   if (materialization) {
@@ -235,7 +234,7 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
     <div className="flex items-center gap-2">
       <Button
         variant="outline"
-        ryecon={RyeconShare}
+        icon={<Copy className="size-3" />}
         tooltip="Copy link"
         onClick={() => {
           void navigator.clipboard.writeText(window.location.href);
@@ -246,15 +245,19 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
 
   return (
     <article className="flex flex-col gap-6 px-8 pb-20 pt-6 text-fgMain">
-      <AssetHeader
-        name={asset.name}
-        resourceType={resourceType}
-        packageName={asset.packageName || null}
-        headerIcons={headerIcons}
-        actions={actions}
-      />
-
-      <DetailTabs tabs={tabs} show={true}>
+      <DetailTabs
+        tabs={tabs}
+        show={true}
+        stickyHeader={
+          <AssetHeader
+            name={asset.name}
+            resourceType={resourceType}
+            packageName={asset.packageName || null}
+            headerIcons={headerIcons}
+            actions={actions}
+          />
+        }
+      >
         {(tabType) => {
           switch (tabType) {
             case 'general': {

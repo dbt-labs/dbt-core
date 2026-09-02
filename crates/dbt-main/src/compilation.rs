@@ -1,4 +1,4 @@
-use crate::source_freshness::run_source_freshness;
+use crate::freshness::run_freshness_command;
 use crate::{dbt_lib::write_catalog_json, version_check};
 use arrow::datatypes::SchemaRef;
 use dbt_adapter::{
@@ -21,8 +21,10 @@ use dbt_defer::DeferState;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
 use dbt_index_core::ingest::ingest_state::IngestState;
-use dbt_index_core::ingest::metadata_to_parquet::ingest_from_metadata_direct;
-use dbt_index_core::{WriteSource, save_artifact_meta};
+use dbt_index_core::ingest::metadata_to_parquet::{
+    has_persisted_state, ingest_from_metadata_direct,
+};
+use dbt_index_core::{WriteSource, save_artifact_meta, write_info_schema};
 use dbt_jinja_utils::{
     JinjaFactory,
     invocation_args::InvocationArgs,
@@ -54,6 +56,7 @@ use dbt_common::{
     artifact_io::write_artifact_to_file,
     cancellation::CancellationToken,
     constants::{DBT_MANIFEST_JSON, DBT_SEMANTIC_MANIFEST_JSON},
+    fail_fast::FailFast,
     fs_err,
     io_args::{
         EvalArgs, EvalArgsBuilder, ListOutputFormat, Phases, ShowOptions,
@@ -95,7 +98,7 @@ use dbt_tasks_sa::{
     run_operation::{INLINE_SQL_NAME, run_operation, run_operation_inline_sql},
 };
 use dbt_tasks_sa::{graph::GraphBuilder, utils::typecheck_macros};
-use dbt_telemetry::{ExecutionPhase, PhaseExecuted, ShowResult};
+use dbt_telemetry::{ExecutionPhase, NodeType, PhaseExecuted, ShowResult};
 
 use std::{
     borrow::Cow,
@@ -107,8 +110,8 @@ use tracing::Instrument;
 use vortex_events::{adapter_info_event, resource_counts_event};
 
 use dbt_schemas::schemas::{
-    InternalDbtNode, OnManifestLoadFailure, StateArtifacts, legacy_catalog::DbtCatalog,
-    manifest::build_manifest,
+    InternalDbtNode, InternalDbtNodeAttributes, OnManifestLoadFailure, StateArtifacts,
+    legacy_catalog::DbtCatalog, manifest::build_manifest,
 };
 
 use dbt_compilation::config::CompilationConfig;
@@ -119,11 +122,10 @@ use dbt_telemetry::{ArtifactType, ListItemOutput};
 
 use std::{sync::Arc, time::SystemTime};
 
-use serde_json::to_string_pretty;
-
 use crate::utils::update_manifest_with_macro_depends_on;
-
+use dbt_common::io_args::LocalExecutionBackendKind;
 use dbt_schemas::state::NodeResolverTracker;
+use serde_json::to_string_pretty;
 
 fn should_skip_tasks_when_no_selected_nodes(
     command: &FsCommand,
@@ -146,7 +148,20 @@ struct CompilationPhasesExecutor<'a> {
     cli: Cow<'a, Cli>,
     lazy_dbt_manifest: OnceLock<DbtManifestV12>,
     catalog_artifact: Option<DbtCatalog>,
+    parse_index_publish_failed: bool,
     token: CancellationToken,
+}
+
+/// Whether this `dbt show` reads `target/info_schema/` instead of the warehouse.
+///
+/// Thin wrapper so the three call sites read as one decision: the predicate itself
+/// lives in `dbt-tasks-sa` because it needs the Jinja parser, and that crate cannot
+/// take a `ShowArgs` without depending on `dbt-clap-core`.
+pub(crate) fn show_queries_info_schema(show_args: &ShowArgs) -> bool {
+    dbt_tasks_sa::show_info::queries_info_schema(
+        show_args.info.as_deref(),
+        show_args.inline.as_deref(),
+    )
 }
 
 impl<'a> CompilationPhasesExecutor<'a> {
@@ -156,6 +171,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
             cli,
             lazy_dbt_manifest: OnceLock::new(),
             catalog_artifact: None,
+            parse_index_publish_failed: false,
             token,
         }
     }
@@ -179,10 +195,14 @@ impl<'a> CompilationPhasesExecutor<'a> {
         let inline_sql = match &self.cli.command {
             Command::Core(Compile(CompileArgs {
                 inline: Some(sql), ..
-            }))
-            | Command::Core(Show(ShowArgs {
-                inline: Some(sql), ..
             })) => Some(sql.clone()),
+            // Info-schema show queries DuckDB over `target/info_schema/`; injecting
+            // the SQL as a warehouse model would bind `dbt.<view>` on the project adapter.
+            Command::Core(Show(show_args))
+                if show_args.inline.is_some() && !show_queries_info_schema(show_args) =>
+            {
+                show_args.inline.clone()
+            }
             _ => None,
         };
         let has_inline = inline_sql.is_some();
@@ -297,9 +317,10 @@ impl<'a> CompilationPhasesExecutor<'a> {
         // Handle 'debug' or 'init' commands to run debug.
         if let FsCommand::Debug | FsCommand::Init = self.arg.command {
             let mut debug_args = DebugArgs::from_eval_args(self.arg.as_ref());
-            debug_args.alt_propagation_checker = feature_stack.alt.propagation_checker.clone();
-            debug_args.alt_catalog_attach_checker =
-                feature_stack.alt.catalog_attach_checker.clone();
+            debug_args.lake_compute_propagation_checker =
+                feature_stack.lake_compute.propagation_checker.clone();
+            debug_args.lake_compute_catalog_attach_checker =
+                feature_stack.lake_compute.catalog_attach_checker.clone();
             compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
                 .await?;
             self.token.check_cancellation()?;
@@ -376,6 +397,76 @@ impl<'a> CompilationPhasesExecutor<'a> {
         }
     }
 
+    /// Publish the parse-derived index early, so the parse-time check gate has something current to
+    /// read before the task graph is built.
+    ///
+    /// Checks are pure readers — they never bring the index up to date themselves (per-check catch-up
+    /// raced sibling readers and produced an index the invocation was never asked for), so the
+    /// invocation has to publish before they run. Without this the index only appears at the very end
+    /// and every check is skipped as stale, i.e. exactly when it matters.
+    ///
+    /// Persisting the ingest state is required rather than optional: `index_is_current` — which the
+    /// gate consults before querying — reads it to decide whether the index reflects the metadata
+    /// written so far. Without it the index looks stale and the checks skip regardless.
+    ///
+    /// # Why this is not keyed on `write_index` alone
+    ///
+    /// The trigger is "will anything read the index before this invocation ends", not "is the index
+    /// being written at all". An early publish is a second ingest pass over the parse layer, and the
+    /// only mid-invocation reader is the check gate in `execute_all_phases`, which runs on
+    /// `build`/`check` only — everything else is served by the single end-of-invocation ingest.
+    ///
+    /// Consuming the parse epochs here does *not* cost that later ingest its `compiled_code` column:
+    /// when the parse layer has not moved, `apply_delta_direct` applies the compile epoch to the node
+    /// rows already on disk instead of rebuilding them. See `crates/dbt-index/DESIGN.md`.
+    fn publish_parse_index(&mut self, resolved_state: &ResolverState) {
+        // `write_index` is still consulted, just not as the *trigger*: `--no-write-index` clears it
+        // (see `effective_write_index`), and an explicit opt-out has to win even here. The gate
+        // then skips because `write_index` is false — the gate warns under `CheckIndexDisabled`
+        // rather than `CheckIndexUnavailable`, which is for a write that was requested and failed.
+        //
+        // `nodes.checks` is enabled-only (`resolve_checks` inserts a node only when enabled), so an
+        // empty map means nothing will read the parse layer early even on `build`/`check`.
+        // `--skip-checks` likewise: the gate will not run, so skip the extra ingest. The
+        // end-of-invocation index write still happens because `write_index` stays true.
+        if !self.arg.write_index
+            || self.arg.skip_checks
+            || !matches!(self.arg.command, FsCommand::Build | FsCommand::Check)
+            || resolved_state.nodes.checks.is_empty()
+        {
+            return;
+        }
+        let metadata_dir = self.arg.metadata_dir();
+        let index_dir = self.arg.index_dir();
+        let mut state = IngestState::default();
+        match ingest_from_metadata_direct(&metadata_dir, &index_dir, &mut state) {
+            Ok(_) => {
+                if let Err(e) = save_artifact_meta(
+                    &index_dir,
+                    &self.arg.io.out_dir,
+                    WriteSource::DirectWrite,
+                    None,
+                ) {
+                    emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!("dbt-index: save_artifact_meta: {e}"),
+                    );
+                }
+            }
+            Err(e) => {
+                // Checks read the index and never build it, so a failed publish leaves them
+                // nothing current to query. Skipping them keeps the build going rather than
+                // failing it on infrastructure; `warn_error_options` can promote this code to
+                // an error for projects that want the gate to be mandatory.
+                self.parse_index_publish_failed = true;
+                emit_warn_log_message(
+                    ErrorCode::CheckIndexUnavailable,
+                    format!("failed to write index: {e}. Skipping checks..."),
+                )
+            }
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn maybe_write_json_and_exit(
         &mut self,
@@ -422,11 +513,13 @@ impl<'a> CompilationPhasesExecutor<'a> {
         //
         // Also when the index is being written, even if partial parse is off: these epochs are
         // the input the index ingest converts into the `dbt.*` layers, so without them the
-        // ingest finds nothing to convert and leaves a half-built index (run_results only).
-        // Reading `EvalArgs` here rather than the raw `CommonArgs` is what lets `build` default
-        // the index on without also turning incremental reuse on — the two read sites below
-        // stay on `effective_partial_parse()`. Writing this state and *consuming* it to skip
-        // work are separable, and only the consuming side carries the staleness risk.
+        // ingest finds nothing to convert and leaves a half-built index (run_results only). This
+        // is also how `dbt check` reaches here without the raw `--write-index` CLI flag — it
+        // implies writing the index via `EvalArgs` instead. Reading `EvalArgs` here rather than
+        // the raw `CommonArgs` is what lets `build` default the index on without also turning
+        // incremental reuse on — the two read sites below stay on `effective_partial_parse()`.
+        // Writing this state and *consuming* it to skip work are separable, and only the
+        // consuming side carries the staleness risk.
         if self.cli.common_args.effective_partial_parse() || self.arg.write_index {
             let dbt_state = loaded_project.dbt_state();
             let env_vars = dbt_jinja_utils::utils::ENV_VARS
@@ -450,6 +543,8 @@ impl<'a> CompilationPhasesExecutor<'a> {
                     feature_stack.jinja.factory.clone(),
                 );
             }
+
+            self.publish_parse_index(resolved_state);
         }
 
         // check if command is parse and write catalog.json
@@ -491,40 +586,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 &empty_column_classifiers,
             );
 
-            // When --write-index is set, convert the parse epochs into snapshot index
-            // parquet. The parse index is intentionally incomplete: it carries nodes and
-            // node-level lineage from the manifest, but no column schemas or column-level
-            // lineage (those require compilation). ingest_from_metadata_direct creates the
-            // index directory, so the subsequent save_artifact_meta can record the fingerprint.
-            // Metadata-only runs (no --write-index) write epochs only and skip the index.
-            if self.arg.write_index {
-                let metadata_dir = self.arg.metadata_dir();
-                let index_dir = self.arg.index_dir();
-                let mut state = IngestState::default();
-                match ingest_from_metadata_direct(&metadata_dir, &index_dir, &mut state) {
-                    Ok(_) => {
-                        if let Err(e) = save_artifact_meta(
-                            &index_dir,
-                            &self.arg.io.out_dir,
-                            WriteSource::DirectWrite,
-                            None,
-                        ) {
-                            emit_warn_log_message(
-                                ErrorCode::Generic,
-                                format!("dbt-index: save_artifact_meta: {e}"),
-                            );
-                        }
-                        emit_warn_log_message(
-                            ErrorCode::Generic,
-                            "--write-index: the index produced by `parse` is incomplete; column schemas and column-level lineage are only written by `compile`, `run`, or `build`.",
-                        );
-                    }
-                    Err(e) => emit_warn_log_message(
-                        ErrorCode::Generic,
-                        format!("dbt-index: write-index: {e}"),
-                    ),
-                }
-            }
+            write_parse_artifacts(&self.arg);
         }
 
         if self.arg.io.should_show(ShowOptions::Manifest) {
@@ -703,8 +765,13 @@ pub struct DbtProjectCompilation {
     pub(crate) file_kind_registry: CompleteStateWithKind,
     pub(crate) metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
     pub(crate) catalog_artifact: Option<DbtCatalog>,
+    /// The parse-phase index publish failed, so parse-time checks have no current index to read
+    /// and are skipped.
+    pub(crate) parse_index_publish_failed: bool,
     /// --state
     pub(crate) previous_state: Option<Arc<StateArtifacts>>,
+    /// Request context for service-backed state selection when no local state is available.
+    pub(crate) run_cache_state_selector_args: Option<RunCacheStateSelectorArgs>,
     pub(crate) invocation_id: String,
     /// True when --partial-load actually applied a unique_id filter to the cache load
     /// (either via the fast path or filtered incremental load). False on a full parse
@@ -720,6 +787,12 @@ pub struct DbtProjectCompilationCacheState {
 }
 
 impl DbtProjectCompilationCacheState {
+    /// The compiled-SQL cache, so post-graph work can read what render tasks produced rather than
+    /// re-rendering or reading rendered SQL off a node.
+    pub fn compiled_sql_cache(&self) -> Arc<dyn CompiledSqlCache> {
+        self.compiled_sql_cache.clone()
+    }
+
     pub fn schema_exists_by_unique_id(&self, unique_id: &str) -> bool {
         self.schema_store.exists_by_unique_id(unique_id)
     }
@@ -768,11 +841,11 @@ pub type DbtRunTasksResult = (
     Arc<DbtProjectCompilationCacheState>,
 );
 
-use dbt_compilation::traits::{CompilationCache, CompiledProject};
-
 use crate::partial_parse::{
     PrevCompilationResult, try_lazy_load_fast_path, try_load_prev_compilation,
 };
+use dbt_compilation::traits::{CompilationCache, CompiledProject};
+use dbt_state::selector::RunCacheStateSelectorArgs;
 
 impl DbtProjectCompilation {
     fn dbt_state(&self) -> Arc<DbtState> {
@@ -1037,16 +1110,15 @@ impl DbtProjectCompilation {
         // partial-load fast path (also fires for state:dirty): if no file mtimes changed,
         // skip WalkDir entirely and return prev as-is. Skip when --inline is set since the
         // inline SQL node must be injected during load().
-        let has_inline = matches!(
-            &cli.command,
+        let has_inline = match &cli.command {
             Command::Core(CoreCommand::Compile(CompileArgs {
-                inline: Some(_),
-                ..
-            })) | Command::Core(CoreCommand::Show(ShowArgs {
-                inline: Some(_),
-                ..
-            }))
-        );
+                inline: Some(_), ..
+            })) => true,
+            Command::Core(CoreCommand::Show(show_args)) => {
+                show_args.inline.is_some() && !show_queries_info_schema(show_args)
+            }
+            _ => false,
+        };
         if use_lazy_filter && !has_inline {
             // Skip the fast path when the --static-analysis level has changed since the
             // previous compilation. The fast path reuses nodes whose `base().static_analysis`
@@ -1420,6 +1492,20 @@ impl DbtProjectCompilation {
             prev_state.set_test_name_truncations(&resolved_state.test_name_truncations);
         }
 
+        // Only initialize run-cache state selector when no local previous state is available.
+        // The lifecycle handles all enablement checks and fail-open logic internally.
+        let run_cache_state_selector_args = if maybe_previous_state.is_none() {
+            create_run_cache_state_selector_args(
+                arg_use_once,
+                &resolved_state,
+                loaded_project.dbt_cloud_config(),
+                loaded_project.root_package().package_root_path.as_path(),
+            )
+            .await?
+        } else {
+            None
+        };
+
         // Refresh node_resolver (no renaming needed - sample plan is resolved after scheduling)
         executor.refresh_node_resolver(
             &loaded_project,
@@ -1446,7 +1532,9 @@ impl DbtProjectCompilation {
                 file_kind_registry,
                 metricflow_server_client,
                 catalog_artifact: executor.catalog_artifact.take(),
+                parse_index_publish_failed: executor.parse_index_publish_failed,
                 previous_state: maybe_previous_state,
+                run_cache_state_selector_args,
                 invocation_id,
                 partial_load_filter_applied: false,
             },
@@ -1464,6 +1552,7 @@ impl DbtProjectCompilation {
         token: &CancellationToken,
     ) -> FsResult<Schedule<String>> {
         let maybe_previous_state = self.previous_state.clone();
+        let run_cache_state_selector_args = self.run_cache_state_selector_args.as_ref();
 
         // ========================================================================
         // PHASE 3: Use Pipeline for Schedule
@@ -1493,6 +1582,7 @@ impl DbtProjectCompilation {
                 &self.resolved_state,
                 scheduler_args,
                 maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                run_cache_state_selector_args,
                 select_expr,
                 exclude_expr,
                 arg.local_execution_backend,
@@ -1506,6 +1596,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         scheduler_args,
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         arg.local_execution_backend,
                         token,
                     )
@@ -1516,6 +1607,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         scheduler_args,
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         &custom_schedule_desc.unique_ids,
                         custom_schedule_desc.include_parents,
                         custom_schedule_desc.include_children,
@@ -1530,6 +1622,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         scheduler_args,
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         compilation_cache_changes.as_cache_state(),
                         arg.local_execution_backend,
                         token,
@@ -1566,6 +1659,7 @@ impl DbtProjectCompilation {
         let dbt_cloud_config = self.dbt_cloud_config().cloned();
         let metricflow_server_client = self.metricflow_server_client.clone();
         let maybe_previous_state = self.previous_state.clone();
+        let run_cache_state_selector_args = self.run_cache_state_selector_args.as_ref();
         let root_project_quoting = self.resolved_state.root_project_quoting;
         let project_optimize_tests =
             optimize_test_defaults_from_project_flags(self.root_project().flags.as_ref());
@@ -1586,12 +1680,18 @@ impl DbtProjectCompilation {
         if schedule.selected_nodes.is_empty() {
             // Only warn for commands where selection matters (not for parse, list, pull, etc.)
             let command = arg.command;
+            // `Check` too: its schedule is deliberately emptied after the parse-time gate passes
+            // (nothing else needs rendering/analyzing/running to answer "did the checks pass"),
+            // and that emptiness is not a "nothing to do" mistake worth surfacing here -- a
+            // check's own pass/fail/skip line is check's actual "did anything happen" signal.
             if !matches!(
                 command,
                 FsCommand::Parse
                     | FsCommand::List
                     | FsCommand::RunOperation
                     | FsCommand::Source
+                    | FsCommand::Check
+                    | FsCommand::Freshness
                     | FsCommand::Extension("pull")
             ) {
                 // For the Show command, check if the selector matches a macro file.
@@ -1788,6 +1888,7 @@ impl DbtProjectCompilation {
                         &self.resolved_state,
                         SchedulerArgs::from_eval_args(arg),
                         maybe_previous_state.as_ref().map(|x| x.as_ref()),
+                        run_cache_state_selector_args,
                         arg.local_execution_backend,
                         token,
                     )
@@ -1836,7 +1937,18 @@ impl DbtProjectCompilation {
         };
 
         // FEATURES: auth record_replay
-        // Initialize adapter
+        // Initialize adapters. The store is kept, not just the adapter selected
+        // off it: a task that knows its node's adapter type asks it for the one
+        // that executes that node.
+        let adapter_store = self.loaded_project().init_adapter_store(
+            &self.resolved_state,
+            arg.replay.clone(),
+            &jinja_env,
+            Some(schema_store.clone()),
+            token,
+            sidecar_client.clone(),
+            execute_mode,
+        )?;
         let adapter = if let Some(adapter_override) = arg
             .adapter_override
             .as_deref()
@@ -1848,29 +1960,9 @@ impl DbtProjectCompilation {
                     "--adapter '{adapter_override}' is not a recognized adapter type"
                 )
             })?;
-            self.loaded_project()
-                .init_adapter_store(
-                    &self.resolved_state,
-                    arg.replay.clone(),
-                    &jinja_env,
-                    Some(schema_store.clone()),
-                    token,
-                    sidecar_client.clone(),
-                    execute_mode,
-                    arg.infer_schemas,
-                )?
-                .get(adapter_type)?
+            adapter_store.get(adapter_type)?
         } else {
-            self.loaded_project().init_adapter(
-                &self.resolved_state,
-                arg.replay.clone(),
-                &jinja_env,
-                Some(schema_store.clone()),
-                token,
-                sidecar_client.clone(),
-                execute_mode,
-                arg.infer_schemas,
-            )?
+            adapter_store.default_adapter()?
         };
         token.check_cancellation()?;
 
@@ -2031,6 +2123,12 @@ impl DbtProjectCompilation {
             for (truncated, full_name) in resolved_state.test_name_truncations.iter() {
                 replay_adapter.record_test_name_truncation(truncated, full_name);
             }
+            // A versioned model's unique_id ends in `.v<N>`, which is not its alias, so an
+            // ephemeral+versioned model's own node_id can't be traced back to the CTE name
+            // dbt-core compiled it under without this. See fs#11684.
+            for model in resolved_state.nodes.models.values() {
+                replay_adapter.record_node_alias(&model.unique_id(), &model.alias());
+            }
         }
 
         let base_context = build_base_context(&resolved_state, &jinja_env);
@@ -2056,8 +2154,9 @@ impl DbtProjectCompilation {
         token.check_cancellation()?;
 
         // FEATURES: cmd_source_freshness on_run_hooks artifact_output
-        let freshness_results = if arg.command == FsCommand::Source {
-            run_source_freshness(
+        let sources_only = arg.command.is_sources_only_freshness();
+        let freshness_results = if arg.command.is_freshness_command() {
+            run_freshness_command(
                 arg,
                 &jinja_env,
                 &resolved_state,
@@ -2065,6 +2164,7 @@ impl DbtProjectCompilation {
                 Arc::clone(&adapter),
                 &base_context,
                 artifacts_sink,
+                sources_only,
             )
             .await?
         } else {
@@ -2175,18 +2275,22 @@ impl DbtProjectCompilation {
             compare_task_graph_builder,
         );
 
-        // Increment counters used in final run reporting
+        // Increment counters used in final run reporting.
+        // Checks are not graph work. Counting every selected check here reports them as
+        // "Processed" even when the parse-time gate never ran (`--skip-checks`,
+        // `--no-write-index`, or a failed index publish).
+        let count_checks = !arg.skip_checks && arg.write_index && !self.parse_index_publish_failed;
         schedule.selected_nodes.iter().for_each(|unique_id| {
-            increment_metric(
-                FusionMetricKey::NodeCounts(
-                    self.resolved_state
-                        .nodes
-                        .get_node(unique_id)
-                        .expect("Node must exist")
-                        .resource_type(),
-                ),
-                1,
-            )
+            let node_type = self
+                .resolved_state
+                .nodes
+                .get_node(unique_id)
+                .expect("Node must exist")
+                .resource_type();
+            if node_type == NodeType::Check && !count_checks {
+                return;
+            }
+            increment_metric(FusionMetricKey::NodeCounts(node_type), 1);
         });
 
         let hooks = task_runner_hooks_factory.create(
@@ -2211,6 +2315,7 @@ impl DbtProjectCompilation {
         let task_runner = TaskRunner::new(
             hooks,
             adapter.clone(),
+            adapter_store,
             resolved_state,
             jinja_env,
             schema_store.clone(),
@@ -2474,17 +2579,14 @@ pub fn update_resolved_state_node_columns(
 /// Skipped for local execution (`--compute inline`).
 fn spawn_version_check_if_possible(
     config: &CompilationConfig,
-    compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
+    compute_flag: LocalExecutionBackendKind,
     version_check_disabled: bool,
     command_name: &'static str,
 ) -> Option<tokio::task::JoinHandle<Option<String>>> {
     if version_check_disabled {
         return None;
     }
-    let is_local = matches!(
-        compute_flag,
-        dbt_common::io_args::LocalExecutionBackendKind::Inline
-    );
+    let is_local = matches!(compute_flag, LocalExecutionBackendKind::Inline);
     if !is_local {
         let disable_version_check =
             { config.no_version_check || std::env::var("DBT_DISABLE_VERSION_CHECK").is_ok() };
@@ -2563,7 +2665,6 @@ async fn write_catalog(
         token,
         None,
         execute,
-        arg.infer_schemas,
     )?;
     let mut jinja_env = Arc::unwrap_or_clone(jinja_env.clone());
     configure_compile_and_run_jinja_environment(&mut jinja_env, adapter.clone());
@@ -2648,7 +2749,9 @@ fn select_matches_macro(
         match expr {
             SelectExpression::Atom(criteria) => {
                 if matches!(criteria.method, MethodName::Path | MethodName::File) {
-                    values.push((criteria.method, criteria.value.clone()));
+                    if let Some(value) = criteria.value.as_str() {
+                        values.push((criteria.method, value.to_string()));
+                    }
                 }
             }
             SelectExpression::And(exprs) | SelectExpression::Or(exprs) => {
@@ -2779,6 +2882,104 @@ fn run_verify_partial_load(arg: &EvalArgs, schedule: &Schedule<String>) {
     }
 }
 
+async fn create_run_cache_state_selector_args(
+    arg: &EvalArgs,
+    resolved_state: &ResolverState,
+    cloud_config: Option<&ResolvedCloudConfig>,
+    project_root: &std::path::Path,
+) -> FsResult<Option<RunCacheStateSelectorArgs>> {
+    let execute_mode = Execute::from_compute_flag(arg.local_execution_backend);
+    let run_task_args = RunTasksArgs::from_eval_args(arg, FailFast::new());
+    let lifecycle = RunCacheLifecycle::get_or_initialize(
+        run_task_args.as_ref(),
+        execute_mode,
+        resolved_state.adapter_type,
+        cloud_config,
+    )
+    .await?;
+
+    let Some(client) = lifecycle.service_client() else {
+        return Ok(None);
+    };
+
+    let defer_to = lifecycle
+        .defer_to_target(&resolved_state.dbt_profile)
+        .unwrap_or_default();
+    let project_id = cloud_config.and_then(|c| c.project_id.clone());
+
+    Ok(Some(RunCacheStateSelectorArgs {
+        client,
+        defer_to,
+        project_id,
+        macros: resolved_state.macros.macros.clone(),
+        project_root: DbtPath::from(project_root),
+    }))
+}
+
+/// Convert the `parse` metadata epochs into whichever opt-in artifacts were
+/// requested.
+///
+/// Both artifact sets are independent: either, neither, or both may be asked
+/// for. Failures are advisory — an artifact that could not be written must not
+/// fail the command.
+///
+/// What `parse` can produce is limited: nodes and node-level lineage, but no
+/// column types and no column-level lineage, both of which need a compile.
+fn write_parse_artifacts(arg: &EvalArgs) {
+    let metadata_dir = arg.metadata_dir();
+
+    if arg.write_index {
+        let index_dir = arg.index_dir();
+        let mut state = IngestState::default();
+        // `ingest_from_metadata_direct` creates the directory, so the
+        // fingerprint below has somewhere to land.
+        match ingest_from_metadata_direct(&metadata_dir, &index_dir, &mut state) {
+            Ok(_) => {
+                if let Err(e) =
+                    save_artifact_meta(&index_dir, &arg.io.out_dir, WriteSource::DirectWrite, None)
+                {
+                    emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!("dbt-index: save_artifact_meta: {e}"),
+                    );
+                }
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    "--write-index: the index produced by `parse` is incomplete; column schemas and column-level lineage are only written by `compile`, `run`, or `build`.",
+                );
+            }
+            Err(e) => {
+                emit_warn_log_message(ErrorCode::Generic, format!("dbt-index: write-index: {e}"))
+            }
+        }
+    }
+
+    if arg.generate_info_schema {
+        let info_schema_dir = arg.info_schema_dir();
+        // Reuse the flat index at `target/private/index` as the intermediate when one is
+        // already there (the same ingest builds both, so an index written earlier
+        // in this run is picked up via the delta path rather than re-ingested).
+        // With no index to reuse — e.g. `--no-write-index` — stage privately
+        // instead, so we never materialise an index the caller opted out of.
+        let index_dir = arg.index_dir();
+        let staging_dir = if has_persisted_state(&index_dir) {
+            index_dir
+        } else {
+            arg.info_schema_staging_dir()
+        };
+        match write_info_schema(&metadata_dir, &info_schema_dir, &staging_dir) {
+            Ok(_) => emit_warn_log_message(
+                ErrorCode::Generic,
+                "--generate-info-schema: the information schema produced by `parse` is incomplete; column types, column-level lineage, and runtime results are only written by `compile`, `run`, or `build`.",
+            ),
+            Err(e) => emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("dbt: generate-info-schema: {e}"),
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2823,6 +3024,10 @@ mod tests {
         ));
         assert!(!should_skip_tasks_when_no_selected_nodes(
             &FsCommand::Source,
+            &schedule
+        ));
+        assert!(!should_skip_tasks_when_no_selected_nodes(
+            &FsCommand::Freshness,
             &schedule
         ));
     }

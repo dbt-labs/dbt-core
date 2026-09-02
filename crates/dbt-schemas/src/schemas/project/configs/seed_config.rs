@@ -1,4 +1,5 @@
 use crate::schemas::common::ClusterConfig;
+use crate::schemas::serde::AdapterTypeOrArray;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_adapter_core::AdapterType;
@@ -28,8 +29,10 @@ use crate::schemas::common::Schedule;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
-use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::project::configs::common::{
+    WarehouseSpecificNodeConfig, take_databricks_catalog_alias,
+};
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
@@ -128,6 +131,8 @@ pub struct ProjectSeedConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -207,10 +212,13 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+adapter")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    #[serde(rename = "+propagate")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -232,7 +240,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+catalog")]
     pub catalog: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]
@@ -278,7 +286,7 @@ pub struct ProjectSeedConfig {
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -380,6 +388,7 @@ impl TypedRecursiveConfig for ProjectSeedConfig {
             || self.file_format.is_some()
             || self.catalog_name.is_some()
             || self.adapter.is_some()
+            || self.propagate.is_some()
             || self.location_root.is_some()
             || self.tblproperties.is_some()
             || self.include_full_name_in_path.is_some()
@@ -431,6 +440,10 @@ pub struct SeedConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     pub docs: Option<DocsConfig>,
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -470,6 +483,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             alias: config.alias,
             catalog_name: config.catalog_name.clone(),
             adapter: config.adapter,
+            propagate: config.propagate,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -507,6 +521,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -517,6 +532,12 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
+
+                partition_by_config: None,
+
+                distribute_by_config: None,
+
+                primary_key_config: None,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
@@ -549,6 +570,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
                 zorder: None,
+                skip_optimize: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -627,6 +649,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             schema: config.schema,
             alias: config.alias,
             adapter: config.adapter,
+            propagate: config.propagate,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -662,6 +685,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -772,6 +796,18 @@ impl ResolvableConfig<SeedConfig> for SeedConfig {
     fn default_to(&mut self, parent: &SeedConfig) {
         self.default_to_fields(parent);
     }
+
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            self.database.is_some(),
+        ) {
+            self.database = Some(catalog);
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
+    }
 }
 
 impl ConfigKeys for SeedConfig {
@@ -805,6 +841,23 @@ impl ConfigKeys for SeedConfig {
 mod tests {
     use super::{ProjectSeedConfig, SeedConfig};
     use dbt_adapter_core::AdapterType;
+
+    #[test]
+    fn test_seed_query_tags_propagate_through_resolved_config() {
+        let project: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"seed"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: SeedConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"seed"}"#)
+        );
+    }
 
     #[test]
     fn test_project_seed_config_resource_tags_parses() {

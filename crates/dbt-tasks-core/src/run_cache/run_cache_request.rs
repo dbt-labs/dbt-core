@@ -901,10 +901,10 @@ mod tests {
             __adapter_attr__: AdapterAttr::default(),
             deprecated_config: ModelConfig {
                 incremental_strategy: Some(DbtIncrementalStrategy::Merge),
-                incremental_predicates: Some(vec![
+                incremental_predicates: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                     "updated_at >= current_date".to_string(),
                     "deleted_at is null".to_string(),
-                ]),
+                ])),
                 unique_key: Some(DbtUniqueKey::Single("id".to_string())),
                 on_schema_change: Some(OnSchemaChange::SyncAllColumns),
                 merge_update_columns: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![

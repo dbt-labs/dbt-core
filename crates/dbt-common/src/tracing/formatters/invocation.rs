@@ -39,10 +39,12 @@ const fn node_type_to_order(node_type: NodeType) -> u8 {
         NodeType::Analysis => 10,
         NodeType::Operation => 11,
         NodeType::UnitTest => 12,
-        NodeType::Function => 13,
-        NodeType::Macro => 14,
-        NodeType::DocsMacro => 15,
-        NodeType::Unspecified => 16,
+        // Grouped with the other validation resources rather than the build ones.
+        NodeType::Check => 13,
+        NodeType::Function => 14,
+        NodeType::Macro => 15,
+        NodeType::DocsMacro => 16,
+        NodeType::Unspecified => 17,
     }
 }
 
@@ -65,6 +67,7 @@ pub fn node_type_plural(node: NodeType) -> &'static str {
         NodeType::SavedQuery => "saved queries",
         NodeType::SemanticModel => "semantic models",
         NodeType::Function => "functions",
+        NodeType::Check => "checks",
     }
 }
 

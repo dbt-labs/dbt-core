@@ -7,15 +7,18 @@ use std::{
     path::{Component, Display, Path, PathBuf},
 };
 
-/// Compute the compiled output path for a snapshot node.
+/// Compute the `target/compiled` or `target/run` output path for a snapshot node.
 ///
 /// Snapshots always use the many-to-one nested layout: `out_dir/package/original_file_path/name.sql`.
 /// A single .sql file can contain multiple snapshot blocks, so the basename heuristic in
 /// `get_target_write_path` would create both a file and a directory at the same path (EISDIR)
-/// when one snapshot's name matches the source filename.
+/// when one snapshot's name matches the source filename. The same collision also bites when a
+/// `target/` directory populated by dbt-core v1 is reused by Fusion (dbt-core#15692), so both
+/// output subdirectories must use this layout — `out_dir` selects which one.
 ///
-/// Mirrors dbt-core `SnapshotNode.get_target_write_path` (dbt-core#12693).
-pub fn get_snapshot_compiled_path(
+/// Mirrors dbt-core `SnapshotNode.get_target_write_path` (dbt-core#12693), which likewise applies
+/// to both the "compiled" and "run" subdirectories.
+pub fn get_snapshot_write_path(
     out_dir: &Path,
     package_name: &str,
     original_file_path: &Path,

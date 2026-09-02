@@ -49,16 +49,19 @@ pub mod schemas {
 
     pub mod nodes;
     pub use nodes::{
-        AbsorbedOverload, AdapterAttr, CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure,
-        DbtExposureAttr, DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed,
-        DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr,
-        DbtUnitTest, DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
-        InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, NodePathKind, Nodes,
-        TestMetadata, TimeSpine, TimeSpinePrimaryColumn, deserialize_empty_string_as_none,
-        serialize_none_as_empty_string,
+        AbsorbedOverload, AdapterAttr, CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtCheck,
+        DbtCheckAttr, DbtExposure, DbtExposureAttr, DbtFunction, DbtFunctionAttr, DbtModel,
+        DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr,
+        DbtTest, DbtTestAttr, DbtUnitTest, DbtUnitTestAttr, ExposureType, InternalDbtNode,
+        InternalDbtNodeAttributes, InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes,
+        NodePathKind, Nodes, TestMetadata, TimeSpine, TimeSpinePrimaryColumn,
+        deserialize_empty_string_as_none, serialize_none_as_empty_string,
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};
+
+    pub mod freshness_node;
+    pub use freshness_node::{FreshnessNodeRef, is_freshness_node};
     pub mod legacy_catalog {
         mod catalog;
         pub use catalog::CatalogNodeStats;
@@ -102,8 +105,8 @@ pub mod schemas {
             nodes_from_dbt_manifest,
         };
         pub use manifest_nodes::{
-            ManifestDataTest, ManifestExposure, ManifestFunction, ManifestMacro, ManifestMetric,
-            ManifestModel, ManifestModelConfig, ManifestSavedQuery, ManifestSeed,
+            ManifestCheck, ManifestDataTest, ManifestExposure, ManifestFunction, ManifestMacro,
+            ManifestMetric, ManifestModel, ManifestModelConfig, ManifestSavedQuery, ManifestSeed,
             ManifestSeedConfig, ManifestSemanticModel, ManifestSnapshot, ManifestSnapshotConfig,
             ManifestSource, ManifestUnitTest,
         };
@@ -133,6 +136,7 @@ pub mod schemas {
         mod dbt_project;
         pub(crate) mod configs {
             pub mod analysis_config;
+            pub mod check_config;
             pub mod common;
             pub mod config_keys;
             pub mod config_merge;
@@ -153,9 +157,13 @@ pub mod schemas {
         pub use configs::analysis_config::{
             AnalysesConfig, ProjectAnalysisConfig, ResolvedAnalysesConfig,
         };
+        pub use configs::check_config::{
+            CheckConfig, DEFAULT_CHECK_SEVERITY, InfoSchemaConfig, ProjectCheckConfig,
+            ResolvedCheckConfig, SUPPORTED_INFO_SCHEMA_VERSIONS, SelectionFilterOn,
+        };
         pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
         pub use configs::config_keys::ConfigKeys;
-        pub use configs::config_merge::{DefaultTo, Packages, Tags};
+        pub use configs::config_merge::{DefaultTo, Packages, Tags, TblProperties};
         pub use configs::data_test_config::{
             DEFAULT_DATA_TEST_ERROR_IF, DEFAULT_DATA_TEST_FAIL_CALC, DEFAULT_DATA_TEST_SEVERITY,
             DEFAULT_DATA_TEST_WARN_IF, DataTestConfig, ProjectDataTestConfig,
@@ -196,6 +204,7 @@ pub mod schemas {
 
     pub mod properties {
         mod analysis_properties;
+        mod check_properties;
         mod data_test_properties;
         mod exposure_properties;
         mod function_properties;
@@ -210,6 +219,7 @@ pub mod schemas {
         mod unit_test_properties;
 
         pub use analysis_properties::AnalysesProperties;
+        pub use check_properties::CheckProperties;
         pub use data_test_properties::DataTestProperties;
         pub use exposure_properties::ExposureProperties;
         pub use function_properties::{

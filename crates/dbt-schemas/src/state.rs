@@ -53,6 +53,7 @@ pub enum ResourcePathKind {
     FixturePaths,
     SessionPaths,
     FunctionPaths,
+    CheckPaths,
 }
 
 impl fmt::Display for ResourcePathKind {
@@ -70,6 +71,7 @@ impl fmt::Display for ResourcePathKind {
             ResourcePathKind::FixturePaths => "fixture paths",
             ResourcePathKind::SessionPaths => "session paths",
             ResourcePathKind::FunctionPaths => "function paths",
+            ResourcePathKind::CheckPaths => "check paths",
         };
         write!(f, "{kind_str}")
     }
@@ -135,10 +137,16 @@ pub struct GenericTestAsset {
     pub source_name: Option<String>,
     pub test_name: String,
     pub defined_at: dbt_common::CodeLocationWithFile,
+    /// The column this test is attached to, taken from its position in the schema file
+    /// (`columns[*].data_tests`). `None` for a model-level test, regardless of any
+    /// `column_name` kwarg the test passes to its macro.
+    pub column_name: Option<String>,
     // Structured metadata for generic tests (optional; not used for singular tests)
     pub test_metadata_name: Option<String>,
     pub test_metadata_namespace: Option<String>,
-    pub test_metadata_column_name: Option<String>,
+    /// The `column_name` macro kwarg, which a generic test may set to an arbitrary
+    /// sequence. Distinct from [`GenericTestAsset::column_name`].
+    pub test_metadata_column_name: Option<StringOrArrayOfStrings>,
     pub test_metadata_combination_of_columns: Option<Vec<String>>,
     /// The model kwarg for generic tests, e.g. "{{ get_where_subquery(ref('foo')) }}"
     pub test_metadata_model: Option<String>,
@@ -343,6 +351,7 @@ pub struct DbtPackage {
     pub package_root_path: PathBuf,
     pub dbt_properties: Vec<DbtAsset>,
     pub analysis_files: Vec<DbtAsset>,
+    pub check_files: Vec<DbtAsset>,
     pub model_sql_files: Vec<DbtAsset>,
     pub function_sql_files: Vec<DbtAsset>,
     pub macro_files: Vec<DbtAsset>,
@@ -368,6 +377,7 @@ impl Default for DbtPackage {
             package_root_path: PathBuf::new(),
             dbt_properties: vec![],
             analysis_files: vec![],
+            check_files: vec![],
             model_sql_files: vec![],
             function_sql_files: vec![],
             macro_files: vec![],
@@ -676,6 +686,7 @@ pub struct ManifestPathConfig {
     pub seed_paths: Vec<String>,
     pub snapshot_paths: Vec<String>,
     pub test_paths: Vec<String>,
+    pub check_paths: Vec<String>,
     pub analysis_paths: Vec<String>,
     pub function_paths: Vec<String>,
     pub macro_paths: Vec<String>,
@@ -690,6 +701,7 @@ impl ManifestPathConfig {
             seed_paths: dbt_project.seed_paths.clone().unwrap_or_default(),
             snapshot_paths: dbt_project.snapshot_paths.clone().unwrap_or_default(),
             test_paths: dbt_project.test_paths.clone().unwrap_or_default(),
+            check_paths: dbt_project.check_paths.clone().unwrap_or_default(),
             analysis_paths: dbt_project.analysis_paths.clone().unwrap_or_default(),
             function_paths: dbt_project.function_paths.clone().unwrap_or_default(),
             macro_paths: dbt_project.macro_paths.clone().unwrap_or_default(),

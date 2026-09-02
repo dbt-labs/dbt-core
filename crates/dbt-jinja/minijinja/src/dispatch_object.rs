@@ -356,7 +356,7 @@ pub fn get_adapter_prefixes(dialect: &str) -> Vec<String> {
     match dialect {
         "redshift" => prefixes.push("postgres".to_string()),
         "databricks" => prefixes.push("spark".to_string()),
-        // `AdapterType::Alt` renders as `lake_compute`; lake compute defines no
+        // `AdapterType::LakeCompute` renders as `lake_compute`; lake compute defines no
         // macros of its own and inherits DuckDB's.
         "lake_compute" => prefixes.push("duckdb".to_string()),
         // Add other adapter hierarchies as needed

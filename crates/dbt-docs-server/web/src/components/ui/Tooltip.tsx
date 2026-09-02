@@ -79,7 +79,9 @@ export function Tooltip({
             side={side}
             align={align}
             sideOffset={4}
-            className="z-50 max-w-xs rounded bg-fgMain px-2 py-1 text-xs text-bgMain shadow-md"
+            // `break-words`: content is capped at `max-w-xs`, so longer content
+            // may need to break mid-token to prevent overflow
+            className="z-50 max-w-xs break-words rounded bg-fgMain px-2 py-1 text-xs text-bgMain shadow-md"
           >
             {content}
             <RadixTooltip.Arrow className="fill-fgMain" />

@@ -223,6 +223,7 @@ pub struct MacroTestHarness {
     root_package: String,
     env: JinjaEnv,
     mock: Arc<MockJinjaObject>,
+    store_result_calls: Arc<Mutex<Vec<String>>>,
 }
 
 impl MacroTestHarness {
@@ -271,6 +272,12 @@ impl MacroTestHarness {
     /// Access the mock adapter.
     pub fn mock(&self) -> &Arc<MockJinjaObject> {
         &self.mock
+    }
+
+    /// Names passed to `store_result(name, ...)`, in call order. Only populated when
+    /// [`MacroTestHarnessBuilder::with_stub_functions`] registered the stub that records them.
+    pub fn store_result_calls(&self) -> Vec<String> {
+        self.store_result_calls.lock().unwrap().clone()
     }
 
     /// Create a relation appropriate for this adapter's type.
@@ -491,8 +498,8 @@ impl MacroTestHarnessBuilder {
     /// Declare additional adapters this environment serves, as a target with an
     /// adapter list does.
     ///
-    /// Without this, a harness built with `for_adapter(AdapterType::Alt)` alone
-    /// measures alt-as-sole-adapter and proves nothing about a mixed graph.
+    /// Without this, a harness built with `for_adapter(AdapterType::LakeCompute)` alone
+    /// measures lake-compute-as-sole-adapter and proves nothing about a mixed graph.
     /// Combine with [`MacroTestHarness::render_for`] to render a node against
     /// one of the declared adapters.
     pub fn with_extra_adapters(
@@ -583,14 +590,23 @@ impl MacroTestHarnessBuilder {
 
         let mut env = builder.build();
 
+        let store_result_calls: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
         if self.stub_functions {
             env.env
                 .add_function("write", |_val: Value| Ok(Value::UNDEFINED));
             env.env
                 .add_function("log", |_msg: Value| Ok(Value::UNDEFINED));
+            let recorded_store_results = store_result_calls.clone();
             env.env.add_function(
                 "store_result",
-                |_name: Value, _kwargs: minijinja::value::Kwargs| Ok(Value::UNDEFINED),
+                move |name: Value, _kwargs: minijinja::value::Kwargs| {
+                    recorded_store_results
+                        .lock()
+                        .unwrap()
+                        .push(name.to_string());
+                    Ok(Value::UNDEFINED)
+                },
             );
             env.env.add_function("load_result", |_name: Value| {
                 Ok(Value::from_serialize(BTreeMap::from([(
@@ -618,6 +634,7 @@ impl MacroTestHarnessBuilder {
             root_package: self.root_package,
             env,
             mock,
+            store_result_calls,
         })
     }
 }

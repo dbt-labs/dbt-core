@@ -818,26 +818,41 @@ done",
     }
 
     #[test]
-    fn macro_call_still_executes_and_absorbs_taint_from_an_argument() {
-        // Regression check for the exemption in the fix above: unlike a
-        // plain native function, a macro call with a tainted argument must
-        // still actually execute (the call-boundary taint rule needs the
-        // real body to run so it can absorb taint from internal logic),
-        // not be short-circuited into re-pushing the argument unevaluated.
-        let env = test_env();
+    fn macro_call_with_a_tainted_argument_skips_the_body_instead_of_executing_it() {
+        // Regression test for a real user report: `dbt_utils.date_spine`
+        // passes a tainted `upper_bound` (force-tainted, per
+        // `is_known_introspective_macro`, since it came from a macro that
+        // touches `statement()`) into `dbt_utils.generate_series`, whose
+        // body calls `get_powers_of_two`, which raises
+        // `exceptions.raise_compiler_error("upper bound must be positive")`
+        // for a non-positive value (stood in for here by `fail()`, since
+        // `exceptions` lives in `dbt-jinja-utils`, which this crate doesn't
+        // depend on). A macro call used to always execute its body for real
+        // even with a tainted argument (see the removed
+        // `macro_call_still_executes_and_absorbs_taint_from_an_argument`),
+        // so this fabricated stand-in could actually reach that guard and
+        // fail the whole render -- a call the real run (with a live
+        // warehouse) would never make. Since a tainted argument means
+        // *everything* the macro could compute from it is equally
+        // unknowable, skipping the body outright (mirroring how a plain
+        // native function call already short-circuits on a tainted
+        // argument) avoids ever reaching a guard like this.
+        let mut env = test_env();
+        env.add_function("fail", |msg: String| -> Result<Value, Error> {
+            Err(Error::new(ErrorKind::InvalidOperation, msg))
+        });
         let env_source = "\
-{%- macro pivot(values) -%}\
-{%- set ns = namespace(parts=[]) -%}\
-{%- for v in values -%}\
-{%- set _ = ns.parts.append(v ~ '_x') -%}\
-{%- endfor -%}\
-{{ ns.parts | join(', ') }}\
+{%- macro boom(n) -%}\
+{%- if n <= 0 -%}\
+{{ fail(\"n must be positive\") }}\
+{%- endif -%}\
+ok\
 {%- endmacro -%}\
-select {{ pivot(vals) }} from t";
+select {{ boom(n) }} from t";
         let out = env
             .render_str(
                 env_source,
-                context! { vals => IntrospectiveValue::wrap(Value::from(Vec::<Value>::new())) },
+                context! { n => IntrospectiveValue::wrap(Value::from(0)) },
                 &taint_gate(),
             )
             .unwrap();

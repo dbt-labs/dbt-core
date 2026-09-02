@@ -1,9 +1,11 @@
 import type { FC, ReactNode } from 'react';
 
-import { resourceNameMap, ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-
 import { Link } from '../../components/ui/Link';
 import { Tooltip } from '../../components/ui/Tooltip';
+import {
+  RESOURCE_TYPE_SINGULAR,
+  type ResourceTypeExplorer,
+} from '../../lib/resourceType';
 import { useResourceLink } from '../links/useResourceLink';
 import { DataPlatformChip } from './DataPlatformChip';
 import { PageHeading } from './PageHeading';
@@ -62,7 +64,7 @@ export function AssetHeader({
         breadcrumbs={[
           { text: packageName ?? '—', href: links.home() },
           {
-            text: resourceNameMap[resourceType],
+            text: RESOURCE_TYPE_SINGULAR[resourceType],
             href: links.resourceFilter({ resourceType }),
           },
           { text: name },

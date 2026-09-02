@@ -1,4 +1,5 @@
 use crate::schemas::common::ClusterConfig;
+use crate::schemas::serde::AdapterTypeOrArray;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_adapter_core::AdapterType;
@@ -31,8 +32,10 @@ use crate::schemas::common::SyncConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
-use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::project::configs::common::{
+    WarehouseSpecificNodeConfig, take_databricks_catalog_alias,
+};
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::properties::ModelState;
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
@@ -165,6 +168,8 @@ pub struct ProjectSnapshotConfig {
     pub scheduler: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -272,7 +277,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+file_format")]
     pub file_format: Option<String>,
     #[serde(rename = "+catalog_name")]
@@ -280,6 +285,9 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+adapter")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    #[serde(rename = "+propagate")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -333,12 +341,12 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+target_alias")]
     pub target_alias: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     // Adapter-specific fields (Redshift)
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -468,6 +476,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
             || self.file_format.is_some()
             || self.catalog_name.is_some()
             || self.adapter.is_some()
+            || self.propagate.is_some()
             || self.include_full_name_in_path.is_some()
             || self.liquid_clustered_by.is_some()
             || self.location_root.is_some()
@@ -525,6 +534,10 @@ pub struct SnapshotConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     // General Configuration
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -695,6 +708,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             target_schema: config.target_schema,
             compute: config.compute,
             adapter: config.adapter,
+            propagate: config.propagate,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: Tags(config.tags),
@@ -733,6 +747,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -743,6 +758,12 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
+
+                partition_by_config: None,
+
+                distribute_by_config: None,
+
+                primary_key_config: None,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
@@ -776,6 +797,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
                 zorder: None,
+                skip_optimize: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -864,6 +886,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             target_schema: config.target_schema,
             compute: config.compute,
             adapter: config.adapter,
+            propagate: config.propagate,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: config.tags.into_inner(),
@@ -896,6 +919,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -1026,6 +1050,26 @@ impl ResolvableConfig<SnapshotConfig> for SnapshotConfig {
     fn default_to(&mut self, parent: &SnapshotConfig) {
         self.default_to_fields(parent);
     }
+
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            self.database.is_some(),
+        ) {
+            self.database = Some(catalog);
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
+        //
+        // Databricks' `target_catalog` -> `target_database` has no dedicated alias field the
+        // way `catalog`/`database` do, so it cannot be canonicalized here; it is handled only
+        // where a raw config-key rename is possible, at the inline `{{ config(...) }}` layer
+        // (`ParseConfig::apply_config`). A `+target_catalog:` in `dbt_project.yml` or a
+        // schema.yml `config:` block remains an unrecognized key -- see the marker test
+        // `test_snapshot_target_catalog_in_project_yml_is_unrecognized_key` in
+        // `dbt-parser/src/dbt_project_config.rs`.
+    }
 }
 
 impl ConfigKeys for SnapshotConfig {
@@ -1060,6 +1104,23 @@ mod tests {
     use super::{AdapterType, ProjectSnapshotConfig, SnapshotConfig};
     use crate::schemas::common::{FreshnessPeriod, UpdatesOn};
     use crate::schemas::properties::{ModelState, StatePreClone};
+
+    #[test]
+    fn test_snapshot_query_tags_propagate_through_resolved_config() {
+        let project: ProjectSnapshotConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"snapshot"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: SnapshotConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"snapshot"}"#)
+        );
+    }
 
     #[test]
     fn test_project_snapshot_config_resource_tags_parses() {
@@ -1197,6 +1258,42 @@ __warehouse_specific_config__: {}
         let state = child
             .state
             .expect("state should propagate from parent to child via default_to");
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+        assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
+    }
+
+    /// Regression for #16135: a snapshot that sets one `state:` key keeps the keys
+    /// the project layer set.
+    #[test]
+    fn test_snapshot_config_state_merges_field_by_field() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+
+        let parent = SnapshotConfig {
+            state: Some(ModelState {
+                lag_tolerance: None,
+                require_fresh_data_from: None,
+                evaluate_volatile_sql: Some(true),
+                pre_clone: Some(StatePreClone::IfMissing),
+                execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        let mut child = SnapshotConfig {
+            state: Some(ModelState {
+                lag_tolerance: None,
+                require_fresh_data_from: Some(UpdatesOn::All),
+                evaluate_volatile_sql: None,
+                pre_clone: None,
+                execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        child.default_to(&parent);
+
+        let state = child.state.expect("state should survive the merge");
         assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
         assert_eq!(state.evaluate_volatile_sql, Some(true));
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));

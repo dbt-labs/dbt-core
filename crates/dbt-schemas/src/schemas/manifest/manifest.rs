@@ -32,17 +32,17 @@ use crate::{
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
-                ManifestAnalysis, ManifestCommonAttributes, ManifestDataTest, ManifestFunction,
-                ManifestMaterializableCommonAttributes, ManifestMetric, ManifestModel,
-                ManifestOperation, ManifestSeed, ManifestSemanticModel, ManifestSnapshot,
-                ManifestSource,
+                ManifestAnalysis, ManifestCheck, ManifestCommonAttributes, ManifestDataTest,
+                ManifestFunction, ManifestMaterializableCommonAttributes, ManifestMetric,
+                ManifestModel, ManifestOperation, ManifestSeed, ManifestSemanticModel,
+                ManifestSnapshot, ManifestSource,
             },
             saved_query::DbtSavedQueryAttr,
             semantic_model::NodeRelation,
         },
         nodes::{
-            AdapterAttr, DbtAnalysis, DbtAnalysisAttr, DbtGroup, DbtGroupAttr, DbtSeedAttr,
-            DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr,
+            AdapterAttr, DbtAnalysis, DbtAnalysisAttr, DbtCheck, DbtCheckAttr, DbtGroup,
+            DbtGroupAttr, DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr,
         },
         relations::default_dbt_quoting_for,
     },
@@ -61,6 +61,7 @@ pub enum DbtNode {
     Operation(ManifestOperation),
     Analysis(ManifestAnalysis),
     Function(ManifestFunction),
+    Check(ManifestCheck),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -230,6 +231,15 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 normalize_manifest_analysis_path(&mut analysis_node.__common_attr__, path_config);
                 normalize_manifest_patch_path(&mut analysis_node.__common_attr__, path_config);
                 (id.clone(), DbtNode::Analysis(analysis_node))
+            }))
+            .chain(resolver_state.nodes.checks.iter().map(|(id, node)| {
+                let mut check_node: ManifestCheck = (**node).clone().into();
+                let path_config = path_config_for_package(
+                    resolver_state,
+                    &check_node.__common_attr__.package_name,
+                );
+                normalize_manifest_patch_path(&mut check_node.__common_attr__, path_config);
+                (id.clone(), DbtNode::Check(check_node))
             }))
             // Note: Functions are now handled separately in the functions field, not in nodes
             .chain(resolver_state.operations.on_run_start.iter().map(|node| {
@@ -1174,6 +1184,20 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
 
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
+    // A previous manifest carries its own `adapter_type` (just parsed above), which is the
+    // spelling authority for the alias-authored keys in that file -- so canonicalize
+    // `unrendered_config` the same way the parser does on the write side, or a manifest written
+    // by pre-fix Fusion (authored spelling) looks like a `state:modified` false positive against
+    // freshly parsed (canonical) config. Suppress-only and idempotent (see the callee's doc
+    // comment); on a duplicate the canonical spelling wins rather than erroring, since this is
+    // data we did not write this run.
+    let canonicalize_unrendered_config = |cfg: BTreeMap<String, YmlValue>| {
+        dbt_adapter_core::config_aliases::canonicalize_previous_manifest_config_keys(
+            adapter_type,
+            cfg,
+        )
+    };
+
     // Do not put disabled nodes into the nodes, because all things in Nodes object should be enabled.
     for (unique_id, node) in manifest.nodes.clone() {
         match node {
@@ -1230,6 +1254,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            // `propagate`, like `adapter`, never reaches the manifest, so a node
+                            // read back from one has no selection to recover -- the same reason
+                            // `adapter` falls back to the manifest's global `adapter_type` here.
+                            propagate: Vec::new(),
                             database: test.__common_attr__.database,
                             schema: test.__common_attr__.schema,
                             alias: test.__base_attr__.alias,
@@ -1258,7 +1286,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             sources: test.__base_attr__.sources,
                             functions: test.__base_attr__.functions,
                             metrics: test.__base_attr__.metrics,
-                            unrendered_config: test.__base_attr__.unrendered_config,
+                            unrendered_config: canonicalize_unrendered_config(
+                                test.__base_attr__.unrendered_config,
+                            ),
                         },
                         __test_attr__: DbtTestAttr {
                             column_name: test.column_name,
@@ -1324,6 +1354,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            propagate: Vec::new(),
                             database: snapshot.__common_attr__.database,
                             schema: snapshot.__common_attr__.schema,
                             alias: snapshot.__base_attr__.alias,
@@ -1356,7 +1387,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             sources: snapshot.__base_attr__.sources,
                             functions: snapshot.__base_attr__.functions,
                             metrics: snapshot.__base_attr__.metrics,
-                            unrendered_config: snapshot.__base_attr__.unrendered_config,
+                            unrendered_config: canonicalize_unrendered_config(
+                                snapshot.__base_attr__.unrendered_config,
+                            ),
                         },
                         __snapshot_attr__: DbtSnapshotAttr {
                             snapshot_meta_column_names: snapshot
@@ -1403,6 +1436,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            propagate: Vec::new(),
                             database: seed.__common_attr__.database,
                             schema: seed.__common_attr__.schema,
                             alias: seed.__base_attr__.alias,
@@ -1431,7 +1465,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             sources: seed.__base_attr__.sources,
                             functions: seed.__base_attr__.functions,
                             metrics: seed.__base_attr__.metrics,
-                            unrendered_config: seed.__base_attr__.unrendered_config,
+                            unrendered_config: canonicalize_unrendered_config(
+                                seed.__base_attr__.unrendered_config,
+                            ),
                         },
                         __seed_attr__: DbtSeedAttr {
                             quote_columns: seed.config.quote_columns.unwrap_or_default(),
@@ -1498,6 +1534,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            propagate: Vec::new(),
                             database: analysis.__common_attr__.database,
                             schema: analysis.__common_attr__.schema,
                             alias: analysis.__base_attr__.alias,
@@ -1533,6 +1570,84 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     }),
                 );
             }
+            DbtNode::Check(check) => {
+                let config = check.config;
+                let tags = config
+                    .tags
+                    .inner()
+                    .clone()
+                    .map(Into::into)
+                    .unwrap_or_default();
+                let meta = config.meta.clone().unwrap_or_default();
+
+                let recalculated_checksum = match check.__base_attr__.raw_code.clone() {
+                    Some(raw_code) => {
+                        let normalized_raw_code = normalize_sql(&raw_code);
+                        recalculate_checksum(
+                            Some(normalized_raw_code.as_str()),
+                            check.__base_attr__.checksum.clone(),
+                        )
+                    }
+                    None => check.__base_attr__.checksum.clone(),
+                };
+                nodes.checks.insert(
+                    unique_id,
+                    Arc::new(DbtCheck {
+                        __common_attr__: CommonAttributes {
+                            unique_id: check.__common_attr__.unique_id,
+                            name: check.__common_attr__.name,
+                            package_name: check.__common_attr__.package_name,
+                            path: check.__common_attr__.path,
+                            name_span: Span::default(),
+                            original_file_path: check.__common_attr__.original_file_path,
+                            patch_path: check.__common_attr__.patch_path,
+                            fqn: check.__common_attr__.fqn,
+                            description: check.__common_attr__.description,
+                            raw_code: check.__base_attr__.raw_code,
+                            checksum: recalculated_checksum,
+                            language: check.__base_attr__.language,
+                            tags,
+                            classifiers: Default::default(),
+                            meta,
+                        },
+                        __base_attr__: NodeBaseAttributes {
+                            adapter: adapter_type,
+                            propagate: Vec::new(),
+                            // A check has no relation, so these stay as written (empty) rather
+                            // than being defaulted from the target.
+                            database: check.__common_attr__.database,
+                            schema: check.__common_attr__.schema,
+                            alias: check.__base_attr__.alias,
+                            relation_name: check.__base_attr__.relation_name,
+                            materialized: DbtMaterialization::Analysis,
+                            static_analysis: Default::default(),
+                            enabled: check.enabled,
+                            static_analysis_off_reason: None,
+                            compute: None,
+                            extended_model: false,
+                            quoting: dbt_quoting.try_into().expect("DbtQuoting should be set"),
+                            quoting_ignore_case: false,
+                            persist_docs: None,
+                            columns: check.__base_attr__.columns,
+                            depends_on: check.__base_attr__.depends_on,
+                            refs: check.__base_attr__.refs,
+                            sources: check.__base_attr__.sources,
+                            metrics: check.__base_attr__.metrics,
+                            functions: check.__base_attr__.functions,
+                            unrendered_config: check.__base_attr__.unrendered_config,
+                        },
+                        __check_attr__: DbtCheckAttr {
+                            // Neither field is carried by `ManifestCheck`. A node reconstructed from
+                            // a manifest is only ever *compared* (`--state`), never executed or
+                            // scheduled — execution reads the rendered SQL and scheduling reads the
+                            // table list, and both of those paths come from a fresh resolve or the
+                            // parse cache, which do round-trip them.
+                            compiled_sql: None,
+                        },
+                        deprecated_config: config,
+                    }),
+                );
+            }
         }
     }
     for (unique_id, source) in manifest.sources {
@@ -1565,6 +1680,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: source.__common_attr__.database,
                     schema: source.__common_attr__.schema,
                     alias: source.identifier.clone(),
@@ -1592,7 +1708,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     sources: vec![],
                     functions: vec![],
                     metrics: vec![],
-                    unrendered_config: source.unrendered_config,
+                    unrendered_config: canonicalize_unrendered_config(source.unrendered_config),
                 },
                 __source_attr__: DbtSourceAttr {
                     identifier: source.identifier,
@@ -1637,6 +1753,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1664,7 +1781,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     maturity: exposure.maturity,
                     type_: exposure.type_,
                     url: exposure.url,
-                    unrendered_config: exposure.__base_attr__.unrendered_config,
+                    unrendered_config: canonicalize_unrendered_config(
+                        exposure.__base_attr__.unrendered_config,
+                    ),
                     created_at: exposure.__base_attr__.created_at,
                 },
                 deprecated_config: exposure.config,
@@ -1700,6 +1819,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: unit_test.__common_attr__.database,
                     schema: unit_test.__common_attr__.schema,
                     alias: unit_test.__base_attr__.alias,
@@ -1741,15 +1861,24 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
     for (unique_id, semantic_model) in manifest.semantic_models {
         // TODO: I don't like the inconsistency of using From trait here,
         // although it seems everything should be refactored to use that instead
+        let mut dbt_semantic_model: crate::schemas::manifest::DbtSemanticModel =
+            semantic_model.into();
+        dbt_semantic_model.__semantic_model_attr__.unrendered_config =
+            canonicalize_unrendered_config(
+                dbt_semantic_model.__semantic_model_attr__.unrendered_config,
+            );
         nodes
             .semantic_models
-            .insert(unique_id, Arc::new(semantic_model.into()));
+            .insert(unique_id, Arc::new(dbt_semantic_model));
     }
     for (unique_id, metric) in manifest.metrics {
         // Load previous-state metrics so `state:modified` can compare them. Without this,
         // `previous_node_for` never finds a metric and every metric is unconditionally
         // reported as modified (dbt-core#15513).
-        nodes.metrics.insert(unique_id, Arc::new(metric.into()));
+        let mut dbt_metric: crate::schemas::manifest::DbtMetric = metric.into();
+        dbt_metric.__metric_attr__.unrendered_config =
+            canonicalize_unrendered_config(dbt_metric.__metric_attr__.unrendered_config);
+        nodes.metrics.insert(unique_id, Arc::new(dbt_metric));
     }
     for (unique_id, saved_query) in manifest.saved_queries {
         nodes.saved_queries.insert(
@@ -1780,6 +1909,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1806,7 +1936,9 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     exports: saved_query.exports,
                     label: saved_query.label,
                     metadata: saved_query.metadata,
-                    unrendered_config: saved_query.__base_attr__.unrendered_config,
+                    unrendered_config: canonicalize_unrendered_config(
+                        saved_query.__base_attr__.unrendered_config,
+                    ),
                     created_at: saved_query.__base_attr__.created_at,
                     group: saved_query.group,
                     cache: saved_query.config.cache.clone(),
@@ -1839,6 +1971,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1968,6 +2101,7 @@ pub fn manifest_model_to_dbt_model(
         },
         __base_attr__: NodeBaseAttributes {
             adapter: adapter_type,
+            propagate: Vec::new(),
             database,
             schema,
             alias,
@@ -1995,7 +2129,14 @@ pub fn manifest_model_to_dbt_model(
             sources: model.__base_attr__.sources,
             functions: model.__base_attr__.functions,
             metrics: model.__base_attr__.metrics,
-            unrendered_config: model.__base_attr__.unrendered_config,
+            // See `nodes_from_dbt_manifest`'s `canonicalize_unrendered_config` for why: this
+            // model's own `adapter_type` (just computed above) is the spelling authority for the
+            // previous manifest's alias-authored keys.
+            unrendered_config:
+                dbt_adapter_core::config_aliases::canonicalize_previous_manifest_config_keys(
+                    adapter_type,
+                    model.__base_attr__.unrendered_config,
+                ),
         },
         __model_attr__: DbtModelAttr {
             // `config.access` first, node-level `access` as a fallback: dbt-core mirrors the two
@@ -2081,6 +2222,7 @@ pub fn manifest_function_to_dbt_function(
         },
         __base_attr__: NodeBaseAttributes {
             adapter: adapter_type,
+            propagate: Vec::new(),
             database: function.__common_attr__.database,
             schema: function.__common_attr__.schema,
             alias: function.__base_attr__.alias,
@@ -2109,7 +2251,12 @@ pub fn manifest_function_to_dbt_function(
             sources: function.__base_attr__.sources,
             functions: function.__base_attr__.functions,
             metrics: function.__base_attr__.metrics,
-            unrendered_config: function.__base_attr__.unrendered_config,
+            // See `nodes_from_dbt_manifest`'s `canonicalize_unrendered_config` for why.
+            unrendered_config:
+                dbt_adapter_core::config_aliases::canonicalize_previous_manifest_config_keys(
+                    adapter_type,
+                    function.__base_attr__.unrendered_config,
+                ),
         },
         __function_attr__: DbtFunctionAttr {
             access: function.access,
@@ -2169,6 +2316,7 @@ mod tests {
             saved_queries: BTreeMap::new(),
             groups: BTreeMap::new(),
             functions: BTreeMap::new(),
+            checks: BTreeMap::new(),
             macros: BTreeMap::new(),
             project_name: None,
         }
@@ -2261,6 +2409,51 @@ mod tests {
 
         // Neither: dbt-core's `protected` default.
         assert_eq!(to_dbt_model(ManifestModel::default()), Access::Protected);
+    }
+
+    /// A previous manifest is data this run did not write, so a node carrying both an alias and
+    /// its canonical spelling in `unrendered_config` (e.g. a hand-edited or foreign manifest) must
+    /// merge to exactly one key on read, deterministically, rather than erroring the way parsing a
+    /// project we control does (`canonicalize_config_keys`'s `DuplicateAliasKey`).
+    #[test]
+    fn manifest_model_unrendered_config_merges_duplicate_alias_deterministically() {
+        let quoting = DbtQuoting {
+            database: Some(false),
+            identifier: Some(false),
+            schema: Some(false),
+            snowflake_ignore_case: Some(false),
+        };
+        let manifest = DbtManifest {
+            metadata: ManifestMetadata {
+                adapter_type: "databricks".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut unrendered_config = BTreeMap::new();
+        unrendered_config.insert(
+            "catalog".to_string(),
+            YmlValue::string("alias_value".to_string()),
+        );
+        unrendered_config.insert(
+            "database".to_string(),
+            YmlValue::string("canonical_value".to_string()),
+        );
+        let model = ManifestModel {
+            __base_attr__: crate::schemas::manifest::manifest_nodes::ManifestNodeBaseAttributes {
+                unrendered_config,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let dbt_model = manifest_model_to_dbt_model(model, &manifest, quoting);
+
+        assert_eq!(dbt_model.__base_attr__.unrendered_config.len(), 1);
+        assert_eq!(
+            dbt_model.__base_attr__.unrendered_config.get("database"),
+            Some(&YmlValue::string("canonical_value".to_string()))
+        );
     }
 
     #[test]

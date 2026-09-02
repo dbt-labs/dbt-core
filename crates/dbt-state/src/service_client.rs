@@ -18,11 +18,12 @@ use crate::auth::browser_flow::is_retryable_token_error;
 use crate::proto::query_cache::{
     CloneRequest, CloneResponse, ConfirmExecutionRequest, ConfirmExecutionResponse,
     GetExplainMessagesRequest, GetExplainMessagesResponse, RecordExecutionsRequest,
-    RecordExecutionsResponse, ResolveDeferredRelationsRequest, SubmitEnrichedSqlRequest,
-    SubmitSqlResponse, SubmitSqlSpeculativeResponse, SubmitTelemetryBatchRequest,
-    SubmitTelemetryBatchResponse, SubmitValuesRequest, ValidateClientVersionRequest,
-    client_validation_client::ClientValidationClient, execution_client::ExecutionClient,
-    explain_client::ExplainClient, sql_client::SqlClient,
+    RecordExecutionsResponse, ResolveDeferredRelationsRequest, SelectorRequest, SelectorResponse,
+    SubmitEnrichedSqlRequest, SubmitSqlResponse, SubmitSqlSpeculativeResponse,
+    SubmitTelemetryBatchRequest, SubmitTelemetryBatchResponse, SubmitValuesRequest,
+    ValidateClientVersionRequest, client_validation_client::ClientValidationClient,
+    execution_client::ExecutionClient, explain_client::ExplainClient,
+    selector_service_client::SelectorServiceClient, sql_client::SqlClient,
 };
 use crate::proto::query_cache::{client_telemetry_client::ClientTelemetryClient, clone_client};
 use crate::service_config::{RunCacheServiceConfig, RunCacheServiceConfigError};
@@ -87,6 +88,28 @@ pub enum RunCacheServiceError {
         "dbt State authentication requires an interactive terminal, but none is available in this environment"
     )]
     NoInteractiveTerminal,
+    /// No dbt platform credential is available for the account the project
+    /// configures. Deliberately not an `Auth` error: like
+    /// [`Self::NoInteractiveTerminal`] it is not user-actionable *auth*, so
+    /// validation fails open and dbt State is bypassed for the invocation
+    /// rather than failing the run.
+    #[error("{}", platform_account_unavailable_message(.configured, .found.as_deref()))]
+    PlatformAccountUnavailable {
+        configured: String,
+        found: Option<String>,
+    },
+}
+
+fn platform_account_unavailable_message(configured: &str, found: Option<&str>) -> String {
+    let found = match found {
+        Some(found) => format!(", but the available credentials belong to account {found}"),
+        None => String::new(),
+    };
+    format!(
+        "no dbt platform credentials for account {configured}{found}. \
+         Run `dbt login` with account {configured}, or update 'account_id' in the \
+         'dbt-cloud' block of dbt_project.yml"
+    )
 }
 
 impl RunCacheServiceError {
@@ -106,6 +129,7 @@ impl RunCacheServiceError {
             Self::Aborted => "Aborted",
             Self::Timeout(_) => "Timeout",
             Self::NoInteractiveTerminal => "NoInteractiveTerminal",
+            Self::PlatformAccountUnavailable { .. } => "PlatformAccountUnavailable",
         }
     }
 
@@ -355,6 +379,12 @@ pub trait RunCacheServiceClient: Send + Sync {
     ) -> Result<GetExplainMessagesResponse, RunCacheServiceError> {
         Err(RunCacheServiceError::Disabled)
     }
+    async fn get_state_selection(
+        &self,
+        _request: SelectorRequest,
+    ) -> Result<SelectorResponse, RunCacheServiceError> {
+        Err(RunCacheServiceError::Disabled)
+    }
 
     async fn resolve_deferred_relations(
         &self,
@@ -372,6 +402,7 @@ pub struct GrpcRunCacheServiceClient {
     client_telemetry: ClientTelemetryClient<Channel>,
     client_validation: ClientValidationClient<Channel>,
     explain: ExplainClient<Channel>,
+    state_selector: SelectorServiceClient<Channel>,
     auth: RunCacheAuth,
     metadata: RunCacheClientMetadata,
     disabled: Arc<AtomicBool>,
@@ -415,6 +446,7 @@ impl GrpcRunCacheServiceClient {
             execution: ExecutionClient::new(channel.clone()),
             client_telemetry: ClientTelemetryClient::new(channel.clone()),
             client_validation: ClientValidationClient::new(channel.clone()),
+            state_selector: SelectorServiceClient::new(channel.clone()),
             explain: ExplainClient::new(channel),
             auth,
             metadata,
@@ -643,6 +675,22 @@ impl RunCacheServiceClient for GrpcRunCacheServiceClient {
         )?;
 
         Ok(response.fqn_by_unique_id)
+    }
+
+    async fn get_state_selection(
+        &self,
+        request: SelectorRequest,
+    ) -> Result<SelectorResponse, RunCacheServiceError> {
+        self.with_retry(|| async {
+            let request = self.attach(Request::new(request.clone())).await?;
+            self.response(
+                self.state_selector
+                    .clone()
+                    .get_state_selection(request)
+                    .await,
+            )
+        })
+        .await
     }
 }
 
@@ -935,6 +983,7 @@ mod tests {
             execution: ExecutionClient::new(channel.clone()),
             client_telemetry: ClientTelemetryClient::new(channel.clone()),
             client_validation: ClientValidationClient::new(channel.clone()),
+            state_selector: SelectorServiceClient::new(channel.clone()),
             explain: ExplainClient::new(channel),
             auth: RunCacheAuth::None,
             metadata: RunCacheClientMetadata::default(),

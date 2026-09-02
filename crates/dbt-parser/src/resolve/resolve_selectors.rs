@@ -8,7 +8,7 @@ use dbt_schemas::schemas::{
     manifest::DbtSelector,
     selectors::{
         AtomExpr, CompositeExpr, MethodAtomExpr, SelectorDefaultSpec, SelectorDefinitionValue,
-        SelectorEntry, SelectorExpr, SelectorFile,
+        SelectorEntry, SelectorExpr, SelectorFile, SelectorMethodValue,
     },
 };
 use dbt_selector_parser::{ResolvedSelector, SelectorParser};
@@ -345,7 +345,7 @@ fn selector_atom_to_yaml(atom: &AtomExpr) -> FsResult<YmlValue> {
                         "MethodKey must have exactly one key-value pair"
                     )
                 })?;
-            Ok(method_value_to_yaml(method, value.as_str()))
+            Ok(method_value_to_yaml(method, selector_value_to_yaml(value)))
         }
         AtomExpr::Exclude(expr) => {
             let mut map = dbt_yaml::Mapping::new();
@@ -362,7 +362,7 @@ fn selector_atom_to_yaml(atom: &AtomExpr) -> FsResult<YmlValue> {
 }
 
 fn method_atom_to_yaml(expr: &MethodAtomExpr) -> YmlValue {
-    let mut value = method_value_to_yaml(&expr.method, expr.value.as_str());
+    let mut value = method_value_to_yaml(&expr.method, selector_value_to_yaml(&expr.value));
     if let YmlValue::Mapping(map, _) = &mut value {
         if expr.parents.as_bool() || expr.parents_depth.is_some() {
             map.insert(
@@ -404,7 +404,7 @@ fn method_atom_to_yaml(expr: &MethodAtomExpr) -> YmlValue {
     value
 }
 
-fn method_value_to_yaml(method: &str, value: &str) -> YmlValue {
+fn method_value_to_yaml(method: &str, value: YmlValue) -> YmlValue {
     let mut map = dbt_yaml::Mapping::new();
     map.insert(
         YmlValue::String("method".to_string(), Default::default()),
@@ -412,9 +412,19 @@ fn method_value_to_yaml(method: &str, value: &str) -> YmlValue {
     );
     map.insert(
         YmlValue::String("value".to_string(), Default::default()),
-        YmlValue::String(value.to_string(), Default::default()),
+        value,
     );
     YmlValue::Mapping(map, Default::default())
+}
+
+/// Renders a method argument back to YAML, preserving the shape it was parsed with.
+fn selector_value_to_yaml(value: &SelectorMethodValue) -> YmlValue {
+    match value {
+        SelectorMethodValue::Scalar(v) => {
+            YmlValue::String(v.as_str().to_string(), Default::default())
+        }
+        SelectorMethodValue::Unsupported(y) => (**y).clone(),
+    }
 }
 
 /// Converts a SelectExpression to the normalized YAML format expected by the manifest.
@@ -431,9 +441,15 @@ fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
                 YmlValue::String("method".to_string(), Default::default()),
                 YmlValue::String(method, Default::default()),
             );
+            let value = match &criteria.value {
+                dbt_common::node_selector::SelectionValue::Scalar(s) => {
+                    YmlValue::String(s.clone(), Default::default())
+                }
+                dbt_common::node_selector::SelectionValue::Unsupported(y) => (**y).clone(),
+            };
             map.insert(
                 YmlValue::String("value".to_string(), Default::default()),
-                YmlValue::String(criteria.value.clone(), Default::default()),
+                value,
             );
 
             if criteria.parents_depth.is_some() {
@@ -647,8 +663,8 @@ mod tests {
     #[test]
     fn test_serialize_method_key_requires_one_entry() {
         let method_value = BTreeMap::from([
-            ("selector".to_string(), SelectorValue::from("base")),
-            ("fqn".to_string(), SelectorValue::from("other")),
+            ("selector".to_string(), SelectorValue::from("base").into()),
+            ("fqn".to_string(), SelectorValue::from("other").into()),
         ]);
         let atom = AtomExpr::MethodKey(method_value);
 
@@ -721,7 +737,7 @@ selectors:
         let original_definition =
             SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(MethodAtomExpr {
                 method: "config.materialized".to_string(),
-                value: SelectorValue::from("table"),
+                value: SelectorValue::from("table").into(),
                 childrens_parents: SelectorDefaultSpec::from(false),
                 parents: SelectorDefaultSpec::from(false),
                 children: SelectorDefaultSpec::from(false),
@@ -759,7 +775,7 @@ selectors:
     #[test]
     fn test_manifest_selector_preserves_mixed_union_with_selector_reference() -> FsResult<()> {
         let mut selector_ref = BTreeMap::new();
-        selector_ref.insert("selector".to_string(), SelectorValue::from("base"));
+        selector_ref.insert("selector".to_string(), SelectorValue::from("base").into());
         let original_definition =
             SelectorDefinitionValue::Full(SelectorExpr::Composite(CompositeExpr {
                 union: Some(vec![
@@ -825,7 +841,7 @@ selectors:
     #[test]
     fn test_manifest_selector_preserves_pure_selector_alias() -> FsResult<()> {
         let mut selector_ref = BTreeMap::new();
-        selector_ref.insert("selector".to_string(), SelectorValue::from("base"));
+        selector_ref.insert("selector".to_string(), SelectorValue::from("base").into());
         let original_definition =
             SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::MethodKey(selector_ref)));
         let normalized_include = SelectExpression::And(vec![
@@ -859,6 +875,64 @@ selectors:
             definition.get("value").and_then(|v| v.as_str()),
             Some("base")
         );
+        Ok(())
+    }
+
+    /// Regression (dbt-labs/fs#13604): dbt Core types a method argument's
+    /// `value` as `Any`, so a sequence like `value: ["models"]` loads fine
+    /// even for an unused selector. A one-element sequence is no exception:
+    /// `Path.glob()` still gets a `list`, so it must defer, not resolve.
+    #[test]
+    fn test_sequence_valued_selector_argument_parses() -> FsResult<()> {
+        let selector_file: SelectorFile = dbt_yaml::from_str(
+            r#"
+selectors:
+  - name: default
+    definition:
+      method: path
+      value: ["models"]
+"#,
+        )
+        .expect("issue #13604 selector YAML should parse");
+
+        let original_definition = selector_file.selectors[0].definition.clone();
+        let normalized_include =
+            SelectorParser::new(BTreeMap::new()).parse_definition(&original_definition)?;
+        if let SelectExpression::Atom(criteria) = &normalized_include {
+            assert_eq!(criteria.method, MethodName::Path);
+            assert!(
+                matches!(
+                    criteria.value,
+                    dbt_common::node_selector::SelectionValue::Unsupported(_)
+                ),
+                "a sequence value has no selection semantics and must be deferred, not treated as a scalar"
+            );
+        } else {
+            panic!("Expected a single deferred Atom for a sequence value");
+        }
+
+        // Manifest round-trip must preserve the sequence shape, matching how
+        // dbt Core stores the raw, unvalidated `value` in the manifest.
+        let resolved_selectors = HashMap::from([(
+            "default".to_string(),
+            SelectorEntry {
+                include: normalized_include,
+                is_default: false,
+                description: None,
+                definition: original_definition,
+            },
+        )]);
+        let manifest_selectors = resolve_manifest_selectors(resolved_selectors)?;
+        let definition = manifest_selectors
+            .get("default")
+            .and_then(|selector| selector.definition.as_ref())
+            .expect("selector definition should be present");
+        let value = definition
+            .get("value")
+            .and_then(|v| v.as_sequence())
+            .expect("manifest should preserve the sequence-valued argument");
+        assert_eq!(value.len(), 1);
+        assert_eq!(value[0].as_str(), Some("models"));
         Ok(())
     }
 }

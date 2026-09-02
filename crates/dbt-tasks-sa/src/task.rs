@@ -41,15 +41,15 @@ fn sender_receiver(b: bool) -> (Option<Tx>, Option<Rx>) {
 
 /// Whether a node's adapter routes it to the alternate compute path.
 ///
-/// `alt` is not merely another adapter -- it owns an execution path that bypasses
+/// `lake` is not merely another adapter -- it owns an execution path that bypasses
 /// Jinja materializations -- so routing follows the resolved type. Reads
 /// `node_adapter()` off the shared trait rather than each node type's own attr
 /// struct, so a new node type is covered the moment it exists. False for a
 /// `unique_id` that names no node.
-fn selects_alt_compute(nodes: &Nodes, unique_id: &str) -> bool {
+fn selects_lake_compute(nodes: &Nodes, unique_id: &str) -> bool {
     nodes
         .get_node(unique_id)
-        .is_some_and(|node| node.node_adapter() == AdapterType::Alt)
+        .is_some_and(|node| node.node_adapter() == AdapterType::LakeCompute)
 }
 
 pub fn effective_unit_test_execute(unit_test: &DbtUnitTest, execute: Execute) -> Execute {
@@ -213,23 +213,23 @@ impl RunTaskHooks for DefaultRunTaskHooks {
         Ok(RunCacheServiceDecision::Disabled)
     }
 
-    async fn run_alt_compute_sidecar(
+    async fn run_lake_compute_sidecar(
         &self,
         _ctx: &mut TaskRunnerCtx,
         _node: Arc<dyn InternalDbtNodeAttributes>,
         _task_result: Option<TaskResult>,
     ) -> FsResult<NodeStatus> {
-        debug_assert!(false, "run_alt_compute_sidecar called");
+        debug_assert!(false, "run_lake_compute_sidecar called");
         Ok(NodeStatus::Errored)
     }
 
-    async fn run_on_alt_compute(
+    async fn run_on_lake_compute(
         &self,
         _ctx: &mut TaskRunnerCtx,
         _node: Arc<dyn InternalDbtNodeAttributes>,
         _task_result: Option<TaskResult>,
     ) -> FsResult<NodeStatus> {
-        debug_assert!(false, "run_on_alt_compute called");
+        debug_assert!(false, "run_on_lake_compute called");
         Ok(NodeStatus::Errored)
     }
 
@@ -422,16 +422,16 @@ pub trait TasksForNodeFactory: Send + Sync {
                     (_, Execute::Service) => (),
                 }
             } else {
-                // A model or seed whose `+adapter` names an `alt`-typed adapter
+                // A model or seed whose `+adapter` names an `lake_compute`-typed adapter
                 // takes the compute-platform path instead of the default (remote)
                 // one; selection/execution is delegated to the run hook.
-                let on_alt_compute = selects_alt_compute(nodes, unique_id);
+                let on_lake_compute = selects_lake_compute(nodes, unique_id);
                 match (the_runnable_task, execute) {
-                    (Some(t), Execute::Remote) if on_alt_compute => {
+                    (Some(t), Execute::Remote) if on_lake_compute => {
                         runnable = Some(Arc::new(RunTask::new(
                             t,
                             next_receiver.take(),
-                            RunExecutionPath::AltCompute,
+                            RunExecutionPath::LakeCompute,
                             run_task_hooks,
                         )) as Arc<dyn Task>);
                     }
@@ -499,23 +499,26 @@ mod node_adapter_dispatch_tests {
     }
 
     #[test]
-    fn a_seed_on_alt_routes_to_alt_compute() {
-        assert!(selects_alt_compute(&seed_on(AdapterType::Alt), "seed.p.s"));
+    fn a_seed_on_lake_compute_routes_to_lake_compute() {
+        assert!(selects_lake_compute(
+            &seed_on(AdapterType::LakeCompute),
+            "seed.p.s"
+        ));
     }
 
     #[test]
-    fn a_model_on_alt_routes_to_alt_compute() {
-        assert!(selects_alt_compute(
-            &model_on(AdapterType::Alt),
+    fn a_model_on_lake_compute_routes_to_lake_compute() {
+        assert!(selects_lake_compute(
+            &model_on(AdapterType::LakeCompute),
             "model.p.m"
         ));
     }
 
-    /// `alt` owns an execution path that bypasses Jinja materializations, so every
+    /// `lake_compute` owns an execution path that bypasses Jinja materializations, so every
     /// other adapter must stay on the normal path even when it is not the target
-    /// default. DuckDB is the sharp case: `alt` inherits its macros, not its routing.
+    /// default. DuckDB is the sharp case: `lake_compute` inherits its macros, not its routing.
     #[test]
-    fn no_other_adapter_routes_to_alt_compute() {
+    fn no_other_adapter_routes_to_lake_compute() {
         for adapter_type in [
             AdapterType::DuckDB,
             AdapterType::Snowflake,
@@ -523,8 +526,8 @@ mod node_adapter_dispatch_tests {
             AdapterType::Bigquery,
         ] {
             assert!(
-                !selects_alt_compute(&model_on(adapter_type), "model.p.m"),
-                "{adapter_type} must not take the alt-compute path"
+                !selects_lake_compute(&model_on(adapter_type), "model.p.m"),
+                "{adapter_type} must not take the lake-compute path"
             );
         }
     }
@@ -537,7 +540,7 @@ mod node_adapter_dispatch_tests {
         let mut nodes = Nodes::default();
 
         let mut snapshot = DbtSnapshot::default();
-        snapshot.__base_attr__.adapter = AdapterType::Alt;
+        snapshot.__base_attr__.adapter = AdapterType::LakeCompute;
         nodes
             .snapshots
             .insert("snapshot.p.snap".to_string(), Arc::new(snapshot));
@@ -549,7 +552,7 @@ mod node_adapter_dispatch_tests {
             .insert("function.p.f".to_string(), Arc::new(function));
 
         let mut test = DbtTest::default();
-        test.__base_attr__.adapter = AdapterType::Alt;
+        test.__base_attr__.adapter = AdapterType::LakeCompute;
         nodes.tests.insert("test.p.t".to_string(), Arc::new(test));
 
         let mut unit_test = DbtUnitTest::default();
@@ -558,15 +561,15 @@ mod node_adapter_dispatch_tests {
             .unit_tests
             .insert("unit_test.p.u".to_string(), Arc::new(unit_test));
 
-        assert!(selects_alt_compute(&nodes, "snapshot.p.snap"));
-        assert!(selects_alt_compute(&nodes, "test.p.t"));
-        assert!(!selects_alt_compute(&nodes, "function.p.f"));
-        assert!(!selects_alt_compute(&nodes, "unit_test.p.u"));
+        assert!(selects_lake_compute(&nodes, "snapshot.p.snap"));
+        assert!(selects_lake_compute(&nodes, "test.p.t"));
+        assert!(!selects_lake_compute(&nodes, "function.p.f"));
+        assert!(!selects_lake_compute(&nodes, "unit_test.p.u"));
     }
 
     #[test]
-    fn an_unknown_unique_id_does_not_route_to_alt_compute() {
-        assert!(!selects_alt_compute(&Nodes::default(), "seed.p.missing"));
+    fn an_unknown_unique_id_does_not_route_to_lake_compute() {
+        assert!(!selects_lake_compute(&Nodes::default(), "seed.p.missing"));
     }
 
     #[test]

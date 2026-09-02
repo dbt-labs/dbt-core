@@ -8,6 +8,8 @@ use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
 
+use dbt_common::ErrorCode;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::value::{Value, ValueMap};
 
@@ -57,11 +59,28 @@ fn normalized_keys_diff(
     // comment differs from the current warehouse comment. Columns that exist
     // remotely but are undocumented in the model are left untouched, never cleared.
     // Reference: https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/column_comments.py
+    let desired = normalized_keys(desired_state);
     let current = normalized_keys(current_state);
 
-    let diff: IndexMap<String, String> = normalized_keys(desired_state)
+    let missing: Vec<&str> = desired
+        .keys()
+        .filter(|k| !current.contains_key(k.as_str()))
+        .map(|k| k.as_str())
+        .collect();
+    if !missing.is_empty() {
+        emit_warn_log_message(
+            ErrorCode::JinjaWarn,
+            format!(
+                "The following columns are specified in the schema but are not present in the \
+                 database and will be skipped: {}",
+                missing.join(", ")
+            ),
+        );
+    }
+
+    let diff: IndexMap<String, String> = desired
         .into_iter()
-        .filter(|(k, v)| current.get(k) != Some(v))
+        .filter(|(k, v)| current.get(k).is_some_and(|cur| cur != v))
         .map(|(k, v)| (k, v.to_string()))
         .collect();
 
@@ -408,6 +427,44 @@ email,string,\n\
             Some(&"Updated primary key".to_string())
         );
         assert_eq!(diff_config.value.get("age"), Some(&"10".to_string()));
+    }
+
+    #[test]
+    fn test_column_comments_diff_skips_column_missing_from_relation() {
+        let mut desired = IndexMap::new();
+        desired.insert("id".to_string(), "New primary key".to_string());
+        desired.insert("email".to_string(), "Email address".to_string());
+        let new_config = new_component(desired);
+
+        let mut current = IndexMap::new();
+        current.insert("id".to_string(), "Primary key".to_string());
+        let old_config = new_component(current);
+
+        let diff = ColumnComments::diff_from(&new_config, Some(&old_config));
+        assert!(diff.is_some());
+        let diff_config = diff.unwrap();
+        let diff_config = diff_config
+            .as_any()
+            .downcast_ref::<ColumnComments>()
+            .unwrap();
+        assert_eq!(diff_config.value.len(), 1);
+        assert_eq!(
+            diff_config.value.get("id"),
+            Some(&"New primary key".to_string())
+        );
+        assert!(!diff_config.value.contains_key("email"));
+    }
+
+    #[test]
+    fn test_column_comments_diff_all_columns_missing_returns_none() {
+        let mut desired = IndexMap::new();
+        desired.insert("ghost".to_string(), "not in relation".to_string());
+        let new_config = new_component(desired);
+
+        let old_config = new_component(IndexMap::new());
+
+        let diff = ColumnComments::diff_from(&new_config, Some(&old_config));
+        assert!(diff.is_none());
     }
 
     #[test]

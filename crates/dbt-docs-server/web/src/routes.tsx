@@ -14,6 +14,7 @@ export const ROUTES = {
   search: '/search/',
   sourceCollection: '/resource/source/:sourceName/',
   lineage: '/lineage/',
+  lineageV2: '/lineageV2/',
   notFound: '*',
 } as const;
 
@@ -28,5 +29,10 @@ export const paths = {
     const p = new URLSearchParams({ uniqueId: dbtUniqueId });
     if (opts?.panel) p.set('panel', opts.panel);
     return `/lineage/?${p.toString()}`;
+  },
+  lineageV2: (dbtUniqueId: string, opts?: { panel?: string }) => {
+    const p = new URLSearchParams({ uniqueId: dbtUniqueId });
+    if (opts?.panel) p.set('panel', opts.panel);
+    return `/lineageV2/?${p.toString()}`;
   },
 };

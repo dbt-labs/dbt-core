@@ -2,14 +2,19 @@ import { FC } from 'react';
 import { twMerge } from 'tailwind-merge';
 
 import { WarehouseType, WarehouseTypeIcon } from '@dbt-labs/dbt-dag';
-import { SizeType } from '@dbt-labs/sourdough';
 
 import { toTitleCase } from '../util/string';
+
+/** Matches sourdough's SizeType structurally (same string values) so it's
+ *  still assignable to WarehouseTypeIcon's own `size` prop (which is typed
+ *  against sourdough's SizeType inside the published dbt-dag package) --
+ *  TypeScript checks shape, not origin, for a plain string-literal union. */
+type ChipSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
 
 interface DataPlatformChipProps extends React.ComponentPropsWithoutRef<'div'> {
   platform: 'dbt' | WarehouseType;
   showText?: boolean;
-  size?: SizeType;
+  size?: ChipSize;
   bordered?: boolean;
 }
 

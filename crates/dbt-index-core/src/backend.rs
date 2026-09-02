@@ -96,8 +96,8 @@ impl DuckDbViewsBackend {
         if !index_dir.exists() {
             return Err(BackendError::Query(format!(
                 "index directory does not exist: {}\n\n\
-                 Run `dbt --write-index <run|build|compile>` to generate parquet artifacts, \
-                 or pass --target-path <DIR> pointing at a directory whose `index/` subdirectory contains them.",
+                 Run `dbt build` or `dbt docs generate` to generate parquet artifacts, \
+                 or pass --target-path <DIR> pointing at a directory whose `private/index/` subdirectory contains them.",
                 index_dir.display()
             )));
         }

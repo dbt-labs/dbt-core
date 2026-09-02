@@ -27,10 +27,15 @@ pub enum Channel {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Distribution {
+    /// The full, proprietary dbt v2 distribution.
     #[serde(rename = "dbt")]
-    Fusion,
+    Dbt,
+    /// The open-source dbt v2 distribution.
+    #[serde(rename = "dbt-oss")]
+    Oss,
+    /// The legacy, v1-only dbt-core distribution.
     #[serde(rename = "dbt-core")]
-    OSS,
+    Core,
     #[serde(rename = "cloud-cli")]
     CloudCLI,
 }
@@ -146,7 +151,7 @@ impl DistInfo {
 
 /// Generates the uninstall command for a package that isn't necessarily the
 /// currently-running distribution's own package — e.g. removing `dbt-core`
-/// once a cross-distribution upgrade has installed `dbt` (Fusion) alongside
+/// once a cross-distribution upgrade has installed `dbt` (v2) alongside
 /// or in place of it. Mirrors the uninstall half of
 /// [`crate::PathDiscovery::command_strings`]'s `Pypi` arm, but parameterized
 /// by an explicit package name instead of the hardcoded `"dbt"`, and passes
@@ -281,7 +286,7 @@ pub fn resolve_manager_for_manifest(
 
 /// The command(s), run in order, that bring a managed Python project's
 /// lockfile/environment back in sync after its manifest has been rewritten
-/// to depend on `dbt` (Fusion) instead of `dbt-core` -- editing the manifest
+/// to depend on `dbt` (v2) instead of `dbt-core` -- editing the manifest
 /// alone can leave a lockfile stale relative to it. Managers with their own
 /// lock/sync step re-lock as part of the listed command; `pip`-family
 /// managers have no lock step and no rename semantics, so installing the
@@ -462,11 +467,15 @@ mod tests {
     #[test]
     fn distribution_serializes_to_spec_contract() {
         assert_eq!(
-            serde_json::to_string(&Distribution::Fusion).unwrap(),
+            serde_json::to_string(&Distribution::Dbt).unwrap(),
             "\"dbt\""
         );
         assert_eq!(
-            serde_json::to_string(&Distribution::OSS).unwrap(),
+            serde_json::to_string(&Distribution::Oss).unwrap(),
+            "\"dbt-oss\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Distribution::Core).unwrap(),
             "\"dbt-core\""
         );
         assert_eq!(
@@ -503,7 +512,7 @@ mod tests {
         DistInfo {
             path: "/home/user/.venv/bin/dbt".to_string(),
             channel: Some(Channel::Pypi),
-            distribution: Some(Distribution::Fusion),
+            distribution: Some(Distribution::Dbt),
             generation: Generation::V2,
             py_package_manager: Some(PythonPackageManager::Uv),
             py_venv_root: Some("/home/user/.venv".to_string()),

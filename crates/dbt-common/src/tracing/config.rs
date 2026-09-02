@@ -29,7 +29,7 @@ use crate::{
     constants::{
         DBT_DEFAULT_LOG_FILE_BACKUP_COUNT, DBT_DEFAULT_LOG_FILE_MAX_BYTES,
         DBT_DEFAULT_LOG_FILE_NAME, DBT_DEFAULT_QUERY_LOG_FILE_NAME, DBT_FUSION, DBT_LOG_DIR_NAME,
-        DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
+        DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
     },
     io_args::{FsCommand, IoArgs, LogFormat, ShowOptions},
     io_utils::determine_project_dir,
@@ -399,7 +399,7 @@ impl FsTraceConfig {
             max_file_log_verbosity,
             otel_file_path: otel_file_name.map(|file_name| log_dir_path.join(file_name)),
             otel_parquet_file_path: otel_parquet_file_name
-                .map(|file_name| out_dir.join(DBT_METADATA_DIR_NAME).join(file_name)),
+                .map(|file_name| crate::constants::default_metadata_dir(out_dir).join(file_name)),
             log_path: log_dir_path,
             log_file_name: log_file_name.map(|s| s.to_string()),
             log_file_max_bytes,

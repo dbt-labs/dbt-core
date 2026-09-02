@@ -24,6 +24,7 @@ use arrow::{
 };
 use chrono::DateTime;
 use dbt_adapter::Adapter;
+use dbt_adapter::LATEST_VERSION_POINTER_SUFFIX;
 use dbt_adapter::adapter::NodeOverride;
 use dbt_adapter::connection::drop_thread_local_connection;
 use dbt_adapter::relation::{RelationObject, do_create_relation};
@@ -49,7 +50,9 @@ use dbt_tasks_core::test_aggregation::GenericTestRelationships;
 use dbt_telemetry::ExecutionPhase;
 use dbt_yaml::Verbatim;
 use minijinja::Value;
+use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::mutable_map::MutableMap;
 use tracing::debug;
 
 /// Macro to handle NULL values in Arrow arrays
@@ -249,7 +252,7 @@ pub fn model_hook_style(
         (Bigquery | Snowflake | Spark | Databricks, View | Table | Incremental) => {
             NodeHookStyle::Plain
         }
-        (Snowflake, DynamicTable) => NodeHookStyle::Plain,
+        (Snowflake, DynamicTable | InteractiveTable) => NodeHookStyle::Plain,
         _ => NodeHookStyle::SplitTransaction,
     }
 }
@@ -441,6 +444,13 @@ mod tests {
         assert_eq!(
             model_hook_style(AdapterType::Redshift, &DbtMaterialization::Table),
             NodeHookStyle::SplitTransaction
+        );
+        assert_eq!(
+            model_hook_style(
+                AdapterType::Snowflake,
+                &DbtMaterialization::InteractiveTable
+            ),
+            NodeHookStyle::Plain
         );
         assert_eq!(
             model_hook_style(AdapterType::Bigquery, &DbtMaterialization::MaterializedView),
@@ -658,10 +668,16 @@ pub fn materialize_model(
 
     let unique_id = model.__common_attr__.unique_id.clone();
     let node_alias = model.__base_attr__.alias.clone();
-    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
-    let run_path = model
-        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
-        .into_owned();
+    // Python models execute from their source file. SQL models execute from target/run.
+    let run_path = if model.__common_attr__.language.as_deref() == Some("python") {
+        io_args
+            .in_dir
+            .join(&model.__common_attr__.original_file_path)
+    } else {
+        model
+            .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+            .into_owned()
+    };
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -885,7 +901,31 @@ pub fn materialize_latest_version_pointer(
 
     let source_relation_str = source_relation.render_self_as_str();
 
+    // Uppercase, matching dbt-core's own generated SQL for this synthetic pointer (confirmed
+    // against a production recording) and this file's other synthetic pass-through SQL
+    // (`materialize_clone`, above). Time Machine's SQL comparison is a sanitized string-equality
+    // check with no keyword-case folding, so drifting from dbt-core's casing here is a literal
+    // dbt1308 SqlMismatch on every account with a `latest_version_pointer`, not just a style nit.
     let pointer_sql = format!("SELECT * FROM {source_relation_str}");
+
+    // The id the pointer view's own adapter calls target. dbt-core records the pointer view's
+    // create-view/grant statements on the base model's thread, interleaved before the base
+    // model's own trailing grants/persist_docs/column calls, but Fusion runs the base model's
+    // materialization macro (including those trailing calls) to completion before this function
+    // ever runs. Sequential replay would let the trailing calls permanently consume (and discard)
+    // the earlier pointer-view records while skipping past them. A distinct target id lets the
+    // replay adapter route these calls through unordered, content-based matching instead
+    // (`find_key_for_node_id`'s `LATEST_VERSION_POINTER_SUFFIX` handling) rather than the shared
+    // sequential cursor. See fs#13705.
+    //
+    // This is deliberately NOT the pointer model's `unique_id`: the pointer view is not a node,
+    // and overwriting the node's identity leaks the synthetic id into everything keyed on it —
+    // connection pooling, telemetry, and the recording keys of cross-version record/replay,
+    // which then cannot find events any earlier version recorded under the real node id.
+    let target_unique_id = format!(
+        "{}{LATEST_VERSION_POINTER_SUFFIX}",
+        model.__common_attr__.unique_id
+    );
 
     // Build a synthetic model with the pointer's alias and view materialization.
     // Clone the model and override:
@@ -893,6 +933,12 @@ pub fn materialize_latest_version_pointer(
     //   - materialization → "view"
     //   - hooks cleared (pre/post hooks should not run for the pointer)
     //   - persist_docs cleared (avoid duplicating doc persistence)
+    //   - contract cleared: dbt-core never contract-checks the synthetic pointer view (it's a
+    //     plain `create or replace view as select *`, not an independent contracted node), but
+    //     Fusion's `snowflake__create_or_replace_view` reads `config.get('contract')` off this
+    //     same cloned model. Left enforced, it calls `get_assert_columns_equivalent` ->
+    //     `get_column_schema_from_query` for the pointer, a call dbt-core's recording never
+    //     made, producing a genuine ReplayDataMissing. See fs#13705.
     let mut pointer_model = model.clone();
     pointer_model.__base_attr__.alias = pointer_identifier.clone();
     pointer_model.__base_attr__.materialized = DbtMaterialization::View;
@@ -900,6 +946,8 @@ pub fn materialize_latest_version_pointer(
     pointer_model.deprecated_config.pre_hook = Verbatim::from(None);
     pointer_model.deprecated_config.post_hook = Verbatim::from(None);
     pointer_model.deprecated_config.persist_docs = None;
+    pointer_model.deprecated_config.contract = None;
+    pointer_model.__model_attr__.contract = None;
 
     debug!(
         "Creating latest version pointer view '{}' -> '{}' for model '{}'",
@@ -925,10 +973,14 @@ pub fn materialize_latest_version_pointer(
         "compiled_code".to_string(),
         Value::from(pointer_sql.as_str()),
     );
-
-    let unique_id = format!(
-        "{}__latest_version_pointer",
-        model.__common_attr__.unique_id
+    // `TARGET_UNIQUE_ID` is the single channel carrying the pointer view's distinct identity.
+    // Adapter methods either read it straight out of Jinja state or pick it up from
+    // `QueryCtx::target_unique_id` (which `query_ctx_from_state` fills from this same key), so
+    // every lookup path lands on the same id without the node's own `unique_id` being disturbed.
+    // See fs#13705.
+    context.insert(
+        TARGET_UNIQUE_ID.to_string(),
+        Value::from(target_unique_id.as_str()),
     );
 
     let run_path = model
@@ -940,7 +992,7 @@ pub fn materialize_latest_version_pointer(
         &macro_name,
         &mut context,
         "model",
-        &unique_id,
+        &target_unique_id,
         &pointer_identifier,
         run_path,
     )
@@ -981,9 +1033,21 @@ pub fn materialize_microbatch_model(
         &io_args.out_dir,
     )?;
 
-    // Insert the batch SQL into context
-    run_node_context.insert("sql".to_string(), Value::from(batch_sql.as_str()));
-    run_node_context.insert("compiled_code".to_string(), Value::from(batch_sql.as_str()));
+    let batch_sql = Value::from(batch_sql);
+
+    // Databricks incremental materialization reads `model['compiled_code']`.
+    let batch_model = run_node_context
+        .get("model")
+        .and_then(|model| model.downcast_object_ref::<MutableMap>())
+        .ok_or_else(|| {
+            unexpected_fs_err!(
+                "No batch-local model context for microbatch model {}",
+                batch_ctx.id,
+            )
+        })?;
+    batch_model.insert(Value::from("compiled_code"), batch_sql.clone());
+    run_node_context.insert("sql".to_string(), batch_sql.clone());
+    run_node_context.insert("compiled_code".to_string(), batch_sql);
 
     // Get the incremental materialization macro
     let macro_name = materialization_resolver.find_materialization_macro_by_name(
@@ -1119,7 +1183,11 @@ pub fn materialize_unit_test(
     base_context: &BTreeMap<String, Value>,
     io_args: &IoArgs,
 ) -> FsResult<bool> {
-    let adapter_type = resolver_state.adapter_type;
+    // The unit test's own adapter, not the target default: `resolve_unit_tests`
+    // gives it the tested model's (`adapter: model_adapter.unwrap_or(default)`),
+    // already excluding lake compute, since a unit test never takes the
+    // compute-platform path.
+    let adapter_type = unit_test.node_adapter();
     let (mut context, _result_store) = build_run_node_context(
         unit_test,
         &unit_test.deprecated_config,

@@ -4,15 +4,20 @@
    missing. Vendored (not imported from the private package) so docs v2 can
    build without it for OSS distribution — see the OSS Design Capability
    plan. Re-copy from @dbt-labs/biga/tokens.css if biga's tokens change. */
-@import "./styles/tokens.css";
+@import './styles/tokens.css';
 /* @dbt-labs/dbt-dag bundles react-flow under the hood; its CSS provides
    node positioning, zoom transforms, and viewport styles. Without this
    import, nodes overlap in a tight cluster and zoom is broken. */
-@import "@dbt-labs/dbt-dag/dist/dbt-dag.css";
+@import '@dbt-labs/dbt-dag/dist/dbt-dag.css';
+/* React Flow's own stylesheet. The import above happens to carry a copy (dbt-dag
+   bundles react-flow v11), but the canvas is on `@xyflow/react` v12 now and should not
+   depend on another package's vendored CSS for node positioning — this can be the only
+   one once dbt-dag's last consumer (`LineageView`, `FullLineagePage`) is gone. */
+@import '@xyflow/react/dist/style.css';
 /* Sourdough's design-system tokens + component styles. The published package
    only exports `./dist/*.css`, so this must go through `dist/` (dbt-ui consumes
    sourdough from source via `workspace:*` and can use the bare path). */
-@import "@dbt-labs/sourdough/dist/sourdough.css";
+@import '@dbt-labs/sourdough/dist/sourdough.css';
 
 @tailwind base;
 @tailwind components;
@@ -33,7 +38,7 @@ body {
 
 body {
   font-family:
-    -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   color: var(--fgMain);
   background: var(--bgMain);
@@ -154,11 +159,22 @@ button {
   z-index: -1;
   background:
     /* aurora tints, bottom-anchored */
-    linear-gradient(178.84deg, rgba(254, 103, 2, 0) 78.15%, rgba(254, 103, 2, 0.30) 98.7%),
-    linear-gradient(181.69deg, rgba(99, 47, 245, 0) 71.10%, rgba(99, 47, 245, 0.30) 96.95%),
-    linear-gradient(179.59deg, rgba(255, 204, 37, 0) 67.02%, rgba(255, 204, 37, 0.20) 94.05%),
-    /* dark base */
-    var(--bgNavHeader);
+    linear-gradient(
+      178.84deg,
+      rgba(254, 103, 2, 0) 78.15%,
+      rgba(254, 103, 2, 0.3) 98.7%
+    ),
+    linear-gradient(
+      181.69deg,
+      rgba(99, 47, 245, 0) 71.1%,
+      rgba(99, 47, 245, 0.3) 96.95%
+    ),
+    linear-gradient(
+      179.59deg,
+      rgba(255, 204, 37, 0) 67.02%,
+      rgba(255, 204, 37, 0.2) 94.05%
+    ),
+    /* dark base */ var(--bgNavHeader);
 }
 .topbar {
   display: grid;
@@ -321,8 +337,12 @@ button {
   }
 }
 @keyframes drawer-slide-in {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 .preview-drawer__head {
@@ -465,8 +485,13 @@ button {
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 .preview-drawer__pending {
@@ -509,7 +534,6 @@ button {
   padding: 0 4px;
   border-radius: 3px;
 }
-
 
 /* Active row highlight in AssetListView when the row is being previewed.
    Subtle brand tint with a left border so it reads as "current" without
@@ -669,8 +693,8 @@ button {
   align-items: center;
   transition: transform 120ms ease;
 }
-.locate-pane__pkg-head[aria-expanded="false"] .locate-pane__caret,
-.locate-pane__bucket-head[aria-expanded="false"] .locate-pane__caret {
+.locate-pane__pkg-head[aria-expanded='false'] .locate-pane__caret,
+.locate-pane__bucket-head[aria-expanded='false'] .locate-pane__caret {
   transform: rotate(180deg);
 }
 
@@ -861,7 +885,9 @@ button {
   position: relative;
   margin: 0;
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 .locate-pane__checkbox:hover {
   border-color: var(--borderBrand);
@@ -871,7 +897,7 @@ button {
   border-color: var(--fgBrand);
 }
 .locate-pane__checkbox:checked::after {
-  content: "";
+  content: '';
   position: absolute;
   left: 3px;
   top: 0px;
@@ -1363,7 +1389,7 @@ code.inline {
   cursor: pointer;
   padding: 0;
 }
-.locate-pane__schema-toggle[aria-expanded="false"] svg {
+.locate-pane__schema-toggle[aria-expanded='false'] svg {
   transform: rotate(-90deg);
   transition: transform 120ms ease;
 }
@@ -1585,11 +1611,17 @@ code.inline {
   animation: qq-starter-spin 520ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 @keyframes qq-starter-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .qq-starters-icon { animation: none; }
+  .qq-starters-icon {
+    animation: none;
+  }
 }
 .qq-starters-title-block {
   display: flex;
@@ -1626,7 +1658,9 @@ code.inline {
   border-radius: 8px;
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
 }
 .qq-starter:hover {
   border-color: var(--borderBrand);
@@ -1863,7 +1897,7 @@ code.inline {
 .dark .qq-lineage-canvas .react-flow__node {
   color: var(--fgMain);
 }
-.dark .qq-lineage-canvas .react-flow__node [class*="text-"],
+.dark .qq-lineage-canvas .react-flow__node [class*='text-'],
 .dark .qq-lineage-canvas .react-flow__node text {
   fill: var(--fgMain);
   color: var(--fgMain);
@@ -2146,11 +2180,239 @@ code.inline {
 /* Color variants — `Tinted` token is the soft pastel bg, text stays as
    fgMain (high contrast). In dark mode biga remaps the tinted alpha,
    so both modes read correctly without per-mode overrides. */
-.resource-badge--blue   { background: var(--brandBlueTinted); }
-.resource-badge--green  { background: var(--brandGreenTinted); }
-.resource-badge--orange { background: var(--brandOrangeTinted); }
-.resource-badge--yellow { background: var(--brandYellowTinted); }
-.resource-badge--pink   { background: var(--brandPinkTinted); }
-.resource-badge--purple { background: var(--brandPurpleTinted); }
-.resource-badge--neutral { background: var(--bgMainHover); }
+.resource-badge--blue {
+  background: var(--brandBlueTinted);
+}
+.resource-badge--green {
+  background: var(--brandGreenTinted);
+}
+.resource-badge--orange {
+  background: var(--brandOrangeTinted);
+}
+.resource-badge--yellow {
+  background: var(--brandYellowTinted);
+}
+.resource-badge--pink {
+  background: var(--brandPinkTinted);
+}
+.resource-badge--purple {
+  background: var(--brandPurpleTinted);
+}
+.resource-badge--neutral {
+  background: var(--bgMainHover);
+}
 
+/* ============================================================
+   Lineage DAG node — components/LineageV2/DagNode.tsx
+   ============================================================
+
+   The card grows with its name between 245px and 600px, so a resource's full
+   name is readable on the canvas. This width is used to render the 
+   node without cutting off the name which is then used by the Dagre layout. */
+.dag-node {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  /* `stretch`, so the header and body span whatever width the widest of them asks
+     for. With `flex-start` they collapse to their own content and the divider and
+     body fill stop short of the border. */
+  align-items: stretch;
+  /* Accommodates the full node name unless it's extremely long */
+  width: max-content;
+  min-width: 245px;
+  max-width: 600px;
+  height: 108px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bgMain);
+  border: 1.5px solid var(--borderMuted);
+  border-radius: 6px;
+  /* Four stacked layers rather than one large blur — that is what lifts a node
+     off the canvas without the halo a single 12px shadow would give it. */
+  box-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.4),
+    0 6px 6px rgba(0, 0, 0, 0.4),
+    0 8px 8px rgba(0, 0, 0, 0.4),
+    0 12px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Active/selected. Only the border changes: the shadow is the node's resting
+   elevation, not a selection cue. */
+.dag-node--active {
+  border-color: var(--fgMain);
+}
+
+/* Handles carry the edges. Kept in the layout (opacity, not `display: none`,
+   which would stop React Flow measuring them) but invisible — the design has
+   edges meeting the node border with no visible port. */
+.dag-node .react-flow__handle {
+  width: 1px;
+  min-width: 1px;
+  height: 1px;
+  min-height: 1px;
+  background: transparent;
+  border: 0;
+  opacity: 0;
+}
+
+.dag-node__header {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 51px;
+  align-items: center;
+  height: 51px;
+  padding: 0 24px;
+  border-bottom: 1.5px solid var(--borderMuted);
+}
+
+/* The Tooltip trigger wrapper sits between the header and the name, so it is the
+   thing that has to be allowed to shrink — without `min-width: 0` a name past the
+   card's max-width overflows the border instead of ellipsing. */
+.dag-node__name-wrap {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* `nowrap` is what turns the name into a width the card grows to, rather than a second
+   line. The ellipsis only ever comes into play past `max-width` — and only for the
+   generated test names that get there, which carry a tooltip. */
+.dag-node__name {
+  display: block;
+  overflow: hidden;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--fgMain);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dag-node__body {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  background: var(--bgMainHover);
+}
+
+/* Resource-type badge. The fill comes from a custom property so the per-type
+   rules below are one line each, and an unknown type still renders in neutral
+   rather than transparent. */
+.dag-node__type {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px;
+  /* Smaller than the design's badge text on purpose: at 16px, "Source" and "Snapshot"
+     ellipsed as soon as a node also had a column chip, and those are ordinary types
+     rather than edge cases. The longest labels ("Semantic model") still truncate, and
+     carry a tooltip. */
+  font-size: 14px;
+  line-height: 1;
+  color: var(--bgMain);
+  white-space: nowrap;
+  background: var(--dag-node-type-color, var(--fgVizNeutral));
+  border-radius: 6px;
+}
+
+.dag-node__type-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dag-node__type-icon {
+  flex: none;
+}
+
+/* The badge's own Tooltip wrapper, same shrink problem as the name's. */
+.dag-node__type-wrap {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.dag-node__type--analysis {
+  --dag-node-type-color: var(--fgVizAnalysis);
+}
+.dag-node__type--column {
+  --dag-node-type-color: var(--fgVizColumn);
+}
+.dag-node__type--exposure {
+  --dag-node-type-color: var(--fgVizExposure);
+}
+.dag-node__type--function {
+  --dag-node-type-color: var(--fgVizFunction);
+}
+.dag-node__type--macro {
+  --dag-node-type-color: var(--fgVizMacro);
+}
+.dag-node__type--metric {
+  --dag-node-type-color: var(--fgVizMetric);
+}
+.dag-node__type--model {
+  --dag-node-type-color: var(--fgVizModel);
+}
+.dag-node__type--saved_query {
+  --dag-node-type-color: var(--fgVizSavedquery);
+}
+.dag-node__type--seed {
+  --dag-node-type-color: var(--fgVizSeed);
+}
+.dag-node__type--semantic_model {
+  --dag-node-type-color: var(--fgVizSemanticmodel);
+}
+.dag-node__type--snapshot {
+  --dag-node-type-color: var(--fgVizSnapshot);
+}
+.dag-node__type--source {
+  --dag-node-type-color: var(--fgVizSource);
+}
+.dag-node__type--test {
+  --dag-node-type-color: var(--fgVizTest);
+}
+.dag-node__type--unit_test {
+  --dag-node-type-color: var(--fgVizTest);
+}
+
+/* Column count — two abutting segments, icon then count, so the pair reads as
+   one control while each keeps its own rounded outer edge. Present only when
+   the node has column-level lineage. */
+.dag-node__columns {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+}
+
+.dag-node__columns-icon,
+.dag-node__columns-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  background: var(--bgMainActive);
+  box-shadow:
+    0 1.5px 1.5px rgba(29, 0, 81, 0.64),
+    0 0 1.5px rgba(29, 0, 81, 0.64);
+}
+
+.dag-node__columns-icon {
+  width: 39px;
+  color: var(--fgAlt);
+  border-radius: 6px 0 0 6px;
+}
+
+.dag-node__columns-count {
+  box-sizing: border-box;
+  min-width: 43px;
+  padding: 0 8px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--fgMain);
+  border-radius: 0 6px 6px 0;
+}

@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import type { ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-
+import type { ResourceTypeExplorer } from '../../lib/resourceType';
 import { ResourceChip } from './ResourceChip';
 
 const RESOURCE_TYPES: ResourceTypeExplorer[] = [

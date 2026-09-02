@@ -190,6 +190,10 @@ pub fn initialize_parse_jinja_environment(
         .try_with_macros(MacroUnitsWrapper::new(macro_units))?
         .build();
 
+    // Checks render during parse, so `info_schema()` has to resolve here — not just in the check
+    // runner's environment, where it originally lived when checks were discovered at run time.
+    env.add_global("info_schema", crate::info_schema::make_info_schema_fn());
+
     // This ensures consistent quoting behavior for rendering same string in call block vs directly
     // example: {{ target.database }} vs {{ call statement(None, auto_begin=false, fetch_result=false) }}{{ target.database }}{{ endcall }}
     // if we directly render the first one, it will add double quotes around the string, but the second one will not.

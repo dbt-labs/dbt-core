@@ -135,7 +135,10 @@ impl From<ComputeArg> for LocalExecutionBackendKind {
     }
 }
 
-use crate::constants::{DBT_METADATA_DIR_NAME, DBT_TARGET_DIR_NAME, WARNING};
+use crate::constants::{
+    DBT_INFO_SCHEMA_DIR_NAME, DBT_INFO_SCHEMA_STAGING_DIR_NAME, DBT_TARGET_DIR_NAME, WARNING,
+    default_index_dir, default_metadata_dir,
+};
 use crate::pretty_string::YELLOW;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
@@ -226,6 +229,7 @@ pub enum FsCommand {
     Parse,
     List, // aka: Ls
     Compile,
+    Check,
     Run,
     RunOperation,
     Test,
@@ -235,6 +239,7 @@ pub enum FsCommand {
     Build,
     Clean,
     Source,
+    Freshness,
     Clone,
     System,
     Man,
@@ -251,6 +256,14 @@ pub enum FsCommand {
 }
 
 impl FsCommand {
+    pub const fn is_freshness_command(&self) -> bool {
+        matches!(self, FsCommand::Source | FsCommand::Freshness)
+    }
+
+    pub const fn is_sources_only_freshness(&self) -> bool {
+        matches!(self, FsCommand::Source)
+    }
+
     pub const fn as_str(&self) -> &'static str {
         match self {
             FsCommand::Unset => "",
@@ -259,6 +272,7 @@ impl FsCommand {
             FsCommand::Parse => "parse",
             FsCommand::List => "list",
             FsCommand::Compile => "compile",
+            FsCommand::Check => "check",
             FsCommand::Run => "run",
             FsCommand::RunOperation => "run-operation",
             FsCommand::Test => "test",
@@ -268,6 +282,7 @@ impl FsCommand {
             FsCommand::Build => "build",
             FsCommand::Clean => "clean",
             FsCommand::Source => "freshness",
+            FsCommand::Freshness => "freshness",
             FsCommand::Clone => "clone",
             FsCommand::System => "system",
             FsCommand::Man => "man",
@@ -280,6 +295,16 @@ impl FsCommand {
             FsCommand::Internal => "internal",
             FsCommand::Extension(s) => s,
         }
+    }
+
+    /// Whether this command compiles every node in the project (as opposed to a narrower
+    /// operation like `test`, `seed`, or `snapshot`, which act on a subset). Per-node artifacts
+    /// derived from a full compile are only meaningful for these commands.
+    pub const fn compiles_project(&self) -> bool {
+        matches!(
+            self,
+            FsCommand::Compile | FsCommand::Check | FsCommand::Build | FsCommand::Run
+        )
     }
 }
 
@@ -313,6 +338,9 @@ pub struct IoArgs {
 
     // Flag for deps to use Fusion-compatible downloads from Package Hub
     pub use_v2_compatible_package_downloads: bool,
+
+    // Flag for deps to require a sha1-verified download from Package Hub
+    pub require_hub_verified_downloads: bool,
 
     /// Optional status reporter for reporting status messages during execution
     pub status_reporter: Option<Arc<dyn StatusReporter>>,
@@ -591,10 +619,6 @@ pub struct EvalArgs {
     pub empty: bool,
     pub sample: Option<String>,
     pub full_refresh: bool,
-    pub infer_schemas: bool,
-    pub skip_type_checking: bool,
-    pub show_sources: bool,
-    pub resolve_ambiguous_cols: bool,
     pub store_failures: bool,
     pub favor_state: bool,
     pub refresh_sources: bool,
@@ -622,21 +646,34 @@ pub struct EvalArgs {
     pub skip_post_hooks: bool,
     /// Write metadata parquet epoch files (parse/nodes, compile/nodes, compile/columns, etc.)
     pub write_metadata: bool,
-    /// Also write snapshot index parquet to target/index/ (implies write_metadata)
+    /// Also write snapshot index parquet to target/private/index/ (implies write_metadata)
     pub write_index: bool,
     /// True when `write_index` came from a command's default rather than from the command
     /// line. The index itself is identical either way; this only suppresses the advisory
     /// naming the extra flags that would enrich it, which is noise for a user who never
     /// asked for an index (and fails the command under `--warn-error`).
     pub write_index_implied: bool,
-    /// Directory for index parquet output (default: <target>/index/)
+    /// Directory for index parquet output (default: <target>/private/index/)
     pub index_dir: Option<PathBuf>,
-    /// Directory for metadata parquet output (default: <target>/metadata/)
+    /// Directory for metadata parquet output (default: <target>/private/metadata/)
     pub metadata_dir: Option<PathBuf>,
+    /// Write the dbt information schema to target/info_schema/ (implies write_metadata)
+    pub generate_info_schema: bool,
+    /// Directory for information schema parquet output (default: <target>/info_schema/)
+    pub info_schema_dir: Option<PathBuf>,
     /// Whether to skip creating generic tests
     pub skip_creating_generic_tests: bool,
     /// Compute and write column-level lineage into compile/cll parquet (requires --write-metadata and --static-analysis strict)
     pub write_lineage: bool,
+    /// Positional check names from `dbt check <name>...`. Empty means every check.
+    ///
+    /// A filter on which checks run, not a node selection: the parse-time gate still
+    /// evaluates against the whole project's index. Narrowing the schedule to the check
+    /// node instead would leave it querying an empty index and passing vacuously.
+    pub check_names: Vec<String>,
+    /// Skip the parse-time check gate (`dbt build --skip-checks`). Opt-out, no
+    /// warning: the user asked to skip. The index is still written.
+    pub skip_checks: bool,
     /// Always enable the linter.
     pub force_enable_linter: bool,
     /// Always enable formatter-fix diagnostics.
@@ -778,18 +815,50 @@ impl EvalArgsBuilder {
 }
 
 impl EvalArgs {
-    /// Resolves the metadata output directory: `--metadata-dir` if set, else `<out_dir>/metadata`.
+    /// Resolves the metadata output directory: `--metadata-dir` if set, else
+    /// `<out_dir>/private/metadata`.
     pub fn metadata_dir(&self) -> PathBuf {
         self.metadata_dir
             .clone()
-            .unwrap_or_else(|| self.io.out_dir.join(DBT_METADATA_DIR_NAME))
+            .unwrap_or_else(|| default_metadata_dir(&self.io.out_dir))
     }
 
-    /// Resolves the index output directory: `--index-dir` if set, else `<out_dir>/index`.
+    /// Resolves the index output directory: `--index-dir` if set, else
+    /// `<out_dir>/private/index`.
     pub fn index_dir(&self) -> PathBuf {
         self.index_dir
             .clone()
-            .unwrap_or_else(|| self.io.out_dir.join("index"))
+            .unwrap_or_else(|| default_index_dir(&self.io.out_dir))
+    }
+
+    /// Resolves the information schema output directory: `--info-schema-dir` if
+    /// set, else `<out_dir>/info_schema`.
+    ///
+    /// The intermediate for building it is the flat index at [`index_dir`] when one
+    /// is already present; otherwise the fallback at [`info_schema_staging_dir`].
+    ///
+    /// [`index_dir`]: Self::index_dir
+    /// [`info_schema_staging_dir`]: Self::info_schema_staging_dir
+    pub fn info_schema_dir(&self) -> PathBuf {
+        self.info_schema_dir
+            .clone()
+            .unwrap_or_else(|| self.io.out_dir.join(DBT_INFO_SCHEMA_DIR_NAME))
+    }
+
+    /// Fallback intermediate for building the information schema, used only when
+    /// there is no flat index at [`index_dir`] to reuse — e.g. under
+    /// `--no-write-index`, or a `parse` that never builds one. Held beside the
+    /// output directory rather than inside it, because it holds files in a
+    /// different shape and must never be picked up by a caller globbing the
+    /// information schema. When an index *is* present it is reused directly and
+    /// this directory is never created.
+    ///
+    /// [`index_dir`]: Self::index_dir
+    pub fn info_schema_staging_dir(&self) -> PathBuf {
+        match &self.info_schema_dir {
+            Some(dir) => dir.with_file_name(DBT_INFO_SCHEMA_STAGING_DIR_NAME),
+            None => self.io.out_dir.join(DBT_INFO_SCHEMA_STAGING_DIR_NAME),
+        }
     }
 
     // this could accept a SelectExpression in case we want to join more complex selections together.
@@ -852,6 +921,7 @@ pub enum ClapResourceType {
     SemanticModel,
     Metric,
     SavedQuery,
+    Check,
 }
 
 impl Display for ClapResourceType {
@@ -868,6 +938,7 @@ impl Display for ClapResourceType {
             ClapResourceType::SemanticModel => "semantic_model",
             ClapResourceType::Metric => "metric",
             ClapResourceType::SavedQuery => "saved_query",
+            ClapResourceType::Check => "check",
         };
         write!(f, "{s}")
     }
@@ -887,6 +958,7 @@ impl From<&ClapResourceType> for NodeType {
             ClapResourceType::SemanticModel => NodeType::SemanticModel,
             ClapResourceType::Metric => NodeType::Metric,
             ClapResourceType::SavedQuery => NodeType::SavedQuery,
+            ClapResourceType::Check => NodeType::Check,
         }
     }
 }

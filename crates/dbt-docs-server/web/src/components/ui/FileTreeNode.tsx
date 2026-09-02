@@ -1,6 +1,5 @@
 import { type MouseEvent } from 'react';
-
-import { Icon, RyeconCaretRight, RyeconFile, RyeconFolder } from '@dbt-labs/sourdough';
+import { ChevronRight, FileText, Folder } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './Collapsible';
@@ -60,11 +59,7 @@ export function FileTreeNode({
         )}
         onClick={(event) => onFileSelect?.(item.id, event, item)}
       >
-        <Icon
-          ryecon={item.data.iconOverride?.ryecon ?? RyeconFile}
-          size="xs"
-          className="shrink-0"
-        />
+        {item.data.iconOverride?.icon ?? <FileText className="size-3 shrink-0" />}
         <span className="truncate">{name}</span>
         {infoText && (
           <span className="ml-auto shrink-0 text-xs text-fgDecorative">{infoText}</span>
@@ -104,10 +99,8 @@ export function FileTreeNode({
             className="shrink-0"
             aria-label={isOpen ? 'Collapse' : 'Expand'}
           >
-            <Icon
-              ryecon={RyeconCaretRight}
-              size="xs"
-              className={cn('transition-transform', isOpen && 'rotate-90')}
+            <ChevronRight
+              className={cn('size-3 transition-transform', isOpen && 'rotate-90')}
             />
           </button>
         </CollapsibleTrigger>
@@ -116,11 +109,7 @@ export function FileTreeNode({
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
           onClick={handleRowClick}
         >
-          <Icon
-            ryecon={item.data.iconOverride?.ryecon ?? RyeconFolder}
-            size="xs"
-            className="shrink-0"
-          />
+          {item.data.iconOverride?.icon ?? <Folder className="size-3 shrink-0" />}
           <span className="truncate">{name}</span>
         </button>
         {infoText && (

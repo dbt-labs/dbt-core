@@ -10,7 +10,8 @@ use arrow_schema::Schema;
 use arrow_array::{Array, Int32Array, RecordBatch, StringArray};
 
 use dbt_adapter_core::ExecutionPhase;
-use dbt_adbc::{Connection, MapReduce, QueryCtx};
+use dbt_adapter_engine::MapReduce;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
@@ -459,7 +460,7 @@ impl CatalogSpecDuckDbExt for CatalogSpecV2View<'_> {
         // resolves.
         let duckdb_block = self
             .config_block(AdapterType::DuckDB.as_ref())
-            .or_else(|| self.config_block(AdapterType::Alt.as_ref()))?;
+            .or_else(|| self.config_block(AdapterType::LakeCompute.as_ref()))?;
         let alias = duckdb_block
             .get(dbt_yaml::Value::from("attach_as"))
             .and_then(|value| value.as_str())

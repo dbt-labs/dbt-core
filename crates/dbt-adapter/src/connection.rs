@@ -10,7 +10,8 @@ use std::task::{Poll, Waker};
 use std::time::Instant;
 
 use dbt_adapter_core::AdapterType;
-use dbt_adbc::{Connection, ConnectionFactory};
+use dbt_adapter_engine::ConnectionFactory;
+use dbt_adbc::Connection;
 use dbt_common::AdapterResult;
 use dbt_common::cancellation::Cancellable;
 use dbt_telemetry::{AdapterConnectionClose, ConnectionLimitWait};
@@ -788,9 +789,7 @@ mod tests {
         run_on_fresh_thread(|| {
             CONNECTION.with(|c| assert!(c.take().is_none()));
             let backend = crate::adapter::adapter_factory::backend_of(AdapterType::Databricks);
-            let auth: Arc<dyn dbt_auth::Auth> =
-                dbt_auth::auth_for_backend(Box::new(dbt_auth::NoopAuthWarningPrinter), backend)
-                    .into();
+            let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
             let config = dbt_auth::AdapterConfig::new(dbt_yaml::Mapping::from_iter([(
                 "compute".into(),
                 true.into(),

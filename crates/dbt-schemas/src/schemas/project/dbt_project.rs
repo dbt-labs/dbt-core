@@ -20,7 +20,9 @@ use strum::{Display, EnumString};
 
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::SyncConfig;
+use crate::schemas::project::InfoSchemaConfig;
 use crate::schemas::project::ProjectAnalysisConfig;
+use crate::schemas::project::ProjectCheckConfig;
 use crate::schemas::project::ProjectSemanticModelConfig;
 use crate::schemas::project::configs::saved_query_config::ProjectSavedQueryConfig;
 use crate::schemas::serde::FloatOrString;
@@ -140,6 +142,8 @@ pub struct DbtProject {
     pub snapshot_paths: Option<Vec<String>>,
     #[serde(rename = "test-paths")]
     pub test_paths: Option<Vec<String>>,
+    #[serde(rename = "check-paths")]
+    pub check_paths: Option<Vec<String>>,
     #[serde(rename = "docs-paths")]
     pub docs_paths: Option<Vec<String>>,
     #[serde(rename = "target-path")]
@@ -155,6 +159,12 @@ pub struct DbtProject {
     pub snapshots: Option<ProjectSnapshotConfig>,
     pub seeds: Option<ProjectSeedConfig>,
     pub sources: Option<ProjectSourceConfig>,
+    /// Project-level `checks:` config tree (path-scoped, `+`-prefixed), resolved by the standard
+    /// project-config machinery like every other node type's subtree.
+    pub checks: Option<ProjectCheckConfig>,
+    /// Package-scoped `info_schema:` block. Not resolved/inherited like `checks:` -- see
+    /// [`InfoSchemaConfig`].
+    pub info_schema: Option<InfoSchemaConfig>,
     pub tests: Option<ProjectDataTestConfig>,
     pub unit_tests: Option<ProjectUnitTestConfig>,
     pub data_tests: Option<ProjectDataTestConfig>,
@@ -207,6 +217,7 @@ impl Default for DbtProject {
             seed_paths: None,
             snapshot_paths: None,
             test_paths: None,
+            check_paths: None,
             docs_paths: None,
             target_path: None,
             log_path: None,
@@ -217,6 +228,8 @@ impl Default for DbtProject {
             snapshots: None,
             seeds: None,
             sources: None,
+            checks: None,
+            info_schema: None,
             tests: None,
             unit_tests: None,
             data_tests: None,
@@ -397,6 +410,35 @@ pub trait ResolvableConfig<T>:
 
     fn apply_package_defaults(&mut self, defaults: Self::PackageDefaults);
 
+    /// Canonicalizes adapter config aliases for this layer, mirroring dbt-core's
+    /// `credentials.translate_aliases` call in `_update_from_config`
+    /// (`core/dbt/context/context_config.py:222`). Called once per config layer, before
+    /// `default_to` merging, so an alias key in a less specific layer and its canonical key in a
+    /// more specific one merge by ordinary precedence.
+    ///
+    /// Only covers aliases whose canonical field already exists as a typed field on `Self`
+    /// (e.g. Databricks' `catalog` -> `database`): this hook runs on an already-typed `Self`, so
+    /// it can move a value between two fields but cannot conjure a field for an alias that has
+    /// none of its own (e.g. Databricks' `target_catalog`, or postgres/redshift's `dbname`).
+    /// Those resolve only where a *raw* config-key rename is still possible before typing --
+    /// currently just the inline `{{ config(...) }}` layer
+    /// (`dbt_adapter_core::config_aliases::canonicalize_config_keys` in
+    /// `ParseConfig::apply_config`) -- so the same alias authored in `dbt_project.yml` or a
+    /// schema.yml `config:` block remains an unrecognized key. See
+    /// `test_snapshot_target_catalog_in_project_yml_is_unrecognized_key` and
+    /// `test_dbname_in_project_yml_is_unrecognized_key` (`dbt-parser/src/dbt_project_config.rs`)
+    /// for the pinned, `#[ignore]`d gap.
+    ///
+    /// `default_adapter` is the *target's default* adapter, not the adapter this node runs on: a
+    /// node's own `+adapter:` override is a mergeable field, so it is only readable once every
+    /// layer has merged -- which is after this hook, by construction. `apply_resolve_defaults`
+    /// below is the seam that can read it (`ModelConfig` does exactly that, as
+    /// `self.adapter.or(default_adapter)`), but canonicalizing there would destroy the per-layer
+    /// precedence this hook exists for. Pinned by
+    /// `test_databricks_catalog_alias_not_canonicalized_for_adapter_overridden_node`
+    /// (`dbt-parser/src/tests.rs`, `#[ignore]`d).
+    fn canonicalize_adapter_aliases(&mut self, _default_adapter: AdapterType) {}
+
     /// Called after all config layers (project, properties, inline) are merged and the root
     /// overlay is applied, but before `finalize()`. Use this to fill in fields that must always
     /// have a value but are not set by `apply_package_defaults` for dependency packages.
@@ -443,6 +485,7 @@ mod tests {
             seed_paths: Some(vec![]),
             snapshot_paths: Some(vec![]),
             test_paths: Some(vec![]),
+            check_paths: Some(vec![]),
             docs_paths: Some(vec![]),
             target_path: Some(TargetPath::Target),
             log_path: Some(LogPath::Logs),
@@ -453,6 +496,8 @@ mod tests {
             snapshots: None,
             seeds: None,
             sources: None,
+            checks: None,
+            info_schema: None,
             tests: None,
             unit_tests: None,
             data_tests: None,
@@ -503,11 +548,11 @@ adapters:
         let adapters = project.adapters.expect("adapters");
         assert_eq!(
             adapters.keys().copied().collect::<Vec<_>>(),
-            vec![AdapterType::Alt, AdapterType::Snowflake],
+            vec![AdapterType::LakeCompute, AdapterType::Snowflake],
             "declaration order is preserved"
         );
         assert_eq!(
-            adapters[&AdapterType::Alt]
+            adapters[&AdapterType::LakeCompute]
                 .quoting
                 .expect("lake_compute quoting")
                 .identifier,
@@ -524,7 +569,7 @@ adapters:
         );
     }
 
-    /// `lake_compute` is the only name for `AdapterType::Alt`. `alt` was the
+    /// `lake_compute` is the only name for `AdapterType::LakeCompute`. `alt` was the
     /// external name before the rename and is not kept as an alias, so it has to
     /// be rejected here like any other unknown adapter.
     #[test]

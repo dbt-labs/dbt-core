@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_node_adapter};
+use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
@@ -49,7 +49,7 @@ pub async fn resolve_analyses(
     analysis_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
+    // The target's default adapter.
     default_adapter: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
@@ -76,8 +76,10 @@ pub async fn resolve_analyses(
                 (),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
         },
+        default_adapter,
     )?;
 
     let render_ctx = RenderCtx {
@@ -90,7 +92,7 @@ pub async fn resolve_analyses(
             defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             resource_paths: package
@@ -157,17 +159,10 @@ pub async fn resolve_analyses(
         // An analysis is compiled rather than materialized, but it still renders
         // refs and dispatches macros, so which adapter it renders *as* is a real
         // choice. Resolved the same way every other node type resolves it.
-        let selected_adapter = validate_node_adapter(
-            analysis_config.adapter,
-            default_adapter,
-            &DbtMaterialization::Analysis,
-            None,
-            adapter_type,
-            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
-            dbt_asset.is_python(),
-            &dbt_asset.path,
-        )?
-        .unwrap_or(adapter_type);
+        let selected_adapter = arg
+            .adapter_override
+            .or(analysis_config.adapter)
+            .unwrap_or(default_adapter);
         // unique_id.push_str(&format!(".{statement_index}"));
 
         let fqn = get_node_fqn(
@@ -235,6 +230,9 @@ pub async fn resolve_analyses(
             },
             __base_attr__: NodeBaseAttributes {
                 adapter: selected_adapter,
+                // An analysis materializes nothing, so there is no relation to publish:
+                // no `+propagate` config exists for this node type.
+                propagate: Vec::new(),
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -309,7 +307,7 @@ pub async fn resolve_analyses(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
         if status == ModelStatus::Enabled || render_error_deferred {

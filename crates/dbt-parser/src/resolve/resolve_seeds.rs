@@ -4,7 +4,6 @@ use crate::dbt_project_config::{
 };
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
-    validate_node_adapter,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -34,6 +33,7 @@ use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -53,15 +53,13 @@ pub async fn resolve_seeds(
     root_project_configs: &RootProjectConfigs,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
-    // Every adapter the active target declares, for resolving `+adapter`.
-    // The target's default adapter.
     default_adapter: AdapterType,
     package_name: &str,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     node_resolver: &mut NodeResolver,
 ) -> FsResult<(HashMap<String, Arc<DbtSeed>>, HashMap<String, Arc<DbtSeed>>)> {
     let mut seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
@@ -70,13 +68,17 @@ pub async fn resolve_seeds(
     let dependency_package_name = dependency_package_name_from_ctx(jinja_env, base_ctx);
 
     let is_dependency = dependency_package_name.is_some();
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "seeds");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "seeds",
+        default_adapter,
+    )?;
     let raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "seeds",
-        ))
+            default_adapter,
+        )?)
     } else {
         None
     };
@@ -119,21 +121,26 @@ pub async fn resolve_seeds(
         seed_root_dirs.push("seeds".to_string());
     }
 
-    let config_resolver =
-        ProjectConfigResolver::build(root_project_configs.seeds.clone(), is_dependency, || {
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.seeds.clone(),
+        is_dependency,
+        || {
             init_project_config(
                 &package.dbt_project.seeds,
                 DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
-        })?
-        .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
+        },
+        default_adapter,
+    )?
+    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
     // TODO: update this to be relative of the root project
     let mut duplicate_errors = Vec::new();
     // Track seed names seen so far (name → relative path) to detect duplicates across subdirs
-    let mut seen_seed_names: HashMap<String, std::path::PathBuf> = HashMap::new();
+    let mut seen_seed_names: HashMap<String, PathBuf> = HashMap::new();
     for seed_file in package.seed_files.iter() {
         // Validate that path extension is one of csv, parquet, or json
         let path = seed_file.path.clone();
@@ -221,7 +228,8 @@ pub async fn resolve_seeds(
             raw_schema_yml_configs.get(seed_name),
             None,
             true,
-        );
+            default_adapter,
+        )?;
 
         // Merge schema_file_info
         let (seed, patch_path) = if let Some(mpe) = seed_properties.remove(seed_name) {
@@ -255,7 +263,7 @@ pub async fn resolve_seeds(
         );
 
         // XXX: normalize column_types to uppercase if it is snowflake
-        if matches!(adapter_type, AdapterType::Snowflake)
+        if matches!(default_adapter, AdapterType::Snowflake)
             && let Some(column_types) = &properties_config.column_types
         {
             let column_types = column_types
@@ -312,16 +320,9 @@ pub async fn resolve_seeds(
 
         validate_delimiter(&properties_config.delimiter)?;
 
-        let resolved_node_adapter = validate_node_adapter(
-            properties_config.adapter,
-            default_adapter,
-            &DbtMaterialization::Table,
-            properties_config.catalog_name.as_deref(),
-            adapter_type,
-            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
-            false,
-            &path,
-        )?;
+        // See `resolve_models`: the flag overrides the config, and nothing is
+        // validated at parse.
+        let resolved_node_adapter = arg.adapter_override.or(properties_config.adapter);
 
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds
@@ -331,13 +332,21 @@ pub async fn resolve_seeds(
         // See `resolve_models`: both remaining layers depend on the node's
         // `+adapter`, which the config merge cannot know. Written back so
         // `deprecated_config` carries the resolved value too.
-        let selected_adapter = resolved_node_adapter.unwrap_or(adapter_type);
+        // `propagate` comes straight off the node's own config. Unlike
+        // `adapter` there is no target default to fall back to and nothing to
+        // inherit: an unset `+propagate` means "publish nowhere".
+        let selected_propagate: Vec<AdapterType> = properties_config
+            .propagate
+            .clone()
+            .map(Into::into)
+            .unwrap_or_default();
+        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
         properties_config.quoting = resolve_package_quoting(
             Some(match adapter_quoting.get(&selected_adapter) {
                 Some(authored) => properties_config.quoting.filled_from(authored),
                 None => properties_config.quoting,
             }),
-            resolved_node_adapter.unwrap_or(adapter_type),
+            resolved_node_adapter.unwrap_or(default_adapter),
         );
 
         // Create initial seed with default values
@@ -373,6 +382,7 @@ pub async fn resolve_seeds(
             },
             __base_attr__: NodeBaseAttributes {
                 adapter: selected_adapter,
+                propagate: selected_propagate,
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -403,19 +413,7 @@ pub async fn resolve_seeds(
         };
 
         let components = RelationComponents {
-            database: if matches!(adapter_type, AdapterType::Databricks)
-                && properties_config
-                    .__warehouse_specific_config__
-                    .catalog
-                    .is_some()
-            {
-                properties_config
-                    .__warehouse_specific_config__
-                    .catalog
-                    .clone()
-            } else {
-                properties_config.database.clone()
-            },
+            database: properties_config.database.clone(),
             schema: properties_config.schema.clone(),
             alias: properties_config.alias.clone(),
             store_failures: None,
@@ -428,7 +426,7 @@ pub async fn resolve_seeds(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
         let status = if is_enabled {
@@ -437,7 +435,7 @@ pub async fn resolve_seeds(
             ModelStatus::Disabled
         };
 
-        match node_resolver.insert_ref(&dbt_seed, adapter_type, status, false) {
+        match node_resolver.insert_ref(&dbt_seed, default_adapter, status, false) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(path.clone());
@@ -454,7 +452,8 @@ pub async fn resolve_seeds(
                         &root_package.dbt_project.name,
                         collected_generic_tests,
                         test_name_truncations,
-                        adapter_type,
+                        seen_generic_test_paths,
+                        default_adapter,
                         io_args,
                         patch_path.as_ref().unwrap_or(&path),
                         false,

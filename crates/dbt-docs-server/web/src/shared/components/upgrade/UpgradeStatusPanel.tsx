@@ -1,8 +1,6 @@
 import { X } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
 
-import { Sizes } from '@dbt-labs/sourdough';
-
 import { Button } from '../../../components/ui/Button';
 import { InvisibleButton } from '../../../components/ui/InvisibleButton';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
@@ -152,7 +150,7 @@ export function UpgradeStatusPanel({
             </h2>
             <Button
               variant="outline"
-              size={Sizes.sm}
+              size="sm"
               text="Need Enterprise? Contact sales."
               onClick={() =>
                 window.open(decorateOutboundHref(contactSalesUrl), '_blank')

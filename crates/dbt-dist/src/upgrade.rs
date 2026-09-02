@@ -1,11 +1,13 @@
-//! `dbt system upgrade-distribution`: the OSS `dbt-core` -> Fusion `dbt`
-//! cross-distribution upgrade. See `upgrade-spec.md` (repo root) for the
-//! full design. Handles two cases: a "global install" (a `standalone`/
-//! `unclaimed` native binary upgraded in place at its own path, or every
-//! other channel -- pip --user / pipx / uv tool / system pip -- getting a
-//! fresh standalone install followed by uninstalling the old package), and
-//! a "managed project" (rewriting a project manifest's `dbt-core` dependency
-//! to `dbt`, then re-running the manager's install/lock command).
+//! `dbt system upgrade-distribution`: only available in dbt v2 OSS, this
+//! command upgrades the current install to dbt v2 proprietary (published on
+//! PyPI as `dbt`). See `upgrade-spec.md` (repo root) for the full design.
+//! Handles two cases: a "global install" (a `standalone`/`unclaimed` native
+//! binary upgraded in place at its own path, or every other channel -- pip
+//! --user / pipx / uv tool / system pip -- getting a fresh standalone
+//! install followed by uninstalling the old package), and a "managed
+//! project" (rewriting a project manifest's `dbt-core` dependency -- which
+//! may also be a pin predating dbt v2 -- to `dbt`, then re-running the
+//! manager's install/lock command).
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -26,13 +28,20 @@ use crate::python::{
 use crate::version::{ReqwestClient, VersionsHttpClient, cdn_base_url, resolve_target_version};
 use crate::{Channel, DiscoveryContext, DistInfo, DistInfoDiscovery, Distribution};
 
-/// The name under which `dbt-core` declares itself as a dependency in a
-/// Python project manifest, and the package name to uninstall from a global
-/// Python environment once Fusion has taken over.
-const OSS_PACKAGE_NAME: &str = "dbt-core";
+/// PyPI's legacy dbt namespace, shared with v1.
+///
+/// NOTE: `confirm_and_uninstall_old_package`'s global-install path still
+/// hardcodes this name; it doesn't yet check `DBT_OSS_PACKAGE_NAME`.
+const DBT_CORE_PACKAGE_NAME: &str = "dbt-core";
 
-/// The name under which Fusion's PyPI package is declared.
-const FUSION_PACKAGE_NAME: &str = "dbt";
+/// PyPI's newer, OSS-only dbt namespace.
+const DBT_OSS_PACKAGE_NAME: &str = "dbt-oss";
+
+/// Package names this command can rewrite to [`PROPRIETARY_PACKAGE_NAME`].
+pub(crate) const UPGRADABLE_TARGET_NAMES: [&str; 2] = [DBT_CORE_PACKAGE_NAME, DBT_OSS_PACKAGE_NAME];
+
+/// PyPI's proprietary dbt v2 package.
+const PROPRIETARY_PACKAGE_NAME: &str = "dbt";
 
 fn install_script_name() -> &'static str {
     if cfg!(windows) {
@@ -79,11 +88,8 @@ pub async fn exec_upgrade_distribution(
     let dist_info = DistInfo::current(command_name)?;
 
     match dist_info.distribution {
-        Some(Distribution::Fusion) => {
-            println(
-                "dbt is already running Fusion (the `dbt` distribution) -- there is nothing to \
-                 upgrade to.",
-            );
+        Some(Distribution::Dbt) => {
+            println("You are already running dbt v2 -- there is nothing to upgrade to.");
             return Ok(());
         }
         Some(Distribution::CloudCLI) => {
@@ -92,6 +98,14 @@ pub async fn exec_upgrade_distribution(
             );
             return Ok(());
         }
+        Some(Distribution::Core) => {
+            return err!(
+                ErrorCode::Unexpected,
+                "The current `dbt` binary reports itself as the legacy dbt-core distribution, \
+                 which isn't possible for a dbt v2 OSS build; refusing to guess. Run \
+                 `dbt internal get-distribution-info` for more detail."
+            );
+        }
         None => {
             return err!(
                 ErrorCode::Unexpected,
@@ -99,26 +113,17 @@ pub async fn exec_upgrade_distribution(
                  `dbt internal get-distribution-info` for more detail."
             );
         }
-        Some(Distribution::OSS) => {}
+        Some(Distribution::Oss) => {}
     }
 
     let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     if let Some(mut manifest) = PythonManifest::detect(&cwd)? {
-        let declares_dbt_core = manifest
-            .get_version_replacement(&PackageSpec {
-                name: OSS_PACKAGE_NAME.to_string(),
-                // Version is irrelevant here -- this call is only used to
-                // test whether the manifest declares `dbt-core` at all; the
-                // replacement itself is discarded, never applied.
-                version: PackageVersion::Exact("0.0.0".to_string()),
-            })?
-            .is_some();
-        if declares_dbt_core {
-            if manifest.has_top_level_conda_declaration(OSS_PACKAGE_NAME)? {
+        if let Some(declared_name) = declared_upgradable_name(&manifest)? {
+            if manifest.has_top_level_conda_declaration(declared_name)? {
                 return err!(
                     ErrorCode::NotSupported,
-                    "{} declares `dbt-core` in conda's top-level dependency list, but dbt \
-                     (Fusion) isn't published on conda channels. Move the dependency into the \
+                    "{} declares `{declared_name}` in conda's top-level dependency list, but \
+                     dbt v2 isn't published on conda channels. Move the dependency into the \
                      `pip:` sub-list (which resolves from PyPI) and re-run this command, or edit \
                      the manifest manually.",
                     manifest.path().display()
@@ -133,21 +138,22 @@ pub async fn exec_upgrade_distribution(
             let target_version = resolve_target_version(None, &ReqwestClient).await?;
             let replacements = manifest
                 .get_rename_replacement(
-                    OSS_PACKAGE_NAME,
+                    declared_name,
                     &PackageSpec {
-                        name: FUSION_PACKAGE_NAME.to_string(),
+                        name: PROPRIETARY_PACKAGE_NAME.to_string(),
                         version: PackageVersion::Exact(target_version),
                     },
                 )?
                 .ok_or_else(|| {
                     fs_err!(
                         ErrorCode::Unexpected,
-                        "{} declared `dbt-core` a moment ago, but no longer does",
+                        "{} declared `{declared_name}` a moment ago, but no longer does",
                         manifest.path().display()
                     )
                 })?;
             return exec_managed_project_upgrade(
                 &mut manifest,
+                declared_name,
                 replacements,
                 &dist_info,
                 override_manager,
@@ -166,6 +172,36 @@ pub async fn exec_upgrade_distribution(
     }
 
     exec_global_install(&dist_info, yes, command_name).await
+}
+
+/// Which of [`UPGRADABLE_TARGET_NAMES`] `manifest` depends on, if any.
+/// Errors if it depends on more than one.
+fn declared_upgradable_name(manifest: &PythonManifest) -> FsResult<Option<&'static str>> {
+    let mut declared = Vec::new();
+    for name in UPGRADABLE_TARGET_NAMES {
+        // Version is a placeholder: this only checks whether `name` is
+        // declared at all; the replacement itself is discarded.
+        let is_declared = manifest
+            .get_version_replacement(&PackageSpec {
+                name: name.to_string(),
+                version: PackageVersion::Exact("0.0.0".to_string()),
+            })?
+            .is_some();
+        if is_declared {
+            declared.push(name);
+        }
+    }
+    match declared[..] {
+        [] => Ok(None),
+        [name] => Ok(Some(name)),
+        [..] => err!(
+            ErrorCode::NotSupported,
+            "{} declares both `{}`; only one dbt dependency is expected. Remove one manually \
+             and re-run this command.",
+            manifest.path().display(),
+            declared.join("` and `")
+        ),
+    }
 }
 
 /// The shared "manifest was edited, but the environment can't be brought
@@ -264,7 +300,7 @@ fn resolve_manager(
 
     // `existing_hint` (`dist_info.py_package_manager`) reflects how *dbt's
     // own binary* was installed, which is frequently unrelated to this
-    // project's dependencies -- e.g. Fusion shipped as a standalone binary
+    // project's dependencies -- e.g. dbt v2 shipped as a standalone binary
     // dropped directly onto `PATH` has no venv/tool-dir signal at all, even
     // though `manifest_dir` obviously has some real package manager
     // governing it. Probe that directory (and `PATH`) directly before
@@ -318,8 +354,8 @@ fn resolve_manager(
     Ok(choices[selection])
 }
 
-/// Rewrites a managed Python project's manifest to depend on `dbt` (Fusion)
-/// at a pinned exact version instead of `dbt-core`, then re-runs the
+/// Rewrites a managed Python project's manifest to depend on `dbt`
+/// at a pinned exact version instead of `old_name`, then re-runs the
 /// project's package manager to bring its lockfile/environment back in sync
 /// with that edit -- editing the manifest alone can leave a lockfile stale.
 /// Two separate confirmations, matching the two distinct actions: one for
@@ -327,6 +363,7 @@ fn resolve_manager(
 /// that follow it.
 async fn exec_managed_project_upgrade(
     manifest: &mut PythonManifest,
+    old_name: &str,
     replacements: ManifestReplacements,
     dist_info: &DistInfo,
     override_manager: Option<PythonPackageManager>,
@@ -337,7 +374,7 @@ async fn exec_managed_project_upgrade(
     replacements.diff(manifest, &mut diff)?;
     let diff = String::from_utf8_lossy(&diff);
     let edit_prompt = format!(
-        "This will rewrite {} to depend on `dbt` (Fusion) instead of `dbt-core`:\n\n{diff}\nProceed?",
+        "This will rewrite {} to depend on `dbt` instead of `{old_name}`:\n\n{diff}\nProceed?",
         manifest.path().display()
     );
     if !confirm(&edit_prompt, yes)? {
@@ -359,7 +396,7 @@ async fn exec_managed_project_upgrade(
 
     let backup_path = replacements.apply_to(manifest)?;
     println(format!(
-        "{} was rewritten to depend on `dbt` (Fusion). A backup of the original was saved to \
+        "{} was rewritten to depend on `dbt`. A backup of the original was saved to \
          {} -- restore from it if you need to undo this edit.",
         manifest.path().display(),
         backup_path.display()
@@ -421,7 +458,7 @@ async fn exec_global_install(dist_info: &DistInfo, yes: bool, command_name: &str
 }
 
 /// Upgrades a `standalone`/`unclaimed` dbt-core install in place: re-runs
-/// the Fusion installer with `--to <dir>` pointed at the existing binary's
+/// the dbt v2 installer with `--to <dir>` pointed at the existing binary's
 /// own directory (from `DistInfo::path`, not the installer's default) and
 /// `--update` so it overwrites rather than refusing a pre-existing file.
 /// There's no separate package to uninstall afterward -- the installer
@@ -438,7 +475,7 @@ async fn exec_in_place_upgrade(dist_info: &DistInfo, yes: bool) -> FsResult<()> 
     })?;
 
     let prompt = format!(
-        "This will download and run the dbt (Fusion) standalone installer, replacing the \
+        "This will download and run the dbt v2 standalone installer, replacing the \
          existing dbt-core binary in place at {}:\n\n    {}\n\nProceed?",
         target_dir.display(),
         install_command_display(Some(target_dir), true)
@@ -446,7 +483,7 @@ async fn exec_in_place_upgrade(dist_info: &DistInfo, yes: bool) -> FsResult<()> 
     if !confirm(&prompt, yes)? {
         return err!(ErrorCode::Generic, "Aborted.");
     }
-    install_fusion_standalone(Some(target_dir), true).await
+    install_dbt_v2_standalone(Some(target_dir), true).await
 }
 
 async fn exec_fresh_install_and_replace_package(
@@ -462,7 +499,7 @@ async fn exec_fresh_install_and_replace_package(
     // If the standalone installer would overwrite the exact file the old
     // `dbt-core` package manager thinks it owns, uninstall the old package
     // *first* -- otherwise the package manager's later uninstall would
-    // delete the freshly-installed Fusion binary, believing it's removing
+    // delete the freshly-installed dbt v2 binary, believing it's removing
     // its own file.
     if old_package_shadowed_by_target {
         confirm_and_uninstall_old_package(dist_info, yes)?;
@@ -473,14 +510,14 @@ async fn exec_fresh_install_and_replace_package(
         .map(|p| p.display().to_string())
         .unwrap_or_else(|| "the default location (~/.local/bin)".to_string());
     let install_prompt = format!(
-        "This will download and run the dbt (Fusion) standalone installer:\n\n    {}\n\n\
+        "This will download and run the dbt v2 standalone installer:\n\n    {}\n\n\
          installing to {install_target}. Proceed?",
         install_command_display(None, false)
     );
     if !confirm(&install_prompt, yes)? {
         return err!(ErrorCode::Generic, "Aborted.");
     }
-    install_fusion_standalone(None, false).await?;
+    install_dbt_v2_standalone(None, false).await?;
 
     if !old_package_shadowed_by_target {
         confirm_and_uninstall_old_package(dist_info, yes)?;
@@ -501,7 +538,7 @@ fn confirm_and_uninstall_old_package(dist_info: &DistInfo, yes: bool) -> FsResul
         return Ok(());
     };
     let Some(uninstall_cmd) =
-        uninstall_command_for_package(channel, dist_info.py_package_manager, OSS_PACKAGE_NAME)
+        uninstall_command_for_package(channel, dist_info.py_package_manager, DBT_CORE_PACKAGE_NAME)
     else {
         println(
             "Could not determine how to uninstall the existing dbt-core install automatically. \
@@ -578,7 +615,7 @@ fn install_sh_args(to: Option<&Path>, update: bool) -> Vec<String> {
     args
 }
 
-/// Unix-shaped display string for the command `install_fusion_standalone`
+/// Unix-shaped display string for the command `install_dbt_v2_standalone`
 /// will effectively run (mirrors `install_sh_args`'s flags), for
 /// confirmation-prompt text only -- never fed to a shell.
 fn unix_install_command_display(to: Option<&Path>, update: bool) -> String {
@@ -595,7 +632,7 @@ fn unix_install_command_display(to: Option<&Path>, update: bool) -> String {
 /// Deliberately doesn't encode `-Update`/`-To` -- there's no single
 /// canonical one-liner for "download, then run with args" on Windows the
 /// way `curl | sh -s -- args` is on Unix (the real mechanism is
-/// temp-file + `powershell -Command`, see `install_fusion_standalone`).
+/// temp-file + `powershell -Command`, see `install_dbt_v2_standalone`).
 /// Callers convey destination/update behavior in the surrounding prompt
 /// prose instead.
 fn windows_install_command_display() -> String {
@@ -646,7 +683,7 @@ pub(crate) fn escape_ps_single_quoted(s: &str) -> String {
     s.replace('\'', "''")
 }
 
-/// Downloads and runs the Fusion standalone installer. `to` pins the install
+/// Downloads and runs the dbt v2 standalone installer. `to` pins the install
 /// directory (the installer's own default, `~/.local/bin`, is used when
 /// `None`); `update` allows overwriting a file already at the destination --
 /// both are set together for [`exec_in_place_upgrade`]'s in-place overwrite
@@ -655,7 +692,7 @@ pub(crate) fn escape_ps_single_quoted(s: &str) -> String {
 /// currently-running exe's file lock before overwriting it), this installs a
 /// different binary, so it runs synchronously to completion on every
 /// platform.
-async fn install_fusion_standalone(to: Option<&Path>, update: bool) -> FsResult<()> {
+async fn install_dbt_v2_standalone(to: Option<&Path>, update: bool) -> FsResult<()> {
     let script = ReqwestClient.get_text(&install_script_url()).await?;
 
     #[cfg(not(target_os = "windows"))]
@@ -672,10 +709,7 @@ async fn install_fusion_standalone(to: Option<&Path>, update: bool) -> FsResult<
             } else {
                 output.to_string()
             };
-            return err!(
-                ErrorCode::IoError,
-                "dbt (Fusion) install script failed: {msg}"
-            );
+            return err!(ErrorCode::IoError, "dbt v2 install script failed: {msg}");
         }
         println(output);
         Ok(())
@@ -684,7 +718,7 @@ async fn install_fusion_standalone(to: Option<&Path>, update: bool) -> FsResult<
     #[cfg(target_os = "windows")]
     {
         let mut tmp = tempfile::Builder::new()
-            .prefix("dbt-fusion-install-")
+            .prefix("dbt-v2-install-")
             .suffix(".ps1")
             .tempfile()
             .map_err(|e| {
@@ -722,7 +756,7 @@ async fn install_fusion_standalone(to: Option<&Path>, update: bool) -> FsResult<
         if !status.success() {
             return err!(
                 ErrorCode::IoError,
-                "dbt (Fusion) install script failed with {status}"
+                "dbt v2 install script failed with {status}"
             );
         }
         Ok(())
@@ -730,7 +764,7 @@ async fn install_fusion_standalone(to: Option<&Path>, update: bool) -> FsResult<
 }
 
 /// Best-effort post-install check: warns (without failing the command) if
-/// something earlier on `PATH` still shadows the new Fusion install, or if
+/// something earlier on `PATH` still shadows the new dbt v2 install, or if
 /// the current shell hasn't picked up the installer's PATH/rc changes yet.
 async fn warn_if_path_shadowed(standalone_target: &Option<PathBuf>, command_name: &str) {
     let Some(target) = standalone_target else {
@@ -743,7 +777,7 @@ async fn warn_if_path_shadowed(standalone_target: &Option<PathBuf>, command_name
         Some(first) if Path::new(&first.path) == target.as_path() => {}
         Some(first) => {
             println(format!(
-                "Warning: dbt (Fusion) was installed to {}, but the first `dbt` on your PATH is \
+                "Warning: dbt v2 was installed to {}, but the first `dbt` on your PATH is \
                  still {} -- you may need to reorder PATH, or open a new shell, before the new \
                  install takes effect.",
                 target.display(),
@@ -752,7 +786,7 @@ async fn warn_if_path_shadowed(standalone_target: &Option<PathBuf>, command_name
         }
         None => {
             println(format!(
-                "Warning: dbt (Fusion) was installed to {}, but it isn't on PATH yet -- you may \
+                "Warning: dbt v2 was installed to {}, but it isn't on PATH yet -- you may \
                  need to open a new shell, or add it to PATH manually.",
                 target.display()
             ));
@@ -886,7 +920,7 @@ mod tests {
         DistInfo {
             path: path.to_string(),
             channel,
-            distribution: Some(Distribution::OSS),
+            distribution: Some(Distribution::Oss),
             generation: crate::Generation::V2,
             py_package_manager: None,
             py_venv_root: None,
@@ -904,6 +938,54 @@ mod tests {
         assert_eq!(target_dir, Path::new("/home/user/.local/bin"));
     }
 
+    fn manifest_with(dir: &Path, filename: &str, content: &str) -> PythonManifest {
+        std::fs::write(dir.join(filename), content).unwrap();
+        PythonManifest::detect(dir).unwrap().unwrap()
+    }
+
+    #[test]
+    fn declared_upgradable_name_detects_dbt_core() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-core==1.2.3\n");
+        assert_eq!(
+            declared_upgradable_name(&manifest).unwrap(),
+            Some(DBT_CORE_PACKAGE_NAME)
+        );
+    }
+
+    #[test]
+    fn declared_upgradable_name_detects_dbt_oss() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-oss==2.0.0\n");
+        assert_eq!(
+            declared_upgradable_name(&manifest).unwrap(),
+            Some(DBT_OSS_PACKAGE_NAME)
+        );
+    }
+
+    #[test]
+    fn declared_upgradable_name_returns_none_when_neither_declared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(tmp.path(), "requirements.txt", "other-package==0.1.0\n");
+        assert_eq!(declared_upgradable_name(&manifest).unwrap(), None);
+    }
+
+    #[test]
+    fn declared_upgradable_name_errors_when_both_declared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(
+            tmp.path(),
+            "requirements.txt",
+            "dbt-core==1.2.3\ndbt-oss==2.0.0\n",
+        );
+        let err = declared_upgradable_name(&manifest).expect_err("both names are declared");
+        assert!(
+            err.context.contains("dbt-core") && err.context.contains("dbt-oss"),
+            "expected the error to name both declared packages, got: {}",
+            err.context
+        );
+    }
+
     fn managed_project_manifest_and_replacements(
         dir: &Path,
     ) -> (PythonManifest, ManifestReplacements) {
@@ -915,9 +997,9 @@ mod tests {
         let manifest = PythonManifest::detect(dir).unwrap().unwrap();
         let replacements = manifest
             .get_rename_replacement(
-                OSS_PACKAGE_NAME,
+                DBT_CORE_PACKAGE_NAME,
                 &PackageSpec {
-                    name: FUSION_PACKAGE_NAME.to_string(),
+                    name: PROPRIETARY_PACKAGE_NAME.to_string(),
                     version: PackageVersion::Exact("2.0.0".to_string()),
                 },
             )
@@ -938,6 +1020,7 @@ mod tests {
 
         let result = exec_managed_project_upgrade(
             &mut manifest,
+            DBT_CORE_PACKAGE_NAME,
             replacements,
             &dist_info,
             None,
@@ -970,6 +1053,7 @@ mod tests {
 
         let result = exec_managed_project_upgrade(
             &mut manifest,
+            DBT_CORE_PACKAGE_NAME,
             replacements,
             &dist_info,
             None,
@@ -1010,6 +1094,7 @@ mod tests {
 
         let result = exec_managed_project_upgrade(
             &mut manifest,
+            DBT_CORE_PACKAGE_NAME,
             replacements,
             &dist_info,
             None,
@@ -1089,7 +1174,7 @@ mod tests {
 
     #[test]
     fn resolve_manager_falls_back_to_the_manifest_dir_probe_when_hint_is_none() {
-        // The exact scenario an unattended `-y` sweep hits when Fusion ships
+        // The exact scenario an unattended `-y` sweep hits when dbt v2 ships
         // as a standalone binary with no venv/tool-dir signal of its own
         // (`existing_hint: None`) against a Hatch-managed pyproject.toml
         // (no uv.lock/poetry.lock/pdm.lock for the earlier lockfile check to

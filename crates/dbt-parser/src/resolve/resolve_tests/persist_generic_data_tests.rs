@@ -7,7 +7,7 @@ use dbt_common::FsResult;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;
-use dbt_common::tracing::dbt_emit::emit_strict_parse_error;
+use dbt_common::tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -23,6 +23,7 @@ use dbt_schemas::schemas::dbt_column::VersionColumnProperties;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_schemas::state::{DbtAsset, GenericTestAsset};
 use dbt_yaml::ShouldBe;
@@ -50,6 +51,13 @@ pub struct ColumnTestEntry {
     pub quote: bool,
     pub tests: Vec<DataTests>,
     pub tags: Vec<String>,
+    pub(super) legacy_syntax_handling: LegacyTestSyntaxHandling,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) enum LegacyTestSyntaxHandling {
+    Strict,
+    Warn,
 }
 
 /// Raw (unrendered) schema.yml `config:` blocks for a resource's generic tests, captured
@@ -183,6 +191,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         root_project_name: &str,
         collected_generic_tests: &mut Vec<GenericTestAsset>,
         test_name_truncations: &mut HashMap<String, String>,
+        seen_generic_test_paths: &mut HashMap<PathBuf, String>,
         adapter_type: AdapterType,
         io_args: &IoArgs,
         original_file_path: &Path,
@@ -208,14 +217,19 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         project_name,
                         root_project_name,
                         &test_config,
+                        // A model-level test is attached to no column, even when it passes
+                        // a `column_name` kwarg to its macro.
+                        None,
                         test.column_name(),
                         &column_test,
                         io_args,
                         original_file_path,
                         &mut seen_tests,
                         test_name_truncations,
+                        seen_generic_test_paths,
                         &[],
                         suppress_deprecated_test_validation,
+                        LegacyTestSyntaxHandling::Strict,
                         raw_config,
                     )?;
                     collected_generic_tests.push(test_asset);
@@ -246,14 +260,17 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             project_name,
                             root_project_name,
                             &test_config,
-                            Some(&quoted_column_name),
+                            Some(quoted_column_name.clone()),
+                            Some(StringOrArrayOfStrings::String(quoted_column_name)),
                             test,
                             io_args,
                             original_file_path,
                             &mut seen_tests,
                             test_name_truncations,
+                            seen_generic_test_paths,
                             &entry.tags,
                             suppress_deprecated_test_validation,
+                            entry.legacy_syntax_handling,
                             raw_config,
                         )?;
                         collected_generic_tests.push(test_asset);
@@ -266,20 +283,54 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
     }
 }
 
+/// Path for a generated generic-test SQL asset. Distinct tests can flatten to the
+/// same generated name (e.g. `not_null` on `orders.status_code` vs `orders_status.code`),
+/// and the name-keyed default path would let the second test overwrite the first one's
+/// SQL file and silently drop it from the manifest. On collision, suffix the kwargs
+/// hash (already unique per test, mirroring the `unique_id`) to keep the assets apart.
+///
+/// Keyed on path -> test_hash (not just path) so that re-deriving the exact same test
+/// on a later pass (e.g. versioned models are resolved once per version SQL file, and
+/// shared column tests get re-derived identically each time) is idempotent rather than
+/// being mistaken for a real collision.
+fn generic_test_asset_path(
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
+    full_name: &str,
+    test_hash: &str,
+) -> PathBuf {
+    let default_path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
+    match seen_generic_test_paths.get(&default_path) {
+        None => {
+            seen_generic_test_paths.insert(default_path.clone(), test_hash.to_string());
+            default_path
+        }
+        Some(existing_hash) if existing_hash == test_hash => default_path,
+        Some(_) => {
+            let hashed_path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME)
+                .join(format!("{full_name}_{test_hash}.sql"));
+            seen_generic_test_paths.insert(hashed_path.clone(), test_hash.to_string());
+            hashed_path
+        }
+    }
+}
+
 #[allow(clippy::ptr_arg)]
 #[allow(clippy::too_many_arguments)]
 fn persist_inner(
     project_name: &str,
     root_project_name: &str,
     test_config: &GenericTestConfig,
-    column_name: Option<&str>,
+    column_name: Option<String>,
+    column_name_kwarg: Option<StringOrArrayOfStrings>,
     test: &DataTests,
     io_args: &IoArgs,
     original_file_path: &Path,
     seen_tests: &mut HashSet<String>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     column_tags: &[String],
     suppress_deprecated_test_validation: bool,
+    legacy_syntax_handling: LegacyTestSyntaxHandling,
     raw_config: RawTestConfig,
 ) -> FsResult<GenericTestAsset> {
     let RawTestConfig {
@@ -297,9 +348,10 @@ fn persist_inner(
     let details = get_test_details(
         test,
         test_config,
-        column_name,
+        column_name_kwarg,
         dependecy_package_name,
         suppress_deprecated_test_validation,
+        legacy_syntax_handling,
         &explicit_config_keys,
     )?;
 
@@ -336,7 +388,7 @@ fn persist_inner(
     );
     let unique_id = format!("{}.{}", full_name, test_hash);
 
-    let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
+    let path = generic_test_asset_path(seen_generic_test_paths, &full_name, &test_hash);
     let test_file = io_args.out_dir.join(&path);
     let generated_test_sql = generate_test_macro(
         test_macro_name.as_str(),
@@ -350,7 +402,7 @@ fn persist_inner(
     // rather than just the cleaned name. This matches mantle's behavior where
     // tests with different kwargs get different unique_ids.
     if !seen_tests.insert(unique_id) {
-        match column_name {
+        match &column_name {
             Some(column_name) => {
                 return err!(
                     ErrorCode::DbtYamlValidationError,
@@ -382,10 +434,9 @@ fn persist_inner(
         package_name: project_name.to_string(),
     };
     let (meta_name, meta_namespace) = (Some(test_macro_name), namespace);
-    let column_name = kwargs
+    let column_name_kwarg = kwargs
         .get("column_name")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .and_then(StringOrArrayOfStrings::from_json_value);
     let combination_of_columns = kwargs
         .get("combination_of_columns")
         .and_then(|v| v.as_array())
@@ -429,7 +480,8 @@ fn persist_inner(
         defined_at: test.span().clone().into(),
         test_metadata_name: meta_name,
         test_metadata_namespace: meta_namespace,
-        test_metadata_column_name: column_name,
+        column_name,
+        test_metadata_column_name: column_name_kwarg,
         test_metadata_combination_of_columns: combination_of_columns,
         test_metadata_model,
         test_metadata_kwargs,
@@ -454,9 +506,10 @@ struct TestDetails {
 fn get_test_details(
     test: &DataTests,
     test_config: &GenericTestConfig,
-    column_name: Option<&str>,
+    column_name_kwarg: Option<StringOrArrayOfStrings>,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
+    legacy_syntax_handling: LegacyTestSyntaxHandling,
     explicit_config_keys: &BTreeSet<String>,
 ) -> FsResult<TestDetails> {
     let mut kwargs = BTreeMap::new();
@@ -495,8 +548,8 @@ fn get_test_details(
         "model".to_string(),
         Value::String(format!("{{{{ get_where_subquery({model_string}) }}}}")),
     );
-    if let Some(col) = column_name {
-        kwargs.insert("column_name".to_string(), Value::String(col.to_string()));
+    if let Some(col) = column_name_kwarg {
+        kwargs.insert("column_name".to_string(), col.to_json_value());
     }
 
     let (test_macro_name, mut custom_test_name, namespace) = match test {
@@ -513,6 +566,7 @@ fn get_test_details(
                     &mk.config,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
+                    legacy_syntax_handling,
                     explicit_config_keys,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
@@ -536,6 +590,7 @@ fn get_test_details(
                     &inner.config,
                     dependency_package_name,
                     suppress_deprecated_test_validation,
+                    legacy_syntax_handling,
                     explicit_config_keys,
                 )?;
                 kwargs.extend(extraction_result.kwargs);
@@ -600,6 +655,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     existing_config: &Option<DataTestConfig>,
     dependency_package_name: Option<&str>,
     suppress_deprecated_test_validation: bool,
+    legacy_syntax_handling: LegacyTestSyntaxHandling,
     explicit_config_keys: &BTreeSet<String>,
 ) -> FsResult<KwargsExtractionResult> {
     // Start with existing config
@@ -657,7 +713,12 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
         );
 
         if !suppress_deprecated_test_validation {
-            emit_strict_parse_error(*schema_error, dependency_package_name);
+            match legacy_syntax_handling {
+                LegacyTestSyntaxHandling::Strict => {
+                    emit_strict_parse_error(*schema_error, dependency_package_name);
+                }
+                LegacyTestSyntaxHandling::Warn => emit_warn_log_from_fs_error(*schema_error),
+            }
         }
     }
     for (key, value) in deprecated.clone() {
@@ -1540,6 +1601,10 @@ fn collect_versioned_model_tests(
                             quote: col.quote.unwrap_or(false),
                             tests: tests.clone(),
                             tags,
+                            // Version-local column tests were ignored before they were collected
+                            // from the typed `versions[].columns` field. Keep their legacy syntax
+                            // warning-only so discovering the tests does not break existing projects.
+                            legacy_syntax_handling: LegacyTestSyntaxHandling::Warn,
                         },
                     );
                 }
@@ -1734,6 +1799,38 @@ mod tests {
     use std::collections::{BTreeMap, HashMap};
 
     #[test]
+    fn test_generic_test_asset_path_disambiguates_name_collisions() {
+        // `not_null` on `orders.status_code` and on `orders_status.code` both flatten
+        // to the same generated name; the second asset must not reuse the first path.
+        let mut seen = HashMap::new();
+        let first = generic_test_asset_path(&mut seen, "not_null_orders_status_code", "aaaaaaaaaa");
+        let second =
+            generic_test_asset_path(&mut seen, "not_null_orders_status_code", "bbbbbbbbbb");
+        assert_eq!(
+            first,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join("not_null_orders_status_code.sql")
+        );
+        assert_eq!(
+            second,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME)
+                .join("not_null_orders_status_code_bbbbbbbbbb.sql")
+        );
+
+        // Non-colliding names keep the plain (hash-free) path.
+        let other = generic_test_asset_path(&mut seen, "not_null_orders_id", "cccccccccc");
+        assert_eq!(
+            other,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join("not_null_orders_id.sql")
+        );
+
+        // Re-deriving the exact same test (same full_name AND same test_hash) is
+        // idempotent, not a collision: versioned models resolve shared column tests
+        // once per version SQL file, re-deriving identical paths on each pass.
+        let rederived = generic_test_asset_path(&mut seen, "not_null_orders_id", "cccccccccc");
+        assert_eq!(rederived, other);
+    }
+
+    #[test]
     fn test_format_node_unique_id_shapes() {
         // Versioned model wins over source_name (versioned sources don't exist).
         assert_eq!(
@@ -1914,6 +2011,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            LegacyTestSyntaxHandling::Strict,
             &BTreeSet::new(),
         )
         .unwrap();
@@ -2059,6 +2157,7 @@ mod tests {
                 quote: false,
                 tests: vec![unique_test],
                 tags: vec![],
+                legacy_syntax_handling: LegacyTestSyntaxHandling::Strict,
             },
         );
         let base_config = GenericTestConfig {
@@ -2955,6 +3054,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            LegacyTestSyntaxHandling::Strict,
             &BTreeSet::new(),
         )
         .unwrap();
@@ -3008,6 +3108,7 @@ mod tests {
             &existing_config,
             None,
             true,
+            LegacyTestSyntaxHandling::Strict,
             &explicit_config_keys,
         )
     }
@@ -3129,6 +3230,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            LegacyTestSyntaxHandling::Strict,
             &BTreeSet::new(),
         )
         .unwrap();
@@ -3277,6 +3379,7 @@ mod tests {
             &existing_config,
             None,
             false,
+            LegacyTestSyntaxHandling::Strict,
             &BTreeSet::new(),
         )
         .unwrap();
@@ -3668,6 +3771,7 @@ mod tests {
             None,
             None,
             false,
+            LegacyTestSyntaxHandling::Strict,
             &BTreeSet::new(),
         )
         .unwrap();
@@ -3721,14 +3825,17 @@ mod tests {
             "project_name",
             "project_name",
             &test_config,
-            Some("id"),
+            Some("id".to_string()),
+            Some(StringOrArrayOfStrings::String("id".to_string())),
             &test,
             &io_args,
             Path::new("models/schema.yml"),
             &mut HashSet::new(),
             &mut HashMap::new(),
+            &mut HashMap::new(),
             &[],
             false,
+            LegacyTestSyntaxHandling::Strict,
             RawTestConfig::default(),
         )
         .expect("persist_inner should create missing intermediate directories, not fail");

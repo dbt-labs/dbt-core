@@ -5,11 +5,11 @@ use dbt_common::DiscreteEventEmitter;
 use dbt_login::LoginHooks;
 
 use crate::adapter::AdapterFeature;
-use crate::alt::AltFeature;
 use crate::antlr_parser::AntlrParserFeature;
 use crate::cli::CliFeature;
 use crate::index::IndexFeature;
 use crate::jinja::JinjaFeature;
+use crate::lake_compute::LakeComputeFeature;
 use crate::loader::LoaderFeature;
 use crate::metricflow::MetricflowFeature;
 use crate::resolver::ResolverFeature;
@@ -65,7 +65,7 @@ pub struct FeatureStack {
     pub resolver: ResolverFeature,
     pub loader: LoaderFeature,
     pub jinja: JinjaFeature,
-    pub alt: AltFeature,
+    pub lake_compute: LakeComputeFeature,
     pub login_hooks: Arc<dyn LoginHooks>,
     // TODO: add more features here
     pub version_check_enabled: bool,

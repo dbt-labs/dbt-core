@@ -1,11 +1,9 @@
-import { type ComponentPropsWithRef } from 'react';
-
-import { Icon, type Ryecon } from '@dbt-labs/sourdough';
+import { type ComponentPropsWithRef, type ReactNode } from 'react';
 
 import { cn } from '../../lib/utils';
 
 interface InputIconProps {
-  ryecon: Ryecon;
+  icon: ReactNode;
   onClick?: () => void;
   className?: string;
 }
@@ -22,8 +20,7 @@ export interface InputProps extends Omit<ComponentPropsWithRef<'input'>, 'classN
   isEdit?: boolean;
 }
 
-function InputIcon({ ryecon, onClick, className }: InputIconProps) {
-  const icon = <Icon ryecon={ryecon} size="xs" />;
+function InputIcon({ icon, onClick, className }: InputIconProps) {
   if (!onClick) return <span className={className}>{icon}</span>;
   return (
     <button type="button" onClick={onClick} className={className}>
@@ -64,7 +61,11 @@ export function Input({
         name={name}
         data-testid={testId}
         className={cn(
-          'flex h-9 w-full rounded-md border border-borderMain bg-bgMain px-3 py-1 text-sm text-fgMain shadow-sm transition-colors placeholder:text-fgDecorative focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-bgBrand disabled:cursor-not-allowed disabled:opacity-50',
+          // appearance-none suppresses WebKit/Chrome's native decoration on
+          // <input type="search"> (its own focus ring, clear-button styling,
+          // etc.) -- outline:0/focus-visible:outline-none alone doesn't fully
+          // remove it, which is what caused the double focus-ring bug.
+          'flex h-9 w-full appearance-none rounded-md border border-borderMain bg-bgMain px-3 py-1 text-sm text-fgMain shadow-sm transition-colors placeholder:text-fgDecorative focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-bgBrand disabled:cursor-not-allowed disabled:opacity-50',
           startIcon && 'pl-8',
           endIcon && 'pr-8',
           inputClassName,

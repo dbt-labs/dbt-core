@@ -1,11 +1,11 @@
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-
-import { RyeconMagnifyingGlass } from '@dbt-labs/sourdough';
+import { Search as SearchIcon } from 'lucide-react';
 
 import { AnalysisFilterView } from './components/AnalysisFilterView';
 import FullLineagePage from './components/FullLineagePage';
+import { FullLineagePageV2 } from './components/LineageV2/FullLineagePage';
 import { LocatePane, type LocatePaneMode } from './components/LocatePane';
 import { MacroFilterView } from './components/MacroFilterView';
 import { ModelFilterView } from './components/ModelFilterView';
@@ -144,6 +144,7 @@ export default function App() {
 
   const view = useMemo(() => viewFromPath(location.pathname), [location.pathname]);
   const isLineageRoute = location.pathname.startsWith('/lineage');
+  const isLineageV2Route = location.pathname.startsWith('/lineageV2');
   const selectedId = view.kind === 'detail' ? view.uniqueId : null;
 
   // Resolve the selected node's `{ uniqueId, resourceType }` for useAssetDetail:
@@ -377,7 +378,11 @@ export default function App() {
   }
 
   if (isLineageRoute) {
-    return (
+    return isLineageV2Route ? (
+      <Routes>
+        <Route path={ROUTES.lineageV2} element={<FullLineagePageV2 />} />
+      </Routes>
+    ) : (
       <Routes>
         <Route path={ROUTES.lineage} element={<FullLineagePage />} />
       </Routes>
@@ -624,7 +629,7 @@ function Topbar({
       </div>
       <Input
         type="search"
-        startIcon={{ ryecon: RyeconMagnifyingGlass }}
+        startIcon={{ icon: <SearchIcon className="size-3" /> }}
         placeholder="Search models, sources, tests, metrics…"
         value={search}
         onChange={(e) => onSearch(e.target.value)}

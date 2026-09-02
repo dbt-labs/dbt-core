@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_schemas::schemas::{data_tests::DataTests, dbt_column::ColumnProperties};
 
-use crate::resolve::resolve_tests::persist_generic_data_tests::ColumnTestEntry;
+use crate::resolve::resolve_tests::persist_generic_data_tests::{
+    ColumnTestEntry, LegacyTestSyntaxHandling,
+};
 
 type ModelDataTestVec = Vec<DataTests>;
 
@@ -65,6 +67,7 @@ pub fn column_tests_inner(
                                 quote: col.quote.unwrap_or(false),
                                 tests: tests.clone(),
                                 tags,
+                                legacy_syntax_handling: LegacyTestSyntaxHandling::Strict,
                             },
                         )
                     })

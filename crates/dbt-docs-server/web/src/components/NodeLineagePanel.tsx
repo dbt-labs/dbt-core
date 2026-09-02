@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Compass, Share2, X } from 'lucide-react';
 
 import { type ResourceTypeExplorer, resourceTypesWithColumns } from '@dbt-labs/dbt-dag';
-import { RyeconClose, RyeconCompass, RyeconShare } from '@dbt-labs/sourdough';
 
 import { getColumns, toRelationshipItem } from '../lib/assetView';
 import { inferResourceType } from '../lib/inferResourceType';
@@ -94,7 +94,7 @@ function PanelBody({ uniqueId, onClose }: { uniqueId: string; onClose: () => voi
         <div className="flex justify-end">
           <Button
             variant="ghost"
-            ryecon={RyeconClose}
+            icon={<X className="size-3" />}
             size="icon-lg"
             ariaLabel="Close Panel"
             tooltip="Close Panel"
@@ -147,19 +147,17 @@ function PanelBody({ uniqueId, onClose }: { uniqueId: string; onClose: () => voi
             <Button
               variant="ghost"
               size="icon-lg"
-              ryecon={RyeconCompass}
+              icon={<Compass className="size-4" />}
               ariaLabel="Open full details"
               tooltip="Open full details"
-              className="size-6 align-middle"
               onClick={() => window.location.assign(paths.details(asset.uniqueId))}
             />
             <Button
               variant="ghost"
               size="icon-lg"
-              ryecon={RyeconShare}
+              icon={<Share2 className="size-4" />}
               ariaLabel="Copy Link"
               tooltip="Copy Link"
-              className="size-6 align-middle"
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href).catch(() => {});
               }}
@@ -167,10 +165,9 @@ function PanelBody({ uniqueId, onClose }: { uniqueId: string; onClose: () => voi
             <Button
               variant="ghost"
               size="icon-lg"
-              ryecon={RyeconClose}
+              icon={<X className="size-4" />}
               ariaLabel="Close Panel"
               tooltip="Close Panel"
-              className="size-6 align-middle"
               onClick={onClose}
             />
           </>
