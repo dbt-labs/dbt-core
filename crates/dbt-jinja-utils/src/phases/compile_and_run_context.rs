@@ -35,6 +35,17 @@ pub fn configure_compile_and_run_jinja_environment(env: &mut JinjaEnv, adapter: 
     env.set_undefined_behavior(UndefinedBehavior::Lenient);
 }
 
+/// Replace a configured relation value with its cached warehouse identity when available.
+pub fn physicalize_relation_value(
+    adapter: Option<&Adapter>,
+    relation: MinijinjaValue,
+) -> Result<MinijinjaValue, MinijinjaError> {
+    match adapter {
+        Some(adapter) => adapter.physicalize_relation_value(&relation),
+        None => Ok(relation),
+    }
+}
+
 /// Build the truly-shared compile/run base ctx — values that are identical
 /// across REPL, `run-operation`, per-node compile, and per-node run renders.
 /// Leaf ctxs ([`OperationCtx`], `CompileNodeCtx`, `RunNodeCtx`) hold this via
@@ -49,6 +60,27 @@ pub fn build_compile_base_ctx(
     defer_nodes: Option<&Nodes>,
     runtime_config: Arc<DbtRuntimeConfig>,
     namespace_keys: Vec<String>,
+) -> CompileBaseCtx {
+    build_compile_base_ctx_with_adapter(
+        node_resolver,
+        package_name,
+        nodes,
+        defer_nodes,
+        runtime_config,
+        namespace_keys,
+        None,
+    )
+}
+
+/// Build the shared compile/run base with cache-backed relation resolution enabled.
+pub fn build_compile_base_ctx_with_adapter(
+    node_resolver: Arc<dyn NodeResolverTracker>,
+    package_name: &str,
+    nodes: &Nodes,
+    defer_nodes: Option<&Nodes>,
+    runtime_config: Arc<DbtRuntimeConfig>,
+    namespace_keys: Vec<String>,
+    adapter: Option<Arc<Adapter>>,
 ) -> CompileBaseCtx {
     // Wrap each per-namespace search order as `Value::from(Vec<String>)` —
     // dispatch lookup downcasts to `Vec<String>` so the underlying Object
@@ -75,13 +107,15 @@ pub fn build_compile_base_ctx(
         node_resolver.clone(),
         package_name.to_owned(),
         runtime_config.clone(),
-    );
+    )
+    .with_adapter(adapter.clone());
     let ref_value = MinijinjaValue::from_object(ref_function);
     builtins.insert("ref".to_string(), ref_value.clone());
 
     // Create source function
     let source_function =
-        SourceFunction::new_unvalidated(node_resolver.clone(), package_name.to_owned());
+        SourceFunction::new_unvalidated(node_resolver.clone(), package_name.to_owned())
+            .with_adapter(adapter);
     let source_value = MinijinjaValue::from_object(source_function);
     builtins.insert("source".to_string(), source_value.clone());
 
@@ -265,6 +299,7 @@ pub struct RefFunction {
     /// The unique_id of the node that owns this ref context.
     /// Used for O(1) defer decisions via `NodeResolver::prefers_deferred`.
     current_node_unique_id: String,
+    adapter: Option<Arc<Adapter>>,
 }
 
 impl RefFunction {
@@ -282,6 +317,7 @@ impl RefFunction {
             validation_config: DependencyValidationConfig::default(),
             microbatch_context: None,
             current_node_unique_id: String::new(),
+            adapter: None,
         }
     }
 
@@ -300,6 +336,7 @@ impl RefFunction {
             validation_config,
             microbatch_context: None,
             current_node_unique_id,
+            adapter: None,
         }
     }
 
@@ -323,6 +360,7 @@ impl RefFunction {
             validation_config,
             microbatch_context: Some(microbatch_context),
             current_node_unique_id,
+            adapter: None,
         }
     }
 
@@ -334,6 +372,11 @@ impl RefFunction {
             microbatch_context: Some(microbatch_context),
             ..self
         }
+    }
+
+    /// Use the adapter's hydrated relation cache when returning a resolved ref.
+    pub fn with_adapter(self, adapter: Option<Arc<Adapter>>) -> Self {
+        Self { adapter, ..self }
     }
 
     fn resolve_args(
@@ -454,6 +497,8 @@ impl Object for RefFunction {
                     (true, Some(deferred)) => deferred,
                     _ => relation,
                 };
+                let resolved_relation =
+                    physicalize_relation_value(self.adapter.as_deref(), resolved_relation)?;
 
                 for listener in listeners {
                     listener.on_ref_or_source_resolved(&unique_id);
@@ -544,6 +589,7 @@ pub struct SourceFunction {
     package_name: String,
     microbatch_context: Option<MicrobatchRefContext>,
     validation_config: DependencyValidationConfig,
+    adapter: Option<Arc<Adapter>>,
 }
 
 impl SourceFunction {
@@ -561,6 +607,7 @@ impl SourceFunction {
             package_name,
             microbatch_context: Some(microbatch_context),
             validation_config: DependencyValidationConfig::default(),
+            adapter: None,
         }
     }
 }
@@ -577,6 +624,7 @@ impl SourceFunction {
             package_name,
             microbatch_context: None,
             validation_config: DependencyValidationConfig::default(),
+            adapter: None,
         }
     }
 
@@ -591,7 +639,13 @@ impl SourceFunction {
             package_name,
             microbatch_context: None,
             validation_config,
+            adapter: None,
         }
+    }
+
+    /// Use the adapter's hydrated relation cache when returning a resolved source.
+    pub fn with_adapter(self, adapter: Option<Arc<Adapter>>) -> Self {
+        Self { adapter, ..self }
     }
 
     /// Validate that the referenced source is in the allowed dependencies.
@@ -683,6 +737,7 @@ impl Object for SourceFunction {
                 }
 
                 self.validate_dependency(&unique_id, &source_name, &table_name)?;
+                let relation = physicalize_relation_value(self.adapter.as_deref(), relation)?;
 
                 // Apply microbatch filtering if we have a microbatch context and
                 // the referenced source has event_time configured

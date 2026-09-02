@@ -645,7 +645,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         schema: Option<bool>,
         identifier: Option<bool>,
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
-        let defaults = self.include_policy();
+        let defaults = self.quote_policy();
         let quote_policy = Policy {
             database: database.unwrap_or(defaults.database),
             schema: schema.unwrap_or(defaults.schema),

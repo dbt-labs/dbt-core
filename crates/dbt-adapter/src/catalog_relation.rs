@@ -154,6 +154,53 @@ impl PhysicalFormatResolver for CatalogRelation {
 }
 
 impl CatalogRelation {
+    /// Whether relations in `database` must adopt identity stored by an external catalog.
+    pub fn uses_catalog_stored_relation_casing(
+        adapter_type: AdapterType,
+        database: &str,
+    ) -> AdapterResult<bool> {
+        match adapter_type {
+            AdapterType::Snowflake => {
+                let Some(catalogs) = load_catalogs::fetch_catalogs() else {
+                    return Ok(false);
+                };
+                Self::snowflake_database_uses_catalog_stored_relation_casing(
+                    catalogs.as_ref(),
+                    database,
+                    load_catalogs::fetch_use_catalogs_v2(),
+                )
+            }
+            _ => Ok(false),
+        }
+    }
+
+    fn snowflake_database_uses_catalog_stored_relation_casing(
+        catalogs: &DbtCatalogs,
+        database: &str,
+        use_catalogs_v2: bool,
+    ) -> AdapterResult<bool> {
+        if use_catalogs_v2 {
+            let view = catalogs.view_v2().map_err(|error| {
+                AdapterError::new(AdapterErrorKind::Configuration, error.to_string())
+            })?;
+            Ok(view.catalogs.iter().any(|catalog| {
+                matches!(
+                    catalog.catalog_type,
+                    CatalogType::Glue | CatalogType::IcebergRest | CatalogType::Unity
+                ) && catalog
+                    .config_block("snowflake")
+                    .and_then(|config| config.get(YmlValue::from("catalog_database")))
+                    .and_then(YmlValue::as_str)
+                    .is_some_and(|linked| linked.trim().eq_ignore_ascii_case(database))
+            }))
+        } else {
+            Ok(Self::cld_exists_in_iceberg_rest(
+                catalogs.mapping(),
+                database,
+            ))
+        }
+    }
+
     // Builder pattern setters - prefer these over introducing a new named
     // `default_catalog_relation_<adapter>_<variant>()` constructor
     pub fn with_table_format(mut self, table_format: TableFormat) -> Self {
@@ -3810,5 +3857,79 @@ mod tests {
                 Some("cool_connection")
             );
         }
+    }
+
+    fn catalogs_from_yaml(yaml: &str) -> DbtCatalogs {
+        let parsed: YmlValue = dbt_yaml::from_str(yaml).unwrap();
+        let YmlValue::Mapping(mapping, span) = parsed else {
+            panic!("expected catalogs mapping");
+        };
+        DbtCatalogs::new(mapping, span)
+    }
+
+    #[test]
+    fn legacy_catalog_linked_database_uses_stored_relation_casing() {
+        let catalogs = catalogs_from_yaml(
+            r#"
+catalogs:
+  - name: external
+    active_write_integration: rest
+    write_integrations:
+      - name: rest
+        catalog_type: iceberg_rest
+        table_format: iceberg
+        adapter_properties:
+          catalog_linked_database: mixed_db
+"#,
+        );
+
+        assert!(
+            CatalogRelation::snowflake_database_uses_catalog_stored_relation_casing(
+                &catalogs, "MIXED_DB", false,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn v2_linked_catalog_types_use_stored_relation_casing_but_horizon_does_not() {
+        let linked = catalogs_from_yaml(
+            r#"
+catalogs:
+  - name: external
+    type: unity
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: mixed_db
+"#,
+        );
+        let managed = catalogs_from_yaml(
+            r#"
+catalogs:
+  - name: managed
+    type: horizon
+    table_format: iceberg
+    config:
+      snowflake:
+        external_volume: volume
+        catalog_database: managed_db
+"#,
+        );
+
+        assert!(
+            CatalogRelation::snowflake_database_uses_catalog_stored_relation_casing(
+                &linked, "MIXED_DB", true,
+            )
+            .unwrap()
+        );
+        assert!(
+            !CatalogRelation::snowflake_database_uses_catalog_stored_relation_casing(
+                &managed,
+                "MANAGED_DB",
+                true,
+            )
+            .unwrap()
+        );
     }
 }

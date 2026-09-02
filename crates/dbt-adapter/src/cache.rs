@@ -27,6 +27,15 @@ pub struct RelationCacheEntry {
     relation_config: Option<Arc<dyn BaseRelationConfig>>,
 }
 
+#[derive(Debug, Clone)]
+/// Outcome of resolving a requested relation against cached warehouse identity.
+pub enum RelationCacheResolution {
+    Missing,
+    Exact(RelationCacheEntry),
+    Approximate(RelationCacheEntry),
+    Ambiguous(Vec<RelationCacheEntry>),
+}
+
 impl RelationCacheEntry {
     pub fn new(
         relation: Arc<dyn BaseRelation>,
@@ -81,6 +90,10 @@ pub struct RelationCache {
     // The inner key is a unique key generated from a relation's fully qualified name
     // We also differentiate using [SchemaEntry] to see what information we actually know about that schema
     schemas_and_relations: DashMap<String, SchemaEntry>,
+    /// Folded database/schema path -> the small set of cache buckets populated
+    /// for that warehouse schema. This lets catalog-linked resolution cross a
+    /// configured-case bucket without scanning unrelated schemas.
+    folded_schema_buckets: Arc<DashMap<String, BTreeSet<String>>>,
     /// Per-node set of dependents: `parent_to_children[k]` is the set of relations
     /// that would be cascade-dropped if `k` were dropped. Lifted out of
     /// `RelationCacheEntry` so the cache entry stays Clone-via-derive and
@@ -89,6 +102,7 @@ pub struct RelationCache {
     /// Whether the project defines any function (UDF) nodes. Set once, before
     /// the run starts.
     project_has_functions: Arc<AtomicBool>,
+    warned_approximate_resolutions: Arc<DashMap<String, ()>>,
 }
 
 #[derive(Debug, Default)]
@@ -118,6 +132,65 @@ impl RelationCache {
         }
     }
 
+    /// Resolves `relation` against catalog-stored path components.
+    ///
+    /// The ordinary cache key remains authoritative unless `allow_approximate`
+    /// is enabled. In that mode all case-insensitive candidates are collected
+    /// before an exact entry can be selected, so a case collision is never
+    /// hidden by an exact spelling.
+    pub fn resolve_relation(
+        &self,
+        relation: &dyn BaseRelation,
+        allow_approximate: bool,
+    ) -> RelationCacheResolution {
+        if !allow_approximate {
+            return self
+                .get_relation(relation)
+                .map(RelationCacheResolution::Exact)
+                .unwrap_or(RelationCacheResolution::Missing);
+        }
+
+        let mut candidates = HashMap::new();
+        let schema_key = Self::get_schema_cache_key_from_relation(relation);
+        let schema_keys = self
+            .folded_schema_buckets
+            .get(&Self::folded_schema_path_from_relation(relation))
+            .map(|keys| keys.clone())
+            .unwrap_or_else(|| BTreeSet::from([schema_key]));
+        for schema_key in schema_keys {
+            if let Some(schema) = self.schemas_and_relations.get(&schema_key) {
+                for entry in &schema.relations {
+                    let cached = entry.value();
+                    if relation_paths_match(cached.relation.as_ref(), relation) {
+                        candidates
+                            .entry(cached.relation.semantic_fqn())
+                            .or_insert_with(|| cached.clone());
+                    }
+                }
+            }
+        }
+
+        if candidates.len() > 1 {
+            return RelationCacheResolution::Ambiguous(candidates.into_values().collect());
+        }
+
+        let Some(candidate) = candidates.into_values().next() else {
+            return RelationCacheResolution::Missing;
+        };
+        if candidate.relation.semantic_fqn() == relation.semantic_fqn() {
+            RelationCacheResolution::Exact(candidate)
+        } else {
+            RelationCacheResolution::Approximate(candidate)
+        }
+    }
+
+    /// Returns true once per cached relation until the cache is cleared.
+    pub fn mark_approximate_resolution_warned(&self, relation: &dyn BaseRelation) -> bool {
+        self.warned_approximate_resolutions
+            .insert(relation.semantic_fqn(), ())
+            .is_none()
+    }
+
     /// Inserts a relation of [Arc<dyn BaseRelation] along with an optional <Arc<dyn BaseRelationConfig>> if applicable
     pub fn insert_relation(
         &self,
@@ -125,6 +198,7 @@ impl RelationCache {
         relation_config: Option<Arc<dyn BaseRelationConfig>>,
     ) -> Option<RelationCacheEntry> {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation.as_ref());
+        self.index_schema_bucket(relation.as_ref(), &schema_key);
         let entry = RelationCacheEntry::new(relation, relation_config);
         self.schemas_and_relations
             .entry(schema_key)
@@ -157,6 +231,14 @@ impl RelationCache {
     /// Inserts a schema and its relations into the cache
     pub fn insert_schema(&self, schema: CatalogAndSchema, relations: RelationVec) {
         let schema_key = schema.to_string();
+        self.index_schema_path(
+            &schema.resolved_catalog,
+            &schema.resolved_schema,
+            &schema_key,
+        );
+        for relation in &relations {
+            self.index_schema_bucket(relation.as_ref(), &schema_key);
+        }
         let cached_relations: DashMap<_, _> = relations
             .iter()
             .map(|r| {
@@ -198,6 +280,7 @@ impl RelationCache {
     pub fn evict_schema_for_relation(&self, relation: &dyn BaseRelation) {
         let schema_key = Self::get_schema_cache_key_from_relation(relation);
         self.schemas_and_relations.remove(&schema_key);
+        self.remove_schema_bucket_index(&schema_key);
     }
 
     /// Checks if the entire schema was cached
@@ -250,6 +333,7 @@ impl RelationCache {
 
         let original_entry = self.evict(&old_schema_key, &old_relation_key)?;
         let new_entry = RelationCacheEntry::new(new, original_entry.relation_config.clone());
+        self.index_schema_bucket(new_entry.relation.as_ref(), &new_dep_key.0);
 
         // Move the renamed node's incoming-edge set to its new key.
         if let Some(refs) = graph.parent_to_children.remove(&old_dep_key) {
@@ -347,6 +431,8 @@ impl RelationCache {
     /// Removes all entries from the cache
     pub fn clear(&self) {
         self.schemas_and_relations.clear();
+        self.folded_schema_buckets.clear();
+        self.warned_approximate_resolutions.clear();
     }
 
     /// Number of total relations cached
@@ -383,6 +469,36 @@ impl RelationCache {
         CatalogAndSchema::from(relation).to_string()
     }
 
+    fn folded_schema_path_from_relation(relation: &dyn BaseRelation) -> String {
+        let database = relation.database_as_resolved_str().unwrap_or_default();
+        let schema = relation.schema_as_resolved_str().unwrap_or_default();
+        Self::folded_schema_path(&database, &schema)
+    }
+
+    fn folded_schema_path(database: &str, schema: &str) -> String {
+        format!("{}\0{}", database.to_lowercase(), schema.to_lowercase())
+    }
+
+    fn index_schema_bucket(&self, relation: &dyn BaseRelation, schema_key: &str) {
+        let database = relation.database_as_resolved_str().unwrap_or_default();
+        let schema = relation.schema_as_resolved_str().unwrap_or_default();
+        self.index_schema_path(&database, &schema, schema_key);
+    }
+
+    fn index_schema_path(&self, database: &str, schema: &str, schema_key: &str) {
+        self.folded_schema_buckets
+            .entry(Self::folded_schema_path(database, schema))
+            .or_default()
+            .insert(schema_key.to_string());
+    }
+
+    fn remove_schema_bucket_index(&self, schema_key: &str) {
+        self.folded_schema_buckets.retain(|_, schema_keys| {
+            schema_keys.remove(schema_key);
+            !schema_keys.is_empty()
+        });
+    }
+
     /// Helper: Generates a normalized relation key by substituting the relation's own schema
     /// prefix with the provided `schema_key`.
     ///
@@ -404,6 +520,28 @@ impl RelationCache {
             relation_fqn
         }
     }
+}
+
+fn relation_paths_match(candidate: &dyn BaseRelation, requested: &dyn BaseRelation) -> bool {
+    fn component_matches(candidate: Option<&str>, requested: Option<&str>, quoted: bool) -> bool {
+        match (candidate, requested) {
+            (_, None) => true,
+            (Some(candidate), Some(requested)) if quoted => candidate == requested,
+            (Some(candidate), Some(requested)) => {
+                candidate.to_lowercase() == requested.to_lowercase()
+            }
+            (None, Some(_)) => false,
+        }
+    }
+
+    let quoting = requested.quote_policy();
+    component_matches(candidate.database(), requested.database(), quoting.database)
+        && component_matches(candidate.schema(), requested.schema(), quoting.schema)
+        && component_matches(
+            candidate.identifier(),
+            requested.identifier(),
+            quoting.identifier,
+        )
 }
 
 /// Hydrates the relation cache of the given [Adapter]
@@ -640,6 +778,173 @@ mod tests {
 
         let found_unquoted_entry = cache.get_relation(search_relation_unquoted.as_ref());
         assert!(found_unquoted_entry.is_some());
+    }
+
+    fn snowflake_relation(
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        quoting: ResolvedQuoting,
+    ) -> Arc<dyn BaseRelation> {
+        crate::relation::do_create_relation(
+            AdapterType::Snowflake,
+            database.to_string(),
+            schema.to_string(),
+            Some(identifier.to_string()),
+            None,
+            quoting,
+        )
+        .map(Arc::from)
+        .unwrap()
+    }
+
+    #[test]
+    fn catalog_stored_resolution_adopts_identifier_and_schema_case() {
+        let cache = RelationCache::default();
+        let requested =
+            snowflake_relation("CLD", "SCHEMA_A", "T_ORDERS", ResolvedQuoting::falses());
+        let stored = snowflake_relation("CLD", "schema_a", "t_orders", ResolvedQuoting::trues());
+        cache.insert_schema(CatalogAndSchema::from(requested.as_ref()), vec![stored]);
+
+        let RelationCacheResolution::Approximate(entry) =
+            cache.resolve_relation(requested.as_ref(), true)
+        else {
+            panic!("expected an approximate stored-case match");
+        };
+        assert_eq!(entry.relation().schema(), Some("schema_a"));
+        assert_eq!(entry.relation().identifier(), Some("t_orders"));
+
+        assert!(matches!(
+            cache.resolve_relation(entry.relation().as_ref(), true),
+            RelationCacheResolution::Exact(_)
+        ));
+    }
+
+    #[test]
+    fn same_spelling_with_different_identifier_semantics_is_approximate() {
+        let cache = RelationCache::default();
+        let requested = snowflake_relation(
+            "CLD",
+            "SCHEMA_A",
+            "t_orders",
+            ResolvedQuoting {
+                database: true,
+                schema: true,
+                identifier: false,
+            },
+        );
+        let stored = snowflake_relation("CLD", "SCHEMA_A", "t_orders", ResolvedQuoting::trues());
+        cache.insert_schema(CatalogAndSchema::from(requested.as_ref()), vec![stored]);
+
+        assert!(matches!(
+            cache.resolve_relation(requested.as_ref(), true),
+            RelationCacheResolution::Approximate(_)
+        ));
+    }
+
+    #[test]
+    fn folded_schema_index_tracks_rename_and_schema_eviction() {
+        let cache = RelationCache::default();
+        let old = snowflake_relation("CLD", "SCHEMA_A", "T_ORDERS", ResolvedQuoting::falses());
+        let new = snowflake_relation("CLD", "schema_b", "t_orders", ResolvedQuoting::trues());
+        cache.insert_relation(old.clone(), None);
+
+        cache
+            .rename_relation(old.as_ref(), new.clone())
+            .expect("old relation should be cached");
+        assert!(matches!(
+            cache.resolve_relation(new.as_ref(), true),
+            RelationCacheResolution::Exact(_)
+        ));
+
+        cache.evict_schema_for_relation(new.as_ref());
+        assert!(matches!(
+            cache.resolve_relation(new.as_ref(), true),
+            RelationCacheResolution::Missing
+        ));
+        assert!(
+            cache
+                .folded_schema_buckets
+                .get(&RelationCache::folded_schema_path_from_relation(
+                    new.as_ref()
+                ))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn catalog_stored_resolution_rejects_case_variants_before_exact_match() {
+        let cache = RelationCache::default();
+        let requested =
+            snowflake_relation("CLD", "SCHEMA_A", "T_ORDERS", ResolvedQuoting::falses());
+        let exact = snowflake_relation("CLD", "SCHEMA_A", "T_ORDERS", ResolvedQuoting::trues());
+        let variant = snowflake_relation("CLD", "SCHEMA_A", "t_orders", ResolvedQuoting::trues());
+        cache.insert_schema(
+            CatalogAndSchema::from(requested.as_ref()),
+            vec![exact, variant],
+        );
+
+        let RelationCacheResolution::Ambiguous(entries) =
+            cache.resolve_relation(requested.as_ref(), true)
+        else {
+            panic!("case variants must be rejected before selecting the exact spelling");
+        };
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn explicit_identifier_quoting_selects_only_the_exact_identity() {
+        let cache = RelationCache::default();
+        let requested = snowflake_relation(
+            "CLD",
+            "SCHEMA_A",
+            "T_ORDERS",
+            ResolvedQuoting {
+                database: false,
+                schema: false,
+                identifier: true,
+            },
+        );
+        let exact = snowflake_relation("CLD", "SCHEMA_A", "T_ORDERS", ResolvedQuoting::trues());
+        let variant = snowflake_relation("CLD", "SCHEMA_A", "t_orders", ResolvedQuoting::trues());
+        cache.insert_schema(
+            CatalogAndSchema::from(requested.as_ref()),
+            vec![exact, variant],
+        );
+
+        assert!(matches!(
+            cache.resolve_relation(requested.as_ref(), true),
+            RelationCacheResolution::Exact(_)
+        ));
+    }
+
+    #[test]
+    fn quoted_identity_does_not_strip_literal_quote_characters() {
+        let cache = RelationCache::default();
+        let requested =
+            snowflake_relation("CLD", "SCHEMA_A", "\"t_orders\"", ResolvedQuoting::trues());
+        let stored = snowflake_relation("CLD", "SCHEMA_A", "t_orders", ResolvedQuoting::trues());
+        cache.insert_schema(CatalogAndSchema::from(requested.as_ref()), vec![stored]);
+
+        assert!(matches!(
+            cache.resolve_relation(requested.as_ref(), true),
+            RelationCacheResolution::Missing
+        ));
+    }
+
+    #[test]
+    fn approximate_matching_is_disabled_for_regular_databases() {
+        let cache = RelationCache::default();
+        let requested =
+            snowflake_relation("REGULAR", "SCHEMA_A", "T_ORDERS", ResolvedQuoting::falses());
+        let stored =
+            snowflake_relation("REGULAR", "SCHEMA_A", "t_orders", ResolvedQuoting::trues());
+        cache.insert_schema(CatalogAndSchema::from(requested.as_ref()), vec![stored]);
+
+        assert!(matches!(
+            cache.resolve_relation(requested.as_ref(), false),
+            RelationCacheResolution::Missing
+        ));
     }
 
     #[test]

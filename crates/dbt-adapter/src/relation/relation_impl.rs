@@ -704,6 +704,7 @@ impl BaseRelation for Relation {
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
         .with_temporary(self.temporary)
+        .with_table_format(self.table_format)
         // FIXME: no need to validate here since the parent relation is already valid.
         .validate()?;
 
@@ -711,6 +712,8 @@ impl BaseRelation for Relation {
         relation.create_constraints = self.create_constraints.clone();
         relation.alter_constraints = self.alter_constraints.clone();
         relation.external = self.external.clone();
+        relation.location = self.location.clone();
+        relation.native_schema = self.native_schema.clone();
         relation.is_parse_time = self.is_parse_time;
 
         Ok(Arc::new(relation))
@@ -729,10 +732,14 @@ impl BaseRelation for Relation {
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
         .with_temporary(self.temporary)
+        .with_table_format(self.table_format)
         // FIXME: no need to validate here since the parent relation is already valid.
         .validate()?;
         relation.create_constraints = self.create_constraints.clone();
         relation.alter_constraints = self.alter_constraints.clone();
+        relation.external = self.external.clone();
+        relation.location = self.location.clone();
+        relation.native_schema = self.native_schema.clone();
         relation.is_parse_time = self.is_parse_time;
         Ok(Arc::new(relation))
     }
@@ -1200,6 +1207,7 @@ impl BaseRelation for Relation {
             .with_metadata(self.metadata.clone())
             .with_is_delta(self.is_delta)
             .with_temporary(self.temporary)
+            .with_table_format(self.table_format)
             .validate()?;
         Ok(Arc::new(relation))
     }

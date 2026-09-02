@@ -1,4 +1,4 @@
-use crate::cache::RelationCache;
+use crate::cache::{RelationCache, RelationCacheResolution};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 use crate::engine::{AdbcEngine, Options};
@@ -25,7 +25,8 @@ use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
-use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_common::{AdapterError, AdapterErrorKind, ErrorCode, FsResult};
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, PartitionConfig};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
@@ -1413,27 +1414,31 @@ impl Adapter {
         schema: &str,
         identifier: &str,
         needs_information: bool,
+        requested_relation: Option<Arc<dyn BaseRelation>>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 // Skip cache in replay mode
                 let is_replay = adapter.as_replay().is_some();
 
-                let temp_relation = crate::relation::do_create_relation(
-                    adapter.adapter_type(),
-                    database.to_string(),
-                    schema.to_string(),
-                    Some(identifier.to_string()),
-                    None,
-                    adapter.quoting(),
-                )?;
+                let temp_relation = match requested_relation {
+                    Some(relation) => relation,
+                    None => Arc::from(crate::relation::do_create_relation(
+                        adapter.adapter_type(),
+                        database.to_string(),
+                        schema.to_string(),
+                        Some(identifier.to_string()),
+                        None,
+                        adapter.quoting(),
+                    )?),
+                };
 
                 let maybe_cache_result = if is_replay {
                     None
                 } else {
                     // Cache hit
                     if let Some(cache_result) =
-                        self.get_relation_value_from_cache(temp_relation.as_ref())
+                        self.get_relation_value_from_cache(temp_relation.as_ref())?
                     {
                         Some(cache_result)
                     } else {
@@ -1494,8 +1499,8 @@ impl Adapter {
                                     ),
                                 }
 
-                                self.get_relation_value_from_cache(temp_relation.as_ref())
-                                    .or(Some(none_value()))
+                                self.get_relation_value_from_cache(temp_relation.as_ref())?
+                                    .or(Some((none_value(), None)))
                             } else {
                                 None
                             }
@@ -1508,12 +1513,8 @@ impl Adapter {
                 // Return early when cache is sufficient:
                 // - Relation doesn't exist (contains_full_schema): return none_value
                 // - Cache hit with relation: return cached value unless needs_information && !has_information
-                if let Some(cache_result) = maybe_cache_result {
-                    if let Some(cached_entry) = adapter
-                        .engine()
-                        .relation_cache()
-                        .get_relation(temp_relation.as_ref())
-                    {
+                if let Some((cache_result, cached_entry)) = maybe_cache_result {
+                    if let Some(cached_entry) = cached_entry {
                         let can_use_cache =
                             !needs_information || cached_entry.relation().has_information();
                         if can_use_cache {
@@ -3900,9 +3901,20 @@ impl Adapter {
                 let needs_information = iter
                     .next_kwarg::<Option<bool>>("needs_information")?
                     .unwrap_or(false);
+                let requested_relation = iter
+                    .next_kwarg::<Option<&Value>>("relation")?
+                    .map(downcast_value_to_dyn_base_relation)
+                    .transpose()?;
                 iter.finish()?;
 
-                self.get_relation(state, database, schema, identifier, needs_information)
+                self.get_relation(
+                    state,
+                    database,
+                    schema,
+                    identifier,
+                    needs_information,
+                    requested_relation,
+                )
             }
             "get_columns_in_relation" => {
                 let iter = ArgsIter::new(name, &["relation"], args);
@@ -4581,17 +4593,83 @@ impl Object for Adapter {
 }
 
 impl Adapter {
-    fn get_relation_value_from_cache(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
-        let relation_cache = self.engine().relation_cache();
-        if let Some(cached_entry) = relation_cache.get_relation(temp_relation) {
-            Some(RelationObject::new(cached_entry.relation()).into_value())
+    pub fn physicalize_relation_value(&self, relation: &Value) -> Result<Value, minijinja::Error> {
+        let Some(relation_object) = relation.downcast_object_ref::<RelationObject>() else {
+            return Ok(relation.clone());
+        };
+        let requested = relation_object.inner();
+        match self.resolve_cached_relation(requested.as_ref())? {
+            Some(entry) => Ok(relation_object.with_relation(entry.relation()).into_value()),
+            None => Ok(relation.clone()),
         }
-        // If we have captured the entire schema previously, we can check for non-existence
-        // In these cases, return early with a None value
-        else if relation_cache.contains_full_schema_for_relation(temp_relation) {
-            Some(none_value())
+    }
+
+    fn resolve_cached_relation(
+        &self,
+        requested: &dyn BaseRelation,
+    ) -> Result<Option<crate::cache::RelationCacheEntry>, minijinja::Error> {
+        let allow_approximate = CatalogRelation::uses_catalog_stored_relation_casing(
+            self.adapter_type(),
+            requested.database().unwrap_or_default(),
+        )?;
+        match self
+            .engine()
+            .relation_cache()
+            .resolve_relation(requested, allow_approximate)
+        {
+            RelationCacheResolution::Exact(entry) => Ok(Some(entry)),
+            RelationCacheResolution::Approximate(entry) => {
+                let relation = entry.relation();
+                if self
+                    .engine()
+                    .relation_cache()
+                    .mark_approximate_resolution_warned(relation.as_ref())
+                {
+                    emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!(
+                            "dbt resolved '{}' to {}, which is stored under a different case in the catalog-linked database. dbt will manage that object. If it is not meant to be managed by dbt, rename one of them or set an explicit `alias` on the model.",
+                            requested.identifier().unwrap_or_default(),
+                            relation.render_self_as_str(),
+                        ),
+                    );
+                }
+                Ok(Some(entry))
+            }
+            RelationCacheResolution::Missing => Ok(None),
+            RelationCacheResolution::Ambiguous(entries) => {
+                let mut candidates = entries
+                    .iter()
+                    .map(|entry| entry.relation().render_self_as_str())
+                    .collect::<Vec<_>>();
+                candidates.sort();
+                Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!(
+                        "Cannot resolve '{}' in catalog-linked database '{}': the catalog holds more than one relation whose database, schema, and identifier differ only by case: {}. dbt cannot tell which one you mean, and choosing either could read or overwrite the wrong object. Rename or remove one of them, or set an explicit `alias` and enable `quoting` for the identifier.",
+                        requested.identifier().unwrap_or_default(),
+                        requested.database().unwrap_or_default(),
+                        candidates.join(", ")
+                    ),
+                ))
+            }
+        }
+    }
+
+    fn get_relation_value_from_cache(
+        &self,
+        temp_relation: &dyn BaseRelation,
+    ) -> Result<Option<(Value, Option<crate::cache::RelationCacheEntry>)>, minijinja::Error> {
+        let relation_cache = self.engine().relation_cache();
+        if let Some(entry) = self.resolve_cached_relation(temp_relation)? {
+            Ok(Some((
+                RelationObject::new(entry.relation()).into_value(),
+                Some(entry),
+            )))
+        } else if relation_cache.contains_full_schema_for_relation(temp_relation) {
+            Ok(Some((none_value(), None)))
         } else {
-            None
+            Ok(None)
         }
     }
 

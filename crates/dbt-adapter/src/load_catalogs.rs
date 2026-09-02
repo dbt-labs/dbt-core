@@ -22,6 +22,14 @@ pub fn fetch_catalogs() -> Option<Arc<DbtCatalogs>> {
     }
 }
 
+/// Clear project-scoped catalog definitions before loading another project.
+pub fn clear_catalogs() {
+    *match CATALOGS.write() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    } = None;
+}
+
 pub fn fetch_use_catalogs_v2() -> bool {
     match USE_CATALOGS_V2.read() {
         Ok(g) => *g,

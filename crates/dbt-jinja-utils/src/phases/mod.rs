@@ -7,6 +7,6 @@ mod utils;
 
 pub use compile_and_run_context::{
     MacroLookupContext, MicrobatchRefContext, RefFunction, SourceFunction, build_compile_base_ctx,
-    build_operation_context, build_operation_context_btreemap,
+    build_compile_base_ctx_with_adapter, build_operation_context, build_operation_context_btreemap,
     configure_compile_and_run_jinja_environment,
 };

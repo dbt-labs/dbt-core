@@ -121,7 +121,7 @@ pub fn prepare_microbatch_batches(
             ExecutionPhase::Run,
             sql_header,
             ctx.runtime_config().dependencies.keys().cloned().collect(),
-        )
+        )?
         .0,
     );
 

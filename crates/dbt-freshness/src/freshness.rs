@@ -381,6 +381,7 @@ async fn calculate_freshness_common(
     dependencies: BTreeSet<String>,
     error_message: &str,
 ) -> FsResult<FreshnessResult> {
+    let context_adapter = jinja_env.get_adapter();
     let context = build_run_node_ctx(
         node,
         &node.serialized_config(),
@@ -391,7 +392,8 @@ async fn calculate_freshness_common(
         ExecutionPhase::Run,
         None,
         dependencies,
-    );
+        context_adapter.as_deref(),
+    )?;
 
     let expr = jinja_env.compile_expression(macro_expr)?;
     let table = expr

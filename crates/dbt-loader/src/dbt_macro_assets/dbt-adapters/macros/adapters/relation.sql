@@ -86,7 +86,8 @@
   {% do return(adapter.get_relation(
     database=relation.database,
     schema=relation.schema,
-    identifier=relation.identifier
+    identifier=relation.identifier,
+    relation=relation
   )) -%}
 {% endmacro %}
 
