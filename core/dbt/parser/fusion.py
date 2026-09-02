@@ -10,6 +10,7 @@ resulting manifest artifacts.
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import shlex
@@ -19,9 +20,8 @@ import sysconfig
 import tempfile
 import threading
 import time
-from collections import deque
 from pathlib import Path
-from typing import TYPE_CHECKING, Deque, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from dbt.artifacts.exceptions import IncompatibleSchemaError
 from dbt.artifacts.schemas.manifest import WritableManifest
@@ -40,12 +40,6 @@ from dbt_common.events.types import Note
 
 if TYPE_CHECKING:
     from dbt.config import RuntimeConfig
-
-# Trailing output lines (stdout+stderr, interleaved by arrival order) kept in
-# memory and surfaced in FusionParserError on a nonzero exit, so the failure
-# reason is visible even to a consumer that only sees the raised exception
-# rather than the live event stream (e.g. dbt Studio's error surfacing).
-_OUTPUT_TAIL_LINES = 40
 
 
 def parse_with_fusion(
@@ -243,6 +237,12 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
       --project-dir, --profiles-dir, --profile, --target,
       --target-path, --vars, --packages-install-path
 
+    Also always forwards --log-format json so the subprocess emits structured
+    per-line JSON on stdout/stderr instead of human-formatted text. This is not
+    a user-configurable passthrough (unlike the flags above) — it's how
+    _run_fusion talks to the subprocess, so it's added unconditionally rather
+    than gated on a dbt-core flag.
+
     When target_path_override is provided, it replaces the user's --target-path
     so the fusion parser writes its handoff manifest where dbt expects it (a
     temp dir).
@@ -295,6 +295,12 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     if invocation_id:
         forwarded += ["--invocation-id", str(invocation_id)]
 
+    # json-compat output lets _run_fusion re-level each line by its real
+    # severity instead of a single hardcoded level per stream. Request full
+    # verbosity here and let dbt-core's own event system filter by level,
+    # rather than also forwarding a --log-level and double-filtering.
+    forwarded += ["--log-format", "json"]
+
     return base + forwarded
 
 
@@ -340,6 +346,14 @@ def _fusion_subprocess_env() -> dict:
     return env
 
 
+_FUSION_JSON_LEVELS = {
+    "error": EventLevel.ERROR,
+    "warn": EventLevel.WARN,
+    "info": EventLevel.INFO,
+    "debug": EventLevel.DEBUG,
+}
+
+
 def _run_fusion(argv: List[str]) -> None:
     """Run the fusion parser subprocess, capturing stdout/stderr and re-emitting
     each line live through dbt-core's event system as it arrives.
@@ -351,13 +365,24 @@ def _run_fusion(argv: List[str]) -> None:
     something was reading the raw inherited file descriptors directly (true
     for a CLI terminal, not true inside Studio's execution model).
 
-    The fusion parser doesn't yet emit a structured (JSON/OTel) log stream
-    dbt-core can parse, so lines are re-emitted verbatim as Note events —
-    stdout at INFO, stderr at WARN — rather than mapped to fusion's own
-    per-line levels.
-    TODO: once the fusion parser ships that structured log stream and the
-    Python library to decode it lands, replace this raw re-emission with a
-    real parse into properly leveled/structured dbt events.
+    _build_argv requests --log-format json, so each line is normally a JSON
+    object with the fusion-assigned severity at `info.level` and message at
+    `info.msg`; those are re-emitted as a Note at the mapped level rather than
+    the stream's fallback level. json-compat is not a stable, fully-supported
+    fusion contract (schema/fields/level strings may change between fusion
+    releases without notice), and fusion emits plain text before its JSON
+    logger initializes (e.g. CLI-arg errors) or after a panic — so any line
+    that isn't valid JSON, or is missing the fields above, falls back to
+    today's behavior: re-emitted verbatim at the stream's fallback level
+    (stdout at INFO, stderr at WARN).
+
+    On a nonzero exit, raises FusionParserError with just the exit code;
+    the actual failure detail was already streamed live as Note events
+    above, so it isn't duplicated into the exception message.
+    TODO: once the Python library to decode fusion's native OTel log stream
+    lands, replace this json-compat parsing with a real parse into properly
+    leveled/structured dbt events (also preserving info.code/info.name,
+    which json-compat exposes but this still discards into a flat Note).
     """
     try:
         proc = subprocess.Popen(
@@ -375,15 +400,19 @@ def _run_fusion(argv: List[str]) -> None:
             f"point to an alternate engine binary."
         ) from e
 
-    tail: Deque[str] = deque(maxlen=_OUTPUT_TAIL_LINES)
-    tail_lock = threading.Lock()
-
-    def _pump(stream, level: EventLevel) -> None:
+    def _pump(stream, fallback_level: EventLevel) -> None:
         for raw_line in stream:
             line = raw_line.rstrip("\n")
-            with tail_lock:
-                tail.append(line)
-            fire_event(Note(msg=line), level=level)
+            level = fallback_level
+            msg = line
+            try:
+                parsed = json.loads(line)
+                info = parsed["info"]
+                msg = info["msg"]
+                level = _FUSION_JSON_LEVELS.get(info.get("level"), fallback_level)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
+            fire_event(Note(msg=msg), level=level)
 
     # Separate threads per stream avoid the deadlock a single blocking
     # readline() would hit if the other stream fills its OS pipe buffer.
@@ -398,10 +427,8 @@ def _run_fusion(argv: List[str]) -> None:
     returncode = proc.wait()
 
     if returncode != 0:
-        with tail_lock:
-            excerpt = "\n".join(tail)
         raise FusionParserError(
-            f"Fusion parser failed (exit {returncode}).\n{excerpt}",
+            f"Fusion parser failed (exit {returncode}); see parser output above.",
             returncode=returncode,
         )
 

@@ -100,7 +100,12 @@ class TestBuildArgv:
             yield
 
     def test_default_command_no_forwards(self):
-        assert _build_argv(_flags()) == ["dbt-core-experimental-parser", "parse"]
+        assert _build_argv(_flags()) == [
+            "dbt-core-experimental-parser",
+            "parse",
+            "--log-format",
+            "json",
+        ]
 
     def test_forwards_all_known_flags(self):
         argv = _build_argv(
@@ -128,16 +133,31 @@ class TestBuildArgv:
         i = argv.index("--vars")
         assert "k" in argv[i + 1] and "v" in argv[i + 1]
 
+    def test_forwards_log_format_json(self):
+        """--log-format json is always forwarded (not user-configurable) so
+        _run_fusion can parse each line's real severity instead of using a
+        single hardcoded level per stream."""
+        argv = _build_argv(_flags())
+        i = argv.index("--log-format")
+        assert argv[i + 1] == "json"
+
     def test_custom_command_split_with_shlex(self):
         argv = _build_argv(_flags(V2_PARSER="uv run dbt-core-experimental-parser parse"))
-        assert argv == ["uv", "run", "dbt-core-experimental-parser", "parse"]
+        assert argv == [
+            "uv",
+            "run",
+            "dbt-core-experimental-parser",
+            "parse",
+            "--log-format",
+            "json",
+        ]
 
     def test_expands_tilde_in_v2_parser_path(self):
         # shlex.split leaves ~ literal; users expect shell-style expansion when
         # pointing --v2-parser at a binary under their home directory.
         home = os.path.expanduser("~")
         argv = _build_argv(_flags(V2_PARSER="~/bin/my-parser parse"))
-        assert argv == [f"{home}/bin/my-parser", "parse"]
+        assert argv == [f"{home}/bin/my-parser", "parse", "--log-format", "json"]
 
     def test_target_path_override_replaces_user_value(self):
         argv = _build_argv(_flags(TARGET_PATH="user/target"), target_path_override="/tmp/handoff")
@@ -279,26 +299,9 @@ class TestParseWithFusion:
             with pytest.raises(FusionParserError, match="exit 2"):
                 parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
 
-    def test_nonzero_exit_error_includes_captured_output(self, tmp_path: Path, _patch_fusion_deps):
-        """Captured stdout/stderr must be embedded in the raised error so the
-        failure reason is visible even to a caller that only sees the exception,
-        not just the live event stream (e.g. dbt Studio's error surfacing)."""
-        with mock.patch(
-            "dbt.parser.fusion.subprocess.Popen",
-            side_effect=_fake_parser(
-                manifest_text=None,
-                returncode=1,
-                stdout_lines=["compiling model foo"],
-                stderr_lines=["panic: division by zero"],
-            ),
-        ):
-            with pytest.raises(FusionParserError, match="panic: division by zero"):
-                parse_with_fusion(self._runtime_config(tmp_path), write=True, write_json=True)
-
-    def test_output_lines_reemitted_as_note_events(self, tmp_path: Path, _patch_fusion_deps):
-        """stdout/stderr lines must be re-emitted through dbt-core's event
-        system (as Note events) so they reach any consumer of that stream
-        (e.g. dbt Studio), not just a raw inherited terminal fd."""
+    def _run_and_capture_notes(self, tmp_path: Path, stdout_lines=(), stderr_lines=()):
+        """Run parse_with_fusion against fake stdout/stderr lines and return
+        the (msg, level) pairs of every Note event fired."""
         events: list = []
         levels: list = []
 
@@ -310,8 +313,8 @@ class TestParseWithFusion:
             "dbt.parser.fusion.subprocess.Popen",
             side_effect=_fake_parser(
                 manifest_text=json.dumps({"metadata": {}}),
-                stdout_lines=["compiling model foo"],
-                stderr_lines=["warning: deprecated config"],
+                stdout_lines=stdout_lines,
+                stderr_lines=stderr_lines,
             ),
         ), mock.patch(
             "dbt.parser.fusion._load_writable_manifest", return_value=mock.MagicMock()
@@ -322,15 +325,60 @@ class TestParseWithFusion:
         ):
             parse_with_fusion(self._runtime_config(tmp_path), write=False, write_json=False)
 
-        notes = [(e.msg, lvl) for e, lvl in zip(events, levels) if isinstance(e, Note)]
-        assert (
-            "compiling model foo",
-            EventLevel.INFO,
-        ) in notes
-        assert (
-            "warning: deprecated config",
-            EventLevel.WARN,
-        ) in notes
+        return [(e.msg, lvl) for e, lvl in zip(events, levels) if isinstance(e, Note)]
+
+    def test_output_lines_reemitted_as_note_events(self, tmp_path: Path, _patch_fusion_deps):
+        """Non-JSON stdout/stderr lines must still be re-emitted through
+        dbt-core's event system (as Note events) at the stream's fallback
+        level, so they reach any consumer of that stream (e.g. dbt Studio),
+        not just a raw inherited terminal fd. This is the json-compat
+        fallback path: plain-text lines (e.g. pre-JSON-logger clap/panic
+        output) aren't dropped just because they aren't valid JSON."""
+        notes = self._run_and_capture_notes(
+            tmp_path,
+            stdout_lines=["compiling model foo"],
+            stderr_lines=["warning: deprecated config"],
+        )
+        assert ("compiling model foo", EventLevel.INFO) in notes
+        assert ("warning: deprecated config", EventLevel.WARN) in notes
+
+    @pytest.mark.parametrize(
+        "fusion_level, expected_level",
+        [
+            ("error", EventLevel.ERROR),
+            ("warn", EventLevel.WARN),
+            ("info", EventLevel.INFO),
+            ("debug", EventLevel.DEBUG),
+        ],
+    )
+    def test_json_line_reemitted_with_mapped_level(
+        self, tmp_path: Path, _patch_fusion_deps, fusion_level, expected_level
+    ):
+        """A json-compat line's own info.level must override the stream's
+        fallback level (e.g. an "error" on stdout is still fired as ERROR,
+        not silently downgraded to stdout's INFO fallback)."""
+        line = json.dumps({"info": {"level": fusion_level, "msg": "boom"}})
+        notes = self._run_and_capture_notes(tmp_path, stdout_lines=[line])
+        assert ("boom", expected_level) in notes
+
+    def test_json_line_unknown_level_falls_back(self, tmp_path: Path, _patch_fusion_deps):
+        """An info.level string outside the known vocabulary must not raise —
+        json-compat isn't a stable contract, so an unrecognized level falls
+        back to the stream's default rather than crashing the parse."""
+        line = json.dumps({"info": {"level": "trace", "msg": "boom"}})
+        notes = self._run_and_capture_notes(tmp_path, stdout_lines=[line])
+        assert ("boom", EventLevel.INFO) in notes
+
+    def test_non_json_line_falls_back_to_raw_note(self, tmp_path: Path, _patch_fusion_deps):
+        notes = self._run_and_capture_notes(tmp_path, stdout_lines=["not json at all"])
+        assert ("not json at all", EventLevel.INFO) in notes
+
+    def test_json_line_missing_info_or_msg_falls_back(self, tmp_path: Path, _patch_fusion_deps):
+        """json-compat isn't a guaranteed contract; a schema change that drops
+        or renames fields must degrade to the raw line rather than crash."""
+        line = json.dumps({"unexpected": "shape"})
+        notes = self._run_and_capture_notes(tmp_path, stderr_lines=[line])
+        assert (line, EventLevel.WARN) in notes
 
     def test_missing_manifest_after_success_raises(self, tmp_path: Path, _patch_fusion_deps):
         """Parser exits 0 but writes nothing — must raise, not silently load a stale file."""
