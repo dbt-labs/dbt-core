@@ -1,7 +1,0 @@
-kind: Features
-body: Add Databricks query tags with automatic dbt metadata and profile- and model-level configuration.
-time: 2026-07-28T00:00:00.000000+05:30
-custom:
-    author: sd-db
-    issue: "15701"
-    project: dbt-core

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: The oss CLI now builds as a binary named `dbt` instead of `dbt-sa-cli` (build output is at `target/<profile>/dbt`)
-time: 2026-08-11T14:37:16.63007+05:30
-custom:
-    author: ""
-    issue: ""
-    project: dbt-core
