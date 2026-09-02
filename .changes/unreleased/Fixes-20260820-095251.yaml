@@ -1,8 +1,0 @@
-kind: Fixes
-body: Stop the v2 parser emitting a null `macros` key for unit tests that set `overrides`
-  without `macros`, which made dbt-core fail to deserialize the fusion-produced manifest
-time: 2026-08-20T09:52:51.000000Z
-custom:
-    author: CallumFriend-MP
-    issue: "16009"
-    project: dbt-core
