@@ -86,12 +86,26 @@ fn parse_auth<'a>(
     }
 }
 
+/// Production dbt Compute service, used when `base_url` is absent from both
+/// the profile and the `DBT_COMPUTE_BASE_URL` environment variable.
+const DEFAULT_BASE_URL: &str = "https://api.lake-compute.fivetran.com/";
+
 fn apply_connection_args(
     config: &AdapterConfig,
     mut builder: DatabaseBuilder,
     _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<DatabaseBuilder, AuthError> {
-    builder.with_named_option(lake_compute::BASE_URL, config.require_str("base_url")?)?;
+    // Each branch hands its own natively-typed value (borrowed profile
+    // string, owned env var, or `'static` default) straight to
+    // `with_named_option`, which is the actual `impl Into<String>` boundary
+    // -- avoids unifying into an owned `String` any earlier than that.
+    if let Some(base_url) = config.get_str("base_url") {
+        builder.with_named_option(lake_compute::BASE_URL, base_url)?;
+    } else if let Ok(base_url) = std::env::var("DBT_COMPUTE_BASE_URL") {
+        builder.with_named_option(lake_compute::BASE_URL, base_url)?;
+    } else {
+        builder.with_named_option(lake_compute::BASE_URL, DEFAULT_BASE_URL)?;
+    }
 
     if let Some(bundle) = config.get_str("catalog_bundle") {
         builder.with_named_option(lake_compute::CATALOG_BUNDLE, bundle)?;
@@ -171,10 +185,39 @@ mod tests {
     }
 
     #[test]
-    fn missing_base_url_errors() {
-        let err = LakeComputeAuth::new(Box::new(crate::NoopAuthWarningPrinter))
-            .configure(&AdapterConfig::new(Mapping::new()))
-            .expect_err("expected missing base_url error");
-        assert!(matches!(err, AuthError::YAML(_)), "got {err:?}");
+    fn missing_base_url_defaults_to_production() {
+        // SAFETY: single-threaded test; no other test in this module reads
+        // or writes `DBT_COMPUTE_BASE_URL`.
+        unsafe {
+            std::env::remove_var("DBT_COMPUTE_BASE_URL");
+        }
+        let builder = configure(Mapping::from_iter([
+            ("method".into(), "api_key".into()),
+            ("api_key".into(), "secret-key".into()),
+        ]));
+        assert_eq!(
+            other_option_value(&builder, lake_compute::BASE_URL),
+            Some(DEFAULT_BASE_URL)
+        );
+    }
+
+    #[test]
+    fn base_url_env_var_overrides_default() {
+        // SAFETY: single-threaded test; restored immediately after use.
+        #[allow(clippy::disallowed_methods)]
+        unsafe {
+            std::env::set_var("DBT_COMPUTE_BASE_URL", "https://env.example");
+        }
+        let builder = configure(Mapping::from_iter([
+            ("method".into(), "api_key".into()),
+            ("api_key".into(), "secret-key".into()),
+        ]));
+        unsafe {
+            std::env::remove_var("DBT_COMPUTE_BASE_URL");
+        }
+        assert_eq!(
+            other_option_value(&builder, lake_compute::BASE_URL),
+            Some("https://env.example")
+        );
     }
 }
