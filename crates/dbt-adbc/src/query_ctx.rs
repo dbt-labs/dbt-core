@@ -12,6 +12,12 @@ pub struct QueryCtx {
     desc: Option<String>,
     // Whether the query is for metadata fetch (schema hydration)
     metadata: bool,
+    // dbt project (package) name issuing the query, for usage attribution.
+    project_name: Option<String>,
+    // dbt model (node) name issuing the query, for usage attribution.
+    model_name: Option<String>,
+    // dbt invocation id issuing the query, for usage attribution.
+    run_id: Option<String>,
 }
 
 impl QueryCtx {
@@ -23,6 +29,9 @@ impl QueryCtx {
             phase: None,
             desc: Some(description.into()),
             metadata: false,
+            project_name: None,
+            model_name: None,
+            run_id: None,
         }
     }
 
@@ -34,6 +43,9 @@ impl QueryCtx {
             phase: None,
             desc: None,
             metadata: true,
+            project_name: None,
+            model_name: None,
+            run_id: None,
         }
     }
 
@@ -76,6 +88,24 @@ impl QueryCtx {
 
     pub fn with_phase(mut self, phase: &'static str) -> Self {
         self.phase = Some(phase);
+        self
+    }
+
+    /// Set the dbt project (package) name issuing this query.
+    pub fn with_project_name(mut self, project_name: impl Into<String>) -> Self {
+        self.project_name = Some(project_name.into());
+        self
+    }
+
+    /// Set the dbt model (node) name issuing this query.
+    pub fn with_model_name(mut self, model_name: impl Into<String>) -> Self {
+        self.model_name = Some(model_name.into());
+        self
+    }
+
+    /// Set the dbt invocation id issuing this query.
+    pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
+        self.run_id = Some(run_id.into());
         self
     }
 
@@ -126,6 +156,21 @@ impl QueryCtx {
     /// Returns the Execution Phase
     pub fn phase(&self) -> Option<&'static str> {
         self.phase
+    }
+
+    /// Returns the dbt project (package) name issuing this query, if set.
+    pub fn project_name(&self) -> Option<&String> {
+        self.project_name.as_ref()
+    }
+
+    /// Returns the dbt model (node) name issuing this query, if set.
+    pub fn model_name(&self) -> Option<&String> {
+        self.model_name.as_ref()
+    }
+
+    /// Returns the dbt invocation id issuing this query, if set.
+    pub fn run_id(&self) -> Option<&String> {
+        self.run_id.as_ref()
     }
 }
 
