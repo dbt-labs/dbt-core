@@ -2,10 +2,10 @@
 
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
-use dbt_adapter::{AdapterType, load_store::ResultStore};
+use dbt_adapter::{Adapter, AdapterType, load_store::ResultStore};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
-use dbt_common::{FsResult, dashmap::DashMap, serde_utils::convert_yml_to_value_map};
+use dbt_common::{FsError, FsResult, dashmap::DashMap, serde_utils::convert_yml_to_value_map};
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, common::DbtMaterialization, telemetry::NodeType},
@@ -23,7 +23,9 @@ use dbt_jinja_ctx::{
     CompileNodeCtx, JinjaObject, MacroLookupContext, to_jinja_btreemap, to_model_context_map,
 };
 
-use crate::phases::compile_and_run_context::{FunctionFunction, SourceFunction};
+use crate::phases::compile_and_run_context::{
+    FunctionFunction, SourceFunction, physicalize_relation_value,
+};
 use dbt_schemas::schemas::project::ConfigKeys;
 
 use super::super::compile_and_run_context::RefFunction;
@@ -178,6 +180,9 @@ where
         BTreeMap::new()
     };
     let mut ctx = base_context.clone();
+    let adapter = base_context
+        .get("adapter")
+        .and_then(|value| value.downcast_object::<Adapter>());
 
     let this_relation = match model.resource_type() {
         NodeType::UnitTest => {
@@ -268,6 +273,8 @@ where
         ))
         .into_value(),
     };
+    let this_relation = physicalize_relation_value(adapter.as_deref(), this_relation)
+        .map_err(|error| FsError::from_jinja_err(error, "Failed to resolve `this` relation"))?;
     let config_map = Arc::new(convert_yml_to_dash_map(model.serialized_config()));
 
     // Get valid config keys based on resource type
@@ -305,7 +312,8 @@ where
         runtime_config.clone(),
         validation_config_with_depends_on.clone(),
         model.common().unique_id.clone(),
-    );
+    )
+    .with_adapter(adapter.clone());
     let ref_value = MinijinjaValue::from_object(ref_function);
     base_builtins.insert("ref".to_string(), ref_value.clone());
 
@@ -324,7 +332,8 @@ where
         node_resolver.clone(),
         model.common().package_name.clone(),
         validation_config_with_depends_on,
-    );
+    )
+    .with_adapter(adapter);
     let source_value = MinijinjaValue::from_object(source_function);
     base_builtins.insert("source".to_string(), source_value.clone());
 

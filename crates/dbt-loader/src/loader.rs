@@ -659,6 +659,10 @@ pub async fn load_catalogs(
     env: &JinjaEnv,
     project_flags: Option<&dbt_yaml::Value>,
 ) -> FsResult<()> {
+    // Catalog definitions are project-scoped. Clear the process-global holder
+    // even when this project has no catalogs.yml so a prior invocation cannot
+    // enable catalog-linked behavior in the next project.
+    load_catalogs::clear_catalogs();
     let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
         (
             "env_var".to_owned(),

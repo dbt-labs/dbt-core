@@ -423,7 +423,7 @@ fn populate_schema_from_empty_relation(
         TelemetryExecutionPhase::Render,
         None,
         ctx.runtime_config().dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     // Ensure schema inference macro evaluation is node-scoped for replay and any other
     // context-dependent adapter behavior.

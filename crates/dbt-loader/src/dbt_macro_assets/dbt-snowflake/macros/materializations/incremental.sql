@@ -130,6 +130,13 @@
 
   {% set existing_relation = load_relation(this) %}
 
+  {%- if is_catalog_linked_db and existing_relation is not none -%}
+    {%- set target_relation = target_relation.incorporate(path={
+          "schema": existing_relation.schema,
+          "identifier": existing_relation.identifier,
+        }).quote(schema=true, identifier=true) -%}
+  {%- endif -%}
+
   {#-- The temp relation will be a view, temp table, or transient table, depending on strategy and config --#}
   {%- set unique_key = config.get('unique_key') -%}
   {% set incremental_strategy = config.get('incremental_strategy') or 'default' %}

@@ -341,13 +341,17 @@ pub fn is_incremental(
         }
     };
 
+    let database = relation.database().unwrap_or_default().to_string();
+    let schema = relation.schema().unwrap_or_default().to_string();
+    let identifier = relation.identifier().unwrap_or_default().to_string();
     adapter
         .get_relation(
             &state,
-            relation.database().unwrap_or_default(),
-            relation.schema().unwrap_or_default(),
-            relation.identifier().unwrap_or_default(),
+            &database,
+            &schema,
+            &identifier,
             false,
+            Some(Arc::from(relation)),
         )
         .ok()
         .filter(|v| !v.is_none())

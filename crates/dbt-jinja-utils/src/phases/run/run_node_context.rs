@@ -7,11 +7,11 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use dbt_adapter_core::AdapterType;
+use dbt_adapter::{Adapter, AdapterType};
 use dbt_agate::AgateTable;
-use dbt_common::ErrorCode;
 use dbt_common::io_args::IoArgs;
 use dbt_common::serde_utils::convert_yml_to_value_map;
+use dbt_common::{ErrorCode, FsError, FsResult};
 
 use dbt_adapter::column::ColumnStatic;
 use dbt_adapter::load_store::ResultStore;
@@ -33,6 +33,7 @@ use dbt_jinja_ctx::{
 };
 
 use super::run_config::RunConfig;
+use crate::phases::compile_and_run_context::physicalize_relation_value;
 use dbt_schemas::schemas::project::ConfigKeys;
 
 type YmlValue = dbt_yaml::Value;
@@ -469,11 +470,11 @@ pub fn build_run_node_context<S: Serialize>(
     phase: ExecutionPhase,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
-) -> (BTreeMap<String, MinijinjaValue>, ResultStore) {
+) -> FsResult<(BTreeMap<String, MinijinjaValue>, ResultStore)> {
     // Downcast the base `builtins` Object to its concrete map here so the
     // shared overlay builder receives a typed map (no downcast on its side).
     let base_builtins = base_context.get("builtins").map(downcast_builtins_map);
-    let (overlay, result_store) = build_run_node_overlay(
+    let (mut overlay, result_store) = build_run_node_overlay(
         node,
         deprecated_config,
         adapter_type,
@@ -484,10 +485,15 @@ pub fn build_run_node_context<S: Serialize>(
         sql_header,
         packages,
     );
+    let adapter = base_context
+        .get("adapter")
+        .and_then(|value| value.downcast_object::<Adapter>());
+    overlay.this = physicalize_relation_value(adapter.as_deref(), overlay.this)
+        .map_err(|error| FsError::from_jinja_err(error, "Failed to resolve run relation"))?;
 
     let mut context = base_context.clone();
     context.extend(to_jinja_btreemap(&overlay));
-    (context, result_store)
+    Ok((context, result_store))
 }
 
 /// Build a run context as a typed [`RunNodeCtx`] composed onto `base` via the
@@ -509,7 +515,8 @@ pub fn build_run_node_ctx<S: Serialize>(
     phase: ExecutionPhase,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
-) -> RunNodeCtx {
+    adapter: Option<&Adapter>,
+) -> FsResult<RunNodeCtx> {
     // `CompileBaseCtx::builtins` is a `MinijinjaValue` (Jinja-facing Object
     // slot), so downcast it to the concrete map for the shared overlay builder.
     let base_builtins = downcast_builtins_map(&base.builtins);
@@ -524,8 +531,10 @@ pub fn build_run_node_ctx<S: Serialize>(
         sql_header,
         packages,
     );
+    overlay.this = physicalize_relation_value(adapter, overlay.this)
+        .map_err(|error| FsError::from_jinja_err(error, "Failed to resolve run relation"))?;
     overlay.base = Some(base.clone());
-    overlay
+    Ok(overlay)
 }
 
 #[cfg(test)]

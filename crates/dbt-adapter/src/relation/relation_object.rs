@@ -59,6 +59,15 @@ impl RelationObject {
         self.relation.clone()
     }
 
+    /// Replace the base relation while preserving runtime filtering metadata.
+    pub fn with_relation(&self, relation: Arc<dyn BaseRelation>) -> Self {
+        Self {
+            relation,
+            run_filter: self.run_filter.clone(),
+            event_time: self.event_time.clone(),
+        }
+    }
+
     /// Whether this relation is the placeholder returned during parsing.
     pub fn is_parse_time(&self) -> bool {
         self.relation

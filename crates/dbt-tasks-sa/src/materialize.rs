@@ -312,7 +312,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     if let Some(sql) = sql {
         context.insert("sql".to_string(), Value::from(sql));
@@ -501,7 +501,7 @@ pub fn materialize_clone<S: serde::Serialize>(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     // `dbt clone` takes the target default: this path is typed `&dyn InternalDbtNode`,
     // which does not expose the node's `+adapter`. Cloning a node on a non-default
@@ -592,7 +592,7 @@ pub fn materialize_seed(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
     let run_path = seed
@@ -658,7 +658,7 @@ pub fn materialize_model(
         ExecutionPhase::Run,
         sql_header,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
     let materialization = model.__base_attr__.materialized.clone();
 
     let macro_name = materialization_resolver
@@ -829,7 +829,7 @@ pub fn materialize_latest_version_pointer(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     let pointer_identifier =
         latest_version_pointer_identifier(model, &jinja_env, &mut resolve_context)?;
@@ -964,7 +964,7 @@ pub fn materialize_latest_version_pointer(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     let macro_name = materialization_resolver
         .find_materialization_macro_by_name("view", model.node_adapter())?;
@@ -1124,7 +1124,7 @@ pub fn materialize_snapshot(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
@@ -1203,7 +1203,7 @@ pub fn materialize_unit_test(
             .keys()
             .cloned()
             .collect(),
-    );
+    )?;
     let materialization = DbtMaterialization::Unit;
     let macro_name = materialization_resolver.find_materialization_macro_by_name(
         &materialization.to_string(),
@@ -1287,7 +1287,7 @@ pub fn materialize_unit_test_fast_pass(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     context.insert("sql".to_string(), Value::from(sql));
 
@@ -1509,7 +1509,7 @@ pub fn materialize_test(
         ExecutionPhase::Run,
         None,
         packages,
-    );
+    )?;
 
     let is_aggregated = relationships.unique_ids.contains_key(&test.common().name);
     let materialization_name = if is_aggregated {
@@ -2012,7 +2012,7 @@ pub fn materialize_function(
         ExecutionPhase::Run,
         None,
         runtime_config.dependencies.keys().cloned().collect(),
-    );
+    )?;
 
     // Find the function materialization macro
     let macro_name = materialization_resolver

@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Snowflake: resolve catalog-linked relations using catalog-stored database, schema, and identifier casing.'
+time: 2026-09-02T10:25:25.363866158-07:00
+custom:
+    author: dataders
+    issue: ""
+    project: dbt-core
