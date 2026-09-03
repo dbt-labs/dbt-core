@@ -175,6 +175,10 @@ pub struct GenericTestAsset {
     /// `severity`, `limit`, schema.yml `tags`/`meta`, …) in `unrendered_config`, matching
     /// models/seeds/snapshots. Empty when the test has no schema.yml config.
     pub unrendered_schema_config: BTreeMap<String, dbt_yaml::Value>,
+    /// User-authored `description:` on the generic test in schema YAML. `None` for the
+    /// bare `- unique` form and for singular tests. Carried onto the test node's
+    /// `description` so it surfaces in the manifest, matching dbt-core.
+    pub description: Option<String>,
 }
 
 impl fmt::Display for GenericTestAsset {

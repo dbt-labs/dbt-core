@@ -77,6 +77,20 @@ impl DataTests {
             },
         }
     }
+
+    /// The user-authored `description:` on a generic test, if any. The bare
+    /// `String` form (e.g. `- unique`) has no description.
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            DataTests::String(_) => None,
+            DataTests::CustomTest(test) => match test.as_ref() {
+                CustomTest::MultiKey(test) => test.description.as_deref(),
+                CustomTest::SimpleKeyValue(test) => {
+                    test.values().next().and_then(|v| v.description.as_deref())
+                }
+            },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -133,6 +147,52 @@ dbt_utils.equal_rowcount:
                 "customer_id".to_string(),
                 "event_date".to_string(),
             ]))
+        );
+    }
+
+    #[test]
+    fn bare_string_test_has_no_description() {
+        let yaml = "unique";
+        let test: DataTests =
+            dbt_yaml::from_str(yaml).expect("bare string form should deserialize");
+        assert_eq!(test.description(), None);
+    }
+
+    #[test]
+    fn multi_key_test_carries_description() {
+        // The `{test_name: ..., ...}` shape (as opposed to `{<test-name>: {...}}`).
+        let yaml = r#"
+test_name: unique
+description: Order id must be unique across all orders.
+"#;
+        let test: DataTests = dbt_yaml::from_str(yaml).expect("multi-key form should deserialize");
+        assert_eq!(
+            test.description(),
+            Some("Order id must be unique across all orders.")
+        );
+    }
+
+    #[test]
+    fn multi_key_test_without_description_is_none() {
+        let yaml = r#"
+test_name: unique
+column_name: id
+"#;
+        let test: DataTests = dbt_yaml::from_str(yaml).expect("multi-key form should deserialize");
+        assert_eq!(test.description(), None);
+    }
+
+    #[test]
+    fn simple_key_value_test_carries_description() {
+        let yaml = r#"
+unique:
+    description: Order id must be unique across all orders.
+"#;
+        let test: DataTests =
+            dbt_yaml::from_str(yaml).expect("simple key-value form should deserialize");
+        assert_eq!(
+            test.description(),
+            Some("Order id must be unique across all orders.")
         );
     }
 }
