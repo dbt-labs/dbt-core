@@ -24,7 +24,10 @@ use crate::storage::sqlite::SqliteHandler;
 /// lookup, so the record layer has no way to enumerate what a caller will ask
 /// for later. This allowlist is the set a replay is expected to answer; add to
 /// it when a caller starts depending on another option surviving replay.
-const RECORDED_STATEMENT_OPTIONS: &[&str] = &[dbt_adbc::lake_compute::LAST_WARNINGS];
+const RECORDED_STATEMENT_OPTIONS: &[&str] = &[
+    dbt_adbc::lake_compute::LAST_WARNINGS,
+    dbt_adbc::lake_compute::LAST_QUERY_ID,
+];
 
 /// Read [`RECORDED_STATEMENT_OPTIONS`] off `stmt`, keeping only the ones it
 /// actually answered with a non-empty value.

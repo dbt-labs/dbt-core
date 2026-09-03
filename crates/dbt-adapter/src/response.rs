@@ -228,6 +228,9 @@ pub(crate) fn query_id_from_record_batch(
         AdapterType::Snowflake => batch.meta_string(adbc::snowflake::schema_metadata::QUERY_ID),
         AdapterType::Bigquery => batch.meta_string(adbc::bigquery::schema_metadata::QUERY_ID),
         AdapterType::Databricks => batch.meta_string(adbc::databricks::schema_metadata::QUERY_ID),
+        AdapterType::LakeCompute => {
+            batch.meta_string(adbc::lake_compute::schema_metadata::QUERY_ID)
+        }
         _ => None,
     }
 }

@@ -387,21 +387,37 @@ pub(crate) fn adbc_execute_with_options(
             let rows_affected = stmt.execute_update()?;
             token.check_cancellation()?;
             // Surface non-fatal backend warnings (e.g. an export-limit
-            // truncation notice) via schema metadata, since this function's
-            // return type has no other slot for statement-level side
-            // channels. `AdapterResponse::from_record_batch` reads it back.
+            // truncation notice) and the job id via schema metadata, since
+            // this function's return type has no other slot for
+            // statement-level side channels. `AdapterResponse::from_record_batch`
+            // reads both back; the job id is the only way to later recover
+            // this statement's result via dbt-compute's `/download_credentials`.
             let warnings = stmt
                 .get_option_string(OptionStatement::Other(
                     dbt_adbc::lake_compute::LAST_WARNINGS.to_string(),
                 ))
                 .unwrap_or_default();
-            let schema = if warnings.is_empty() {
-                Arc::new(Schema::empty())
-            } else {
-                let metadata = std::collections::HashMap::from([(
+            let query_id = stmt
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_QUERY_ID.to_string(),
+                ))
+                .unwrap_or_default();
+            let mut metadata = std::collections::HashMap::new();
+            if !warnings.is_empty() {
+                metadata.insert(
                     dbt_adbc::lake_compute::schema_metadata::WARNINGS.to_string(),
                     warnings,
-                )]);
+                );
+            }
+            if !query_id.is_empty() {
+                metadata.insert(
+                    dbt_adbc::lake_compute::schema_metadata::QUERY_ID.to_string(),
+                    query_id,
+                );
+            }
+            let schema = if metadata.is_empty() {
+                Arc::new(Schema::empty())
+            } else {
                 Arc::new(Schema::new_with_metadata(
                     Vec::<arrow_schema::Field>::new(),
                     metadata,
@@ -436,7 +452,7 @@ pub(crate) fn adbc_execute_with_options(
         // `ComputeStatement::do_execute`) already stashed them internally, so
         // this is a local option read, not a second round trip -- but it must
         // happen after `reader` (which holds `stmt` borrowed) is dropped.
-        let attach_alt_warnings = |stmt: &TrackedStatement, schema: Arc<Schema>| {
+        let attach_lake_compute_metadata = |stmt: &TrackedStatement, schema: Arc<Schema>| {
             if adapter_type != AdapterType::LakeCompute {
                 return schema;
             }
@@ -445,14 +461,27 @@ pub(crate) fn adbc_execute_with_options(
                     dbt_adbc::lake_compute::LAST_WARNINGS.to_string(),
                 ))
                 .unwrap_or_default();
-            if warnings.is_empty() {
+            let query_id = stmt
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_QUERY_ID.to_string(),
+                ))
+                .unwrap_or_default();
+            if warnings.is_empty() && query_id.is_empty() {
                 return schema;
             }
             let mut metadata = schema.metadata().clone();
-            metadata.insert(
-                dbt_adbc::lake_compute::schema_metadata::WARNINGS.to_string(),
-                warnings,
-            );
+            if !warnings.is_empty() {
+                metadata.insert(
+                    dbt_adbc::lake_compute::schema_metadata::WARNINGS.to_string(),
+                    warnings,
+                );
+            }
+            if !query_id.is_empty() {
+                metadata.insert(
+                    dbt_adbc::lake_compute::schema_metadata::QUERY_ID.to_string(),
+                    query_id,
+                );
+            }
             Arc::new(Schema::new_with_metadata(schema.fields().clone(), metadata))
         };
 
@@ -461,7 +490,7 @@ pub(crate) fn adbc_execute_with_options(
         // to compute rows_affected correctly, so we must drain even when fetch=false.
         if !fetch && !schema.has_dml_columns(engine.adapter_type()) {
             drop(reader);
-            let schema = attach_alt_warnings(&stmt, schema);
+            let schema = attach_lake_compute_metadata(&stmt, schema);
             return Ok((schema, batches, None));
         }
 
@@ -476,7 +505,7 @@ pub(crate) fn adbc_execute_with_options(
             token.check_cancellation()?;
         }
         log_step_duration("batch-consume loop (for res in reader)", t_loop.elapsed());
-        let schema = attach_alt_warnings(&stmt, schema);
+        let schema = attach_lake_compute_metadata(&stmt, schema);
         Ok((schema, batches, None))
     };
     let _span = span!("SqlEngine::execute");

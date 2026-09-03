@@ -35,6 +35,19 @@ pub const CATALOG_BUNDLE: &str = "adbc.dbt.catalog_bundle";
 /// notice), newline-joined. Mirrors `adbc_driver_dbt::options::LAST_WARNINGS`.
 pub const LAST_WARNINGS: &str = "adbc.dbt.last_warnings";
 
+/// Statement option. Read-only. The dbt-compute job id of the most recently
+/// submitted statement, if any. Mirrors
+/// `adbc_driver_dbt::options::LAST_QUERY_ID`.
+pub const LAST_QUERY_ID: &str = "adbc.dbt.last_query_id";
+
+/// Statement option, write-only, mutually exclusive with setting a SQL query
+/// on the same statement. The dbt-compute job id of a previously completed
+/// query whose result should be fetched directly instead of submitting new
+/// SQL -- no worker/Temporal round trip, just a Postgres-backed status lookup
+/// plus the same object-store fetch used for normal exports. Mirrors
+/// `adbc_driver_dbt::options::RESULT_JOB_ID`.
+pub const RESULT_JOB_ID: &str = "adbc.dbt.result_job_id";
+
 /// Schema metadata keys used to convey per-statement, backend-reported
 /// information that isn't part of the Arrow schema proper.
 pub mod schema_metadata {
@@ -43,7 +56,14 @@ pub mod schema_metadata {
     /// `adbc_execute_with_options` (from [`super::LAST_WARNINGS`]) so it can
     /// survive the trip through `adbc_execute_with_options`'s `RecordBatch`
     /// return value; read back by `AdapterResponse::from_record_batch`.
-    pub const WARNINGS: &str = "ALT_WARNINGS";
+    pub const WARNINGS: &str = "LAKE_COMPUTE_WARNINGS";
+
+    /// The dbt-compute job id of the executed statement. Set by
+    /// `adbc_execute_with_options` (from [`super::LAST_QUERY_ID`]) so it can
+    /// survive the trip through `adbc_execute_with_options`'s `RecordBatch`
+    /// return value; read back by `AdapterResponse::from_record_batch` via
+    /// `query_id_from_record_batch`.
+    pub const QUERY_ID: &str = "LAKE_COMPUTE_QUERY_ID";
 }
 
 /// Okta authorization endpoint.

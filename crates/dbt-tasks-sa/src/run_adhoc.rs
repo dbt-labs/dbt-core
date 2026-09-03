@@ -20,6 +20,10 @@ use dbt_tasks_core::AdhocRunner;
 pub struct RemoteAdhocRunner {
     pub env: Arc<JinjaEnv>,
     pub adapter_type: AdapterType,
+    /// `show --job-id <id>`: when set, `run_adhoc` ignores `instruction`/
+    /// `rendered_sql` entirely and fetches this already-completed dbt-compute
+    /// job's result directly instead. See `EvalArgs::job_id`.
+    pub job_id: Option<String>,
 }
 
 impl AdhocRunner for RemoteAdhocRunner {
@@ -31,6 +35,9 @@ impl AdhocRunner for RemoteAdhocRunner {
         connection: &'a mut Option<Box<dyn Connection>>,
     ) -> Pin<Box<dyn Future<Output = FsResult<(Vec<RecordBatch>, SchemaRef)>> + Send + 'a>> {
         Box::pin(async move {
+            if let Some(job_id) = &self.job_id {
+                return fetch_job_result_with_connection(job_id, &self.env, connection).await;
+            }
             run_remote_adhoc_with_connection(
                 instruction,
                 rendered_sql,
@@ -41,6 +48,57 @@ impl AdhocRunner for RemoteAdhocRunner {
             .await
         })
     }
+}
+
+/// Reuse `conn_box`'s connection if present, otherwise open and cache one
+/// from the workspace's base adapter engine. Shared by the ordinary
+/// `--inline` path and the `--job-id` result-fetch path below.
+fn get_or_open_connection<'a>(
+    env: &JinjaEnv,
+    conn_box: &'a mut Option<Box<dyn Connection>>,
+) -> FsResult<&'a mut dyn Connection> {
+    if conn_box.is_some() {
+        return Ok(conn_box.as_mut().unwrap().as_mut());
+    }
+    let adapter_engine = env.get_base_adapter().map(|a| Arc::clone(a.engine()));
+    let Some(engine) = adapter_engine else {
+        return err!(
+            ErrorCode::RemoteError,
+            "No adapter engine configured in workspace"
+        );
+    };
+    let conn = engine.new_connection(None, None)?;
+    conn_box.replace(conn);
+    Ok(conn_box.as_mut().unwrap().as_mut())
+}
+
+/// `show --job-id <id>`: fetch an already-completed dbt-compute job's result
+/// directly, by setting `RESULT_JOB_ID` on a fresh statement instead of a SQL
+/// query. No submission, no worker/Temporal round trip -- the driver turns
+/// this into a `Client::status()` lookup plus the same object-store fetch a
+/// normal export uses (see `adbc_driver_dbt::statement::ComputeStatement::
+/// fetch_existing_result`).
+async fn fetch_job_result_with_connection(
+    job_id: &str,
+    env: &JinjaEnv,
+    conn_box: &mut Option<Box<dyn Connection>>,
+) -> FsResult<(Vec<RecordBatch>, SchemaRef)> {
+    let conn = get_or_open_connection(env, conn_box)?;
+    let mut stmt = conn.new_statement().map_err(from_adbc_error)?;
+    stmt.set_option(
+        OptionStatement::Other(dbt_adbc::lake_compute::RESULT_JOB_ID.to_string()),
+        adbc_core::options::OptionValue::String(job_id.to_string()),
+    )
+    .map_err(from_adbc_error)?;
+
+    let mut reader = stmt.execute().map_err(from_adbc_error)?;
+    let schema = reader.schema();
+    let records: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
+    drop(reader);
+    warn_if_last_warnings(stmt.as_ref());
+    let schema = attach_last_query_id(stmt.as_ref(), schema);
+
+    Ok((records, schema))
 }
 
 async fn run_remote_adhoc_with_connection(
@@ -54,22 +112,7 @@ async fn run_remote_adhoc_with_connection(
         return result;
     }
 
-    let conn = {
-        if let Some(conn) = conn_box {
-            conn.as_mut()
-        } else {
-            let adapter_engine = env.get_base_adapter().map(|a| Arc::clone(a.engine()));
-            let Some(engine) = adapter_engine else {
-                return err!(
-                    ErrorCode::RemoteError,
-                    "No adapter engine configured in workspace"
-                );
-            };
-            let conn = engine.new_connection(None, None)?;
-            conn_box.replace(conn);
-            conn_box.as_mut().unwrap().as_mut()
-        }
-    };
+    let conn = get_or_open_connection(env, conn_box)?;
     let expected_schema = match instruction {
         Instruction::Sql(_) => None,
         Instruction::Lp(lp_instruction) => match &lp_instruction.plan {
@@ -157,6 +200,7 @@ async fn run_remote_adhoc_with_connection(
     // fully drained).
     drop(reader);
     warn_if_last_warnings(stmt.as_ref());
+    let schema = attach_last_query_id(stmt.as_ref(), schema);
 
     if let Some(recorder) = dbt_adapter::time_machine::global_recorder() {
         recorder.record_run_remote_adhoc(rendered_sql, &records, &schema, true, None);
@@ -209,6 +253,36 @@ fn warn_if_last_warnings(stmt: &dyn dbt_adbc::statement::Statement) {
     if !warning.is_empty() {
         tracing::warn!("{warning}");
     }
+}
+
+/// Read the dbt-compute job id of the just-executed statement (e.g. from
+/// `show --inline`) and stamp it onto `schema`'s metadata, the only way to
+/// later recover this result via dbt-compute's `/download_credentials`
+/// endpoint. This function's caller talks to the raw ADBC `Statement`
+/// directly (unlike model materializations, which go through
+/// `AdapterEngine::execute_with_options`/`adapter_engine.rs`'s
+/// `attach_lake_compute_metadata`), so the id has to be attached here for
+/// `showable/mod.rs::run_show` to append it to the "Query <name>" title line.
+/// Also logged at debug level for troubleshooting. Unconditional for the same
+/// reason as `warn_if_last_warnings` above: only the LakeCompute driver ever
+/// populates `LAST_QUERY_ID`, and every other `Statement` impl returns a
+/// clean `Err` for an option it doesn't recognize.
+fn attach_last_query_id(stmt: &dyn dbt_adbc::statement::Statement, schema: SchemaRef) -> SchemaRef {
+    let query_id = stmt
+        .get_option_string(OptionStatement::Other(
+            dbt_adbc::lake_compute::LAST_QUERY_ID.to_string(),
+        ))
+        .unwrap_or_default();
+    if query_id.is_empty() {
+        return schema;
+    }
+    tracing::debug!("show --inline completed via dbt Compute (job_id={query_id})");
+    let mut metadata = schema.metadata().clone();
+    metadata.insert(
+        dbt_adbc::lake_compute::schema_metadata::QUERY_ID.to_string(),
+        query_id,
+    );
+    Arc::new(Schema::new_with_metadata(schema.fields().clone(), metadata))
 }
 
 #[cfg(test)]
