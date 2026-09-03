@@ -312,7 +312,11 @@ async fn re_running_deps_is_a_no_op() {
         .filter_map(Result::ok)
         .map(|e| e.file_name().to_string_lossy().to_string())
         .collect();
-    assert_eq!(entries, vec!["dbt-mine".to_string()], "no duplicate install");
+    assert_eq!(
+        entries,
+        vec!["dbt-mine".to_string()],
+        "no duplicate install"
+    );
 }
 
 #[tokio::test]
