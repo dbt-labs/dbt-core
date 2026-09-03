@@ -20,6 +20,7 @@ use dbt_common::{
     tracing::{
         dbt_emit::{
             emit_error_log_from_fs_error, emit_info_progress_message, emit_trace_log_message,
+            emit_warn_log_message,
         },
         dbt_metrics::error_count_checkpoint,
         event_info::store_event_attributes,
@@ -183,10 +184,44 @@ pub async fn clean_project(
         }
     }
 
+    clean_installed_skills(arg, dbt_project);
+
     // Explicitly release to predictably wait for the lease internally to drop.
     target_guard.release().await;
 
     Ok(())
+}
+
+/// Remove skills dbt installed, leaving everything else in the provider
+/// directories alone.
+///
+/// The provider directories are not blanket-removed: they hold user-authored
+/// skills too. Only skills whose `SKILL.md` carries dbt's `metadata` keys are
+/// candidates, and even those are left in place if the user has edited them.
+fn clean_installed_skills(arg: &EvalArgs, dbt_project: &DbtProject) {
+    let destinations = dbt_skills::skill_destinations(dbt_project, arg.ai_provider.as_deref());
+    if destinations.is_empty() {
+        return;
+    }
+
+    match dbt_skills::prune_all(&arg.io.in_dir, &destinations) {
+        Ok(reports) => {
+            let removed = reports
+                .iter()
+                .filter(|report| report.outcome == dbt_skills::install::InstallOutcome::Pruned)
+                .count();
+            if removed > 0 {
+                emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+                    "Removing".to_string(),
+                    format!("{removed} dbt-installed agent skill(s)"),
+                ));
+            }
+        }
+        Err(e) => emit_warn_log_message(
+            ErrorCode::IoError,
+            format!("Could not remove dbt-installed agent skills: {e}"),
+        ),
+    }
 }
 
 fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(to: P, from: Q) -> bool {

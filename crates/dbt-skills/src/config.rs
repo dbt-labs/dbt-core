@@ -35,6 +35,14 @@ use crate::discover::{DiscoveredSkill, SkillOrigin, SkillSourceProject};
 /// `skill_config_resolution_ignores_the_adapter` keeps this assumption honest.
 const CONFIG_RESOLVER_ADAPTER: AdapterType = AdapterType::Snowflake;
 
+/// A skill that survived config resolution and collision handling, plus the
+/// `<package>:<source_path>` of each skill it shadowed.
+#[derive(Debug, Clone)]
+pub struct SelectedSkill {
+    pub skill: DiscoveredSkill,
+    pub shadowed: Vec<String>,
+}
+
 /// Resolve `enabled` for every discovered skill and drop the disabled ones.
 ///
 /// `projects` must be the same slice, in the same order, that produced
@@ -101,10 +109,11 @@ pub fn filter_enabled(
 /// Resolve same-name collisions into one winner per name.
 ///
 /// The install layout is flat and unnamespaced, so two enabled skills with the
-/// same name want the same directory. dbt does not fail: it warns and installs a
-/// deterministic winner. Precedence is the order source projects were supplied
+/// same name want the same directory. dbt does not fail: it warns, installs a
+/// deterministic winner, and records the losers so the installed metadata can
+/// explain what happened. Precedence is the order source projects were supplied
 /// in — the project first, then packages in `packages.yml` declaration order.
-pub fn resolve_collisions(skills: Vec<DiscoveredSkill>) -> Vec<DiscoveredSkill> {
+pub fn resolve_collisions(skills: Vec<DiscoveredSkill>) -> Vec<SelectedSkill> {
     let mut by_name: BTreeMap<String, Vec<DiscoveredSkill>> = BTreeMap::new();
     for skill in skills {
         by_name.entry(skill.name.clone()).or_default().push(skill);
@@ -123,7 +132,19 @@ pub fn resolve_collisions(skills: Vec<DiscoveredSkill>) -> Vec<DiscoveredSkill> 
             warn_collision(&name, &winner, &losers);
         }
 
-        selected.push(winner);
+        selected.push(SelectedSkill {
+            shadowed: losers
+                .iter()
+                .map(|loser| {
+                    format!(
+                        "{}:{}",
+                        loser.origin.package_name().unwrap_or("root_project"),
+                        loser.source_path.to_string_lossy().replace('\\', "/")
+                    )
+                })
+                .collect(),
+            skill: winner,
+        });
     }
 
     selected
@@ -264,7 +285,7 @@ mod tests {
         ]);
 
         assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].origin, SkillOrigin::Project);
+        assert_eq!(selected[0].skill.origin, SkillOrigin::Project);
     }
 
     #[test]
@@ -277,7 +298,7 @@ mod tests {
         // With no shadow list left to inspect, the count is the only remaining
         // evidence that the loser was dropped rather than installed alongside.
         assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].origin.package_name(), Some("package_a"));
+        assert_eq!(selected[0].skill.origin.package_name(), Some("package_a"));
     }
 
     #[test]

@@ -98,6 +98,10 @@ impl TestProject {
     }
 }
 
+fn skill_md(skill_dir: &Path) -> String {
+    fs::read_to_string(skill_dir.join("SKILL.md")).unwrap()
+}
+
 fn write_skill_at(dir: &Path, name: &str, body: &str) {
     fs::create_dir_all(dir).unwrap();
     fs::write(
@@ -299,26 +303,20 @@ async fn re_running_deps_is_a_no_op() {
 
     project.deps(Some(&provider)).await;
     let installed = project.installed(AGENTS_DIR, "mine");
-    let first = fs::read_to_string(installed.join("SKILL.md")).unwrap();
+    let first = skill_md(&installed);
 
     project.deps(Some(&provider)).await;
 
+    // Byte-identical, including the recorded timestamp.
     assert_eq!(
-        fs::read_to_string(installed.join("SKILL.md")).unwrap(),
-        first
+        skill_md(&installed),
+        first,
+        "nothing should have been rewritten"
     );
-    let entries: Vec<_> = fs::read_dir(project.root.join(AGENTS_DIR))
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect();
-    assert_eq!(entries, vec!["mine".to_string()], "no duplicate install");
 }
 
 #[tokio::test]
-async fn a_changed_package_skill_is_left_in_place_for_now() {
-    // dbt cannot yet tell its own installed copy from one the user edited, so it
-    // declines to overwrite either. Restoring in-place updates is the follow-up.
+async fn a_changed_package_skill_is_updated_on_the_next_deps() {
     let project = TestProject::new("name: root_project\nprofile: default\n");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
     let source = package.join("skills/evolving");
@@ -329,15 +327,12 @@ async fn a_changed_package_skill_is_left_in_place_for_now() {
     write_skill_at(&source, "evolving", "version two");
     project.deps(Some(&provider)).await;
 
-    let installed = project.installed(AGENTS_DIR, "evolving");
-    let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
-    assert!(contents.ends_with("version one"), "{contents}");
+    let contents = skill_md(&project.installed(AGENTS_DIR, "evolving"));
+    assert!(contents.contains("version two"), "{contents}");
 }
 
 #[tokio::test]
 async fn a_user_edited_copy_is_left_alone() {
-    // Holds for a blunter reason than it used to: dbt now overwrites nothing at
-    // all, rather than detecting the edit specifically.
     let project = TestProject::new("name: root_project\nprofile: default\n");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
     let source = package.join("skills/evolving");
@@ -359,7 +354,7 @@ async fn a_user_edited_copy_is_left_alone() {
 }
 
 #[tokio::test]
-async fn a_removed_skill_is_left_behind_and_user_skills_survive() {
+async fn a_removed_skill_is_pruned_and_user_skills_survive() {
     let project = TestProject::new("name: root_project\nprofile: default\n");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
     write_skill_at(&package.join("skills/temporary"), "temporary", "body");
@@ -368,14 +363,14 @@ async fn a_removed_skill_is_left_behind_and_user_skills_survive() {
     project.deps(Some(&provider)).await;
     assert!(project.installed(AGENTS_DIR, "temporary").is_dir());
 
+    // A skill the user wrote by hand, carrying no dbt metadata.
     let hand_written = project.installed(AGENTS_DIR, "hand-written");
     write_skill_at(&hand_written, "hand-written", "mine");
 
     fs::remove_dir_all(package.join("skills/temporary")).unwrap();
     project.deps(Some(&provider)).await;
 
-    // Cleaning this up needs a way to tell dbt's copies apart from the user's.
-    assert!(project.installed(AGENTS_DIR, "temporary").is_dir());
+    assert!(!project.installed(AGENTS_DIR, "temporary").exists());
     assert!(hand_written.join("SKILL.md").is_file());
 }
 
@@ -408,4 +403,19 @@ async fn the_source_skill_is_never_modified() {
     project.deps(Some(&["claude".to_string()])).await;
 
     assert_eq!(fs::read_to_string(source.join("SKILL.md")).unwrap(), before);
+}
+
+#[tokio::test]
+async fn the_installed_skill_carries_dbt_metadata_and_no_sidecar() {
+    let project = TestProject::new("name: root_project\nprofile: default\n");
+    let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
+    write_skill_at(&package.join("skills/from-package"), "from-package", "body");
+
+    project.deps(Some(&["claude".to_string()])).await;
+
+    let installed = project.installed(CLAUDE_DIR, "from-package");
+    let contents = skill_md(&installed);
+    assert!(contents.contains("dbt.managed_by"), "{contents}");
+    assert!(contents.contains("some_pkg"), "{contents}");
+    assert!(!installed.join(".provenance").exists(), "no sidecar file");
 }
