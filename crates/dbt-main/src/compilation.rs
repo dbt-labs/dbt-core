@@ -203,15 +203,15 @@ impl<'a> CompilationPhasesExecutor<'a> {
             {
                 show_args.inline.clone()
             }
-            // `show --job-id <id>`: no SQL to compile at all -- this is a
+            // `show --query-id <id>`: no SQL to compile at all -- this is a
             // direct result-fetch, not a query. A placeholder gets the
             // inline-node machinery (loader/Showable) to build the same
             // ephemeral node `--inline` uses, so `run_adhoc.rs` has a node to
             // execute against; it's never actually rendered/run as SQL,
-            // since `eval_args.job_id` being set makes `run_adhoc.rs` set
-            // `RESULT_JOB_ID` and fetch instead of compiling this string.
+            // since `eval_args.query_id` being set makes `run_adhoc.rs` set
+            // `RESULT_QUERY_ID` and fetch instead of compiling this string.
             Command::Core(Show(ShowArgs {
-                job_id: Some(_), ..
+                query_id: Some(_), ..
             })) => Some("select 1".to_string()),
             _ => None,
         };

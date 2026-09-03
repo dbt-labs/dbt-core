@@ -902,21 +902,21 @@ pub struct ShowArgs {
     pub common_args: CommonArgs,
 
     /// Show the given query
-    #[arg(long, allow_hyphen_values = true, conflicts_with = "job_id")]
+    #[arg(long, allow_hyphen_values = true, conflicts_with = "query_id")]
     pub inline: Option<String>,
 
     /// Query a dbt information schema view (e.g. `models`, `dag_nodes`) instead of
     /// the warehouse. Equivalent to `--inline "select * from {{ info_schema('<view>') }}"`.
     /// Requires a prior `dbt parse|compile|run|build --generate-info-schema`.
-    #[arg(long, value_name = "VIEW", conflicts_with_all = ["inline", "adapter", "job_id"])]
+    #[arg(long, value_name = "VIEW", conflicts_with_all = ["inline", "adapter", "query_id"])]
     pub info: Option<String>,
 
-    /// Fetch the result of a previously completed dbt-compute job directly,
-    /// by job id, instead of compiling and running a query. No worker/compute
-    /// round trip -- this reads the job's already-materialized result.
+    /// Fetch the result of a previously completed dbt-compute query directly,
+    /// by query id, instead of compiling and running a query. No worker/compute
+    /// round trip -- this reads the query's already-materialized result.
     /// Requires `--adapter lake_compute`.
     #[arg(long, conflicts_with_all = ["inline", "info"])]
-    pub job_id: Option<String>,
+    pub query_id: Option<String>,
 
     /// Select nodes of a specific type;
     #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
@@ -973,7 +973,7 @@ impl ShowArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::Show;
         eval_args.adapter_override = self.adapter.clone();
-        eval_args.job_id = self.job_id.clone();
+        eval_args.query_id = self.query_id.clone();
         if let Some(resource_type) = &self.resource_type {
             eval_args.resource_types = resource_type.clone();
         } else {
@@ -2816,7 +2816,7 @@ impl CommonArgs {
             macro_args: BTreeMap::new(),
             macro_sql: None,
             adapter_override: None,
-            job_id: None,
+            query_id: None,
             selector: self.selector.clone(),
             resource_types: vec![],
             exclude_resource_types: vec![],

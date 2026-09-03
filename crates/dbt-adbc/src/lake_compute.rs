@@ -41,12 +41,12 @@ pub const LAST_WARNINGS: &str = "adbc.dbt.last_warnings";
 pub const LAST_QUERY_ID: &str = "adbc.dbt.last_query_id";
 
 /// Statement option, write-only, mutually exclusive with setting a SQL query
-/// on the same statement. The dbt-compute job id of a previously completed
+/// on the same statement. The dbt-compute query id of a previously completed
 /// query whose result should be fetched directly instead of submitting new
 /// SQL -- no worker/Temporal round trip, just a Postgres-backed status lookup
 /// plus the same object-store fetch used for normal exports. Mirrors
-/// `adbc_driver_dbt::options::RESULT_JOB_ID`.
-pub const RESULT_JOB_ID: &str = "adbc.dbt.result_job_id";
+/// `adbc_driver_dbt::options::RESULT_QUERY_ID`.
+pub const RESULT_QUERY_ID: &str = "adbc.dbt.result_query_id";
 
 /// Schema metadata keys used to convey per-statement, backend-reported
 /// information that isn't part of the Arrow schema proper.

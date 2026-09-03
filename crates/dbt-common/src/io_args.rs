@@ -610,10 +610,10 @@ pub struct EvalArgs {
     /// `run-operation --adapter <type>`: run against this non-default adapter
     /// instead of the target's default one.
     pub adapter_override: Option<String>,
-    /// `show --job-id <id>`: fetch a previously completed dbt-compute job's
+    /// `show --query-id <id>`: fetch a previously completed dbt-compute query's
     /// result directly, instead of compiling/executing a query. Mutually
     /// exclusive with `inline`.
-    pub job_id: Option<String>,
+    pub query_id: Option<String>,
     pub warn_error: Option<bool>,
     pub warn_error_options: WarnErrorOptions,
     pub version_check: bool,
