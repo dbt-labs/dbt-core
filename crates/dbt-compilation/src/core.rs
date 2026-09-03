@@ -636,7 +636,7 @@ impl DbtLoadedProject {
         let token = token.clone();
 
         let build: AdapterBuilder = Box::new(move |adapter_type| {
-            let db_config = configs
+            let matched_config = &configs
                 .iter()
                 .find(|(t, _)| *t == adapter_type)
                 .ok_or_else(|| {
@@ -645,14 +645,37 @@ impl DbtLoadedProject {
                         "the adapter store asked for '{adapter_type}', which it does not hold a config for"
                     )
                 })?
-                .1
-                .to_mapping()
-                .map_err(|e| {
-                    fs_err!(
-                        ErrorCode::InvalidConfig,
-                        "could not read the '{adapter_type}' connection: {e}"
-                    )
-                })?;
+                .1;
+            // `lake_compute`, when configured as a secondary (non-default) adapter,
+            // inherits `database`/`schema` from the default adapter instead of
+            // requiring its own. `threads` is already shared across every adapter
+            // via the `threads` parameter passed to `build_adapter` below, so it
+            // needs no handling here. See fs#13653.
+            let resolved_config = if let DbConfig::LakeCompute(lake_compute) = matched_config {
+                let mut lake_compute = lake_compute.clone();
+                if lake_compute.database.is_none() || lake_compute.schema.is_none() {
+                    let default_config = configs
+                        .iter()
+                        .find(|(t, _)| *t == default_adapter)
+                        .map(|(_, c)| c);
+                    if lake_compute.database.is_none() {
+                        lake_compute.database =
+                            default_config.and_then(|c| c.get_database().cloned());
+                    }
+                    if lake_compute.schema.is_none() {
+                        lake_compute.schema = default_config.and_then(|c| c.get_schema().cloned());
+                    }
+                }
+                DbConfig::LakeCompute(lake_compute)
+            } else {
+                matched_config.clone()
+            };
+            let db_config = resolved_config.to_mapping().map_err(|e| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "could not read the '{adapter_type}' connection: {e}"
+                )
+            })?;
             let quoting = resolve_package_quoting(authored_quoting, adapter_type).try_into()?;
             project.build_adapter(
                 adapter_type,
