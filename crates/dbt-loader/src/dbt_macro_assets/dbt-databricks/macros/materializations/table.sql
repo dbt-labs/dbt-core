@@ -37,6 +37,7 @@
 
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
     {{ apply_grants(target_relation, grant_config, should_revoke) }}
+    {% do optimize(target_relation) %}
 
     {% if language == 'python' %}
       {{ drop_relation_if_exists(intermediate_relation) }}
