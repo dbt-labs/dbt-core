@@ -11,6 +11,7 @@ pub mod config;
 pub mod discover;
 pub mod hash;
 pub mod install;
+pub mod metadata;
 pub mod providers;
 pub mod validate;
 pub mod yaml;
@@ -30,6 +31,7 @@ use crate::install::InstallOutcome;
 use crate::install::{InstallReport, install_skills};
 use crate::providers::{AiProvider, parse_providers, resolve_ai_provider, resolve_destinations};
 
+pub use crate::install::prune_all;
 pub use crate::providers::{CLAUDE_SKILLS_DIR, DEFAULT_SKILLS_DIR};
 
 /// The subset of a `dbt_project.yml` the skill pass needs.
@@ -82,7 +84,14 @@ pub fn install_package_skills(
     let resolved_providers = resolve_ai_provider(ai_provider, root_project.flags.as_ref());
 
     if discovered.is_empty() {
-        return Ok(None);
+        // Nothing to install, but dbt may still own installs from a previous run.
+        return match resolved_providers {
+            Some(raw) => {
+                let destinations = resolve_destinations(&parse_providers(&raw));
+                Ok(Some(install_skills(project_root, &destinations, &[])?))
+            }
+            None => Ok(None),
+        };
     }
 
     let Some(raw_providers) = resolved_providers else {
@@ -117,6 +126,18 @@ pub fn install_package_skills(
         &destinations,
         &selected,
     )?))
+}
+
+/// Destinations for the configured providers, for callers that only need to
+/// prune (e.g. `dbt clean`).
+pub fn skill_destinations(
+    root_project: &DbtProject,
+    ai_provider: Option<&[String]>,
+) -> Vec<PathBuf> {
+    match resolve_ai_provider(ai_provider, root_project.flags.as_ref()) {
+        Some(raw) => resolve_destinations(&parse_providers(&raw)),
+        None => Vec::new(),
+    }
 }
 
 fn read_package_project(package: &InstalledPackage) -> SkillSourceProject {
@@ -336,6 +357,36 @@ mod tests {
             .unwrap();
 
         assert!(!root.join(DEFAULT_SKILLS_DIR).join("bloat").exists());
+    }
+
+    #[test]
+    fn a_skill_removed_from_a_package_is_pruned_on_the_next_run() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        let package = write_package(root, "some_pkg", "name: some_pkg\n");
+        write_skill(&package.root, "skills/going-away", "going-away");
+
+        let provider = ["wizard".to_string()];
+        install_package_skills(
+            root,
+            &root_project("root_project"),
+            std::slice::from_ref(&package),
+            Some(&provider),
+        )
+        .unwrap();
+        assert!(root.join(DEFAULT_SKILLS_DIR).join("going-away").is_dir());
+
+        fs::remove_dir_all(package.root.join("skills/going-away")).unwrap();
+        install_package_skills(
+            root,
+            &root_project("root_project"),
+            &[package],
+            Some(&provider),
+        )
+        .unwrap();
+
+        assert!(!root.join(DEFAULT_SKILLS_DIR).join("going-away").exists());
     }
 
     #[test]
