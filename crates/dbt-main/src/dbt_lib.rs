@@ -1319,15 +1319,18 @@ impl<'a> AllPhasesExecutor<'a> {
                         format!("{reason}. Skipping checks..."),
                     );
                 } else {
-                    // Naming checks explicitly (`dbt check <name>`, or a retry of failed checks) is a
-                    // request to *run those checks*, not to scope their rows — scoping them against a
-                    // selection that contains no models leaves nothing to report and yields a green
-                    // `skipped`, which is how a retry of a failing check came to exit 0.
-                    // Never on a retry: its schedule holds only the failed nodes, so scoping to it
-                    // would verify a fraction of the gate.
-                    let selection_active = !retrying
-                        && self.arg.check_names.is_empty()
-                        && (schedule.select.is_some() || schedule.exclude.is_some());
+                    // Naming checks and scoping their rows are orthogonal: `check_names` chooses
+                    // which checks run, a selector chooses which of their rows are reported. So
+                    // `dbt check <name> --select <subset>` composes -- run that check, report only
+                    // the subset's violations.
+                    //
+                    // Never on a retry, and that exclusion is load-bearing rather than tidy:
+                    // `check_names` is set from the retry artifact, and the accompanying schedule
+                    // holds only the failed nodes. Scoping to it would verify a fraction of the gate
+                    // and report the rest as a green `skipped`, which is how a retry of a failing
+                    // check once came to exit 0.
+                    let selection_active =
+                        !retrying && (schedule.select.is_some() || schedule.exclude.is_some());
                     let scope = dbt_tasks_sa::check::scope_for_selection(
                         selection_active,
                         schedule.selected_nodes.iter(),

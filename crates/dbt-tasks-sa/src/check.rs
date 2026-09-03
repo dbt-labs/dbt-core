@@ -68,16 +68,50 @@ pub fn scope_for_selection<'a>(
 
 /// Whether a zero-row result means "nothing was examined" rather than "nothing is wrong".
 ///
-/// A node-scoped check evaluated against an empty scope returns zero rows because there was nothing
-/// in scope. Reporting that as a pass would claim a validation that never ran, which is the one
-/// outcome a check must never produce.
+/// Reporting the first as a pass claims a validation that never ran, which is the one outcome a
+/// check must never produce. There are two ways to get there, and an empty scope is only the
+/// obvious one:
 ///
-/// Imprecise for [`SelectionFilter::Auto`]: `Auto` only scopes when the output actually carries a
-/// node column, and that isn't known until the rows come back, so an aggregate check under `Auto` is
-/// treated as node-scoped here. Erring toward "skipped" is the safer direction — it under-claims
-/// rather than over-claims.
-pub fn zero_rows_is_vacuous(scope: Option<&BTreeSet<String>>, filter: &SelectionFilter) -> bool {
-    matches!(scope, Some(s) if s.is_empty()) && !matches!(filter, SelectionFilter::None)
+/// - **Nothing selected at all.** Every row is filtered away because the scope is empty.
+/// - **Nothing of the right *kind* selected.** `--select tag:quality` on a project that tags its
+///   checks yields a scope of `check.*` ids. A check reporting `model.*` ids matches none of them,
+///   so every row goes — but the scope is not empty, so the empty-scope test says "genuine pass".
+///   Both are equally vacuous, and the second is reachable now that a named check can be scoped.
+///
+/// `reported_kinds` is the resource-type prefixes of the ids the check actually emitted in its
+/// scoping columns, before filtering (see [`Evaluation::reported_kinds`]). Empty means the check
+/// reported no rows anywhere, which is a real pass: the rule looked and found nothing.
+pub fn zero_rows_is_vacuous(
+    scope: Option<&BTreeSet<String>>,
+    filter: &SelectionFilter,
+    reported_kinds: &BTreeSet<String>,
+) -> bool {
+    // No selector: the whole project was examined.
+    let Some(scope) = scope else { return false };
+    // The check opted out of scoping, so the selection never touched its rows.
+    if matches!(filter, SelectionFilter::None) {
+        return false;
+    }
+    if scope.is_empty() {
+        return true;
+    }
+    // The rule found nothing to report project-wide, so there was nothing for the scope to drop.
+    if reported_kinds.is_empty() {
+        return false;
+    }
+    !reported_kinds
+        .iter()
+        .any(|kind| scope.iter().any(|id| id.starts_with(kind)))
+}
+
+/// The resource-type prefix of a unique id: `model.p.a` -> `model.`.
+///
+/// Ids that carry no prefix are their own kind, so an exact match still works.
+fn kind_of(id: &str) -> String {
+    match id.find('.') {
+        Some(i) => id[..=i].to_string(),
+        None => id.to_string(),
+    }
 }
 
 /// Map a check node's resolved `selection_filter_on` config onto a [`SelectionFilter`].
@@ -129,16 +163,29 @@ pub fn index_unavailable_reason(metadata_dir: &Path, index_dir: &Path) -> Option
 /// When `selected` is `Some`, rows are scoped to that node set according to `filter`, so a
 /// project-wide check evaluates only the selected nodes. Shared by the standalone `dbt check`
 /// parse-time runner; kept in one place so "what counts as a violation" has a single answer.
+/// A check's rows, evaluated against the selection.
+pub struct Evaluation {
+    /// Rows that survived scoping. Zero is a pass -- unless it is vacuous; see
+    /// [`zero_rows_is_vacuous`].
+    pub violations: u64,
+    /// First few rows, for the log.
+    pub preview: Vec<String>,
+    /// Resource-type prefixes of the ids found in the scoping columns **before** filtering, so a
+    /// zero-row result can be told apart from one whose scope held nothing of the right kind.
+    pub reported_kinds: BTreeSet<String>,
+}
+
 pub fn evaluate_batches(
     batches: &[arrow::record_batch::RecordBatch],
     filter: &SelectionFilter,
     selected: Option<&BTreeSet<String>>,
     max_rows: usize,
-) -> Result<(u64, Vec<String>), String> {
+) -> Result<Evaluation, String> {
     use arrow::util::display::ArrayFormatter;
     use dbt_index_core::format::FMT_OPTS;
     let mut count: u64 = 0;
     let mut preview: Vec<String> = Vec::new();
+    let mut reported_kinds: BTreeSet<String> = BTreeSet::new();
     for batch in batches {
         let Ok(formatters) = batch
             .columns()
@@ -177,6 +224,11 @@ pub fn evaluate_batches(
             }
         };
         for row in 0..batch.num_rows() {
+            // Recorded before the row is filtered away: what the check reports on is a property of
+            // the check, not of the selection.
+            for &i in &filter_idxs {
+                reported_kinds.insert(kind_of(&formatters[i].value(row).to_string()));
+            }
             if let Some(sel) = selected
                 && !filter_idxs.is_empty()
                 && !filter_idxs
@@ -202,7 +254,11 @@ pub fn evaluate_batches(
             }
         }
     }
-    Ok((count, preview))
+    Ok(Evaluation {
+        violations: count,
+        preview,
+        reported_kinds,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -262,32 +318,7 @@ mod tests {
         );
     }
 
-    /// Zero rows against an empty scope means "nothing was examined", not "nothing is wrong".
-    #[test]
-    fn zero_rows_is_vacuous_only_when_scoped_and_empty() {
-        let empty = BTreeSet::new();
-        let non_empty = BTreeSet::from(["model.p.a".to_string()]);
-
-        // Node-scoped check, empty scope -> vacuous.
-        assert!(zero_rows_is_vacuous(Some(&empty), &SelectionFilter::Auto));
-        assert!(zero_rows_is_vacuous(
-            Some(&empty),
-            &SelectionFilter::Columns(vec!["unique_id".to_string()])
-        ));
-
-        // Something was in scope -> a genuine pass.
-        assert!(!zero_rows_is_vacuous(
-            Some(&non_empty),
-            &SelectionFilter::Auto
-        ));
-
-        // No selector at all -> whole project was examined, so a genuine pass.
-        assert!(!zero_rows_is_vacuous(None, &SelectionFilter::Auto));
-
-        // `None` filter opts out of scoping entirely, so an empty scope is irrelevant to it.
-        assert!(!zero_rows_is_vacuous(Some(&empty), &SelectionFilter::None));
-    }
-
+    /// A single-batch, all-Utf8 record batch from `(column, values)` pairs.
     fn preview_batch(cols: &[(&str, &[&str])]) -> arrow::record_batch::RecordBatch {
         use arrow::array::StringArray;
         use arrow::datatypes::{DataType, Field, Schema};
@@ -307,6 +338,91 @@ mod tests {
         arrow::record_batch::RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays).unwrap()
     }
 
+    /// Zero rows can mean "nothing was examined" two ways: nothing selected, or nothing of the
+    /// kind this check reports on.
+    #[test]
+    fn zero_rows_is_vacuous_when_the_scope_holds_nothing_the_check_reports_on() {
+        let empty = BTreeSet::new();
+        let models = BTreeSet::from(["model.p.a".to_string()]);
+        let checks_only = BTreeSet::from(["check.p.one".to_string(), "check.p.two".to_string()]);
+        let reports_models = BTreeSet::from(["model.".to_string()]);
+        let reports_checks = BTreeSet::from(["check.".to_string()]);
+        let reports_nothing = BTreeSet::new();
+
+        // Nothing selected -> vacuous, whatever the check reports on.
+        assert!(zero_rows_is_vacuous(
+            Some(&empty),
+            &SelectionFilter::Auto,
+            &reports_models
+        ));
+        assert!(zero_rows_is_vacuous(
+            Some(&empty),
+            &SelectionFilter::Columns(vec!["unique_id".to_string()]),
+            &reports_models
+        ));
+
+        // The scope holds only checks and the check reports on models: every row was filtered
+        // away, so nothing was examined. `--select tag:quality` on a project that tags its checks.
+        assert!(zero_rows_is_vacuous(
+            Some(&checks_only),
+            &SelectionFilter::Auto,
+            &reports_models
+        ));
+
+        // Same scope, but a check *about checks* — those ids are exactly what it reports on, so
+        // zero rows means they are all fine.
+        assert!(!zero_rows_is_vacuous(
+            Some(&checks_only),
+            &SelectionFilter::Auto,
+            &reports_checks
+        ));
+
+        // A model was in scope and the check reports on models -> a genuine pass.
+        assert!(!zero_rows_is_vacuous(
+            Some(&models),
+            &SelectionFilter::Auto,
+            &reports_models
+        ));
+
+        // The check reported no rows at all: the rule looked project-wide and found nothing.
+        assert!(!zero_rows_is_vacuous(
+            Some(&models),
+            &SelectionFilter::Auto,
+            &reports_nothing
+        ));
+
+        // No selector at all -> whole project was examined.
+        assert!(!zero_rows_is_vacuous(
+            None,
+            &SelectionFilter::Auto,
+            &reports_models
+        ));
+
+        // `None` opts out of scoping, so the scope is irrelevant to it.
+        assert!(!zero_rows_is_vacuous(
+            Some(&empty),
+            &SelectionFilter::None,
+            &reports_models
+        ));
+    }
+
+    /// The kinds are collected before filtering: what a check reports on is a property of the
+    /// check, not of the selection that just discarded its rows.
+    #[test]
+    fn reported_kinds_survive_being_filtered_out() {
+        let batch = preview_batch(&[("unique_id", &["model.p.a"]), ("name", &["a"])]);
+        let scope = BTreeSet::from(["check.p.one".to_string()]);
+        let eval = evaluate_batches(&[batch], &SelectionFilter::Auto, Some(&scope), 5).unwrap();
+
+        assert_eq!(eval.violations, 0, "the model row is out of scope");
+        assert_eq!(eval.reported_kinds, BTreeSet::from(["model.".to_string()]));
+        assert!(zero_rows_is_vacuous(
+            Some(&scope),
+            &SelectionFilter::Auto,
+            &eval.reported_kinds
+        ));
+    }
+
     #[test]
     fn preview_omits_name_and_message_when_unique_id_is_present() {
         let batch = preview_batch(&[
@@ -315,10 +431,10 @@ mod tests {
             ("column_name", &["id"]),
             ("message", &["column has no description"]),
         ]);
-        let (count, preview) = evaluate_batches(&[batch], &SelectionFilter::None, None, 5).unwrap();
-        assert_eq!(count, 1);
+        let eval = evaluate_batches(&[batch], &SelectionFilter::None, None, 5).unwrap();
+        assert_eq!(eval.violations, 1);
         assert_eq!(
-            preview,
+            eval.preview,
             vec!["unique_id=model.p.a, column_name=id".to_string()]
         );
     }
@@ -454,7 +570,10 @@ pub fn run_parse_time_checks(
                     .results
                     .push(CheckResult::error(unique_id, name, message));
             }
-            Ok((0, _)) if zero_rows_is_vacuous(selection, &filter) => {
+            Ok(eval)
+                if eval.violations == 0
+                    && zero_rows_is_vacuous(selection, &filter, &eval.reported_kinds) =>
+            {
                 outcome.results.push(CheckResult {
                     unique_id,
                     name,
@@ -465,14 +584,15 @@ pub fn run_parse_time_checks(
                     violations: None,
                 });
             }
-            Ok((0, _)) => outcome.results.push(CheckResult {
+            Ok(eval) if eval.violations == 0 => outcome.results.push(CheckResult {
                 unique_id,
                 name,
                 status: "pass",
                 message: None,
                 violations: Some(0),
             }),
-            Ok((violations, preview)) => {
+            Ok(eval) => {
+                let (violations, preview) = (eval.violations, eval.preview);
                 let detail = if preview.is_empty() {
                     None
                 } else {
