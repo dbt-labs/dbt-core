@@ -40,6 +40,21 @@ def _flags(**overrides):
     return SimpleNamespace(**base)
 
 
+class _FakeStream:
+    """Iterable text-mode stream stand-in that also supports close(), like a
+    real Popen pipe."""
+
+    def __init__(self, lines: Iterable[str]):
+        self._iter = iter(lines)
+        self.closed = False
+
+    def __iter__(self):
+        return self._iter
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class _FakePopen:
     """Stand-in for subprocess.Popen that supplies the attributes _run_fusion
     reads: iterable text-mode stdout/stderr streams, wait() -> returncode."""
@@ -51,8 +66,8 @@ class _FakePopen:
         stdout_lines: Iterable[str] = (),
         stderr_lines: Iterable[str] = (),
     ):
-        self.stdout = iter([line + "\n" for line in stdout_lines])
-        self.stderr = iter([line + "\n" for line in stderr_lines])
+        self.stdout = _FakeStream([line + "\n" for line in stdout_lines])
+        self.stderr = _FakeStream([line + "\n" for line in stderr_lines])
         self.returncode = returncode
 
     def wait(self) -> int:

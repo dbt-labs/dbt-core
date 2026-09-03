@@ -402,6 +402,8 @@ def _run_fusion(argv: List[str]) -> None:
             f"point to an alternate engine binary."
         ) from e
 
+    assert proc.stdout is not None and proc.stderr is not None  # guaranteed by stdout/stderr=PIPE above
+
     def _pump(stream, fallback_level: EventLevel) -> None:
         for raw_line in stream:
             line = raw_line.rstrip("\n")
@@ -426,6 +428,8 @@ def _run_fusion(argv: List[str]) -> None:
         reader.start()
     for reader in readers:
         reader.join()
+    proc.stdout.close()
+    proc.stderr.close()
     returncode = proc.wait()
 
     if returncode != 0:
