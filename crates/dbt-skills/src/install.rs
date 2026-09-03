@@ -1,31 +1,37 @@
-//! Copying selected skills into each provider directory.
+//! Copying selected skills into dbt's namespace in each provider directory.
 //!
-//! Every install is a plain copy — no symlinks, uniform across providers. dbt
-//! writes a skill only into a destination it can create fresh: an occupied
-//! directory is left exactly as it is, because dbt has no way to tell its own
-//! earlier copy from a skill the user wrote by hand. Re-running is a safe no-op.
+//! Every install is a plain copy into `dbt-<name>/`, with the copy's frontmatter
+//! `name` rewritten to match. Any `dbt-*` directory is dbt's, which is the whole
+//! ownership mechanism — nothing is recorded and nothing is read back. dbt
+//! overwrites freely inside its own namespace and never touches anything outside
+//! it. Re-running is a safe no-op.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use dbt_common::tracing::dbt_emit::{emit_info_progress_message, emit_warn_log_message};
-use dbt_common::{ErrorCode, FsResult, stdfs};
+use dbt_common::tracing::dbt_emit::emit_info_progress_message;
+use dbt_common::{FsResult, stdfs};
 use dbt_telemetry::ProgressMessage;
 use walkdir::WalkDir;
 
 use crate::discover::{DiscoveredSkill, SkillOrigin};
-use crate::hash::hash_skill_dir;
+use crate::hash::hash_skill_dir_excluding_skill_md;
+use crate::namespace;
+use crate::validate::SKILL_FILE;
 
 /// What happened to one skill in one destination directory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallOutcome {
     /// Freshly copied in.
     Installed,
-    /// Already present and identical to its source; left alone.
+    /// Already present and identical to what dbt would write; left alone.
     Unchanged,
+    /// Already present in dbt's namespace but different; overwritten.
+    Updated,
     /// The source resolves to the destination, so there is nothing to copy.
     SourceIsDestination,
-    /// Something else already occupies the directory; left untouched.
-    SkippedDestinationOccupied,
+    /// A directory in dbt's namespace that is no longer wanted; removed.
+    Pruned,
 }
 
 impl InstallOutcome {
@@ -37,10 +43,9 @@ impl InstallOutcome {
     const fn action(self) -> Option<&'static str> {
         match self {
             InstallOutcome::Installed => Some("Installing"),
-            // Nothing happened, or the skill already warned for itself.
-            InstallOutcome::Unchanged
-            | InstallOutcome::SourceIsDestination
-            | InstallOutcome::SkippedDestinationOccupied => None,
+            InstallOutcome::Updated => Some("Updating"),
+            InstallOutcome::Pruned => Some("Removing"),
+            InstallOutcome::Unchanged | InstallOutcome::SourceIsDestination => None,
         }
     }
 }
@@ -79,10 +84,10 @@ fn report_progress(report: &InstallReport, origin: Option<&SkillOrigin>) {
     ));
 }
 
-/// Install `selected` into every directory in `destinations`.
+/// Install `selected` into every directory in `destinations`, then prune.
 ///
-/// `project_root` anchors the (relative) destination directories. Returns one
-/// report per skill per destination.
+/// `InstallReport::skill_name` carries the **namespaced** directory name, since
+/// that is what appears on disk and in `dbt clean` output.
 pub fn install_skills(
     project_root: &Path,
     destinations: &[PathBuf],
@@ -92,53 +97,131 @@ pub fn install_skills(
 
     for destination in destinations {
         let absolute = project_root.join(destination);
+        let mut wanted = BTreeSet::new();
 
         for skill in selected {
+            let dir_name = namespace::namespaced(&skill.name);
+            wanted.insert(dir_name.clone());
             let report = InstallReport {
                 destination: destination.clone(),
-                skill_name: skill.name.clone(),
+                skill_name: dir_name,
                 outcome: install_one(&absolute, skill)?,
             };
             report_progress(&report, Some(&skill.origin));
             reports.push(report);
         }
+
+        reports.extend(prune_destination(&absolute, destination, &wanted)?);
     }
 
     Ok(reports)
 }
 
 fn install_one(destination: &Path, skill: &DiscoveredSkill) -> FsResult<InstallOutcome> {
-    let target = destination.join(&skill.name);
+    let target = destination.join(namespace::namespaced(&skill.name));
 
-    // A project may author its skills directly inside a provider directory. In
-    // that case there is nothing to copy, and copying would be self-destructive.
-    if same_path(&skill.dir, &target) {
+    // A project may author its skills directly inside a provider directory.
+    // Compare against both the namespaced target and the skill's own un-prefixed
+    // location: prefixing would otherwise copy an in-place skill beside itself
+    // and ship it twice.
+    if same_path(&skill.dir, &target) || same_path(&skill.dir, &destination.join(&skill.name)) {
         return Ok(InstallOutcome::SourceIsDestination);
     }
 
+    let rendered = render(skill)?;
+
     if target.exists() {
-        // Identical contents mean this is dbt's own copy from an earlier run (or
-        // a second destination that symlinks to the first), so re-running stays
-        // a no-op. Anything else is someone else's, and dbt will not guess:
-        // overwriting a hand-written skill is unrecoverable, a stale copy is not.
-        if hash_skill_dir(&target)? == hash_skill_dir(&skill.dir)? {
+        if installed_matches(skill, &target, &rendered)? {
             return Ok(InstallOutcome::Unchanged);
         }
-
-        emit_warn_log_message(
-            ErrorCode::SkillDestinationOccupied,
-            format!(
-                "Not installing skill '{}' into {}: a directory is already there and does not \
-                 match the version dbt would install. Delete it to let dbt install this skill.",
-                skill.name,
-                target.display()
-            ),
-        );
-        return Ok(InstallOutcome::SkippedDestinationOccupied);
+        // Inside dbt's namespace, so dbt replaces it without asking. There is no
+        // recorded state to tell a stale copy from a user edit, and the visible
+        // `dbt-` prefix is what tells users this directory is not theirs.
+        stdfs::remove_dir_all(&target)?;
+        write_skill(skill, &target, &rendered)?;
+        return Ok(InstallOutcome::Updated);
     }
 
-    copy_skill(&skill.dir, &target)?;
+    write_skill(skill, &target, &rendered)?;
     Ok(InstallOutcome::Installed)
+}
+
+/// The exact `SKILL.md` bytes dbt writes for this skill.
+fn render(skill: &DiscoveredSkill) -> FsResult<String> {
+    let source_md = stdfs::read_to_string(skill.dir.join(SKILL_FILE))?;
+    namespace::rewrite_name(&source_md, &namespace::namespaced(&skill.name))
+}
+
+/// Whether the installed copy is already exactly what dbt would write.
+///
+/// `SKILL.md` is compared against the regenerated bytes because the installed
+/// copy carries a rewritten `name`; every other file must match the source.
+fn installed_matches(skill: &DiscoveredSkill, target: &Path, rendered: &str) -> FsResult<bool> {
+    if stdfs::read_to_string(target.join(SKILL_FILE)).unwrap_or_default() != rendered {
+        return Ok(false);
+    }
+    Ok(
+        hash_skill_dir_excluding_skill_md(&skill.dir)?
+            == hash_skill_dir_excluding_skill_md(target)?,
+    )
+}
+
+/// Copy the skill in, then overwrite its `SKILL.md` with the namespaced version.
+/// The source tree is never modified.
+fn write_skill(skill: &DiscoveredSkill, target: &Path, rendered: &str) -> FsResult<()> {
+    copy_skill(&skill.dir, target)?;
+    stdfs::write(target.join(SKILL_FILE), rendered)
+}
+
+/// Remove directories in dbt's namespace that are no longer wanted.
+///
+/// Anything without the `dbt-` prefix is the user's and is never a candidate.
+fn prune_destination(
+    destination: &Path,
+    relative_destination: &Path,
+    wanted: &BTreeSet<String>,
+) -> FsResult<Vec<InstallReport>> {
+    let mut reports = Vec::new();
+    if !destination.is_dir() {
+        return Ok(reports);
+    }
+
+    for entry in stdfs::read_dir(destination)?.filter_map(Result::ok) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if wanted.contains(name) || !namespace::is_dbt_owned(name) {
+            continue;
+        }
+
+        stdfs::remove_dir_all(&path)?;
+        let report = InstallReport {
+            destination: relative_destination.to_path_buf(),
+            skill_name: name.to_string(),
+            outcome: InstallOutcome::Pruned,
+        };
+        report_progress(&report, None);
+        reports.push(report);
+    }
+
+    Ok(reports)
+}
+
+/// Remove dbt's entire namespace under `destinations`. Used by `dbt clean`.
+pub fn prune_all(project_root: &Path, destinations: &[PathBuf]) -> FsResult<Vec<InstallReport>> {
+    let mut reports = Vec::new();
+    for destination in destinations {
+        reports.extend(prune_destination(
+            &project_root.join(destination),
+            destination,
+            &BTreeSet::new(),
+        )?);
+    }
+    Ok(reports)
 }
 
 /// Recursively copy a skill directory.
@@ -189,7 +272,7 @@ fn same_path(left: &Path, right: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::validate::{SKILL_FILE, SkillFrontmatter};
+    use crate::validate::SkillFrontmatter;
     use std::fs;
     use tempfile::TempDir;
 
@@ -225,15 +308,29 @@ mod tests {
         reports.iter().map(|r| r.outcome).collect()
     }
 
+    fn installed_md(root: &Path, dir: &str) -> String {
+        fs::read_to_string(root.join(DEST).join(dir).join(SKILL_FILE)).unwrap()
+    }
+
     #[test]
-    fn installs_flat_into_the_destination() {
+    fn installs_into_the_dbt_namespace_and_rewrites_the_name() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         let selected = vec![make_source(root, "alpha", "body")];
 
         let reports = install_skills(root, &[PathBuf::from(DEST)], &selected).unwrap();
         assert_eq!(outcomes(&reports), vec![InstallOutcome::Installed]);
-        assert!(root.join(DEST).join("alpha").join(SKILL_FILE).is_file());
+
+        // Namespaced directory, and the declared name agrees with it.
+        assert!(root.join(DEST).join("dbt-alpha").join(SKILL_FILE).is_file());
+        assert!(!root.join(DEST).join("alpha").exists());
+        assert!(installed_md(root, "dbt-alpha").contains("name: dbt-alpha"));
+        // The source is untouched.
+        assert!(
+            fs::read_to_string(root.join("skills/alpha").join(SKILL_FILE))
+                .unwrap()
+                .contains("name: alpha")
+        );
     }
 
     #[test]
@@ -245,7 +342,7 @@ mod tests {
         fs::write(skill.dir.join("scripts/run.sh"), "echo hi").unwrap();
 
         install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
-        assert!(root.join(DEST).join("alpha/scripts/run.sh").is_file());
+        assert!(root.join(DEST).join("dbt-alpha/scripts/run.sh").is_file());
     }
 
     #[test]
@@ -260,31 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn an_occupied_destination_is_left_alone_whoever_owns_it() {
-        // dbt keeps no record of what it installed, so it cannot tell its own
-        // stale copy from a skill the user wrote by hand, and refuses to touch
-        // either. Losing an update is recoverable; losing the user's work is not.
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        let skill = make_source(root, "alpha", "body");
-
-        let occupied = root.join(DEST).join("alpha");
-        fs::create_dir_all(&occupied).unwrap();
-        fs::write(occupied.join(SKILL_FILE), "hand written").unwrap();
-
-        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
-        assert_eq!(
-            outcomes(&reports),
-            vec![InstallOutcome::SkippedDestinationOccupied]
-        );
-        assert_eq!(
-            fs::read_to_string(occupied.join(SKILL_FILE)).unwrap(),
-            "hand written"
-        );
-    }
-
-    #[test]
-    fn a_changed_source_does_not_overwrite_the_installed_copy() {
+    fn a_changed_source_updates_the_installed_copy() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         let skill = make_source(root, "alpha", "first");
@@ -297,29 +370,124 @@ mod tests {
         .unwrap();
         let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
 
-        assert_eq!(
-            outcomes(&reports),
-            vec![InstallOutcome::SkippedDestinationOccupied]
-        );
-        let installed = fs::read_to_string(root.join(DEST).join("alpha").join(SKILL_FILE)).unwrap();
-        assert!(installed.ends_with("first"), "{installed}");
+        assert_eq!(outcomes(&reports), vec![InstallOutcome::Updated]);
+        assert!(installed_md(root, "dbt-alpha").ends_with("second"));
     }
 
     #[test]
-    fn nothing_is_removed_from_a_destination() {
+    fn a_changed_bundled_file_also_updates_the_installed_copy() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let stale = root.join(DEST).join("no-longer-shipped");
-        fs::create_dir_all(&stale).unwrap();
-        fs::write(stale.join(SKILL_FILE), "still here").unwrap();
+        let skill = make_source(root, "alpha", "body");
+        fs::create_dir_all(skill.dir.join("scripts")).unwrap();
+        fs::write(skill.dir.join("scripts/run.sh"), "echo one").unwrap();
+        install_skills(root, &[PathBuf::from(DEST)], &[skill.clone()]).unwrap();
 
-        let reports = install_skills(root, &[PathBuf::from(DEST)], &[]).unwrap();
-        assert!(reports.is_empty());
-        assert!(stale.join(SKILL_FILE).is_file());
+        fs::write(skill.dir.join("scripts/run.sh"), "echo two").unwrap();
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
+
+        assert_eq!(outcomes(&reports), vec![InstallOutcome::Updated]);
+        assert_eq!(
+            fs::read_to_string(root.join(DEST).join("dbt-alpha/scripts/run.sh")).unwrap(),
+            "echo two"
+        );
     }
 
     #[test]
-    fn a_skill_authored_in_the_provider_dir_is_not_copied_onto_itself() {
+    fn dbt_overwrites_edits_inside_its_own_namespace() {
+        // Deliberate: `dbt-*` is dbt's territory, like dbt_packages/. Without
+        // recorded state dbt cannot distinguish a user edit from a stale copy,
+        // and the visible namespace is the warning.
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let skill = make_source(root, "alpha", "body");
+        install_skills(root, &[PathBuf::from(DEST)], &[skill.clone()]).unwrap();
+
+        let installed = root.join(DEST).join("dbt-alpha");
+        fs::write(installed.join(SKILL_FILE), "the user rewrote this").unwrap();
+
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
+        assert_eq!(outcomes(&reports), vec![InstallOutcome::Updated]);
+        assert!(installed_md(root, "dbt-alpha").contains("name: dbt-alpha"));
+    }
+
+    #[test]
+    fn a_user_authored_skill_of_the_same_name_cannot_collide() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let skill = make_source(root, "alpha", "body");
+
+        // The user's own `alpha` lives beside, not under, dbt's namespace.
+        let mine = root.join(DEST).join("alpha");
+        fs::create_dir_all(&mine).unwrap();
+        fs::write(mine.join(SKILL_FILE), "hand written").unwrap();
+
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
+        assert_eq!(outcomes(&reports), vec![InstallOutcome::Installed]);
+        assert_eq!(
+            fs::read_to_string(mine.join(SKILL_FILE)).unwrap(),
+            "hand written"
+        );
+        assert!(root.join(DEST).join("dbt-alpha").is_dir());
+    }
+
+    #[test]
+    fn a_skill_that_is_no_longer_wanted_is_pruned() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let alpha = make_source(root, "alpha", "body");
+        let beta = make_source(root, "beta", "body");
+
+        install_skills(root, &[PathBuf::from(DEST)], &[alpha.clone(), beta]).unwrap();
+        assert!(root.join(DEST).join("dbt-beta").is_dir());
+
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[alpha]).unwrap();
+        assert!(
+            reports
+                .iter()
+                .any(|r| r.skill_name == "dbt-beta" && r.outcome == InstallOutcome::Pruned)
+        );
+        assert!(!root.join(DEST).join("dbt-beta").exists());
+    }
+
+    #[test]
+    fn pruning_leaves_everything_outside_the_namespace_alone() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        let mine = root.join(DEST).join("hand-written");
+        fs::create_dir_all(&mine).unwrap();
+        fs::write(mine.join(SKILL_FILE), "mine").unwrap();
+
+        install_skills(root, &[PathBuf::from(DEST)], &[]).unwrap();
+        assert!(mine.join(SKILL_FILE).is_file());
+    }
+
+    #[test]
+    fn prune_all_removes_the_namespace_but_not_user_skills() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        install_skills(
+            root,
+            &[PathBuf::from(DEST)],
+            &[make_source(root, "alpha", "body")],
+        )
+        .unwrap();
+
+        let mine = root.join(DEST).join("hand-written");
+        fs::create_dir_all(&mine).unwrap();
+        fs::write(mine.join(SKILL_FILE), "mine").unwrap();
+
+        prune_all(root, &[PathBuf::from(DEST)]).unwrap();
+        assert!(!root.join(DEST).join("dbt-alpha").exists());
+        assert!(mine.join(SKILL_FILE).is_file());
+    }
+
+    #[test]
+    fn a_skill_authored_in_the_provider_dir_is_not_duplicated_into_the_namespace() {
+        // R5 regression guard. Branch A compared source against the plain target
+        // path; with a prefix the paths differ, so a naive check would copy
+        // `.agents/skills/alpha` to `.agents/skills/dbt-alpha` and ship the same
+        // skill twice.
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
 
@@ -349,6 +517,10 @@ mod tests {
             outcomes(&reports),
             vec![InstallOutcome::SourceIsDestination]
         );
+        assert!(
+            !root.join(DEST).join("dbt-alpha").exists(),
+            "must not duplicate"
+        );
     }
 
     #[test]
@@ -359,10 +531,10 @@ mod tests {
         let destinations = [PathBuf::from(DEST), PathBuf::from(".claude/skills")];
 
         install_skills(root, &destinations, &selected).unwrap();
-        assert!(root.join(DEST).join("alpha").join(SKILL_FILE).is_file());
+        assert!(root.join(DEST).join("dbt-alpha").join(SKILL_FILE).is_file());
         assert!(
             root.join(".claude/skills")
-                .join("alpha")
+                .join("dbt-alpha")
                 .join(SKILL_FILE)
                 .is_file()
         );
@@ -374,7 +546,7 @@ mod tests {
         // dbt-core's own repo symlinks .claude/skills -> ../.agents/skills, so a
         // user with `ai_provider: [wizard, claude]` has two destination paths
         // naming one directory. The second pass must recognize the copy the first
-        // pass just wrote as identical, not report the destination as occupied.
+        // pass just wrote as identical rather than rewriting it.
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         let selected = vec![make_source(root, "alpha", "body")];
@@ -395,7 +567,7 @@ mod tests {
             .filter_map(Result::ok)
             .map(|e| e.file_name().to_string_lossy().to_string())
             .collect();
-        assert_eq!(installed, vec!["alpha".to_string()]);
+        assert_eq!(installed, vec!["dbt-alpha".to_string()]);
     }
 
     #[test]
@@ -404,8 +576,6 @@ mod tests {
         // A package can ship whatever it likes inside its own skill directory,
         // including a symlink to somewhere outside the project. Copying such a
         // link — or worse, its target — would leak files into the install.
-        // `copy_entry` only handles regular files and directories; this pins
-        // that, since it is a security boundary and not just tidiness.
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         fs::write(root.join("secret.txt"), "TOP SECRET").unwrap();
@@ -416,7 +586,7 @@ mod tests {
 
         install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
 
-        let installed = root.join(DEST).join("leaky");
+        let installed = root.join(DEST).join("dbt-leaky");
         assert!(installed.join(SKILL_FILE).is_file());
         assert!(!installed.join("stolen.txt").exists());
         assert!(!installed.join("everything").exists());

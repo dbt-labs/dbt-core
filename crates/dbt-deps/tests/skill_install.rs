@@ -115,7 +115,7 @@ async fn installs_a_skill_shipped_by_a_package() {
 
     project.deps(Some(&["claude".to_string()])).await;
 
-    let installed = project.installed(CLAUDE_DIR, "from-package");
+    let installed = project.installed(CLAUDE_DIR, "dbt-from-package");
     assert!(installed.join("SKILL.md").is_file());
 }
 
@@ -128,7 +128,7 @@ async fn installs_the_projects_own_skills_too() {
 
     assert!(
         project
-            .installed(AGENTS_DIR, "mine")
+            .installed(AGENTS_DIR, "dbt-mine")
             .join("SKILL.md")
             .is_file()
     );
@@ -150,13 +150,13 @@ async fn writes_into_every_provider_directory_once() {
 
     assert!(
         project
-            .installed(AGENTS_DIR, "mine")
+            .installed(AGENTS_DIR, "dbt-mine")
             .join("SKILL.md")
             .is_file()
     );
     assert!(
         project
-            .installed(CLAUDE_DIR, "mine")
+            .installed(CLAUDE_DIR, "dbt-mine")
             .join("SKILL.md")
             .is_file()
     );
@@ -193,7 +193,7 @@ async fn ai_provider_can_be_set_in_project_flags() {
 
     assert!(
         project
-            .installed(CLAUDE_DIR, "mine")
+            .installed(CLAUDE_DIR, "dbt-mine")
             .join("SKILL.md")
             .is_file()
     );
@@ -210,8 +210,8 @@ async fn a_disabled_skill_is_not_installed() {
 
     project.deps(Some(&["wizard".to_string()])).await;
 
-    assert!(!project.installed(AGENTS_DIR, "mine").exists());
-    assert!(project.installed(AGENTS_DIR, "yours").is_dir());
+    assert!(!project.installed(AGENTS_DIR, "dbt-mine").exists());
+    assert!(project.installed(AGENTS_DIR, "dbt-yours").is_dir());
 }
 
 #[tokio::test]
@@ -225,7 +225,7 @@ async fn a_package_skill_can_be_disabled_by_the_root_project() {
 
     project.deps(Some(&["wizard".to_string()])).await;
 
-    assert!(!project.installed(AGENTS_DIR, "unwanted").exists());
+    assert!(!project.installed(AGENTS_DIR, "dbt-unwanted").exists());
 }
 
 #[tokio::test]
@@ -241,7 +241,7 @@ async fn a_package_is_read_from_its_own_skill_paths() {
 
     assert!(
         project
-            .installed(AGENTS_DIR, "custom")
+            .installed(AGENTS_DIR, "dbt-custom")
             .join("SKILL.md")
             .is_file()
     );
@@ -256,7 +256,7 @@ async fn the_project_wins_a_name_collision() {
 
     project.deps(Some(&["wizard".to_string()])).await;
 
-    let installed = project.installed(AGENTS_DIR, "shared");
+    let installed = project.installed(AGENTS_DIR, "dbt-shared");
     let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
     assert!(contents.ends_with("from the project"), "{contents}");
 }
@@ -272,7 +272,7 @@ async fn the_first_declared_package_wins_a_collision_between_packages() {
 
     project.deps(Some(&["wizard".to_string()])).await;
 
-    let installed = project.installed(AGENTS_DIR, "shared");
+    let installed = project.installed(AGENTS_DIR, "dbt-shared");
     let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
     assert!(contents.ends_with("from zeta"), "{contents}");
 }
@@ -287,8 +287,8 @@ async fn a_malformed_skill_is_skipped_without_failing_deps() {
 
     project.deps(Some(&["wizard".to_string()])).await;
 
-    assert!(project.installed(AGENTS_DIR, "good").is_dir());
-    assert!(!project.installed(AGENTS_DIR, "bad").exists());
+    assert!(project.installed(AGENTS_DIR, "dbt-good").is_dir());
+    assert!(!project.installed(AGENTS_DIR, "dbt-bad").exists());
 }
 
 #[tokio::test]
@@ -298,7 +298,7 @@ async fn re_running_deps_is_a_no_op() {
     let provider = ["wizard".to_string()];
 
     project.deps(Some(&provider)).await;
-    let installed = project.installed(AGENTS_DIR, "mine");
+    let installed = project.installed(AGENTS_DIR, "dbt-mine");
     let first = fs::read_to_string(installed.join("SKILL.md")).unwrap();
 
     project.deps(Some(&provider)).await;
@@ -312,70 +312,71 @@ async fn re_running_deps_is_a_no_op() {
         .filter_map(Result::ok)
         .map(|e| e.file_name().to_string_lossy().to_string())
         .collect();
-    assert_eq!(entries, vec!["mine".to_string()], "no duplicate install");
-}
-
-#[tokio::test]
-async fn a_changed_package_skill_is_left_in_place_for_now() {
-    // dbt cannot yet tell its own installed copy from one the user edited, so it
-    // declines to overwrite either. Restoring in-place updates is the follow-up.
-    let project = TestProject::new("name: root_project\nprofile: default\n");
-    let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
-    let source = package.join("skills/evolving");
-    write_skill_at(&source, "evolving", "version one");
-    let provider = ["wizard".to_string()];
-
-    project.deps(Some(&provider)).await;
-    write_skill_at(&source, "evolving", "version two");
-    project.deps(Some(&provider)).await;
-
-    let installed = project.installed(AGENTS_DIR, "evolving");
-    let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
-    assert!(contents.ends_with("version one"), "{contents}");
-}
-
-#[tokio::test]
-async fn a_user_edited_copy_is_left_alone() {
-    // Holds for a blunter reason than it used to: dbt now overwrites nothing at
-    // all, rather than detecting the edit specifically.
-    let project = TestProject::new("name: root_project\nprofile: default\n");
-    let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
-    let source = package.join("skills/evolving");
-    write_skill_at(&source, "evolving", "version one");
-    let provider = ["wizard".to_string()];
-
-    project.deps(Some(&provider)).await;
-
-    let installed = project.installed(AGENTS_DIR, "evolving");
-    fs::write(installed.join("SKILL.md"), "the user rewrote this").unwrap();
-
-    write_skill_at(&source, "evolving", "version two");
-    project.deps(Some(&provider)).await;
-
     assert_eq!(
-        fs::read_to_string(installed.join("SKILL.md")).unwrap(),
-        "the user rewrote this"
+        entries,
+        vec!["dbt-mine".to_string()],
+        "no duplicate install"
     );
 }
 
 #[tokio::test]
-async fn a_removed_skill_is_left_behind_and_user_skills_survive() {
+async fn a_changed_package_skill_is_updated_on_the_next_deps() {
+    let project = TestProject::new("name: root_project\nprofile: default\n");
+    let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
+    let source = package.join("skills/evolving");
+    write_skill_at(&source, "evolving", "version one");
+    let provider = ["wizard".to_string()];
+
+    project.deps(Some(&provider)).await;
+    write_skill_at(&source, "evolving", "version two");
+    project.deps(Some(&provider)).await;
+
+    let installed = project.installed(AGENTS_DIR, "dbt-evolving");
+    let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
+    assert!(contents.contains("version two"), "{contents}");
+}
+
+#[tokio::test]
+async fn dbt_overwrites_edits_inside_its_own_namespace() {
+    // The `dbt-` prefix is the contract: this directory belongs to dbt, the way
+    // dbt_packages/ does. Protecting edits would need recorded state, which this
+    // mechanism deliberately does not keep.
+    let project = TestProject::new("name: root_project\nprofile: default\n");
+    let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
+    let source = package.join("skills/evolving");
+    write_skill_at(&source, "evolving", "version one");
+    let provider = ["wizard".to_string()];
+
+    project.deps(Some(&provider)).await;
+
+    let installed = project.installed(AGENTS_DIR, "dbt-evolving");
+    fs::write(installed.join("SKILL.md"), "the user rewrote this").unwrap();
+
+    project.deps(Some(&provider)).await;
+
+    let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
+    assert!(contents.contains("name: dbt-evolving"), "{contents}");
+    assert!(!contents.contains("the user rewrote this"), "{contents}");
+}
+
+#[tokio::test]
+async fn a_removed_skill_is_pruned_and_user_skills_survive() {
     let project = TestProject::new("name: root_project\nprofile: default\n");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
     write_skill_at(&package.join("skills/temporary"), "temporary", "body");
     let provider = ["wizard".to_string()];
 
     project.deps(Some(&provider)).await;
-    assert!(project.installed(AGENTS_DIR, "temporary").is_dir());
+    assert!(project.installed(AGENTS_DIR, "dbt-temporary").is_dir());
 
+    // A skill the user wrote by hand, outside dbt's namespace.
     let hand_written = project.installed(AGENTS_DIR, "hand-written");
     write_skill_at(&hand_written, "hand-written", "mine");
 
     fs::remove_dir_all(package.join("skills/temporary")).unwrap();
     project.deps(Some(&provider)).await;
 
-    // Cleaning this up needs a way to tell dbt's copies apart from the user's.
-    assert!(project.installed(AGENTS_DIR, "temporary").is_dir());
+    assert!(!project.installed(AGENTS_DIR, "dbt-temporary").exists());
     assert!(hand_written.join("SKILL.md").is_file());
 }
 
@@ -390,7 +391,7 @@ async fn bundled_files_are_copied_alongside_the_skill() {
 
     project.deps(Some(&["wizard".to_string()])).await;
 
-    let installed = project.installed(AGENTS_DIR, "with-scripts");
+    let installed = project.installed(AGENTS_DIR, "dbt-with-scripts");
     assert_eq!(
         fs::read_to_string(installed.join("scripts/run.sh")).unwrap(),
         "echo hi"
@@ -408,4 +409,37 @@ async fn the_source_skill_is_never_modified() {
     project.deps(Some(&["claude".to_string()])).await;
 
     assert_eq!(fs::read_to_string(source.join("SKILL.md")).unwrap(), before);
+}
+
+#[tokio::test]
+async fn the_installed_skill_declares_its_namespaced_name() {
+    let project = TestProject::new("name: root_project\nprofile: default\n");
+    let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
+    let source = package.join("skills/from-package");
+    write_skill_at(&source, "from-package", "body");
+
+    project.deps(Some(&["claude".to_string()])).await;
+
+    let installed = project.installed(CLAUDE_DIR, "dbt-from-package");
+    let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
+    assert!(contents.contains("name: dbt-from-package"), "{contents}");
+    // The package's own copy still declares the author's name.
+    let original = fs::read_to_string(source.join("SKILL.md")).unwrap();
+    assert!(original.contains("name: from-package"), "{original}");
+}
+
+#[tokio::test]
+async fn a_user_skill_named_like_dbts_is_the_one_hole_in_the_namespace() {
+    // Documented limitation: dbt cannot distinguish a user directory that
+    // deliberately starts with `dbt-` from one of its own, so it prunes it.
+    let project = TestProject::new("name: root_project\nprofile: default\n");
+    let squatter = project.installed(AGENTS_DIR, "dbt-mine");
+    write_skill_at(&squatter, "dbt-mine", "the user picked this name");
+
+    project.deps(Some(&["wizard".to_string()])).await;
+
+    assert!(
+        !squatter.exists(),
+        "a dbt- prefixed user skill is treated as dbt's"
+    );
 }

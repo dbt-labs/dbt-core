@@ -1,0 +1,7 @@
+kind: Features
+body: Install agent skills from packages into a dbt- prefixed namespace inside the agent skills directory, so dbt can update and prune its own skills while leaving yours alone.
+time: 2026-09-03T16:49:17.502209-06:00
+custom:
+    author: dbeatty10
+    issue: "14556"
+    project: dbt-core
