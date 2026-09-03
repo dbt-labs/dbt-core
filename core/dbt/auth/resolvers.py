@@ -81,16 +81,8 @@ class OAuthPassiveResolver:
     """Resolves credentials from a cached OAuth session — no user interaction.
 
     Checks ~/.dbt/oauth_sessions.json for a non-expired session matching
-    client_id. If the access token is expired but a refresh token is present,
-    attempts a token refresh.
-
-    Client ID and account matching:
-    Only sessions for the given client_id are considered. When account_id is set,
-    only sessions for that dbt platform account are considered — a cache holding
-    sessions for several accounts then resolves the configured one instead of
-    whichever session happens to come first. If no session matches the requested
-    account, NotAuthenticated is raised so the caller's chain can fall through to
-    another resolver rather than silently authenticating against the wrong account.
+    client_id and, when specified, account_id. If the access token is expired
+    but a refresh token is present, attempts a token refresh.
     """
 
     kind = ResolverKind.OAUTH_PASSIVE
