@@ -2774,7 +2774,7 @@ async fn prepare_write_only_execution_record(
                 last_modified_epoch: None,
                 clone_time_travel_limit: None,
                 clone_table_properties: None,
-                clone_chain_depth_limit: clone_chain_depth_limit_for_seed(ctx, seed),
+                clone_chain_depth_limit: None,
                 dbt_project_info: DbtProjectInfo::from(ctx),
             },
             create_macro_resolver(ctx),
@@ -2854,7 +2854,7 @@ async fn submit_seed(
             last_modified_epoch,
             clone_time_travel_limit,
             clone_table_properties: None,
-            clone_chain_depth_limit: clone_chain_depth_limit_for_seed(ctx, seed),
+            clone_chain_depth_limit: None,
             dbt_project_info: DbtProjectInfo::from(ctx),
         },
         create_macro_resolver(ctx),
@@ -3219,22 +3219,6 @@ fn stale_upstream_policy_for_node(
         Some(UpdatesOn::All) => StaleUpstreamPolicy::All,
         Some(UpdatesOn::Any) | None => StaleUpstreamPolicy::Any,
     }
-}
-
-/// Seeds skip `build_sql_context`, so derive the limit the way it does.
-fn clone_chain_depth_limit_for_seed(ctx: &TaskRunnerCtx, seed: &DbtSeed) -> Option<i64> {
-    let is_targeting_prod = ctx
-        .inner
-        .run_cache_ctx
-        .run_cache_service_config
-        .as_ref()
-        .map(|config| config.is_defer_to_target(ctx.dbt_profile()))
-        .unwrap_or(false);
-    clone_chain_depth_limit_for_adapter(
-        seed.node_adapter(),
-        is_targeting_prod,
-        ctx.dbt_profile().allow_clones,
-    )
 }
 
 pub(crate) fn clone_chain_depth_limit_for_adapter(
@@ -4603,7 +4587,6 @@ mod tests {
     use dbt_adapter::sql_types::DefaultTypeOps;
     use dbt_common::collections::DashMap;
     use dbt_common::io_args::RunCacheMode;
-    use dbt_common::path::DbtPath;
     use dbt_common::{CompiledSpans, MacroSpan};
     use dbt_dag::schedule::Schedule;
     use dbt_frontend_common::FullyQualifiedName;
@@ -8444,101 +8427,6 @@ mod tests {
             clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, false, false),
             Some(0)
         );
-    }
-
-    fn test_task_runner_ctx_with_allow_clones(allow_clones: bool) -> TaskRunnerCtx {
-        let mut ctx = test_task_runner_ctx(None);
-        Arc::get_mut(&mut ctx.inner)
-            .expect("sole owner of inner right after construction")
-            .dbt_profile = Arc::new(DbtProfile {
-            allow_clones,
-            ..ctx.dbt_profile().clone()
-        });
-        ctx
-    }
-
-    /// Seed body hashing reads the CSV off disk relative to the project root,
-    /// so the write-only record can't be built without pointing the ctx at one.
-    fn set_project_root(ctx: &mut TaskRunnerCtx, project_root: &Path) {
-        let inner =
-            Arc::get_mut(&mut ctx.inner).expect("sole owner of inner right after construction");
-        Arc::get_mut(&mut inner.arg)
-            .expect("sole owner of args right after construction")
-            .io
-            .in_dir = project_root.to_path_buf();
-    }
-
-    fn test_seed_on_adapter(adapter: AdapterType) -> DbtSeed {
-        let mut seed = DbtSeed::default();
-        seed.__base_attr__.adapter = adapter;
-        seed
-    }
-
-    fn seed_with_csv(project_root: &Path) -> DbtSeed {
-        std::fs::create_dir_all(project_root.join("seeds")).unwrap();
-        std::fs::write(
-            project_root.join("seeds").join("cities.csv"),
-            "id,name\n1,Philadelphia\n",
-        )
-        .unwrap();
-
-        let mut seed = test_seed_on_adapter(AdapterType::Snowflake);
-        seed.__common_attr__.unique_id = "seed.test.cities".to_string();
-        seed.__common_attr__.name = "cities".to_string();
-        seed.__common_attr__.original_file_path = DbtPath::from("seeds/cities.csv");
-        set_state_explain_base(&mut seed.__base_attr__, DbtMaterialization::Seed, "cities");
-        seed
-    }
-
-    fn values_request(record: RunCachePendingExecutionRecord) -> SubmitValuesRequest {
-        match record.input {
-            RunCachePendingExecutionInput::Values(request) => *request,
-            RunCachePendingExecutionInput::Sql(_) => panic!("a seed submits values, not SQL"),
-        }
-    }
-
-    async fn seed_write_only_request(allow_clones: bool) -> SubmitValuesRequest {
-        let project_root = tempfile::tempdir().unwrap();
-        let seed = seed_with_csv(project_root.path());
-        let mut ctx = test_task_runner_ctx_with_allow_clones(allow_clones);
-        set_project_root(&mut ctx, project_root.path());
-
-        let record =
-            prepare_write_only_execution_record(&ctx, &seed, &task_result_with_sql(""), None)
-                .await
-                .unwrap()
-                .expect("a seed always produces a write-only record");
-        values_request(record)
-    }
-
-    #[tokio::test]
-    async fn seed_request_sends_zero_clone_chain_depth_limit_when_clones_disallowed() {
-        // Regression test for https://github.com/dbt-labs/dbt-core/issues/16136.
-        // Asserted on the built request rather than on the derivation: the bug
-        // was that seeds hardcoded `clone_chain_depth_limit: None`, so a test of
-        // the helper alone stays green through a revert. On Snowflake (no adapter
-        // default) `Some(0)` can only come from `allow_clones: false`.
-        assert_eq!(
-            seed_write_only_request(false).await.clone_chain_depth_limit,
-            Some(0)
-        );
-    }
-
-    #[tokio::test]
-    async fn seed_request_omits_clone_chain_depth_limit_when_clones_allowed() {
-        assert_eq!(
-            seed_write_only_request(true).await.clone_chain_depth_limit,
-            None
-        );
-    }
-
-    #[test]
-    fn clone_chain_depth_limit_for_seed_uses_the_seed_adapter() {
-        // The ctx default is Snowflake (no limit), so a Databricks seed proves
-        // the node's own adapter decides, not `ctx.default_adapter_type()`.
-        let ctx = test_task_runner_ctx_with_allow_clones(true);
-        let seed = test_seed_on_adapter(AdapterType::Databricks);
-        assert_eq!(clone_chain_depth_limit_for_seed(&ctx, &seed), Some(1));
     }
 
     fn state_explain_model(materialized: DbtMaterialization) -> DbtModel {
