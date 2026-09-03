@@ -17,6 +17,7 @@ use fs_deps::get_or_install_packages;
 use fs_deps::private_package::LocalPrivatePackageResolver;
 use tempfile::TempDir;
 
+const PROVENANCE: &str = ".provenance";
 const AGENTS_DIR: &str = ".agents/skills";
 const CLAUDE_DIR: &str = ".claude/skills";
 
@@ -107,6 +108,10 @@ fn write_skill_at(dir: &Path, name: &str, body: &str) {
     .unwrap();
 }
 
+fn provenance(skill_dir: &Path) -> String {
+    fs::read_to_string(skill_dir.join(PROVENANCE)).unwrap()
+}
+
 #[tokio::test]
 async fn installs_a_skill_shipped_by_a_package() {
     let project = TestProject::new("name: root_project\nprofile: default\n");
@@ -117,6 +122,11 @@ async fn installs_a_skill_shipped_by_a_package() {
 
     let installed = project.installed(CLAUDE_DIR, "from-package");
     assert!(installed.join("SKILL.md").is_file());
+
+    let provenance = provenance(&installed);
+    assert!(provenance.contains("managed_by: dbt"), "{provenance}");
+    assert!(provenance.contains("source: package"), "{provenance}");
+    assert!(provenance.contains("some_pkg"), "{provenance}");
 }
 
 #[tokio::test]
@@ -248,7 +258,7 @@ async fn a_package_is_read_from_its_own_skill_paths() {
 }
 
 #[tokio::test]
-async fn the_project_wins_a_name_collision() {
+async fn the_project_wins_a_name_collision_and_records_the_shadowed_skill() {
     let project = TestProject::new("name: root_project\nprofile: default\n");
     project.write_skill("skills/shared", "shared", "from the project");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
@@ -259,6 +269,11 @@ async fn the_project_wins_a_name_collision() {
     let installed = project.installed(AGENTS_DIR, "shared");
     let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
     assert!(contents.ends_with("from the project"), "{contents}");
+
+    let provenance = provenance(&installed);
+    assert!(provenance.contains("source: project"), "{provenance}");
+    assert!(provenance.contains("shadowed:"), "{provenance}");
+    assert!(provenance.contains("some_pkg"), "{provenance}");
 }
 
 #[tokio::test]
@@ -275,6 +290,7 @@ async fn the_first_declared_package_wins_a_collision_between_packages() {
     let installed = project.installed(AGENTS_DIR, "shared");
     let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
     assert!(contents.ends_with("from zeta"), "{contents}");
+    assert!(provenance(&installed).contains("alpha_pkg"));
 }
 
 #[tokio::test]
@@ -299,26 +315,17 @@ async fn re_running_deps_is_a_no_op() {
 
     project.deps(Some(&provider)).await;
     let installed = project.installed(AGENTS_DIR, "mine");
-    let first = fs::read_to_string(installed.join("SKILL.md")).unwrap();
+    let first = provenance(&installed);
 
     project.deps(Some(&provider)).await;
 
-    assert_eq!(
-        fs::read_to_string(installed.join("SKILL.md")).unwrap(),
-        first
-    );
-    let entries: Vec<_> = fs::read_dir(project.root.join(AGENTS_DIR))
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|e| e.file_name().to_string_lossy().to_string())
-        .collect();
-    assert_eq!(entries, vec!["mine".to_string()], "no duplicate install");
+    // Same bytes, including the install timestamp — nothing was rewritten.
+    assert_eq!(provenance(&installed), first);
+    assert!(installed.join("SKILL.md").is_file());
 }
 
 #[tokio::test]
-async fn a_changed_package_skill_is_left_in_place_for_now() {
-    // dbt cannot yet tell its own installed copy from one the user edited, so it
-    // declines to overwrite either. Restoring in-place updates is the follow-up.
+async fn a_changed_package_skill_is_updated_on_the_next_deps() {
     let project = TestProject::new("name: root_project\nprofile: default\n");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
     let source = package.join("skills/evolving");
@@ -331,13 +338,11 @@ async fn a_changed_package_skill_is_left_in_place_for_now() {
 
     let installed = project.installed(AGENTS_DIR, "evolving");
     let contents = fs::read_to_string(installed.join("SKILL.md")).unwrap();
-    assert!(contents.ends_with("version one"), "{contents}");
+    assert!(contents.ends_with("version two"), "{contents}");
 }
 
 #[tokio::test]
 async fn a_user_edited_copy_is_left_alone() {
-    // Holds for a blunter reason than it used to: dbt now overwrites nothing at
-    // all, rather than detecting the edit specifically.
     let project = TestProject::new("name: root_project\nprofile: default\n");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
     let source = package.join("skills/evolving");
@@ -359,7 +364,7 @@ async fn a_user_edited_copy_is_left_alone() {
 }
 
 #[tokio::test]
-async fn a_removed_skill_is_left_behind_and_user_skills_survive() {
+async fn a_removed_skill_is_pruned_and_user_skills_survive() {
     let project = TestProject::new("name: root_project\nprofile: default\n");
     let package = project.with_local_package("some_pkg", "name: some_pkg\nprofile: default\n");
     write_skill_at(&package.join("skills/temporary"), "temporary", "body");
@@ -368,14 +373,14 @@ async fn a_removed_skill_is_left_behind_and_user_skills_survive() {
     project.deps(Some(&provider)).await;
     assert!(project.installed(AGENTS_DIR, "temporary").is_dir());
 
+    // A skill the user wrote by hand, with no provenance sidecar.
     let hand_written = project.installed(AGENTS_DIR, "hand-written");
     write_skill_at(&hand_written, "hand-written", "mine");
 
     fs::remove_dir_all(package.join("skills/temporary")).unwrap();
     project.deps(Some(&provider)).await;
 
-    // Cleaning this up needs a way to tell dbt's copies apart from the user's.
-    assert!(project.installed(AGENTS_DIR, "temporary").is_dir());
+    assert!(!project.installed(AGENTS_DIR, "temporary").exists());
     assert!(hand_written.join("SKILL.md").is_file());
 }
 
@@ -408,4 +413,8 @@ async fn the_source_skill_is_never_modified() {
     project.deps(Some(&["claude".to_string()])).await;
 
     assert_eq!(fs::read_to_string(source.join("SKILL.md")).unwrap(), before);
+    assert!(
+        !source.join(PROVENANCE).exists(),
+        "dbt must not write a sidecar into a package's own source tree"
+    );
 }
