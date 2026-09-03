@@ -1,7 +1,0 @@
-kind: Features
-body: Recognize Databricks persist_constraints and schema.yml meta.constraints so Fusion can persist legacy constraints and unnamed primary-key expressions.
-time: 2026-08-26T23:30:22.364767+05:30
-custom:
-    author: sd-db
-    issue: "15773"
-    project: dbt-core
