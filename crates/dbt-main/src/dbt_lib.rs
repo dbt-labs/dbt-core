@@ -3,6 +3,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
+use dbt_common::tracing::formatters::duration::format_duration_fixed_width;
+use dbt_common::tracing::formatters::node::{format_node_action, format_node_type_fixed_width};
+
 use dbt_adapter::load_store::ResultStore;
 use dbt_adapter::{
     Adapter, AdapterType, convert_macro_result_to_record_batch,
@@ -91,7 +94,7 @@ use dbt_tasks_sa::base_context::build_base_context;
 use dbt_telemetry::ArtifactType;
 use dbt_telemetry::{
     CompiledCodeInline, NodeOutcome, NodeSkipReason, ProgressMessage, ShowDataOutput,
-    ShowDataOutputFormat, ShowResult,
+    ShowDataOutputFormat, ShowResult, TestOutcome,
 };
 
 use dbt_vortex::vortex_producer_is_running;
@@ -1344,8 +1347,51 @@ impl<'a> AllPhasesExecutor<'a> {
                     );
 
                     for r in &outcome.results {
+                        // One result line per check, in the shape a test's takes:
+                        // right-aligned verdict, fixed-width duration, node type, name.
+                        // Built from the same helpers the node formatter uses, so the
+                        // columns line up with the models and tests printed around it
+                        // on `dbt build`. Checks are not tasks, so they do not flow
+                        // through `NodeProcessed` -- borrowing the formatting is what
+                        // keeps them from looking like a different program's output.
+                        //
+                        // The verdict comes from `format_node_action` rather than a
+                        // local match, so a check's label and colour are a test's by
+                        // construction: green Passed, yellow Warned, red Failed. The
+                        // file and JSON layers strip ANSI from message bodies, so
+                        // colouring here reaches the terminal only.
+                        let (outcome, test_outcome, skip_reason) = match r.status {
+                            "pass" => (NodeOutcome::Success, Some(TestOutcome::Passed), None),
+                            "warn" => (NodeOutcome::Success, Some(TestOutcome::Warned), None),
+                            "fail" => (NodeOutcome::Success, Some(TestOutcome::Failed), None),
+                            "skipped" => (
+                                NodeOutcome::Skipped,
+                                None,
+                                Some(NodeSkipReason::Unspecified),
+                            ),
+                            // Not evaluated at all: red Failed, and the error below says
+                            // why. Reporting it as a test failure would claim the check
+                            // ran and disagreed with the project.
+                            _ => (NodeOutcome::Error, None, None),
+                        };
+                        emit_info_log_message(format!(
+                            "{} [{}] {} {}",
+                            format_node_action(
+                                outcome,
+                                skip_reason,
+                                test_outcome,
+                                None,
+                                false,
+                                true
+                            ),
+                            format_duration_fixed_width(Duration::from_secs_f64(r.execution_time)),
+                            format_node_type_fixed_width("check", true),
+                            r.name,
+                        ));
+
                         match r.status {
-                            "pass" => emit_info_log_message(format!("  PASS  check  {}", r.name)),
+                            // The line above is the whole report for a pass.
+                            "pass" => {}
                             "skipped" => emit_warn_log_message(
                                 ErrorCode::CheckSkipped,
                                 format!(
@@ -1355,10 +1401,15 @@ impl<'a> AllPhasesExecutor<'a> {
                                 ),
                             ),
                             _ => {
+                                // Show the rows the check's SQL returned, the way
+                                // `dbt show` shows a query's rows. `message` keeps the
+                                // compact `col=value` form for `run_results.json`,
+                                // which is read by tools rather than by people.
                                 let detail = r
-                                    .message
+                                    .rows
                                     .as_deref()
-                                    .map(|m| format!("\n  {m}"))
+                                    .map(|t| format!("\n{t}"))
+                                    .or_else(|| r.message.as_deref().map(|m| format!("\n  {m}")))
                                     .unwrap_or_default();
                                 let count = r
                                     .violations
