@@ -3,5 +3,5 @@ body: 'Bump the ClickHouse ADBC driver to 0.1.1: arbitrary connection settings v
 time: 2026-09-03T16:16:34.645792+02:00
 custom:
     author: koletzilla
-    issue: "14585"
+    issue: "16184"
     project: dbt-core
