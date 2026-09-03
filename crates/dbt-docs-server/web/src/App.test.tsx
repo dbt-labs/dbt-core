@@ -110,16 +110,16 @@ describe('<App />', () => {
       expect(screen.getByText('From the project.')).toBeVisible();
     });
 
-    it('falls back to the bundled default when no package defines one', async () => {
+    it('falls back to the dashboard default when no package defines one', async () => {
       // `fetchOverview` resolving null is the real "not defined" answer, not an
       // error — the landing page must still render something.
       renderApp(shellSource({ fetchOverview: async () => null } as never));
       await waitFor(() => {
-        expect(screen.getByText('Welcome!', { selector: 'h3' })).toBeVisible();
+        expect(screen.getByText('Welcome!', { selector: 'h1' })).toBeVisible();
       });
     });
 
-    it('falls back to the bundled default when the overview read fails', async () => {
+    it('falls back to the dashboard default when the overview read fails', async () => {
       // An unreadable dbt.docs must not blank the landing page.
       renderApp(
         shellSource({
@@ -129,7 +129,7 @@ describe('<App />', () => {
         } as never),
       );
       await waitFor(() => {
-        expect(screen.getByText('Welcome!', { selector: 'h3' })).toBeVisible();
+        expect(screen.getByText('Welcome!', { selector: 'h1' })).toBeVisible();
       });
     });
   });
