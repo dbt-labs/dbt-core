@@ -12,6 +12,7 @@ use dbt_schemas::schemas::project::{
     ProjectUnitTestConfig, SeedConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
 };
 use dbt_yaml::{ShouldBe, Value as YmlValue};
+use indexmap::IndexMap;
 use minijinja::Value;
 use minijinja::constants::CURRENT_PATH;
 use std::{
@@ -187,6 +188,89 @@ fn prune_unexpected_nulls_in_section<T>(
     );
 }
 
+/// Renders a single Yaml value tree with Jinja on a "best effort" basis: if rendering the
+/// whole subtree in one shot fails (e.g. an unknown macro call nested somewhere within it),
+/// recurses into its children (mapping values / sequence elements) and renders each
+/// independently, so a broken descendant only leaves its own leaf/subtree unrendered -- with
+/// a warning -- instead of poisoning unrelated siblings the way a single combined `into_typed`
+/// pass over the whole tree would.
+fn render_yml_value_tolerantly(
+    value: YmlValue,
+    env: &JinjaEnv,
+    ctx: &BTreeMap<String, Value>,
+    dependency_package_name: Option<&str>,
+) -> YmlValue {
+    match into_typed_with_jinja::<YmlValue, _>(
+        value.clone(),
+        false,
+        env,
+        ctx,
+        &[],
+        dependency_package_name,
+        true,
+    ) {
+        Ok(rendered) => rendered,
+        Err(e) => match value {
+            YmlValue::Mapping(mapping, span) => YmlValue::Mapping(
+                mapping
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            render_yml_value_tolerantly(v, env, ctx, dependency_package_name),
+                        )
+                    })
+                    .collect(),
+                span,
+            ),
+            YmlValue::Sequence(seq, span) => YmlValue::Sequence(
+                seq.into_iter()
+                    .map(|v| render_yml_value_tolerantly(v, env, ctx, dependency_package_name))
+                    .collect(),
+                span,
+            ),
+            leaf => {
+                emit_warn_log_from_fs_error(*e);
+                leaf
+            }
+        },
+    }
+}
+
+/// Re-renders `+meta` on its own, after the whole-document parse in [`load_project_yml`] already
+/// skipped it via `Verbatim` (fs#14217). Each value is rendered tolerantly (see
+/// [`render_yml_value_tolerantly`]), so a render failure -- e.g. an unknown macro call nested
+/// inside a customer's misplaced `+meta` block -- is contained to a warning and the original,
+/// unrendered value for just that node, instead of failing the entire enclosing directory-path
+/// node (and silently dropping unrelated sibling directories' `+schema`/etc. overrides, or even
+/// unrelated sibling `+meta` keys, with it) the way it would if `meta` were rendered as part of
+/// the single combined `into_typed` pass.
+fn render_meta_tolerantly(
+    config: &mut ProjectModelConfig,
+    env: &JinjaEnv,
+    ctx: &BTreeMap<String, Value>,
+    dependency_package_name: Option<&str>,
+) {
+    if let Some(raw_meta) = config.meta.0.clone() {
+        let rendered: IndexMap<String, YmlValue> = raw_meta
+            .into_iter()
+            .map(|(k, v)| {
+                (
+                    k,
+                    render_yml_value_tolerantly(v, env, ctx, dependency_package_name),
+                )
+            })
+            .collect();
+        config.meta = Some(rendered).into();
+    }
+
+    for child in config.__additional_properties__.values_mut() {
+        if let ShouldBe::AndIs(child_config) = child {
+            render_meta_tolerantly(child_config, env, ctx, dependency_package_name);
+        }
+    }
+}
+
 pub fn load_project_yml(
     env: &JinjaEnv,
     dbt_project_path: &Path,
@@ -222,6 +306,10 @@ pub fn load_project_yml(
         true,
     )?;
 
+    if let Some(models) = dbt_project.models.as_mut() {
+        render_meta_tolerantly(models, env, &context, dependency_package_name);
+    }
+
     if dbt_project.name.contains(' ') {
         return Err(fs_err!(
             code => ErrorCode::DbtYamlValidationError,
@@ -253,4 +341,128 @@ pub fn collect_protected_paths(dbt_project: &DbtProject) -> Vec<String> {
     result.extend_from_slice(dbt_project.test_paths.as_deref().unwrap_or_default());
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression for fs#14217: a render failure nested inside a `+meta` value (here, a
+    /// misplaced sibling directory's config with an unknown macro in its `+post-hook`) must not
+    /// drop unrelated sibling directories' own config -- only the containing struct as a whole
+    /// used to fail before `+meta` was made `Verbatim` and re-rendered tolerantly afterward.
+    #[test]
+    fn test_meta_render_failure_does_not_drop_sibling_config() {
+        let yaml = r#"
+        INT:
+          +schema: INT_SCHEMA
+        CNT:
+          +schema: CNT_SCHEMA
+        +meta:
+          PRF:
+            +schema: PRF_SCHEMA
+            +post-hook: "{{ some_totally_unknown_macro() }}"
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let env = JinjaEnv::new(minijinja::Environment::new());
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+
+        // With `+meta` protected by `Verbatim`, this must succeed even though the value nested
+        // inside `+meta.PRF.+post-hook` could never render (the macro doesn't exist).
+        let mut cfg: ProjectModelConfig =
+            into_typed_with_jinja(val, false, &env, &ctx, &[], None, true)
+                .expect("a render failure inside +meta must not fail the whole node");
+
+        render_meta_tolerantly(&mut cfg, &env, &ctx, None);
+
+        for (dir, expected_schema) in [("INT", "INT_SCHEMA"), ("CNT", "CNT_SCHEMA")] {
+            let child = cfg
+                .__additional_properties__
+                .get(dir)
+                .unwrap_or_else(|| panic!("{dir} should still be present in the config tree"));
+            let ShouldBe::AndIs(child_config) = child else {
+                panic!("{dir}'s own config should have parsed fine");
+            };
+            assert_eq!(
+                child_config.schema,
+                dbt_common::serde_utils::Omissible::Present(Some(expected_schema.to_string())),
+                "{dir}'s own +schema override must survive the sibling +meta failure"
+            );
+        }
+    }
+
+    /// Regression for the review discussion on fs#14227's fix: a render failure nested inside
+    /// one `+meta` key (here, `PRF.+post-hook`) must not also leave an unrelated sibling `+meta`
+    /// key (`owner`) unrendered -- only the failing subtree should fall back to its raw value.
+    /// <https://github.com/dbt-labs/fs/pull/14227#discussion_r3927327837>
+    #[test]
+    fn test_meta_render_failure_does_not_poison_sibling_meta_key() {
+        let yaml = r#"
+        +meta:
+          owner: "{{ 1 + 1 }}"
+          PRF:
+            +post-hook: "{{ some_totally_unknown_macro() }}"
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let env = JinjaEnv::new(minijinja::Environment::new());
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+
+        let mut cfg: ProjectModelConfig =
+            into_typed_with_jinja(val, false, &env, &ctx, &[], None, true)
+                .expect("a render failure inside +meta must not fail the whole node");
+
+        render_meta_tolerantly(&mut cfg, &env, &ctx, None);
+
+        let meta = cfg.meta.0.as_ref().expect("+meta should be present");
+        match meta.get("owner").expect("owner key in +meta") {
+            dbt_yaml::Value::Number(n, _) => assert_eq!(
+                n.as_i64(),
+                Some(2),
+                "owner must still render even though a sibling +meta key failed"
+            ),
+            other => panic!("expected owner to render to a number, got {other:?}"),
+        }
+
+        match meta.get("PRF").expect("PRF key in +meta") {
+            dbt_yaml::Value::Mapping(m, _) => {
+                let post_hook = m
+                    .get(dbt_yaml::Value::string("+post-hook".to_string()))
+                    .expect("+post-hook should still be present, unrendered");
+                match post_hook {
+                    dbt_yaml::Value::String(s, _) => {
+                        assert_eq!(s, "{{ some_totally_unknown_macro() }}")
+                    }
+                    other => panic!("expected +post-hook to stay a raw string, got {other:?}"),
+                }
+            }
+            other => panic!("expected PRF to stay a mapping, got {other:?}"),
+        }
+    }
+
+    /// The success path still renders `+meta`'s Jinja, matching dbt-core -- the fix only changes
+    /// *when* that happens (after the main parse, tolerating failure) not *whether* it happens.
+    #[test]
+    fn test_meta_renders_successfully_when_valid() {
+        let yaml = r#"
+        +meta:
+          demo: "{{ 1 + 2 }}"
+        "#;
+
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let env = JinjaEnv::new(minijinja::Environment::new());
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+
+        let mut cfg: ProjectModelConfig =
+            into_typed_with_jinja(val, false, &env, &ctx, &[], None, true).unwrap();
+
+        render_meta_tolerantly(&mut cfg, &env, &ctx, None);
+
+        let meta = cfg.meta.0.as_ref().expect("+meta should be present");
+        match meta.get("demo").expect("demo key in +meta") {
+            dbt_yaml::Value::Number(n, _) => assert_eq!(n.as_i64(), Some(3)),
+            other => panic!("expected number in +meta.demo, got {other:?}"),
+        }
+    }
 }

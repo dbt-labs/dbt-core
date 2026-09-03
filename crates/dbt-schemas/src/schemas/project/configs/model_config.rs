@@ -382,8 +382,14 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub merge_with_schema_evolution: Option<bool>,
+    // Verbatim: skips the whole-document `into_typed` render pass for this field. A render
+    // failure nested inside a `meta` value (e.g. an unknown macro call under a misplaced
+    // `+meta` block) would otherwise fail the entire enclosing directory-path node -- not just
+    // that key -- silently dropping unrelated sibling directories' config too (fs#14217).
+    // `dbt_project_yml_loader::render_meta_tolerantly` re-renders this field on its own,
+    // afterward, falling back to the unrendered value on failure instead of propagating.
     #[serde(rename = "+meta")]
-    pub meta: Option<IndexMap<String, YmlValue>>,
+    pub meta: Verbatim<Option<IndexMap<String, YmlValue>>>,
     #[serde(rename = "+not_matched_by_source_action")]
     pub not_matched_by_source_action: Option<String>,
     #[serde(rename = "+not_matched_by_source_condition")]
@@ -1003,7 +1009,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: config.meta,
+            meta: config.meta.0,
             on_configuration_change: config.on_configuration_change,
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,
@@ -1206,7 +1212,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: config.meta,
+            meta: config.meta.into(),
             submission_method: config.submission_method.clone(),
             job_cluster_config: config.job_cluster_config.clone(),
             python_job_config: config.python_job_config.clone(),
