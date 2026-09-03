@@ -107,14 +107,14 @@ class OAuthPassiveResolver:
         self.token_endpoint_override = token_endpoint_override
         self.account_id = account_id
 
+    def _matches(self, session: OAuthSession) -> bool:
+        if session.client_id != self.client_id:
+            return False
+        return self.account_id is None or session.account_id == self.account_id
+
     def resolve(self) -> Credential:
         cache = read_session_cache(self.cache_path)
-        matching = [
-            s
-            for s in cache.sessions
-            if s.client_id == self.client_id
-            and (self.account_id is None or s.account_id == self.account_id)
-        ]
+        matching = [s for s in cache.sessions if self._matches(s)]
 
         if not matching:
             raise NotAuthenticated()
