@@ -390,6 +390,8 @@ def _run_fusion(argv: List[str]) -> None:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
             env=_fusion_subprocess_env(),
         )
