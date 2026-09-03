@@ -13,6 +13,7 @@ drivers = [
   "bigquery-0.21.0.dev+dbt0.21.15",
   "bigquery-0.21.0.dev+dbt0.21.16",
   "bigquery-0.21.0.dev+dbt0.21.17",
+  "bigquery-0.21.0.dev+dbt0.21.18",
   "bigquery_foundry-0.21.0.dev+dbt0.1.0",
   "bigquery_foundry-0.21.0.dev+dbt0.1.1",
   "bigquery_foundry-0.21.0.dev+dbt0.1.2",
