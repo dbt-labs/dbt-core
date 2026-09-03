@@ -3310,7 +3310,7 @@ impl Adapter {
                     .map(|value| {
                         value.downcast_object::<RelationConfig>().ok_or_else(|| {
                             minijinja::Error::new(
-                                minijinja::ErrorKind::InvalidOperation,
+                                minijinja::ErrorKind::InvalidArgument,
                                 "model_config must be a RelationConfig",
                             )
                         })

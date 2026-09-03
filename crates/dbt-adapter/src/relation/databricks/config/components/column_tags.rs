@@ -110,7 +110,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Adapter
 impl_loader!(ColumnTags, DatabricksRelationMetadata);
 
 impl ColumnTagsLoader {
-    /// `None` means the desired config is unknown, so fetch. Empty desired tags means skip.
+    /// Column tags are set-only: diffs add or update desired tags and never unset existing tags.
+    /// When model config is available, fetch current tags only when column tags are configured.
     pub(crate) fn requires_server_metadata_for_diff(model_config: Option<&RelationConfig>) -> bool {
         model_config
             .and_then(|config| config.get(TYPE_NAME))
