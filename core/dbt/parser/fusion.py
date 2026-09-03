@@ -402,7 +402,9 @@ def _run_fusion(argv: List[str]) -> None:
             f"point to an alternate engine binary."
         ) from e
 
-    assert proc.stdout is not None and proc.stderr is not None  # guaranteed by stdout/stderr=PIPE above
+    assert (
+        proc.stdout is not None and proc.stderr is not None
+    )  # guaranteed by stdout/stderr=PIPE above
 
     def _pump(stream, fallback_level: EventLevel) -> None:
         for raw_line in stream:
