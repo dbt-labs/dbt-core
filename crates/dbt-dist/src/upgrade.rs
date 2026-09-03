@@ -28,10 +28,10 @@ use crate::python::{
 use crate::version::{ReqwestClient, VersionsHttpClient, cdn_base_url, resolve_target_version};
 use crate::{Channel, DiscoveryContext, DistInfo, DistInfoDiscovery, Distribution};
 
-/// PyPI's legacy dbt namespace, shared with v1.
-///
-/// NOTE: `confirm_and_uninstall_old_package`'s global-install path still
-/// hardcodes this name; it doesn't yet check `DBT_OSS_PACKAGE_NAME`.
+/// PyPI's legacy dbt namespace, shared with v1. Also
+/// [`confirm_and_uninstall_old_package`]'s fallback when
+/// [`probe_installed_package_name`] can't tell which namespace is actually
+/// installed.
 const DBT_CORE_PACKAGE_NAME: &str = "dbt-core";
 
 /// PyPI's newer, OSS-only dbt namespace.
@@ -171,7 +171,7 @@ pub async fn exec_upgrade_distribution(
         );
     }
 
-    exec_global_install(&dist_info, yes, command_name).await
+    exec_global_install(&dist_info, yes, command_name, &DiscoveryContext::real()).await
 }
 
 /// Which of [`UPGRADABLE_TARGET_NAMES`] `manifest` depends on, if any.
@@ -443,7 +443,12 @@ async fn exec_managed_project_upgrade(
     Ok(())
 }
 
-async fn exec_global_install(dist_info: &DistInfo, yes: bool, command_name: &str) -> FsResult<()> {
+async fn exec_global_install(
+    dist_info: &DistInfo,
+    yes: bool,
+    command_name: &str,
+    ctx: &DiscoveryContext<'_>,
+) -> FsResult<()> {
     match dist_info.channel {
         // A `standalone`/`unclaimed` dbt-core is already a native binary
         // that nothing but dbt itself manages -- there's no package manager
@@ -453,7 +458,7 @@ async fn exec_global_install(dist_info: &DistInfo, yes: bool, command_name: &str
         Some(Channel::Standalone) | Some(Channel::Unclaimed) => {
             exec_in_place_upgrade(dist_info, yes).await
         }
-        _ => exec_fresh_install_and_replace_package(dist_info, yes, command_name).await,
+        _ => exec_fresh_install_and_replace_package(dist_info, yes, command_name, ctx).await,
     }
 }
 
@@ -490,6 +495,7 @@ async fn exec_fresh_install_and_replace_package(
     dist_info: &DistInfo,
     yes: bool,
     command_name: &str,
+    ctx: &DiscoveryContext<'_>,
 ) -> FsResult<()> {
     let standalone_target = standalone_target_path();
     let old_package_shadowed_by_target = standalone_target
@@ -502,7 +508,7 @@ async fn exec_fresh_install_and_replace_package(
     // delete the freshly-installed dbt v2 binary, believing it's removing
     // its own file.
     if old_package_shadowed_by_target {
-        confirm_and_uninstall_old_package(dist_info, yes)?;
+        confirm_and_uninstall_old_package(dist_info, yes, ctx)?;
     }
 
     let install_target = standalone_target
@@ -520,7 +526,7 @@ async fn exec_fresh_install_and_replace_package(
     install_dbt_v2_standalone(None, false).await?;
 
     if !old_package_shadowed_by_target {
-        confirm_and_uninstall_old_package(dist_info, yes)?;
+        confirm_and_uninstall_old_package(dist_info, yes, ctx)?;
     }
 
     warn_if_path_shadowed(&standalone_target, command_name).await;
@@ -528,22 +534,34 @@ async fn exec_fresh_install_and_replace_package(
     Ok(())
 }
 
-fn confirm_and_uninstall_old_package(dist_info: &DistInfo, yes: bool) -> FsResult<()> {
+fn confirm_and_uninstall_old_package(
+    dist_info: &DistInfo,
+    yes: bool,
+    ctx: &DiscoveryContext<'_>,
+) -> FsResult<()> {
     let Some(channel) = dist_info.channel.clone() else {
         println(
-            "Could not determine how the existing dbt-core install was made, so it can't be \
-             uninstalled automatically. Please remove it manually with the package manager you \
-             installed it with.",
+            "Could not determine how the existing install was made, so it can't be uninstalled \
+             automatically. Please remove it manually with the package manager you installed it \
+             with.",
         );
         return Ok(());
     };
+    let package_name = probe_installed_package_name(
+        ctx,
+        &channel,
+        dist_info.py_package_manager,
+        dist_info.py_venv_root.as_deref(),
+    )
+    .unwrap_or(DBT_CORE_PACKAGE_NAME);
     let Some(uninstall_cmd) =
-        uninstall_command_for_package(channel, dist_info.py_package_manager, DBT_CORE_PACKAGE_NAME)
+        uninstall_command_for_package(channel, dist_info.py_package_manager, package_name)
     else {
-        println(
-            "Could not determine how to uninstall the existing dbt-core install automatically. \
-             Please remove it manually with the package manager you installed it with.",
-        );
+        println(format!(
+            "Could not determine how to uninstall the existing {package_name} install \
+             automatically. Please remove it manually with the package manager you installed \
+             it with."
+        ));
         return Ok(());
     };
 
@@ -553,7 +571,7 @@ fn confirm_and_uninstall_old_package(dist_info: &DistInfo, yes: bool) -> FsResul
         format!(" via {}", dist_info.install_label())
     };
     let prompt = format!(
-        "This will remove the existing dbt-core install{manager_note} by running:\n\n    {uninstall_cmd}\n\nProceed?"
+        "This will remove the existing {package_name} install{manager_note} by running:\n\n    {uninstall_cmd}\n\nProceed?"
     );
     if !confirm(&prompt, yes)? {
         return err!(ErrorCode::Generic, "Aborted.");
@@ -562,6 +580,92 @@ fn confirm_and_uninstall_old_package(dist_info: &DistInfo, yes: bool) -> FsResul
     // package, so it keeps inheriting the process's own cwd rather than
     // needing an explicit directory.
     run_shell_command(&uninstall_cmd, None)
+}
+
+/// Which of [`UPGRADABLE_TARGET_NAMES`] is actually installed via `channel`/
+/// `manager`, so [`confirm_and_uninstall_old_package`] doesn't have to
+/// guess. `None` if the check is inconclusive (neither or both match, or
+/// this channel/manager has no reliable way to check) -- callers fall back
+/// to [`DBT_CORE_PACKAGE_NAME`] in that case.
+fn probe_installed_package_name(
+    ctx: &DiscoveryContext,
+    channel: &Channel,
+    manager: Option<PythonPackageManager>,
+    venv_root: Option<&str>,
+) -> Option<&'static str> {
+    let mut installed = UPGRADABLE_TARGET_NAMES
+        .into_iter()
+        .filter(|name| is_package_installed(ctx, channel, manager, venv_root, name));
+    let name = installed.next()?;
+    installed.next().is_none().then_some(name)
+}
+
+/// Best-effort "is `name` installed" check. Only PyPI installs are checked:
+/// there's no `dbt-oss` Homebrew formula or Winget package yet, so a
+/// Brew/Winget probe would always fail and just cost a wasted subprocess
+/// spawn.
+fn is_package_installed(
+    ctx: &DiscoveryContext,
+    channel: &Channel,
+    manager: Option<PythonPackageManager>,
+    venv_root: Option<&str>,
+    name: &str,
+) -> bool {
+    if !matches!(channel, Channel::Pypi) {
+        return false;
+    }
+    match manager {
+        Some(
+            PythonPackageManager::Pip
+            | PythonPackageManager::Asdf
+            | PythonPackageManager::Mise
+            | PythonPackageManager::Pyenv
+            | PythonPackageManager::Poetry
+            | PythonPackageManager::Pdm
+            | PythonPackageManager::Pipenv
+            | PythonPackageManager::Hatch,
+        ) => {
+            let pip = venv_executable(venv_root, "pip");
+            (ctx.run)(&pip, &["show", name]).is_some_and(|o| o.success)
+        }
+        Some(PythonPackageManager::Pipx) => (ctx.run)("pipx", &["list", "--short"])
+            .is_some_and(|o| o.success && lists_package(&o.stdout, name)),
+        Some(PythonPackageManager::Uv) => (ctx.run)("uv", &["tool", "list"])
+            .is_some_and(|o| o.success && lists_package(&o.stdout, name)),
+        Some(PythonPackageManager::Conda) => (ctx.run)("conda", &["list", name])
+            .is_some_and(|o| o.success && lists_package(&o.stdout, name)),
+        Some(PythonPackageManager::Rye) | None => false,
+    }
+}
+
+/// The path to `executable_name` under `venv_root`, if it exists there;
+/// otherwise the bare name, resolved from `PATH` instead. Prefers the venv's
+/// own executable so a probe answers for the environment `dbt` actually
+/// lives in, not whatever's ambient on the caller's `PATH`.
+fn venv_executable(venv_root: Option<&str>, executable_name: &str) -> String {
+    let Some(root) = venv_root else {
+        return executable_name.to_string();
+    };
+    let bin_dir = if cfg!(windows) { "Scripts" } else { "bin" };
+    let exe_name = if cfg!(windows) {
+        format!("{executable_name}.exe")
+    } else {
+        executable_name.to_string()
+    };
+    let path = Path::new(root).join(bin_dir).join(exe_name);
+    if path.exists() {
+        path.to_string_lossy().into_owned()
+    } else {
+        executable_name.to_string()
+    }
+}
+
+/// Whether `stdout` (one installed package per line, name first) lists
+/// `name` -- from `pipx list --short`, `uv tool list`, or `conda list`.
+fn lists_package(stdout: &str, name: &str) -> bool {
+    stdout
+        .lines()
+        .any(|line| line.split_whitespace().next() == Some(name))
 }
 
 /// Builds the `Command` `run_shell_command` will run: a `sh -c`/`cmd /C`
@@ -931,6 +1035,208 @@ mod tests {
         }
     }
 
+    /// Mocks `pip show <name>` / `conda list <name>` (success iff `name` is
+    /// in `installed`) and `pipx list --short` / `uv tool list` (always
+    /// succeeds, listing every name in `installed`). Any other command/args
+    /// -- including a Brew/Winget probe, which `is_package_installed` must
+    /// never issue -- returns `None`, so a test relying on one fails loudly.
+    fn run_reporting_installed(
+        installed: &'static [&'static str],
+    ) -> impl Fn(&str, &[&str]) -> Option<ProcessOutput> {
+        move |cmd: &str, args: &[&str]| match (cmd, args) {
+            ("pip", ["show", name]) | ("conda", ["list", name]) => Some(ProcessOutput {
+                success: installed.contains(name),
+                stdout: String::new(),
+                stderr: String::new(),
+            }),
+            ("pipx", ["list", "--short"]) | ("uv", ["tool", "list"]) => Some(ProcessOutput {
+                success: true,
+                stdout: installed.join("\n"),
+                stderr: String::new(),
+            }),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn probe_installed_package_name_detects_dbt_core_via_pip() {
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run_reporting_installed(&[DBT_CORE_PACKAGE_NAME]),
+        };
+        assert_eq!(
+            probe_installed_package_name(
+                &ctx,
+                &Channel::Pypi,
+                Some(PythonPackageManager::Pip),
+                None
+            ),
+            Some(DBT_CORE_PACKAGE_NAME)
+        );
+    }
+
+    #[test]
+    fn probe_installed_package_name_detects_dbt_oss_via_pip() {
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run_reporting_installed(&[DBT_OSS_PACKAGE_NAME]),
+        };
+        assert_eq!(
+            probe_installed_package_name(
+                &ctx,
+                &Channel::Pypi,
+                Some(PythonPackageManager::Pip),
+                None
+            ),
+            Some(DBT_OSS_PACKAGE_NAME)
+        );
+    }
+
+    #[test]
+    fn probe_installed_package_name_none_when_neither_found() {
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run_reporting_installed(&[]),
+        };
+        assert_eq!(
+            probe_installed_package_name(
+                &ctx,
+                &Channel::Pypi,
+                Some(PythonPackageManager::Pip),
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn probe_installed_package_name_none_when_both_found() {
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run_reporting_installed(&[DBT_CORE_PACKAGE_NAME, DBT_OSS_PACKAGE_NAME]),
+        };
+        assert_eq!(
+            probe_installed_package_name(
+                &ctx,
+                &Channel::Pypi,
+                Some(PythonPackageManager::Pip),
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn probe_installed_package_name_none_for_rye_or_no_manager() {
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run_reporting_installed(&[DBT_OSS_PACKAGE_NAME]),
+        };
+        assert_eq!(
+            probe_installed_package_name(
+                &ctx,
+                &Channel::Pypi,
+                Some(PythonPackageManager::Rye),
+                None
+            ),
+            None
+        );
+        assert_eq!(
+            probe_installed_package_name(&ctx, &Channel::Pypi, None, None),
+            None
+        );
+    }
+
+    #[test]
+    fn probe_installed_package_name_detects_via_pipx_list_output() {
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run_reporting_installed(&[DBT_OSS_PACKAGE_NAME]),
+        };
+        assert_eq!(
+            probe_installed_package_name(
+                &ctx,
+                &Channel::Pypi,
+                Some(PythonPackageManager::Pipx),
+                None
+            ),
+            Some(DBT_OSS_PACKAGE_NAME)
+        );
+    }
+
+    #[test]
+    fn probe_installed_package_name_never_probes_brew_or_winget() {
+        // No known dbt-oss Homebrew formula or Winget package exists yet --
+        // Brew/Winget must never be probed, regardless of what a (mocked)
+        // package manager would otherwise report.
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run_reporting_installed(&[DBT_CORE_PACKAGE_NAME]),
+        };
+        assert_eq!(
+            probe_installed_package_name(&ctx, &Channel::Brew, None, None),
+            None
+        );
+        assert_eq!(
+            probe_installed_package_name(&ctx, &Channel::Winget, None, None),
+            None
+        );
+    }
+
+    #[test]
+    fn probe_installed_package_name_prefers_the_venv_pip_when_present() {
+        let venv = tempfile::tempdir().unwrap();
+        let bin_dir = if cfg!(windows) { "Scripts" } else { "bin" };
+        let pip_name = if cfg!(windows) { "pip.exe" } else { "pip" };
+        let bin = venv.path().join(bin_dir);
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join(pip_name), "").unwrap();
+        let venv_pip = bin.join(pip_name).to_string_lossy().into_owned();
+
+        let run = move |cmd: &str, args: &[&str]| match (cmd, args) {
+            (c, ["show", name]) if c == venv_pip.as_str() => Some(ProcessOutput {
+                success: *name == DBT_OSS_PACKAGE_NAME,
+                stdout: String::new(),
+                stderr: String::new(),
+            }),
+            _ => None,
+        };
+        let ctx = DiscoveryContext {
+            env: &no_env,
+            run: &run,
+        };
+        assert_eq!(
+            probe_installed_package_name(
+                &ctx,
+                &Channel::Pypi,
+                Some(PythonPackageManager::Pip),
+                Some(venv.path().to_str().unwrap())
+            ),
+            Some(DBT_OSS_PACKAGE_NAME),
+            "expected the venv's own pip to be queried instead of the bare `pip` on PATH"
+        );
+    }
+
+    #[test]
+    fn venv_executable_falls_back_to_bare_name_when_absent_from_venv() {
+        let venv = tempfile::tempdir().unwrap();
+        assert_eq!(
+            venv_executable(Some(venv.path().to_str().unwrap()), "pip"),
+            "pip"
+        );
+        assert_eq!(venv_executable(None, "pip"), "pip");
+    }
+
+    #[test]
+    fn lists_package_matches_first_whitespace_token_only() {
+        assert!(lists_package(
+            "dbt-oss 2.0.0\nother-tool 1.0.0\n",
+            "dbt-oss"
+        ));
+        assert!(!lists_package("dbt-oss-extra 1.0.0\n", "dbt-oss"));
+        assert!(!lists_package("", "dbt-oss"));
+    }
+
     #[test]
     fn exec_in_place_upgrade_target_dir_is_parent_of_dist_info_path() {
         let dist_info = dist_info_for_test(Some(Channel::Standalone), "/home/user/.local/bin/dbt");
@@ -1294,7 +1600,9 @@ mod tests {
         // `exec_in_place_upgrade` without touching the network.
         for channel in [Channel::Standalone, Channel::Unclaimed] {
             let dist_info = dist_info_for_test(Some(channel.clone()), "/home/user/.local/bin/dbt");
-            let result = exec_global_install(&dist_info, false, "dbt-core").await;
+            let result =
+                exec_global_install(&dist_info, false, "dbt-core", &empty_discovery_context())
+                    .await;
             assert!(result.is_err(), "channel={channel:?}");
         }
     }
