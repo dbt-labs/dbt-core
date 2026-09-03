@@ -16,7 +16,27 @@
 //!       method: service-account
 //! ```
 //!
-//! Both resolve to the same thing: connections grouped by their `type:` into an
+//! A legacy mapping also accepts a `lake_compute:` sibling key as shorthand for
+//! the two-entry list pairing it with lake compute:
+//!
+//! ```yaml
+//!   staging:
+//!     type: snowflake
+//!     account: abc123
+//!     lake_compute:               # equivalent to a second list entry with
+//!       method: token             # `type: lake_compute` and these fields
+//!       token: "{{ env_var('DBT_COMPUTE_AUTH_TOKEN') }}"
+//! ```
+//!
+//! This exists only because dbt platform generates `profiles.yml` from a web
+//! form that can produce a legacy mapping but not the list shape, while its
+//! "extended attributes" mechanism can still append a sibling key to that
+//! mapping -- so this is the one shape such a generated profile can express a
+//! second, lake-compute connection in. See
+//! [`split_legacy_lake_compute_extension`] and dbt-labs/fs#14234. It is a
+//! transitional accommodation for that gap, not a general-purpose feature.
+//!
+//! All three resolve to the same thing: connections grouped by their `type:` into an
 //! ordered list of [`AdapterConnections`], exactly one of which holds the default.
 //! The legacy mapping yields a single adapter with a single connection, which is
 //! the default -- so callers never branch on the shape.
@@ -191,10 +211,17 @@ pub fn parse_target_connections(
     raw: &dbt_yaml::Value,
     penv: &ProfileEnvironment,
 ) -> Result<Vec<AdapterConnections>> {
-    let raw_connections = match raw {
-        dbt_yaml::Value::Sequence(entries, _) => entries,
-        // The legacy shape: the whole block is one connection.
-        dbt_yaml::Value::Mapping(_, _) => return parse_legacy_target(raw, penv),
+    let raw_connections: Vec<dbt_yaml::Value> = match raw {
+        dbt_yaml::Value::Sequence(entries, _) => entries.clone(),
+        dbt_yaml::Value::Mapping(mapping, _) => {
+            match split_legacy_lake_compute_extension(mapping) {
+                // dbt platform's extended-attributes hack: treat it as the
+                // two-entry list it stands in for.
+                Some((primary, lake_compute)) => vec![primary, lake_compute],
+                // The ordinary legacy shape: the whole block is one connection.
+                None => return parse_legacy_target(raw, penv),
+            }
+        }
         _ => {
             return Err(ProfileError::TargetNotConnectionList {
                 profile: profile.to_owned(),
@@ -357,6 +384,72 @@ fn parse_legacy_target(
         }],
         default_connection: 0,
     }])
+}
+
+/// Split dbt platform's "extended attributes" lake-compute hack out of an
+/// otherwise-legacy target mapping, into the equivalent two-entry list shape.
+///
+/// dbt platform generates `profiles.yml` from a web form that only supports one
+/// warehouse connection per target, so it cannot produce the list shape a
+/// Snowflake + lake compute pairing needs. It does support "extended
+/// attributes" -- arbitrary extra keys appended to a generated target -- so a
+/// `lake_compute:` sibling key smuggles the second connection in that way
+/// instead. This turns that sibling into the `[primary, lake_compute]` list the
+/// rest of this module already knows how to parse, so nothing downstream has
+/// to know the shape came from the hack rather than the real list syntax.
+///
+/// This is a transitional accommodation for dbt platform's UI gap, not a
+/// general-purpose feature -- it applies to `lake_compute` specifically because
+/// that is what platform customers are currently unable to configure any other
+/// way. See dbt-labs/fs#14234.
+///
+/// Returns `None` -- deferring to the ordinary legacy path -- when there is no
+/// `lake_compute:` mapping sibling to split out, or when the target's own
+/// `type:` is already lake compute (appending lake compute to itself is
+/// nonsensical, so it is left for the ordinary legacy path to accept or reject
+/// as-is rather than special-cased here).
+fn split_legacy_lake_compute_extension(
+    mapping: &dbt_yaml::Mapping,
+) -> Option<(dbt_yaml::Value, dbt_yaml::Value)> {
+    let lake_compute_block = mapping.get(LAKE_COMPUTE_TYPE)?;
+    if !matches!(lake_compute_block, dbt_yaml::Value::Mapping(_, _)) {
+        // Not this hack's shape -- e.g. some other adapter's config
+        // legitimately has an unrelated field named `lake_compute`.
+        return None;
+    }
+    let already_lake_compute = mapping
+        .get(TYPE_KEY)
+        .and_then(|v| v.as_str())
+        .is_some_and(|t| t.eq_ignore_ascii_case(LAKE_COMPUTE_TYPE));
+    if already_lake_compute {
+        return None;
+    }
+
+    let mut primary = mapping.clone();
+    let lake_compute_block = primary
+        .shift_remove(LAKE_COMPUTE_TYPE)
+        .expect("checked present above");
+    // The legacy shape's one connection was always the implicit default; make
+    // that explicit now that it is joining a list, which requires the marker
+    // to resolve one unambiguously.
+    primary.insert(
+        dbt_yaml::Value::from(DEFAULT_KEY),
+        dbt_yaml::Value::from(true),
+    );
+
+    let mut lake_compute = match lake_compute_block {
+        dbt_yaml::Value::Mapping(m, _) => m,
+        _ => unreachable!("checked present and a mapping above"),
+    };
+    lake_compute.insert(
+        dbt_yaml::Value::from(TYPE_KEY),
+        dbt_yaml::Value::from(LAKE_COMPUTE_TYPE),
+    );
+
+    Some((
+        dbt_yaml::Value::from(primary),
+        dbt_yaml::Value::from(lake_compute),
+    ))
 }
 
 /// Resolve the target-wide `default: true` marker into a default connection per
@@ -635,6 +728,82 @@ base_url: https://example.invalid
                 .and_then(|v| v.as_str()),
             Some(LAKE_COMPUTE_INTERNAL_TAG)
         );
+    }
+
+    // -- dbt platform's extended-attributes lake_compute hack ---------------
+
+    /// dbt platform can only generate one connection per target, so a
+    /// `lake_compute:` sibling key on an otherwise-legacy mapping is the only
+    /// way its "extended attributes" mechanism can add a second one. This must
+    /// parse exactly like the equivalent two-entry list.
+    #[test]
+    fn a_legacy_mapping_with_a_lake_compute_sibling_splits_into_two_adapters() {
+        let adapters = parse(
+            "type: snowflake
+account: abc123
+lake_compute:
+  method: token
+  token: test-token
+  threads: 4
+",
+        )
+        .expect("the sibling-key shape should parse");
+
+        assert_eq!(types(&adapters), vec!["snowflake", "lake_compute"]);
+        assert_eq!(
+            default_of(&adapters),
+            ("snowflake", DEFAULT_CONNECTION_NAME)
+        );
+
+        let lake_compute = &adapters[1];
+        assert_eq!(lake_compute.connections.len(), 1);
+        assert_eq!(
+            lake_compute
+                .default_connection()
+                .credentials
+                .get("type")
+                .and_then(|v| v.as_str()),
+            Some(LAKE_COMPUTE_INTERNAL_TAG),
+            "the split-out connection must still be canonicalized"
+        );
+        assert_eq!(
+            lake_compute
+                .default_connection()
+                .credentials
+                .get("threads")
+                .and_then(|v| v.as_i64()),
+            Some(4),
+            "the sibling block's own fields must survive the split"
+        );
+    }
+
+    /// A `lake_compute:` field that isn't a mapping (e.g. some unrelated
+    /// adapter's scalar config field that happens to share the name) is not
+    /// this hack's shape, so it must fall through to the ordinary legacy path
+    /// untouched rather than erroring.
+    #[test]
+    fn a_non_mapping_lake_compute_field_is_not_treated_as_the_extension() {
+        let adapters = parse("type: duckdb\npath: ./dev.db\nlake_compute: true\n")
+            .expect("should still parse as ordinary legacy shape");
+
+        assert_eq!(types(&adapters), vec!["duckdb"]);
+    }
+
+    /// Appending the hack's sibling key to a connection whose own `type:` is
+    /// already `lake_compute` is nonsensical; it must not be split, leaving it
+    /// for the ordinary legacy path to handle as a single connection.
+    #[test]
+    fn a_lake_compute_target_with_a_lake_compute_sibling_is_not_split() {
+        let adapters = parse(
+            "type: lake_compute
+base_url: https://example.invalid
+lake_compute:
+  threads: 4
+",
+        )
+        .expect("should still parse as ordinary legacy shape");
+
+        assert_eq!(types(&adapters), vec!["lake_compute"]);
     }
 
     /// Two connections of one type are legal and land under one adapter -- the
