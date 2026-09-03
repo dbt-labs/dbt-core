@@ -1120,6 +1120,16 @@ impl DbtProjectCompilation {
         // partial-load fast path (also fires for state:dirty): if no file mtimes changed,
         // skip WalkDir entirely and return prev as-is. Skip when --inline is set since the
         // inline SQL node must be injected during load().
+        //
+        // Also skip it when a `parse` was asked to write artifacts. `parse`'s metadata epochs
+        // and information schema are written from `maybe_write_json_and_exit`, which returning
+        // early here never reaches — so `dbt parse --generate-info-schema` on a project with a
+        // warm parse cache exited 0 having written nothing at all, no artifact and no warning.
+        // Every other command escapes this because it writes from the post-run site in
+        // `dbt_lib`, which the fast path does not bypass.
+        //
+        // Scoped to `parse` deliberately: `write_metadata` is defaulted on for build/run/check,
+        // so testing it alone would disable the fast path for them too.
         let has_inline = match &cli.command {
             Command::Core(CoreCommand::Compile(CompileArgs {
                 inline: Some(_), ..
@@ -1129,7 +1139,12 @@ impl DbtProjectCompilation {
             }
             _ => false,
         };
-        if use_lazy_filter && !has_inline {
+        // For `parse`, `write_metadata` is only true when an artifact was actually requested
+        // (`--generate-info-schema` and `--write-index` both imply it); a plain `dbt parse`
+        // leaves it false and keeps the fast path.
+        let parse_artifacts_requested =
+            arg.command == FsCommand::Parse && (arg.write_metadata || arg.generate_info_schema);
+        if use_lazy_filter && !has_inline && !parse_artifacts_requested {
             // Skip the fast path when the --static-analysis level has changed since the
             // previous compilation. The fast path reuses nodes whose `base().static_analysis`
             // was stamped by the prior run; if the CLI arg changed (e.g. baseline→strict),
@@ -1202,6 +1217,31 @@ impl DbtProjectCompilation {
                     if sa_changed_on_prev {
                         tracing::debug!(
                             "Partial parse: no files changed but static_analysis level changed, performing full parse"
+                        );
+                        return DbtProjectCompilation::initialize(
+                            feature_stack,
+                            arg,
+                            cli,
+                            config,
+                            event_emitter,
+                            jinja_type_checking_event_listener_factory,
+                            None,
+                            token,
+                            version_check_handle,
+                            artifacts_sink,
+                        )
+                        .await;
+                    }
+                    // Same reasoning as the partial-load fast path above: reusing the
+                    // previous compilation returns before `maybe_write_json_and_exit`, which
+                    // is where `parse` writes its metadata epochs and information schema. A
+                    // `parse` that was asked for them has to take the full path, exactly as
+                    // it does when the static-analysis level changed.
+                    if arg.command == FsCommand::Parse
+                        && (arg.write_metadata || arg.generate_info_schema)
+                    {
+                        tracing::debug!(
+                            "Partial parse: no files changed, but parse artifacts were requested"
                         );
                         return DbtProjectCompilation::initialize(
                             feature_stack,
