@@ -16,8 +16,9 @@ use walkdir::WalkDir;
 
 use crate::config::SelectedSkill;
 use crate::discover::SkillOrigin;
+use crate::hash::hash_skill_dir;
 use crate::provenance::{
-    MANAGED_BY_DBT, PROVENANCE_FILE, Provenance, hash_skill_dir, read_provenance, write_provenance,
+    MANAGED_BY_DBT, PROVENANCE_FILE, Provenance, read_provenance, write_provenance,
 };
 
 /// What happened to one skill in one destination directory.

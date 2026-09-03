@@ -9,6 +9,7 @@
 
 pub mod config;
 pub mod discover;
+pub mod hash;
 pub mod install;
 pub mod provenance;
 pub mod providers;
