@@ -50,7 +50,6 @@ pub mod schema;
 pub mod spec;
 pub mod views;
 
-use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -304,7 +303,6 @@ fn build_own(
     out: &SchemaRef,
 ) -> Result<Vec<RecordBatch>, IndexError> {
     match spec.name {
-        "project_vars" => build_project_vars(staging_dir, out),
         "dag_nodes" => build_dag_nodes(staging_dir, out),
         // No source of taxonomy data yet; the shape is published so it can be
         // filled without a schema change.
@@ -313,148 +311,6 @@ fn build_own(
             "info schema: no builder for assembled table '{other}'"
         ))),
     }
-}
-
-/// The adapter's built-in packages, whose vars are not the user's.
-///
-/// Mirrors the package resolution order used when building the macro
-/// namespace: the adapter package, its parent where one exists, then `dbt`.
-fn internal_packages(adapter_type: Option<&str>) -> Vec<String> {
-    let mut v = Vec::new();
-    if let Some(adapter) = adapter_type {
-        v.push(format!("dbt_{adapter}"));
-        match adapter {
-            "redshift" => v.push("dbt_postgres".to_string()),
-            "databricks" => v.push("dbt_spark".to_string()),
-            _ => {}
-        }
-    }
-    v.push("dbt".to_string());
-    v
-}
-
-type VarMap = BTreeMap<String, serde_json::Value>;
-
-/// Render a var value the way `serde_json::Value` displays: a plain string
-/// bare, anything else as JSON.
-fn render_var_value(value: serde_json::Value) -> String {
-    match value {
-        serde_json::Value::String(s) => s,
-        other => other.to_string(),
-    }
-}
-
-/// Split a package's vars map into scalar variables and package-scoped nested
-/// maps. A nested object is a scope only when its key is an installed package;
-/// otherwise it stays an object-valued variable on the parent.
-fn split_scoped_vars(map: VarMap, installed: &HashSet<String>) -> (VarMap, Vec<(String, VarMap)>) {
-    let mut scalars = BTreeMap::new();
-    let mut scopes = Vec::new();
-    for (key, value) in map {
-        if let serde_json::Value::Object(obj) = value {
-            if installed.contains(&key) {
-                scopes.push((key, obj.into_iter().collect()));
-                continue;
-            }
-            scalars.insert(key, serde_json::Value::Object(obj));
-        } else {
-            scalars.insert(key, value);
-        }
-    }
-    (scalars, scopes)
-}
-
-/// `dbt.project_vars`, one row per (project, variable).
-///
-/// The source table holds one row per package, with the package name in
-/// `var_name` and that package's whole variable map encoded in `var_value`.
-/// Un-nest it so each variable is its own row and the package it applies to is
-/// its own column. Nested object keys that name an installed package become
-/// their own `project_name` rows, inheriting the parent's scalar vars and
-/// overlaying the nested map.
-fn build_project_vars(staging_dir: &Path, out: &SchemaRef) -> Result<Vec<RecordBatch>, IndexError> {
-    let adapter = read_source(staging_dir, "project")
-        .first()
-        .and_then(|b| str_col(b, "adapter_type").map(|c| c.value(0).to_string()));
-    let skip = internal_packages(adapter.as_deref());
-
-    let mut installed: HashSet<String> = HashSet::new();
-    for batch in read_source(staging_dir, "packages") {
-        let Some(col) = str_col(&batch, "package_name") else {
-            continue;
-        };
-        for row in 0..batch.num_rows() {
-            if !col.is_null(row) {
-                installed.insert(col.value(row).to_string());
-            }
-        }
-    }
-
-    let mut projects: Vec<String> = Vec::new();
-    let mut names: Vec<String> = Vec::new();
-    let mut values: Vec<String> = Vec::new();
-    let mut stamps: Vec<i64> = Vec::new();
-
-    let mut emit = |package: &str, map: BTreeMap<String, serde_json::Value>, stamp: i64| {
-        for (name, value) in map {
-            projects.push(package.to_string());
-            names.push(name);
-            values.push(render_var_value(value));
-            stamps.push(stamp);
-        }
-    };
-
-    for batch in read_source(staging_dir, "project_vars") {
-        let Some(pkg_col) = str_col(&batch, "var_name") else {
-            continue;
-        };
-        let Some(val_col) = str_col(&batch, "var_value") else {
-            continue;
-        };
-        let stamp_col = timestamp_micros_col(&batch, "ingested_at");
-
-        for row in 0..batch.num_rows() {
-            if pkg_col.is_null(row) || val_col.is_null(row) {
-                continue;
-            }
-            let package = pkg_col.value(row);
-            if skip.iter().any(|s| s == package) {
-                continue;
-            }
-            let Ok(map) =
-                serde_json::from_str::<BTreeMap<String, serde_json::Value>>(val_col.value(row))
-            else {
-                continue;
-            };
-            let stamp = stamp_col
-                .filter(|c| !c.is_null(row))
-                .map(|c| c.value(row))
-                .unwrap_or(0);
-            let (scalars, scopes) = split_scoped_vars(map, &installed);
-            emit(package, scalars.clone(), stamp);
-            for (scope_pkg, nested) in scopes {
-                if skip.iter().any(|s| s == &scope_pkg) {
-                    continue;
-                }
-                let mut inherited = scalars.clone();
-                inherited.extend(nested);
-                emit(&scope_pkg, inherited, stamp);
-            }
-        }
-    }
-
-    if projects.is_empty() {
-        return Ok(Vec::new());
-    }
-    let cols: Vec<arrow_array::ArrayRef> = vec![
-        Arc::new(StringArray::from(projects)),
-        Arc::new(StringArray::from(names)),
-        Arc::new(StringArray::from(values)),
-        Arc::new(timestamps(stamps, out, 3)),
-    ];
-    Ok(vec![RecordBatch::try_new(Arc::clone(out), cols).map_err(
-        |e| IndexError::Other(format!("info schema project_vars: {e}")),
-    )?])
 }
 
 /// `dbt.dag_nodes`: every enabled resource that participates in the DAG.

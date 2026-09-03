@@ -187,16 +187,12 @@ pub const VIEWS: &[ParseSafeView] = &[
         filter: Filter::All,
         cols: &["package_name", "ingested_at"],
     },
-    // `project_name` is in the information schema but not here: the index stores one row
-    // per top-level `vars` key, and it takes the writer's un-nesting to say which project
-    // a package-scoped var belongs to. A var scoped to a package therefore appears with
-    // the package as its `var_name` and its whole block as `var_value`.
     ParseSafeView {
         name: "project_vars",
         vocabulary: "project_vars",
         src: Src::Table("project_vars"),
         filter: Filter::All,
-        cols: &["var_name", "var_value", "ingested_at"],
+        cols: &["project_name", "var_name", "var_value", "ingested_at"],
     },
     ParseSafeView {
         name: "project_env_vars",

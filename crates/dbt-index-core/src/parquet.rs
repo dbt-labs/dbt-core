@@ -1589,6 +1589,7 @@ define_row! {
 define_row! {
     /// dbt.project_vars row.
     pub struct ProjectVarRow<'a> => schema_project_vars {
+        [utf8!] pub project_name: &'a str,
         [utf8!] pub var_name: &'a str,
         [utf8]  pub var_value: String,
         [timestamp !] pub ingested_at: &'a str,

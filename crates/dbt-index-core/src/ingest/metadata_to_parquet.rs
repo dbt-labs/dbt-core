@@ -2186,6 +2186,81 @@ fn write_parse_columns(
 // Parse project → dbt.project + dbt.project_vars + dbt.project_env_vars + dbt.packages
 // ---------------------------------------------------------------------------
 
+/// Packages dbt installs itself, which no one writes `vars` for: the adapter's
+/// dispatch package, its parent where one exists, and `dbt` itself.
+fn internal_packages(adapter_type: &str) -> Vec<String> {
+    let mut v = vec!["dbt".to_string()];
+    if !adapter_type.is_empty() {
+        v.push(format!("dbt_{adapter_type}"));
+        match adapter_type {
+            "redshift" => v.push("dbt_postgres".to_string()),
+            "databricks" => v.push("dbt_spark".to_string()),
+            _ => {}
+        }
+    }
+    v
+}
+
+/// A string variable reads as itself; anything else as the JSON it was written
+/// as. `Value::to_string` would quote the string.
+fn render_var_value(value: Value) -> String {
+    match value {
+        Value::String(s) => s,
+        other => other.to_string(),
+    }
+}
+
+/// `dbt.project_vars` rows: one per (project, variable).
+///
+/// `vars_json` is `{package: {var: value}}` and each package's map is already
+/// *resolved for that package* -- a dependency's map carries the value the
+/// dependency sees, root default or scoped override -- so there is nothing to
+/// un-nest here. Walking each package's own map is the whole job; scoping has
+/// already happened upstream.
+///
+/// Two kinds of key are not variables:
+///
+/// - a package nobody sets vars for. `dbt` and `dbt_<adapter>` are installed by
+///   dbt itself, and their maps are a copy of the root's with no one to read them.
+/// - inside a map, a nested object whose key names an installed package. That is
+///   the scope *declaration* (`vars: {dbt_utils: {...}}`), not a variable of the
+///   enclosing package, and the scope's effect is already in `dbt_utils`' own map.
+///   A nested object whose key is *not* installed is an ordinary object-valued
+///   variable, which dbt allows, so it stays.
+fn project_var_rows(
+    vars_json: Option<&str>,
+    installed: &HashSet<String>,
+    adapter_type: &str,
+    now: &str,
+) -> Vec<Value> {
+    let internal = internal_packages(adapter_type);
+    vars_json
+        .and_then(|s| serde_json::from_str::<serde_json::Map<String, Value>>(s).ok())
+        .map(|obj| {
+            obj.into_iter()
+                .filter(|(package, _)| !internal.iter().any(|i| i == package))
+                .flat_map(|(package, vars)| {
+                    let vars = match vars {
+                        Value::Object(map) => map,
+                        _ => serde_json::Map::new(),
+                    };
+                    vars.into_iter()
+                        .filter(|(name, value)| !(value.is_object() && installed.contains(name)))
+                        .map(|(name, value)| {
+                            json!({
+                                "project_name": package,
+                                "var_name": name,
+                                "var_value": render_var_value(value),
+                                "ingested_at": now,
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn write_parse_project(
     writer: &mut IndexWriter,
@@ -2317,22 +2392,12 @@ fn write_parse_project(
         })],
     )?;
 
-    // project_vars
-    let var_rows: Vec<Value> = vars_json
+    let installed: HashSet<String> = pkg_kinds_json
         .as_deref()
         .and_then(|s| serde_json::from_str::<serde_json::Map<String, Value>>(s).ok())
-        .map(|obj| {
-            obj.into_iter()
-                .map(|(k, v)| {
-                    json!({
-                        "var_name": k,
-                        "var_value": v.to_string(),
-                        "ingested_at": now,
-                    })
-                })
-                .collect()
-        })
+        .map(|obj| obj.into_iter().map(|(k, _)| k).collect())
         .unwrap_or_default();
+    let var_rows = project_var_rows(vars_json.as_deref(), &installed, &adapter_type, now);
     writer.write_dbt_table("project_vars", var_rows)?;
 
     // project_env_vars
@@ -3528,9 +3593,108 @@ mod tests {
 
     use super::{
         CATALOG_COLUMNS_SUBDIR, COMPILE_COLUMNS_SUBDIR, IngestState, extract_json_field_raw,
-        read_parquet_batches, trim_model_payload, write_catalog_columns, write_compile_columns,
+        project_var_rows, read_parquet_batches, trim_model_payload, write_catalog_columns,
+        write_compile_columns,
     };
     use crate::parquet::IndexWriter;
+
+    /// `(project_name, var_name, var_value)` of each row, sorted, for comparing
+    /// against an expected table.
+    fn var_table(rows: &[serde_json::Value]) -> Vec<(String, String, String)> {
+        let mut got: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                let f = |k: &str| r[k].as_str().expect(k).to_string();
+                (f("project_name"), f("var_name"), f("var_value"))
+            })
+            .collect();
+        got.sort();
+        got
+    }
+
+    /// The shape a real parse produces: one entry per package, each holding that
+    /// package's *resolved* vars, plus the root's scope declaration repeated in
+    /// every entry. The scope is already applied in `my_pkg`'s own entry, so the
+    /// answer is four rows -- one per variable per project.
+    ///
+    /// Reading the declaration as well as the resolved entry is what produced
+    /// duplicates: `my_pkg`'s two variables came back once from its own entry and
+    /// once from every other package's copy of the declaration.
+    #[test]
+    fn project_vars_is_one_row_per_project_and_variable() {
+        let root = r#"{"grace":"goheen","peanut":"jelly","my_pkg":{"peanut":"butter"}}"#;
+        let scoped = r#"{"grace":"goheen","peanut":"butter","my_pkg":{"peanut":"butter"}}"#;
+        let vars =
+            format!(r#"{{"proj":{root},"my_pkg":{scoped},"dbt":{root},"dbt_duckdb":{root}}}"#,);
+        let installed = ["proj", "my_pkg"].into_iter().map(String::from).collect();
+
+        let rows = project_var_rows(Some(&vars), &installed, "duckdb", "2026-09-03T00:00:00Z");
+
+        assert_eq!(
+            var_table(&rows),
+            vec![
+                ("my_pkg".into(), "grace".into(), "goheen".into()),
+                ("my_pkg".into(), "peanut".into(), "butter".into()),
+                ("proj".into(), "grace".into(), "goheen".into()),
+                ("proj".into(), "peanut".into(), "jelly".into()),
+            ],
+        );
+    }
+
+    /// The packages dbt installs itself carry a copy of the root's vars that no
+    /// one set and no one reads. `dbt_postgres` is in for Redshift, whose
+    /// dispatch package is a child of it.
+    #[test]
+    fn project_vars_leaves_out_the_packages_dbt_installs() {
+        let map = r#"{"grace":"goheen"}"#;
+        let vars =
+            format!(r#"{{"proj":{map},"dbt":{map},"dbt_redshift":{map},"dbt_postgres":{map}}}"#);
+        let installed = ["proj"].into_iter().map(String::from).collect();
+
+        let rows = project_var_rows(Some(&vars), &installed, "redshift", "2026-09-03T00:00:00Z");
+
+        assert_eq!(
+            var_table(&rows),
+            vec![("proj".into(), "grace".into(), "goheen".into())],
+        );
+    }
+
+    /// A nested map is a scope only when its key names an installed package.
+    /// `dbt` supports object-valued variables, so a nested map keyed by anything
+    /// else is a variable and keeps its JSON as the value -- and a string value is
+    /// rendered bare rather than re-quoted.
+    #[test]
+    fn project_vars_keeps_an_object_valued_variable() {
+        let vars = r#"{"proj":{"thresholds":{"warn":10},"dbt_utils":{"x":1},"note":"hi","n":90}}"#;
+        let installed = ["proj", "dbt_utils"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let rows = project_var_rows(Some(vars), &installed, "duckdb", "2026-09-03T00:00:00Z");
+
+        assert_eq!(
+            var_table(&rows),
+            vec![
+                ("proj".into(), "n".into(), "90".into()),
+                ("proj".into(), "note".into(), "hi".into()),
+                ("proj".into(), "thresholds".into(), r#"{"warn":10}"#.into()),
+            ],
+            "'dbt_utils' is a scope; 'thresholds' is a variable",
+        );
+    }
+
+    /// A project with no `vars` block at all, and metadata too old to carry the
+    /// field, both mean no rows rather than an error.
+    #[test]
+    fn project_vars_tolerates_missing_vars() {
+        let installed = ["proj"].into_iter().map(String::from).collect();
+        let now = "2026-09-03T00:00:00Z";
+        assert!(project_var_rows(None, &installed, "duckdb", now).is_empty());
+        assert!(project_var_rows(Some("{}"), &installed, "duckdb", now).is_empty());
+        assert!(project_var_rows(Some("not json"), &installed, "duckdb", now).is_empty());
+        assert!(project_var_rows(Some(r#"{"proj":{}}"#), &installed, "duckdb", now).is_empty());
+    }
 
     /// A `catalog/columns` epoch holding `nodes × columns_per_node` rows.
     fn write_catalog_epoch(dir: &std::path::Path, nodes: &[&str], columns_per_node: &[&str]) {
