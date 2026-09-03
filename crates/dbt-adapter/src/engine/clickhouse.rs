@@ -62,15 +62,26 @@ pub(crate) fn ensure_database(
             .transpose()
             .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?;
         // EXISTS DATABASE returns a single UInt8 row.
-        Ok(batch.is_some_and(|batch| {
-            use arrow_array::cast::AsArray;
-            batch.num_rows() > 0
-                && batch
-                    .column(0)
-                    .as_primitive::<arrow_array::types::UInt8Type>()
-                    .value(0)
-                    != 0
-        }))
+        let Some(batch) = batch else {
+            return Ok(false);
+        };
+        if batch.num_rows() == 0 {
+            return Ok(false);
+        }
+        let column = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<arrow_array::UInt8Array>()
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Internal,
+                    format!(
+                        "unexpected EXISTS DATABASE result type: {}",
+                        batch.column(0).data_type()
+                    ),
+                )
+            })?;
+        Ok(column.value(0) != 0)
     };
 
     if db_exists(&mut conn)? {

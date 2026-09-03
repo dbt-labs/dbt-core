@@ -13,6 +13,7 @@ use arrow_array::{Array, RecordBatch, StringArray, UInt64Array};
 
 use dbt_adapter_core::ExecutionPhase;
 use dbt_adapter_engine::MapReduce;
+use dbt_adapter_sql::ident::quote_identifier;
 use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
@@ -841,30 +842,14 @@ fn probe_server_version(
 /// dbclient.py `ND_MUTATION_SETTING`.
 const ND_MUTATION_SETTING: &str = "allow_nondeterministic_mutations";
 
-/// Mirrors query.py `quote_identifier`.
-pub(crate) fn quote_identifier(identifier: &str) -> String {
-    let first_char = identifier.chars().next();
-    if matches!(first_char, Some('`') | Some('"'))
-        && identifier.len() > 1
-        && identifier.ends_with(first_char.unwrap())
-    {
-        return identifier.to_string();
-    }
-    let mut quoted = String::with_capacity(identifier.len() + 2);
-    quoted.push('`');
-    for c in identifier.chars() {
-        if matches!(c, '\\' | '\'' | '`') {
-            quoted.push('\\');
-        }
-        quoted.push(c);
-    }
-    quoted.push('`');
-    quoted
-}
-
 /// dbclient.py `_ensure_database` parity (incl. its clause spacing).
+/// Divergence: identifiers are double-quoted via the shared ident helper
+/// instead of query.py's backtick quoting — equivalent for ClickHouse.
 pub(crate) fn exists_database_sql(database: &str) -> String {
-    format!("EXISTS DATABASE {}", quote_identifier(database))
+    format!(
+        "EXISTS DATABASE {}",
+        quote_identifier(database, AdapterType::ClickHouse)
+    )
 }
 
 /// See [`exists_database_sql`].
@@ -883,7 +868,7 @@ pub(crate) fn create_database_sql(
     };
     format!(
         "CREATE DATABASE IF NOT EXISTS {}{cluster_clause}{engine_clause}",
-        quote_identifier(database)
+        quote_identifier(database, AdapterType::ClickHouse)
     )
 }
 
@@ -1335,27 +1320,24 @@ mod tests {
     }
 
     #[test]
-    fn test_quote_identifier_mirrors_python() {
-        assert_eq!(quote_identifier("my_db"), "`my_db`");
-        assert_eq!(quote_identifier("`already`"), "`already`");
-        assert_eq!(quote_identifier("\"already\""), "\"already\"");
-        assert_eq!(quote_identifier("we`ird\\d'b"), "`we\\`ird\\\\d\\'b`");
-    }
-
-    #[test]
     fn test_ensure_database_sql_mirrors_python() {
-        assert_eq!(exists_database_sql("my_db"), "EXISTS DATABASE `my_db`");
+        assert_eq!(exists_database_sql("my_db"), "EXISTS DATABASE \"my_db\"");
+        // '"' doubling in quoted identifiers verified against ClickHouse 26.3
+        assert_eq!(
+            exists_database_sql("we\"ird"),
+            "EXISTS DATABASE \"we\"\"ird\""
+        );
         assert_eq!(
             create_database_sql("my_db", None, None),
-            "CREATE DATABASE IF NOT EXISTS `my_db`"
+            "CREATE DATABASE IF NOT EXISTS \"my_db\""
         );
         assert_eq!(
             create_database_sql("my_db", Some(""), Some("  ")),
-            "CREATE DATABASE IF NOT EXISTS `my_db`"
+            "CREATE DATABASE IF NOT EXISTS \"my_db\""
         );
         assert_eq!(
             create_database_sql("my_db", Some("Replicated"), Some("test_shard")),
-            "CREATE DATABASE IF NOT EXISTS `my_db` ON CLUSTER \"test_shard\"  ENGINE Replicated "
+            "CREATE DATABASE IF NOT EXISTS \"my_db\" ON CLUSTER \"test_shard\"  ENGINE Replicated "
         );
     }
 
