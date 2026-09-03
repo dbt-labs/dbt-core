@@ -200,6 +200,12 @@ pub struct ProjectModelConfig {
     pub incremental_apply_config_changes: Option<bool>,
     #[serde(
         default,
+        rename = "+persist_constraints",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub persist_constraints: Option<bool>,
+    #[serde(
+        default,
         rename = "+use_safer_relation_operations",
         deserialize_with = "bool_or_string_bool"
     )]
@@ -704,6 +710,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.environment_key.is_some()
             || self.environment_dependencies.is_some()
             || self.incremental_apply_config_changes.is_some()
+            || self.persist_constraints.is_some()
             || self.use_safer_relation_operations.is_some()
             || self.view_update_via_alter.is_some()
             || self.description.is_some()
@@ -1078,6 +1085,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 intermediate_format: config.intermediate_format,
                 storage_uri: config.storage_uri,
                 incremental_apply_config_changes: config.incremental_apply_config_changes,
+                persist_constraints: config.persist_constraints,
                 use_safer_relation_operations: config.use_safer_relation_operations,
                 view_update_via_alter: config.view_update_via_alter,
 
@@ -1346,6 +1354,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             incremental_apply_config_changes: config
                 .__warehouse_specific_config__
                 .incremental_apply_config_changes,
+            persist_constraints: config.__warehouse_specific_config__.persist_constraints,
             use_safer_relation_operations: config
                 .__warehouse_specific_config__
                 .use_safer_relation_operations,

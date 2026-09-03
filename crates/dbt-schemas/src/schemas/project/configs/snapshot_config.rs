@@ -326,6 +326,12 @@ pub struct ProjectSnapshotConfig {
     pub skip_not_matched_step: Option<bool>,
     #[serde(
         default,
+        rename = "+persist_constraints",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub persist_constraints: Option<bool>,
+    #[serde(
+        default,
         rename = "+unique_tmp_table_suffix",
         deserialize_with = "bool_or_string_bool"
     )]
@@ -481,6 +487,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
             || self.not_matched_condition.is_some()
             || self.skip_matched_step.is_some()
             || self.skip_not_matched_step.is_some()
+            || self.persist_constraints.is_some()
             || self.unique_tmp_table_suffix.is_some()
             || self.source_alias.is_some()
             || self.target_alias.is_some()
@@ -806,6 +813,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                persist_constraints: config.persist_constraints,
                 unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
                 row_filter: None,
@@ -974,6 +982,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             target_alias: config.__warehouse_specific_config__.target_alias,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            persist_constraints: config.__warehouse_specific_config__.persist_constraints,
             unique_tmp_table_suffix: config.__warehouse_specific_config__.unique_tmp_table_suffix,
             // Redshift fields
             auto_refresh: config.__warehouse_specific_config__.auto_refresh,
