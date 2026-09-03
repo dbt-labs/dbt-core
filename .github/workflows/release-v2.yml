@@ -56,13 +56,15 @@
 # dbt-core publish step so the sdist's manifest matches the maturin wheel
 # filenames actually sitting at the GitHub Release download URL (the default
 # `py3`/`none` tags are for the binary-CLI wheel, used for the parser publish
-# step instead), and `--project-dir crates/dbt-sa-python` so the sdist's
-# static metadata comes from the crate those wheels were built from rather than
-# the workspace root's binary-CLI pyproject.
+# step instead), and `--runtime-metadata-from crates/dbt-sa-python` so the
+# sdist declares those wheels' `requires-python`/dependencies while keeping
+# the root pyproject's descriptive metadata — uv trusts the sdist's PKG-INFO
+# for the former, and the PyPI project page renders from the latter.
 #
 # `dbt-oss` is the identical rebrand of `dbt-core` — same extension, only
 # `[project].name` differs — built by a second `maturin build` in the
-# `build` job and published with the same `cp311`/`abi3` tags.
+# `build` job and published with the same `cp311`/`abi3` tags. Its publish
+# step swaps `[project].name` in the root pyproject, like the parser's.
 #
 # **Homebrew publishing**
 # `publish-homebrew` renders `Formula/dbt-core.rb` from the SHA256SUMS the
@@ -847,14 +849,12 @@ jobs:
       # the matching python/abi tags so the sdist manifest's filenames match
       # what's actually sitting at BASE_URL.
       #
-      # --project-dir points the sdist's static metadata at the same crate
-      # maturin built. The default (workspace root) describes the binary CLI
-      # wheel: `requires-python = ">=3.9"` and no dependencies, which contradicts
-      # these wheels' `>=3.11` + mashumaro. pip survives that (it reads the
-      # built wheel's real metadata) but uv trusts the sdist's PKG-INFO, so it
-      # would install on 3.10 and die on an abi3 symbol, or install no
-      # dependencies at all. `cargo ci pypi publish` now cross-checks the two
-      # and fails the release on a mismatch.
+      # No --project-dir: the workspace root carries the descriptive metadata
+      # the PyPI page renders from, and --runtime-metadata-from overlays just
+      # requires-python + dependencies from the crate maturin built (>=3.11 +
+      # mashumaro; the root says >=3.9, for the binary CLI wheel). uv trusts
+      # the sdist's PKG-INFO over the wheel's, so a mismatch installs broken —
+      # `cargo ci pypi publish` cross-checks both and fails the release.
       - name: Publish (dbt-core)
         if: inputs.release_target == 'all' || inputs.release_target == 'core'
         run: |
@@ -862,7 +862,7 @@ jobs:
             --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --download-base-url "$BASE_URL" \
-            --project-dir crates/dbt-sa-python \
+            --runtime-metadata-from crates/dbt-sa-python \
             --python-tag cp311 \
             --abi-tag abi3 \
             --target x86_64-unknown-linux-gnu \
@@ -896,18 +896,16 @@ jobs:
           sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
           grep '^name = ' pyproject.toml
 
-      # dbt-oss is the identical rebrand of dbt-core (see the `build` job),
-      # so it uses the same cp311/abi3 tags and the same --project-dir: the
-      # wheels being published were built from crates/dbt-sa-python, whose
-      # pyproject.toml is what needs the name swap (not the workspace root,
-      # which describes the unrelated binary CLI package and would otherwise
-      # feed `cargo ci pypi publish` >=3.9 metadata for >=3.11 wheels).
+      # dbt-oss is the identical rebrand of dbt-core (see the `build` job) —
+      # same tags, same --runtime-metadata-from. The name swap targets the
+      # root pyproject, like the parser's above: with no --project-dir that's
+      # where the sdist's name and descriptive metadata come from.
       # `grep -qx` guards against a silent no-op `sed` (exits 0 either way).
       - name: Rename pyproject for oss publish
         if: inputs.release_target == 'all' || inputs.release_target == 'oss'
         run: |
-          sed -i 's/^name = "dbt-core"$/name = "dbt-oss"/' crates/dbt-sa-python/pyproject.toml
-          grep -qx 'name = "dbt-oss"' crates/dbt-sa-python/pyproject.toml
+          sed -i 's/^name = "dbt-core"$/name = "dbt-oss"/' pyproject.toml
+          grep -qx 'name = "dbt-oss"' pyproject.toml
 
       - name: Publish (dbt-oss)
         if: inputs.release_target == 'all' || inputs.release_target == 'oss'
@@ -916,7 +914,7 @@ jobs:
             --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --download-base-url "$BASE_URL" \
-            --project-dir crates/dbt-sa-python \
+            --runtime-metadata-from crates/dbt-sa-python \
             --python-tag cp311 \
             --abi-tag abi3 \
             --target x86_64-unknown-linux-gnu \
@@ -928,8 +926,8 @@ jobs:
       - name: Restore pyproject name after oss publish
         if: ${{ always() && (inputs.release_target == 'all' || inputs.release_target == 'oss') }}
         run: |
-          sed -i 's/^name = "dbt-oss"$/name = "dbt-core"/' crates/dbt-sa-python/pyproject.toml
-          grep -qx 'name = "dbt-core"' crates/dbt-sa-python/pyproject.toml
+          sed -i 's/^name = "dbt-oss"$/name = "dbt-core"/' pyproject.toml
+          grep -qx 'name = "dbt-core"' pyproject.toml
 
   # ------------------------------------------------------------------
   # Create the GitHub Release with all assets. Skipped on dry-run.
