@@ -13,7 +13,6 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-chrono = { workspace = true }
 dbt-adapter-core = { workspace = true }
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
