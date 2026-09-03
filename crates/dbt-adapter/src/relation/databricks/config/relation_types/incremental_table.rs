@@ -79,14 +79,10 @@ mod tests {
                     ("a_tag".to_string(), "old".to_string()),
                     ("b_tag".to_string(), "old".to_string()),
                 ]),
-                tbl_properties: IndexMap::from_iter([
-                    ("delta.enableRowTracking".to_string(), "false".to_string()),
-                    (
-                        "pipelines.pipelineId".to_string(),
-                        "my_old_pipeline".to_string(),
-                    ),
-                    ("customKey".to_string(), "old".to_string()),
-                ]),
+                tbl_properties: IndexMap::from_iter([(
+                    "delta.enableChangeDataFeed".to_string(),
+                    "false".to_string(),
+                )]),
                 ..Default::default()
             },
             desired_state: TestModelConfig {
@@ -123,16 +119,11 @@ mod tests {
                     ("b_tag".to_string(), "old".to_string()),
                 ]),
                 tbl_properties: IndexMap::from_iter([
-                    // changing these key should not result in anything as these should be ignored
-                    ("delta.enableRowTracking".to_string(), "true".to_string()),
+                    ("delta.enableChangeDataFeed".to_string(), "true".to_string()),
                     (
-                        "pipelines.pipelineId".to_string(),
-                        "my_new_pipeline".to_string(),
+                        "data.owner".to_string(),
+                        "analytics-engineering".to_string(),
                     ),
-                    // changing a key not in the ignore list should cause a changeset entry
-                    ("customKey".to_string(), "new".to_string()),
-                    // introducing a new key should also add it to the changeset
-                    ("customKey2".to_string(), "value".to_string()),
                 ]),
                 ..Default::default()
             },
@@ -219,8 +210,11 @@ mod tests {
                         ComponentConfigChange::Some(
                             components::TblPropertiesLoader::new_component_type_erased(
                                 IndexMap::from_iter([
-                                    ("customKey".to_string(), "new".to_string()),
-                                    ("customKey2".to_string(), "value".to_string()),
+                                    ("delta.enableChangeDataFeed".to_string(), "true".to_string()),
+                                    (
+                                        "data.owner".to_string(),
+                                        "analytics-engineering".to_string(),
+                                    ),
                                 ]),
                             ),
                         ),
@@ -318,18 +312,15 @@ mod tests {
 </row_filter>
 <tblproperties>
     <tblproperties>
-        <delta.enableRowTracking>
+        <delta.enableChangeDataFeed>
             true
-        </delta.enableRowTracking>
-        <customKey>
-            new
-        </customKey>
-        <customKey2>
-            value
-        </customKey2>
+        </delta.enableChangeDataFeed>
+        <data.owner>
+            analytics-engineering
+        </data.owner>
     </tblproperties>
     <pipeline_id>
-        my_new_pipeline
+        None
     </pipeline_id>
 </tblproperties>
 <column_masks>
