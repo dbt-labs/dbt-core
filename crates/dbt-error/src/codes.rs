@@ -295,11 +295,9 @@ pub enum ErrorCode {
     InvalidSkill = 1802,
     /// Two enabled skills want the same flat install destination.
     SkillNameCollision = 1803,
-    /// No longer emitted. Retained so an existing `warn_error_options` entry naming it
-    /// keeps resolving, and so the discriminant is not reused: dbt cannot currently tell
-    /// its own installed skills from the user's, and will emit this again once it can.
+    /// A dbt-installed skill was edited by the user, so dbt left it alone.
     SkillModifiedByUser = 1804,
-    /// A skill directory dbt wanted to install into is already occupied.
+    /// A user-authored skill occupies a destination dbt wanted to install into.
     SkillDestinationOccupied = 1805,
     /// A `skill-paths` entry resolves outside the project that declared it.
     SkillPathEscapesProject = 1806,
