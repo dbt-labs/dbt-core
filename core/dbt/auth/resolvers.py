@@ -83,6 +83,14 @@ class OAuthPassiveResolver:
     Checks ~/.dbt/oauth_sessions.json for a non-expired session matching
     client_id. If the access token is expired but a refresh token is present,
     attempts a token refresh.
+
+    Client ID and account matching:
+    Only sessions for the given client_id are considered. When account_id is set,
+    only sessions for that dbt platform account are considered — a cache holding
+    sessions for several accounts then resolves the configured one instead of
+    whichever session happens to come first. If no session matches the requested
+    account, NotAuthenticated is raised so the caller's chain can fall through to
+    another resolver rather than silently authenticating against the wrong account.
     """
 
     kind = ResolverKind.OAUTH_PASSIVE
@@ -92,14 +100,21 @@ class OAuthPassiveResolver:
         client_id: str = OAUTH_CLIENT_ID,
         cache_path: Optional[Path] = None,
         token_endpoint_override: Optional[str] = None,
+        account_id: Optional[int] = None,
     ) -> None:
         self.client_id = client_id
         self.cache_path = cache_path or DEFAULT_CACHE_PATH
         self.token_endpoint_override = token_endpoint_override
+        self.account_id = account_id
 
     def resolve(self) -> Credential:
         cache = read_session_cache(self.cache_path)
-        matching = [s for s in cache.sessions if s.client_id == self.client_id]
+        matching = [
+            s
+            for s in cache.sessions
+            if s.client_id == self.client_id
+            and (self.account_id is None or s.account_id == self.account_id)
+        ]
 
         if not matching:
             raise NotAuthenticated()

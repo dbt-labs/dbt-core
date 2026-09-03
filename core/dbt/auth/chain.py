@@ -26,23 +26,28 @@ class AuthChain:
         self._resolvers = resolvers
 
     @classmethod
-    def default(cls) -> AuthChain:
-        """Non-interactive chain: EnvVar -> OAuthPassive -> CloudYaml."""
+    def default(cls, configured_account_id: Optional[int] = None) -> AuthChain:
+        """Non-interactive chain: EnvVar -> OAuthPassive -> CloudYaml.
+
+        configured_account_id restricts cached OAuth session lookup to the given
+        dbt platform account. Without it, a session cache holding sessions for
+        several accounts resolves whichever session comes first.
+        """
         return cls(
             resolvers=[
                 EnvVarResolver(),
-                OAuthPassiveResolver(),
+                OAuthPassiveResolver(account_id=configured_account_id),
                 CloudYamlResolver(),
             ]
         )
 
     @classmethod
-    def interactive(cls) -> AuthChain:
+    def interactive(cls, configured_account_id: Optional[int] = None) -> AuthChain:
         """Interactive chain: EnvVar -> OAuthPassive -> CloudYaml -> OAuthInteractive."""
         return cls(
             resolvers=[
                 EnvVarResolver(),
-                OAuthPassiveResolver(),
+                OAuthPassiveResolver(account_id=configured_account_id),
                 CloudYamlResolver(),
                 OAuthInteractiveResolver(),
             ]
