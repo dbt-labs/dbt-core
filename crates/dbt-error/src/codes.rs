@@ -275,6 +275,18 @@ pub enum ErrorCode {
     CheckIndexDisabled = 1655,
 
     // --------------------------------------------------------------------------------------------
+    // Information schema
+    /// `target/info_schema/` is missing, unreadable, or will not open.
+    ///
+    /// Distinct from `InvalidArgument`, which this case used to report: `--info <view>` is a
+    /// well-formed request against state that has not been produced, so calling it a bad
+    /// argument sent people to check their flags, and made a missing artifact
+    /// indistinguishable from a typo'd option in anything that reads codes rather than prose.
+    /// The query itself keeps `InvalidArgument` -- an unknown view or a syntax error really is
+    /// the argument.
+    InfoSchemaUnavailable = 1656,
+
+    // --------------------------------------------------------------------------------------------
     // CLI errors
     NoLongerSupportedOption = 1700,
     NotYetSupportedOption = 1701,
