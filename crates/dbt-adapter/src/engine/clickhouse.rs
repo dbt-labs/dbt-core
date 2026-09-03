@@ -43,7 +43,10 @@ pub(crate) fn database_dropped(
 /// Mirrors dbclient.py `_ensure_database`, over a temporary connection with
 /// no current schema set: the server rejects every request whose default
 /// database does not exist, so a fresh target could never bootstrap itself.
-pub(crate) fn ensure_database(database: &dyn Database, config: &AdapterConfig) -> AdapterResult<()> {
+pub(crate) fn ensure_database(
+    database: &dyn Database,
+    config: &AdapterConfig,
+) -> AdapterResult<()> {
     let Some(db_name) = target_schema(config) else {
         return Ok(());
     };
