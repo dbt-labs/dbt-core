@@ -47,7 +47,8 @@
 # `--environment prod`, authenticating with the repo-level `PYPI_API_TOKEN`
 # secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`). Three distributions
 # are published — `dbt-core`, `dbt-core-experimental-parser`, and `dbt-oss`
-# — selected by the `release_target` input.
+# — selected by the `release_target` input. Homebrew and winget publish
+# `dbt-core` specifically, so they're gated on the same input too.
 #
 # `dbt-core`'s wheels are built by `maturin build` in the `build` job
 # (abi3-py311, one cp311-abi3 wheel per platform) — not `cargo ci pypi pack`,
@@ -70,7 +71,8 @@
 # dbt-labs/homebrew-dbt tap. Tap commits are GPG-signed by the build bot
 # (via FISHTOWN_BOT_GPG_*). Skipped for SemVer pre-releases and any tag
 # that isn't GitHub's current "Latest" release — protects against
-# downgrades from re-runs or hotfixes on older minors.
+# downgrades from re-runs or hotfixes on older minors. Also skipped unless
+# `release_target` is `all` or `core`.
 #
 # Dry-run (`inputs.dry_run = true`) skips tag push, PyPI publish, the
 # GitHub Release, and the Homebrew publish — build + pack still run so
@@ -131,7 +133,7 @@ on:
         type: string
         default: "main"
       release_target:
-        description: "Which package(s) to publish to PyPI. Pack always builds all three; no effect on dry runs or Homebrew publish."
+        description: "Which package(s) to publish. Pack always builds all three. Also gates Homebrew and winget publish (dbt-core-specific), skipped unless 'all' or 'core'. No effect on dry runs."
         required: false
         type: choice
         options:
@@ -1015,7 +1017,7 @@ jobs:
   publish-homebrew:
     needs: [prepare-release, github-release]
     # if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi && !contains(needs.prepare-release.outputs.version, '-') }}
-    if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi }}
+    if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi && (inputs.release_target == 'all' || inputs.release_target == 'core') }}
     uses: ./.github/workflows/publish-homebrew.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
@@ -1186,7 +1188,8 @@ jobs:
   # Submits an updated dbtLabs.dbt-core manifest to microsoft/winget-pkgs
   # via `wingetcreate update` using the Windows installer archive from the
   # `github-release` job. Runs in parallel with `publish-homebrew`; both
-  # fan out from `github-release`.
+  # fan out from `github-release`. Also skipped unless `release_target`
+  # is `all` or `core`.
   #
   # PRE-STABLE PREVIEW WINDOW: pre-release versions are published too. Note
   # each preview opens a new upstream winget-pkgs PR and a permanent
@@ -1197,7 +1200,7 @@ jobs:
     # if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
     # dry_run cascades via github-release being skipped; dry_run_with_test_pypi
     # needs an explicit guard since github-release now runs in that mode too.
-    if: ${{ !inputs.dry_run_with_test_pypi }}
+    if: ${{ !inputs.dry_run_with_test_pypi && (inputs.release_target == 'all' || inputs.release_target == 'core') }}
     uses: ./.github/workflows/publish-winget.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
