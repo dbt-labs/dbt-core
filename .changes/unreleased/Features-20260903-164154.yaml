@@ -1,0 +1,7 @@
+kind: Features
+body: Record which agent skills dbt installed, and the package version they came from, in the installed SKILL.md's metadata frontmatter, so dbt can update and prune its own skills without touching ones you wrote or edited.
+time: 2026-09-03T16:41:54.936263-06:00
+custom:
+    author: dbeatty10
+    issue: "14556"
+    project: dbt-core
