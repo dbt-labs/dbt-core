@@ -1,0 +1,7 @@
+kind: Features
+body: Record a .provenance sidecar for each agent skill installed from a package, so dbt can update and prune its own installed skills without touching ones you wrote or edited.
+time: 2026-09-03T15:10:53.203188-06:00
+custom:
+    author: dbeatty10
+    issue: "14556"
+    project: dbt-core
