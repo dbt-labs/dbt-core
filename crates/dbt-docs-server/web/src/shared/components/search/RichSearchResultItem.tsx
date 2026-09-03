@@ -1,17 +1,16 @@
-import { FC, ReactNode } from 'react';
+import { createElement, FC, ReactNode } from 'react';
 import { Columns3, Folder, Server } from 'lucide-react';
 import { twJoin } from 'tailwind-merge';
-
-import {
-  DbtResourceIcon,
-  ResourceType,
-  ResourceTypeExplorer,
-  WarehouseType,
-} from '@dbt-labs/dbt-dag';
 
 import { Link } from '../../../components/ui/Link';
 import { LoadingBlock } from '../../../components/ui/LoadingBlock';
 import { Tooltip } from '../../../components/ui/Tooltip';
+import {
+  iconForType,
+  type ResourceType,
+  type ResourceTypeExplorer,
+  type WarehouseType,
+} from '../../../lib/resourceType';
 import { TrustSignals } from '../../typings/trustSignals';
 import { toTitleCase } from '../../util/string';
 import { DataPlatformChip } from '../DataPlatformChip';
@@ -189,7 +188,9 @@ export const RichSearchResultItem: FC<RichItemParams | SkeletonItemParams> = (
               </span>
             )}
             <span className="flex items-center gap-1">
-              <DbtResourceIcon className="text-fgMain" resource={resourceType} />
+              {createElement(iconForType(resourceType), {
+                size: 16,
+              })}
               {toTitleCase(resourceType)}
             </span>
             {metadata?.numColumns != null && metadata.numColumns > 0 && (

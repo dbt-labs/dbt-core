@@ -133,11 +133,13 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 Some(catalog_name) => catalog_name,
             }
         }
-        // Alt behaves as DuckDB-backed for relation-building purposes.
-        AdapterType::DuckDB | AdapterType::Alt => match model_catalog_name(model, adapter_type) {
-            None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
-            Some(catalog_name) => catalog_name,
-        },
+        // Lake compute behaves as DuckDB-backed for relation-building purposes.
+        AdapterType::DuckDB | AdapterType::LakeCompute => {
+            match model_catalog_name(model, adapter_type) {
+                None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
+                Some(catalog_name) => catalog_name,
+            }
+        }
         _ => Err(AdapterError::new(
             AdapterErrorKind::Internal,
             format!("build_relation_catalog cannot be invoked by an adapter {adapter_type:?}"),
@@ -216,21 +218,21 @@ pub(super) fn from_model_config_and_catalogs_v2(
                 other.as_str()
             ),
         )),
-        // Alt never issues its own ATTACH: the dbt-compute
+        // Lake compute never issues its own ATTACH: the dbt-compute
         // service auto-attaches the org's MDLS catalog server-side via the
-        // caller's bearer token. All Alt needs from catalogs.yml is the
+        // caller's bearer token. All lake compute needs from catalogs.yml is the
         // Snowflake-cased `catalog_database` these catalog types carry --
         // see `catalog_attach_database()` in dbt-tasks'
         // local_engine::runnable::compute_platform, which reads the exact
         // same field and nothing else.
         (
-            AdapterType::Alt,
+            AdapterType::LakeCompute,
             CatalogType::Horizon | CatalogType::IcebergRest | CatalogType::Unity,
-        ) => CatalogRelation::build_alt_with_catalogs_v2(catalog, &catalog_name),
-        (AdapterType::Alt, other) => Err(AdapterError::new(
+        ) => CatalogRelation::build_lake_compute_with_catalogs_v2(catalog, &catalog_name),
+        (AdapterType::LakeCompute, other) => Err(AdapterError::new(
             AdapterErrorKind::Configuration,
             format!(
-                "Catalog '{catalog_name}' has type '{}'; Alt (dbt Compute) v2 mapping supports only 'horizon', 'iceberg_rest', and 'unity'",
+                "Catalog '{catalog_name}' has type '{}'; lake compute v2 mapping supports only 'horizon', 'iceberg_rest', and 'unity'",
                 other.as_str()
             ),
         )),
@@ -627,6 +629,10 @@ impl CatalogRelation {
         let external_volume =
             Self::get_model_config_value(model, FIELD_EXTERNAL_VOLUME, AdapterType::Snowflake)
                 .or_else(|| get_yaml_str(snowflake, FIELD_EXTERNAL_VOLUME).map(|s| s.to_string()));
+        // catalogs.yml schema validation requires `external_volume` on every
+        // Horizon+Snowflake platform block, so this default never actually
+        // triggers for a valid config -- kept only so `external_volume` stays
+        // `Option<String>` consistently with the legacy (no catalogs.yml) path.
         let external_volume =
             Some(external_volume.unwrap_or_else(|| SNOWFLAKE_MANAGED_EXTERNAL_VOLUME.to_string()));
 
@@ -860,13 +866,13 @@ impl CatalogRelation {
         })
     }
 
-    /// Alt equivalent of `build_horizon_with_catalogs_v2` /
+    /// Lake compute equivalent of `build_horizon_with_catalogs_v2` /
     /// `build_snowflake_linked_with_catalogs_v2`, pared down to the single
-    /// field the Alt runtime actually consults: `catalog_database` from
-    /// `config.snowflake`. Alt attaches server-side (see module doc on
+    /// field the lake compute runtime actually consults: `catalog_database` from
+    /// `config.snowflake`. Lake compute attaches server-side (see module doc on
     /// `build_duckdb_with_catalogs_v2` and `catalog_attach_database()` in
     /// dbt-tasks), so none of the ATTACH/endpoint fields apply here.
-    fn build_alt_with_catalogs_v2(
+    fn build_lake_compute_with_catalogs_v2(
         catalog: &CatalogSpecV2View<'_>,
         catalog_name: &str,
     ) -> AdapterResult<CatalogRelation> {
@@ -878,13 +884,13 @@ impl CatalogRelation {
                 AdapterError::new(
                     AdapterErrorKind::Configuration,
                     format!(
-                        "Catalog '{catalog_name}' requires config.snowflake.catalog_database for the Alt (dbt Compute) adapter"
+                        "Catalog '{catalog_name}' requires config.snowflake.catalog_database for the lake compute adapter"
                     ),
                 )
             })?;
 
         Ok(CatalogRelation {
-            adapter_type: AdapterType::Alt,
+            adapter_type: AdapterType::LakeCompute,
             catalog_name: Some(catalog_name.to_string()),
             integration_name: None,
             catalog_type: catalog.catalog_type,
@@ -1490,8 +1496,7 @@ catalogs:
     }
 
     #[test]
-    fn snowflake_v2_horizon_iceberg_without_catalog_templates_snowflake_managed_and_omits_base_location()
-     {
+    fn snowflake_v2_horizon_iceberg_without_catalog_omits_external_volume_and_base_location() {
         let catalogs = load_catalogs_yaml(
             r#"
 catalogs:
@@ -1520,10 +1525,11 @@ catalogs:
             assert!(r.catalog_name.is_none());
             assert_eq!(r.table_format, TableFormat::Iceberg);
             assert_eq!(r.catalog_type, CatalogType::SnowflakeBuiltIn);
-            assert_eq!(
-                r.external_volume.as_deref(),
-                Some(SNOWFLAKE_MANAGED_EXTERNAL_VOLUME)
-            );
+            // No `+catalog_name`, so this dispatches to `build_without_catalogs_yml`
+            // (the legacy path) -- no `external_volume` configured there either,
+            // so it stays unset rather than templating the literal (bogus)
+            // `SNOWFLAKE_MANAGED` string into the DDL.
+            assert!(r.external_volume.is_none());
             assert!(r.base_location.is_none());
         }
     }

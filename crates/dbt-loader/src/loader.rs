@@ -181,20 +181,17 @@ pub(crate) fn resolve_and_reload_weo_from_project(
     })
 }
 
-fn project_flags_v2_compatible_download(flags: &dbt_yaml::Value) -> Option<bool> {
-    project_flags_get_value(flags, "use_v2_compatible_package_downloads")
-        .and_then(dbt_yaml::Value::as_bool)
-}
-
-pub fn resolve_use_v2_compatible_package_download_options(
+/// Enabled by the CLI/env, or by `flags: { <name>: true }` in dbt_project.yml.
+pub fn resolve_bool_project_flag(
     from_cli: bool,
     project_flags: Option<&dbt_yaml::Value>,
+    name: &str,
 ) -> bool {
-    from_cli || {
-        project_flags
-            .and_then(project_flags_v2_compatible_download)
+    from_cli
+        || project_flags
+            .and_then(|flags| project_flags_get_value(flags, name))
+            .and_then(dbt_yaml::Value::as_bool)
             .unwrap_or_default()
-    }
 }
 
 #[tracing::instrument(
@@ -287,10 +284,15 @@ pub async fn load(
     }
     let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg.as_ref())?;
 
-    // Merge use_v2_compatible_package_downloads flags from project and CLI/env
-    let use_v2_compatible_package_downloads = resolve_use_v2_compatible_package_download_options(
+    let use_v2_compatible_package_downloads = resolve_bool_project_flag(
         arg.io.use_v2_compatible_package_downloads,
         simplified_dbt_project.flags.as_ref(),
+        "use_v2_compatible_package_downloads",
+    );
+    let require_hub_verified_downloads = resolve_bool_project_flag(
+        arg.io.require_hub_verified_downloads,
+        simplified_dbt_project.flags.as_ref(),
+        "require_hub_verified_downloads",
     );
 
     if iarg.num_threads != final_threads {
@@ -505,6 +507,7 @@ pub async fn load(
         iarg.replay.as_ref(),
         token,
         use_v2_compatible_package_downloads,
+        require_hub_verified_downloads,
         private_package_resolver,
         dbt_state.cloud_config.clone(),
     )

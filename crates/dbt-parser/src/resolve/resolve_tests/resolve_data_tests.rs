@@ -11,7 +11,7 @@ use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
 use crate::resolve::resolve_utils::{
-    build_unrendered_config, err_resource_name_has_spaces, validate_compute, validate_node_adapter,
+    build_unrendered_config, err_resource_name_has_spaces, validate_compute,
 };
 use crate::utils::RelationComponents;
 use crate::utils::extract_resource_config_from_raw_project;
@@ -551,13 +551,19 @@ pub async fn resolve_data_tests(
             format!("test.{package_name}.{test_name}")
         };
 
-        // Use test_name (the truncated/file-stem form) as the lookup key, because that is
-        // what the renderer used when it called create_listener — see resolve_model_context.rs
-        // where unique_id = "{package_name}.{model_name}" and model_name = file stem = test_name.
+        // Use the file stem as the lookup key, because that is what the renderer used
+        // when it called create_listener — see resolve_model_context.rs where
+        // unique_id = "{package_name}.{model_name}" and model_name = file stem.
         // Using fqn_name here caused a key miss when the name was truncated, leaving
-        // depends_on.macros empty. (dbt-core#15308)
+        // depends_on.macros empty (dbt-core#15308). The stem usually equals test_name,
+        // but diverges for name-collided generic tests whose file carries a hash suffix.
+        let renderer_name = dbt_asset
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&test_name);
         jinja_type_checking_event_listener_factory
-            .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
+            .update_unique_id(&format!("{package_name}.{renderer_name}"), &unique_id);
         let mut macro_depends_on =
             jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
         filter_core_builtin_test_macro_dependencies(
@@ -607,9 +613,9 @@ pub async fn resolve_data_tests(
 
         // A test runs where its subject runs, so an unset `+adapter` is inherited
         // from `attached_node` -- the same lookup the `group` inheritance below
-        // does. `alt` is deliberately not inherited: the compute-platform path
+        // does. `lake_compute` is deliberately not inherited: the compute-platform path
         // materializes models and seeds only, so a test routed there would fail at
-        // run time. A test on an `alt` node therefore stays on the target default,
+        // run time. A test on an `lake_compute` node therefore stays on the target default,
         // which is what it did before `+adapter` existed.
         let inherited_adapter = attached_node
             .as_deref()
@@ -620,20 +626,13 @@ pub async fn resolve_data_tests(
                     .or_else(|| seeds.get(id).map(|s| s.node_adapter()))
                     .or_else(|| snapshots.get(id).map(|s| s.node_adapter()))
             })
-            .filter(|adapter| *adapter != AdapterType::Alt);
-        // An explicit selection is validated like any other node's; `None` in gives
-        // `None` out, and inheritance fills the gap. An inherited adapter needs no
-        // validation -- it was already validated on the node that materializes.
-        let resolved_node_adapter = validate_node_adapter(
-            test_config.adapter,
-            &DbtMaterialization::Test,
-            None,
-            default_adapter,
-            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
-            false,
-            &dbt_asset.path,
-        )?
-        .or(inherited_adapter);
+            .filter(|adapter| *adapter != AdapterType::LakeCompute);
+        // See `resolve_models`: the flag overrides the config, and nothing is
+        // validated at parse. `None` from both leaves inheritance to fill the gap.
+        let resolved_node_adapter = arg
+            .adapter_override
+            .or(test_config.adapter)
+            .or(inherited_adapter);
 
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
@@ -743,6 +742,9 @@ pub async fn resolve_data_tests(
             },
             __base_attr__: NodeBaseAttributes {
                 adapter: selected_adapter,
+                // A data test never runs on lake compute (see `inherited_adapter` above), so
+                // it has nothing to publish: no `+propagate` config exists for this node type.
+                propagate: Vec::new(),
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),

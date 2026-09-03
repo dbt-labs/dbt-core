@@ -11,8 +11,12 @@ use dbt_common::tracing::dbt_emit::emit_info_progress_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_compilation::core::DbtLoadedProject;
 use dbt_schemas::schemas::profiles::{DbConfig, Execute};
-use dbt_tasks_core::alt_catalog_attach::{AltCatalogAttachChecker, AltCatalogAttachOutcome};
-use dbt_tasks_core::alt_propagation::{AltPropagationChecker, AltPropagationOutcome};
+use dbt_tasks_core::lake_compute_catalog_attach::{
+    LakeComputeCatalogAttachChecker, LakeComputeCatalogAttachOutcome,
+};
+use dbt_tasks_core::lake_compute_propagation::{
+    LakeComputePropagationChecker, LakeComputePropagationOutcome,
+};
 use dbt_telemetry::ProgressMessage;
 
 // Action labels for debug command progress messages (without padding - formatter handles padding)
@@ -67,13 +71,13 @@ pub struct DebugArgs {
     pub target: Option<String>,
     pub connection: bool,
     pub local_execution_backend: LocalExecutionBackendKind,
-    /// Checker for verifying alt-compute-to-native propagation, if this
+    /// Checker for verifying lake-compute-to-native propagation, if this
     /// build has one registered. `None` means the check is skipped.
-    pub alt_propagation_checker: Option<Arc<dyn AltPropagationChecker>>,
+    pub lake_compute_propagation_checker: Option<Arc<dyn LakeComputePropagationChecker>>,
     /// Checker for verifying the catalogs declared in `catalogs.yml` are
-    /// reachable from the alt compute target, if this build has one
+    /// reachable from the lake compute target, if this build has one
     /// registered. `None` means the check is skipped.
-    pub alt_catalog_attach_checker: Option<Arc<dyn AltCatalogAttachChecker>>,
+    pub lake_compute_catalog_attach_checker: Option<Arc<dyn LakeComputeCatalogAttachChecker>>,
 }
 
 impl DebugArgs {
@@ -82,8 +86,8 @@ impl DebugArgs {
             target: arg.target.clone(),
             connection: arg.connection,
             local_execution_backend: arg.local_execution_backend,
-            alt_propagation_checker: None,
-            alt_catalog_attach_checker: None,
+            lake_compute_propagation_checker: None,
+            lake_compute_catalog_attach_checker: None,
         }
     }
 }
@@ -221,24 +225,31 @@ pub async fn debug(
     }
 
     // Lake Compute (dbt-compute / MDLS) checks: only when the profile
-    // declares an adapter of type `alt` in the active target's adapter list.
+    // declares an adapter of type `lake_compute` in the active target's adapter list.
     // Independent of whichever target is currently active/selected.
-    if let Some(alt_db_config) = loaded_project
+    if let Some(lake_compute_db_config) = loaded_project
         .dbt_state()
         .dbt_profile
-        .adapter(AdapterType::Alt)
+        .adapter(AdapterType::LakeCompute)
         .cloned()
     {
-        // Every one of these probes goes through the alt connection, so running
+        // Every one of these probes goes through the lake compute connection, so running
         // them after that connection failed only replaces the real diagnostic with
         // a cascade of derived ones.
-        if unreachable_adapters.contains(&AdapterType::Alt) {
+        if unreachable_adapters.contains(&AdapterType::LakeCompute) {
             emit_info_progress_message(create_progress_msg(
                 ACTION_SKIPPED,
-                "dbt Compute checks (the alt connection is unreachable)",
+                "dbt Compute checks (the lake compute connection is unreachable)",
             ));
         } else {
-            debug_lake_compute(arg, &db_config, &alt_db_config, loaded_project, &token).await?;
+            debug_lake_compute(
+                arg,
+                &db_config,
+                &lake_compute_db_config,
+                loaded_project,
+                &token,
+            )
+            .await?;
         }
     }
 
@@ -335,38 +346,41 @@ fn debug_adapter_connection(
     Ok(())
 }
 
-/// Runs the Lake Compute checks that are specific to alt compute: declared-catalog
+/// Runs the Lake Compute checks that are specific to lake compute: declared-catalog
 /// attach, MDLS write/read-back, and (if a checker is registered and the project
 /// declares a catalog-linked database) native-connection propagation.
 ///
-/// Connecting to `alt` is not one of them -- that is a plain connection test, and
+/// Connecting to `lake_compute` is not one of them -- that is a plain connection test, and
 /// the per-adapter loop in [`debug`] runs it for every declared adapter.
 async fn debug_lake_compute(
     arg: &DebugArgs,
     native_db_config: &DbConfig,
-    alt_db_config: &DbConfig,
+    lake_compute_db_config: &DbConfig,
     loaded_project: &DbtLoadedProject,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    let mut alt_mapping = alt_db_config.to_mapping().unwrap();
-    alt_mapping
+    let mut lake_compute_mapping = lake_compute_db_config.to_mapping().unwrap();
+    lake_compute_mapping
         .entry("connect_timeout".into())
         .or_insert("1s".into());
 
-    let alt_adapter_type = alt_db_config.adapter_type();
-    let alt_adapter =
-        loaded_project.init_base_adapter(alt_adapter_type, alt_mapping, token.clone())?;
+    let lake_compute_adapter_type = lake_compute_db_config.adapter_type();
+    let lake_compute_adapter = loaded_project.init_base_adapter(
+        lake_compute_adapter_type,
+        lake_compute_mapping,
+        token.clone(),
+    )?;
     let ctx = QueryCtx::default();
 
-    // The `alt` connection round trip is not done here: it is a plain connection
+    // The `lake_compute` connection round trip is not done here: it is a plain connection
     // test, and the per-adapter loop above already ran it for every declared
     // adapter including this one. What follows is only what is genuinely specific
-    // to alt compute.
+    // to lake compute.
 
     // 1. Declared-catalog attach. Runs before the write tests below because it
     // is the cheapest check that can fail on a misconfigured catalog, and a
     // catalog that cannot be attached makes everything after it moot.
-    match &arg.alt_catalog_attach_checker {
+    match &arg.lake_compute_catalog_attach_checker {
         None => {
             emit_info_progress_message(create_progress_msg(
                 ACTION_SKIPPED,
@@ -376,7 +390,7 @@ async fn debug_lake_compute(
         Some(checker) => {
             let attach_started = Instant::now();
             let outcome = checker
-                .check_catalog_attach(native_db_config, alt_db_config, token.clone())
+                .check_catalog_attach(native_db_config, lake_compute_db_config, token.clone())
                 .await?;
             emit_info_progress_message(create_progress_msg(
                 ACTION_DEBUGGING,
@@ -389,7 +403,7 @@ async fn debug_lake_compute(
         }
     }
 
-    // 2. MDLS write + read-back, in an already-authorized namespace (the alt
+    // 2. MDLS write + read-back, in an already-authorized namespace (the lake compute
     // target's configured database/schema). Namespace-level DDL is
     // deliberately avoided: creating a new namespace is denied for the
     // Polaris principal used here and (confirmed empirically) can hang
@@ -403,13 +417,13 @@ async fn debug_lake_compute(
             .as_nanos()
     );
     let qualified_probe = qualify_probe_name(
-        alt_db_config.get_database().map(String::as_str),
-        alt_db_config.get_schema().map(String::as_str),
+        lake_compute_db_config.get_database().map(String::as_str),
+        lake_compute_db_config.get_schema().map(String::as_str),
         &probe_table,
     );
 
     let write_started = Instant::now();
-    let write_result = alt_adapter.execute_without_state(
+    let write_result = lake_compute_adapter.execute_without_state(
         Some(&ctx),
         &format!("create table {qualified_probe} (id integer)"),
         false,
@@ -436,7 +450,7 @@ async fn debug_lake_compute(
     ));
 
     let read_started = Instant::now();
-    let read_result = alt_adapter.execute_without_state(
+    let read_result = lake_compute_adapter.execute_without_state(
         Some(&ctx),
         &format!("select count(*) as c from {qualified_probe}"),
         true,
@@ -446,7 +460,7 @@ async fn debug_lake_compute(
 
     // Cleanup is unconditional and best-effort: don't let a drop failure mask
     // the read-back result, but don't leave the probe table behind either.
-    let _ = alt_adapter.execute_without_state(
+    let _ = lake_compute_adapter.execute_without_state(
         Some(&ctx),
         &format!("drop table if exists {qualified_probe}"),
         false,
@@ -478,7 +492,7 @@ async fn debug_lake_compute(
         .and_then(|dbs| dbs.into_iter().next())
         .map(|(_, db)| db);
 
-    match (&linked_database, &arg.alt_propagation_checker) {
+    match (&linked_database, &arg.lake_compute_propagation_checker) {
         (None, _) => {
             emit_info_progress_message(create_progress_msg(
                 ACTION_SKIPPED,
@@ -500,9 +514,9 @@ async fn debug_lake_compute(
             ));
             let propagation_started = Instant::now();
             let outcome = checker
-                .check_alt_propagation(
+                .check_lake_compute_propagation(
                     native_db_config,
-                    alt_db_config,
+                    lake_compute_db_config,
                     linked_database,
                     token.clone(),
                 )
@@ -523,7 +537,7 @@ async fn debug_lake_compute(
 }
 
 /// Builds a schema/database-qualified name for the MDLS probe object from
-/// the alt target's own configured database/schema.
+/// the lake compute target's own configured database/schema.
 fn qualify_probe_name(database: Option<&str>, schema: Option<&str>, table: &str) -> String {
     match (database, schema) {
         (Some(db), Some(schema)) => format!("{db}.{schema}.{table}"),
@@ -532,27 +546,27 @@ fn qualify_probe_name(database: Option<&str>, schema: Option<&str>, table: &str)
     }
 }
 
-/// Renders an [`AltCatalogAttachOutcome`] as the `dbt debug` progress line.
+/// Renders an [`LakeComputeCatalogAttachOutcome`] as the `dbt debug` progress line.
 /// A failed attach never reaches here -- it comes back as an error, since a
 /// catalog that cannot be attached is a setup problem the user must fix.
-fn format_catalog_attach_outcome(outcome: &AltCatalogAttachOutcome) -> String {
+fn format_catalog_attach_outcome(outcome: &LakeComputeCatalogAttachOutcome) -> String {
     match outcome {
-        AltCatalogAttachOutcome::NothingToCheck => {
+        LakeComputeCatalogAttachOutcome::NothingToCheck => {
             "catalog attach test: skipped (no declared catalogs to check)".to_string()
         }
-        AltCatalogAttachOutcome::Attached { catalogs } => {
+        LakeComputeCatalogAttachOutcome::Attached { catalogs } => {
             format!("catalog attach test: OK ({})", catalogs.join(", "))
         }
     }
 }
 
-/// Renders an [`AltPropagationOutcome`] as the `dbt debug` progress line.
+/// Renders an [`LakeComputePropagationOutcome`] as the `dbt debug` progress line.
 /// `NotYetVisible` is reported informationally, not as a failure, since
 /// catalog-integration propagation is inherently asynchronous.
-fn format_propagation_outcome(outcome: &AltPropagationOutcome) -> String {
+fn format_propagation_outcome(outcome: &LakeComputePropagationOutcome) -> String {
     match outcome {
-        AltPropagationOutcome::Verified => "Snowflake propagation test: OK".to_string(),
-        AltPropagationOutcome::NotYetVisible {
+        LakeComputePropagationOutcome::Verified => "Snowflake propagation test: OK".to_string(),
+        LakeComputePropagationOutcome::NotYetVisible {
             waited_secs,
             configured_refresh_secs,
         } => {
@@ -606,7 +620,10 @@ mod tests {
     #[test]
     fn adapter_label_names_the_adapter_when_several_are_declared() {
         assert_eq!(adapter_label(AdapterType::Snowflake, true), "snowflake ");
-        assert_eq!(adapter_label(AdapterType::Alt, true), "lake_compute ");
+        assert_eq!(
+            adapter_label(AdapterType::LakeCompute, true),
+            "lake_compute "
+        );
     }
 
     /// The VS Code extension decides whether to show the `allow_id_token` tip by
@@ -643,7 +660,7 @@ mod tests {
 
     #[test]
     fn format_catalog_attach_outcome_lists_checked_catalogs() {
-        let msg = format_catalog_attach_outcome(&AltCatalogAttachOutcome::Attached {
+        let msg = format_catalog_attach_outcome(&LakeComputeCatalogAttachOutcome::Attached {
             catalogs: vec!["mdls_horizon".to_string(), "native_db".to_string()],
         });
         assert_eq!(msg, "catalog attach test: OK (mdls_horizon, native_db)");
@@ -651,21 +668,21 @@ mod tests {
 
     #[test]
     fn format_catalog_attach_outcome_nothing_to_check() {
-        let msg = format_catalog_attach_outcome(&AltCatalogAttachOutcome::NothingToCheck);
+        let msg = format_catalog_attach_outcome(&LakeComputeCatalogAttachOutcome::NothingToCheck);
         assert!(msg.contains("no declared catalogs to check"));
     }
 
     #[test]
     fn format_propagation_outcome_verified() {
         assert_eq!(
-            format_propagation_outcome(&AltPropagationOutcome::Verified),
+            format_propagation_outcome(&LakeComputePropagationOutcome::Verified),
             "Snowflake propagation test: OK"
         );
     }
 
     #[test]
     fn format_propagation_outcome_not_yet_visible_with_refresh_interval() {
-        let msg = format_propagation_outcome(&AltPropagationOutcome::NotYetVisible {
+        let msg = format_propagation_outcome(&LakeComputePropagationOutcome::NotYetVisible {
             waited_secs: 90,
             configured_refresh_secs: Some(3600),
         });
@@ -676,7 +693,7 @@ mod tests {
 
     #[test]
     fn format_propagation_outcome_not_yet_visible_without_refresh_interval() {
-        let msg = format_propagation_outcome(&AltPropagationOutcome::NotYetVisible {
+        let msg = format_propagation_outcome(&LakeComputePropagationOutcome::NotYetVisible {
             waited_secs: 90,
             configured_refresh_secs: None,
         });

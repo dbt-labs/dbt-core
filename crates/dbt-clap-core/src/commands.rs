@@ -57,7 +57,7 @@ pub enum CoreCommand {
     Debug(DebugArgs),
     /// Retry failed nodes from the previous run
     Retry(RetryArgs),
-    /// Generate and serve documentation (deprecated in Fusion - use `dbt compile --write-catalog`)
+    /// Generate and serve documentation
     Docs(DocsArgs),
     /// Authenticate with dbt platform
     Login(LoginArgs),

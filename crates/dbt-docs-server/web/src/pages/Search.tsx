@@ -1,13 +1,11 @@
 import { useEffect, useMemo } from 'react';
 
-import type { ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-
 import type { AssetFilters } from '../App';
 import { Badge } from '../components/ui/Badge';
 import { NotificationBanner } from '../components/ui/NotificationBanner';
 import { Pill } from '../components/ui/Pill';
 import { FEATURE_FLAGS } from '../lib/featureFlags';
-import { RESOURCE_TYPE_LABEL } from '../lib/resourceType';
+import { RESOURCE_TYPE_LABEL, type ResourceTypeExplorer } from '../lib/resourceType';
 import { isTelemetryInitialized, trackSearchPerformed } from '../lib/telemetry';
 import { paths } from '../routes';
 import type { Project } from '../shared';

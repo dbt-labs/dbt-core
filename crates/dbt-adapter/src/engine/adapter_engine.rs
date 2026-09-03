@@ -371,7 +371,7 @@ pub(crate) fn adbc_execute_with_options(
             return Ok((Arc::new(Schema::empty()), Vec::new(), rows_affected));
         }
 
-        // Alt compute: every statement compute_platform.rs sends is DDL/DML
+        // Lake compute: every statement compute_platform.rs sends is DDL/DML
         // whose result is never read (it always passes fetch=false -- models
         // only ever create/drop/write, they don't read query results back).
         // `stmt.execute()` below calls `reader.schema()` unconditionally, which
@@ -379,14 +379,51 @@ pub(crate) fn adbc_execute_with_options(
         // + list_files, ~2-3s) even though nothing will ever consume that
         // export. `execute_update()` skips export setup server-side entirely
         // and never touches the schema. This is only safe because dbt-compute
-        // doesn't execute tests today (see AltCompute routing in
+        // doesn't execute tests today (see `selects_lake_compute` routing in
         // dbt-tasks-sa/src/task.rs, keyed off the models table) -- a test
-        // needs its result rows, so a future test-execution path over Alt must
+        // needs its result rows, so a future test-execution path over lake compute must
         // pass fetch=true and must not hit this branch.
-        if adapter_type == AdapterType::Alt && !fetch {
+        if adapter_type == AdapterType::LakeCompute && !fetch {
             let rows_affected = stmt.execute_update()?;
             token.check_cancellation()?;
-            return Ok((Arc::new(Schema::empty()), Vec::new(), rows_affected));
+            // Surface non-fatal backend warnings (e.g. an export-limit
+            // truncation notice) and the job id via schema metadata, since
+            // this function's return type has no other slot for
+            // statement-level side channels. `AdapterResponse::from_record_batch`
+            // reads both back; the job id is the only way to later recover
+            // this statement's result via dbt-compute's `/download_credentials`.
+            let warnings = stmt
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_WARNINGS.to_string(),
+                ))
+                .unwrap_or_default();
+            let query_id = stmt
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_QUERY_ID.to_string(),
+                ))
+                .unwrap_or_default();
+            let mut metadata = std::collections::HashMap::new();
+            if !warnings.is_empty() {
+                metadata.insert(
+                    dbt_adbc::lake_compute::schema_metadata::WARNINGS.to_string(),
+                    warnings,
+                );
+            }
+            if !query_id.is_empty() {
+                metadata.insert(
+                    dbt_adbc::lake_compute::schema_metadata::QUERY_ID.to_string(),
+                    query_id,
+                );
+            }
+            let schema = if metadata.is_empty() {
+                Arc::new(Schema::empty())
+            } else {
+                Arc::new(Schema::new_with_metadata(
+                    Vec::<arrow_schema::Field>::new(),
+                    metadata,
+                ))
+            };
+            return Ok((schema, Vec::new(), rows_affected));
         }
 
         // Redshift-only: other adapters need execute()'s schema metadata
@@ -408,10 +445,52 @@ pub(crate) fn adbc_execute_with_options(
         log_step_duration("reader.schema()", t_schema.elapsed());
         let mut batches = Vec::with_capacity(1);
 
+        // Surface non-fatal backend warnings (e.g. an export-limit truncation
+        // notice) the same way the `!fetch` lake compute branch above does: via schema
+        // metadata, since this closure's return type has no other slot for
+        // statement-level side channels. `stmt.execute()` (quack's
+        // `ComputeStatement::do_execute`) already stashed them internally, so
+        // this is a local option read, not a second round trip -- but it must
+        // happen after `reader` (which holds `stmt` borrowed) is dropped.
+        let attach_lake_compute_metadata = |stmt: &TrackedStatement, schema: Arc<Schema>| {
+            if adapter_type != AdapterType::LakeCompute {
+                return schema;
+            }
+            let warnings = stmt
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_WARNINGS.to_string(),
+                ))
+                .unwrap_or_default();
+            let query_id = stmt
+                .get_option_string(OptionStatement::Other(
+                    dbt_adbc::lake_compute::LAST_QUERY_ID.to_string(),
+                ))
+                .unwrap_or_default();
+            if warnings.is_empty() && query_id.is_empty() {
+                return schema;
+            }
+            let mut metadata = schema.metadata().clone();
+            if !warnings.is_empty() {
+                metadata.insert(
+                    dbt_adbc::lake_compute::schema_metadata::WARNINGS.to_string(),
+                    warnings,
+                );
+            }
+            if !query_id.is_empty() {
+                metadata.insert(
+                    dbt_adbc::lake_compute::schema_metadata::QUERY_ID.to_string(),
+                    query_id,
+                );
+            }
+            Arc::new(Schema::new_with_metadata(schema.fields().clone(), metadata))
+        };
+
         // Snowflake DML (MERGE/INSERT/UPDATE/DELETE) returns a one-row metadata batch
         // with columns like "number of rows inserted". AdapterResponse needs that batch
         // to compute rows_affected correctly, so we must drain even when fetch=false.
         if !fetch && !schema.has_dml_columns(engine.adapter_type()) {
+            drop(reader);
+            let schema = attach_lake_compute_metadata(&stmt, schema);
             return Ok((schema, batches, None));
         }
 
@@ -426,6 +505,7 @@ pub(crate) fn adbc_execute_with_options(
             token.check_cancellation()?;
         }
         log_step_duration("batch-consume loop (for res in reader)", t_loop.elapsed());
+        let schema = attach_lake_compute_metadata(&stmt, schema);
         Ok((schema, batches, None))
     };
     let _span = span!("SqlEngine::execute");

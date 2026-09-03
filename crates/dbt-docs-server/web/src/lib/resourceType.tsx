@@ -5,6 +5,7 @@ import {
   ChartColumn,
   CircleGauge,
   ClipboardCheck,
+  Columns3,
   Database,
   FileText,
   type LucideIcon,
@@ -28,6 +29,111 @@ export const RESOURCE_TYPE_ORDER = [
   'saved_query',
   'analysis',
 ] as const;
+
+/** Every real dbt resource type -- mirrors `@dbt-labs/dbt-dag`'s `ResourceType`
+ *  union so callers moving off that package aren't narrowing what they can
+ *  represent. */
+export type ResourceType =
+  | 'analysis'
+  | 'exposure'
+  | 'macro'
+  | 'metric'
+  | 'model'
+  | 'seed'
+  | 'snapshot'
+  | 'source'
+  | 'test'
+  | 'unit_test'
+  | 'semantic_model'
+  | 'group'
+  | 'saved_query'
+  | 'function';
+
+/** `ResourceType` plus the two pseudo-types the file/asset explorer tree
+ *  also has to represent: the project root itself, and a column node.
+ *  Mirrors dbt-dag's `ResourceTypeExplorer`. */
+export type ResourceTypeExplorer = ResourceType | 'project' | 'column';
+
+/** Resource types whose detail page has a Columns tab. Mirrors dbt-dag's
+ *  `resourceTypesWithColumns`. */
+export const RESOURCE_TYPES_WITH_COLUMNS: readonly ResourceType[] = [
+  'model',
+  'source',
+  'seed',
+  'snapshot',
+];
+
+/** Narrows an arbitrary string to `ResourceTypeExplorer`, or `defaultValue`
+ *  if it isn't one. Mirrors dbt-dag's `getResourceType`. */
+export function getResourceType<
+  TDefault extends undefined | ResourceTypeExplorer | 'unknown',
+>(
+  resourceName: string | undefined,
+  defaultValue?: TDefault,
+): ResourceTypeExplorer | TDefault {
+  if (resourceName === 'project' || resourceName === 'column') {
+    return resourceName;
+  }
+  const match = RESOURCE_TYPE_ALL.find((t) => t === resourceName);
+  return (match ?? defaultValue) as ResourceTypeExplorer | TDefault;
+}
+
+const RESOURCE_TYPE_ALL: readonly ResourceType[] = [
+  'analysis',
+  'exposure',
+  'macro',
+  'metric',
+  'model',
+  'seed',
+  'snapshot',
+  'source',
+  'test',
+  'unit_test',
+  'semantic_model',
+  'group',
+  'saved_query',
+  'function',
+];
+
+/** dbt's four supported warehouses. Mirrors dbt-dag's `WarehouseType`/
+ *  `warehouseTypes`. */
+export const WAREHOUSE_TYPES = [
+  'snowflake',
+  'databricks',
+  'bigquery',
+  'redshift',
+] as const;
+export type WarehouseType = (typeof WAREHOUSE_TYPES)[number];
+
+/** Saturated fg/viz token per resource type -- the confirmed-correct palette
+ *  (checked against Jess's reference swatch previously), not dbt-dag's own
+ *  `backgroundColors`, which uses the paler `--bgDagX` family. That pale
+ *  family is exactly what `DagResourceBadge` in the lineage work was built
+ *  to avoid reusing. Mirrors `LineageV2/dagResourceColors.ts`'s
+ *  `DAG_RESOURCE_COLOR`. CSS var *values* rather than Tailwind classes since
+ *  `resourceTypeColor()` below is applied via inline `style`, not `className`,
+ *  so it works for arbitrary runtime-computed keys. Base values only (not
+ *  Hover/Muted). */
+export const RESOURCE_TYPE_FG_VIZ: Record<string, string> = {
+  model: 'var(--fgVizModel)',
+  source: 'var(--fgVizSource)',
+  test: 'var(--fgVizTest)',
+  unit_test: 'var(--fgVizTest)',
+  seed: 'var(--fgVizSeed)',
+  exposure: 'var(--fgVizExposure)',
+  metric: 'var(--fgVizMetric)',
+  semantic_model: 'var(--fgVizSemanticmodel)',
+  snapshot: 'var(--fgVizSnapshot)',
+  macro: 'var(--fgVizMacro)',
+  analysis: 'var(--fgVizAnalysis)',
+  saved_query: 'var(--fgVizSavedquery)',
+  function: 'var(--fgVizFunction)',
+  column: 'var(--fgVizColumn)',
+};
+
+export function resourceTypeColor(type: string): string {
+  return RESOURCE_TYPE_FG_VIZ[type] ?? 'var(--bgDisabled)';
+}
 
 export const RESOURCE_TYPE_LABEL: Record<string, string> = {
   model: 'Models',
@@ -58,6 +164,8 @@ export const RESOURCE_TYPE_SINGULAR: Record<string, string> = {
   snapshot: 'Snapshot',
   saved_query: 'Saved query',
   analysis: 'Analysis',
+  unit_test: 'Unit test',
+  function: 'Function',
 };
 
 export const RESOURCE_TYPE_ICON: Record<string, LucideIcon> = {
@@ -73,6 +181,7 @@ export const RESOURCE_TYPE_ICON: Record<string, LucideIcon> = {
   snapshot: Camera,
   saved_query: Save,
   analysis: FileText,
+  column: Columns3,
 };
 
 export function iconForType(type: string): LucideIcon {

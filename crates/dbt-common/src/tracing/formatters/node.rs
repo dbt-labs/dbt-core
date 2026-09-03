@@ -146,7 +146,7 @@ fn format_node_description(node: &NodeProcessed) -> Option<String> {
                 "No new changes on any upstreams".to_string()
             }
             dbt_telemetry::NodeCacheReason::StillFresh => format!(
-                "New changes detected. Did not meet lag_tolerance of {}. Last updated {} ago",
+                "New changes detected within lag tolerance of {}. Last updated {} ago",
                 humantime::format_duration(std::time::Duration::from_secs(
                     cache_detail.build_after_seconds()
                 )),
@@ -158,10 +158,10 @@ fn format_node_description(node: &NodeProcessed) -> Option<String> {
                 "No new changes on all upstreams".to_string()
             }
             dbt_telemetry::NodeCacheReason::ClonedExisting => {
-                "Cloned from cached relation".to_string()
+                "Cloned from other environment".to_string()
             }
             dbt_telemetry::NodeCacheReason::ClonedExistingStillFresh => {
-                "Cloned from cached relation within freshness tolerance".to_string()
+                "Cloned from other environment within tolerance".to_string()
             }
         });
     }

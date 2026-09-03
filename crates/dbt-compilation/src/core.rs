@@ -6,10 +6,9 @@ use std::{
     time::SystemTime,
 };
 
-use crate::adapter_store::{AdapterBuilder, AdapterStore};
 use crate::config::CompilationConfig;
 use dbt_adapter::{
-    Adapter, AdapterEngine, AdapterImpl, AdapterType,
+    Adapter, AdapterBuilder, AdapterEngine, AdapterImpl, AdapterStore, AdapterType,
     adapter::AdapterFactory,
     cache::RelationCache,
     config::AdapterConfig,
@@ -604,7 +603,6 @@ impl DbtLoadedProject {
         token: &CancellationToken,
         sidecar_client: Option<Arc<dyn SidecarClient>>,
         execute: Execute,
-        infer_schemas: bool,
     ) -> FsResult<Arc<AdapterStore>> {
         // Each declared adapter's `DbConfig`, cloned because the builder closure has
         // to be `'static` and so cannot hold `resolved_state`. Cloned rather than
@@ -623,7 +621,14 @@ impl DbtLoadedProject {
 
         let project = self.clone();
         let flags = Self::flags_from_env(jinja_env)?;
-        let root_project_quoting = resolved_state.root_project_quoting;
+        // The *authored* `quoting:` block, not `resolved_state.root_project_quoting`.
+        // The latter has already had its unset fields filled from the default
+        // adapter's policy, so handing it to a non-default adapter of another type
+        // silently applies the wrong one -- quote-everything to an adapter that
+        // does not quote renders identifiers it then cannot find. Each adapter
+        // resolves the same authored block against its own defaults instead, which
+        // is what `resolve_package_quoting` is field-wise for.
+        let authored_quoting = *self.dbt_state.root_project().quoting;
         let query_comment = resolved_state.runtime_config.inner.query_comment.clone();
         let cloud_config = self.dbt_cloud_config().cloned();
         // One budget for every adapter for now; per-adapter threads is a follow-up.
@@ -648,6 +653,7 @@ impl DbtLoadedProject {
                         "could not read the '{adapter_type}' connection: {e}"
                     )
                 })?;
+            let quoting = resolve_package_quoting(authored_quoting, adapter_type).try_into()?;
             project.build_adapter(
                 adapter_type,
                 db_config,
@@ -657,8 +663,7 @@ impl DbtLoadedProject {
                 &token,
                 sidecar_client.clone(),
                 execute,
-                infer_schemas,
-                root_project_quoting,
+                quoting,
                 query_comment.clone(),
                 cloud_config.clone(),
                 threads,
@@ -687,7 +692,6 @@ impl DbtLoadedProject {
         token: &CancellationToken,
         sidecar_client: Option<Arc<dyn SidecarClient>>,
         execute: Execute,
-        infer_schemas: bool,
     ) -> FsResult<Arc<Adapter>> {
         self.init_adapter_store(
             resolved_state,
@@ -697,7 +701,6 @@ impl DbtLoadedProject {
             token,
             sidecar_client,
             execute,
-            infer_schemas,
         )?
         .default_adapter()
     }
@@ -730,7 +733,6 @@ impl DbtLoadedProject {
         token: &CancellationToken,
         sidecar_client: Option<Arc<dyn SidecarClient>>,
         execute: Execute,
-        infer_schemas: bool,
         root_project_quoting: ResolvedQuoting,
         query_comment: Option<QueryComment>,
         cloud_config: Option<ResolvedCloudConfig>,
@@ -750,17 +752,19 @@ impl DbtLoadedProject {
         // This mode also applies to compile with --no-introspect
         // DuckDB is a local database — use the AdapterFactory for proper adapter creation
         // instead of a MockAdapter, so we get real query logging and telemetry.
+        // Lake compute joins it for the same reason from the other direction: it is
+        // an execution engine in its own right, and a node routed to it has no
+        // fallback path, so a mock would silently do nothing rather than degrade.
         //
         // Under `--dbt-replay`, the mock/sidecar adapter below has no metadata
         // adapter, so unit-test `given` upstream schemas cannot resolve from the
         // recording. Route those runs through the factory so it builds a replay
         // adapter instead; sidecar execution still goes through the db_runner.
         let is_mantle_replay = matches!(&replay_mode, Some(ReplayMode::MantleReplay(_)));
-        let executes_locally = !introspect_enabled
-            || infer_schemas
-            || matches!(execute, Execute::Sidecar | Execute::Service);
+        let executes_locally =
+            !introspect_enabled || matches!(execute, Execute::Sidecar | Execute::Service);
         let use_local_mock_adapter = executes_locally && !is_mantle_replay;
-        let adapter = if adapter_type == AdapterType::DuckDB {
+        let adapter = if matches!(adapter_type, AdapterType::DuckDB | AdapterType::LakeCompute) {
             adapter_factory
                 .create_adapter(
                     adapter_type,
@@ -808,39 +812,12 @@ impl DbtLoadedProject {
                 Arc::new(Adapter::new(Arc::new(adapter_impl), None, token.clone()))
             } else {
                 // Fallback: use mock adapter
-                let metadata_fallback_engine = if infer_schemas {
-                    match adapter_factory.create_adapter(
-                        adapter_type,
-                        db_config,
-                        Arc::clone(&type_ops_factory),
-                        replay_mode,
-                        flags.project_flags(),
-                        schema_store,
-                        root_project_quoting,
-                        query_comment,
-                        token.clone(),
-                        cloud_config.as_ref(),
-                        threads,
-                    ) {
-                        Ok(adapter) => Some(Arc::clone(adapter.engine())),
-                        Err(e) => {
-                            tracing::warn!(
-                                "infer-schemas: failed to build metadata fallback adapter, \
-                                 continuing with mock-only metadata: {e:?}"
-                            );
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-                let mock = AdapterImpl::new_mock_with_metadata_fallback(
+                let mock = AdapterImpl::new_mock(
                     adapter_type,
                     flags.project_flags(),
                     root_project_quoting,
                     type_ops,
                     adapter_factory.stmt_splitter(),
-                    metadata_fallback_engine,
                 );
                 Arc::new(Adapter::new(Arc::new(mock), None, token.clone()))
             }

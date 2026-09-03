@@ -52,7 +52,6 @@ impl SemanticCategory {
             | "get_relations_without_caching"
             | "valid_snapshot_target"
             | "describe_relation"
-            | "describe_dynamic_table"
             | "get_column_schema_from_query"
             | "get_columns_in_select_sql"
             | "get_partitions_metadata"
@@ -243,6 +242,12 @@ mod tests {
         );
         assert_eq!(
             SemanticCategory::from_adapter_method("list_schemas"),
+            SemanticCategory::MetadataRead
+        );
+        // `describe_*` issues a read-only SHOW. An unregistered method falls through to
+        // `Write`, which would record a read as mutating during replay.
+        assert_eq!(
+            SemanticCategory::from_adapter_method("describe_relation"),
             SemanticCategory::MetadataRead
         );
 

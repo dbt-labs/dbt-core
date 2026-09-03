@@ -67,6 +67,8 @@ pub async fn run_freshness_command(
         true,
         arg.check_all,
         sources_only,
+        &arg.resource_types,
+        &arg.exclude_resource_types,
     )
     .await?;
     emit_freshness_stats(&arg.io, &results);
@@ -76,7 +78,13 @@ pub async fn run_freshness_command(
     // applies to the unified `dbt freshness` spelling: a model-only
     // `dbt freshness --select some_model` would otherwise replace a good artifact
     // with an empty one, and downstream consumers read this file.
-    if should_write_sources_json(sources_only, schedule, resolved_state) {
+    if should_write_sources_json(
+        sources_only,
+        schedule,
+        resolved_state,
+        &arg.resource_types,
+        &arg.exclude_resource_types,
+    ) {
         let sources_artifact = artifacts_sink.sources.insert(build_sources_artifact(
             &arg.io.invocation_id,
             resolved_state,

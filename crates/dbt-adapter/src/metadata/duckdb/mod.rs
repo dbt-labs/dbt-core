@@ -460,7 +460,7 @@ impl CatalogSpecDuckDbExt for CatalogSpecV2View<'_> {
         // resolves.
         let duckdb_block = self
             .config_block(AdapterType::DuckDB.as_ref())
-            .or_else(|| self.config_block(AdapterType::Alt.as_ref()))?;
+            .or_else(|| self.config_block(AdapterType::LakeCompute.as_ref()))?;
         let alias = duckdb_block
             .get(dbt_yaml::Value::from("attach_as"))
             .and_then(|value| value.as_str())

@@ -1,8 +1,7 @@
-import { useState } from 'react';
-
-import { DbtResourceIcon, getResourceType } from '@dbt-labs/dbt-dag';
+import { createElement, useState } from 'react';
 
 import { FloatingTabs } from '../../components/ui/FloatingTabs';
+import { getResourceType, iconForType } from '../../lib/resourceType';
 
 export type RelationshipItem = {
   uniqueId: string;
@@ -36,10 +35,10 @@ function RelationshipList({
         const inner = (
           <>
             <span className="flex-0 m-1 h-4 w-4">
-              <DbtResourceIcon
-                resource={resourceType}
-                className="align-top text-current"
-              />
+              {createElement(iconForType(resourceType), {
+                className: 'align-top text-current',
+                size: 16,
+              })}
             </span>
             <span className="align-middle">{item.name}</span>
           </>

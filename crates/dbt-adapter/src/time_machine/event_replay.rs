@@ -838,7 +838,9 @@ impl Recording {
     ///     Writes are tracked and consumed - they act as segment barriers.
     ///     Args are verified to ensure we're matching the correct write.
     /// For MetadataRead operations: Can match any read in the current segment with matching args.
-    ///     Reads are NOT tracked - the same read can be matched multiple times.
+    ///     Reads are NOT tracked - the same read can be matched multiple times. If the current
+    ///     segment holds no match, falls back to a content match in the region replay already
+    ///     passed (see [`Self::find_read_before_segment_untracked`]).
     ///
     /// PRECONDITION: Pure/Cache operations are filtered at the adapter level and should never reach here.
     ///
@@ -872,6 +874,11 @@ impl Recording {
                 // Reads can match any read in the current segment with matching args.
                 // Reads are NOT tracked - same read can be matched 0 or more times.
                 self.find_read_in_segment_untracked(events, node_state, method, args)
+                    .or_else(|| {
+                        self.find_read_before_segment_untracked(
+                            events, node_state, method, args, node_id,
+                        )
+                    })
             }
             SemanticCategory::Pure | SemanticCategory::Cache => {
                 unreachable!()
@@ -961,6 +968,68 @@ impl Recording {
             event.method == method
                 && adapter_args_match_for_type(method, &event.args, args, adapter_type)
         })
+    }
+
+    /// Last resort for a read the current segment cannot answer: find a content match in the
+    /// region replay has *already passed*.
+    ///
+    /// Segment bounds exist to keep write ordering honest. Looking **forward** past the next
+    /// barrier would defeat that — a read answered from a future segment hides the fact that the
+    /// replayer never performed the write in between (see
+    /// `test_semantic_mode_read_does_not_advance_over_skipped_write`, and
+    /// `test_semantic_mode_read_not_in_segment_fails`). So this only ever looks **backward**,
+    /// before `segment_start`: every write in that region has already been matched in sequence,
+    /// so nothing can be hidden by reusing a read from it, and reads are explicitly idempotent
+    /// and multi-matchable to begin with.
+    ///
+    /// Backward misses are real and not the replayer's fault. Whether a read reaches the adapter
+    /// at all depends on cache state, and cache state is not recorded: when a relation's columns
+    /// are already hydrated in the recorded run, the read is recorded at whatever earlier point
+    /// did hydrate it, and a replay with a differently-warmed cache asks for it a segment or two
+    /// later. That fails even when replaying a recording against the very version that produced
+    /// it — which is how it shows up in nightly, as `get_columns_in_relation` "No matching read
+    /// found in current segment" on a snapshot that its own recorded version cannot replay.
+    ///
+    /// The metadata replay path has carried an equivalent last-resort search for a while (see
+    /// `find_metadata_read_across_all_callers`, "non-determinism in which node facilitates
+    /// hydration of shared resources such as the schema cache"); adapter reads never got one.
+    ///
+    /// Deliberately narrow beyond the backward-only bound:
+    /// - reads only — write barriers keep their strict in-sequence matching
+    /// - the same `method` + args predicate used inside the segment, so this widens *where* a
+    ///   read may be found, never *what* counts as an answer to it
+    /// - real writes are skipped, so a read is never answered by a mutating event
+    /// - this node's own stream only; a read recorded under a different node is still a miss
+    ///
+    /// Logs on success: recorded and replayed call order diverged, which is worth seeing even
+    /// though it is not fatal.
+    fn find_read_before_segment_untracked<'a>(
+        &'a self,
+        events: &'a [AdapterCallEvent],
+        state: &SemanticReplayState,
+        method: &str,
+        args: &serde_json::Value,
+        node_id: &str,
+    ) -> Option<&'a AdapterCallEvent> {
+        let adapter_type = self.adapter_type();
+        let already_passed = events.get(..state.segment_start)?;
+        let event = already_passed.iter().find(|event| {
+            let is_real_write =
+                event.semantic_category.is_mutating() && !is_read_only_execute_event(event);
+            !is_real_write
+                && event.method == method
+                && adapter_args_match_for_type(method, &event.args, args, adapter_type)
+        })?;
+
+        tracing::debug!(
+            node_id,
+            method,
+            seq = event.seq,
+            segment_start = state.segment_start,
+            "Replay: answered read from an already-passed recorded segment"
+        );
+
+        Some(event)
     }
 
     /// Peek at the next event in semantic mode without consuming it.
@@ -1654,6 +1723,195 @@ mod tests {
             .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
             .unwrap();
         assert_eq!(event.method, "execute");
+    }
+
+    /// A read recorded before a write barrier must still be answerable after replay has crossed
+    /// that barrier. Cache state decides whether a read reaches the adapter at all, and cache
+    /// state isn't recorded, so recorded and replayed call order legitimately differ here — this
+    /// is the shape that fails even when replaying a recording against the version that produced
+    /// it (nightly's `get_columns_in_relation` "No matching read found in current segment").
+    #[test]
+    fn test_semantic_mode_read_recorded_before_a_barrier_is_still_matched() {
+        let events = vec![
+            make_event(
+                "node1",
+                0,
+                "get_columns_in_relation",
+                SemanticCategory::MetadataRead,
+            ),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Cross the write barrier first, leaving the recorded read behind the cursor.
+        assert_eq!(
+            recording
+                .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+                .unwrap()
+                .seq,
+            1
+        );
+
+        // The read is now outside the current segment, but the recording does hold the answer.
+        assert_eq!(
+            recording
+                .take_semantic_match(
+                    "node1",
+                    "get_columns_in_relation",
+                    &empty_args(),
+                    SemanticCategory::MetadataRead,
+                )
+                .unwrap()
+                .seq,
+            0
+        );
+    }
+
+    /// The fallback widens *where* a read may be found, never *what* answers it: a read with no
+    /// content match anywhere in the node's stream still misses.
+    #[test]
+    fn test_semantic_mode_unrecorded_read_still_misses() {
+        let events = vec![make_event(
+            "node1",
+            0,
+            "get_columns_in_relation",
+            SemanticCategory::MetadataRead,
+        )];
+        let recording = make_recording(events);
+
+        assert!(
+            recording
+                .take_semantic_match(
+                    "node1",
+                    "list_schemas",
+                    &empty_args(),
+                    SemanticCategory::MetadataRead,
+                )
+                .is_none()
+        );
+    }
+
+    /// The fallback must never hand a read a mutating event, even when the methods match — an
+    /// `execute` that really wrote is not an answer to an `execute` read probe.
+    #[test]
+    fn test_semantic_mode_read_fallback_skips_real_writes() {
+        let events = vec![
+            make_event("node1", 0, "execute", SemanticCategory::Write),
+            make_event("node1", 1, "drop_relation", SemanticCategory::Write),
+        ];
+        let recording = make_recording(events);
+
+        // Cross both barriers so nothing is left in the current segment.
+        recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+        recording
+            .take_semantic_match(
+                "node1",
+                "drop_relation",
+                &empty_args(),
+                SemanticCategory::Write,
+            )
+            .unwrap();
+
+        assert!(
+            recording
+                .take_semantic_match(
+                    "node1",
+                    "execute",
+                    &empty_args(),
+                    SemanticCategory::MetadataRead,
+                )
+                .is_none()
+        );
+    }
+
+    /// The backward fallback must not become a forward one. With replay mid-stream (so the
+    /// already-passed region is non-empty), a read that exists only in a *future* segment still
+    /// misses — answering it would hide the write barrier in between that replay hasn't reached,
+    /// which is the invariant `test_semantic_mode_read_does_not_advance_over_skipped_write`
+    /// exists to protect.
+    #[test]
+    fn test_semantic_mode_read_fallback_never_looks_forward() {
+        let events = vec![
+            make_event("node1", 0, "get_relation", SemanticCategory::MetadataRead),
+            make_event("node1", 1, "execute", SemanticCategory::Write),
+            make_event("node1", 2, "list_schemas", SemanticCategory::MetadataRead),
+            make_event("node1", 3, "drop_relation", SemanticCategory::Write),
+            make_event(
+                "node1",
+                4,
+                "get_columns_in_relation",
+                SemanticCategory::MetadataRead,
+            ),
+        ];
+        let recording = make_recording(events);
+
+        // Cross the first barrier, so segment_start is 2 and the region behind it is non-empty.
+        recording
+            .take_semantic_match("node1", "execute", &empty_args(), SemanticCategory::Write)
+            .unwrap();
+
+        // `get_columns_in_relation` (seq 4) sits beyond the *next* barrier (seq 3): still a miss.
+        assert!(
+            recording
+                .take_semantic_match(
+                    "node1",
+                    "get_columns_in_relation",
+                    &empty_args(),
+                    SemanticCategory::MetadataRead,
+                )
+                .is_none()
+        );
+
+        // The read behind the cursor is still reachable, and the one in the current segment too.
+        assert_eq!(
+            recording
+                .take_semantic_match(
+                    "node1",
+                    "get_relation",
+                    &empty_args(),
+                    SemanticCategory::MetadataRead,
+                )
+                .unwrap()
+                .seq,
+            0
+        );
+        assert_eq!(
+            recording
+                .take_semantic_match(
+                    "node1",
+                    "list_schemas",
+                    &empty_args(),
+                    SemanticCategory::MetadataRead,
+                )
+                .unwrap()
+                .seq,
+            2
+        );
+    }
+
+    /// Reads stay scoped to their own node: one recorded under a different node is still a miss.
+    #[test]
+    fn test_semantic_mode_read_fallback_does_not_cross_nodes() {
+        let events = vec![make_event(
+            "node1",
+            0,
+            "get_columns_in_relation",
+            SemanticCategory::MetadataRead,
+        )];
+        let recording = make_recording(events);
+
+        assert!(
+            recording
+                .take_semantic_match(
+                    "node2",
+                    "get_columns_in_relation",
+                    &empty_args(),
+                    SemanticCategory::MetadataRead,
+                )
+                .is_none()
+        );
     }
 
     #[test]

@@ -132,26 +132,27 @@ pub fn resolve_unit_tests(
         // `tested_node_unique_id` is the unversioned model's unique id when resolvable.
         // Versioned cases below override it with the version-specific id.
         // A unit test runs against one model, so it takes that model's adapter --
-        // it has no `+adapter` of its own. `alt` is not inherited: unit tests never
-        // take the compute-platform path (see `tasks_for_node`), so an `alt` dialect
+        // it has no `+adapter` of its own. `lake_compute` is not inherited: unit tests never
+        // take the compute-platform path (see `tasks_for_node`), so an `lake_compute` dialect
         // here would only mis-resolve the `unit` materialization.
-        let (database, schema, _, tested_node_unique_id, model_adapter) =
-            match models.get(&model_name) {
-                Some(model) => (
-                    model.__base_attr__.database.clone(),
-                    model.__base_attr__.schema.clone(),
-                    model.__base_attr__.alias.clone(),
-                    Some(model_name.clone()),
-                    Some(model.node_adapter()).filter(|adapter| *adapter != AdapterType::Alt),
-                ),
-                None => (
-                    String::new(),
-                    String::new(),
-                    unit_test.model.clone(),
-                    None,
-                    None,
-                ),
-            };
+        let (database, schema, _, tested_node_unique_id, model_adapter) = match models
+            .get(&model_name)
+        {
+            Some(model) => (
+                model.__base_attr__.database.clone(),
+                model.__base_attr__.schema.clone(),
+                model.__base_attr__.alias.clone(),
+                Some(model_name.clone()),
+                Some(model.node_adapter()).filter(|adapter| *adapter != AdapterType::LakeCompute),
+            ),
+            None => (
+                String::new(),
+                String::new(),
+                unit_test.model.clone(),
+                None,
+                None,
+            ),
+        };
 
         // Create base unit test node
         let base_unique_id = format!(
@@ -318,6 +319,8 @@ pub fn resolve_unit_tests(
             },
             __base_attr__: NodeBaseAttributes {
                 adapter: model_adapter.unwrap_or(adapter_type),
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 // match dbt-core semantics for unit test alias
@@ -414,7 +417,8 @@ pub fn resolve_unit_tests(
                         (
                             m.__base_attr__.database.clone(),
                             m.__base_attr__.schema.clone(),
-                            Some(m.node_adapter()).filter(|adapter| *adapter != AdapterType::Alt),
+                            Some(m.node_adapter())
+                                .filter(|adapter| *adapter != AdapterType::LakeCompute),
                         )
                     })
                     .unwrap_or_default();

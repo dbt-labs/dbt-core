@@ -84,17 +84,17 @@ mod quoting_tests {
     fn the_same_authored_quoting_resolves_per_adapter() {
         let authored = None;
         let on_snowflake = resolve_package_quoting(authored, AdapterType::Snowflake);
-        let on_alt = resolve_package_quoting(authored, AdapterType::Alt);
+        let on_lake_compute = resolve_package_quoting(authored, AdapterType::LakeCompute);
         let on_duckdb = resolve_package_quoting(authored, AdapterType::DuckDB);
 
-        // Snowflake and alt do not quote; DuckDB does. Same authored value in,
+        // Snowflake and lake compute do not quote; DuckDB does. Same authored value in,
         // different resolved value out.
         assert_eq!(on_snowflake.identifier, Some(false));
-        assert_eq!(on_alt.identifier, Some(false));
+        assert_eq!(on_lake_compute.identifier, Some(false));
         assert_eq!(on_duckdb.identifier, Some(true));
         assert_ne!(
-            on_alt, on_duckdb,
-            "`alt` has its own policy and must not resolve as DuckDB"
+            on_lake_compute, on_duckdb,
+            "`lake_compute` has its own policy and must not resolve as DuckDB"
         );
     }
 
@@ -126,12 +126,16 @@ mod quoting_tests {
 
         // The same authored `database: false` survives onto an adapter whose
         // default disagrees, and the unset fields follow that adapter.
-        let on_alt = resolve_package_quoting(authored, AdapterType::Alt);
-        assert_eq!(on_alt.database, Some(false), "user-set field must be kept");
+        let on_lake_compute = resolve_package_quoting(authored, AdapterType::LakeCompute);
         assert_eq!(
-            on_alt.schema,
+            on_lake_compute.database,
             Some(false),
-            "unset field takes alt's default"
+            "user-set field must be kept"
+        );
+        assert_eq!(
+            on_lake_compute.schema,
+            Some(false),
+            "unset field takes lake compute's default"
         );
     }
 
@@ -139,8 +143,8 @@ mod quoting_tests {
     /// no-op the second time.
     #[test]
     fn resolution_is_idempotent() {
-        let once = resolve_package_quoting(None, AdapterType::Alt);
-        let twice = resolve_package_quoting(Some(once), AdapterType::Alt);
+        let once = resolve_package_quoting(None, AdapterType::LakeCompute);
+        let twice = resolve_package_quoting(Some(once), AdapterType::LakeCompute);
         assert_eq!(once, twice);
     }
 }

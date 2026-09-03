@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo } from 'react';
 
-import {
-  Dag,
-  type DbtDagNode,
-  type ResourceTypeExplorer,
-  type TransformationType,
-  transformationTypes,
-} from '@dbt-labs/dbt-dag';
+import { Dag, type DbtDagNode } from '@dbt-labs/dbt-dag';
 
 import { decorateOutboundHref } from '../lib/outboundReferrer';
+import { type ResourceTypeExplorer } from '../lib/resourceType';
 import {
   type ColumnLineageGraph,
   type ColumnLineageResult,
@@ -32,7 +27,21 @@ type ColumnLineageEdge = {
 const LOCAL_PROJECT = 'local';
 const LOCAL_PROJECT_ID = 0;
 
-const TRANSFORMATION_VALUES = new Set<string>(transformationTypes);
+/** Mirrors dbt-dag's `transformationTypes`/`TransformationType` -- feeds
+ *  `DbtDagNode.transformationType`, which is typed as this exact literal
+ *  union, not `| string`, so keep this list in sync if dbt-dag's ever
+ *  changes. */
+const TRANSFORMATION_TYPES = [
+  'UNKNOWN',
+  'RAW',
+  'PARSE_ERROR',
+  'PASSTHROUGH',
+  'TRANSFORMATION',
+  'RENAME',
+] as const;
+type TransformationType = (typeof TRANSFORMATION_TYPES)[number];
+
+const TRANSFORMATION_VALUES = new Set<string>(TRANSFORMATION_TYPES);
 
 function toTransformationType(kind: string | undefined): TransformationType {
   if (!kind) return 'UNKNOWN';

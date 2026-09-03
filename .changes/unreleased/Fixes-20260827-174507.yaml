@@ -1,7 +1,0 @@
-kind: Fixes
-body: Accept the config value shapes dbt Core tolerates but Fusion rejected - mapping-valued constraints, list-valued dist, and unquoted YAML 1.1 booleans (yes/no/on/off) in contract.enforced, contract.alias_types, docs.show, and the BigQuery partition_by booleans
-time: 2026-08-27T17:45:07.228008-05:00
-custom:
-    author: HannanNaeem
-    issue: ""
-    project: dbt-core

@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
+import { Edge, Node as ReactFlowNode } from '@xyflow/react';
 
 import type { DbtDagNode } from '@dbt-labs/dbt-dag';
 
+import { DAG_NODE_TYPE } from '../components/LineageV2/DagNode';
 import { type LineageGraph, type ResourceType, useLineage } from '../shared';
 
 export const LOCAL_PROJECT = 'local';
@@ -32,6 +34,9 @@ export function useLineageData(
   selector: string;
   /** False when the active data source has no `fetchLineage`. */
   isSupported: boolean;
+  /** nodes formatted for reactflow */
+  graphNodes: ReactFlowNode[];
+  graphEdges: Edge[];
 } {
   const query = useLineage(
     rootUniqueId
@@ -64,11 +69,43 @@ export function useLineageData(
     }));
   }, [data]);
 
+  const graphNodes = useMemo<ReactFlowNode[]>(() => {
+    if (!data) return [];
+    return data.nodes.map((node) => ({
+      id: node.uniqueId,
+      // Renders as `DagNode`, registered under this key in DAG_NODE_TYPES. Without a
+      // `type` React Flow falls back to its own default node, which knows nothing
+      // about resource types.
+      type: DAG_NODE_TYPE,
+      position: { x: 0, y: 0 },
+      // `label` is what React Flow's built-in node types render; without it a graph
+      // using the defaults draws empty boxes. `DagNode` reads `name`/`resourceType`,
+      // which `node` already carries.
+      // TODO: `columnCount` drives DagNode's column-lineage chip and is not in the
+      // lineage payload — it would need a per-node column count exported alongside
+      // `dbt.column_lineage.parquet`. Until then every node renders in the
+      // no-column-lineage state.
+      data: { ...node, id: node.uniqueId, label: node.name, value: node.name },
+    }));
+  }, [data]);
+
+  const graphEdges = useMemo<Edge[]>(() => {
+    if (!data) return [];
+    return data.edges.map((edge) => ({
+      id: `${edge.downstreamUniqueId}-${edge.upstreamUniqueId}`,
+      source: edge.upstreamUniqueId,
+      target: edge.downstreamUniqueId,
+      type: 'smoothstep',
+    }));
+  }, [data]);
+
   return {
     data,
     error: query.error,
     dagNodes,
     selector: defaultSelectorFor(rootUniqueId, depth),
     isSupported: query.isSupported,
+    graphNodes,
+    graphEdges,
   };
 }

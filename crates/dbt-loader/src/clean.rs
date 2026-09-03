@@ -11,7 +11,7 @@ use std::{
 use dbt_common::{
     ErrorCode, FsResult,
     cancellation::CancellationToken,
-    constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
+    constants::{DBT_INDEX_DIR_NAME, DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
     err, fs_err,
     io_args::{EvalArgs, EvalArgsBuilder},
     lease,
@@ -106,7 +106,13 @@ pub async fn clean_project(
         })
         .collect::<Result<HashSet<_>, _>>()?;
 
-    paths_to_delete.insert(DbtPath::from(&arg.io.out_dir));
+    let out_dir = DbtPath::from(&arg.io.out_dir);
+    paths_to_delete.insert(out_dir.clone());
+    // Leftover public copies from before index/metadata moved under `private/`.
+    // Wiping `out_dir` already removes them; keep the paths explicit so a custom
+    // `clean-targets` that does not delete the whole target still hides them.
+    paths_to_delete.insert(out_dir.join(DBT_INDEX_DIR_NAME));
+    paths_to_delete.insert(out_dir.join(DBT_METADATA_DIR_NAME));
 
     let all_safe = paths_to_delete.iter().all(|path_to_delete| {
         // The clean command does not delete anything outside of the project directory

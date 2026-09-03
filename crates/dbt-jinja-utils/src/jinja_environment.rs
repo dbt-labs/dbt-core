@@ -141,6 +141,26 @@ impl AsRef<JinjaEnv> for JinjaEnv {
     }
 }
 
+/// The `api` namespace (`api.Relation`, `api.Column`) for one adapter.
+///
+/// Both are bound to the adapter's *type*, and `Relation` additionally to its
+/// quoting policy, so a node rendering against a non-default adapter needs its
+/// own -- built here rather than duplicated, so the environment-wide default and
+/// a per-node override cannot drift.
+pub fn adapter_api_value(adapter: &Adapter) -> Value {
+    let adapter_type = adapter.adapter_type();
+    let mut api_map = BTreeMap::new();
+    api_map.insert(
+        "Relation".to_string(),
+        create_static_relation(adapter_type, adapter.engine().quoting()),
+    );
+    api_map.insert(
+        "Column".to_string(),
+        Some(Value::from_object(ColumnStatic::new(adapter_type))),
+    );
+    Value::from_object(api_map)
+}
+
 impl JinjaEnv {
     /// Create a new JinjaEnv.
     pub fn new(env: Environment<'static>) -> Self {
@@ -234,17 +254,7 @@ impl JinjaEnv {
 
     /// Set the adapter
     pub(crate) fn set_adapter(&mut self, adapter: Arc<Adapter>) {
-        let adapter_type = adapter.adapter_type();
-        let mut api_map = BTreeMap::new();
-        api_map.insert(
-            "Relation".to_string(),
-            create_static_relation(adapter_type, adapter.engine().quoting()),
-        );
-        api_map.insert(
-            "Column".to_string(),
-            Some(Value::from_object(ColumnStatic::new(adapter_type))),
-        );
-        self.env.add_global("api", Value::from_object(api_map));
+        self.env.add_global("api", adapter_api_value(&adapter));
 
         // Add the adapter type to the environment for easy access
         self.env

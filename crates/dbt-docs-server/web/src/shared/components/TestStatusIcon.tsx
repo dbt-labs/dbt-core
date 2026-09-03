@@ -1,15 +1,15 @@
 import { FC } from 'react';
 import {
-  BadgeAlert,
-  BadgeCheck,
-  BadgeX,
+  CircleCheck,
+  CircleMinus,
+  CircleX,
   type LucideIcon,
-  Minus,
   Repeat,
+  TriangleAlert,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 
-import { TestStatus } from '@dbt-labs/dbt-dag';
+import type { TestStatus } from '../util/testStatus';
 
 interface TestStatusIconProps {
   status: TestStatus;
@@ -21,17 +21,17 @@ type TestStatusIconType = { Icon: LucideIcon; className: string };
 const getIconConfig = (status: TestStatus): TestStatusIconType | null => {
   switch (status) {
     case 'error':
-      return { Icon: BadgeX, className: 'text-fgDanger' };
+      return { Icon: CircleX, className: 'text-fgDanger' };
     case 'fail':
-      return { Icon: BadgeX, className: 'text-fgDanger' };
+      return { Icon: CircleX, className: 'text-fgDanger' };
     case 'pass':
-      return { Icon: BadgeCheck, className: 'text-fgSuccess' };
+      return { Icon: CircleCheck, className: 'text-fgSuccess' };
     case 'reused':
       return { Icon: Repeat, className: 'text-fgVizTeal' };
     case 'skipped':
-      return { Icon: Minus, className: 'text-fgDecorative' };
+      return { Icon: CircleMinus, className: 'text-fgDecorative' };
     case 'warn':
-      return { Icon: BadgeAlert, className: 'text-fgWarning' };
+      return { Icon: TriangleAlert, className: 'text-fgWarning' };
     default:
       return null;
   }

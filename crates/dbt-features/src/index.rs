@@ -123,7 +123,7 @@ fn unique_key_to_grain(uk: &Option<dbt_schemas::schemas::common::DbtUniqueKey>) 
 
 /// Write metadata parquet epoch files from in-memory typed structs.
 ///
-/// Writes only `target/metadata/` epoch files — no DuckDB, no `target/index/`.
+/// Writes only `target/private/metadata/` epoch files — no DuckDB, no `target/private/index/`.
 /// Independent of `write_json`. Errors are non-fatal — logged as warnings.
 #[allow(clippy::cognitive_complexity)]
 pub fn write_metadata_parquet(

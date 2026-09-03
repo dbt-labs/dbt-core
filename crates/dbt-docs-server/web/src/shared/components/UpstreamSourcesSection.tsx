@@ -131,8 +131,7 @@ export const UpstreamSourcesSection: React.FC<UpstreamSourcesSectionProps> = ({
                 className="pointer-events-auto flex items-center"
               >
                 {createElement(
-                  upstreamFreshnessToIconMap[worstFreshnessStatus] ??
-                    BadgeMinus,
+                  upstreamFreshnessToIconMap[worstFreshnessStatus] ?? BadgeMinus,
                   { className: 'size-4 pointer-events-auto align-middle' },
                 )}
                 <div className="sr-only">{tooltipMessage}</div>

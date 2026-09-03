@@ -96,6 +96,8 @@ impl QueryLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metadata::databricks::describe_json::*;
+    use crate::metadata::databricks::*;
     use crate::relation::databricks::config::test_helpers;
     use arrow::array::{ArrayRef, RecordBatch, StringArray};
     use arrow_schema::{DataType, Field, Schema};
@@ -156,6 +158,22 @@ mod tests {
         let config = from_remote_state_with(&[]);
 
         assert_eq!(config.value, "");
+    }
+
+    #[test]
+    fn test_as_json_path_produces_no_false_diff_vs_info_schema_path() {
+        let info_schema_config = from_remote_state_with(&["(\n    select 1 as id\n  )"]);
+
+        let row = Some(ViewDescriptionRow {
+            view_definition: "(\n    select 1 as id\n  )".to_string(),
+        });
+        let as_json_results = IndexMap::from([(
+            DatabricksRelationMetadataKey::InfoSchemaViews,
+            view_description_to_agate(&row).unwrap(),
+        )]);
+        let as_json_config = from_remote_state(&as_json_results).unwrap();
+
+        assert_eq!(as_json_config.value, info_schema_config.value);
     }
 
     #[test]

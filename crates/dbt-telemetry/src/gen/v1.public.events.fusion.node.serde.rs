@@ -1055,6 +1055,7 @@ impl serde::Serialize for NodeMaterialization {
             Self::StreamingTable => "NODE_MATERIALIZATION_STREAMING_TABLE",
             Self::DynamicTable => "NODE_MATERIALIZATION_DYNAMIC_TABLE",
             Self::Function => "NODE_MATERIALIZATION_FUNCTION",
+            Self::InteractiveTable => "NODE_MATERIALIZATION_INTERACTIVE_TABLE",
             Self::Custom => "NODE_MATERIALIZATION_CUSTOM",
         };
         serializer.serialize_str(variant)
@@ -1082,6 +1083,7 @@ impl<'de> serde::Deserialize<'de> for NodeMaterialization {
             "NODE_MATERIALIZATION_STREAMING_TABLE",
             "NODE_MATERIALIZATION_DYNAMIC_TABLE",
             "NODE_MATERIALIZATION_FUNCTION",
+            "NODE_MATERIALIZATION_INTERACTIVE_TABLE",
             "NODE_MATERIALIZATION_CUSTOM",
         ];
 
@@ -1138,6 +1140,7 @@ impl<'de> serde::Deserialize<'de> for NodeMaterialization {
                     "NODE_MATERIALIZATION_STREAMING_TABLE" => Ok(NodeMaterialization::StreamingTable),
                     "NODE_MATERIALIZATION_DYNAMIC_TABLE" => Ok(NodeMaterialization::DynamicTable),
                     "NODE_MATERIALIZATION_FUNCTION" => Ok(NodeMaterialization::Function),
+                    "NODE_MATERIALIZATION_INTERACTIVE_TABLE" => Ok(NodeMaterialization::InteractiveTable),
                     "NODE_MATERIALIZATION_CUSTOM" => Ok(NodeMaterialization::Custom),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }

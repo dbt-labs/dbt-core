@@ -136,8 +136,8 @@ impl From<ComputeArg> for LocalExecutionBackendKind {
 }
 
 use crate::constants::{
-    DBT_INFO_SCHEMA_DIR_NAME, DBT_INFO_SCHEMA_STAGING_DIR_NAME, DBT_METADATA_DIR_NAME,
-    DBT_TARGET_DIR_NAME, WARNING,
+    DBT_INFO_SCHEMA_DIR_NAME, DBT_INFO_SCHEMA_STAGING_DIR_NAME, DBT_TARGET_DIR_NAME, WARNING,
+    default_index_dir, default_metadata_dir,
 };
 use crate::pretty_string::YELLOW;
 
@@ -338,6 +338,9 @@ pub struct IoArgs {
 
     // Flag for deps to use Fusion-compatible downloads from Package Hub
     pub use_v2_compatible_package_downloads: bool,
+
+    // Flag for deps to require a sha1-verified download from Package Hub
+    pub require_hub_verified_downloads: bool,
 
     /// Optional status reporter for reporting status messages during execution
     pub status_reporter: Option<Arc<dyn StatusReporter>>,
@@ -607,6 +610,10 @@ pub struct EvalArgs {
     /// `run-operation --adapter <type>`: run against this non-default adapter
     /// instead of the target's default one.
     pub adapter_override: Option<String>,
+    /// `show --job-id <id>`: fetch a previously completed dbt-compute job's
+    /// result directly, instead of compiling/executing a query. Mutually
+    /// exclusive with `inline`.
+    pub job_id: Option<String>,
     pub warn_error: Option<bool>,
     pub warn_error_options: WarnErrorOptions,
     pub version_check: bool,
@@ -616,10 +623,6 @@ pub struct EvalArgs {
     pub empty: bool,
     pub sample: Option<String>,
     pub full_refresh: bool,
-    pub infer_schemas: bool,
-    pub skip_type_checking: bool,
-    pub show_sources: bool,
-    pub resolve_ambiguous_cols: bool,
     pub store_failures: bool,
     pub favor_state: bool,
     pub refresh_sources: bool,
@@ -647,16 +650,16 @@ pub struct EvalArgs {
     pub skip_post_hooks: bool,
     /// Write metadata parquet epoch files (parse/nodes, compile/nodes, compile/columns, etc.)
     pub write_metadata: bool,
-    /// Also write snapshot index parquet to target/index/ (implies write_metadata)
+    /// Also write snapshot index parquet to target/private/index/ (implies write_metadata)
     pub write_index: bool,
     /// True when `write_index` came from a command's default rather than from the command
     /// line. The index itself is identical either way; this only suppresses the advisory
     /// naming the extra flags that would enrich it, which is noise for a user who never
     /// asked for an index (and fails the command under `--warn-error`).
     pub write_index_implied: bool,
-    /// Directory for index parquet output (default: <target>/index/)
+    /// Directory for index parquet output (default: <target>/private/index/)
     pub index_dir: Option<PathBuf>,
-    /// Directory for metadata parquet output (default: <target>/metadata/)
+    /// Directory for metadata parquet output (default: <target>/private/metadata/)
     pub metadata_dir: Option<PathBuf>,
     /// Write the dbt information schema to target/info_schema/ (implies write_metadata)
     pub generate_info_schema: bool,
@@ -816,18 +819,20 @@ impl EvalArgsBuilder {
 }
 
 impl EvalArgs {
-    /// Resolves the metadata output directory: `--metadata-dir` if set, else `<out_dir>/metadata`.
+    /// Resolves the metadata output directory: `--metadata-dir` if set, else
+    /// `<out_dir>/private/metadata`.
     pub fn metadata_dir(&self) -> PathBuf {
         self.metadata_dir
             .clone()
-            .unwrap_or_else(|| self.io.out_dir.join(DBT_METADATA_DIR_NAME))
+            .unwrap_or_else(|| default_metadata_dir(&self.io.out_dir))
     }
 
-    /// Resolves the index output directory: `--index-dir` if set, else `<out_dir>/index`.
+    /// Resolves the index output directory: `--index-dir` if set, else
+    /// `<out_dir>/private/index`.
     pub fn index_dir(&self) -> PathBuf {
         self.index_dir
             .clone()
-            .unwrap_or_else(|| self.io.out_dir.join("index"))
+            .unwrap_or_else(|| default_index_dir(&self.io.out_dir))
     }
 
     /// Resolves the information schema output directory: `--info-schema-dir` if

@@ -33,11 +33,13 @@ pub enum ProfileError {
     #[error("missing 'type' field in resolved profile output")]
     NoAdapterType,
 
-    #[error("adapter type '{written}' is no longer recognized; it was renamed to '{replacement}'")]
-    RetiredAdapterType {
-        written: String,
-        replacement: String,
-    },
+    /// Something that names a real adapter but is not the spelling authors are
+    /// meant to write -- either a retired name (`alt`) or the internal
+    /// `DbConfig` tag (`lakecompute`), which deserializes but is not an
+    /// external name. Rejected rather than aliased so there is exactly one
+    /// accepted spelling per adapter.
+    #[error("adapter type '{written}' is not recognized; write '{expected}' instead")]
+    UnacceptedAdapterType { written: String, expected: String },
 
     // ----------------------------------------------------------------------
     // Adapter-type-keyed targets: `outputs.<target>` as a map of adapter type

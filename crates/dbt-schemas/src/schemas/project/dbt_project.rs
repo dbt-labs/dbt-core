@@ -548,11 +548,11 @@ adapters:
         let adapters = project.adapters.expect("adapters");
         assert_eq!(
             adapters.keys().copied().collect::<Vec<_>>(),
-            vec![AdapterType::Alt, AdapterType::Snowflake],
+            vec![AdapterType::LakeCompute, AdapterType::Snowflake],
             "declaration order is preserved"
         );
         assert_eq!(
-            adapters[&AdapterType::Alt]
+            adapters[&AdapterType::LakeCompute]
                 .quoting
                 .expect("lake_compute quoting")
                 .identifier,
@@ -569,7 +569,7 @@ adapters:
         );
     }
 
-    /// `lake_compute` is the only name for `AdapterType::Alt`. `alt` was the
+    /// `lake_compute` is the only name for `AdapterType::LakeCompute`. `alt` was the
     /// external name before the rename and is not kept as an alias, so it has to
     /// be rejected here like any other unknown adapter.
     #[test]

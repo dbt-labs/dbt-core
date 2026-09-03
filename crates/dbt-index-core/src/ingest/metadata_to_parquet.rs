@@ -1,4 +1,4 @@
-//! High-performance fusion ingest: reads target/metadata/ parquet with Arrow,
+//! High-performance fusion ingest: reads target/private/metadata/ parquet with Arrow,
 //! writes the index parquet directly with IndexWriter — no DuckDB involved.
 //!
 //! This is the CLI path for `dbt-index ingest --fusion`. The serve path
@@ -659,13 +659,11 @@ pub fn extract_json_field_raw<'a>(json: &'a str, key: &str) -> Option<&'a str> {
 /// per-column documentation — so rather than pay for a full `simd_json` parse of
 /// the whole thing this keeps two fields and drops the rest.
 ///
-/// Dropping `__common_attr__` costs `raw_code`, `checksum`, `patch_path` and
-/// `meta` for models — but those columns are null for *every* resource type
-/// today, including the ones whose payloads are parsed whole, because the row
-/// builder reads them at the payload top level where they live one level down
-/// (see the note at their reads in `extract_parse_nodes_batch`). Fixing that is a
-/// follow-up that has to move in step with `epoch_views`, which does not emit
-/// them either; widening this trim is the models half of it.
+/// Dropping `raw_code` from `__common_attr__` keeps the trim's point (model
+/// payloads are multi-KB mostly because of source and compiled SQL) while
+/// leaving `patch_path`, `language`, `checksum` and `meta` available to the
+/// row builder. Those used to be dropped wholesale with `__common_attr__`,
+/// so every model published them as NULL.
 ///
 /// `config` is kept as raw JSON text, since only some of the builders parse it.
 /// `__model_attr__` is kept whole and parsed: `DbtModelAttr` is a fixed, small
@@ -686,6 +684,13 @@ pub fn trim_model_payload(raw: Option<&str>) -> Value {
         .and_then(|s| serde_json::from_str::<Value>(s).ok())
     {
         obj.insert("__model_attr__".to_string(), ma);
+    }
+    if let Some(Value::Object(mut common)) = raw
+        .and_then(|r| extract_json_field_raw(r, "__common_attr__"))
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+    {
+        common.remove("raw_code");
+        obj.insert("__common_attr__".to_string(), Value::Object(common));
     }
     Value::Object(obj)
 }
@@ -940,6 +945,7 @@ pub struct OwnedNodeRow {
     pub deprecation_date: Option<String>,
     pub version: Option<String>,
     pub latest_version: Option<String>,
+    pub node_language: Option<String>,
     pub compiled_code: Option<String>,
     pub compiled_code_hash: Option<String>,
     pub compiled_path: Option<String>,
@@ -1124,7 +1130,7 @@ fn write_parse_nodes(
             alias: r.alias.as_deref(),
             checksum: r.checksum.as_deref(),
             description: r.description.as_deref(),
-            node_language: None,
+            node_language: r.node_language.as_deref(),
             raw_code: r.raw_code.as_deref(),
             database_name: r.database_name.as_str(),
             schema_name: r.schema_name.as_str(),
@@ -1357,31 +1363,38 @@ pub fn extract_parse_nodes_batch(
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        // Pre-existing, and null on every corpus: `checksum`, `raw_code`,
-        // `patch_path` and `meta` below are read at the payload top level, but the
-        // `parse/nodes` payload nests them under `__common_attr__` (`path`, just
-        // above, is the one read that gets this right). The reads are left as they
-        // are because `epoch_views` does not emit these columns either, so both
-        // layers are null and agree; correcting one without the other breaks the
-        // differential test. Same for `version`, `latest_version` and
-        // `deprecation_date`, which live under `__model_attr__`.
-        let checksum = payload
+        let checksum = common
             .get("checksum")
             .and_then(|c| c.get("checksum"))
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(|s| s.to_string())
+            .or_else(|| {
+                payload
+                    .get("checksum")
+                    .and_then(|c| c.get("checksum"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
 
-        let raw_code = payload
+        let raw_code = common
             .get("raw_code")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                payload
+                    .get("raw_code")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        let node_language = common
+            .get("language")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
         // `contract` is mirrored on the model `config` (and on `DbtModelAttr`
         // under `__model_attr__`); it is NOT at the payload top level. For model
-        // nodes, `payloads[i]` above extracts ONLY the `config` field — and stores
-        // it as a *raw JSON string*, not a parsed object — as a perf optimization
-        // (no `__model_attr__`). So we must parse that string to reach
-        // `config.contract.enforced`, which is the path actually populated here;
+        // nodes, `config` is stored as a *raw JSON string*, not a parsed object,
+        // so we must parse that string to reach `config.contract.enforced`.
         // `__model_attr__.contract` and a bare top-level `contract` are kept as
         // fallbacks for other (non-model / fully-parsed) payload shapes. The
         // original read targeted top-level `contract` (the old `manifest.json`
@@ -1419,36 +1432,110 @@ pub fn extract_parse_nodes_batch(
 
         let enabled = get_i32(dis_col, i).map(|d| d == 0).unwrap_or(true);
 
-        let source_name = get_str(src_col, i).or_else(|| {
-            payload
-                .get("source_name")
+        let source_attr = payload
+            .get("__source_attr__")
+            .cloned()
+            .unwrap_or(Value::Null);
+        let model_attr = payload
+            .get("__model_attr__")
+            .cloned()
+            .unwrap_or(Value::Null);
+        let source_name = get_str(src_col, i)
+            .or_else(|| {
+                source_attr
+                    .get("source_name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .or_else(|| {
+                payload
+                    .get("source_name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        let source_description = source_attr
+            .get("source_description")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                payload
+                    .get("source_description")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        let loader = source_attr
+            .get("loader")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                payload
+                    .get("loader")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        let loaded_at_field = source_attr
+            .get("loaded_at_field")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                payload
+                    .get("loaded_at_field")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        let patch_path = common
+            .get("patch_path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                payload
+                    .get("patch_path")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        let meta = common
+            .get("meta")
+            .cloned()
+            .or_else(|| payload.get("meta").cloned());
+        let config = payload.get("config").cloned();
+        let deprecation_date = model_attr
+            .get("deprecation_date")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                payload
+                    .get("deprecation_date")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        let version = model_attr
+            .get("version")
+            .cloned()
+            .or_else(|| payload.get("version").cloned());
+        let latest_version = model_attr
+            .get("latest_version")
+            .cloned()
+            .or_else(|| payload.get("latest_version").cloned());
+        let identifier = get_str(ident_col, i)
+            .or_else(|| {
+                source_attr
+                    .get("identifier")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .or_else(|| get_str(alias_col, i));
+        let access_level = get_str(access_col, i).or_else(|| {
+            model_attr
+                .get("access")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
         });
-        let source_description = payload
-            .get("source_description")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let loader = payload
-            .get("loader")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let loaded_at_field = payload
-            .get("loaded_at_field")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let patch_path = payload
-            .get("patch_path")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let meta = payload.get("meta").cloned();
-        let config = payload.get("config").cloned();
-        let deprecation_date = payload
-            .get("deprecation_date")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let version = payload.get("version").cloned();
-        let latest_version = payload.get("latest_version").cloned();
+        let group_name = get_str(grp_col, i).or_else(|| {
+            model_attr
+                .get("group")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        });
 
         // Nodes that go into dbt.nodes
         let write_to_nodes = matches!(
@@ -1503,11 +1590,11 @@ pub fn extract_parse_nodes_batch(
                 database_name: get_str(db_col, i).unwrap_or_default(),
                 schema_name: get_str(schema_col, i).unwrap_or_default(),
                 relation_name: get_str(rel_col, i),
-                identifier: get_str(ident_col, i),
+                identifier,
                 enabled: Some(enabled),
                 materialized: get_str(mat_col, i),
-                access_level: get_str(access_col, i),
-                group_name: get_str(grp_col, i),
+                access_level,
+                group_name,
                 contract_enforced,
                 primary_key,
                 tags: tags.clone(),
@@ -1521,6 +1608,7 @@ pub fn extract_parse_nodes_batch(
                 deprecation_date,
                 version: version.as_ref().map(|v| v.to_string()),
                 latest_version: latest_version.as_ref().map(|v| v.to_string()),
+                node_language,
                 compiled_code,
                 compiled_code_hash,
                 compiled_path,
@@ -2022,7 +2110,7 @@ fn write_parse_columns(
 }
 
 // ---------------------------------------------------------------------------
-// Parse project → dbt.project + dbt.project_vars + dbt.project_env_vars
+// Parse project → dbt.project + dbt.project_vars + dbt.project_env_vars + dbt.packages
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::cognitive_complexity)]
@@ -2120,6 +2208,7 @@ fn write_parse_project(
     let mut git_sha: Option<String> = None;
     let mut git_branch: Option<String> = None;
     let mut git_is_dirty: Option<bool> = None;
+    let mut pkg_kinds_json: Option<String> = None;
 
     let rs_path = metadata_dir.join(PARSE_RESOLVER_STATE);
     if rs_path.exists() {
@@ -2129,6 +2218,7 @@ fn write_parse_project(
             // dirs written before generation.parquet gained these fields (#10623).
             read_str_opt!(batch, "vars_json", vars_json);
             read_str_opt!(batch, "env_vars_json", env_vars_json);
+            read_str_opt!(batch, "pkg_kinds_json", pkg_kinds_json);
             read_str_opt!(batch, "git_sha", git_sha);
             read_str_opt!(batch, "git_branch", git_branch);
             if git_is_dirty.is_none() {
@@ -2198,6 +2288,24 @@ fn write_parse_project(
         })
         .unwrap_or_default();
     writer.write_dbt_table("project_env_vars", env_rows)?;
+
+    // One row per installed package. `pkg_kinds_json` is `{package: path-kinds}`;
+    // the other package columns have no epoch source yet.
+    let pkg_rows: Vec<Value> = pkg_kinds_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<serde_json::Map<String, Value>>(s).ok())
+        .map(|obj| {
+            obj.into_iter()
+                .map(|(package_name, _)| {
+                    json!({
+                        "package_name": package_name,
+                        "ingested_at": now,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    writer.write_dbt_table("packages", pkg_rows)?;
 
     Ok(1)
 }
@@ -3593,6 +3701,21 @@ mod tests {
         // starts to. `raw_code` is what the trim is for, and is gone.
         assert!(ma.get("other").is_some());
         assert!(trimmed.get("raw_code").is_none());
+    }
+
+    #[test]
+    fn the_model_trim_keeps_common_attr_minus_raw_code() {
+        let payload = r#"{"__common_attr__":{"raw_code":"select 1","language":"sql",
+            "patch_path":"models/schema.yml","meta":{"owner":"data"}}}"#;
+        let trimmed = trim_model_payload(Some(payload));
+        let common = trimmed.get("__common_attr__").expect("common attr");
+        assert_eq!(common.get("language").and_then(|v| v.as_str()), Some("sql"));
+        assert_eq!(
+            common.get("patch_path").and_then(|v| v.as_str()),
+            Some("models/schema.yml")
+        );
+        assert!(common.get("meta").is_some());
+        assert!(common.get("raw_code").is_none());
     }
 
     #[test]

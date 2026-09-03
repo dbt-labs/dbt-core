@@ -85,26 +85,27 @@ pub enum AdapterType {
     Oracle,
     /// The dbt lake compute engine.
     ///
-    /// The variant is `Alt` for historical reasons; externally the name is
-    /// `lake_compute` and nothing else -- profiles.yml `type:`, `+adapter:`,
-    /// `adapters:` keys, catalogs.yml config blocks, the manifest's
-    /// `adapter_type`, and the Jinja dispatch dialect. `alt` is not accepted on
-    /// input; see `test_alt_is_not_accepted_on_input`.
+    /// `lake_compute` is the name everywhere -- profiles.yml `type:`,
+    /// `+adapter:`, `adapters:` keys, catalogs.yml config blocks, the
+    /// manifest's `adapter_type`, and the Jinja dispatch dialect. `alt`, the
+    /// name before the rename, is not accepted on input; see
+    /// `test_alt_is_not_accepted_on_input`.
     #[strum(to_string = "lake_compute")]
     #[serde(rename = "lake_compute")]
-    Alt,
+    LakeCompute,
 }
 
 impl AdapterType {
     /// Returns an iterator of `(AdapterType, &'static str)` pairs.
     ///
     /// The string is the lowercased name of the variant, except `Postgres`,
-    /// which is rendered as `"postgresql"`, and `Alt`, which carries an explicit
+    /// which is rendered as `"postgresql"`, and `LakeCompute`, which carries an explicit
     /// `lake_compute` override.
     pub fn iter_with_names() -> impl Iterator<Item = (AdapterType, &'static str)> {
         Self::iter().map(|v| {
             let name: &'static str = match v {
                 AdapterType::Postgres => "postgresql",
+                AdapterType::LakeCompute => "lake_compute",
                 _ => v.into(),
             };
             (v, name)
@@ -122,7 +123,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Redshift => '"',
         Postgres | Salesforce => '"',
         Fabric => '"',
-        DuckDB | Alt => '"',
+        DuckDB | LakeCompute => '"',
         Athena | Trino | Starburst => '"',
         Datafusion => '"',
         // https://clickhouse.com/docs/sql-reference/syntax#identifiers
@@ -183,7 +184,7 @@ mod tests {
             ("sTarburst", AdapterType::Starburst),
             ("tRino", AdapterType::Trino),
             ("dAtafusion", AdapterType::Datafusion),
-            ("lAke_Compute", AdapterType::Alt),
+            ("lAke_Compute", AdapterType::LakeCompute),
         ];
         for (input, expected) in cases {
             let res = input.parse::<AdapterType>();
@@ -207,19 +208,19 @@ mod tests {
         assert_eq!(s, "postgres");
     }
 
-    /// `Alt` is the Rust name; `lake_compute` is the only name that leaves the
-    /// process. Display/AsRef/IntoStaticStr all have to agree on it, because the
-    /// Jinja dialect key is built from `as_ref()` in some places and
-    /// `to_string()` in others.
+    /// `lake_compute` is the only name that leaves the process.
+    /// Display/AsRef/IntoStaticStr all have to agree on it, because the Jinja
+    /// dialect key is built from `as_ref()` in some places and `to_string()` in
+    /// others.
     #[test]
-    fn test_alt_is_externally_lake_compute() {
-        let alt = AdapterType::Alt;
-        assert_eq!(alt.to_string(), "lake_compute");
-        assert_eq!(alt.as_ref(), "lake_compute");
-        let s: &'static str = alt.into();
+    fn test_lake_compute_renders_as_lake_compute() {
+        let lake_compute = AdapterType::LakeCompute;
+        assert_eq!(lake_compute.to_string(), "lake_compute");
+        assert_eq!(lake_compute.as_ref(), "lake_compute");
+        let s: &'static str = lake_compute.into();
         assert_eq!(s, "lake_compute");
 
-        assert_eq!("lake_compute".parse::<AdapterType>().unwrap(), alt);
+        assert_eq!("lake_compute".parse::<AdapterType>().unwrap(), lake_compute);
     }
 
     /// `alt` was the external name before the rename and is deliberately not
@@ -241,13 +242,13 @@ mod tests {
     /// `adapters:` map key, and the manifest's `adapter_type`. It must land on
     /// the same string.
     #[test]
-    fn test_alt_serde_round_trip_is_lake_compute() {
-        let json = serde_json::to_string(&AdapterType::Alt).unwrap();
+    fn test_lake_compute_serde_round_trip() {
+        let json = serde_json::to_string(&AdapterType::LakeCompute).unwrap();
         assert_eq!(json, "\"lake_compute\"");
 
         assert_eq!(
             serde_json::from_str::<AdapterType>("\"lake_compute\"").unwrap(),
-            AdapterType::Alt
+            AdapterType::LakeCompute
         );
     }
 
@@ -274,7 +275,7 @@ mod tests {
                 (AdapterType::Datafusion, "datafusion"),
                 (AdapterType::Dremio, "dremio"),
                 (AdapterType::Oracle, "oracle"),
-                (AdapterType::Alt, "lake_compute"),
+                (AdapterType::LakeCompute, "lake_compute"),
             ]
         );
     }
@@ -296,7 +297,7 @@ mod tests {
             AdapterType::Salesforce,
             AdapterType::Fabric,
             AdapterType::DuckDB,
-            AdapterType::Alt,
+            AdapterType::LakeCompute,
             AdapterType::Athena,
             AdapterType::Trino,
             AdapterType::Starburst,

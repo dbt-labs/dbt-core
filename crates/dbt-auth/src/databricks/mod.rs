@@ -1,4 +1,4 @@
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
+use crate::{AdapterConfig, Auth, AuthError, AuthWarningPrinter};
 use database::Builder as DatabaseBuilder;
 use dbt_yaml::Value;
 use std::borrow::Cow;
@@ -68,7 +68,11 @@ enum DatabricksAuthIR<'a> {
 }
 
 impl<'a> DatabricksAuthIR<'a> {
-    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+    pub fn apply(
+        self,
+        mut builder: DatabaseBuilder,
+        _warning_printer: &dyn AuthWarningPrinter,
+    ) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::OAuthM2M {
                 client_id,
@@ -109,7 +113,10 @@ impl<'a> DatabricksAuthIR<'a> {
     }
 }
 
-fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<DatabricksAuthIR<'a>, AuthError> {
+fn parse_auth<'a>(
+    config: &'a AdapterConfig,
+    _warning_printer: &dyn AuthWarningPrinter,
+) -> Result<DatabricksAuthIR<'a>, AuthError> {
     // FIXME: dbt-databricks historically has allowed garbage in the auth_type field and only responds to
     // auth_type 'oauth'. Everything else means token
     match DatabricksAuthType::from_config(config) {
@@ -168,6 +175,7 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<DatabricksAuthIR<'a>, Aut
 fn apply_connection_args(
     config: &AdapterConfig,
     mut builder: DatabaseBuilder,
+    _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<DatabaseBuilder, AuthError> {
     let http_path = resolve_http_path(config)?;
 
@@ -323,15 +331,23 @@ fn parse_azure_tenant_from_location(location: &str) -> Result<String, AuthError>
         .ok_or_else(|| AuthError::config(format!("could not extract tenant id from '{location}'")))
 }
 
-pub struct DatabricksAuth;
+pub struct DatabricksAuth {
+    pub warning_printer: Box<dyn AuthWarningPrinter>,
+}
+
+impl DatabricksAuth {
+    pub fn new(warning_printer: Box<dyn AuthWarningPrinter>) -> Self {
+        Self { warning_printer }
+    }
+}
 
 impl Auth for DatabricksAuth {
     fn backend(&self) -> Backend {
         Backend::Databricks
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
-        crate::auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
+    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+        crate::auth_configure_pipeline!(self, &config, parse_auth, apply_connection_args)
     }
 }
 
@@ -413,8 +429,8 @@ mod tests {
     }
 
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) -> Result<(), AuthError> {
-        let auth = DatabricksAuth {};
-        let builder = auth.configure(&AdapterConfig::new(config))?.builder;
+        let auth = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter));
+        let builder = auth.configure(&AdapterConfig::new(config))?;
         assert_eq!(builder.clone().into_iter().count(), expected.len() + 1);
         assert_eq!(
             other_option_value(&builder, "databricks.query_tag.@@dbt_core_version"),
@@ -440,10 +456,9 @@ mod tests {
             r#"{"z_team":"analytics","a_cost_center":"3000"}"#.into(),
         );
 
-        let builder = DatabricksAuth {}
+        let builder = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .unwrap()
-            .builder;
+            .unwrap();
         let query_tag_options = builder
             .other
             .iter()
@@ -483,10 +498,9 @@ mod tests {
             ])),
         );
 
-        let builder = DatabricksAuth {}
+        let builder = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .unwrap()
-            .builder;
+            .unwrap();
         let query_tag_options = builder
             .other
             .iter()
@@ -529,10 +543,9 @@ mod tests {
             config.insert("token".into(), "T".into());
             config.insert("query_tags".into(), query_tags);
 
-            let builder = DatabricksAuth {}
+            let builder = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
                 .configure(&AdapterConfig::new(config))
-                .unwrap()
-                .builder;
+                .unwrap();
             let query_tag_options = builder
                 .other
                 .iter()
@@ -584,7 +597,7 @@ mod tests {
             config.insert("token".into(), "T".into());
             config.insert("query_tags".into(), query_tags);
 
-            let error = DatabricksAuth {}
+            let error = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
                 .configure(&AdapterConfig::new(config))
                 .unwrap_err();
             assert!(error.msg().contains(expected), "{}", error.msg());
@@ -607,7 +620,7 @@ mod tests {
             config.insert("token".into(), "T".into());
             config.insert("query_tags".into(), query_tags);
 
-            let error = DatabricksAuth {}
+            let error = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
                 .configure(&AdapterConfig::new(config))
                 .unwrap_err();
             assert!(error.msg().contains(expected), "{}", error.msg());
@@ -1126,7 +1139,7 @@ mod tests {
             ("token".into(), "T".into()),
         ]);
 
-        let err = DatabricksAuth {}
+        let err = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
             .expect_err("configure should fail");
         assert_eq!(err.msg(), "host is required");
@@ -1141,7 +1154,7 @@ mod tests {
             ("token".into(), "T".into()),
         ]);
 
-        let err = DatabricksAuth {}
+        let err = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
             .expect_err("configure should fail");
 
@@ -1162,7 +1175,7 @@ mod tests {
             config.insert("token".into(), "T".into());
             config.remove(missing_key);
 
-            let err = DatabricksAuth {}
+            let err = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
                 .configure(&AdapterConfig::new(config))
                 .expect_err("configure should fail");
 
@@ -1181,7 +1194,8 @@ mod tests {
             ("client_secret".into(), YmlValue::number(1i64.into())),
         ]);
 
-        let err = parse_auth(&AdapterConfig::new(config)).expect_err("expected parse_auth error");
+        let err = parse_auth(&AdapterConfig::new(config), &crate::NoopAuthWarningPrinter)
+            .expect_err("expected parse_auth error");
         match err {
             AuthError::YAML(e) => assert!(e.to_string().contains("missing field `client_secret`")),
             other => panic!("expected YAML missing-field error, got {other:?}"),
@@ -1195,7 +1209,8 @@ mod tests {
             ("client_id".into(), YmlValue::bool(true)),
         ]);
 
-        let err = parse_auth(&AdapterConfig::new(config)).expect_err("expected parse_auth error");
+        let err = parse_auth(&AdapterConfig::new(config), &crate::NoopAuthWarningPrinter)
+            .expect_err("expected parse_auth error");
         match err {
             AuthError::YAML(e) => assert!(e.to_string().contains("missing field `client_id`")),
             other => panic!("expected YAML missing-field error, got {other:?}"),
@@ -1235,10 +1250,9 @@ mod tests {
             if let Some(name) = compute {
                 mapping.insert("databricks_compute".into(), name.into());
             }
-            let builder = DatabricksAuth {}
+            let builder = DatabricksAuth::new(Box::new(crate::NoopAuthWarningPrinter))
                 .configure(&AdapterConfig::new(mapping))
-                .expect("configure should succeed")
-                .builder;
+                .expect("configure should succeed");
             let opts = builder.into_iter().collect::<Vec<_>>();
             DatabaseBuilder::fingerprint(opts.iter()).as_u64()
         }

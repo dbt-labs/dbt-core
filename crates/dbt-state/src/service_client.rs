@@ -88,6 +88,28 @@ pub enum RunCacheServiceError {
         "dbt State authentication requires an interactive terminal, but none is available in this environment"
     )]
     NoInteractiveTerminal,
+    /// No dbt platform credential is available for the account the project
+    /// configures. Deliberately not an `Auth` error: like
+    /// [`Self::NoInteractiveTerminal`] it is not user-actionable *auth*, so
+    /// validation fails open and dbt State is bypassed for the invocation
+    /// rather than failing the run.
+    #[error("{}", platform_account_unavailable_message(.configured, .found.as_deref()))]
+    PlatformAccountUnavailable {
+        configured: String,
+        found: Option<String>,
+    },
+}
+
+fn platform_account_unavailable_message(configured: &str, found: Option<&str>) -> String {
+    let found = match found {
+        Some(found) => format!(", but the available credentials belong to account {found}"),
+        None => String::new(),
+    };
+    format!(
+        "no dbt platform credentials for account {configured}{found}. \
+         Run `dbt login` with account {configured}, or update 'account_id' in the \
+         'dbt-cloud' block of dbt_project.yml"
+    )
 }
 
 impl RunCacheServiceError {
@@ -107,6 +129,7 @@ impl RunCacheServiceError {
             Self::Aborted => "Aborted",
             Self::Timeout(_) => "Timeout",
             Self::NoInteractiveTerminal => "NoInteractiveTerminal",
+            Self::PlatformAccountUnavailable { .. } => "PlatformAccountUnavailable",
         }
     }
 

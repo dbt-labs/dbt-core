@@ -280,6 +280,8 @@ pub fn resolve_nested_model_metrics(
                     __base_attr__: NodeBaseAttributes {
                         // Not executed against a warehouse; records the target it parsed under.
                         adapter: adapter_type,
+                        // This node type has no `+propagate` config; nothing is published.
+                        propagate: Vec::new(),
                         database: "".to_string(),
                         schema: "".to_string(),
                         alias: "".to_string(),
@@ -570,6 +572,8 @@ pub fn resolve_top_level_metrics(
             __base_attr__: NodeBaseAttributes {
                 // Not executed against a warehouse; records the target it parsed under.
                 adapter: adapter_type,
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 database: "".to_string(),
                 schema: "".to_string(),
                 alias: "".to_string(),

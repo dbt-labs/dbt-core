@@ -26,6 +26,7 @@ members = [
   "crates/dbt-tasks-core",
   "crates/dbt-tasks-sa",
   "crates/dbt-init",
+  "crates/dbt-profile-schemas",
   "crates/dbt-index-core",
   "crates/dbt-lineage-core",
   "crates/dbt-error",
@@ -110,7 +111,7 @@ homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "Apache-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
-version = "2.0.0-beta.1"
+version = "2.0.0-rc.1"
 
 [patch.crates-io]
 
@@ -278,6 +279,7 @@ dbt-platform-auth = { path = "crates/dbt-platform-auth" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
+dbt-profile-schemas = { path = "crates/dbt-profile-schemas" }
 dbt-python-core = { path = "crates/dbt-python-core" }
 dbt-runtime = { path = "crates/dbt-runtime" }
 dbt-runtime-macros = { path = "crates/dbt-runtime-macros" }

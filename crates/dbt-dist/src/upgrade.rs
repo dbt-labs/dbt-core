@@ -28,12 +28,19 @@ use crate::python::{
 use crate::version::{ReqwestClient, VersionsHttpClient, cdn_base_url, resolve_target_version};
 use crate::{Channel, DiscoveryContext, DistInfo, DistInfoDiscovery, Distribution};
 
-/// The name under which `dbt-core` declares itself as a dependency in a
-/// Python project manifest, and the package name to uninstall from a global
-/// Python environment once dbt v2 has taken over.
-const OSS_PACKAGE_NAME: &str = "dbt-core";
+/// PyPI's legacy dbt namespace, shared with v1.
+///
+/// NOTE: `confirm_and_uninstall_old_package`'s global-install path still
+/// hardcodes this name; it doesn't yet check `DBT_OSS_PACKAGE_NAME`.
+const DBT_CORE_PACKAGE_NAME: &str = "dbt-core";
 
-/// The name under which dbt v2's PyPI package is declared.
+/// PyPI's newer, OSS-only dbt namespace.
+const DBT_OSS_PACKAGE_NAME: &str = "dbt-oss";
+
+/// Package names this command can rewrite to [`PROPRIETARY_PACKAGE_NAME`].
+pub(crate) const UPGRADABLE_TARGET_NAMES: [&str; 2] = [DBT_CORE_PACKAGE_NAME, DBT_OSS_PACKAGE_NAME];
+
+/// PyPI's proprietary dbt v2 package.
 const PROPRIETARY_PACKAGE_NAME: &str = "dbt";
 
 fn install_script_name() -> &'static str {
@@ -111,21 +118,12 @@ pub async fn exec_upgrade_distribution(
 
     let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     if let Some(mut manifest) = PythonManifest::detect(&cwd)? {
-        let declares_dbt_core = manifest
-            .get_version_replacement(&PackageSpec {
-                name: OSS_PACKAGE_NAME.to_string(),
-                // Version is irrelevant here -- this call is only used to
-                // test whether the manifest declares `dbt-core` at all; the
-                // replacement itself is discarded, never applied.
-                version: PackageVersion::Exact("0.0.0".to_string()),
-            })?
-            .is_some();
-        if declares_dbt_core {
-            if manifest.has_top_level_conda_declaration(OSS_PACKAGE_NAME)? {
+        if let Some(declared_name) = declared_upgradable_name(&manifest)? {
+            if manifest.has_top_level_conda_declaration(declared_name)? {
                 return err!(
                     ErrorCode::NotSupported,
-                    "{} declares `dbt-core` in conda's top-level dependency list, but dbt v2 \
-                     isn't published on conda channels. Move the dependency into the \
+                    "{} declares `{declared_name}` in conda's top-level dependency list, but \
+                     dbt v2 isn't published on conda channels. Move the dependency into the \
                      `pip:` sub-list (which resolves from PyPI) and re-run this command, or edit \
                      the manifest manually.",
                     manifest.path().display()
@@ -140,7 +138,7 @@ pub async fn exec_upgrade_distribution(
             let target_version = resolve_target_version(None, &ReqwestClient).await?;
             let replacements = manifest
                 .get_rename_replacement(
-                    OSS_PACKAGE_NAME,
+                    declared_name,
                     &PackageSpec {
                         name: PROPRIETARY_PACKAGE_NAME.to_string(),
                         version: PackageVersion::Exact(target_version),
@@ -149,12 +147,13 @@ pub async fn exec_upgrade_distribution(
                 .ok_or_else(|| {
                     fs_err!(
                         ErrorCode::Unexpected,
-                        "{} declared `dbt-core` a moment ago, but no longer does",
+                        "{} declared `{declared_name}` a moment ago, but no longer does",
                         manifest.path().display()
                     )
                 })?;
             return exec_managed_project_upgrade(
                 &mut manifest,
+                declared_name,
                 replacements,
                 &dist_info,
                 override_manager,
@@ -173,6 +172,36 @@ pub async fn exec_upgrade_distribution(
     }
 
     exec_global_install(&dist_info, yes, command_name).await
+}
+
+/// Which of [`UPGRADABLE_TARGET_NAMES`] `manifest` depends on, if any.
+/// Errors if it depends on more than one.
+fn declared_upgradable_name(manifest: &PythonManifest) -> FsResult<Option<&'static str>> {
+    let mut declared = Vec::new();
+    for name in UPGRADABLE_TARGET_NAMES {
+        // Version is a placeholder: this only checks whether `name` is
+        // declared at all; the replacement itself is discarded.
+        let is_declared = manifest
+            .get_version_replacement(&PackageSpec {
+                name: name.to_string(),
+                version: PackageVersion::Exact("0.0.0".to_string()),
+            })?
+            .is_some();
+        if is_declared {
+            declared.push(name);
+        }
+    }
+    match declared[..] {
+        [] => Ok(None),
+        [name] => Ok(Some(name)),
+        [..] => err!(
+            ErrorCode::NotSupported,
+            "{} declares both `{}`; only one dbt dependency is expected. Remove one manually \
+             and re-run this command.",
+            manifest.path().display(),
+            declared.join("` and `")
+        ),
+    }
 }
 
 /// The shared "manifest was edited, but the environment can't be brought
@@ -326,7 +355,7 @@ fn resolve_manager(
 }
 
 /// Rewrites a managed Python project's manifest to depend on `dbt`
-/// at a pinned exact version instead of `dbt-core`, then re-runs the
+/// at a pinned exact version instead of `old_name`, then re-runs the
 /// project's package manager to bring its lockfile/environment back in sync
 /// with that edit -- editing the manifest alone can leave a lockfile stale.
 /// Two separate confirmations, matching the two distinct actions: one for
@@ -334,6 +363,7 @@ fn resolve_manager(
 /// that follow it.
 async fn exec_managed_project_upgrade(
     manifest: &mut PythonManifest,
+    old_name: &str,
     replacements: ManifestReplacements,
     dist_info: &DistInfo,
     override_manager: Option<PythonPackageManager>,
@@ -344,7 +374,7 @@ async fn exec_managed_project_upgrade(
     replacements.diff(manifest, &mut diff)?;
     let diff = String::from_utf8_lossy(&diff);
     let edit_prompt = format!(
-        "This will rewrite {} to depend on `dbt` instead of `dbt-core`:\n\n{diff}\nProceed?",
+        "This will rewrite {} to depend on `dbt` instead of `{old_name}`:\n\n{diff}\nProceed?",
         manifest.path().display()
     );
     if !confirm(&edit_prompt, yes)? {
@@ -508,7 +538,7 @@ fn confirm_and_uninstall_old_package(dist_info: &DistInfo, yes: bool) -> FsResul
         return Ok(());
     };
     let Some(uninstall_cmd) =
-        uninstall_command_for_package(channel, dist_info.py_package_manager, OSS_PACKAGE_NAME)
+        uninstall_command_for_package(channel, dist_info.py_package_manager, DBT_CORE_PACKAGE_NAME)
     else {
         println(
             "Could not determine how to uninstall the existing dbt-core install automatically. \
@@ -908,6 +938,54 @@ mod tests {
         assert_eq!(target_dir, Path::new("/home/user/.local/bin"));
     }
 
+    fn manifest_with(dir: &Path, filename: &str, content: &str) -> PythonManifest {
+        std::fs::write(dir.join(filename), content).unwrap();
+        PythonManifest::detect(dir).unwrap().unwrap()
+    }
+
+    #[test]
+    fn declared_upgradable_name_detects_dbt_core() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-core==1.2.3\n");
+        assert_eq!(
+            declared_upgradable_name(&manifest).unwrap(),
+            Some(DBT_CORE_PACKAGE_NAME)
+        );
+    }
+
+    #[test]
+    fn declared_upgradable_name_detects_dbt_oss() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(tmp.path(), "requirements.txt", "dbt-oss==2.0.0\n");
+        assert_eq!(
+            declared_upgradable_name(&manifest).unwrap(),
+            Some(DBT_OSS_PACKAGE_NAME)
+        );
+    }
+
+    #[test]
+    fn declared_upgradable_name_returns_none_when_neither_declared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(tmp.path(), "requirements.txt", "other-package==0.1.0\n");
+        assert_eq!(declared_upgradable_name(&manifest).unwrap(), None);
+    }
+
+    #[test]
+    fn declared_upgradable_name_errors_when_both_declared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = manifest_with(
+            tmp.path(),
+            "requirements.txt",
+            "dbt-core==1.2.3\ndbt-oss==2.0.0\n",
+        );
+        let err = declared_upgradable_name(&manifest).expect_err("both names are declared");
+        assert!(
+            err.context.contains("dbt-core") && err.context.contains("dbt-oss"),
+            "expected the error to name both declared packages, got: {}",
+            err.context
+        );
+    }
+
     fn managed_project_manifest_and_replacements(
         dir: &Path,
     ) -> (PythonManifest, ManifestReplacements) {
@@ -919,7 +997,7 @@ mod tests {
         let manifest = PythonManifest::detect(dir).unwrap().unwrap();
         let replacements = manifest
             .get_rename_replacement(
-                OSS_PACKAGE_NAME,
+                DBT_CORE_PACKAGE_NAME,
                 &PackageSpec {
                     name: PROPRIETARY_PACKAGE_NAME.to_string(),
                     version: PackageVersion::Exact("2.0.0".to_string()),
@@ -942,6 +1020,7 @@ mod tests {
 
         let result = exec_managed_project_upgrade(
             &mut manifest,
+            DBT_CORE_PACKAGE_NAME,
             replacements,
             &dist_info,
             None,
@@ -974,6 +1053,7 @@ mod tests {
 
         let result = exec_managed_project_upgrade(
             &mut manifest,
+            DBT_CORE_PACKAGE_NAME,
             replacements,
             &dist_info,
             None,
@@ -1014,6 +1094,7 @@ mod tests {
 
         let result = exec_managed_project_upgrade(
             &mut manifest,
+            DBT_CORE_PACKAGE_NAME,
             replacements,
             &dist_info,
             None,

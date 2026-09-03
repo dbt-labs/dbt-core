@@ -1222,14 +1222,9 @@ fn expand_selection(
 
     // For BUILDABLE mode, get selected and all parents
     let selected_and_parents = if indirect_selection == IndirectSelection::Buildable {
-        let mut all = selected.clone();
-        // Add all ancestors
-        for node in selected.iter() {
-            let ancestors = upstream(deps, node, u32::MAX);
-            for (ancestor, _) in ancestors.iter() {
-                all.insert(ancestor.clone());
-            }
-        }
+        // One traversal over the shared ancestry rather than one per selected node
+        // (dbt-labs/fs#11359). `multi_source_bfs` includes its seeds.
+        let mut all = multi_source_bfs(deps, selected, u32::MAX);
         // Add all sources
         all.extend(nodes.sources.keys().cloned());
         all
@@ -1320,14 +1315,9 @@ fn incorporate_indirect_nodes(
             }
         }
         IndirectSelection::Buildable => {
-            let mut selected_and_parents = selected.clone();
-            // Add all ancestors
-            for node in selected.iter() {
-                let ancestors = upstream(deps, node, u32::MAX);
-                for (ancestor, _) in ancestors.iter() {
-                    selected_and_parents.insert(ancestor.clone());
-                }
-            }
+            // One traversal over the shared ancestry rather than one per selected node
+            // (dbt-labs/fs#11359). `multi_source_bfs` includes its seeds.
+            let selected_and_parents = multi_source_bfs(deps, &selected, u32::MAX);
 
             for node_id in indirect_nodes {
                 if let Some(node) = nodes.tests.get(&node_id) {
@@ -1350,49 +1340,34 @@ fn incorporate_indirect_nodes(
     selected
 }
 
-fn add_nodes(slice: BTreeMap<String, BTreeSet<String>>, nodes: &mut BTreeSet<String>) {
-    nodes.extend(slice.keys().cloned());
-    slice
-        .values()
-        .for_each(|set| nodes.extend(set.iter().cloned()));
-}
-
+/// The `@` operator: every descendant of `selected_nodes`, plus every ancestor of those
+/// descendants.
+///
+/// Three multi-source traversals, each O(V+E). The previous implementation reversed the
+/// whole graph once per selected node and then ran an independent single-source ancestor
+/// walk per leaf, which made `--select @model` take minutes (dbt-labs/fs#11359).
 fn collect_childrens_parents(
     deps: &BTreeMap<String, BTreeSet<String>>,
     selected_nodes: &BTreeSet<String>,
 ) -> BTreeSet<String> {
-    let mut desc = BTreeMap::new();
-    let mut selected = BTreeSet::new();
-    // Find all descendants of selected nodes
-    for node in selected_nodes {
-        if desc.contains_key(node) {
-            continue;
-        }
-        let descendants = downstream(deps, node, u32::MAX);
-        desc.extend(descendants);
-    }
-    // 2. find leaf nodes (nodes with no children) and get all their ancestors.
-    // A node is its own descendant, so the selected nodes are themselves leaf
-    // candidates: when a selected node has no children it produces no descendant
-    // edges in `desc` and would otherwise be dropped entirely (see #15280).
-    let leaf_nodes: BTreeSet<String> = desc
-        .keys()
-        .chain(desc.values().flatten())
-        .chain(selected_nodes)
-        .filter(|node| {
-            // A node is a leaf if it has no outgoing dependencies in the descendant graph
-            !desc.contains_key(*node) || desc.get(*node).is_none_or(|children| children.is_empty())
-        })
+    // `deps` maps a node to its parents; reverse it once to walk downwards.
+    let children = reverse(deps);
+
+    // 1. Every descendant of the selection. `multi_source_bfs` includes its seeds, so a
+    //    selected node with no children is retained rather than dropped (see #15280).
+    let descendants = multi_source_bfs(&children, selected_nodes, u32::MAX);
+
+    // 2. The leaves of that subgraph. Every child of a descendant is itself a descendant,
+    //    so "no children within the descendant subgraph" is just "no children at all".
+    let leaf_nodes: BTreeSet<String> = descendants
+        .iter()
+        .filter(|node| children.get(*node).is_none_or(|kids| kids.is_empty()))
         .cloned()
         .collect();
-    // Get each leaf plus all of its ancestors. The leaf is inserted explicitly
-    // because `upstream` only returns edges, which omit a leaf that has no
-    // ancestors (e.g. an isolated node).
-    for leaf in leaf_nodes {
-        add_nodes(upstream(deps, &leaf, u32::MAX), &mut selected);
-        selected.insert(leaf);
-    }
-    selected
+
+    // 3. Every leaf plus all of its ancestors, in one pass over the shared ancestry rather
+    //    than one pass per leaf. Seeds are included, so the leaves themselves are kept.
+    multi_source_bfs(deps, &leaf_nodes, u32::MAX)
 }
 
 /// Multi-source BFS: starting from every node in `seeds`, follow edges in
@@ -1429,52 +1404,6 @@ fn multi_source_bfs(
         frontier = next;
     }
     visited
-}
-
-/// collect every descendant within `max_depth` (inclusive)
-fn downstream(
-    deps: &BTreeMap<String, BTreeSet<String>>,
-    root: &str,
-    max_depth: u32,
-) -> BTreeMap<String, BTreeSet<String>> {
-    // 1. walk the graph in the opposite direction …
-    let rev = reverse(deps);
-    let slice_rev = upstream(&rev, root, max_depth);
-
-    // 2. … then flip it back so callers see the usual orientation
-    reverse(&slice_rev)
-}
-
-/// collect every ancestor within `max_depth` (inclusive)
-fn upstream(
-    deps: &BTreeMap<String, BTreeSet<String>>,
-    root: &str,
-    max_depth: u32,
-) -> BTreeMap<String, BTreeSet<String>> {
-    let mut out = BTreeMap::<String, BTreeSet<String>>::new();
-    if max_depth == 0 {
-        return out;
-    }
-
-    let mut frontier = vec![root.to_string()];
-    let mut depth = 0;
-
-    while !frontier.is_empty() && depth < max_depth {
-        depth += 1;
-        let mut next = Vec::<String>::new();
-
-        // record every (parent, child) pair in the current layer
-        for child in &frontier {
-            if let Some(parents) = deps.get(child) {
-                for parent in parents {
-                    out.entry(parent.clone()).or_default().insert(child.clone());
-                    next.push(parent.clone());
-                }
-            }
-        }
-        frontier = next;
-    }
-    out
 }
 
 /// Summarize statistics for scheduled nodes.
@@ -1964,6 +1893,97 @@ mod tests {
         let selected = BTreeSet::from(["a".to_string()]);
         let result = collect_childrens_parents(&deps, &selected);
         assert_eq!(result, BTreeSet::from(["a".to_string()]));
+    }
+
+    #[test]
+    fn test_collect_childrens_parents_diamond_counts_each_node_once() {
+        // A diamond: `top` reaches `bottom` by two distinct paths. The old
+        // implementation walked each path separately, which produced the right answer
+        // but did redundant work; this pins the answer so the rewrite is equivalent.
+        //
+        //     top -> left  -> bottom
+        //     top -> right -> bottom
+        let deps = BTreeMap::from([
+            ("top".to_string(), BTreeSet::new()),
+            ("left".to_string(), BTreeSet::from(["top".to_string()])),
+            ("right".to_string(), BTreeSet::from(["top".to_string()])),
+            (
+                "bottom".to_string(),
+                BTreeSet::from(["left".to_string(), "right".to_string()]),
+            ),
+        ]);
+
+        // `@top` -> descendants are everything; the only leaf is `bottom`; its ancestors
+        // are the rest.
+        let result = collect_childrens_parents(&deps, &BTreeSet::from(["top".to_string()]));
+        assert_eq!(
+            result,
+            BTreeSet::from([
+                "top".to_string(),
+                "left".to_string(),
+                "right".to_string(),
+                "bottom".to_string(),
+            ])
+        );
+
+        // `@left` -> descendants {left, bottom}; leaf `bottom`; its ancestors pull in
+        // `right` and `top`, which is the whole point of the `@` operator.
+        let result = collect_childrens_parents(&deps, &BTreeSet::from(["left".to_string()]));
+        assert_eq!(
+            result,
+            BTreeSet::from([
+                "top".to_string(),
+                "left".to_string(),
+                "right".to_string(),
+                "bottom".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_collect_childrens_parents_is_linear_on_deep_multi_path_dag() {
+        // Regression guard for dbt-labs/fs#11359.
+        //
+        // A "diamond ladder": every layer has two nodes, each depending on both nodes of
+        // the layer above, so the number of distinct top-to-bottom paths is 2^depth.
+        // The old code queued a node once per path reaching it, and ran one independent
+        // ancestor walk per leaf, making it O(paths) rather than O(V+E).
+        //
+        // The budget below is deliberately enormous relative to the real cost: this graph
+        // has 2 * DEPTH + 1 = 53 nodes, so the fixed traversal finishes in microseconds,
+        // while the old one needs ~2^26 frontier entries (measured at ~76s in a debug
+        // build). Anything in between means the traversal has regressed to per-path or
+        // per-leaf work. The assertion exists so that regression fails the suite instead
+        // of merely hanging -- nextest's default profile flags slow tests but does not
+        // terminate them.
+        const DEPTH: usize = 26;
+        const BUDGET: std::time::Duration = std::time::Duration::from_secs(30);
+
+        let mut deps: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        deps.insert("root".to_string(), BTreeSet::new());
+        let mut prev = vec!["root".to_string()];
+        for layer in 0..DEPTH {
+            let cur: Vec<String> = (0..2).map(|i| format!("n{layer}_{i}")).collect();
+            for node in &cur {
+                deps.insert(node.clone(), prev.iter().cloned().collect());
+            }
+            prev = cur;
+        }
+
+        let started = std::time::Instant::now();
+        let result = collect_childrens_parents(&deps, &BTreeSet::from(["root".to_string()]));
+        let elapsed = started.elapsed();
+
+        // Everything is both a descendant of `root` and an ancestor of a bottom leaf.
+        assert_eq!(result.len(), deps.len(), "every node should be selected");
+        assert!(
+            elapsed < BUDGET,
+            "collect_childrens_parents took {elapsed:?} on a {}-node DAG; the traversal is \
+             no longer linear in the graph size (see dbt-labs/fs#11359)",
+            deps.len()
+        );
+        assert!(result.contains("root"));
+        assert!(result.contains(&format!("n{}_0", DEPTH - 1)));
     }
 
     #[test]

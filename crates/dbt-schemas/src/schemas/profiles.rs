@@ -53,29 +53,27 @@ pub enum DbConfig {
     // schema's `description`, so the implementation note lives here instead.
     //
     // The rename is `schemars`-only on purpose. `UntaggedEnumDeserialize`
-    // rejects *any* `#[serde(..)]` attribute on a variant and derives the tag
-    // from the variant identifier alone, so this enum's wire tag is `alt` and
-    // cannot be changed here. `lake_compute` is mapped onto it by
-    // `dbt_profile::adapters::canonicalize_adapter_type`, before the mapping
-    // reaches this enum -- see the test of the same name there.
+    // rejects *any* `#[serde(..)]` attribute on a variant, so the tag comes from
+    // this enum's `rename_all = "lowercase"` applied to the variant identifier:
+    // `lakecompute`, with no underscore. Authors write `lake_compute`, which
+    // `dbt_profile::adapters::canonicalize_adapter_type` maps onto the tag
+    // before the mapping reaches this enum. Asserted by
+    // `lake_compute_is_tagged_by_its_lowercased_identifier` below, so a future
+    // rename of this variant cannot silently change the tag.
     //
-    // That the tag is `alt` does *not* make `alt` an accepted profiles.yml
-    // spelling: `canonicalize_adapter_type` rejects it outright. The tag stays
-    // `alt` only because `Serialize` uses it too, and our own serialized state
-    // (`ProfileConnection`, `DbtRuntimeConfigInner`) has to round trip.
+    // That the tag is `lakecompute` does *not* make it an accepted
+    // profiles.yml spelling; `canonicalize_adapter_type` only ever writes it.
     //
-    // What the `schemars` rename does fix is the generated schema, which is
+    // What the `schemars` rename fixes is the generated schema, which is
     // published to dbt-jsonschema and drives editor validation and autocomplete
     // for profiles.yml: authors are shown the name they should write.
-    // `Serialize` still emits `type: alt`, which keeps our own
-    // serialize/deserialize round trip consistent.
     //
     // Once `dbt-yaml`'s derive honours variant renames this collapses into a
-    // plain `#[serde(rename = "lake_compute")]`, matching `AdapterType::Alt`,
-    // and the mapping in `dbt-profile` goes away.
+    // plain `#[serde(rename = "lake_compute")]`, matching
+    // `AdapterType::LakeCompute`, and the mapping in `dbt-profile` goes away.
     /// The dbt lake compute engine.
     #[schemars(rename = "lake_compute")]
-    Alt(Box<AltConfig>),
+    LakeCompute(Box<LakeComputeConfig>),
     // Hive,
     Exasol(Box<ExasolDbConfig>),
     // Oracle,
@@ -146,7 +144,7 @@ impl DbConfig {
             DbConfig::Salesforce(config) => config.client_id.as_deref(),
             // DuckDB `path` is optional — attach-only profiles default to `:memory:`.
             DbConfig::DuckDB(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
-            DbConfig::Alt(config) => Some(config.path.as_deref().unwrap_or(":memory:")),
+            DbConfig::LakeCompute(config) => config.base_url.as_deref(),
             DbConfig::Spark(config) => config.host.as_deref(),
             DbConfig::Fabric(config) => config.host.as_deref(),
             DbConfig::Exasol(config) => config.host.as_deref(),
@@ -198,6 +196,7 @@ impl DbConfig {
                 "retry_all",
                 "insecure_mode",
                 "reuse_connections",
+                "application_name",
             ],
             AdapterType::Postgres => &[
                 "host",
@@ -282,7 +281,7 @@ impl DbConfig {
                 "attach",
             ],
             // `token` is deliberately absent, for the same reason.
-            AdapterType::Alt => &[
+            AdapterType::LakeCompute => &[
                 "path",
                 "database",
                 "schema",
@@ -389,7 +388,7 @@ impl DbConfig {
             DbConfig::Spark(config) => dbt_yaml::to_value(config),
             DbConfig::Fabric(config) => dbt_yaml::to_value(config),
             DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
-            DbConfig::Alt(config) => dbt_yaml::to_value(config),
+            DbConfig::LakeCompute(config) => dbt_yaml::to_value(config),
             DbConfig::Exasol(config) => dbt_yaml::to_value(config),
             DbConfig::ClickHouse(config) => dbt_yaml::to_value(config),
         }
@@ -410,7 +409,7 @@ impl DbConfig {
             DbConfig::Fabric(..) => AdapterType::Fabric,
             DbConfig::Exasol(..) => AdapterType::Exasol,
             DbConfig::ClickHouse(..) => AdapterType::ClickHouse,
-            DbConfig::Alt(..) => AdapterType::Alt,
+            DbConfig::LakeCompute(..) => AdapterType::LakeCompute,
         }
     }
 
@@ -429,7 +428,7 @@ impl DbConfig {
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
             DbConfig::ClickHouse(config) => config.database.as_ref(),
-            DbConfig::Alt(config) => config.database.as_ref(),
+            DbConfig::LakeCompute(config) => config.database.as_ref(),
         }
     }
 
@@ -465,7 +464,7 @@ impl DbConfig {
             DbConfig::Databricks(config) => config.schema.as_ref(),
             DbConfig::Spark(config) => config.schema.as_ref(),
             DbConfig::DuckDB(config) => config.schema.as_ref(),
-            DbConfig::Alt(config) => config.schema.as_ref(),
+            DbConfig::LakeCompute(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
             DbConfig::Fabric(config) => config.schema.as_ref(),
             DbConfig::Exasol(config) => config.schema.as_ref(),
@@ -488,7 +487,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => None,
             DbConfig::Exasol(config) => config.threads.as_ref(),
             DbConfig::ClickHouse(config) => config.threads.as_ref(),
-            DbConfig::Alt(config) => config.threads.as_ref(),
+            DbConfig::LakeCompute(config) => config.threads.as_ref(),
         }
     }
 
@@ -507,7 +506,7 @@ impl DbConfig {
             DbConfig::Fabric(_) => (),
             DbConfig::Exasol(config) => config.threads = threads,
             DbConfig::ClickHouse(config) => config.threads = threads,
-            DbConfig::Alt(config) => config.threads = threads,
+            DbConfig::LakeCompute(config) => config.threads = threads,
         }
     }
 
@@ -699,6 +698,10 @@ pub struct SnowflakeDbConfig {
     // Configuration Parameters
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
+    /// Route auth through flock-service using dbt Cloud credentials instead of
+    /// adapter-specific auth (see dbt-auth's `AdapterConfig::use_dbt_cloud_credentials`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_dbt_cloud_credentials: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_session_keep_alive: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -768,6 +771,8 @@ pub struct SnowflakeDbConfig {
     pub protocol: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub driver_log_level: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub application_name: Option<String>,
     /// Removed field — kept only so that profiles containing it still parse.
     /// The value is ignored; a deprecation warning is emitted at startup.
     #[serde(default, skip_serializing)]
@@ -1072,7 +1077,7 @@ pub struct DuckDbAttachment {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
-pub struct AltConfig {
+pub struct LakeComputeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2130,7 +2135,7 @@ impl TryFrom<DbConfig> for TargetContext {
                 },
             })),
 
-            DbConfig::Alt(config) => {
+            DbConfig::LakeCompute(config) => {
                 Ok(TargetContext::DuckDB(DuckDbTargetEnv {
                     path: config.path.clone(),
                     __common__: CommonTargetContext {
@@ -2245,7 +2250,44 @@ impl TryFrom<DbConfig> for TargetContext {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+
+    /// `DbConfig` is `#[serde(tag = "type", rename_all = "lowercase")]`, so the
+    /// tag is the variant identifier lowercased. `dbt-profile` hard-codes the
+    /// resulting string (`LAKE_COMPUTE_INTERNAL_TAG`) because it deliberately
+    /// does not depend on this crate, and `compute_platform.rs` writes it back
+    /// after `to_mapping()` drops it. Neither can notice a rename of the
+    /// variant, so pin the tag here and round trip through it.
+    #[test]
+    fn lake_compute_is_tagged_by_its_lowercased_identifier() {
+        let value = dbt_yaml::to_value(DbConfig::LakeCompute(Box::default()))
+            .expect("lake compute config should serialize");
+        assert_eq!(
+            value
+                .get(dbt_yaml::Value::from("type"))
+                .and_then(|v| v.as_str()),
+            Some("lakecompute"),
+            "`dbt_profile::adapters::LAKE_COMPUTE_INTERNAL_TAG` and \
+             `compute_platform::build_lake_compute_adapter` both hard-code this string"
+        );
+
+        let round_tripped: DbConfig =
+            dbt_yaml::from_value(value).expect("the tag it emits must be the tag it accepts");
+        assert!(matches!(round_tripped, DbConfig::LakeCompute(_)));
+
+        // And the reason the mapping in `dbt-profile` has to exist at all: the
+        // name authors write is not a tag this enum accepts. `dbt-yaml`'s
+        // `UntaggedEnumDeserialize` rejects per-variant `#[serde(..)]`
+        // attributes, so the tag cannot be renamed to match.
+        assert!(
+            dbt_yaml::from_str::<DbConfig>(
+                "type: lake_compute\nbase_url: https://example.invalid\n"
+            )
+            .is_err(),
+            "if this starts passing, `canonicalize_adapter_type` can go away"
+        );
+    }
 
     #[test]
     fn test_databricks_profile_deserializes_query_tags_from_both_profile_shapes() {

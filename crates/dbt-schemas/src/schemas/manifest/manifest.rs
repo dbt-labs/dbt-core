@@ -1254,6 +1254,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            // `propagate`, like `adapter`, never reaches the manifest, so a node
+                            // read back from one has no selection to recover -- the same reason
+                            // `adapter` falls back to the manifest's global `adapter_type` here.
+                            propagate: Vec::new(),
                             database: test.__common_attr__.database,
                             schema: test.__common_attr__.schema,
                             alias: test.__base_attr__.alias,
@@ -1350,6 +1354,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            propagate: Vec::new(),
                             database: snapshot.__common_attr__.database,
                             schema: snapshot.__common_attr__.schema,
                             alias: snapshot.__base_attr__.alias,
@@ -1431,6 +1436,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            propagate: Vec::new(),
                             database: seed.__common_attr__.database,
                             schema: seed.__common_attr__.schema,
                             alias: seed.__base_attr__.alias,
@@ -1528,6 +1534,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            propagate: Vec::new(),
                             database: analysis.__common_attr__.database,
                             schema: analysis.__common_attr__.schema,
                             alias: analysis.__base_attr__.alias,
@@ -1605,6 +1612,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         },
                         __base_attr__: NodeBaseAttributes {
                             adapter: adapter_type,
+                            propagate: Vec::new(),
                             // A check has no relation, so these stay as written (empty) rather
                             // than being defaulted from the target.
                             database: check.__common_attr__.database,
@@ -1672,6 +1680,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: source.__common_attr__.database,
                     schema: source.__common_attr__.schema,
                     alias: source.identifier.clone(),
@@ -1744,6 +1753,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1809,6 +1819,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: unit_test.__common_attr__.database,
                     schema: unit_test.__common_attr__.schema,
                     alias: unit_test.__base_attr__.alias,
@@ -1898,6 +1909,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -1959,6 +1971,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: adapter_type,
+                    propagate: Vec::new(),
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),
@@ -2088,6 +2101,7 @@ pub fn manifest_model_to_dbt_model(
         },
         __base_attr__: NodeBaseAttributes {
             adapter: adapter_type,
+            propagate: Vec::new(),
             database,
             schema,
             alias,
@@ -2208,6 +2222,7 @@ pub fn manifest_function_to_dbt_function(
         },
         __base_attr__: NodeBaseAttributes {
             adapter: adapter_type,
+            propagate: Vec::new(),
             database: function.__common_attr__.database,
             schema: function.__common_attr__.schema,
             alias: function.__base_attr__.alias,

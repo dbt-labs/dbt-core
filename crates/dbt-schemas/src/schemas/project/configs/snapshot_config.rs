@@ -1,4 +1,5 @@
 use crate::schemas::common::ClusterConfig;
+use crate::schemas::serde::AdapterTypeOrArray;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_adapter_core::AdapterType;
@@ -276,7 +277,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+file_format")]
     pub file_format: Option<String>,
     #[serde(rename = "+catalog_name")]
@@ -284,6 +285,9 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+adapter")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    #[serde(rename = "+propagate")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -320,6 +324,12 @@ pub struct ProjectSnapshotConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub skip_not_matched_step: Option<bool>,
+    #[serde(
+        default,
+        rename = "+persist_constraints",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub persist_constraints: Option<bool>,
     #[serde(
         default,
         rename = "+unique_tmp_table_suffix",
@@ -466,6 +476,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
             || self.file_format.is_some()
             || self.catalog_name.is_some()
             || self.adapter.is_some()
+            || self.propagate.is_some()
             || self.include_full_name_in_path.is_some()
             || self.liquid_clustered_by.is_some()
             || self.location_root.is_some()
@@ -476,6 +487,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
             || self.not_matched_condition.is_some()
             || self.skip_matched_step.is_some()
             || self.skip_not_matched_step.is_some()
+            || self.persist_constraints.is_some()
             || self.unique_tmp_table_suffix.is_some()
             || self.source_alias.is_some()
             || self.target_alias.is_some()
@@ -522,6 +534,10 @@ pub struct SnapshotConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     // General Configuration
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -692,6 +708,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             target_schema: config.target_schema,
             compute: config.compute,
             adapter: config.adapter,
+            propagate: config.propagate,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: Tags(config.tags),
@@ -780,6 +797,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
                 zorder: None,
+                skip_optimize: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -795,6 +813,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                persist_constraints: config.persist_constraints,
                 unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
                 row_filter: None,
@@ -867,6 +886,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             target_schema: config.target_schema,
             compute: config.compute,
             adapter: config.adapter,
+            propagate: config.propagate,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: config.tags.into_inner(),
@@ -962,6 +982,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             target_alias: config.__warehouse_specific_config__.target_alias,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            persist_constraints: config.__warehouse_specific_config__.persist_constraints,
             unique_tmp_table_suffix: config.__warehouse_specific_config__.unique_tmp_table_suffix,
             // Redshift fields
             auto_refresh: config.__warehouse_specific_config__.auto_refresh,
@@ -1237,6 +1258,42 @@ __warehouse_specific_config__: {}
         let state = child
             .state
             .expect("state should propagate from parent to child via default_to");
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.evaluate_volatile_sql, Some(true));
+        assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
+    }
+
+    /// Regression for #16135: a snapshot that sets one `state:` key keeps the keys
+    /// the project layer set.
+    #[test]
+    fn test_snapshot_config_state_merges_field_by_field() {
+        use crate::schemas::project::dbt_project::ResolvableConfig;
+
+        let parent = SnapshotConfig {
+            state: Some(ModelState {
+                lag_tolerance: None,
+                require_fresh_data_from: None,
+                evaluate_volatile_sql: Some(true),
+                pre_clone: Some(StatePreClone::IfMissing),
+                execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        let mut child = SnapshotConfig {
+            state: Some(ModelState {
+                lag_tolerance: None,
+                require_fresh_data_from: Some(UpdatesOn::All),
+                evaluate_volatile_sql: None,
+                pre_clone: None,
+                execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        child.default_to(&parent);
+
+        let state = child.state.expect("state should survive the merge");
         assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
         assert_eq!(state.evaluate_volatile_sql, Some(true));
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));

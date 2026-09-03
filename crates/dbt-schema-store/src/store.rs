@@ -27,9 +27,9 @@ type Timestamp = u128;
 
 const DATA_DIR_NAME: &str = "data";
 /// Epoch-append parquet dir for compile-time analyzed schemas (no TTL).
-const SCHEMAS_ANALYZED_DIR: &str = "metadata/compile/schemas";
+const SCHEMAS_ANALYZED_DIR: &str = "private/metadata/compile/schemas";
 /// Epoch-append parquet dir for warehouse-fetched remote schemas (has TTL).
-const SCHEMAS_REMOTE_DIR: &str = "metadata/warehouse/schemas";
+const SCHEMAS_REMOTE_DIR: &str = "private/metadata/warehouse/schemas";
 const DBT_SCHEMA_ORIGIN_KEY: &str = "DBT:schema_origin";
 
 /// Lookup key representing the origin of a schema entry.

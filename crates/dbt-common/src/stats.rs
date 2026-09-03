@@ -49,9 +49,9 @@ impl NodeStatus {
             NodeStatus::ReusedNoChanges(msg) => msg.clone(),
             NodeStatus::ReusedStillFresh(msg, _, _) => msg.clone(),
             NodeStatus::ReusedStillFreshNoChanges(msg) => msg.clone(),
-            NodeStatus::ReusedCloned(None) => "Cloned from cached relation".to_string(),
+            NodeStatus::ReusedCloned(None) => "Cloned from other environment".to_string(),
             NodeStatus::ReusedCloned(Some(_)) => {
-                "Cloned from cached relation within freshness tolerance".to_string()
+                "Cloned from other environment within tolerance".to_string()
             }
             NodeStatus::StaticallyCheckedDataTest => "Statically checked".to_string(),
             NodeStatus::SucceededWithWarning => "Warn".to_string(),
@@ -280,11 +280,11 @@ mod tests {
         );
         assert_eq!(
             NodeStatus::ReusedCloned(None).default_message(),
-            "Cloned from cached relation"
+            "Cloned from other environment"
         );
         assert_eq!(
             NodeStatus::ReusedCloned(Some(3600)).default_message(),
-            "Cloned from cached relation within freshness tolerance"
+            "Cloned from other environment within tolerance"
         );
     }
 

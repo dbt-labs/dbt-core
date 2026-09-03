@@ -41,7 +41,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
             ctx,
             node.as_ref(),
             &clone,
-            ctx.adapter_type(),
+            node.node_adapter(),
             ctx.dbt_profile().threads,
             None,
             false,
@@ -125,7 +125,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
         ctx,
         node.as_ref(),
         &clone,
-        ctx.adapter_type(),
+        node.node_adapter(),
         ctx.dbt_profile().threads,
         None,
         false,
@@ -373,6 +373,10 @@ impl DevCloneCandidate {
                 }
                 .to_string(),
             ),
+            // Live-verified against Snowflake (account ktb38830, 2026-09-01): `CREATE
+            // INTERACTIVE TABLE ... CLONE ...` is not valid DDL in any form (bare, CREATE OR
+            // REPLACE, cross-schema/database, AT/BEFORE time travel).
+            DbtMaterialization::InteractiveTable => None,
             _ => None,
         }
     }
@@ -389,7 +393,8 @@ async fn prepare_dev_clone_request(
     candidate: &DevCloneCandidate,
     policy: CloneIncrementalInDev,
 ) -> FsResult<Option<PreparedDevClone>> {
-    let target_relation = create_relation_from_node(ctx.adapter_type(), candidate.local(), None)?;
+    let target_relation =
+        create_relation_from_node(ctx.default_adapter_type(), candidate.local(), None)?;
     let target_relation: Arc<dyn BaseRelation> = target_relation.into();
     let target_table = target_relation.semantic_fqn();
 
@@ -420,7 +425,7 @@ async fn prepare_dev_clone_request(
     }
 
     let source_relation =
-        create_relation_from_node(ctx.adapter_type(), candidate.deferred(), None)?;
+        create_relation_from_node(ctx.default_adapter_type(), candidate.deferred(), None)?;
     let source_relation: Arc<dyn BaseRelation> = source_relation.into();
     let clone_source_table = source_relation.semantic_fqn();
     if target_table == clone_source_table {
@@ -453,16 +458,16 @@ async fn prepare_dev_clone_request(
 
     let request = CloneRequestInput {
         target_table: target_table.clone(),
-        dialect: ctx.adapter_type().to_string(),
+        dialect: ctx.default_adapter_type().to_string(),
         default_catalog: candidate.local().database(),
         execution_type: candidate.execution_type(&ctx.inner.materialization_resolver)?,
         clone_source_table: clone_source_table.clone(),
         clone_source_last_modified_epoch: source_last_modified_epoch,
         labels: node_identity(candidate.local()).labels(),
-        clone_source_table_type: candidate.clone_source_table_type(ctx.adapter_type()),
+        clone_source_table_type: candidate.clone_source_table_type(ctx.default_adapter_type()),
         table_properties: candidate.table_properties(),
         clone_chain_depth_limit: clone_chain_depth_limit_for_adapter(
-            ctx.adapter_type(),
+            ctx.default_adapter_type(),
             false,
             ctx.dbt_profile().allow_clones,
         ),
@@ -675,6 +680,49 @@ mod tests {
         assert_eq!(
             candidate.pre_clone_policy(),
             Some(CloneIncrementalInDev::Always)
+        );
+    }
+
+    #[test]
+    fn clone_source_table_type_returns_none_for_interactive_table_because_snowflake_cannot_clone_it()
+     {
+        // See `clone_source_table_type`: Snowflake cannot clone an interactive table.
+        let mut local = make_model(
+            "dev",
+            "analytics_dev",
+            "orders",
+            DbtMaterialization::InteractiveTable,
+        );
+        let candidate = DevCloneCandidate::Model {
+            local: Arc::new(local.clone()),
+            deferred: Arc::new(make_model(
+                "prod",
+                "analytics",
+                "orders",
+                DbtMaterialization::InteractiveTable,
+            )),
+        };
+        assert_eq!(
+            candidate.clone_source_table_type(AdapterType::Snowflake),
+            None
+        );
+
+        local
+            .deprecated_config
+            .__warehouse_specific_config__
+            .transient = Some(true);
+        let candidate = DevCloneCandidate::Model {
+            local: Arc::new(local),
+            deferred: Arc::new(make_model(
+                "prod",
+                "analytics",
+                "orders",
+                DbtMaterialization::InteractiveTable,
+            )),
+        };
+        assert_eq!(
+            candidate.clone_source_table_type(AdapterType::Snowflake),
+            None
         );
     }
 

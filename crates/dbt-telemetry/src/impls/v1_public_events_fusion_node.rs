@@ -87,6 +87,7 @@ impl NodeMaterialization {
             Self::Analysis => "analysis",
             Self::StreamingTable => "streaming_table",
             Self::DynamicTable => "dynamic_table",
+            Self::InteractiveTable => "interactive_table",
             Self::Function => "function",
             Self::Custom => "custom",
         }
@@ -490,6 +491,14 @@ impl NodeProcessed {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interactive_table_as_static_ref() {
+        assert_eq!(
+            NodeMaterialization::InteractiveTable.as_static_ref(),
+            "interactive_table"
+        );
+    }
 
     fn processed(node_type: NodeType, phase: ExecutionPhase) -> NodeProcessed {
         let mut event = NodeProcessed::start(

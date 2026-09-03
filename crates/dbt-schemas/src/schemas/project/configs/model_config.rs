@@ -1,4 +1,5 @@
 use crate::schemas::common::ClusterConfig;
+use crate::schemas::serde::AdapterTypeOrArray;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::QueryTag;
@@ -118,6 +119,9 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+adapter")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    #[serde(rename = "+propagate")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(rename = "+cluster_by")]
     pub cluster_by: Option<ClusterConfig>,
     #[serde(rename = "+clustered_by")]
@@ -157,7 +161,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+databricks_compute")]
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+submission_method")]
     pub submission_method: Option<String>,
     #[serde(rename = "+job_cluster_config")]
@@ -194,6 +198,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub incremental_apply_config_changes: Option<bool>,
+    #[serde(
+        default,
+        rename = "+persist_constraints",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub persist_constraints: Option<bool>,
     #[serde(
         default,
         rename = "+use_safer_relation_operations",
@@ -483,6 +493,12 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub skip_not_matched_step: Option<bool>,
+    #[serde(
+        default,
+        rename = "+skip_optimize",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub skip_optimize: Option<bool>,
     #[serde(default, rename = "+secure", deserialize_with = "bool_or_string_bool")]
     pub secure: Option<bool>,
     #[serde(rename = "+sort")]
@@ -669,6 +685,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.catalog.is_some()
             || self.catalog_name.is_some()
             || self.adapter.is_some()
+            || self.propagate.is_some()
             || self.cluster_by.is_some()
             || self.clustered_by.is_some()
             || self.column_types.is_some()
@@ -693,6 +710,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.environment_key.is_some()
             || self.environment_dependencies.is_some()
             || self.incremental_apply_config_changes.is_some()
+            || self.persist_constraints.is_some()
             || self.use_safer_relation_operations.is_some()
             || self.view_update_via_alter.is_some()
             || self.description.is_some()
@@ -776,6 +794,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.schema.is_present()
             || self.skip_matched_step.is_some()
             || self.skip_not_matched_step.is_some()
+            || self.skip_optimize.is_some()
             || self.secure.is_some()
             || self.sort.is_some()
             || self.sort_type.is_some()
@@ -829,6 +848,10 @@ pub struct ModelConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     // need default to ensure None if field is not set
     // serialize_with ensures meta is always present (as {} when None) for Jinja macros
     // that access node.config.meta.get(...)
@@ -955,6 +978,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             environment_dependencies: config.environment_dependencies.clone(),
             catalog_name: config.catalog_name.clone(),
             adapter: config.adapter,
+            propagate: config.propagate,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -1061,6 +1085,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 intermediate_format: config.intermediate_format,
                 storage_uri: config.storage_uri,
                 incremental_apply_config_changes: config.incremental_apply_config_changes,
+                persist_constraints: config.persist_constraints,
                 use_safer_relation_operations: config.use_safer_relation_operations,
                 view_update_via_alter: config.view_update_via_alter,
 
@@ -1088,6 +1113,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                skip_optimize: config.skip_optimize,
                 unique_tmp_table_suffix: config.unique_tmp_table_suffix,
                 schedule: config.schedule,
                 row_filter: config.row_filter,
@@ -1154,6 +1180,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             bind: config.__warehouse_specific_config__.bind,
             catalog_name: config.catalog_name,
             adapter: config.adapter,
+            propagate: config.propagate,
             column_types: config.column_types,
             compute: config.compute,
             concurrent_batches: config.concurrent_batches,
@@ -1313,6 +1340,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             target_alias: config.__warehouse_specific_config__.target_alias,
             skip_matched_step: config.__warehouse_specific_config__.skip_matched_step,
             skip_not_matched_step: config.__warehouse_specific_config__.skip_not_matched_step,
+            skip_optimize: config.__warehouse_specific_config__.skip_optimize,
             storage_serialization_policy: config
                 .__warehouse_specific_config__
                 .storage_serialization_policy,
@@ -1326,6 +1354,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             incremental_apply_config_changes: config
                 .__warehouse_specific_config__
                 .incremental_apply_config_changes,
+            persist_constraints: config.__warehouse_specific_config__.persist_constraints,
             use_safer_relation_operations: config
                 .__warehouse_specific_config__
                 .use_safer_relation_operations,
@@ -1408,7 +1437,7 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
         // the node's effective adapter, which is only known once every config layer
         // has merged -- and `finalize` has already collapsed `materialized` to the
         // static `view` default by the time a caller could inspect it.
-        if self.adapter.or(default_adapter) == Some(AdapterType::Alt) {
+        if self.adapter.or(default_adapter) == Some(AdapterType::LakeCompute) {
             if self.materialized.is_none() {
                 self.materialized = Some(DbtMaterialization::Table);
             }
@@ -1473,6 +1502,7 @@ impl ModelConfig {
         let enabled_eq = self.enabled == other.enabled;
         let catalog_name_eq = self.catalog_name == other.catalog_name;
         let adapter_eq = self.adapter == other.adapter;
+        let propagate_eq = self.propagate == other.propagate;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
         let materialized_eq_result = materialized_eq(&self.materialized, &other.materialized);
         let incremental_strategy_eq = self.incremental_strategy == other.incremental_strategy;
@@ -1533,6 +1563,7 @@ impl ModelConfig {
         let result = enabled_eq
             && catalog_name_eq
             && adapter_eq
+            && propagate_eq
             && meta_eq_result
             && materialized_eq_result
             && incremental_strategy_eq
@@ -1595,6 +1626,14 @@ impl ModelConfig {
                         Some((
                             format!("{:?}", &self.adapter),
                             format!("{:?}", &other.adapter),
+                        )),
+                    ),
+                    (
+                        "propagate",
+                        propagate_eq,
+                        Some((
+                            format!("{:?}", &self.propagate),
+                            format!("{:?}", &other.propagate),
                         )),
                     ),
                     (
@@ -2005,9 +2044,48 @@ mod tests {
     use super::ModelConfig;
     use crate::schemas::common::{ConstraintType, FreshnessPeriod, UpdatesOn};
     use crate::schemas::manifest::ManifestModelConfig;
+    use crate::schemas::project::WarehouseSpecificNodeConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
+    use crate::schemas::project::dbt_project::ResolvableConfig;
     use crate::schemas::properties::StatePreClone;
-    use crate::schemas::serde::StringOrArrayOfStrings;
+    use crate::schemas::serde::{AdapterTypeOrArray, StringOrArrayOfStrings};
+    use dbt_adapter_core::AdapterType;
+
+    /// `+propagate` rides the same project -> node -> project path `+adapter`
+    /// does, in both its single-value and list forms.
+    #[test]
+    fn test_project_model_config_propagate_parses_and_round_trips() {
+        let single: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++propagate: snowflake
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            single.propagate,
+            Some(AdapterTypeOrArray::One(AdapterType::Snowflake))
+        );
+
+        let model_config: ModelConfig = single.into();
+        let round_tripped: ProjectModelConfig = model_config.into();
+        assert_eq!(
+            round_tripped.propagate,
+            Some(AdapterTypeOrArray::One(AdapterType::Snowflake))
+        );
+
+        let list: ProjectModelConfig = dbt_yaml::from_str(
+            r#"
++propagate: [snowflake]
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            list.propagate,
+            Some(AdapterTypeOrArray::Many(vec![AdapterType::Snowflake]))
+        );
+    }
 
     #[test]
     fn test_model_clustered_by_accepts_ordered_list() {
@@ -2162,6 +2240,37 @@ __additional_properties__: {}
     }
 
     #[test]
+    fn test_skip_optimize_inherits_from_parent_model_config() {
+        let parent = ModelConfig {
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                skip_optimize: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let mut inherited = ModelConfig::default();
+        inherited.default_to(&parent);
+        assert_eq!(
+            inherited.__warehouse_specific_config__.skip_optimize,
+            Some(true)
+        );
+
+        let mut overridden = ModelConfig {
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                skip_optimize: Some(false),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        overridden.default_to(&parent);
+        assert_eq!(
+            overridden.__warehouse_specific_config__.skip_optimize,
+            Some(false)
+        );
+    }
+
+    #[test]
     fn test_classifiers_merge_in_default_to() {
         use crate::schemas::project::configs::config_merge::Classifiers;
         use crate::schemas::project::dbt_project::ResolvableConfig;
@@ -2248,6 +2357,51 @@ __warehouse_specific_config__: {}
         assert_eq!(state.evaluate_volatile_sql, Some(true));
         assert_eq!(state.pre_clone, Some(StatePreClone::IfMissing));
         assert_eq!(state.execute_hooks_on_any_reuse, Some(true));
+    }
+
+    /// Regression for #16135: `state:` keys merge key by key, so a model that sets
+    /// only `require_fresh_data_from` still inherits the project-level `lag_tolerance`.
+    #[test]
+    fn test_model_config_state_merges_field_by_field() {
+        use crate::schemas::common::ModelFreshnessRules;
+        use crate::schemas::properties::ModelState;
+
+        let parent = ModelConfig {
+            state: Some(ModelState {
+                lag_tolerance: Some(ModelFreshnessRules {
+                    count: Some(1),
+                    period: Some(FreshnessPeriod::minute),
+                    updates_on: None,
+                }),
+                require_fresh_data_from: None,
+                evaluate_volatile_sql: None,
+                pre_clone: Some(StatePreClone::Always),
+                execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        let mut child = ModelConfig {
+            state: Some(ModelState {
+                lag_tolerance: None,
+                require_fresh_data_from: Some(UpdatesOn::All),
+                evaluate_volatile_sql: None,
+                pre_clone: None,
+                execute_hooks_on_any_reuse: None,
+                compare_unrendered_code: None,
+            }),
+            ..Default::default()
+        };
+        child.default_to(&parent);
+
+        let state = child.state.expect("state should survive the merge");
+        let lag_tolerance = state
+            .lag_tolerance
+            .expect("project-level lag_tolerance should be inherited");
+        assert_eq!(lag_tolerance.count, Some(1));
+        assert_eq!(lag_tolerance.period, Some(FreshnessPeriod::minute));
+        assert_eq!(state.require_fresh_data_from, Some(UpdatesOn::All));
+        assert_eq!(state.pre_clone, Some(StatePreClone::Always));
     }
 
     /// Regression for fs#13343: Core accepts a sequence-valued `column_types` entry
@@ -2861,7 +3015,7 @@ __additional_properties__: {}
         #[test]
         fn an_unconfigured_lake_compute_model_is_an_iceberg_table() {
             let config = ModelConfig {
-                adapter: Some(AdapterType::Alt),
+                adapter: Some(AdapterType::LakeCompute),
                 ..Default::default()
             };
             let (materialized, table_format) = resolved(config, Some(AdapterType::Snowflake));
@@ -2873,7 +3027,7 @@ __additional_properties__: {}
         #[test]
         fn an_authored_materialization_and_table_format_survive() {
             let config = ModelConfig {
-                adapter: Some(AdapterType::Alt),
+                adapter: Some(AdapterType::LakeCompute),
                 materialized: Some(DbtMaterialization::View),
                 table_format: Some("default".to_string()),
                 ..Default::default()
@@ -2888,7 +3042,7 @@ __additional_properties__: {}
         #[test]
         fn a_lake_compute_target_defaults_its_nodes_too() {
             let (materialized, table_format) =
-                resolved(ModelConfig::default(), Some(AdapterType::Alt));
+                resolved(ModelConfig::default(), Some(AdapterType::LakeCompute));
             assert_eq!(materialized, Some(DbtMaterialization::Table));
             assert_eq!(table_format.as_deref(), Some("iceberg"));
         }
@@ -2899,7 +3053,7 @@ __additional_properties__: {}
                 adapter: Some(AdapterType::Snowflake),
                 ..Default::default()
             };
-            let (materialized, table_format) = resolved(config, Some(AdapterType::Alt));
+            let (materialized, table_format) = resolved(config, Some(AdapterType::LakeCompute));
             assert_eq!(materialized, None, "left for the static `view` default");
             assert_eq!(table_format, None);
         }

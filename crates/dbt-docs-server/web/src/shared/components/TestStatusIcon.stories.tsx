@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import type { TestStatus } from '@dbt-labs/dbt-dag';
-
+import type { TestStatus } from '../util/testStatus';
 import { TestStatusIcon } from './TestStatusIcon';
 
 const meta: Meta<typeof TestStatusIcon> = {

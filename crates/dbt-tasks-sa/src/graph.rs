@@ -165,7 +165,6 @@ impl GraphBuilder {
                             phases,
                             self.static_analysis_buckets.as_ref(),
                             aggregation,
-                            self.arg.infer_schemas,
                         )
                     } else {
                         // Freshness and `jinja-check` legitimately produce an
@@ -204,7 +203,6 @@ impl GraphBuilder {
         phases: &[TP],
         buckets: &dyn StaticAnalysisBuckets,
         generic_test_aggregation: Option<&GenericTestAggregation>,
-        infer_schemas: bool,
     ) -> (DiGraph<Arc<dyn Task>, ()>, BTreeSet<String>) {
         // Build reverse dependencies map once for efficient propagation
         let reverse_deps = build_reverse_deps(&schedule.deps);
@@ -325,27 +323,13 @@ impl GraphBuilder {
                                         graph.update_edge(from_idx, to_idx, ());
                                     }
                                 });
-                                if infer_schemas {
-                                    deps.iter().for_each(|dep| {
-                                        if let Some(dep_phases) = node_to_phases.get(dep)
-                                            && dep_phases.contains(&TP::Analyze)
-                                            && let Some(&from_idx) =
-                                                node_indices.get(&(TP::Analyze, dep.clone()))
-                                        {
-                                            graph.update_edge(from_idx, to_idx, ());
-                                        }
-                                    });
-                                }
                                 continue;
                             } else {
                                 // find the first upstream nodes with the same phase and add an
                                 // edge to the current node. Except for analyze -> analyze edges
                                 // between baseline nodes, because baseline analyze is only for the
                                 // node itself
-                                if phase == TP::Analyze
-                                    && !infer_schemas
-                                    && buckets.in_baseline_closure(unique_id)
-                                {
+                                if phase == TP::Analyze && buckets.in_baseline_closure(unique_id) {
                                     continue;
                                 }
 

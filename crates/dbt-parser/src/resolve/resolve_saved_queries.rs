@@ -283,6 +283,8 @@ pub async fn resolve_saved_queries(
                 __base_attr__: NodeBaseAttributes {
                     // Not executed against a warehouse; records the target it parsed under.
                     adapter: adapter_type,
+                    // This node type has no `+propagate` config; nothing is published.
+                    propagate: Vec::new(),
                     database: database.unwrap_or_default(),
                     schema: schema.unwrap_or_default(),
                     alias: alias.unwrap_or_default(),

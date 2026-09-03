@@ -62,9 +62,18 @@ impl OAuthAbortHandle {
 /// but a refresh token is present, this resolver will attempt to exchange the
 /// refresh token for new credentials before returning.
 ///
-/// # Client ID matching
+/// # Client ID and account matching
 ///
-/// Only sessions for the given `client_id` are considered.
+/// Only sessions for the given `client_id` are considered. When `account_id` is
+/// set, only sessions for that dbt platform account are considered — a cache
+/// holding sessions for several accounts then resolves the configured one
+/// instead of whichever session happens to come first. If no session matches
+/// the requested account, [`AuthError::NotAuthenticated`] is returned so the
+/// caller's chain can fall through to another resolver rather than silently
+/// authenticating against the wrong account.
+///
+/// Accounts are compared as strings, the form every caller's configuration
+/// carries them in; the session's numeric id is rendered for the comparison.
 ///
 /// # Scope checking
 ///
@@ -82,6 +91,8 @@ pub struct OAuthPassiveResolver {
     pub client_id: String,
     /// Scopes required by the caller. Session must grant all of these.
     pub scopes: Vec<String>,
+    /// dbt platform account the session must belong to. `None` accepts any account.
+    pub account_id: Option<String>,
     /// Override for the session cache path. Defaults to `~/.dbt/oauth_sessions.json`.
     pub cache_path: Option<PathBuf>,
     /// HTTP client used for token refresh requests.
@@ -96,6 +107,7 @@ impl OAuthPassiveResolver {
         Self {
             client_id: client_id.into(),
             scopes: vec![],
+            account_id: None,
             cache_path: None,
             http: reqwest::Client::default(),
             token_endpoint_override: None,
@@ -139,6 +151,11 @@ impl OAuthPassiveResolver {
             .sessions
             .iter()
             .filter(|s| s.client_id == self.client_id)
+            .filter(|s| {
+                self.account_id
+                    .as_deref()
+                    .is_none_or(|want| s.account_id.to_string() == want)
+            })
             .collect();
 
         if matching.is_empty() {
@@ -1011,6 +1028,7 @@ mod tests {
         OAuthPassiveResolver {
             client_id: "test_client".into(),
             scopes: vec![],
+            account_id: None,
             cache_path: Some(path),
             http: reqwest::Client::new(),
             token_endpoint_override: None,
@@ -1326,12 +1344,69 @@ mod tests {
         let r = OAuthPassiveResolver {
             client_id: "other_client".into(),
             scopes: vec![],
+            account_id: None,
             cache_path: Some(f.path().to_path_buf()),
             http: reqwest::Client::new(),
             token_endpoint_override: None,
         };
         let err = r.resolve().await.unwrap_err();
         assert!(matches!(err, AuthError::NotAuthenticated));
+    }
+
+    #[tokio::test]
+    async fn configured_account_id_selects_matching_session() {
+        let mut session_a = make_session(future_time(), None);
+        session_a.account_id = 1;
+
+        let mut session_b = make_session(future_time(), None);
+        session_b.account_id = 2;
+        session_b.access_token = "tok_b".into();
+
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![session_a, session_b],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.account_id = Some("2".to_string());
+        let cred = r.resolve().await.unwrap();
+        assert_eq!(cred.token(), "tok_b");
+        assert_eq!(cred.account_id(), 2);
+    }
+
+    #[tokio::test]
+    async fn configured_account_id_without_session_returns_not_authenticated() {
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![make_session(future_time(), None)],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.account_id = Some("999".to_string());
+        let err = r.resolve().await.unwrap_err();
+        assert!(matches!(err, AuthError::NotAuthenticated));
+    }
+
+    #[tokio::test]
+    async fn configured_account_id_ignores_refresh_token_of_other_account() {
+        // The other account's session is expired but refreshable; without an
+        // account filter it would be refreshed and returned.
+        let mut other = make_session(past_time(), Some("refresh_tok".into()));
+        other.account_id = 1;
+
+        let mut wanted = make_session(future_time(), None);
+        wanted.account_id = 2;
+        wanted.access_token = "tok_wanted".into();
+
+        let cache = OAuthSessionCache {
+            version: 1,
+            sessions: vec![other, wanted],
+        };
+        let f = write_cache(&cache);
+        let mut r = resolver_at(f.path().to_path_buf());
+        r.account_id = Some("2".to_string());
+        let cred = r.resolve().await.unwrap();
+        assert_eq!(cred.token(), "tok_wanted");
     }
 
     // ── Scope helper unit tests ───────────────────────────────────────────────

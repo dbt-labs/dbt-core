@@ -58,6 +58,10 @@ type TabsParams = {
   activeTab?: TabType | null;
   /** Called when user clicks a tab. Required when `activeTab` is provided. */
   onTabChange?: (tab: TabType) => void;
+  /** Rendered above the tab nav, inside the same sticky-positioned block
+   *  (e.g. AssetHeader) -- so the page header and tab nav scroll together
+   *  and stay pinned while only the tab content underneath scrolls. */
+  stickyHeader?: ReactNode;
 };
 
 const DetailTabs: FC<TabsParams> = ({
@@ -66,6 +70,7 @@ const DetailTabs: FC<TabsParams> = ({
   children,
   activeTab,
   onTabChange,
+  stickyHeader,
 }) => {
   const [internalTab, setInternalTab] = useState<TabType | null>(null);
 
@@ -86,34 +91,39 @@ const DetailTabs: FC<TabsParams> = ({
     <div
       className={`${show ? 'opacity-100' : 'opacity-0'} duration-300 motion-reduce:duration-0`}
     >
-      {tabs.length > 1 && (
-        <div className="overflow-x-auto">
-          <FloatingTabs
-            testId="resource-view-tabs"
-            value={resolvedTab.type}
-            onValueChange={(value) => handleTabChange(value as TabType)}
-          >
-            {tabs.map((tabDetails) => (
-              <FloatingTabs.Tab
-                key={tabNameMap[tabDetails.type]}
-                id={tabDetails.type}
-                count={tabDetails.count}
-                testId={`resource-view-tabs-${tabDetails.type}`}
+      {(stickyHeader || tabs.length > 1) && (
+        <div className="sticky top-0 z-10 flex flex-col gap-6 bg-bgMain">
+          {stickyHeader}
+          {tabs.length > 1 && (
+            <div className="overflow-x-auto">
+              <FloatingTabs
+                testId="resource-view-tabs"
+                value={resolvedTab.type}
+                onValueChange={(value) => handleTabChange(value as TabType)}
               >
-                <span className="flex items-center gap-1.5">
-                  {tabNameMap[tabDetails.type]}
-                  {tabAnnotationMap[tabDetails.type] &&
-                    tabDetails.count === undefined && (
-                      <Badge
-                        text={tabAnnotationMap[tabDetails.type]!}
-                        variant="default"
-                        size="xs"
-                      />
-                    )}
-                </span>
-              </FloatingTabs.Tab>
-            ))}
-          </FloatingTabs>
+                {tabs.map((tabDetails) => (
+                  <FloatingTabs.Tab
+                    key={tabNameMap[tabDetails.type]}
+                    id={tabDetails.type}
+                    count={tabDetails.count}
+                    testId={`resource-view-tabs-${tabDetails.type}`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {tabNameMap[tabDetails.type]}
+                      {tabAnnotationMap[tabDetails.type] &&
+                        tabDetails.count === undefined && (
+                          <Badge
+                            text={tabAnnotationMap[tabDetails.type]!}
+                            variant="default"
+                            size="xs"
+                          />
+                        )}
+                    </span>
+                  </FloatingTabs.Tab>
+                ))}
+              </FloatingTabs>
+            </div>
+          )}
         </div>
       )}
       <>{resolvedTab.type && children(resolvedTab.type)}</>

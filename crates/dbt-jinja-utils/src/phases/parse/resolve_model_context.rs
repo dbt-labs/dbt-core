@@ -222,6 +222,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
             // A placeholder node built during parse, before `+adapter` is resolved;
             // the target default is the only answer available here.
             adapter: adapter_type,
+            propagate: Vec::new(),
             materialized: ModelConfig::default_materialized(),
             static_analysis: global_static_analysis.unwrap_or_default().into(),
             static_analysis_off_reason: None,

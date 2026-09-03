@@ -191,6 +191,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         root_project_name: &str,
         collected_generic_tests: &mut Vec<GenericTestAsset>,
         test_name_truncations: &mut HashMap<String, String>,
+        seen_generic_test_paths: &mut HashMap<PathBuf, String>,
         adapter_type: AdapterType,
         io_args: &IoArgs,
         original_file_path: &Path,
@@ -225,6 +226,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         original_file_path,
                         &mut seen_tests,
                         test_name_truncations,
+                        seen_generic_test_paths,
                         &[],
                         suppress_deprecated_test_validation,
                         LegacyTestSyntaxHandling::Strict,
@@ -265,6 +267,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             original_file_path,
                             &mut seen_tests,
                             test_name_truncations,
+                            seen_generic_test_paths,
                             &entry.tags,
                             suppress_deprecated_test_validation,
                             entry.legacy_syntax_handling,
@@ -277,6 +280,37 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         }
 
         Ok(())
+    }
+}
+
+/// Path for a generated generic-test SQL asset. Distinct tests can flatten to the
+/// same generated name (e.g. `not_null` on `orders.status_code` vs `orders_status.code`),
+/// and the name-keyed default path would let the second test overwrite the first one's
+/// SQL file and silently drop it from the manifest. On collision, suffix the kwargs
+/// hash (already unique per test, mirroring the `unique_id`) to keep the assets apart.
+///
+/// Keyed on path -> test_hash (not just path) so that re-deriving the exact same test
+/// on a later pass (e.g. versioned models are resolved once per version SQL file, and
+/// shared column tests get re-derived identically each time) is idempotent rather than
+/// being mistaken for a real collision.
+fn generic_test_asset_path(
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
+    full_name: &str,
+    test_hash: &str,
+) -> PathBuf {
+    let default_path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
+    match seen_generic_test_paths.get(&default_path) {
+        None => {
+            seen_generic_test_paths.insert(default_path.clone(), test_hash.to_string());
+            default_path
+        }
+        Some(existing_hash) if existing_hash == test_hash => default_path,
+        Some(_) => {
+            let hashed_path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME)
+                .join(format!("{full_name}_{test_hash}.sql"));
+            seen_generic_test_paths.insert(hashed_path.clone(), test_hash.to_string());
+            hashed_path
+        }
     }
 }
 
@@ -293,6 +327,7 @@ fn persist_inner(
     original_file_path: &Path,
     seen_tests: &mut HashSet<String>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     column_tags: &[String],
     suppress_deprecated_test_validation: bool,
     legacy_syntax_handling: LegacyTestSyntaxHandling,
@@ -353,7 +388,7 @@ fn persist_inner(
     );
     let unique_id = format!("{}.{}", full_name, test_hash);
 
-    let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
+    let path = generic_test_asset_path(seen_generic_test_paths, &full_name, &test_hash);
     let test_file = io_args.out_dir.join(&path);
     let generated_test_sql = generate_test_macro(
         test_macro_name.as_str(),
@@ -1762,6 +1797,38 @@ mod tests {
     use dbt_schemas::schemas::data_tests::{CustomTestInner, CustomTestMultiKey};
     use serde_json::Value;
     use std::collections::{BTreeMap, HashMap};
+
+    #[test]
+    fn test_generic_test_asset_path_disambiguates_name_collisions() {
+        // `not_null` on `orders.status_code` and on `orders_status.code` both flatten
+        // to the same generated name; the second asset must not reuse the first path.
+        let mut seen = HashMap::new();
+        let first = generic_test_asset_path(&mut seen, "not_null_orders_status_code", "aaaaaaaaaa");
+        let second =
+            generic_test_asset_path(&mut seen, "not_null_orders_status_code", "bbbbbbbbbb");
+        assert_eq!(
+            first,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join("not_null_orders_status_code.sql")
+        );
+        assert_eq!(
+            second,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME)
+                .join("not_null_orders_status_code_bbbbbbbbbb.sql")
+        );
+
+        // Non-colliding names keep the plain (hash-free) path.
+        let other = generic_test_asset_path(&mut seen, "not_null_orders_id", "cccccccccc");
+        assert_eq!(
+            other,
+            PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join("not_null_orders_id.sql")
+        );
+
+        // Re-deriving the exact same test (same full_name AND same test_hash) is
+        // idempotent, not a collision: versioned models resolve shared column tests
+        // once per version SQL file, re-deriving identical paths on each pass.
+        let rederived = generic_test_asset_path(&mut seen, "not_null_orders_id", "cccccccccc");
+        assert_eq!(rederived, other);
+    }
 
     #[test]
     fn test_format_node_unique_id_shapes() {
@@ -3764,6 +3831,7 @@ mod tests {
             &io_args,
             Path::new("models/schema.yml"),
             &mut HashSet::new(),
+            &mut HashMap::new(),
             &mut HashMap::new(),
             &[],
             false,

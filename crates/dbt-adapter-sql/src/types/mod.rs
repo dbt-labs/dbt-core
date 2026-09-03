@@ -1895,7 +1895,7 @@ fn metadata_type_candidate_keys(backend: AdapterType) -> &'static [&'static str]
         AdapterType::Databricks => &DATABRICKS_KEYS,
         AdapterType::Spark => &SPARK_KEYS,
         AdapterType::Redshift => &REDSHIFT_KEYS,
-        AdapterType::DuckDB | AdapterType::Alt => &DUCKDB_KEYS,
+        AdapterType::DuckDB | AdapterType::LakeCompute => &DUCKDB_KEYS,
         AdapterType::Fabric => &SQLSERVER_KEYS,
         AdapterType::ClickHouse => &CLICKHOUSE_KEYS,
         AdapterType::Athena => &ATHENA_KEYS,

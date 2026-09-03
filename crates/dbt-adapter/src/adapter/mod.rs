@@ -19,12 +19,11 @@ use crate::time_machine::TimeMachine;
 use crate::value::*;
 use crate::{AdapterResponse, AdapterResult};
 
-use crate::auth::DefaultAuthWarningPrinter;
 use adbc_core::options::OptionValue;
 use dbt_adapter_core::AdapterType;
 use dbt_adbc::QueryCtx;
 use dbt_agate::AgateTable;
-use dbt_auth::{AdapterConfig, Auth, AuthWarningPrinter, auth_for_backend};
+use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{CancellationToken, never_cancels};
 use dbt_common::{AdapterError, AdapterErrorKind, FsResult};
@@ -56,8 +55,10 @@ use std::sync::Arc;
 
 pub mod adapter_factory;
 pub mod adapter_impl;
+pub mod store;
 pub use adapter_factory::*;
 pub use adapter_impl::{AdapterImpl, alias_types_from_state, quote_component, quote_ident};
+pub use store::{AdapterBuilder, AdapterStore};
 #[cfg(test)]
 mod tests;
 
@@ -182,9 +183,7 @@ impl Adapter {
     ) -> Box<ParseAdapterState> {
         let backend = backend_of(adapter_type);
 
-        let warning_printer =
-            Box::new(DefaultAuthWarningPrinter::new()) as Box<dyn AuthWarningPrinter>;
-        let auth: Arc<dyn Auth> = auth_for_backend(warning_printer, backend).into();
+        let auth: Arc<dyn Auth> = auth_for_backend(backend).into();
         let adapter_config = AdapterConfig::new(config);
         let quoting = package_quoting
             .try_into()
@@ -707,7 +706,7 @@ impl Adapter {
                 | AdapterType::Spark
                 | AdapterType::Databricks
                 | AdapterType::DuckDB
-                | AdapterType::Alt => {
+                | AdapterType::LakeCompute => {
                     format!("({expr1} IS NOT DISTINCT FROM {expr2})")
                 }
                 _ => format!(
@@ -1985,6 +1984,40 @@ impl Adapter {
                     None
                 };
 
+                if adapter.adapter_type() == AdapterType::Bigquery {
+                    if let Some(replay_adapter) = adapter.as_replay() {
+                        let is_replaceable_next = replay_adapter
+                            .replay_peek_is_replaceable_next(state)
+                            .map_err(|e| {
+                                minijinja::Error::new(
+                                    minijinja::ErrorKind::UndefinedError,
+                                    e.to_string(),
+                                )
+                            })?;
+                        if is_replaceable_next {
+                            let val = replay_adapter.replay_is_replaceable(state).map_err(|e| {
+                                minijinja::Error::new(
+                                    minijinja::ErrorKind::UndefinedError,
+                                    e.to_string(),
+                                )
+                            })?;
+                            return Ok(Value::from(val));
+                        } else if relation.is_some() {
+                            let execute_next = replay_adapter
+                                .replay_peek_execute_next(state)
+                                .map_err(|e| {
+                                    minijinja::Error::new(
+                                        minijinja::ErrorKind::UndefinedError,
+                                        e.to_string(),
+                                    )
+                                })?;
+                            if execute_next {
+                                return Ok(Value::from(true));
+                            }
+                        }
+                    }
+                }
+
                 let relation = match relation.as_ref() {
                     None => {
                         // Replay compatibility: Mantle recordings may include an is_replaceable call even
@@ -1992,29 +2025,6 @@ impl Adapter {
                         //
                         // Our typed adapter short-circuits relation=None to true, but in replay mode
                         // we must optionally consume a recorded is_replaceable to keep the stream aligned.
-                        if adapter.adapter_type() == AdapterType::Bigquery {
-                            if let Some(replay_adapter) = adapter.as_replay() {
-                                if replay_adapter
-                                    .replay_peek_is_replaceable_next(state)
-                                    .map_err(|e| {
-                                        minijinja::Error::new(
-                                            minijinja::ErrorKind::UndefinedError,
-                                            e.to_string(),
-                                        )
-                                    })?
-                                {
-                                    let val = replay_adapter.replay_is_replaceable(state).map_err(
-                                        |e| {
-                                            minijinja::Error::new(
-                                                minijinja::ErrorKind::UndefinedError,
-                                                e.to_string(),
-                                            )
-                                        },
-                                    )?;
-                                    return Ok(Value::from(val));
-                                }
-                            }
-                        }
                         return Ok(Value::from(true));
                     }
                     Some(r) => r,
@@ -2551,7 +2561,7 @@ impl Adapter {
                     | AdapterType::Datafusion
                     | AdapterType::Dremio
                     | AdapterType::Oracle
-                    | AdapterType::Alt => Err(AdapterError::new(
+                    | AdapterType::LakeCompute => Err(AdapterError::new(
                         AdapterErrorKind::NotSupported,
                         format!("has_dbr_capability is only supported by the Databricks adapter. Use the portable adapter.has_feature(\"{}\") instead.", capability_name),
                     )
@@ -2581,7 +2591,7 @@ impl Adapter {
                 | AdapterType::Datafusion
                 | AdapterType::Dremio
                 | AdapterType::Oracle
-                | AdapterType::Alt => Ok(Value::from(false)),
+                | AdapterType::LakeCompute => Ok(Value::from(false)),
             },
         }
     }
@@ -3070,14 +3080,21 @@ impl Adapter {
                 let iter = ArgsIter::new("describe_relation", &["relation"], args);
                 let relation_val = iter.next_arg::<&Value>()?;
                 let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+                let include_transient = iter
+                    .next_kwarg::<Option<bool>>("include_transient")?
+                    .unwrap_or(false);
                 iter.finish()?;
 
                 let mut conn =
                     adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                Ok(adapter
-                    .describe_relation(conn.as_mut(), &relation, Some(state))?
-                    .map(Value::from_object)
-                    .unwrap_or_else(none_value))
+
+                adapter.describe_relation(
+                    state,
+                    conn.as_mut(),
+                    &relation,
+                    include_transient,
+                    self.cancellation_token.clone(),
+                )
             }
             Parse(_) => Ok(none_value()),
         }
@@ -3782,48 +3799,6 @@ impl Adapter {
         }
     }
 
-    /// Get all relevant metadata about a dynamic table to return as a dict to Agate Table row
-    ///
-    /// https://github.com/dbt-labs/dbt-adapters/blob/703180a871f2960cd0c91765ffc4b1dc111d615b/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L510
-    ///
-    /// ```python
-    /// def describe_dynamic_table(self, relation: SnowflakeRelation) -> Dict[str, Any]
-    /// ```
-    #[tracing::instrument(skip(self, state), level = "trace")]
-    pub fn describe_dynamic_table(
-        &self,
-        state: &State,
-        args: &[Value],
-    ) -> Result<Value, minijinja::Error> {
-        match &self.inner {
-            Typed { adapter, .. } => {
-                let iter = ArgsIter::new("describe_dynamic_table", &["relation"], args);
-                let relation_val = iter.next_arg::<&Value>()?;
-                let relation = downcast_value_to_dyn_base_relation(relation_val)?;
-                let include_transient = iter
-                    .next_kwarg::<Option<bool>>("include_transient")?
-                    .unwrap_or(false);
-                iter.finish()?;
-
-                let mut conn =
-                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                adapter.describe_dynamic_table(
-                    state,
-                    conn.as_mut(),
-                    &relation,
-                    include_transient,
-                    self.cancellation_token.clone(),
-                )
-            }
-            Parse(_) => {
-                let map = [("dynamic_table", none_value())]
-                    .into_iter()
-                    .collect::<HashMap<_, _>>();
-                Ok(Value::from_serialize(map))
-            }
-        }
-    }
-
     /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L334
     ///
     /// ```python
@@ -3983,8 +3958,6 @@ impl Adapter {
 
                 self.build_catalog_relation(model)
             }
-            // relation: BaseRelation, include_transient: bool = False
-            "describe_dynamic_table" => self.describe_dynamic_table(state, args),
             "get_catalog_integration" => self.get_catalog_integration(state, args),
             "type" => Ok(Value::from(self.effective_adapter_type(state).to_string())),
             // config: dict
@@ -4111,8 +4084,11 @@ impl Adapter {
             "upload_file" => self.upload_file(state, args),
             // relation: BaseRelation
             "get_bq_table" => self.get_bq_table(state, args),
-            // relation: BaseRelation
+            // relation: BaseRelation, include_transient: Optional[bool] = False
             "describe_relation" => self.describe_relation(state, args),
+            // Backwards-compatible alias: "describe_dynamic_table" was shipped Jinja surface
+            // (changelogged in 2.0.0-preview.71) before it was consolidated into describe_relation.
+            "describe_dynamic_table" => self.describe_relation(state, args),
             // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
             "grant_access_to" => self.grant_access_to(state, args),
             // relation: BaseRelation

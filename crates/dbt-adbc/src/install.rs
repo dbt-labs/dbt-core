@@ -24,7 +24,7 @@ static INSTALLABLE_DRIVERS: &[Backend; 12] = &[
     Backend::Redshift,
     Backend::DuckDB,
     Backend::DuckDBExtended,
-    Backend::Alt,
+    Backend::LakeCompute,
     Backend::Salesforce,
     Backend::Spark,
     Backend::SQLServer,
@@ -364,7 +364,7 @@ fn canonical_name_and_version(backend: Backend) -> (&'static str, &'static str) 
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
         Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
         Backend::DuckDBExtended => ("duckdb_extended", DUCKDB_EXTENDED_DRIVER_VERSION),
-        Backend::Alt => ("dbt", ALT_DRIVER_VERSION),
+        Backend::LakeCompute => ("dbt", LAKE_COMPUTE_DRIVER_VERSION),
         Backend::SQLServer => ("mssql", MSSQLSERVER_DRIVER_VERSION),
         Backend::ClickHouse => ("clickhouse", CLICKHOUSE_DRIVER_VERSION),
         Backend::Athena | Backend::Exasol | Backend::Generic { .. } => {

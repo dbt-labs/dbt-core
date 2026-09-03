@@ -34,7 +34,6 @@ use dbt_schemas::schemas::properties::{
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode, Nodes};
 
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
-use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
@@ -54,6 +53,7 @@ use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
 use minijinja::constants::CURRENT_PATH;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
@@ -674,6 +674,7 @@ pub async fn resolve_inner(
     mut node_resolver: NodeResolver,
     runtime_config: Arc<DbtRuntimeConfig>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(
@@ -781,6 +782,7 @@ pub async fn resolve_inner(
         &jinja_env,
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         &mut node_resolver,
     )
     .await?;
@@ -803,6 +805,7 @@ pub async fn resolve_inner(
         &base_ctx,
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         &mut node_resolver,
     )
     .await?;
@@ -831,6 +834,7 @@ pub async fn resolve_inner(
         &mut node_resolver,
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         token,
     )
     .await?;
@@ -869,6 +873,7 @@ pub async fn resolve_inner(
         runtime_config.clone(),
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         &mut node_resolver,
         token,
         jinja_type_checking_event_listener_factory.clone(),
@@ -1088,39 +1093,11 @@ pub async fn resolve_inner(
     ))
 }
 
-/// Whether `alt` can read a catalog of this type.
-///
-/// A capability of `alt`, expressed here in code: it is a property of the storage,
-/// not of anything a project declares. Requiring a catalog to carry an `alt`
-/// connection block would reject readable data over a missing declaration.
-///
-/// Matched exhaustively on purpose, so adding a `CatalogType` forces the
-/// question to be answered rather than defaulting either way.
-fn alt_can_read(catalog_type: CatalogType) -> bool {
-    match catalog_type {
-        // Open table formats `alt` can attach.
-        CatalogType::Horizon | CatalogType::Glue | CatalogType::IcebergRest => true,
-        // Snowflake-managed Iceberg under its older spelling; Horizon supersedes it.
-        CatalogType::SnowflakeBuiltIn => true,
-        // Engine-owned catalogs `alt` does not support today.
-        CatalogType::DuckLake
-        | CatalogType::LocalFilesystem
-        | CatalogType::BiglakeMetastore
-        | CatalogType::Unity
-        | CatalogType::HiveMetastore => false,
-        // Native platform storage is not readable by an external engine at all --
-        // this is the warehouse-native case the check exists to catch.
-        CatalogType::SnowflakeNative | CatalogType::BigqueryNative | CatalogType::DuckdbNative => {
-            false
-        }
-    }
-}
-
 /// Returns `true` if `upstream` is readable as an input for a node running on
-/// `alt`.
+/// `lake_compute`.
 ///
 /// The question is about the *catalog*, never about which adapter wrote the
-/// upstream: a BigQuery model landing in an alt-readable catalog is a legal input,
+/// upstream: a BigQuery model landing in a lake-compute-readable catalog is a legal input,
 /// while a Snowflake model in warehouse-native storage is not.
 ///
 /// Where the catalog type is known, it decides. Where it cannot be resolved — no
@@ -1129,14 +1106,14 @@ fn alt_can_read(catalog_type: CatalogType) -> bool {
 fn upstream_is_catalog_reachable(upstream: &DbtModel, catalogs: Option<&DbtCatalogs>) -> bool {
     let attr = &upstream.__model_attr__;
 
-    // An upstream on `alt` itself writes somewhere `alt` can read, by definition.
-    if upstream.node_adapter() == AdapterType::Alt {
+    // An upstream on `lake_compute` itself writes somewhere `lake_compute` can read, by definition.
+    if upstream.node_adapter() == AdapterType::LakeCompute {
         return true;
     }
 
     match attr.catalog_name.as_deref() {
         Some(name) => match catalogs.and_then(|c| c.v2_catalog_type(name).ok().flatten()) {
-            Some(catalog_type) => alt_can_read(catalog_type),
+            Some(catalog_type) => catalog_type.lake_compute_can_read(),
             None => true,
         },
         // Iceberg without a named catalog is still an open format.
@@ -1159,7 +1136,7 @@ pub fn check_compute_platform_upstreams(
     catalogs: Option<&DbtCatalogs>,
 ) -> FsResult<()> {
     for (unique_id, model) in nodes.models.iter() {
-        if model.node_adapter() != AdapterType::Alt {
+        if model.node_adapter() != AdapterType::LakeCompute {
             continue;
         }
         for upstream_id in &model.__base_attr__.depends_on.nodes {
@@ -1174,13 +1151,14 @@ pub fn check_compute_platform_upstreams(
                 return err!(
                     ErrorCode::InvalidConfig,
                     "Model '{}' runs on adapter: '{}' but its upstream '{}' is not \
-                     reachable through a catalog. Materialize '{}' into a catalog (set \
-                     'catalog_name') or place it on adapter: '{}'.",
+                     reachable through a catalog. Materialize '{}' into an open table \
+                     format (set 'catalog_name', or set 'table_format: iceberg' to land \
+                     it in Iceberg without a named catalog) or place it on adapter: '{}'.",
                     unique_id,
-                    AdapterType::Alt.as_ref(),
+                    AdapterType::LakeCompute.as_ref(),
                     upstream_id,
                     upstream_id,
-                    AdapterType::Alt.as_ref()
+                    AdapterType::LakeCompute.as_ref()
                 );
             }
         }
@@ -1272,6 +1250,7 @@ async fn resolve_package(
     ));
 
     let mut test_name_truncations: HashMap<String, String> = HashMap::new();
+    let mut seen_generic_test_paths: HashMap<PathBuf, String> = HashMap::new();
     let (
         new_nodes,
         new_disabled_nodes,
@@ -1291,6 +1270,7 @@ async fn resolve_package(
         node_resolver,
         runtime_config.clone(),
         &mut test_name_truncations,
+        &mut seen_generic_test_paths,
         token,
         jinja_type_checking_event_listener_factory.clone(),
     )
@@ -1633,12 +1613,11 @@ mod tests {
         assert!(!has_event_time_input(&nodes, &model));
     }
 
-    /// `alt_can_read` is the whole of the capability question, and it is a property
+    /// `lake_compute_can_read` is the whole of the capability question, and it is a property
     /// of the catalog type rather than of anything a project declares. Pinned
     /// exhaustively so that adding a `CatalogType` has to answer it.
     #[test]
-    fn alt_reads_open_catalogs_and_not_engine_owned_ones() {
-        use super::alt_can_read;
+    fn lake_compute_reads_open_catalogs_and_not_engine_owned_ones() {
         use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 
         for readable in [
@@ -1646,7 +1625,10 @@ mod tests {
             CatalogType::Glue,
             CatalogType::IcebergRest,
         ] {
-            assert!(alt_can_read(readable), "alt should read {readable:?}");
+            assert!(
+                readable.lake_compute_can_read(),
+                "lake compute should read {readable:?}"
+            );
         }
         for unreadable in [
             CatalogType::DuckLake,
@@ -1656,15 +1638,15 @@ mod tests {
             CatalogType::HiveMetastore,
         ] {
             assert!(
-                !alt_can_read(unreadable),
-                "alt does not support {unreadable:?} today"
+                !unreadable.lake_compute_can_read(),
+                "lake compute does not support {unreadable:?} today"
             );
         }
     }
 
-    /// WS1 rule 5: an `adapter: alt` model requires each of its model upstreams to
+    /// WS1 rule 5: an `adapter: lake_compute` model requires each of its model upstreams to
     /// be reachable through a catalog; a plain warehouse-native upstream is
-    /// rejected, while catalog-backed / Iceberg / alt upstreams pass.
+    /// rejected, while catalog-backed / Iceberg / lake compute upstreams pass.
     #[test]
     fn test_check_compute_platform_upstreams() {
         use std::sync::Arc;
@@ -1705,7 +1687,7 @@ mod tests {
         let run = |upstream: DbtModel| {
             let consumer = make_model(
                 consumer_uid,
-                AdapterType::Alt,
+                AdapterType::LakeCompute,
                 Some("horizon"),
                 None,
                 &[upstream_uid],
@@ -1744,7 +1726,7 @@ mod tests {
         assert!(
             run(make_model(
                 upstream_uid,
-                AdapterType::Alt,
+                AdapterType::LakeCompute,
                 Some("horizon"),
                 None,
                 &[]
@@ -1786,7 +1768,7 @@ mod tests {
         // though it is not present in `nodes.models`.
         let consumer = make_model(
             consumer_uid,
-            AdapterType::Alt,
+            AdapterType::LakeCompute,
             Some("horizon"),
             None,
             &["source.test.raw"],

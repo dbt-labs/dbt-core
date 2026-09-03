@@ -44,18 +44,17 @@ That two-step form is how you get column-level lineage, which `--static-analysis
 ```
 target/index.html        SPA entry, with window.__DBT_DOCS__ injected
 target/assets/           hashed JS/CSS
-target/index/            the artifacts `--write-index` wrote, read as they are
+target/index/            site data: parquet copied from the engine index
 ```
 
 `index.html` lands exactly where dbt Core v1 wrote it, so an existing pipeline that
 publishes `target/` keeps working unchanged.
 
-**The site reads the index artifacts directly.** Nothing is copied, projected, or
-derived, so `target/index/` is the only artifact contract the site depends on — the same
-files, columns, and names every other index consumer sees. Tables that `--write-index`
-omits because they hold no rows (no run yet, no sources, no catalog) are declared as
-empty relations in the browser from DDL, which is why the queries need no
-missing-table variants.
+Fusion writes the engine index to `target/private/index/` (not a user API). `docs generate`
+copies those parquet files to `target/index/` — the static-site URL layout (`DATA_DIR =
+"index"`). A self-contained `--output-dir` export does the same under `<dir>/index/`.
+
+Tables that `--write-index` omits because they hold no rows (no run yet, no sources, no catalog) are declared as empty relations in the browser from DDL, which is why the queries need no missing-table variants.
 
 `--output-dir <dir>` still gives a self-contained directory: the index travels along as
 a byte-for-byte copy under `<dir>/index/`.
@@ -71,15 +70,15 @@ The browser loads DuckDB-WASM from a CDN at runtime (never bundled; override the
 
 ## ⚙️ How it works
 
-Data comes from parquet files that the Fusion engine writes to `<target>/index/` when you run with `--write-index`.
+Data comes from parquet files that the Fusion engine writes to `<target>/private/index/` when you run with `--write-index`.
 
 ```
 dbt project
     │  dbt compile --write-index --static-analysis strict
     │  …or nothing: `docs generate` runs that compile unless `--no-compile`
     ▼
-<target>/index/*.parquet   ← the data source (not manifest.json), read as written
-    │  dbt docs generate — writes index.html + assets/, copies nothing
+<target>/private/index/*.parquet  ← engine index (not a user API)
+    │  dbt docs generate — copies parquet to index/ for the site URL layout
     ▼
 <target>/index.html        ← hostable anywhere; reads index/ beside it
     │  fetched by the browser
@@ -118,7 +117,7 @@ Generate the artifacts first. From your dbt project, run dbt with `--write-index
 dbt --write-index compile      # or: run / build
 ```
 
-This writes the parquet to `./target/index/`.
+This writes the parquet to `./target/private/index/`.
 
 ### 💻 Option A: command line
 
@@ -132,7 +131,7 @@ Useful flags:
 
 | Flag | Env var | Default | Meaning |
 |---|---|---|---|
-| `--target-path <DIR>` | `DBT_DOCS_TARGET_PATH` | `./target` | Directory whose `index/` holds the parquet |
+| `--target-path <DIR>` | `DBT_DOCS_TARGET_PATH` | `./target` | Directory whose `private/index/` holds the parquet |
 | `--host <HOST>` | `DBT_DOCS_HOST` | `127.0.0.1` | Bind address |
 | `--port <PORT>` | `DBT_DOCS_PORT` | `8580` | Listen port |
 | `--no-open` | — | off | Don't auto-open a browser tab |
@@ -171,7 +170,7 @@ docker build -t dbt-docs-server --build-arg DBT_VERSION=2.0.0-beta.2 crates/dbt-
 
 > **On `latest` and the build cache.** Because the default build args don't change between builds, Docker reuses the cached download layer and keeps whatever version it resolved the first time. To pick up a newer release, build with `--no-cache` or pass the version explicitly.
 
-Run it, mounting a project `target/` that already contains `target/index/*.parquet`:
+Run it, mounting a project `target/` that already contains `target/private/index/*.parquet`:
 
 ```bash
 docker run --rm -p 8580:8580 \
@@ -181,7 +180,7 @@ docker run --rm -p 8580:8580 \
 
 Then open <http://localhost:8580>.
 
-> **The artifact mount is required.** With no `target/index/*.parquet` behind `/data/target`, the server has nothing to serve and the container exits on startup. Generate them first with `dbt --write-index` (see [Prerequisites](#-prerequisites)).
+> **The artifact mount is required.** With no `target/private/index/*.parquet` behind `/data/target`, the server has nothing to serve and the container exits on startup. Generate them first with `dbt --write-index` (see [Prerequisites](#-prerequisites)).
 
 **First-run network note.** The parquet is queried through an ADBC DuckDB driver that is **not** bundled in the image. On first boot the driver is downloaded from `public.cdn.getdbt.com` into the cache dir (`/var/cache/dbt`). The container therefore needs outbound HTTPS the first time it runs. 
 

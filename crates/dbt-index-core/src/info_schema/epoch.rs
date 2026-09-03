@@ -2,7 +2,7 @@
 //!
 //! [`super::schema::INFO_SCHEMA`] declares each output column as a *staging*
 //! column — the shape the Rust ingest produces in the staging directory (the
-//! flat index at `target/index/`, or a private fallback). A view layer over the
+//! flat index at `target/private/index/`, or a private fallback). A view layer over the
 //! epoch files has no staging directory, so every referenced staging column needs
 //! an expression
 //! over the epoch parquet instead. This module is that mapping, declared once in
@@ -589,16 +589,12 @@ pub fn origin(staging_table: &str) -> Option<Origin> {
             unnest: None,
         },
         // Single-row snapshots read field by field, with fallbacks.
-        "project" | "project_vars" | "project_env_vars" => Custom,
+        "project" | "project_vars" | "project_env_vars" | "packages" => Custom,
         // ── written by nothing ───────────────────────────────────────────
-        // `packages` and `semantic_relationships` have schemas and specs but no
-        // writer in `metadata_to_parquet.rs`; `diagnostics`, `adapter_queries`
-        // and `node_input_files` have no epoch source at all.
-        "packages"
-        | "semantic_relationships"
-        | "diagnostics"
-        | "adapter_queries"
-        | "node_input_files" => Empty,
+        // `semantic_relationships` has a schema and spec but no writer in
+        // `metadata_to_parquet.rs`; `diagnostics`, `adapter_queries` and
+        // `node_input_files` have no epoch source at all.
+        "semantic_relationships" | "diagnostics" | "adapter_queries" | "node_input_files" => Empty,
         _ => return None,
     })
 }
@@ -702,10 +698,26 @@ const NODES: &[(&str, EpochExpr)] = &[
     ("alias", EpochExpr::Same),
     ("description", EpochExpr::Same),
     ("relation_name", EpochExpr::Same),
-    ("identifier", EpochExpr::Same),
+    (
+        "identifier",
+        EpochExpr::Sql(
+            "COALESCE(t.identifier, \
+             json_extract_string(t.payload, '$.__source_attr__.identifier'), t.alias)",
+        ),
+    ),
     ("materialized", EpochExpr::Col("materialization")),
-    ("access_level", EpochExpr::Col("access")),
-    ("group_name", EpochExpr::Same),
+    (
+        "access_level",
+        EpochExpr::Sql(
+            "COALESCE(t.access, json_extract_string(t.payload, '$.__model_attr__.access'))",
+        ),
+    ),
+    (
+        "group_name",
+        EpochExpr::Sql(
+            "COALESCE(t.group_name, json_extract_string(t.payload, '$.__model_attr__.group'))",
+        ),
+    ),
     // `unwrap_or_default()` on a `&str`: absent is the empty string, not null.
     (
         "database_name",
@@ -723,28 +735,73 @@ const NODES: &[(&str, EpochExpr)] = &[
     // Column first, payload second — the order of the `or_else` in the builder.
     (
         "source_name",
-        EpochExpr::Sql("COALESCE(t.source_name, json_extract_string(t.payload, '$.source_name'))"),
+        EpochExpr::Sql(
+            "COALESCE(t.source_name, json_extract_string(t.payload, '$.__source_attr__.source_name'), \
+             json_extract_string(t.payload, '$.source_name'))",
+        ),
     ),
     ("ingested_at", EpochExpr::Same),
     // ── dug out of the JSON payload ──────────────────────────────────────
-    ("checksum", EpochExpr::TrimmedJson("checksum.checksum")),
-    ("raw_code", EpochExpr::TrimmedJson("raw_code")),
+    (
+        "checksum",
+        EpochExpr::JsonFirst(
+            &["__common_attr__.checksum.checksum", "checksum.checksum"],
+            "NULL",
+        ),
+    ),
+    (
+        "raw_code",
+        EpochExpr::JsonFirst(&["__common_attr__.raw_code", "raw_code"], "NULL"),
+    ),
     (
         "source_description",
-        EpochExpr::TrimmedJson("source_description"),
+        EpochExpr::JsonFirst(
+            &["__source_attr__.source_description", "source_description"],
+            "NULL",
+        ),
     ),
-    ("loader", EpochExpr::TrimmedJson("loader")),
-    ("loaded_at_field", EpochExpr::TrimmedJson("loaded_at_field")),
-    ("patch_path", EpochExpr::TrimmedJson("patch_path")),
+    (
+        "loader",
+        EpochExpr::JsonFirst(&["__source_attr__.loader", "loader"], "NULL"),
+    ),
+    (
+        "loaded_at_field",
+        EpochExpr::JsonFirst(
+            &["__source_attr__.loaded_at_field", "loaded_at_field"],
+            "NULL",
+        ),
+    ),
+    (
+        "patch_path",
+        EpochExpr::JsonFirst(&["__common_attr__.patch_path", "patch_path"], "NULL"),
+    ),
     (
         "deprecation_date",
-        EpochExpr::TrimmedJson("deprecation_date"),
+        EpochExpr::JsonFirst(
+            &["__model_attr__.deprecation_date", "deprecation_date"],
+            "NULL",
+        ),
     ),
-    ("meta", EpochExpr::TrimmedJsonRaw("meta")),
-    ("version", EpochExpr::TrimmedJsonRaw("version")),
+    (
+        "meta",
+        EpochExpr::SqlJson(
+            "COALESCE(json_extract(t.payload, '$.__common_attr__.meta'), \
+             json_extract(t.payload, '$.meta'))",
+        ),
+    ),
+    (
+        "version",
+        EpochExpr::SqlJson(
+            "COALESCE(json_extract(t.payload, '$.__model_attr__.version'), \
+             json_extract(t.payload, '$.version'))",
+        ),
+    ),
     (
         "latest_version",
-        EpochExpr::TrimmedJsonRaw("latest_version"),
+        EpochExpr::SqlJson(
+            "COALESCE(json_extract(t.payload, '$.__model_attr__.latest_version'), \
+             json_extract(t.payload, '$.latest_version'))",
+        ),
     ),
     // `config` survives the model trim, but as a *raw JSON string* rather than
     // a parsed object, and the builder then serialises whatever it holds — so a
@@ -815,7 +872,7 @@ const NODES: &[(&str, EpochExpr)] = &[
     ("grain_inferred", EpochExpr::EmptyList),
     // Declared in the staging schema, never populated: the payload has the data
     // for most of these, but nothing reads it into `OwnedNodeRow`.
-    ("node_language", EpochExpr::Null),
+    ("node_language", EpochExpr::Json("__common_attr__.language")),
     ("incremental_strategy", EpochExpr::Null),
     ("on_schema_change", EpochExpr::Null),
     ("unique_key", EpochExpr::Null),

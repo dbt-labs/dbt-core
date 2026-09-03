@@ -1,4 +1,4 @@
-//! Generator for the information schema as views straight over `target/metadata/`,
+//! Generator for the information schema as views straight over `target/private/metadata/`,
 //! with no materialization step.
 //!
 //! The SQL it produces declares the same schema names, table names, column names
@@ -9,7 +9,7 @@
 //! substitution honest.
 //!
 //! It is *not* written into the shipped info-schema directory: it reads the
-//! private `target/metadata/` layout through the `dbt_internal` epoch relations,
+//! private `target/private/metadata/` layout through the `dbt_internal` epoch relations,
 //! which are not part of the public contract (see `write_info_schema`). The
 //! generator exists for that differential test and for a future serve path that
 //! queries metadata live; a caller runs [`generate`] and executes or writes the
@@ -358,7 +358,7 @@ fn project_snapshot(present: &[&'static str]) -> String {
     } else {
         "SELECT CAST(NULL AS VARCHAR) AS vars_json, CAST(NULL AS VARCHAR) AS env_vars_json, \
          CAST(NULL AS VARCHAR) AS git_sha, CAST(NULL AS VARCHAR) AS git_branch, \
-         CAST(NULL AS INTEGER) AS git_is_dirty"
+         CAST(NULL AS INTEGER) AS git_is_dirty, CAST(NULL AS VARCHAR) AS pkg_kinds_json"
             .to_string()
     };
     format!(
@@ -373,6 +373,8 @@ fn project_snapshot(present: &[&'static str]) -> String {
          \x20   NULLIF(r.git_sha, '') AS git_sha,\n\
          \x20   NULLIF(r.git_branch, '') AS git_branch,\n\
          \x20   r.git_is_dirty <> 0 AS git_is_dirty,\n\
+         \x20   NULLIF(r.pkg_kinds_json, '') AS pkg_kinds_json,\n\
+         \x20   COALESCE(json_keys(NULLIF(r.pkg_kinds_json, '')), []) AS installed_packages,\n\
          \x20   g.ingested_at AS ingested_at\n\
          \x20 FROM (SELECT * FROM dbt_internal.epoch_parse_generation LIMIT 1) g\n\
          \x20 LEFT JOIN ({resolver}) r ON TRUE\n\
@@ -525,11 +527,15 @@ fn own_sql(
         // puts there: a package's vars are scoped to it, and the root project is
         // one of the packages.
         //
-        // The skip list is `internal_packages`, whose contents depend on the
-        // adapter, so it is built from the snapshot's `adapter_type` rather than
-        // being a literal. `COALESCE(.., '')` on the conditional entry because a
-        // NULL inside `NOT IN` makes the whole predicate NULL — which would drop
-        // every package rather than none.
+        // Nested object keys that name an installed package (a key of
+        // `pkg_kinds_json`) are scopes, not variables: the parent's scalar vars
+        // are inherited into the scope and the nested map overlays them. An
+        // object whose key is not installed stays an object-valued variable on
+        // the parent. The skip list is `internal_packages`, whose contents
+        // depend on the adapter, so it is built from the snapshot's
+        // `adapter_type` rather than being a literal. `COALESCE(.., '')` on the
+        // conditional entry because a NULL inside `NOT IN` makes the whole
+        // predicate NULL — which would drop every package rather than none.
         "project_vars" => {
             let skip = format!(
                 "'dbt', 'dbt_' || {BASE}.adapter_type, \
@@ -542,13 +548,33 @@ fn own_sql(
             let value = "CASE WHEN json_type(q.val) = 'VARCHAR' \
                          THEN json_extract_string(q.val, '$') \
                          ELSE CAST(q.val AS VARCHAR) END";
+            let inherited_value = "CASE WHEN json_type(r.val) = 'VARCHAR' \
+                                  THEN json_extract_string(r.val, '$') \
+                                  ELSE CAST(r.val AS VARCHAR) END";
+            let installed = format!("{BASE}.installed_packages");
+            let is_scope =
+                format!("json_type(q.val) = 'OBJECT' AND list_contains({installed}, q.key)");
+            let parent_scalars = format!(
+                "list_filter({vars}, q -> NOT ({is_scope}))",
+                vars = json_entries("p.val"),
+            );
             let list = format!(
                 "flatten(list_transform(\
                  list_filter({packages}, p -> p.key NOT IN ({skip})), \
-                 p -> list_transform({vars}, \
-                 q -> struct_pack(package := p.key, name := q.key, value := {value}))))",
+                 p -> list_concat(\
+                 list_transform({parent_scalars}, \
+                 q -> struct_pack(package := p.key, name := q.key, value := {value})), \
+                 flatten(list_transform(\
+                 list_filter({vars}, q -> {is_scope} AND q.key NOT IN ({skip})), \
+                 q -> list_transform(\
+                 list_concat(\
+                 list_filter({parent_scalars}, s -> \
+                 NOT list_contains(COALESCE(json_keys(q.val), []), s.key)), \
+                 {scope_vars}), \
+                 r -> struct_pack(package := q.key, name := r.key, value := {inherited_value})))))))",
                 packages = json_entries(&format!("{BASE}.vars_json")),
                 vars = json_entries("p.val"),
+                scope_vars = json_entries("q.val"),
             );
             let cols = cast_cols(
                 spec,
@@ -562,6 +588,30 @@ fn own_sql(
             let cols: Vec<&str> = cols.iter().map(String::as_str).collect();
             let sql = format!(
                 "{}FROM {}\n  , unnest({list}) AS {ELEM_REL}",
+                header(&cols),
+                project_snapshot(present)
+            );
+            Some((sql, Some("epoch_parse_generation")))
+        }
+        // One row per key of `pkg_kinds_json`. The other columns have no epoch
+        // source yet — `write_parse_project` writes `package_name` only — so
+        // they stay null, matching the Rust path.
+        "packages" => {
+            let cols = cast_cols(
+                spec,
+                &[
+                    ("package_name", ELEM.to_string()),
+                    ("package_source", "NULL".to_string()),
+                    ("version", "NULL".to_string()),
+                    ("git_url", "NULL".to_string()),
+                    ("git_revision", "NULL".to_string()),
+                    ("local_path", "NULL".to_string()),
+                    ("ingested_at", format!("{BASE}.ingested_at")),
+                ],
+            )?;
+            let cols: Vec<&str> = cols.iter().map(String::as_str).collect();
+            let sql = format!(
+                "{}FROM {}\n  , unnest({BASE}.installed_packages) AS {ELEM_REL}",
                 header(&cols),
                 project_snapshot(present)
             );

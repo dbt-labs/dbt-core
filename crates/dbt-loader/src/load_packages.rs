@@ -320,7 +320,7 @@ pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
     match adapter_type {
         AdapterType::Redshift => packages.push("dbt-postgres".to_string()),
         AdapterType::Databricks => packages.push("dbt-spark".to_string()),
-        AdapterType::Alt => packages.push("dbt-duckdb".to_string()),
+        AdapterType::LakeCompute => packages.push("dbt-duckdb".to_string()),
         _ => {}
     }
     packages
@@ -335,7 +335,7 @@ pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
 /// `dbt-snowflake`, `dbt-lake_compute`, `dbt-duckdb`.
 ///
 /// The per-adapter [`internal_package_names`] keeps its shape deliberately: the
-/// adapter-inheritance relation (`alt` derives from `duckdb`, `databricks` from
+/// adapter-inheritance relation (`lake_compute` derives from `duckdb`, `databricks` from
 /// `spark`, `redshift` from `postgres`) is expressed once per type there, and the
 /// union is a separate, independently testable concern here.
 pub fn internal_package_names_for(
@@ -571,8 +571,8 @@ mod internal_package_union_tests {
     /// The union is over each adapter's *transitive closure*, so lake compute
     /// drags in `dbt-duckdb` via the inheritance table just as it does on its own.
     #[test]
-    fn snowflake_plus_alt_unions_both_chains() {
-        let names = internal_package_names_for([AdapterType::Snowflake, AdapterType::Alt]);
+    fn snowflake_plus_lake_compute_unions_both_chains() {
+        let names = internal_package_names_for([AdapterType::Snowflake, AdapterType::LakeCompute]);
 
         assert_eq!(
             names,
@@ -631,7 +631,7 @@ mod internal_package_union_tests {
         for adapter_type in [
             AdapterType::Snowflake,
             AdapterType::DuckDB,
-            AdapterType::Alt,
+            AdapterType::LakeCompute,
             AdapterType::Redshift,
             AdapterType::Databricks,
         ] {
@@ -646,7 +646,8 @@ mod internal_package_union_tests {
     /// `dbt_compare_macros` is appended once for the whole set, not per adapter.
     #[test]
     fn macro_package_names_append_compare_macros_once() {
-        let names = internal_macro_package_names_for([AdapterType::Snowflake, AdapterType::Alt]);
+        let names =
+            internal_macro_package_names_for([AdapterType::Snowflake, AdapterType::LakeCompute]);
 
         assert_eq!(
             names.iter().filter(|n| *n == "dbt_compare_macros").count(),

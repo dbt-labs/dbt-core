@@ -19,8 +19,6 @@ use dbt_common::serde_utils::try_get_bool;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
-// `lake_compute` is `AdapterType::Alt`'s external name; the Rust side still
-// says `Alt` (see `GLUE_ALT_FIELDS` and friends below).
 const ALL_V2_PLATFORMS: &[&str] = &[
     "snowflake",
     "databricks",
@@ -148,11 +146,11 @@ const LINKED_SNOWFLAKE_FIELDS: &[FieldSpec] = &[
     FieldSpec::u32_plain("iceberg_version").doc("Iceberg spec version, e.g. 3 for Iceberg V3."),
 ];
 
-// Direct AWS creds for the Alt (dbt Compute) backend, which signs Glue's
+// Direct AWS creds for the lake compute backend, which signs Glue's
 // Iceberg REST endpoint itself (SigV4) server-side rather than attaching via
 // a local DuckDB secret -- so it needs the raw credential fields, not a
 // `secret`/`endpoint_type` reference like DUCKDB_ICEBERG_FIELDS.
-const GLUE_ALT_FIELDS: &[FieldSpec] = &[
+const GLUE_LAKE_COMPUTE_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("catalog_id")
         .required()
         .non_empty()
@@ -308,7 +306,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("lake_compute", GLUE_ALT_FIELDS),
+            PlatformBlock::new("lake_compute", GLUE_LAKE_COMPUTE_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -688,6 +686,33 @@ impl CatalogType {
             Self::SnowflakeNative => "INFO_SCHEMA",
             Self::BigqueryNative => "INFO_SCHEMA",
             Self::DuckdbNative => "duckdb",
+        }
+    }
+
+    /// Whether `lake_compute` can read a catalog of this type.
+    ///
+    /// A capability of `lake_compute`, expressed here in code: it is a property of the
+    /// storage, not of anything a project declares. Requiring a catalog to carry an
+    /// `lake_compute` connection block would reject readable data over a missing
+    /// declaration.
+    ///
+    /// Matched exhaustively on purpose, so adding a `CatalogType` forces the
+    /// question to be answered rather than defaulting either way.
+    pub fn lake_compute_can_read(&self) -> bool {
+        match self {
+            // Open table formats `lake_compute` can attach.
+            Self::Horizon | Self::Glue | Self::IcebergRest => true,
+            // Snowflake-managed Iceberg under its older spelling; Horizon supersedes it.
+            Self::SnowflakeBuiltIn => true,
+            // Engine-owned catalogs `lake_compute` does not support today.
+            Self::DuckLake
+            | Self::LocalFilesystem
+            | Self::BiglakeMetastore
+            | Self::Unity
+            | Self::HiveMetastore => false,
+            // Native platform storage is not readable by an external engine at all --
+            // this is the warehouse-native case the check exists to catch.
+            Self::SnowflakeNative | Self::BigqueryNative | Self::DuckdbNative => false,
         }
     }
 

@@ -9,7 +9,7 @@
 //! compare them table by table.
 //!
 //! Driven by `FS_INFO_SCHEMA_DIFF_METADATA`, a path to a real
-//! `target/metadata/`. Unset, the test skips: the crate's own fixtures do not
+//! `target/private/metadata/`. Unset, the test skips: the crate's own fixtures do not
 //! cover enough of the schema for the comparison to mean anything, and a
 //! synthetic corpus would only test the generator against itself. Generate one
 //! with `dbt build --write-metadata --write-lineage` on a project — `parse`
@@ -38,7 +38,7 @@ use crate::format::cell_to_string;
 
 use super::schema::INFO_SCHEMA;
 use super::spec::TableSpec;
-use super::{epoch, epoch_views, write_info_schema};
+use super::{Materializer, epoch, epoch_views, write_info_schema_with};
 
 /// Columns dropped from the comparison, and why.
 ///
@@ -112,12 +112,13 @@ fn view_layer_matches_materialized_layer() {
     // `target/info_schema/` is left alone.
     let tmp = tempfile::tempdir().expect("tempdir");
     let out_root = tmp.path().join("info_schema");
-    write_info_schema(
+    write_info_schema_with(
+        Materializer::Copy,
         &metadata_dir,
         &out_root,
         &tmp.path().join(super::STAGING_DIR_NAME),
     )
-    .expect("write_info_schema");
+    .expect("write_info_schema COPY");
     let parquet_dir = super::versioned_dir(&out_root);
 
     // View layer, executed statement by statement rather than by splitting the

@@ -31,6 +31,8 @@ pub enum RelationType {
     MetricView,
     /// An enum for a warehouse function
     Function,
+    /// An enum for an interactive table (snowflake only)
+    InteractiveTable,
     /// An enum for a ClickHouse dictionary
     Dictionary,
 }
@@ -91,6 +93,7 @@ impl fmt::Display for RelationType {
             RelationType::StreamingTable => "streaming_table",
             RelationType::MetricView => "metric_view",
             RelationType::Function => "function",
+            RelationType::InteractiveTable => "interactive_table",
             RelationType::Dictionary => "dictionary",
         };
         write!(f, "{s}")
@@ -111,6 +114,7 @@ impl From<&str> for RelationType {
             "streaming_table" => RelationType::StreamingTable,
             "metric_view" => RelationType::MetricView,
             "function" => RelationType::Function,
+            "interactive_table" => RelationType::InteractiveTable,
             "dictionary" => RelationType::Dictionary,
             _ => panic!("Invalid relation type: {s}"),
         }

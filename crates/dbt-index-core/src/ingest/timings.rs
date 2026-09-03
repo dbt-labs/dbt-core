@@ -51,6 +51,10 @@ pub enum Stage {
     StagingWrite,
     /// Projecting staging tables into the information schema shape.
     Projection,
+    /// DuckDB `COPY` of each public table from the epoch-view layer. Mutually
+    /// exclusive with the ingest and projection stages: a conversion uses one
+    /// path or the other.
+    Copy,
     /// Generating `views.sql`.
     ViewsSql,
 }
@@ -62,6 +66,7 @@ impl Stage {
         Stage::RowBuild,
         Stage::StagingWrite,
         Stage::Projection,
+        Stage::Copy,
         Stage::ViewsSql,
     ];
 
@@ -72,6 +77,7 @@ impl Stage {
             Stage::RowBuild => "row_build",
             Stage::StagingWrite => "staging_write",
             Stage::Projection => "projection",
+            Stage::Copy => "copy",
             Stage::ViewsSql => "views_sql",
         }
     }
@@ -83,12 +89,13 @@ impl Stage {
             Stage::RowBuild => 2,
             Stage::StagingWrite => 3,
             Stage::Projection => 4,
-            Stage::ViewsSql => 5,
+            Stage::Copy => 5,
+            Stage::ViewsSql => 6,
         }
     }
 }
 
-const N: usize = 6;
+const N: usize = 7;
 
 #[allow(clippy::declare_interior_mutable_const)]
 const ZERO: AtomicU64 = AtomicU64::new(0);

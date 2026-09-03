@@ -306,6 +306,8 @@ pub async fn resolve_semantic_models(
             __base_attr__: NodeBaseAttributes {
                 // Not executed against a warehouse; records the target it parsed under.
                 adapter: adapter_type,
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 database: "".to_string(),
                 schema: "".to_string(),
                 alias: "".to_string(),

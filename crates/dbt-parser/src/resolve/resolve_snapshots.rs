@@ -14,7 +14,6 @@ use crate::resolve::resolve_tests::persist_generic_data_tests::{
 };
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map, validate_compute,
-    validate_node_adapter,
 };
 use crate::resolve::yaml_field_utils;
 use crate::sql_file_info::SqlFileInfo;
@@ -38,7 +37,7 @@ use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::{
-    DbtChecksum, DbtMaterialization, DbtQuoting, ModelFreshnessRules, NodeDependsOn,
+    DbtChecksum, DbtQuoting, ModelFreshnessRules, NodeDependsOn,
     conform_normalized_snapshot_raw_code_to_mantle_format, normalize_sql,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -81,6 +80,7 @@ pub async fn resolve_snapshots(
     node_resolver: &mut NodeResolver,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSnapshot>>,
@@ -435,26 +435,21 @@ pub async fn resolve_snapshots(
                 dependency_package_name,
             );
             validate_compute(snapshot_config.compute, error_path)?;
-            // Resolved here rather than in the config merge, for the reason given in
-            // `resolve_models`: the merge cannot see the target's adapter list. A
-            // snapshot selects explicitly -- it has no attached node to inherit from --
-            // and an `alt` selection is rejected by the materialization rule, since
-            // `alt` does not materialize snapshots in v1.
-            let resolved_node_adapter = validate_node_adapter(
-                snapshot_config.adapter,
-                &DbtMaterialization::Snapshot,
-                snapshot_config
-                    .__warehouse_specific_config__
-                    .catalog_name
-                    .as_deref(),
-                default_adapter,
-                dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
-                false,
-                error_path,
-            )?;
+            // See `resolve_models`: the flag overrides the config, and nothing is
+            // validated at parse. A snapshot selects explicitly -- it has no
+            // attached node to inherit from.
+            let resolved_node_adapter = arg.adapter_override.or(snapshot_config.adapter);
 
             // See `resolve_models`: both remaining quoting layers depend on which
             // adapter the node runs on, which is only known after the config merge.
+            // `propagate` comes straight off the node's own config. Unlike
+            // `adapter` there is no target default to fall back to and nothing to
+            // inherit: an unset `+propagate` means "publish nowhere".
+            let selected_propagate: Vec<AdapterType> = snapshot_config
+                .propagate
+                .clone()
+                .map(Into::into)
+                .unwrap_or_default();
             let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
             snapshot_config.quoting = resolve_package_quoting(
                 Some(match adapter_quoting.get(&selected_adapter) {
@@ -541,6 +536,7 @@ pub async fn resolve_snapshots(
                 },
                 __base_attr__: NodeBaseAttributes {
                     adapter: selected_adapter,
+                    propagate: selected_propagate,
                     database: "".to_owned(), // will be updated below
                     schema: "".to_owned(),   // will be updated below
                     alias: "".to_owned(),    // will be updated below
@@ -679,6 +675,7 @@ pub async fn resolve_snapshots(
                             &root_package.dbt_project.name,
                             collected_generic_tests,
                             test_name_truncations,
+                            seen_generic_test_paths,
                             default_adapter,
                             &arg.io,
                             patch_path.as_ref().unwrap_or(&dbt_asset.path),
@@ -703,6 +700,7 @@ pub async fn resolve_snapshots(
                                 &root_package.dbt_project.name,
                                 collected_generic_tests,
                                 test_name_truncations,
+                                seen_generic_test_paths,
                                 default_adapter,
                                 &arg.io,
                                 patch_path.as_ref().unwrap_or(&dbt_asset.path),

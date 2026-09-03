@@ -2,9 +2,8 @@ import { FC, useMemo } from 'react';
 import { intersection } from 'lodash';
 import { twMerge } from 'tailwind-merge';
 
-import { ResourceType } from '@dbt-labs/dbt-dag';
-
 import { Popover } from '../../components/ui/Popover';
+import type { ResourceType } from '../../lib/resourceType';
 import {
   ExposureHealthIssueType,
   HealthIssueType,

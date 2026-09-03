@@ -152,6 +152,18 @@ struct CompilationPhasesExecutor<'a> {
     token: CancellationToken,
 }
 
+/// Whether this `dbt show` reads `target/info_schema/` instead of the warehouse.
+///
+/// Thin wrapper so the three call sites read as one decision: the predicate itself
+/// lives in `dbt-tasks-sa` because it needs the Jinja parser, and that crate cannot
+/// take a `ShowArgs` without depending on `dbt-clap-core`.
+pub(crate) fn show_queries_info_schema(show_args: &ShowArgs) -> bool {
+    dbt_tasks_sa::show_info::queries_info_schema(
+        show_args.info.as_deref(),
+        show_args.inline.as_deref(),
+    )
+}
+
 impl<'a> CompilationPhasesExecutor<'a> {
     pub fn new(arg: Cow<'a, EvalArgs>, cli: Cow<'a, Cli>, token: CancellationToken) -> Self {
         Self {
@@ -183,10 +195,24 @@ impl<'a> CompilationPhasesExecutor<'a> {
         let inline_sql = match &self.cli.command {
             Command::Core(Compile(CompileArgs {
                 inline: Some(sql), ..
-            }))
-            | Command::Core(Show(ShowArgs {
-                inline: Some(sql), ..
             })) => Some(sql.clone()),
+            // Info-schema show queries DuckDB over `target/info_schema/`; injecting
+            // the SQL as a warehouse model would bind `dbt.<view>` on the project adapter.
+            Command::Core(Show(show_args))
+                if show_args.inline.is_some() && !show_queries_info_schema(show_args) =>
+            {
+                show_args.inline.clone()
+            }
+            // `show --job-id <id>`: no SQL to compile at all -- this is a
+            // direct result-fetch, not a query. A placeholder gets the
+            // inline-node machinery (loader/Showable) to build the same
+            // ephemeral node `--inline` uses, so `run_adhoc.rs` has a node to
+            // execute against; it's never actually rendered/run as SQL,
+            // since `eval_args.job_id` being set makes `run_adhoc.rs` set
+            // `RESULT_JOB_ID` and fetch instead of compiling this string.
+            Command::Core(Show(ShowArgs {
+                job_id: Some(_), ..
+            })) => Some("select 1".to_string()),
             _ => None,
         };
         let has_inline = inline_sql.is_some();
@@ -301,9 +327,10 @@ impl<'a> CompilationPhasesExecutor<'a> {
         // Handle 'debug' or 'init' commands to run debug.
         if let FsCommand::Debug | FsCommand::Init = self.arg.command {
             let mut debug_args = DebugArgs::from_eval_args(self.arg.as_ref());
-            debug_args.alt_propagation_checker = feature_stack.alt.propagation_checker.clone();
-            debug_args.alt_catalog_attach_checker =
-                feature_stack.alt.catalog_attach_checker.clone();
+            debug_args.lake_compute_propagation_checker =
+                feature_stack.lake_compute.propagation_checker.clone();
+            debug_args.lake_compute_catalog_attach_checker =
+                feature_stack.lake_compute.catalog_attach_checker.clone();
             compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
                 .await?;
             self.token.check_cancellation()?;
@@ -1093,17 +1120,31 @@ impl DbtProjectCompilation {
         // partial-load fast path (also fires for state:dirty): if no file mtimes changed,
         // skip WalkDir entirely and return prev as-is. Skip when --inline is set since the
         // inline SQL node must be injected during load().
-        let has_inline = matches!(
-            &cli.command,
+        //
+        // Also skip it when a `parse` was asked to write artifacts. `parse`'s metadata epochs
+        // and information schema are written from `maybe_write_json_and_exit`, which returning
+        // early here never reaches — so `dbt parse --generate-info-schema` on a project with a
+        // warm parse cache exited 0 having written nothing at all, no artifact and no warning.
+        // Every other command escapes this because it writes from the post-run site in
+        // `dbt_lib`, which the fast path does not bypass.
+        //
+        // Scoped to `parse` deliberately: `write_metadata` is defaulted on for build/run/check,
+        // so testing it alone would disable the fast path for them too.
+        let has_inline = match &cli.command {
             Command::Core(CoreCommand::Compile(CompileArgs {
-                inline: Some(_),
-                ..
-            })) | Command::Core(CoreCommand::Show(ShowArgs {
-                inline: Some(_),
-                ..
-            }))
-        );
-        if use_lazy_filter && !has_inline {
+                inline: Some(_), ..
+            })) => true,
+            Command::Core(CoreCommand::Show(show_args)) => {
+                show_args.inline.is_some() && !show_queries_info_schema(show_args)
+            }
+            _ => false,
+        };
+        // For `parse`, `write_metadata` is only true when an artifact was actually requested
+        // (`--generate-info-schema` and `--write-index` both imply it); a plain `dbt parse`
+        // leaves it false and keeps the fast path.
+        let parse_artifacts_requested =
+            arg.command == FsCommand::Parse && (arg.write_metadata || arg.generate_info_schema);
+        if use_lazy_filter && !has_inline && !parse_artifacts_requested {
             // Skip the fast path when the --static-analysis level has changed since the
             // previous compilation. The fast path reuses nodes whose `base().static_analysis`
             // was stamped by the prior run; if the CLI arg changed (e.g. baseline→strict),
@@ -1176,6 +1217,31 @@ impl DbtProjectCompilation {
                     if sa_changed_on_prev {
                         tracing::debug!(
                             "Partial parse: no files changed but static_analysis level changed, performing full parse"
+                        );
+                        return DbtProjectCompilation::initialize(
+                            feature_stack,
+                            arg,
+                            cli,
+                            config,
+                            event_emitter,
+                            jinja_type_checking_event_listener_factory,
+                            None,
+                            token,
+                            version_check_handle,
+                            artifacts_sink,
+                        )
+                        .await;
+                    }
+                    // Same reasoning as the partial-load fast path above: reusing the
+                    // previous compilation returns before `maybe_write_json_and_exit`, which
+                    // is where `parse` writes its metadata epochs and information schema. A
+                    // `parse` that was asked for them has to take the full path, exactly as
+                    // it does when the static-analysis level changed.
+                    if arg.command == FsCommand::Parse
+                        && (arg.write_metadata || arg.generate_info_schema)
+                    {
+                        tracing::debug!(
+                            "Partial parse: no files changed, but parse artifacts were requested"
                         );
                         return DbtProjectCompilation::initialize(
                             feature_stack,
@@ -1921,7 +1987,18 @@ impl DbtProjectCompilation {
         };
 
         // FEATURES: auth record_replay
-        // Initialize adapter
+        // Initialize adapters. The store is kept, not just the adapter selected
+        // off it: a task that knows its node's adapter type asks it for the one
+        // that executes that node.
+        let adapter_store = self.loaded_project().init_adapter_store(
+            &self.resolved_state,
+            arg.replay.clone(),
+            &jinja_env,
+            Some(schema_store.clone()),
+            token,
+            sidecar_client.clone(),
+            execute_mode,
+        )?;
         let adapter = if let Some(adapter_override) = arg
             .adapter_override
             .as_deref()
@@ -1933,29 +2010,9 @@ impl DbtProjectCompilation {
                     "--adapter '{adapter_override}' is not a recognized adapter type"
                 )
             })?;
-            self.loaded_project()
-                .init_adapter_store(
-                    &self.resolved_state,
-                    arg.replay.clone(),
-                    &jinja_env,
-                    Some(schema_store.clone()),
-                    token,
-                    sidecar_client.clone(),
-                    execute_mode,
-                    arg.infer_schemas,
-                )?
-                .get(adapter_type)?
+            adapter_store.get(adapter_type)?
         } else {
-            self.loaded_project().init_adapter(
-                &self.resolved_state,
-                arg.replay.clone(),
-                &jinja_env,
-                Some(schema_store.clone()),
-                token,
-                sidecar_client.clone(),
-                execute_mode,
-                arg.infer_schemas,
-            )?
+            adapter_store.default_adapter()?
         };
         token.check_cancellation()?;
 
@@ -2308,6 +2365,7 @@ impl DbtProjectCompilation {
         let task_runner = TaskRunner::new(
             hooks,
             adapter.clone(),
+            adapter_store,
             resolved_state,
             jinja_env,
             schema_store.clone(),
@@ -2657,7 +2715,6 @@ async fn write_catalog(
         token,
         None,
         execute,
-        arg.infer_schemas,
     )?;
     let mut jinja_env = Arc::unwrap_or_clone(jinja_env.clone());
     configure_compile_and_run_jinja_environment(&mut jinja_env, adapter.clone());
@@ -2949,7 +3006,7 @@ fn write_parse_artifacts(arg: &EvalArgs) {
 
     if arg.generate_info_schema {
         let info_schema_dir = arg.info_schema_dir();
-        // Reuse the flat index at `target/index` as the intermediate when one is
+        // Reuse the flat index at `target/private/index` as the intermediate when one is
         // already there (the same ingest builds both, so an index written earlier
         // in this run is picked up via the delta path rather than re-ingested).
         // With no index to reuse — e.g. `--no-write-index` — stage privately

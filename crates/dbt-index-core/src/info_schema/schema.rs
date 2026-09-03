@@ -173,14 +173,24 @@ pub const INFO_SCHEMA: &[TableSpec] = &[
         filter: Filter::ResourceTypeIn(&["analysis"]),
         cols: node_cols![],
     },
-    // Empty for now: operations are not part of the node set, so nothing
-    // reaches this table. The shape is published so it can be filled later
-    // without a schema change.
+    // Project `on_run_start` / `on_run_end` operations, as node rows with
+    // `resource_type = 'operation'`. `sql_operation` is kept so a future
+    // resource type can land here without a schema change.
     TableSpec {
         ns: Ns::Dbt,
         name: "hooks",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["operation", "sql_operation"]),
+        cols: node_cols![],
+    },
+    // Project quality checks. A check is a node row like any other, so it is
+    // published like any other resource type -- which is also what lets a check
+    // read `dbt.checks` and assert something about the checks themselves.
+    TableSpec {
+        ns: Ns::Dbt,
+        name: "checks",
+        src: Src::Table("nodes"),
+        filter: Filter::ResourceTypeIn(&["check"]),
         cols: node_cols![],
     },
     // The source-specific columns live here and nowhere else.

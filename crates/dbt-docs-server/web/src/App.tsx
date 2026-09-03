@@ -5,6 +5,7 @@ import { Search as SearchIcon } from 'lucide-react';
 
 import { AnalysisFilterView } from './components/AnalysisFilterView';
 import FullLineagePage from './components/FullLineagePage';
+import { FullLineagePageV2 } from './components/LineageV2/FullLineagePage';
 import { LocatePane, type LocatePaneMode } from './components/LocatePane';
 import { MacroFilterView } from './components/MacroFilterView';
 import { ModelFilterView } from './components/ModelFilterView';
@@ -21,9 +22,7 @@ import {
 import { SourceCollectionPage } from './components/SourceCollectionPage';
 import { SourceFilterView } from './components/SourceFilterView';
 import { TestFilterView } from './components/TestFilterView';
-import { Badge } from './components/ui/Badge';
 import { Input } from './components/ui/Input';
-import { Tooltip } from './components/ui/Tooltip';
 import { useAllNodes } from './hooks/useAllNodes';
 import { deriveUpgradeCapabilities } from './hooks/useCapabilities';
 import { useIdentity } from './hooks/useIdentity';
@@ -143,6 +142,7 @@ export default function App() {
 
   const view = useMemo(() => viewFromPath(location.pathname), [location.pathname]);
   const isLineageRoute = location.pathname.startsWith('/lineage');
+  const isLineageV2Route = location.pathname.startsWith('/lineageV2');
   const selectedId = view.kind === 'detail' ? view.uniqueId : null;
 
   // Resolve the selected node's `{ uniqueId, resourceType }` for useAssetDetail:
@@ -376,7 +376,11 @@ export default function App() {
   }
 
   if (isLineageRoute) {
-    return (
+    return isLineageV2Route ? (
+      <Routes>
+        <Route path={ROUTES.lineageV2} element={<FullLineagePageV2 />} />
+      </Routes>
+    ) : (
       <Routes>
         <Route path={ROUTES.lineage} element={<FullLineagePage />} />
       </Routes>
@@ -594,7 +598,6 @@ function Topbar({
 }) {
   return (
     <header className="topbar-v2">
-      <div className="topbar-v2__bg" aria-hidden />
       <div className="topbar-v2__left">
         <div className="topbar-v2__brand">
           {project && (
@@ -606,12 +609,7 @@ function Topbar({
               title="Overview — reset view"
             >
               <div className="topbar-v2__brand-text">
-                <div className="topbar-v2__brand-name">
-                  {project.name}
-                  <Tooltip content="This docs site is in beta." placement="bottom">
-                    <Badge text="beta" variant="default" size="xs" />
-                  </Tooltip>
-                </div>
+                <div className="topbar-v2__brand-name">{project.name}</div>
                 <div className="topbar-v2__brand-sub">
                   {project.adapterType ?? ''}
                   {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}

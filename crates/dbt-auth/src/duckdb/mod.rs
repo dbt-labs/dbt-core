@@ -1,17 +1,22 @@
 pub mod init;
 
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome};
+use crate::{AdapterConfig, Auth, AuthError, AuthWarningPrinter};
 
 use dbt_adbc::{Backend, database};
 
 pub struct DuckDbAuth {
     backend: Backend,
+    #[allow(dead_code, reason = "unused until DuckDB auth has a warning to raise")]
+    pub warning_printer: Box<dyn AuthWarningPrinter>,
 }
 
 impl DuckDbAuth {
-    pub fn new(backend: Backend) -> Self {
+    pub fn new(backend: Backend, warning_printer: Box<dyn AuthWarningPrinter>) -> Self {
         debug_assert!(matches!(backend, Backend::DuckDB | Backend::DuckDBExtended));
-        Self { backend }
+        Self {
+            backend,
+            warning_printer,
+        }
     }
 }
 
@@ -20,7 +25,7 @@ impl Auth for DuckDbAuth {
         self.backend
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
+    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
         let mut builder = database::Builder::new(self.backend());
 
         // DuckDB requires the database path to be specified
@@ -38,10 +43,7 @@ impl Auth for DuckDbAuth {
                 .map_err(|e| AuthError::Config(e.to_string()))?;
         }
 
-        Ok(AuthOutcome {
-            builder,
-            warnings: vec![],
-        })
+        Ok(builder)
     }
 }
 
@@ -62,11 +64,10 @@ mod tests {
     #[test]
     fn configure_preserves_duckdb_backend_variant() {
         for backend in [Backend::DuckDB, Backend::DuckDBExtended] {
-            let auth = DuckDbAuth::new(backend);
+            let auth = DuckDbAuth::new(backend, Box::new(crate::NoopAuthWarningPrinter));
             let builder = auth
                 .configure(&AdapterConfig::new(Default::default()))
-                .unwrap()
-                .builder;
+                .unwrap();
 
             assert_eq!(auth.backend(), backend);
             assert_eq!(builder.backend, backend);
@@ -75,14 +76,17 @@ mod tests {
 
     #[test]
     fn configure_uses_in_memory_path_for_motherduck() {
-        let auth = DuckDbAuth::new(Backend::DuckDBExtended);
+        let auth = DuckDbAuth::new(
+            Backend::DuckDBExtended,
+            Box::new(crate::NoopAuthWarningPrinter),
+        );
         let config = config_from_yaml(
             r#"
 path: "md:stocks_dev"
 "#,
         );
 
-        let builder = auth.configure(&config).unwrap().builder;
+        let builder = auth.configure(&config).unwrap();
         assert!(builder.other.iter().any(|(name, value)| {
             matches!(
                 (name, value),
@@ -102,14 +106,17 @@ path: "md:stocks_dev"
 
     #[test]
     fn configure_keeps_local_path() {
-        let auth = DuckDbAuth::new(Backend::DuckDBExtended);
+        let auth = DuckDbAuth::new(
+            Backend::DuckDBExtended,
+            Box::new(crate::NoopAuthWarningPrinter),
+        );
         let config = config_from_yaml(
             r#"
 path: "/tmp/local.duckdb"
 "#,
         );
 
-        let builder = auth.configure(&config).unwrap().builder;
+        let builder = auth.configure(&config).unwrap();
         assert!(builder.other.iter().any(|(name, value)| {
             matches!(
                 (name, value),

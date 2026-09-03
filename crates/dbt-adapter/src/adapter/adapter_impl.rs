@@ -8,6 +8,7 @@ use crate::engine::{
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
+use crate::formatter::SqlLiteralFormatter;
 use crate::formatter::format_sql_with_bindings;
 use crate::macro_exec::{
     convert_macro_result_to_record_batch, execute_macro, execute_macro_with_package,
@@ -20,6 +21,7 @@ use crate::metadata::bigquery::{
 use crate::metadata::clickhouse::ClickHouseMetadataAdapter;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
+use crate::metadata::databricks::dbr_capabilities::DbrComputeContext;
 use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::duckdb::DuckDBMetadataAdapter;
 use crate::metadata::duckdb::{classify_attach_entry, duckdb_table_format_for_database};
@@ -36,6 +38,7 @@ use crate::relation::Relation;
 use crate::relation::RelationObject;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
 use crate::relation::databricks::config::DatabricksRelationMetadata;
+use crate::relation::snowflake::config::{INTERACTIVE_TABLE_COLUMNS, INTERACTIVE_TABLE_KEY};
 use crate::render_constraint::{render_column_constraint, warn_constraint_support};
 use crate::response::AdapterResponse;
 use crate::snapshots::SnapshotStrategy;
@@ -46,7 +49,7 @@ use crate::{AdapterResult, load_catalogs, python};
 
 use adbc_core::options::OptionValue;
 use arrow::array::{BooleanArray, RecordBatch, StringArray};
-use arrow_array::{Array as _, ArrayRef, Decimal128Array, Int64Array};
+use arrow_array::{Array as _, ArrayRef, Decimal128Array};
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
 use dashmap::DashMap;
@@ -269,403 +272,6 @@ pub enum InnerAdapter<'a> {
     Replay(AdapterType, &'a dyn Replayer),
 }
 
-#[derive(Default)]
-struct QuoteScanner {
-    in_single: bool,
-    in_double: bool,
-}
-
-impl QuoteScanner {
-    fn in_quotes(&self) -> bool {
-        self.in_single || self.in_double
-    }
-
-    fn advance(&mut self, c: char) {
-        if self.in_single {
-            if c == '\'' {
-                self.in_single = false;
-            }
-        } else if self.in_double {
-            if c == '"' {
-                self.in_double = false;
-            }
-        } else if c == '\'' {
-            self.in_single = true;
-        } else if c == '"' {
-            self.in_double = true;
-        }
-    }
-}
-
-fn strip_sql_comments(sql: &str) -> String {
-    let mut out = String::with_capacity(sql.len());
-    let mut chars = sql.chars().peekable();
-    let mut quotes = QuoteScanner::default();
-    while let Some(c) = chars.next() {
-        if quotes.in_quotes() {
-            out.push(c);
-            quotes.advance(c);
-            continue;
-        }
-        match c {
-            '\'' | '"' => {
-                quotes.advance(c);
-                out.push(c);
-            }
-            '-' if chars.peek() == Some(&'-') => {
-                chars.next();
-                for c2 in chars.by_ref() {
-                    if c2 == '\n' {
-                        out.push('\n');
-                        break;
-                    }
-                }
-            }
-            '/' if chars.peek() == Some(&'*') => {
-                chars.next();
-                let mut prev = ' ';
-                for c2 in chars.by_ref() {
-                    if prev == '*' && c2 == '/' {
-                        break;
-                    }
-                    prev = c2;
-                }
-                out.push(' ');
-            }
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
-fn find_top_level_select(sql: &str) -> Option<usize> {
-    find_top_level_keyword_after(sql, 0, "select")
-}
-
-fn find_top_level_keyword_after(sql: &str, start: usize, keyword: &str) -> Option<usize> {
-    let bytes = sql.as_bytes();
-    let mut depth: i32 = 0;
-    let mut quotes = QuoteScanner::default();
-    let n = bytes.len();
-    let mut i = start;
-    let klen = keyword.len();
-    while i < n {
-        let c = bytes[i] as char;
-        if quotes.in_quotes() {
-            quotes.advance(c);
-            i += 1;
-            continue;
-        }
-        match c {
-            '\'' | '"' => quotes.advance(c),
-            '(' => depth += 1,
-            ')' => depth -= 1,
-            _ => {
-                if depth == 0
-                    && (i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_'))
-                {
-                    let rest = &sql[i..];
-                    if rest.len() >= klen {
-                        let word = &rest[..klen];
-                        if word.eq_ignore_ascii_case(keyword) {
-                            let after = rest.as_bytes().get(klen).copied().unwrap_or(b' ');
-                            if !(after.is_ascii_alphanumeric() || after == b'_') {
-                                return Some(i);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-    None
-}
-
-fn top_level_split_commas(s: &str) -> Vec<String> {
-    let mut items = Vec::new();
-    let mut depth = 0i32;
-    let mut quotes = QuoteScanner::default();
-    let mut current = String::new();
-    for c in s.chars() {
-        if quotes.in_quotes() {
-            current.push(c);
-            quotes.advance(c);
-            continue;
-        }
-        match c {
-            '\'' | '"' => {
-                quotes.advance(c);
-                current.push(c);
-            }
-            '(' => {
-                depth += 1;
-                current.push(c);
-            }
-            ')' => {
-                depth -= 1;
-                current.push(c);
-            }
-            ',' if depth == 0 => {
-                items.push(current.trim().to_string());
-                current = String::new();
-            }
-            _ => current.push(c),
-        }
-    }
-    if !current.trim().is_empty() {
-        items.push(current.trim().to_string());
-    }
-    items
-}
-
-fn last_identifier(item: &str) -> Option<String> {
-    let trimmed = item.trim();
-    if trimmed.ends_with(')') || trimmed.ends_with('*') {
-        return None;
-    }
-    if let Some(pos) = find_top_level_keyword_after(trimmed, 0, "as") {
-        let after = trimmed[pos + 2..].trim();
-        if !after.is_empty() {
-            return Some(strip_ident_quotes(after));
-        }
-    }
-    let bytes = trimmed.as_bytes();
-    let mut end = bytes.len();
-    while end > 0 && (bytes[end - 1] as char).is_whitespace() {
-        end = end.saturating_sub(1);
-    }
-    let mut start = end;
-    if start > 0 && bytes[start - 1] == b'"' {
-        start -= 1;
-        while start > 0 && bytes[start - 1] != b'"' {
-            start -= 1;
-        }
-        start = start.saturating_sub(1);
-        return Some(strip_ident_quotes(&trimmed[start..end]));
-    }
-    while start > 0 {
-        let c = bytes[start - 1] as char;
-        if c.is_ascii_alphanumeric() || c == '_' {
-            start -= 1;
-        } else {
-            break;
-        }
-    }
-    if start == end {
-        return None;
-    }
-    Some(trimmed[start..end].to_string())
-}
-
-fn strip_ident_quotes(s: &str) -> String {
-    let s = s.trim();
-    if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
-        s[1..s.len() - 1].to_string()
-    } else {
-        s.trim_end_matches(',').to_string()
-    }
-}
-
-fn mock_select_column_names(sql: &str) -> Vec<String> {
-    let cleaned = strip_sql_comments(sql);
-    let Some(select_pos) = find_top_level_select(&cleaned) else {
-        return Vec::new();
-    };
-    let after_select = select_pos + "select".len();
-    let from_pos = find_top_level_keyword_after(&cleaned, after_select, "from");
-    let col_list_end = from_pos.unwrap_or(cleaned.len());
-    let col_list = &cleaned[after_select..col_list_end];
-    let items = top_level_split_commas(col_list);
-    if items.is_empty() {
-        return Vec::new();
-    }
-    items
-        .iter()
-        .enumerate()
-        .map(|(i, item)| {
-            let trimmed = item.trim();
-            let trimmed = trimmed
-                .strip_prefix("DISTINCT")
-                .or_else(|| trimmed.strip_prefix("distinct"))
-                .unwrap_or(trimmed)
-                .trim();
-            if trimmed == "*" || trimmed.ends_with(".*") {
-                format!("col_{i}")
-            } else {
-                last_identifier(trimmed).unwrap_or_else(|| format!("col_{i}"))
-            }
-        })
-        .collect()
-}
-
-fn is_metadata_only_query(sql: &str) -> bool {
-    const METADATA_NAMESPACES: &[&str] = &["information_schema", "svv_", "pg_catalog"];
-    let stripped = strip_sql_comments(sql);
-    let lower = stripped.to_ascii_lowercase();
-    METADATA_NAMESPACES
-        .iter()
-        .any(|namespace| contains_as_identifier_prefix(&lower, namespace))
-}
-
-/// Like `str::contains`, but rejects a match whose preceding character is
-/// itself an identifier character — so `svv_` matches `select * from
-/// svv_tables` but not a user identifier like `my_svv_data`.
-fn contains_as_identifier_prefix(haystack: &str, needle: &str) -> bool {
-    let mut start = 0;
-    while let Some(pos) = haystack[start..].find(needle) {
-        let match_start = start + pos;
-        let preceded_by_ident_char = haystack[..match_start]
-            .chars()
-            .next_back()
-            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
-        if !preceded_by_ident_char {
-            return true;
-        }
-        start = match_start + needle.len();
-    }
-    false
-}
-
-fn select_source_column(item: &str) -> Option<String> {
-    let trimmed = item.trim();
-    let before_as = match find_top_level_keyword_after(trimmed, 0, "as") {
-        Some(pos) => trimmed[..pos].trim(),
-        None => trimmed,
-    };
-    if before_as.is_empty()
-        || !before_as
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
-    {
-        return None;
-    }
-    let source = before_as.rsplit('.').next().unwrap_or(before_as);
-    if source.is_empty() {
-        return None;
-    }
-    Some(source.to_string())
-}
-
-fn parse_from_relation(sql_after_from: &str) -> Option<String> {
-    let bytes = sql_after_from.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() && (bytes[i] as char).is_whitespace() {
-        i += 1;
-    }
-    let mut parts = Vec::new();
-    loop {
-        if i >= bytes.len() {
-            break;
-        }
-        if bytes[i] == b'"' {
-            let start = i + 1;
-            let mut end = start;
-            while end < bytes.len() && bytes[end] != b'"' {
-                end += 1;
-            }
-            if end >= bytes.len() {
-                return None;
-            }
-            parts.push(sql_after_from[start..end].to_string());
-            i = end + 1;
-        } else {
-            let start = i;
-            let mut end = i;
-            while end < bytes.len()
-                && ((bytes[end] as char).is_ascii_alphanumeric() || bytes[end] == b'_')
-            {
-                end += 1;
-            }
-            if end == start {
-                break;
-            }
-            parts.push(sql_after_from[start..end].to_string());
-            i = end;
-        }
-        if i < bytes.len() && bytes[i] == b'.' {
-            i += 1;
-            continue;
-        }
-        break;
-    }
-    if parts.is_empty() {
-        None
-    } else {
-        Some(parts.join("."))
-    }
-}
-
-fn seed_column_values(sql: &str) -> Option<Vec<(String, Vec<String>)>> {
-    let cleaned = strip_sql_comments(sql);
-    let select_pos = find_top_level_select(&cleaned)?;
-    let after_select = select_pos + "select".len();
-    let from_pos = find_top_level_keyword_after(&cleaned, after_select, "from")?;
-    let col_list = &cleaned[after_select..from_pos];
-    let items = top_level_split_commas(col_list);
-    if items.is_empty() {
-        return None;
-    }
-
-    let after_from = from_pos + "from".len();
-    let relation_name = parse_from_relation(&cleaned[after_from..])?;
-    let seed_path = dbt_common::seed_path_registry::lookup(&relation_name)?;
-    let result =
-        dbt_csv::read_to_arrow_records(&seed_path, &dbt_csv::CustomCsvOptions::default()).ok()?;
-
-    let mut out = Vec::new();
-    for item in &items {
-        let source = select_source_column(item)?;
-        let alias = last_identifier(item).unwrap_or_else(|| source.clone());
-        let col_idx = result
-            .schema
-            .fields()
-            .iter()
-            .position(|f| f.name().eq_ignore_ascii_case(&source))?;
-
-        let mut seen = HashSet::new();
-        let mut values = Vec::new();
-        for batch in &result.batches {
-            let array = batch
-                .column(col_idx)
-                .as_any()
-                .downcast_ref::<StringArray>()?;
-            for i in 0..array.len() {
-                if array.is_valid(i) {
-                    let v = array.value(i).to_string();
-                    if seen.insert(v.clone()) {
-                        values.push(v);
-                    }
-                }
-            }
-        }
-        out.push((alias, values));
-    }
-
-    let row_count = out.first().map(|(_, v)| v.len())?;
-    if out.iter().any(|(_, v)| v.len() != row_count) {
-        return None;
-    }
-    Some(out)
-}
-
-fn build_mock_agate_table(cols: Vec<(String, ArrayRef)>) -> Option<AgateTable> {
-    let fields: Vec<Field> = cols
-        .iter()
-        .map(|(name, array)| Field::new(name, array.data_type().clone(), true))
-        .collect();
-    let arrays: Vec<ArrayRef> = cols.into_iter().map(|(_, array)| array).collect();
-    let schema = Arc::new(Schema::new(fields));
-    let batch = RecordBatch::try_new(schema, arrays).ok()?;
-    Some(AgateTable::from_record_batch(Arc::new(batch)))
-}
-
-fn trivial_mock_agate_table() -> AgateTable {
-    let array: ArrayRef = Arc::new(StringArray::from(vec!["placeholder"]));
-    build_mock_agate_table(vec![("names".to_string(), array)])
-        .expect("single string column, single row is always a valid record batch")
-}
-
 impl AdapterImpl {
     pub fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         match self.inner_adapter() {
@@ -697,7 +303,7 @@ impl AdapterImpl {
                         DuckDB => {
                             Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
-                        Alt => {
+                        LakeCompute => {
                             Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
                         Fabric => {
@@ -1018,7 +624,7 @@ impl AdapterImpl {
         use DbtIncrementalStrategy::*;
 
         match self.adapter_type() {
-            Postgres | DuckDB | Alt => &[Append, DeleteInsert, Merge, Microbatch],
+            Postgres | DuckDB | LakeCompute => &[Append, DeleteInsert, Merge, Microbatch],
             Snowflake => &[Append, DeleteInsert, InsertOverwrite, Merge, Microbatch],
             Bigquery => &[Append],
             Databricks => &[
@@ -1118,15 +724,15 @@ impl AdapterImpl {
         let splitter = engine.splitter();
         let adapter_type = self.adapter_type();
         let all_stmts = match adapter_type {
-            // BigQuery, DuckDB, and Alt support multi-statement execution.
+            // BigQuery, DuckDB, and lake compute support multi-statement execution.
             //
             // BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
             //
             // DuckDB: temp tables are connection-scoped; batching CREATE TEMP + DML in one
             // execute() call avoids the need for cross-call connection caching.
             //
-            // Alt: also supports batching
-            Bigquery | DuckDB | Alt => vec![sql.to_string()],
+            // Lake compute: also supports batching
+            Bigquery | DuckDB | LakeCompute => vec![sql.to_string()],
             _ => splitter.split(sql, adapter_type),
         };
         // Filter out empty and comment-only statements.
@@ -1219,7 +825,31 @@ impl AdapterImpl {
         options: Option<ExecuteOptions>,
         token: CancellationToken,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let resolved_ctx = match ctx.map(Cow::Borrowed) {
+        if self.mock_state().is_some() {
+            if !self.introspect_enabled() {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::NotSupported,
+                    "Introspective queries are disabled (--no-introspect).",
+                ));
+            }
+            let response = AdapterResponse::new()
+                .with_message("execute".to_string())
+                .with_code(sql.to_string())
+                .with_rows_affected(1);
+
+            let schema = Arc::new(Schema::new(vec![Field::new(
+                "names",
+                DataType::Decimal128(38, 10),
+                true,
+            )]));
+            let decimal_array: ArrayRef = Arc::new(Decimal128Array::from(vec![Some(42)]));
+            let batch = RecordBatch::try_new(schema, vec![decimal_array]).unwrap();
+
+            let table = AgateTable::from_record_batch(Arc::new(batch));
+
+            return Ok((response, table));
+        }
+        let ctx = match ctx.map(Cow::Borrowed) {
             Some(ctx) => ctx,
             None => {
                 let ctx = match state {
@@ -1230,94 +860,11 @@ impl AdapterImpl {
                 Cow::Owned(ctx)
             }
         };
-        if let Some(mock) = self.mock_state() {
-            if !self.introspect_enabled() {
-                return Err(AdapterError::new(
-                    AdapterErrorKind::NotSupported,
-                    "Introspective queries are disabled (--no-introspect).",
-                ));
-            }
-            if is_metadata_only_query(sql) {
-                if let Some(fallback) = mock.metadata_fallback_engine.clone() {
-                    match fallback.new_connection(state, None) {
-                        Ok(mut real_conn) => {
-                            return self.execute_inner(
-                                fallback,
-                                state,
-                                real_conn.as_mut(),
-                                resolved_ctx.as_ref(),
-                                sql,
-                                auto_begin,
-                                fetch,
-                                limit,
-                                options,
-                                token,
-                            );
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "infer-schemas: metadata fallback connection failed, \
-                                 returning fabricated mock data for query: {e:?}"
-                            );
-                        }
-                    }
-                }
-            }
-            let response = AdapterResponse::new()
-                .with_message("execute".to_string())
-                .with_code(sql.to_string())
-                .with_rows_affected(1);
-
-            if let Some(columns) = seed_column_values(sql) {
-                let cols = columns
-                    .into_iter()
-                    .map(|(alias, values)| {
-                        let name = crate::format_ident::default_identifier_case(
-                            &alias,
-                            self.adapter_type(),
-                        );
-                        let array: ArrayRef = Arc::new(StringArray::from(values));
-                        (name, array)
-                    })
-                    .collect();
-                if let Some(table) = build_mock_agate_table(cols) {
-                    return Ok((response, table));
-                }
-            }
-
-            let column_names = mock_select_column_names(sql);
-            let table = if column_names.is_empty() {
-                let decimal_array: ArrayRef = Arc::new(Decimal128Array::from(vec![Some(42)]));
-                build_mock_agate_table(vec![("names".to_string(), decimal_array)])
-                    .unwrap_or_else(trivial_mock_agate_table)
-            } else {
-                let is_computed_expr = |name: &str| {
-                    name.strip_prefix("col_")
-                        .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()))
-                };
-                let cols = column_names
-                    .iter()
-                    .map(|name| {
-                        let field_name =
-                            crate::format_ident::default_identifier_case(name, self.adapter_type());
-                        let array: ArrayRef = if is_computed_expr(name) {
-                            Arc::new(Int64Array::from(vec![Some(1)]))
-                        } else {
-                            Arc::new(StringArray::from(vec!["placeholder"]))
-                        };
-                        (field_name, array)
-                    })
-                    .collect();
-                build_mock_agate_table(cols).unwrap_or_else(trivial_mock_agate_table)
-            };
-
-            return Ok((response, table));
-        }
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_execute(
                 state,
                 conn,
-                resolved_ctx.as_ref(),
+                ctx.as_ref(),
                 sql,
                 auto_begin,
                 fetch,
@@ -1328,7 +875,7 @@ impl AdapterImpl {
                 Arc::clone(engine),
                 state,
                 conn,
-                resolved_ctx.as_ref(),
+                ctx.as_ref(),
                 sql,
                 auto_begin,
                 fetch,
@@ -1512,15 +1059,15 @@ impl AdapterImpl {
                 replay.replay_submit_python_job(ctx, conn, state, model, compiled_code)
             }
             Replay(
-                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | Alt | Spark | Fabric
-                | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
-                | Dremio | Oracle),
+                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | LakeCompute | Spark
+                | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+                | Datafusion | Dremio | Oracle),
                 _,
             )
             | Impl(
-                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | Alt | Spark | Fabric
-                | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
-                | Dremio | Oracle),
+                adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | LakeCompute | Spark
+                | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+                | Datafusion | Dremio | Oracle),
                 _,
             ) => Err(AdapterError::new(
                 AdapterErrorKind::Internal,
@@ -1552,7 +1099,7 @@ impl AdapterImpl {
             }
             Snowflake | Databricks | Redshift | Spark | DuckDB | Postgres | Salesforce | Fabric
             | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle
-            | Alt | Bigquery => {
+            | LakeCompute | Bigquery => {
                 use crate::macro_exec::execute_macro_wrapper;
                 use minijinja::value::{Kwargs, Value};
 
@@ -1660,7 +1207,7 @@ impl AdapterImpl {
                 }
                 Postgres => "nspname",
                 DuckDB => "schema_name",
-                Alt => "schema_name",
+                LakeCompute => "schema_name",
                 Fabric => "schema",
                 // https://github.com/ClickHouse/dbt-clickhouse/blob/main/dbt/include/clickhouse/macros/adapters.sql
                 ClickHouse => "name",
@@ -1792,18 +1339,13 @@ impl AdapterImpl {
                     "Introspective queries are disabled (--no-introspect).",
                 ));
             }
-            let quoting = ResolvedQuoting {
-                database: true,
-                schema: true,
-                identifier: true,
-            };
             let relation = Relation::new(
                 Snowflake,
                 database.to_string(),
                 schema.to_string(),
                 identifier.to_string(),
             )
-            .with_quoting(quoting)
+            .with_quoting(self.quoting())
             .validate()?;
             return Ok(Some(Arc::new(relation)));
         }
@@ -1885,9 +1427,10 @@ impl AdapterImpl {
                     relation.database_as_str()?
                 };
 
+                let lit_fmt = SqlLiteralFormatter::new(adapter_type);
                 let show_sql = format!(
-                    "show dynamic tables like '{}' in schema {database}.{schema}",
-                    relation.identifier_as_str()?
+                    "show dynamic tables like {} in schema {database}.{schema}",
+                    lit_fmt.format_str(&relation.identifier_as_str()?)
                 );
 
                 let (_, table) = self.query(&ctx, conn, &show_sql, None, token.clone())?;
@@ -1912,8 +1455,8 @@ impl AdapterImpl {
                 // TABLES if we need to check transient
                 let table = if include_transient {
                     let show_tables_sql = format!(
-                        "show tables like '{}' in schema {database}.{schema}",
-                        relation.identifier_as_str()?
+                        "show tables like {} in schema {database}.{schema}",
+                        lit_fmt.format_str(&relation.identifier_as_str()?)
                     );
                     let (_, tables) = self.query(&ctx, conn, &show_tables_sql, None, token)?;
                     let tables = tables.rename(Some(tables.column_names()), None, false, false)?;
@@ -1952,11 +1495,78 @@ impl AdapterImpl {
                     Value::from_object(table),
                 )])))
             }
-            Postgres | Bigquery | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Bigquery | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 let err = format!(
                     "describe_dynamic_table is not supported by the {} adapter",
+                    adapter_type
+                );
+                Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    err,
+                ))
+            }
+        }
+    }
+
+    /// `SHOW INTERACTIVE TABLES` has no transient status, so unlike `describe_dynamic_table`
+    /// this never runs a second `SHOW TABLES` to fold `transient` in.
+    ///
+    /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/2d27c26df1a4b71144cd4585cfdefac39cd311bc/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L739-L775
+    pub fn describe_interactive_table(
+        &self,
+        state: &State,
+        conn: &'_ mut dyn Connection,
+        relation: &Arc<dyn BaseRelation>,
+        token: CancellationToken,
+    ) -> Result<Value, minijinja::Error> {
+        let adapter_type = self.adapter_type();
+        match adapter_type {
+            Snowflake => {
+                let ctx = query_ctx_from_state(state)?.with_desc("describe_interactive_table");
+
+                let quoting = relation.quote_policy();
+
+                let schema = if quoting.schema {
+                    relation.schema_as_quoted_str()?
+                } else {
+                    relation.schema_as_str()?
+                };
+
+                let database = if quoting.database {
+                    relation.database_as_quoted_str()?
+                } else {
+                    relation.database_as_str()?
+                };
+
+                let lit_fmt = SqlLiteralFormatter::new(adapter_type);
+                let show_sql = format!(
+                    "show interactive tables like {} in schema {database}.{schema}",
+                    lit_fmt.format_str(&relation.identifier_as_str()?)
+                );
+
+                let (_, table) = self.query(&ctx, conn, &show_sql, None, token)?;
+
+                let table = table
+                    .rename(Some(table.column_names()), None, false, false)?
+                    .select(
+                        &INTERACTIVE_TABLE_COLUMNS
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect::<Vec<_>>(),
+                    );
+
+                Ok(Value::from(ValueMap::from([(
+                    Value::from(INTERACTIVE_TABLE_KEY),
+                    Value::from_object(table),
+                )])))
+            }
+            Postgres | Bigquery | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
+                let err = format!(
+                    "describe_interactive_table is not supported by the {} adapter",
                     adapter_type
                 );
                 Err(minijinja::Error::new(
@@ -2146,11 +1756,17 @@ impl AdapterImpl {
         let Ok(capability) = dbr_capabilities::DbrCapability::from_str(capability_name) else {
             return false;
         };
-        let Some(is_cluster) = Self::is_cluster_http_path(config) else {
-            return false;
-        };
-
-        dbr_capabilities::has_capability(capability, EngineVersion::Unset, !is_cluster)
+        match Self::is_cluster_http_path(config) {
+            // No http_path to classify, so we can't tell cluster from warehouse.
+            None => false,
+            Some(true) => dbr_capabilities::has_capability(
+                capability,
+                DbrComputeContext::Cluster(EngineVersion::Unset),
+            ),
+            Some(false) => {
+                dbr_capabilities::has_capability(capability, DbrComputeContext::SqlWarehouse)
+            }
+        }
     }
 
     /// Determine if the current Databricks connection points to a classic
@@ -2384,8 +2000,8 @@ impl AdapterImpl {
             // NOTE: This is the default behavior. If said adapter type does not
             // have a get_columns_in_relation() macro, it will fail with a
             // "macro does not exist" error
-            Athena | ClickHouse | Datafusion | Dremio | DuckDB | Alt | Exasol | Fabric | Oracle
-            | Postgres | Redshift | Salesforce | Snowflake | Spark | Starburst | Trino => {
+            Athena | ClickHouse | Datafusion | Dremio | DuckDB | LakeCompute | Exasol | Fabric
+            | Oracle | Postgres | Redshift | Salesforce | Snowflake | Spark | Starburst | Trino => {
                 execute_macro(
                     state,
                     &[RelationObject::new(relation.to_owned()).into_value()],
@@ -2533,32 +2149,8 @@ impl AdapterImpl {
         state: &State,
         relation: &dyn BaseRelation,
     ) -> AdapterResult<Vec<Column>> {
+        // Mock adapter: return fake column without executing jinja macro
         if self.engine().is_mock() {
-            if let (Ok(database), Ok(schema), Ok(identifier)) = (
-                relation.database_as_str(),
-                relation.schema_as_str(),
-                relation.identifier_as_str(),
-            ) {
-                let relation_name = format!("{database}.{schema}.{identifier}");
-                if let Some(schema) = dbt_common::infer_schema_registry::lookup(&relation_name) {
-                    if !schema.columns.is_empty() {
-                        return Ok(schema
-                            .columns
-                            .into_iter()
-                            .map(|name| {
-                                Column::new(
-                                    self.adapter_type(),
-                                    name,
-                                    "text".to_string(),
-                                    Some(256),
-                                    None,
-                                    None,
-                                )
-                            })
-                            .collect());
-                    }
-                }
-            }
             return Ok(vec![Column::new(
                 self.adapter_type(),
                 "one".to_string(),
@@ -2672,9 +2264,9 @@ impl AdapterImpl {
                 ))
             }
             Impl(
-                Snowflake | Databricks | Redshift | Salesforce | Postgres | Spark | DuckDB | Alt
-                | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-                | Oracle,
+                Snowflake | Databricks | Redshift | Salesforce | Postgres | Spark | DuckDB
+                | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+                | Datafusion | Dremio | Oracle,
                 _,
             ) => {
                 // downcast relation
@@ -2723,7 +2315,7 @@ impl AdapterImpl {
                 }
             }
             Impl(
-                Postgres | Bigquery | Databricks | Redshift | Spark | DuckDB | Alt | Fabric
+                Postgres | Bigquery | Databricks | Redshift | Spark | DuckDB | LakeCompute | Fabric
                 | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle,
                 _,
             ) => {
@@ -2808,7 +2400,7 @@ impl AdapterImpl {
             Replay(_, replay) => {
                 replay.replay_expand_target_column_types(state, from_relation, to_relation)
             }
-            Impl(Bigquery, _) | Impl(DuckDB, _) | Impl(Alt, _) => {
+            Impl(Bigquery, _) | Impl(DuckDB, _) | Impl(LakeCompute, _) => {
                 // This method is a noop for BigQuery and DuckDB.
                 // BigQuery: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L260-L261
                 // DuckDB: type widening (e.g. INT→BIGINT) is handled implicitly;
@@ -2969,8 +2561,8 @@ impl AdapterImpl {
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | Fabric | DuckDB
-            | Alt | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            | LakeCompute | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion
+            | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3013,8 +2605,9 @@ impl AdapterImpl {
                 }
                 Ok(result)
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
+            | Oracle => {
                 let mut result = vec![];
                 for (_, column) in columns_map {
                     let col_name = if column.quote.unwrap_or(false) {
@@ -3191,13 +2784,13 @@ impl AdapterImpl {
             (DuckDB, Check) => NotSupported,
             (DuckDB, Custom) => NotSupported,
 
-            // Alt - follows DuckDB
-            (Alt, NotNull) => Enforced,
-            (Alt, ForeignKey) => Enforced,
-            (Alt, Unique) => NotEnforced,
-            (Alt, PrimaryKey) => NotEnforced,
-            (Alt, Check) => NotSupported,
-            (Alt, Custom) => NotSupported,
+            // Lake compute - follows DuckDB
+            (LakeCompute, NotNull) => Enforced,
+            (LakeCompute, ForeignKey) => Enforced,
+            (LakeCompute, Unique) => NotEnforced,
+            (LakeCompute, PrimaryKey) => NotEnforced,
+            (LakeCompute, Check) => NotSupported,
+            (LakeCompute, Custom) => NotSupported,
 
             // Fabric
             (Fabric, Check) => NotSupported,
@@ -3328,7 +2921,7 @@ impl AdapterImpl {
         }
 
         match self.adapter_type() {
-            Postgres | Bigquery | DuckDB | Alt | Exasol => {
+            Postgres | Bigquery | DuckDB | LakeCompute | Exasol => {
                 let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
                 let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
 
@@ -3551,9 +3144,9 @@ impl AdapterImpl {
                 )?;
                 Ok(AgateTable::from_record_batch(Arc::new(catalog)))
             }
-            Snowflake | Bigquery | Databricks | Spark | DuckDB | Alt | Postgres | Salesforce
-            | Fabric | ClickHouse | Exasol | Athena | Starburst | Trino | Datafusion | Dremio
-            | Oracle => Err(AdapterError::new(
+            Snowflake | Bigquery | Databricks | Spark | DuckDB | LakeCompute | Postgres
+            | Salesforce | Fabric | ClickHouse | Exasol | Athena | Starburst | Trino
+            | Datafusion | Dremio | Oracle => Err(AdapterError::new(
                 AdapterErrorKind::NotSupported,
                 "build_catalog_from_show_tables_and_svv_columns is only supported for Redshift",
             )),
@@ -3567,9 +3160,9 @@ impl AdapterImpl {
     ) -> AdapterResult<IndexMap<String, DbtColumn>> {
         match self.adapter_type() {
             Bigquery => nest_column_data_types(columns, constraints),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3606,9 +3199,9 @@ impl AdapterImpl {
     ) -> Result<Value, minijinja::Error> {
         match self.adapter_type() {
             Bigquery => Ok(Value::from(render_struct_projection(col_name, data_type))),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3704,9 +3297,9 @@ impl AdapterImpl {
                 )?;
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3758,9 +3351,9 @@ impl AdapterImpl {
 
                 Self::parse_dataset_location(&batch)
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3816,9 +3409,9 @@ impl AdapterImpl {
                 )?;
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3893,8 +3486,9 @@ impl AdapterImpl {
                 Ok(none_value())
             }
             Salesforce => todo!("load_dataframe() for the Salesforce adapter"),
-            Postgres | Snowflake | Databricks | Redshift | Spark | DuckDB | Alt | Fabric
-            | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Spark | DuckDB | LakeCompute
+            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
+            | Oracle => {
                 unimplemented!("only available with BigQuery or Salesforce adapter")
             }
         }
@@ -3954,9 +3548,9 @@ impl AdapterImpl {
 
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -4084,7 +3678,7 @@ impl AdapterImpl {
     pub fn verify_database(&self, database: String) -> AdapterResult<Value> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_verify_database(&database),
-            Impl(adapter_type @ (Postgres | DuckDB | Alt | ClickHouse), engine) => {
+            Impl(adapter_type @ (Postgres | DuckDB | LakeCompute | ClickHouse), engine) => {
                 if let Some(configured_database) = engine.get_configured_database_name() {
                     if database == configured_database {
                         Ok(Value::from(()))
@@ -4201,8 +3795,8 @@ impl AdapterImpl {
                 }
             }
             adapter_type @ (Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark
-            | DuckDB | Alt | Fabric | ClickHouse | Exasol | Starburst | Athena
-            | Trino | Datafusion | Dremio | Oracle) => {
+            | DuckDB | LakeCompute | Fabric | ClickHouse | Exasol | Starburst
+            | Athena | Trino | Datafusion | Dremio | Oracle) => {
                 unimplemented!(
                     "is_replaceable is only available with BigQuery adapter, not {}",
                     adapter_type
@@ -4265,9 +3859,9 @@ impl AdapterImpl {
 
                 Ok(Value::from_object(validated_config))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -4289,9 +3883,9 @@ impl AdapterImpl {
                 temporary,
                 adapter_type,
             ),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -4313,9 +3907,9 @@ impl AdapterImpl {
                     false,
                 ),
             ),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -4340,9 +3934,9 @@ impl AdapterImpl {
                 );
                 Ok(Value::from_serialize(options))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => Err(minijinja::Error::new(
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 "get_common_options is only available with BigQuery adapter",
             )),
@@ -4382,9 +3976,9 @@ impl AdapterImpl {
 
                 Ok(Value::from(result))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -4451,7 +4045,7 @@ impl AdapterImpl {
             Impl(DuckDB, engine) => {
                 duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
-            Impl(Alt, engine) => {
+            Impl(LakeCompute, engine) => {
                 duckdb::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
             Impl(Fabric, engine) => {
@@ -4528,18 +4122,17 @@ impl AdapterImpl {
         let capability = dbr_capabilities::DbrCapability::from_str(capability_name)
             .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
 
-        let is_cluster = self.is_cluster()?;
-        let is_sql_warehouse = !is_cluster;
-
         let query_ctx = query_ctx_from_state(state)?.with_desc("has_dbr_capability adapter call");
         let dbr_version =
             DatabricksMetadataAdapter::get_engine_version(self, &query_ctx, conn, token)?;
 
-        Ok(dbr_capabilities::has_capability(
-            capability,
-            dbr_version,
-            is_sql_warehouse,
-        ))
+        let context = if self.is_cluster()? {
+            DbrComputeContext::Cluster(dbr_version)
+        } else {
+            DbrComputeContext::SqlWarehouse
+        };
+
+        Ok(dbr_capabilities::has_capability(capability, context))
     }
 
     /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L349
@@ -4568,9 +4161,9 @@ impl AdapterImpl {
 
                 Ok(Value::from(result))
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with Databricksadapter")
             }
         }
@@ -4720,9 +4313,9 @@ impl AdapterImpl {
                 Ok(path)
             }
 
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with Databricks adapter")
             }
         }
@@ -4798,9 +4391,9 @@ impl AdapterImpl {
                 }
                 Ok(())
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with Databricks adapter")
             }
         }
@@ -4893,9 +4486,9 @@ impl AdapterImpl {
 
                 Ok(!use_managed_iceberg)
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with Databricks adapter")
             }
         }
@@ -5254,16 +4847,49 @@ impl AdapterImpl {
 
                 Ok(())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB | Alt
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Spark | DuckDB
+            | LakeCompute | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino
+            | Datafusion | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
     }
 
-    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L818
+    /// Return shapes deliberately differ: BigQuery returns a typed `RelationConfig`, Snowflake
+    /// returns a raw `SHOW`-query readback.
     pub fn describe_relation(
+        &self,
+        state: &State,
+        conn: &'_ mut dyn Connection,
+        relation: &Arc<dyn BaseRelation>,
+        include_transient: bool,
+        token: CancellationToken,
+    ) -> Result<Value, minijinja::Error> {
+        if self.adapter_type() == Snowflake {
+            match relation.relation_type() {
+                Some(RelationType::DynamicTable) => {
+                    self.describe_dynamic_table(state, conn, relation, include_transient, token)
+                }
+                Some(RelationType::InteractiveTable) => {
+                    self.describe_interactive_table(state, conn, relation, token)
+                }
+                other => Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!(
+                        "describe_relation is not supported for relation type {other:?} on Snowflake"
+                    ),
+                )),
+            }
+        } else {
+            Ok(self
+                .describe_relation_bigquery(conn, relation, Some(state))?
+                .map(Value::from_object)
+                .unwrap_or_else(none_value))
+        }
+    }
+
+    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L818
+    fn describe_relation_bigquery(
         &self,
         conn: &'_ mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
@@ -5603,11 +5229,23 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
                 None,
             );
 
+            // https://github.com/databricks/dbt-databricks/blob/3caad339bb3e60b7c795684374c3c8a1d9042279/dbt/adapters/databricks/impl.py#L160
+            let use_describe_as_json_for_relation_metadata = BehaviorFlag::new(
+                "use_describe_as_json_for_relation_metadata",
+                false,
+                Some(
+                    "Use DESCRIBE TABLE EXTENDED AS JSON when supported to fetch relation metadata like constraints, column masks, row filters, view definition, etc. When disabled, falls back to information_schema queries.",
+                ),
+                None,
+                None,
+            );
+
             vec![
                 use_user_folder_for_python,
                 use_materialization_v2,
                 use_replace_on_for_insert_overwrite,
                 use_managed_iceberg,
+                use_describe_as_json_for_relation_metadata,
             ]
         }
         Bigquery => {
@@ -5658,8 +5296,8 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
             );
             vec![skip_autocommit_transaction_statements, grants_extended]
         }
-        Postgres | Salesforce | Spark | DuckDB | Alt | ClickHouse | Exasol | Starburst | Athena
-        | Trino | Datafusion | Dremio | Oracle => vec![],
+        Postgres | Salesforce | Spark | DuckDB | LakeCompute | ClickHouse | Exasol | Starburst
+        | Athena | Trino | Datafusion | Dremio | Oracle => vec![],
     }
 }
 
@@ -5675,7 +5313,6 @@ struct MockState {
     engine: Arc<dyn AdapterEngine>,
     flags: BTreeMap<String, Value>,
     behavior: Arc<Behavior>,
-    metadata_fallback_engine: Option<Arc<dyn AdapterEngine>>,
 }
 
 #[derive(Clone)]
@@ -5713,27 +5350,8 @@ impl AdapterImpl {
         type_ops: Arc<dyn TypeOps>,
         stmt_splitter: Arc<dyn StmtSplitter>,
     ) -> Self {
-        Self::new_mock_with_metadata_fallback(
-            adapter_type,
-            flags,
-            quoting,
-            type_ops,
-            stmt_splitter,
-            None,
-        )
-    }
-
-    pub fn new_mock_with_metadata_fallback(
-        adapter_type: AdapterType,
-        flags: BTreeMap<String, Value>,
-        quoting: ResolvedQuoting,
-        type_ops: Arc<dyn TypeOps>,
-        stmt_splitter: Arc<dyn StmtSplitter>,
-        metadata_fallback_engine: Option<Arc<dyn AdapterEngine>>,
-    ) -> Self {
         let backend = crate::adapter::adapter_factory::backend_of(adapter_type);
-        let auth: Arc<dyn dbt_auth::Auth> =
-            dbt_auth::auth_for_backend(Box::new(dbt_auth::NoopAuthWarningPrinter), backend).into();
+        let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
         let engine: Arc<dyn AdapterEngine> = Arc::new(AdbcEngine::new_mock(
             adapter_type,
             auth,
@@ -5770,7 +5388,6 @@ impl AdapterImpl {
                 engine,
                 flags,
                 behavior,
-                metadata_fallback_engine,
             }),
             schema_store: None,
         }
@@ -6100,6 +5717,11 @@ pub trait Replayer: fmt::Debug + Send + Sync {
         Ok(false)
     }
 
+    /// Non-consuming peek: return true if the next per-node replay record is an execute record.
+    fn replay_peek_execute_next(&self, _state: &State) -> AdapterResult<bool> {
+        Ok(false)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn replay_execute(
         &self,
@@ -6339,7 +5961,7 @@ mod tests {
     use crate::stmt_splitter::DefaultStmtSplitter;
 
     use dbt_adapter_core::AdapterType;
-    use dbt_auth::{NoopAuthWarningPrinter, auth_for_backend};
+    use dbt_auth::auth_for_backend;
     use dbt_common::AdapterResult;
     use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
@@ -6347,6 +5969,22 @@ mod tests {
     use dbt_yaml::Mapping;
 
     use minijinja::{Environment, State, Value};
+
+    #[test]
+    fn test_databricks_describe_as_json_behavior_flag_registered_and_off_by_default() {
+        let flags = adapter_specific_behavior_flags(Databricks);
+        let flag = flags
+            .iter()
+            .find(|f| f.name == "use_describe_as_json_for_relation_metadata")
+            .expect(
+                "use_describe_as_json_for_relation_metadata should be registered for Databricks",
+            );
+
+        assert!(
+            !Arc::new(flag.clone()).is_true(),
+            "use_describe_as_json_for_relation_metadata should default to off"
+        );
+    }
 
     fn engine(adapter_type: AdapterType) -> Arc<dyn AdapterEngine> {
         let config = match adapter_type {
@@ -6391,7 +6029,7 @@ mod tests {
         config: Mapping,
         behavior_flag_overrides: BTreeMap<String, bool>,
     ) -> Arc<dyn AdapterEngine> {
-        let auth = auth_for_backend(Box::new(NoopAuthWarningPrinter), backend_of(adapter_type));
+        let auth = auth_for_backend(backend_of(adapter_type));
         let resolved_quoting = match adapter_type {
             Snowflake => SNOWFLAKE_RESOLVED_QUOTING,
             _ => DEFAULT_RESOLVED_QUOTING,
@@ -7943,199 +7581,5 @@ mod tests {
             ("dbt".to_string(), "check_schema_exists".to_string())
         );
         Ok(())
-    }
-
-    #[test]
-    fn build_mock_agate_table_rejects_mismatched_column_lengths() {
-        let short: ArrayRef = Arc::new(StringArray::from(vec!["a"]));
-        let long: ArrayRef = Arc::new(StringArray::from(vec!["a", "b"]));
-        assert!(
-            build_mock_agate_table(vec![("a".to_string(), short), ("b".to_string(), long)])
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn trivial_mock_agate_table_never_panics() {
-        let _ = trivial_mock_agate_table();
-    }
-
-    #[test]
-    fn mock_get_relation_forces_quoting_to_preserve_case_regardless_of_dialect() -> AdapterResult<()>
-    {
-        let quoting = ResolvedQuoting {
-            database: true,
-            schema: true,
-            identifier: true,
-        };
-        let relation = Relation::new(
-            Snowflake,
-            "my_database".to_string(),
-            "my_schema".to_string(),
-            "my_table".to_string(),
-        )
-        .with_quoting(quoting)
-        .validate()?;
-        assert_eq!(
-            relation.render_self_as_str(),
-            "\"my_database\".\"my_schema\".\"my_table\""
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn strip_sql_comments_handles_line_and_block_comments() {
-        assert_eq!(
-            strip_sql_comments("select 1 -- trailing comment\nfrom t"),
-            "select 1 \nfrom t"
-        );
-        assert_eq!(
-            strip_sql_comments("select /* block */ 1 from t"),
-            "select   1 from t"
-        );
-        assert_eq!(
-            strip_sql_comments("select 1 /* multi\nline */ from t"),
-            "select 1   from t"
-        );
-    }
-
-    #[test]
-    fn strip_sql_comments_ignores_markers_inside_string_literals() {
-        assert_eq!(
-            strip_sql_comments("select '-- not a comment' from t"),
-            "select '-- not a comment' from t"
-        );
-        assert_eq!(
-            strip_sql_comments("select '/* not a comment */' from t"),
-            "select '/* not a comment */' from t"
-        );
-    }
-
-    #[test]
-    fn is_metadata_only_query_ignores_namespace_words_inside_comments() {
-        assert!(!is_metadata_only_query(
-            "-- references svv_tables in a comment\nselect * from orders"
-        ));
-        assert!(!is_metadata_only_query(
-            "/* information_schema mentioned here */ select * from orders"
-        ));
-    }
-
-    #[test]
-    fn is_metadata_only_query_ignores_namespace_word_inside_a_larger_identifier() {
-        assert!(!is_metadata_only_query("select * from my_svv_data"));
-    }
-
-    #[test]
-    fn is_metadata_only_query_matches_real_namespace_references() {
-        assert!(is_metadata_only_query("select * from svv_tables"));
-        assert!(is_metadata_only_query(
-            "select * from information_schema.tables"
-        ));
-        assert!(is_metadata_only_query("select * from pg_catalog.pg_class"));
-    }
-
-    #[test]
-    fn find_top_level_select_skips_subquery_select() {
-        assert_eq!(find_top_level_select("select 1 from (select 2) t"), Some(0));
-        assert!(find_top_level_keyword_after("(select 1) as t", 0, "select").is_none());
-    }
-
-    #[test]
-    fn find_top_level_keyword_after_does_not_match_substring_of_identifier() {
-        assert!(find_top_level_keyword_after("select selection from t", 0, "select") == Some(0));
-        assert!(
-            find_top_level_keyword_after("select selection from t", "select".len(), "select")
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn top_level_split_commas_ignores_commas_in_parens_and_strings() {
-        assert_eq!(
-            top_level_split_commas("a, coalesce(b, c), 'x,y'"),
-            vec!["a", "coalesce(b, c)", "'x,y'"]
-        );
-    }
-
-    #[test]
-    fn last_identifier_extracts_alias_after_as() {
-        assert_eq!(
-            last_identifier("some_expr AS my_alias"),
-            Some("my_alias".to_string())
-        );
-        assert_eq!(
-            last_identifier(r#"some_expr AS "My Alias""#),
-            Some("My Alias".to_string())
-        );
-    }
-
-    #[test]
-    fn last_identifier_extracts_bare_qualified_column() {
-        assert_eq!(last_identifier("t.my_col"), Some("my_col".to_string()));
-    }
-
-    #[test]
-    fn last_identifier_returns_none_for_star_and_call_expressions() {
-        assert_eq!(last_identifier("t.*"), None);
-        assert_eq!(last_identifier("count(*)"), None);
-    }
-
-    #[test]
-    fn mock_select_column_names_basic() {
-        assert_eq!(
-            mock_select_column_names("select a, b as bee, t.c from t"),
-            vec!["a", "bee", "c"]
-        );
-    }
-
-    #[test]
-    fn mock_select_column_names_star_gets_placeholder() {
-        assert_eq!(mock_select_column_names("select * from t"), vec!["col_0"]);
-    }
-
-    #[test]
-    fn mock_select_column_names_ignores_comments_and_distinct() {
-        assert_eq!(
-            mock_select_column_names("select distinct a, /* skip */ b -- trailing\nfrom t"),
-            vec!["a", "b"]
-        );
-    }
-
-    #[test]
-    fn mock_select_column_names_handles_nested_subquery_in_column_list() {
-        assert_eq!(
-            mock_select_column_names("select a, (select max(x) from u) as m from t"),
-            vec!["a", "m"]
-        );
-    }
-
-    #[test]
-    fn mock_select_column_names_handles_window_function() {
-        assert_eq!(
-            mock_select_column_names("select a, row_number() over (order by a) as rn from t"),
-            vec!["a", "rn"]
-        );
-    }
-
-    #[test]
-    fn select_source_column_extracts_base_column_before_alias() {
-        assert_eq!(
-            select_source_column("t.my_col as alias"),
-            Some("my_col".to_string())
-        );
-        assert_eq!(select_source_column("count(*) as n"), None);
-    }
-
-    #[test]
-    fn parse_from_relation_handles_quoted_and_dotted_names() {
-        assert_eq!(
-            parse_from_relation("db.schema.\"My Table\" as t"),
-            Some("db.schema.My Table".to_string())
-        );
-        assert_eq!(
-            parse_from_relation("my_table"),
-            Some("my_table".to_string())
-        );
     }
 }

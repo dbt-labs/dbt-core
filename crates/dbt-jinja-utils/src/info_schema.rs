@@ -10,41 +10,55 @@ use minijinja::Value;
 
 /// Views a parse-time check may read.
 ///
-/// `dbt.nodes` and `dbt.node_columns` are **not** on this list: they mix parse-safe columns with
-/// ones that are compile-filled (`compiled_code`, `grain`, `classifiers`, …) or that no writer
-/// populates at all (`unique_key`, `pre_hook`, … — the real values live in the `config` JSON
-/// blob). `dbt.graph_nodes` and `dbt.columns` are the parse-safe projections of those two tables:
-/// every listed column enumerated explicitly, never `SELECT *`, so a column that cannot hold data
-/// at parse simply is not there — referencing it is a DuckDB binder error, not a silent NULL.
-/// `dbt.models` / `dbt.seeds` / … are `dbt.graph_nodes` filtered by `resource_type`, defined in
-/// terms of `dbt.graph_nodes` rather than `dbt.nodes` directly, so they inherit the same guarantee.
+/// Each one is named after the table of the same name in the dbt information schema and
+/// spells its columns the same way, so a query that runs here runs there. It exposes fewer
+/// columns, though: only those that hold their final value by the end of parse. A column that
+/// compile or `dbt docs generate` fills reads as NULL at parse, and since zero rows is a pass,
+/// a check filtering on one quietly reports nothing rather than failing. Such columns are left
+/// out rather than nulled, so naming one is a DuckDB binder error.
 ///
-/// Defined once, in `dbt_index_core::db::PARSE_SAFE_VIEWS_DDL`, and registered from there by the
-/// check adapter — this list only has to name them, not redefine their columns.
+/// Every name here is a table in the information schema: one vocabulary, whether a query is
+/// run by a check or against `target/info_schema/`. `dbt.nodes` is deliberately absent — the
+/// index's own tables are registered under `dbt_internal`, out of reach of a check.
 ///
-/// Also deliberately excluded, unrelated to the nodes/columns split above:
+/// Defined once, in `dbt_index_core::info_schema::parse_safe::VIEWS`, and registered from
+/// there by the check adapter — this list only has to name them, not redefine their columns.
+/// The two are kept in step by a test in the crate that can see both (`dbt-tasks-sa`); this
+/// crate deliberately does not depend on the index.
 ///
-/// - the `dbt_rt` schema — written from run artifacts, so it does not exist at parse at all.
-/// - `generation` — index bookkeeping rather than project metadata; parse-stable but not useful to a
-///   check, and exposing it invites checks that depend on ingest internals.
+/// The list is the information schema's `dbt` tables minus the ones that hold nothing at parse
+/// (`column_lineage` needs static analysis; `classifiers` and `semantic_relationships` have no
+/// writer yet). `dbt_rt` is absent entirely: it is written from run artifacts, so at parse it
+/// does not exist.
 pub const PARSE_SAFE_VIEWS: &[&str] = &[
-    "graph_nodes",
+    "project",
+    "packages",
+    "project_vars",
+    "project_env_vars",
     "models",
     "seeds",
-    "tests",
     "snapshots",
-    "sources",
-    "analyses",
-    "operations",
     "functions",
+    "analyses",
+    "hooks",
+    "sources",
+    "data_tests",
+    "unit_tests",
     "checks",
-    "columns",
-    "docs",
-    "edges",
     "macros",
-    "project",
-    "project_vars",
-    "test_metadata",
+    "groups",
+    "exposures",
+    "metrics",
+    "docs_blocks",
+    "saved_queries",
+    "semantic_models",
+    "semantic_entities",
+    "semantic_measures",
+    "semantic_dimensions",
+    "time_spines",
+    "dag_nodes",
+    "edges",
+    "node_columns",
 ];
 
 /// The `info_schema('<view>')` helper. Expands to `dbt.<view>` so a check can read the index
@@ -103,10 +117,11 @@ mod tests {
 
     #[test]
     fn rejects_the_raw_tables_the_parse_safe_views_are_projected_from() {
-        // `dbt.nodes` / `dbt.node_columns` mix parse-safe columns with compile-filled or
-        // never-populated ones. `dbt.graph_nodes` / `dbt.columns` are the safe projections;
-        // the raw tables underneath must stay unreachable through this helper.
-        for raw in ["nodes", "node_columns"] {
+        // `dbt.nodes` mixes parse-safe columns with compile-filled and never-populated ones,
+        // and the per-resource-type views are its safe projections; the table itself must stay
+        // unreachable. (`node_columns` is not in this list: the information schema publishes a
+        // table by that name, so the view carrying its name is the safe projection.)
+        for raw in ["nodes", "test_metadata", "generation"] {
             let err = call(raw).expect_err("the raw table must be refused");
             assert!(
                 err.contains("not available to a parse-time check"),
@@ -116,14 +131,31 @@ mod tests {
     }
 
     #[test]
+    fn rejects_the_names_these_views_had_before_they_took_the_information_schema_s() {
+        // A check written against the old names must fail loudly at render, naming what is
+        // available now, rather than resolving to a relation that no longer exists.
+        for renamed in ["tests", "operations", "columns", "docs", "graph_nodes"] {
+            let err = call(renamed).expect_err("the old name must be refused");
+            assert!(
+                err.contains("not available to a parse-time check"),
+                "unexpected message for {renamed}: {err}"
+            );
+        }
+    }
+
+    #[test]
     fn rejects_views_that_are_not_final_at_parse() {
         // `dbt_rt.*` does not exist until run artifacts are written; `generation` is ingest
-        // bookkeeping, not project metadata. Both must fail loudly rather than read as empty.
+        // bookkeeping, not project metadata; `column_lineage` waits on static analysis, and
+        // `classifiers` / `semantic_relationships` are information-schema tables with no writer
+        // behind them yet. All must fail loudly rather than read as empty.
         for later in [
             "column_lineage",
             "catalog_tables",
             "run_results",
             "generation",
+            "classifiers",
+            "semantic_relationships",
         ] {
             let err = call(later).expect_err("a later-phase view must be refused");
             assert!(
@@ -154,11 +186,11 @@ mod tests {
     fn error_names_the_available_views() {
         let err = call("nope").expect_err("unknown view");
         assert!(
-            err.contains("graph_nodes"),
+            err.contains("models"),
             "should list what is available: {err}"
         );
         assert!(
-            err.contains("models"),
+            err.contains("data_tests"),
             "should list what is available: {err}"
         );
     }

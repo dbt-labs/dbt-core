@@ -89,6 +89,8 @@ pub fn compare_sql(actual: &str, expected: &str, adapter_type: AdapterType) -> A
     let expected = canonicalize_numeric_to_decimal(&expected);
     let actual = canonicalize_alter_table_set_tblproperties_order(&actual);
     let expected = canonicalize_alter_table_set_tblproperties_order(&expected);
+    let actual = canonicalize_alter_set_tags_order(&actual);
+    let expected = canonicalize_alter_set_tags_order(&expected);
 
     // Short-circuit: Elementary-generated SQL is allowed to drift across recorders/runners.
     // We only short-circuit when BOTH sides are clearly Elementary-originated.
@@ -1299,6 +1301,41 @@ fn canonicalize_alter_table_set_tblproperties_order(sql: &str) -> String {
     format!("{}{}{}", prefix, entries.join(" , "), suffix)
 }
 
+/// Canonicalize `ALTER TABLE ... SET TAGS (...)` by sorting the key-value
+/// entries alphabetically by key. dbt-databricks reads in `databricks_tags`
+/// keys nondeterministically if they are set in inline `config` blocks, so
+/// Fusion and dbt-databricks may emit them in a different order.
+fn canonicalize_alter_set_tags_order(sql: &str) -> String {
+    // Match: ALTER TABLE <name> SET TAGS (<entries>)
+    // Anchored to the full statement to avoid masking unrelated DDL.
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?is)^(\s*ALTER\s+TABLE\s+.+?\s+SET\s+TAGS\s*\()(.+?)(\)\s*)$").unwrap()
+    });
+
+    let Some(caps) = RE.captures(sql) else {
+        return sql.to_string();
+    };
+
+    let prefix = &caps[1]; // "ALTER TABLE ... SET TAGS ("
+    let entries_raw = &caps[2]; // "'key1' = 'val1' , 'key2' = 'val2' , ..."
+    let suffix = &caps[3]; // ")"
+
+    // Extract 'key' = 'value' pairs via regex to avoid breaking on commas inside quoted values.
+    static ENTRY_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"'(?:[^'\\]|\\.)*'\s*=\s*'(?:[^'\\]|\\.)*'").unwrap());
+
+    let mut entries: Vec<&str> = ENTRY_RE
+        .find_iter(entries_raw)
+        .map(|m| m.as_str())
+        .collect();
+    if entries.is_empty() {
+        return sql.to_string();
+    }
+    entries.sort();
+
+    format!("{}{}{}", prefix, entries.join(" , "), suffix)
+}
+
 /// NUMERIC and DECIMAL are SQL-standard synonyms. Fusion may emit one while the
 /// recording uses the other. Normalize `numeric(` → `decimal(` so comparisons succeed.
 fn canonicalize_numeric_to_decimal(sql: &str) -> String {
@@ -2005,9 +2042,12 @@ fn canonicalize_query_tag(sql: &str) -> String {
 /// A lot of these are from {{ invocation_id }}. The value of the original invocation_id
 /// is available in manifest.json. We should consider using it in replay. TODO: Do this!
 fn canonicalize_uuid_literals(sql: &str) -> String {
-    // Case-insensitive UUID regex inside single quotes
+    // Case-insensitive UUID regex inside single quotes. Tolerates whitespace between the quote
+    // and the UUID (e.g. `' <uuid> '`), which some customer macros add around an
+    // `invocation_id`-derived audit-column literal. Regression: fs#14150.
     static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'").unwrap()
+        Regex::new(r"(?i)'\s*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\s*'")
+            .unwrap()
     });
     UUID_RE.replace_all(sql, "'UUID'").to_string()
 }
@@ -4551,6 +4591,26 @@ WHERE
 
         let result = compare_sql(actual, expected, AdapterType::Snowflake);
         assert!(result.is_ok(), "UUID literal differences should be ignored");
+    }
+
+    #[test]
+    fn test_compare_sql_whitespace_padded_uuid_literals_ignored() {
+        // Regression for fs#14150: some customer macros pad the UUID literal with spaces
+        // inside the quotes (e.g. an `invocation_id`-derived audit column), which the UUID
+        // regex previously required to hug the quotes with no interior whitespace.
+        let actual = r#"select * from (
+    select ' 01a050c0-a25d-75d1-bc8d-e46fde65bb69 '::varchar as idp_dbt_id
+) as __dbt_sbq where false limit 0"#;
+
+        let expected = r#"select * from (
+    select ' 66f899d8-7787-4998-8e66-ac219ca47493 '::varchar as idp_dbt_id
+) as __dbt_sbq where false limit 0"#;
+
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_ok(),
+            "Whitespace-padded UUID literal differences should be ignored: {result:?}"
+        );
     }
 
     #[test]

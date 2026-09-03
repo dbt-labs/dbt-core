@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use dbt_adapter::Adapter;
 use dbt_adapter::response::AdapterResponse;
+use dbt_adapter::{Adapter, AdapterStore};
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -82,6 +82,7 @@ pub fn summarize_task_runner_stats(
 pub struct TaskRunner {
     hooks: Box<dyn TaskRunnerHooks>,
     adapter: Arc<Adapter>,
+    adapter_store: Arc<AdapterStore>,
     pub resolved_state: Arc<ResolverState>,
     jinja_env: Arc<JinjaEnv>,
     schema_store: Arc<SchemaStore>,
@@ -96,6 +97,7 @@ impl TaskRunner {
     pub fn new(
         hooks: Box<dyn TaskRunnerHooks>,
         adapter: Arc<Adapter>,
+        adapter_store: Arc<AdapterStore>,
         resolved_state: Arc<ResolverState>,
         jinja_env: Arc<JinjaEnv>,
         schema_store: Arc<SchemaStore>,
@@ -108,6 +110,7 @@ impl TaskRunner {
         Self {
             hooks,
             adapter,
+            adapter_store,
             resolved_state,
             jinja_env,
             schema_store,
@@ -203,6 +206,7 @@ impl TaskRunner {
                 freshness_results,
                 Arc::clone(&self.static_analysis_buckets),
                 Arc::clone(&self.adapter),
+                Arc::clone(&self.adapter_store),
                 self.run_cache.clone(),
             )
             .await

@@ -2,8 +2,7 @@
 
 const colors = require('tailwindcss/colors');
 const defaultTheme = require('tailwindcss/defaultTheme');
-const path = require('path');
-const { tokens: bigaTokens } = require('@dbt-labs/biga');
+const { tokens: bigaTokens } = require('./tokens.js');
 
 const DBT_ORANGE = 'var(--logoBit)';
 
@@ -13,22 +12,14 @@ const DBT_ORANGE = 'var(--logoBit)';
 // OSS Design Capability plan. Re-copy from
 // @dbt-labs/sourdough/tailwind.config if sourdough's config changes.
 //
-// `content` below still points at the real @dbt-labs/sourdough package
-// (resolved dynamically, not via __dirname, since this file no longer lives
-// inside that package) so Tailwind keeps generating CSS for any classnames
-// used in sourdough's own compiled components. In practice this is also
-// covered independently by @dbt-labs/dbt-dag's own tailwind preset, which
-// has its own separate scan of sourdough's package -- this is kept anyway
-// for correctness in case that ever changes.
-const sourdoughPackageDir = path.dirname(
-  require.resolve('@dbt-labs/sourdough/tailwind.config'),
-);
+// No `content` scan of the live @dbt-labs/sourdough package: confirmed
+// (2026-09-02) that every sourdough-only classname it used to pull in
+// (bg-borderBrand, cursor-col-resize, ring-focusDanger, shadow-brand-hover,
+// touch-none) has zero references anywhere in this app's own src/.
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    path.join(sourdoughPackageDir, '{src,dist}/**/*.{js,jsx,ts,tsx,mdx}'),
-  ],
+  content: [],
   darkMode: 'class', // or 'media' or 'class'
   theme: {
     screens: {

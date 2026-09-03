@@ -419,6 +419,8 @@ pub enum DbtMaterialization {
     StreamingTable,
     /// only for snowflake
     DynamicTable,
+    /// only for snowflake
+    InteractiveTable,
     /// for inline SQL compilation
     Inline,
     #[serde(untagged)]
@@ -441,6 +443,7 @@ impl FromStr for DbtMaterialization {
             "function" => Ok(DbtMaterialization::Function),
             "streaming_table" => Ok(DbtMaterialization::StreamingTable),
             "dynamic_table" => Ok(DbtMaterialization::DynamicTable),
+            "interactive_table" => Ok(DbtMaterialization::InteractiveTable),
             "inline" => Ok(DbtMaterialization::Inline),
             other => Ok(DbtMaterialization::Unknown(other.to_string())),
         }
@@ -465,6 +468,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::Unit => "unit",
             DbtMaterialization::StreamingTable => "streaming_table",
             DbtMaterialization::DynamicTable => "dynamic_table",
+            DbtMaterialization::InteractiveTable => "interactive_table",
             DbtMaterialization::Analysis => "analysis",
             DbtMaterialization::Function => "function",
             DbtMaterialization::Inline => "inline",
@@ -495,6 +499,7 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Unit => RelationType::External, // TODO Validate this
             DbtMaterialization::StreamingTable => RelationType::StreamingTable,
             DbtMaterialization::DynamicTable => RelationType::DynamicTable,
+            DbtMaterialization::InteractiveTable => RelationType::InteractiveTable,
             DbtMaterialization::Analysis => RelationType::External, // TODO Validate this
             DbtMaterialization::Inline => RelationType::Ephemeral, // Inline models don't materialize in DB
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
@@ -518,6 +523,7 @@ impl From<&DbtMaterialization> for NodeMaterialization {
             DbtMaterialization::Unit => Self::Unit,
             DbtMaterialization::StreamingTable => Self::StreamingTable,
             DbtMaterialization::DynamicTable => Self::DynamicTable,
+            DbtMaterialization::InteractiveTable => Self::InteractiveTable,
             DbtMaterialization::Analysis => Self::Analysis,
             DbtMaterialization::Inline => Self::Ephemeral, // Inline is similar to ephemeral
             DbtMaterialization::Unknown(_) => Self::Custom,
@@ -1437,6 +1443,12 @@ where
     normalized.serialize(serializer)
 }
 
+// `skip_serializing_none` only rewrites fields whose declared outer type is
+// `Option`, so it cannot elide a field through a `Verbatim` wrapper.
+pub fn verbatim_option_is_none<T>(value: &Verbatim<Option<T>>) -> bool {
+    value.is_none()
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct HookConfig {
@@ -1766,17 +1778,16 @@ pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &s
     let sql_without_opening = find_opening(normalized_full)
         .and_then(|start_pos| {
             let after_tag_start = &normalized_full[start_pos..];
+            // Scoped to this tag's own boundary: the *nearest* `%}` after
+            // `start_pos` always closes this tag, dashed or not, because a
+            // snapshot name is a bare identifier that can't itself contain
+            // `%}`. Searching for `-%}` first (as before) would skip past
+            // this tag's own plain `%}` and match a later, unrelated inner
+            // tag's dashed close instead (e.g. `{% snapshot foo %} ...
+            // {% for x in y -%}`), stripping real body content.
             after_tag_start
-                .find("-%}")
-                .or_else(|| after_tag_start.find("%}"))
-                .map(|end_offset| {
-                    let tag_end = if after_tag_start[end_offset..].starts_with("-%}") {
-                        end_offset + 3
-                    } else {
-                        end_offset + 2
-                    };
-                    &normalized_full[start_pos + tag_end..]
-                })
+                .find("%}")
+                .map(|end_offset| &normalized_full[start_pos + end_offset + 2..])
         })
         .unwrap_or(normalized_full);
 
@@ -2035,6 +2046,25 @@ mod tests {
     }
 
     #[test]
+    fn interactive_table_materialization_roundtrip() {
+        let m: DbtMaterialization = "interactive_table".parse().unwrap();
+        assert_eq!(m, DbtMaterialization::InteractiveTable);
+        assert_eq!(m.to_string(), "interactive_table");
+        assert_eq!(RelationType::from(m), RelationType::InteractiveTable);
+        assert_eq!(
+            RelationType::InteractiveTable.to_string(),
+            "interactive_table"
+        );
+    }
+
+    #[test]
+    fn interactive_table_maps_to_dedicated_node_materialization() {
+        let node_materialization = NodeMaterialization::from(&DbtMaterialization::InteractiveTable);
+        assert_eq!(node_materialization, NodeMaterialization::InteractiveTable);
+        assert_ne!(node_materialization, NodeMaterialization::Custom);
+    }
+
+    #[test]
     fn test_include_exclude_deserializes_number_versions() {
         let config: IncludeExclude = dbt_yaml::from_str(
             r#"
@@ -2216,6 +2246,31 @@ exclude: 3
             conform_normalized_snapshot_raw_code_to_mantle_format(already),
             already,
             "already-stripped input should be returned unchanged"
+        );
+    }
+
+    #[test]
+    fn test_conform_normalized_snapshot_dashed_inner_tag_does_not_leak_into_opening_strip() {
+        // Regression for dbt-labs/dbt-core#15956 (FUSCSE-58): a plain outer
+        // `{% snapshot %}` tag combined with any inner whitespace-controlled tag
+        // caused the opening-tag boundary search to skip past this tag's own
+        // nearby `%}` and match the inner tag's dashed close instead, silently
+        // dropping real body content before hashing and falsely flagging
+        // unchanged snapshots as `state:modified.body`.
+        let trigger = "{% snapshot repro %} select {% for c in cols -%} {{ c }}{%- if not loop.last %},{%- endif -%} {%- endfor %} from t {% endsnapshot %}";
+        let control = "{%- snapshot repro -%} select {% for c in cols -%} {{ c }}{%- if not loop.last %},{%- endif -%} {%- endfor %} from t {%- endsnapshot -%}";
+
+        let stripped_trigger = conform_normalized_snapshot_raw_code_to_mantle_format(trigger);
+        let stripped_control = conform_normalized_snapshot_raw_code_to_mantle_format(control);
+
+        assert!(
+            stripped_trigger.contains("select") && stripped_trigger.contains("from t"),
+            "body content before/after the inner dashed tag must survive stripping, got: {stripped_trigger:?}"
+        );
+        assert_eq!(
+            stripped_trigger, stripped_control,
+            "plain and dashed outer tags must normalize to the same stripped body; \
+             the previous bug made these diverge, causing a false state:modified.body"
         );
     }
 

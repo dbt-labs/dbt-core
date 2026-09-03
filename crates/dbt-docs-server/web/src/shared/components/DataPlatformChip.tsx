@@ -1,27 +1,30 @@
 import { FC } from 'react';
 import { twMerge } from 'tailwind-merge';
 
-import { WarehouseType, WarehouseTypeIcon } from '@dbt-labs/dbt-dag';
-
-import { toTitleCase } from '../util/string';
-
-/** Matches sourdough's SizeType structurally (same string values) so it's
- *  still assignable to WarehouseTypeIcon's own `size` prop (which is typed
- *  against sourdough's SizeType inside the published dbt-dag package) --
- *  TypeScript checks shape, not origin, for a plain string-literal union. */
-type ChipSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+import type { WarehouseType } from '../../lib/resourceType';
 
 interface DataPlatformChipProps extends React.ComponentPropsWithoutRef<'div'> {
   platform: 'dbt' | WarehouseType;
-  showText?: boolean;
-  size?: ChipSize;
   bordered?: boolean;
 }
 
+/** Display name per warehouse -- mirrors dbt-dag's `warehouseNameMap` exactly
+ *  (verified against its compiled output) rather than title-casing the raw
+ *  value, which would render "Bigquery" instead of "BigQuery". */
+const WAREHOUSE_NAME: Record<WarehouseType, string> = {
+  snowflake: 'Snowflake',
+  databricks: 'Databricks',
+  bigquery: 'BigQuery',
+  redshift: 'Redshift',
+};
+
+/** Renders the warehouse name as plain text -- no per-platform brand icon.
+ *  dbt-dag's `WarehouseTypeIcon` rendered actual Snowflake/Databricks/BigQuery/
+ *  Redshift logos; those aren't something to bundle into an OSS-published
+ *  repo, so this is text-only by design, not a placeholder pending a real
+ *  icon. */
 export const DataPlatformChip: FC<DataPlatformChipProps> = ({
   platform,
-  showText = false,
-  size = 'md',
   bordered = true,
   className,
   ...props
@@ -38,16 +41,9 @@ export const DataPlatformChip: FC<DataPlatformChipProps> = ({
 
   return (
     <div className={twMerge(classes, className)} {...props}>
-      <WarehouseTypeIcon
-        warehouse={platform}
-        className="mt-0.5 align-middle"
-        size={size}
-      />
-      {showText && (
-        <span className="align-middle font-normal leading-5 text-fgMain">
-          {toTitleCase(platform)}
-        </span>
-      )}
+      <span className="align-middle font-normal leading-5 text-fgMain">
+        {WAREHOUSE_NAME[platform]}
+      </span>
     </div>
   );
 };

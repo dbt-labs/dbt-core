@@ -275,6 +275,7 @@ mod tests {
         assert_eq!(f.format_str(""), "''");
         assert_eq!(f.format_str("hello"), "'hello'");
         assert_eq!(f.format_str("Mom\\Baby"), "'Mom\\\\Baby'");
+        assert_eq!(f.format_str("it's"), "'it''s'");
     }
 
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -365,11 +366,11 @@ mod tests {
     #[test]
     fn value_as_sql_literal_quotes_and_escapes_strings() {
         assert_eq!(
-            format_value_as_sql_literal(AdapterType::Alt, &Value::from("hello")),
+            format_value_as_sql_literal(AdapterType::LakeCompute, &Value::from("hello")),
             "'hello'"
         );
         assert_eq!(
-            format_value_as_sql_literal(AdapterType::Alt, &Value::from("it's a test")),
+            format_value_as_sql_literal(AdapterType::LakeCompute, &Value::from("it's a test")),
             "'it''s a test'"
         );
     }
@@ -377,7 +378,7 @@ mod tests {
     #[test]
     fn value_as_sql_literal_formats_none_as_null() {
         assert_eq!(
-            format_value_as_sql_literal(AdapterType::Alt, &Value::from(())),
+            format_value_as_sql_literal(AdapterType::LakeCompute, &Value::from(())),
             "NULL"
         );
     }
@@ -385,11 +386,11 @@ mod tests {
     #[test]
     fn value_as_sql_literal_formats_booleans() {
         assert_eq!(
-            format_value_as_sql_literal(AdapterType::Alt, &Value::from(true)),
+            format_value_as_sql_literal(AdapterType::LakeCompute, &Value::from(true)),
             "true"
         );
         assert_eq!(
-            format_value_as_sql_literal(AdapterType::Alt, &Value::from(false)),
+            format_value_as_sql_literal(AdapterType::LakeCompute, &Value::from(false)),
             "false"
         );
     }
@@ -399,7 +400,7 @@ mod tests {
         let date = PyDate::new(NaiveDate::from_ymd_opt(2026, 1, 15).unwrap());
         let value = Value::from_object(date);
         assert_eq!(
-            format_value_as_sql_literal(AdapterType::Alt, &value),
+            format_value_as_sql_literal(AdapterType::LakeCompute, &value),
             "'2026-01-15'"
         );
     }
@@ -407,7 +408,7 @@ mod tests {
     #[test]
     fn value_as_sql_literal_falls_back_to_display_for_numbers() {
         assert_eq!(
-            format_value_as_sql_literal(AdapterType::Alt, &Value::from(42i64)),
+            format_value_as_sql_literal(AdapterType::LakeCompute, &Value::from(42i64)),
             "42"
         );
     }

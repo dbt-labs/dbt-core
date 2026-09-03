@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use dbt_adapter::Adapter;
 use dbt_adapter::relation::create_relation_from_node;
+use dbt_adapter::{Adapter, AdapterStore};
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
 use dbt_common::collections::DashMap;
@@ -58,6 +58,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
         freshness_results: Option<Box<dyn PreTaskRunData>>,
         static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
         adapter: Arc<Adapter>,
+        adapter_store: Arc<AdapterStore>,
         run_cache_lifecycle: Arc<RunCacheLifecycle>,
     ) -> Pin<Box<dyn Future<Output = Result<TaskRunnerCtx, Box<FsError>>> + Send>> {
         let rendering_listener_factory = self.rendering_listener_factory();
@@ -165,6 +166,7 @@ pub trait TaskRunnerCtxFactory: Send + Sync + 'static {
                     generic_test_relationships,
                     span_manager,
                     execute,
+                    adapter_store,
                     sources_extractor,
                     run_cache_ctx,
                 )),

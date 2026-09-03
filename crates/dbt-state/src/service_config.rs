@@ -50,6 +50,11 @@ pub struct RunCacheServiceConfig {
     pub api_url: String,
     pub secure: bool,
     pub org_id: Option<String>,
+    /// dbt platform account id from `dbt-cloud: account_id` (or
+    /// `DBT_CLOUD_ACCOUNT_ID`), trimmed. Used to pick the matching cached
+    /// platform OAuth session when several accounts are logged in, and to
+    /// detect that a cached dbt State token belongs to another account.
+    pub platform_account_id: Option<String>,
     pub oauth_client_id: String,
     pub oauth_client_secret: Option<String>,
     pub oauth_token_url: String,
@@ -221,6 +226,7 @@ impl RunCacheServiceConfig {
             api_url,
             secure,
             org_id: config_value(&mut get_env, "ORG_ID"),
+            platform_account_id: None,
             oauth_client_id: state_config_value(
                 &mut get_env,
                 STATE_OAUTH_CLIENT_ID_ENV,
@@ -281,6 +287,7 @@ impl RunCacheServiceConfig {
             api_url: DEFAULT_API_URL.to_string(),
             secure: true,
             org_id: None,
+            platform_account_id: None,
             oauth_client_id: DEFAULT_OAUTH_CLIENT_ID.to_string(),
             oauth_client_secret: None,
             oauth_token_url: DEFAULT_OAUTH_TOKEN_URL.to_string(),
@@ -321,6 +328,13 @@ impl RunCacheServiceConfig {
     fn with_cloud_config(mut self, cloud_config: Option<&ResolvedCloudConfig>) -> Self {
         if self.org_id.is_none() {
             self.org_id = cloud_config.and_then(|config| config.state_org_id.clone());
+        }
+        if self.platform_account_id.is_none() {
+            self.platform_account_id = cloud_config
+                .and_then(|config| config.account_id.as_deref())
+                .map(str::trim)
+                .filter(|account_id| !account_id.is_empty())
+                .map(str::to_string);
         }
         self
     }
@@ -754,6 +768,35 @@ mod tests {
         let config = config_from_pairs_and_cloud_config(&[], Some(&cloud_config)).unwrap();
 
         assert_eq!(config.org_id.as_deref(), Some("project-org"));
+    }
+
+    #[test]
+    fn cloud_config_account_id_sets_platform_account_id() {
+        let cloud_config = ResolvedCloudConfig {
+            account_id: Some("456".to_string()),
+            ..Default::default()
+        };
+
+        let config = config_from_pairs_and_cloud_config(&[], Some(&cloud_config)).unwrap();
+
+        assert_eq!(config.platform_account_id.as_deref(), Some("456"));
+    }
+
+    #[test]
+    fn cloud_config_account_id_is_trimmed_and_empty_is_ignored() {
+        let padded = ResolvedCloudConfig {
+            account_id: Some("  456  ".to_string()),
+            ..Default::default()
+        };
+        let config = config_from_pairs_and_cloud_config(&[], Some(&padded)).unwrap();
+        assert_eq!(config.platform_account_id.as_deref(), Some("456"));
+
+        let blank = ResolvedCloudConfig {
+            account_id: Some("   ".to_string()),
+            ..Default::default()
+        };
+        let config = config_from_pairs_and_cloud_config(&[], Some(&blank)).unwrap();
+        assert_eq!(config.platform_account_id, None);
     }
 
     #[test]

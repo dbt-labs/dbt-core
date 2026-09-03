@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-
-import type { CellContext } from '@dbt-labs/sourdough';
+import type { CellContext } from '@tanstack/react-table';
 
 import {
   RightAlignedTruncatedCell,

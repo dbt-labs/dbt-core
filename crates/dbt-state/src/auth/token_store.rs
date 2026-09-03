@@ -25,6 +25,12 @@ pub struct StoredToken {
     pub access_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
+    /// dbt platform account whose credential was exchanged for this token.
+    /// `None` for tokens not minted from a platform credential (standalone
+    /// browser login, client credentials) and for files written before this
+    /// field existed; such tokens are never invalidated on account change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform_account_id: Option<String>,
 }
 
 impl StoredToken {
@@ -51,6 +57,7 @@ impl StoredToken {
             expires_at,
             access_token: response.access_token,
             refresh_token: response.refresh_token,
+            platform_account_id: None,
         })
     }
 }
@@ -188,6 +195,7 @@ mod tests {
             expires_at: Some(1_700_000_000.0),
             access_token: Some("access".to_string()),
             refresh_token: Some("refresh".to_string()),
+            platform_account_id: Some("42".to_string()),
         }
     }
 

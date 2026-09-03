@@ -12,8 +12,8 @@ use dbt_adapter::{
 };
 use dbt_adapter_core::AdapterType;
 use dbt_agate::AgateTable;
-use dbt_common::constants::{DBT_FRESHNESS_JSON, DBT_SOURCES_JSON};
-use dbt_common::io_args::{IoArgs, ShowOptions};
+use dbt_common::constants::{DBT_FRESHNESS_JSON, DBT_SOURCES_JSON, default_metadata_dir};
+use dbt_common::io_args::{ClapResourceType, IoArgs, ShowOptions};
 use dbt_common::tracing::dbt_emit::emit_info_log_message;
 use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::tracing::span_info::{record_span_status_with_attrs, update_span_attrs};
@@ -482,6 +482,20 @@ fn collects_freshness_during_build(node: &DbtSource) -> bool {
 }
 
 /// This function is used to calculate the freshness of the sources and extended models.
+/// Whether `ty` survives `--resource-type`/`--exclude-resource-type` filtering.
+///
+/// Shared between [`run_freshness`] (gating which nodes are actually measured) and
+/// [`selection_contains_source`] (gating the `sources.json` write guard), so the two
+/// can never disagree about whether sources are in scope for a given invocation.
+fn resource_type_allowed(
+    ty: ClapResourceType,
+    resource_types: &[ClapResourceType],
+    exclude_resource_types: &[ClapResourceType],
+) -> bool {
+    (resource_types.is_empty() || resource_types.contains(&ty))
+        && !exclude_resource_types.contains(&ty)
+}
+
 #[allow(clippy::cognitive_complexity)]
 #[allow(clippy::too_many_arguments)]
 #[tracing::instrument(
@@ -499,7 +513,26 @@ pub async fn run_freshness(
     is_freshness_command: bool,
     check_all: bool,
     sources_only: bool,
+    resource_types: &[ClapResourceType],
+    exclude_resource_types: &[ClapResourceType],
 ) -> FsResult<BTreeMap<String, FreshnessResult>> {
+    // Frontier nodes (upstream dependencies of a selected node that are not
+    // themselves selected) are chained in below regardless of selection, so a
+    // source read by an included model would otherwise always be measured —
+    // bypassing `--exclude-resource-type source`/`--resource-type model`. Gate
+    // each resource type explicitly here rather than relying solely on the
+    // generic scheduler-level filter over `selected_nodes`.
+    let sources_allowed = resource_type_allowed(
+        ClapResourceType::Source,
+        resource_types,
+        exclude_resource_types,
+    );
+    let models_allowed = resource_type_allowed(
+        ClapResourceType::Model,
+        resource_types,
+        exclude_resource_types,
+    );
+
     // First, collect all sources and extended models
     let set_of_nodes = schedule
         .all_selected_nodes
@@ -508,16 +541,20 @@ pub async fn run_freshness(
         .chain(schedule.frontier_nodes.clone().into_iter())
         .collect::<BTreeSet<_>>();
 
-    let mut sources = set_of_nodes
-        .iter()
-        .map(|unique_id| {
-            resolver_state
-                .nodes
-                .get_node(unique_id)
-                .ok_or_else(|| unexpected_fs_err!("Node must be resolved"))
-        })
-        .filter_map_ok(|node| node.as_any().downcast_ref::<DbtSource>())
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut sources = if sources_allowed {
+        set_of_nodes
+            .iter()
+            .map(|unique_id| {
+                resolver_state
+                    .nodes
+                    .get_node(unique_id)
+                    .ok_or_else(|| unexpected_fs_err!("Node must be resolved"))
+            })
+            .filter_map_ok(|node| node.as_any().downcast_ref::<DbtSource>())
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        vec![]
+    };
 
     if is_freshness_command {
         for node in sources.iter() {
@@ -526,7 +563,7 @@ pub async fn run_freshness(
     }
 
     // Build-time freshness handles models through the extended-model path below.
-    let sla_models = if is_freshness_command && !sources_only {
+    let sla_models = if is_freshness_command && !sources_only && models_allowed {
         set_of_nodes
             .iter()
             .map(|unique_id| {
@@ -990,7 +1027,7 @@ fn validate_and_extract_timestamp_column(
     }
 }
 
-/// Whether the selection contains any source at all.
+/// Whether the selection contains any source that would actually be measured.
 ///
 /// Gates the `sources.json` write: a model-only `dbt freshness --select some_model`
 /// would otherwise overwrite a good artifact with an empty one, even though the run
@@ -1000,10 +1037,26 @@ fn validate_and_extract_timestamp_column(
 /// but produced no result is a different situation, already fatal in
 /// `run_freshness_with_spans`, and must still write the artifact rather than silently
 /// skip it.
+///
+/// Also folds in `resource_types`/`exclude_resource_types`: a source that is only
+/// present as a frontier node (an upstream dependency of a selected model) is still
+/// "selected" here, but `run_freshness` never measures it when `--exclude-resource-type
+/// source`/`--resource-type model` rules sources out. Without this check the guard
+/// would think a source is in scope, write `sources.json`, and clobber it with empty
+/// results anyway.
 pub fn selection_contains_source(
     schedule: &Schedule<String>,
     resolver_state: &ResolverState,
+    resource_types: &[ClapResourceType],
+    exclude_resource_types: &[ClapResourceType],
 ) -> bool {
+    if !resource_type_allowed(
+        ClapResourceType::Source,
+        resource_types,
+        exclude_resource_types,
+    ) {
+        return false;
+    }
     schedule
         .all_selected_nodes
         .iter()
@@ -1020,14 +1073,23 @@ pub fn selection_contains_source(
 ///
 /// `dbt source freshness` (`sources_only`) always writes it, empty results
 /// included, matching dbt-core. The unified `dbt freshness` spelling only writes
-/// it when [`selection_contains_source`] holds, so a model-only selection doesn't
+/// it when [`selection_contains_source`] holds, so a model-only selection — or one
+/// where `--exclude-resource-type source` rules sources out entirely — doesn't
 /// clobber a good artifact with an empty one.
 pub fn should_write_sources_json(
     sources_only: bool,
     schedule: &Schedule<String>,
     resolver_state: &ResolverState,
+    resource_types: &[ClapResourceType],
+    exclude_resource_types: &[ClapResourceType],
 ) -> bool {
-    sources_only || selection_contains_source(schedule, resolver_state)
+    sources_only
+        || selection_contains_source(
+            schedule,
+            resolver_state,
+            resource_types,
+            exclude_resource_types,
+        )
 }
 
 /// Sources only, `resource_type` unset: `sources.json` keeps the exact shape
@@ -1238,7 +1300,9 @@ pub fn write_freshness_results_parquet(
 ) {
     use dbt_metadata_parquet::runtime_freshness::{FreshnessResultRow, write_freshness_results};
 
-    let freshness_dir = io.out_dir.join("metadata").join("run").join("freshness");
+    let freshness_dir = default_metadata_dir(&io.out_dir)
+        .join("run")
+        .join("freshness");
 
     // Microseconds, matching the column's Arrow type and every sibling producer.
     let ingested_at: i64 = Utc::now().timestamp_micros();
@@ -1372,7 +1436,12 @@ mod tests {
     fn selection_contains_source_is_false_with_no_sources_selected() {
         let resolver_state = test_resolver_state_with_nodes(Nodes::default());
         let schedule = Schedule::<String>::default();
-        assert!(!selection_contains_source(&schedule, &resolver_state));
+        assert!(!selection_contains_source(
+            &schedule,
+            &resolver_state,
+            &[],
+            &[]
+        ));
     }
 
     #[test]
@@ -1386,7 +1455,41 @@ mod tests {
         let mut schedule = Schedule::<String>::default();
         schedule.frontier_nodes.insert(unique_id);
 
-        assert!(selection_contains_source(&schedule, &resolver_state));
+        assert!(selection_contains_source(
+            &schedule,
+            &resolver_state,
+            &[],
+            &[]
+        ));
+    }
+
+    #[test]
+    fn selection_contains_source_is_false_when_frontier_source_is_resource_type_excluded() {
+        // A source that is only present as a frontier node (an upstream dependency of
+        // a selected model) must not count once `--exclude-resource-type source` (or
+        // an equivalent `--resource-type model`) rules it out: `run_freshness` will
+        // never measure it, so the guard must not think it's in scope either.
+        let mut nodes = Nodes::default();
+        let source = source_with_freshness(None);
+        let unique_id = source.__common_attr__.unique_id.clone();
+        nodes.sources.insert(unique_id.clone(), Arc::new(source));
+        let resolver_state = test_resolver_state_with_nodes(nodes);
+
+        let mut schedule = Schedule::<String>::default();
+        schedule.frontier_nodes.insert(unique_id);
+
+        assert!(!selection_contains_source(
+            &schedule,
+            &resolver_state,
+            &[],
+            &[ClapResourceType::Source],
+        ));
+        assert!(!selection_contains_source(
+            &schedule,
+            &resolver_state,
+            &[ClapResourceType::Model],
+            &[],
+        ));
     }
 
     #[test]
@@ -1396,8 +1499,19 @@ mod tests {
         let resolver_state = test_resolver_state_with_nodes(Nodes::default());
         let schedule = Schedule::<String>::default();
 
-        assert!(!selection_contains_source(&schedule, &resolver_state));
-        assert!(should_write_sources_json(true, &schedule, &resolver_state));
+        assert!(!selection_contains_source(
+            &schedule,
+            &resolver_state,
+            &[],
+            &[]
+        ));
+        assert!(should_write_sources_json(
+            true,
+            &schedule,
+            &resolver_state,
+            &[],
+            &[]
+        ));
     }
 
     #[test]
@@ -1410,7 +1524,41 @@ mod tests {
         assert!(!should_write_sources_json(
             false,
             &schedule,
-            &resolver_state
+            &resolver_state,
+            &[],
+            &[]
+        ));
+    }
+
+    #[test]
+    fn should_write_sources_json_is_false_when_frontier_source_is_resource_type_excluded() {
+        // Regression test for the gap left by `run_freshness`'s resource-type gate:
+        // a model that depends on a source still pulls that source in as a frontier
+        // node, but `--exclude-resource-type source` means it is never measured. The
+        // write guard must follow suit and skip the write, not clobber an existing
+        // good `sources.json` with `{"results": []}`.
+        let mut nodes = Nodes::default();
+        let source = source_with_freshness(None);
+        let unique_id = source.__common_attr__.unique_id.clone();
+        nodes.sources.insert(unique_id.clone(), Arc::new(source));
+        let resolver_state = test_resolver_state_with_nodes(nodes);
+
+        let mut schedule = Schedule::<String>::default();
+        schedule.frontier_nodes.insert(unique_id);
+
+        assert!(!should_write_sources_json(
+            false,
+            &schedule,
+            &resolver_state,
+            &[],
+            &[ClapResourceType::Source],
+        ));
+        assert!(!should_write_sources_json(
+            false,
+            &schedule,
+            &resolver_state,
+            &[ClapResourceType::Model],
+            &[],
         ));
     }
 
@@ -1426,7 +1574,9 @@ mod tests {
         assert!(should_write_sources_json(
             sources_only,
             &schedule,
-            &resolver_state
+            &resolver_state,
+            &[],
+            &[]
         ));
 
         let empty_results: BTreeMap<String, FreshnessResult> = BTreeMap::new();

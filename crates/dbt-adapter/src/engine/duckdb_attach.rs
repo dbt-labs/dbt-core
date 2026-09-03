@@ -44,7 +44,7 @@ pub fn compose_v2_catalog_attach_stmts(
                 || attaches_via_iceberg_rest(catalog.catalog_type)
         })
         .filter_map(|catalog| {
-            // Prefer the caller's platform block (e.g. `alt` for the compute
+            // Prefer the caller's platform block (e.g. `lake_compute` for the compute
             // engine), falling back to the `duckdb` block.
             catalog
                 .config_block(platform)

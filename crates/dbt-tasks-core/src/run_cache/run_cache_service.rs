@@ -552,7 +552,7 @@ pub fn insert_compiled_view_definition(
         return;
     }
 
-    let adapter_type = ctx.adapter_type();
+    let adapter_type = node.node_adapter();
     let Ok(relation) = create_relation_from_node(adapter_type, node, None) else {
         return;
     };
@@ -636,7 +636,7 @@ impl HeuristicClock {
     /// Sample the warehouse clock and return a bootstrapped clock, or `None`
     /// if the adapter is not opted in or the query fails.
     pub async fn bootstrap(ctx: &TaskRunnerCtx) -> Option<Self> {
-        if !heuristic_clock_enabled_for_adapter(ctx.adapter_type()) {
+        if !heuristic_clock_enabled_for_adapter(ctx.default_adapter_type()) {
             return None;
         }
         let start_instant = Instant::now();
@@ -655,7 +655,7 @@ impl HeuristicClock {
 /// Query the warehouse for its current epoch-millisecond timestamp.
 /// Returns `None` when the adapter is unsupported or the query fails.
 async fn warehouse_now_ms(ctx: &TaskRunnerCtx) -> Option<i64> {
-    let sql: &'static str = match ctx.adapter_type() {
+    let sql: &'static str = match ctx.default_adapter_type() {
         AdapterType::Snowflake => "SELECT DATE_PART('epoch_millisecond', SYSDATE())",
         AdapterType::Redshift => "SELECT (EXTRACT(EPOCH FROM GETDATE()) * 1000)::BIGINT",
         AdapterType::Databricks => "SELECT unix_millis(current_timestamp())",
@@ -828,7 +828,7 @@ fn render_freshness_override(
 /// it and lets the per-node paths fall back to their own freshness lookups.
 async fn prefetch_global_last_modified_epochs(ctx: &TaskRunnerCtx) -> FsResult<()> {
     let (relations, overrides) = collect_global_prefetch_relations(
-        ctx.adapter_type(),
+        ctx.default_adapter_type(),
         &ctx.inner.runnable_set,
         &ctx.inner.runtime_deps,
         ctx.nodes(),
@@ -882,7 +882,7 @@ fn should_warn_slow_metadata_prefetch(
 /// in INFORMATION_SCHEMA without one configured.
 fn maybe_warn_slow_metadata_prefetch(ctx: &TaskRunnerCtx, elapsed: std::time::Duration) {
     let metadata_options = run_cache_metadata_query_options(ctx);
-    if !should_warn_slow_metadata_prefetch(ctx.adapter_type(), &metadata_options, elapsed) {
+    if !should_warn_slow_metadata_prefetch(ctx.default_adapter_type(), &metadata_options, elapsed) {
         return;
     }
     emit_warn_log_message(
@@ -1475,7 +1475,7 @@ pub async fn run_cache_service_before_execution(
                 should_honor_service_skip(ctx),
             );
             // A node that completed a dev clone earlier in this invocation should
-            // surface as "Cloned from cached relation" when the service decides
+            // surface as "Cloned from other environment" when the service decides
             // Skip, matching the dbt-core plugin's `_dev_cloned_nodes` mapping.
             let is_dev_cloned = ctx
                 .inner
@@ -1584,7 +1584,7 @@ fn state_explain_node_info(
     node: &dyn InternalDbtNodeAttributes,
 ) -> StateExplainNodeInfo {
     let mut node_info =
-        state_explain_node_info_for_parts(ctx.adapter_type(), ctx.inner.arg.full_refresh, node);
+        state_explain_node_info_for_parts(node.node_adapter(), ctx.inner.arg.full_refresh, node);
     node_info.dev_clone = ctx
         .inner
         .run_cache_ctx
@@ -1609,9 +1609,10 @@ fn state_explain_deferrals(
         .iter()
         .filter_map(|dependency_id| {
             let deferred_node = defer_nodes.get_node(dependency_id)?;
-            let deferred_fqn = create_relation_from_node(ctx.adapter_type(), deferred_node, None)
-                .ok()?
-                .semantic_fqn();
+            let deferred_fqn =
+                create_relation_from_node(deferred_node.node_adapter(), deferred_node, None)
+                    .ok()?
+                    .semantic_fqn();
             if !ctx
                 .inner
                 .run_cache_ctx
@@ -1622,7 +1623,7 @@ fn state_explain_deferrals(
             }
 
             let local_node = ctx.nodes().get_node(dependency_id)?;
-            let local_fqn = create_relation_from_node(ctx.adapter_type(), local_node, None)
+            let local_fqn = create_relation_from_node(ctx.default_adapter_type(), local_node, None)
                 .ok()?
                 .semantic_fqn();
             Some((local_fqn, deferred_fqn))
@@ -1737,7 +1738,7 @@ pub async fn confirm_run_cache_service_execution(
         return;
     };
     let request = match confirmation
-        .into_confirm_execution_request(ctx, node, final_last_modified_epoch, execution_runtime_ms)
+        .into_confirm_execution_request(node, final_last_modified_epoch, execution_runtime_ms)
         .await
     {
         Ok(Some(request)) => request,
@@ -1909,7 +1910,7 @@ pub async fn execute_run_cache_service_clone(
     .map_err(RunCacheCloneError::Recoverable)?;
     clone_result?;
 
-    let target_relation = create_relation_from_node(ctx.adapter_type(), node, None)
+    let target_relation = create_relation_from_node(node.node_adapter(), node, None)
         .map_err(RunCacheCloneError::Fatal)?;
     let target_relation: Arc<dyn BaseRelation> = target_relation.into();
     ctx.inner
@@ -1953,7 +1954,7 @@ impl std::fmt::Display for RunCacheCloneError {
 struct RunCacheSubmitOutcome {
     response: SubmitSqlResponse,
     /// Freshness tolerance window (seconds) that Fusion sent with the request.
-    /// Used to format the "Did not meet lag_tolerance of …" message when the
+    /// Used to format the "within lag tolerance of …" message when the
     /// service admits a candidate despite a stale upstream. Echoing the local
     /// value avoids a proto round-trip — the service already evaluates against
     /// the same number.
@@ -1986,7 +1987,6 @@ impl RunCacheSubmitResult {
 impl RunCacheExecutionConfirmation {
     async fn into_confirm_execution_request(
         self,
-        ctx: &TaskRunnerCtx,
         node: &dyn InternalDbtNodeAttributes,
         last_modified_epoch: Option<i64>,
         execution_runtime_ms: Option<i64>,
@@ -2013,7 +2013,7 @@ impl RunCacheExecutionConfirmation {
             request_id: self.request_id,
             last_modified_epoch,
             failed_to_clone: self.failed_to_clone,
-            table_type: table_type_for_node(ctx, node).await?,
+            table_type: table_type_for_node(node).await?,
             execution_results: self.execution_results,
             execution_runtime_ms: self.execution_runtime_ms.or(execution_runtime_ms),
             labels: node_identity(node).labels(),
@@ -2077,7 +2077,7 @@ impl RunCachePendingExecutionRecord {
 
         let outcome = ExecutionOutcomeInput {
             last_modified_epoch: Some(last_modified_epoch),
-            table_type: table_type_for_node(ctx, node).await?,
+            table_type: table_type_for_node(node).await?,
             execution_runtime_ms,
         };
         let record = match input {
@@ -2128,7 +2128,7 @@ async fn finalize_speculative_sql_request(
     // resolve (e.g. parser-discovered raw references outside the DAG).
     let mut relations: BTreeMap<String, Arc<dyn BaseRelation>> = BTreeMap::new();
     for table in &request.tables {
-        if let Ok(relation) = relation_from_rendered_name(ctx, node, &table.name) {
+        if let Ok(relation) = relation_from_rendered_name(node, &table.name) {
             relations.insert(table.name.clone(), relation);
         }
     }
@@ -2176,7 +2176,7 @@ fn collect_source_freshness_overrides(
         let Some(source) = dep_node.as_any().downcast_ref::<DbtSource>() else {
             continue;
         };
-        let Ok((name, _)) = relation_for_node(ctx, dep_node) else {
+        let Ok((name, _)) = relation_for_node(dep_node) else {
             continue;
         };
         if let Some(kind) = source_freshness_override(source) {
@@ -2234,7 +2234,7 @@ async fn verify_clone_source_freshness(
         ));
     }
 
-    let source_relation = relation_from_rendered_name(ctx, node, &clone.clone_source)?;
+    let source_relation = relation_from_rendered_name(node, &clone.clone_source)?;
     let actual_epoch =
         refresh_last_modified_epoch_for_relation(ctx, &clone.clone_source, source_relation).await?;
     match actual_epoch {
@@ -2256,15 +2256,14 @@ async fn verify_clone_source_freshness(
 }
 
 fn relation_from_rendered_name(
-    ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
     rendered_name: &str,
 ) -> FsResult<Arc<dyn BaseRelation>> {
-    let Some(dialect) = dialect_of(ctx.adapter_type()) else {
+    let Some(dialect) = dialect_of(node.node_adapter()) else {
         return Err(fs_err!(
             ErrorCode::Generic,
             "dbt State service clone source parsing is unsupported for adapter {:?}",
-            ctx.adapter_type()
+            node.node_adapter()
         ));
     };
     let fqn = FullyQualifiedName::parse(rendered_name, dialect).map_err(|err| {
@@ -2276,7 +2275,7 @@ fn relation_from_rendered_name(
         )
     })?;
     Ok(create_relation(
-        ctx.adapter_type(),
+        node.node_adapter(),
         fqn.catalog().to_value(),
         fqn.schema().to_value(),
         Some(fqn.table().to_value()),
@@ -2313,7 +2312,7 @@ fn cache_cloned_relation(
     node: &dyn InternalDbtNodeAttributes,
 ) -> FsResult<()> {
     if let Some(base_adapter) = ctx.env.get_base_adapter() {
-        let relation = create_relation_from_node(ctx.adapter_type(), node, None)?;
+        let relation = create_relation_from_node(ctx.default_adapter_type(), node, None)?;
         let _ = base_adapter.cache_added(&ctx.env.empty_state(), relation.into());
     }
     Ok(())
@@ -2770,12 +2769,12 @@ async fn prepare_write_only_execution_record(
         let request = build_seed_values_request(
             seed,
             SeedRunCacheRequestContext {
-                adapter_type: ctx.adapter_type(),
+                adapter_type: seed.node_adapter(),
                 dialect: run_cache_dialect(ctx),
                 last_modified_epoch: None,
                 clone_time_travel_limit: None,
                 clone_table_properties: None,
-                clone_chain_depth_limit: None,
+                clone_chain_depth_limit: clone_chain_depth_limit_for_seed(ctx, seed),
                 dbt_project_info: DbtProjectInfo::from(ctx),
             },
             create_macro_resolver(ctx),
@@ -2850,12 +2849,12 @@ async fn submit_seed(
     let request = build_seed_values_request(
         seed,
         SeedRunCacheRequestContext {
-            adapter_type: ctx.adapter_type(),
+            adapter_type: seed.node_adapter(),
             dialect: run_cache_dialect(ctx),
             last_modified_epoch,
             clone_time_travel_limit,
             clone_table_properties: None,
-            clone_chain_depth_limit: None,
+            clone_chain_depth_limit: clone_chain_depth_limit_for_seed(ctx, seed),
             dbt_project_info: DbtProjectInfo::from(ctx),
         },
         create_macro_resolver(ctx),
@@ -2989,14 +2988,14 @@ async fn build_sql_context(
     let active_profile = ctx.dbt_profile();
     let is_targeting_prod = config.is_defer_to_target(active_profile);
     let clone_chain_depth_limit = clone_chain_depth_limit_for_adapter(
-        ctx.adapter_type(),
+        node.node_adapter(),
         is_targeting_prod,
         active_profile.allow_clones,
     );
 
     Ok(BuiltSqlRunCacheContext {
         request: SqlRunCacheRequestContext {
-            adapter_type: ctx.adapter_type(),
+            adapter_type: node.node_adapter(),
             dialect: run_cache_dialect(ctx),
             sql,
             tables: tables.tables,
@@ -3222,6 +3221,22 @@ fn stale_upstream_policy_for_node(
     }
 }
 
+/// Seeds skip `build_sql_context`, so derive the limit the way it does.
+fn clone_chain_depth_limit_for_seed(ctx: &TaskRunnerCtx, seed: &DbtSeed) -> Option<i64> {
+    let is_targeting_prod = ctx
+        .inner
+        .run_cache_ctx
+        .run_cache_service_config
+        .as_ref()
+        .map(|config| config.is_defer_to_target(ctx.dbt_profile()))
+        .unwrap_or(false);
+    clone_chain_depth_limit_for_adapter(
+        seed.node_adapter(),
+        is_targeting_prod,
+        ctx.dbt_profile().allow_clones,
+    )
+}
+
 pub(crate) fn clone_chain_depth_limit_for_adapter(
     adapter_type: AdapterType,
     is_targeting_prod: bool,
@@ -3415,7 +3430,7 @@ async fn collect_table_modified_infos(
     let mut relations = BTreeMap::new();
     let mut metadata_complete = true;
 
-    let (target_name, target_relation) = relation_for_node(ctx, node)?;
+    let (target_name, target_relation) = relation_for_node(node)?;
     relations.insert(target_name.clone(), target_relation);
 
     let mut freshness_overrides: BTreeMap<String, FreshnessOverride> = BTreeMap::new();
@@ -3430,7 +3445,7 @@ async fn collect_table_modified_infos(
                 || dep_node.as_any().is::<DbtSeed>()
                 || dep_id.starts_with("source.")
             {
-                if let Ok((name, relation)) = relation_for_node(ctx, dep_node) {
+                if let Ok((name, relation)) = relation_for_node(dep_node) {
                     // For sources with `loaded_at_query` or `loaded_at_field` set,
                     // build an override entry keyed by the relation's semantic_fqn —
                     // that's what MetadataAdapter::freshness_with_overrides expects.
@@ -3560,7 +3575,7 @@ async fn last_modified_epoch_for_node(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
 ) -> FsResult<Option<i64>> {
-    let (name, relation) = relation_for_node(ctx, node)?;
+    let (name, relation) = relation_for_node(node)?;
     last_modified_epoch_for_relation(ctx, &name, relation).await
 }
 
@@ -3568,7 +3583,7 @@ pub async fn refresh_final_last_modified_epoch_for_node(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
 ) -> FsResult<Option<i64>> {
-    let (name, relation) = relation_for_node(ctx, node)?;
+    let (name, relation) = relation_for_node(node)?;
     ctx.inner
         .run_cache_ctx
         .run_cache_metadata
@@ -3580,7 +3595,7 @@ pub fn clear_stale_missing_last_modified_epoch_for_node(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
 ) {
-    if let Ok((name, _)) = relation_for_node(ctx, node) {
+    if let Ok((name, _)) = relation_for_node(node) {
         // Only clear a known-stale placeholder (`Some(None)`), cached when the
         // submit-time probe found no target table yet. A real cached epoch
         // (`Some(Some(_))`) is still valid and may be relied on by sibling nodes
@@ -3609,7 +3624,7 @@ pub fn evict_node_metadata_for_untracked_rebuild(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
 ) {
-    if let Ok((name, _)) = relation_for_node(ctx, node) {
+    if let Ok((name, _)) = relation_for_node(node) {
         ctx.inner
             .run_cache_ctx
             .run_cache_metadata
@@ -3626,7 +3641,7 @@ fn stamp_final_last_modified_epoch_for_node_heuristic(
     // Mirror the plugin's `clear_cache` + `cache_last_modified_epoch(table, H)`:
     // replace the stale prefetch value (often None for newly-created tables) with H
     // so downstream submissions in the same run have metadata_complete=true.
-    let Ok((name, _)) = relation_for_node(ctx, node) else {
+    let Ok((name, _)) = relation_for_node(node) else {
         return None;
     };
     ctx.inner
@@ -3679,12 +3694,12 @@ async fn refresh_last_modified_epoch_for_relation(
     relation: Arc<dyn BaseRelation>,
 ) -> FsResult<Option<i64>> {
     let mut relations = BTreeMap::new();
+    let adapter_type = relation.adapter_type();
     relations.insert(name.to_string(), relation);
     // Per-relation refreshes aren't used for sources (sources are populated
     // upfront via the bulk prefetch), so no overrides apply here. Still route
     // through the adapter-specific planner so BigQuery can use schema prefetch.
-    refresh_planned_last_modified_misses(ctx, &relations, &BTreeMap::new(), ctx.adapter_type())
-        .await?;
+    refresh_planned_last_modified_misses(ctx, &relations, &BTreeMap::new(), adapter_type).await?;
     Ok(ctx
         .inner
         .run_cache_ctx
@@ -3722,7 +3737,8 @@ async fn prefetch_last_modified_epochs(
         misses.keys().cloned().collect::<Vec<_>>().join(", ")
     ));
     let refresh_result =
-        refresh_planned_last_modified_misses(ctx, &misses, overrides, ctx.adapter_type()).await;
+        refresh_planned_last_modified_misses(ctx, &misses, overrides, ctx.default_adapter_type())
+            .await;
     if let Err(err) = refresh_result {
         emit_trace_log_message(|| format!("dbt State metadata prefetch failed: {err}"));
     }
@@ -3904,8 +3920,8 @@ fn group_relations_by_database_and_schema(
 }
 
 /// Derives the SQL table-type keyword for a node (e.g. `"TRANSIENT TABLE"` /
-/// `"TABLE"` / `"DYNAMIC TABLE"` on Snowflake) that downstream callers send
-/// to the dbt State service for clone-SQL composition.
+/// `"TABLE"` / `"DYNAMIC TABLE"` / `"INTERACTIVE TABLE"` on Snowflake) that
+/// downstream callers send to the dbt State service for clone-SQL composition.
 ///
 /// We derive this from the dbt node config, not from warehouse
 /// introspection, mirroring the dbt-core plugin's
@@ -3976,22 +3992,20 @@ fn config_derived_table_type(
             }
             .to_string(),
         ),
+        // `TRANSIENT INTERACTIVE TABLE` is not valid DDL, so `transient` is ignored here.
+        DbtMaterialization::InteractiveTable => Some("INTERACTIVE TABLE".to_string()),
         _ => None,
     }
 }
 
-async fn table_type_for_node(
-    ctx: &TaskRunnerCtx,
-    node: &dyn InternalDbtNodeAttributes,
-) -> FsResult<Option<String>> {
-    Ok(config_derived_table_type(node, ctx.adapter_type()))
+async fn table_type_for_node(node: &dyn InternalDbtNodeAttributes) -> FsResult<Option<String>> {
+    Ok(config_derived_table_type(node, node.node_adapter()))
 }
 
 fn relation_for_node(
-    ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
 ) -> FsResult<(String, Arc<dyn BaseRelation>)> {
-    let relation = create_relation_from_node(ctx.adapter_type(), node, None)?;
+    let relation = create_relation_from_node(node.node_adapter(), node, None)?;
     // Canonical (`semantic_fqn`) key so lenient-dependency matching, the
     // metadata cache, and the wire payload all agree regardless of how the
     // relation's database/schema/identifier were originally cased.
@@ -4107,7 +4121,7 @@ async fn query_dependencies_for_parse_error(
 
     let unique_id = node.unique_id();
     let upstreams = match extract_standalone_expression_upstreams_for_run_cache(
-        ctx.adapter_type(),
+        node.node_adapter(),
         sql,
         &node.database(),
         &node.schema(),
@@ -4131,7 +4145,7 @@ async fn query_dependencies_for_parse_error(
             return Ok(CollectedViewQueryDependencies::incomplete());
         };
         relations_from_upstreams(
-            ctx.adapter_type(),
+            node.node_adapter(),
             upstreams,
             adapter.engine().type_ops().as_ref(),
         )?
@@ -4175,7 +4189,7 @@ fn cacheable_manifest_dependency_relations(
         if !is_cacheable_resource_type(dep_node.resource_type()) {
             continue;
         }
-        let Ok((name, relation)) = relation_for_node(ctx, dep_node) else {
+        let Ok((name, relation)) = relation_for_node(dep_node) else {
             continue;
         };
         relations.insert(name, relation);
@@ -4217,7 +4231,7 @@ fn parse_sql_relations_for_run_cache(
     let type_ops = adapter.engine().type_ops().as_ref();
     let sources_extractor = ctx.inner.sources_extractor.as_ref();
     parse_sql_relations_for_adapter(
-        ctx.adapter_type(),
+        ctx.default_adapter_type(),
         sql,
         default_catalog,
         default_schema,
@@ -4327,7 +4341,7 @@ fn quoting_for_upstream(
 }
 
 fn run_cache_dialect(ctx: &TaskRunnerCtx) -> String {
-    ctx.adapter_type().to_string()
+    ctx.default_adapter_type().to_string()
 }
 
 fn should_honor_service_skip(ctx: &TaskRunnerCtx) -> bool {
@@ -4356,6 +4370,7 @@ fn full_refresh_blocks_model_submit(materialization: DbtMaterialization) -> bool
             | DbtMaterialization::MaterializedView
             | DbtMaterialization::DynamicTable
             | DbtMaterialization::StreamingTable
+            | DbtMaterialization::InteractiveTable
     )
 }
 
@@ -4513,7 +4528,7 @@ fn skip_node_status_from_response(
 
     let tolerance_secs = freshness_tolerance_seconds.max(0) as u64;
     let message = format!(
-        "New changes detected. Did not meet lag_tolerance of {}",
+        "New changes detected within lag tolerance of {}",
         humantime::format_duration(std::time::Duration::from_secs(tolerance_secs)),
     );
     NodeStatus::ReusedStillFresh(message, tolerance_secs, 0)
@@ -4572,6 +4587,7 @@ fn record_submit_skipped(node: &dyn InternalDbtNodeAttributes, reason: &'static 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_adapter::{AdapterBuilder, AdapterStore};
     use dbt_schemas::state::ProfileAdapter;
     use indexmap::IndexMap;
     use std::any::Any;
@@ -4587,6 +4603,7 @@ mod tests {
     use dbt_adapter::sql_types::DefaultTypeOps;
     use dbt_common::collections::DashMap;
     use dbt_common::io_args::RunCacheMode;
+    use dbt_common::path::DbtPath;
     use dbt_common::{CompiledSpans, MacroSpan};
     use dbt_dag::schedule::Schedule;
     use dbt_frontend_common::FullyQualifiedName;
@@ -4893,7 +4910,7 @@ mod tests {
     fn relabel_skip_for_dev_cloned_node_rewrites_still_fresh_to_clone_still_fresh() {
         let original = RunCacheServiceDecision::Skip {
             status: NodeStatus::ReusedStillFresh(
-                "New changes detected. Did not meet lag_tolerance of 1h".to_string(),
+                "New changes detected within lag tolerance of 1h".to_string(),
                 3600,
                 42,
             ),
@@ -4966,11 +4983,39 @@ mod tests {
         assert!(full_refresh_blocks_model_submit(
             DbtMaterialization::Incremental
         ));
+        assert!(full_refresh_blocks_model_submit(
+            DbtMaterialization::InteractiveTable
+        ));
         assert!(!full_refresh_blocks_model_submit(DbtMaterialization::View));
         assert!(!full_refresh_blocks_model_submit(DbtMaterialization::Table));
         assert!(!full_refresh_blocks_model_submit(
             DbtMaterialization::Unknown("custom_table".to_string())
         ));
+    }
+
+    #[test]
+    fn config_derived_table_type_treats_interactive_table_as_never_transient() {
+        let mut model = make_model(
+            "model.test.orders",
+            "db",
+            "dbt_test",
+            "orders",
+            DbtMaterialization::InteractiveTable,
+        );
+        assert_eq!(
+            config_derived_table_type(model.as_ref(), AdapterType::Snowflake),
+            Some("INTERACTIVE TABLE".to_string())
+        );
+
+        Arc::get_mut(&mut model)
+            .unwrap()
+            .deprecated_config
+            .__warehouse_specific_config__
+            .transient = Some(true);
+        assert_eq!(
+            config_derived_table_type(model.as_ref(), AdapterType::Snowflake),
+            Some("INTERACTIVE TABLE".to_string())
+        );
     }
 
     #[test]
@@ -7550,6 +7595,7 @@ mod tests {
             Default::default(),
             Arc::new(crate::span_manager::SpanManager::new_empty()),
             Execute::Remote,
+            test_adapter_store(),
             sources_extractor,
             RunCacheCtx {
                 run_cache_metadata: Arc::new(RunCacheMetadataCache::new()),
@@ -7578,6 +7624,22 @@ mod tests {
             rendering_listener_factory: Arc::new(DefaultRenderingEventListenerFactory::default()),
             thread_id: 0,
         }
+    }
+
+    /// A store these tests never read from. Building a real `Adapter` needs a
+    /// `TypeOps` impl and a connection config, and nothing here executes SQL --
+    /// so the builder fails, which the store treats as "not built yet".
+    fn test_adapter_store() -> Arc<AdapterStore> {
+        let build: AdapterBuilder = Box::new(|_| {
+            Err(fs_err!(
+                ErrorCode::Unexpected,
+                "adapters are not built in run cache service tests"
+            ))
+        });
+        Arc::new(
+            AdapterStore::new(vec![AdapterType::Snowflake], AdapterType::Snowflake, build)
+                .expect("valid store"),
+        )
     }
 
     fn test_resolver_state_with_nodes(nodes: Nodes) -> ResolverState {
@@ -8382,6 +8444,101 @@ mod tests {
             clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, false, false),
             Some(0)
         );
+    }
+
+    fn test_task_runner_ctx_with_allow_clones(allow_clones: bool) -> TaskRunnerCtx {
+        let mut ctx = test_task_runner_ctx(None);
+        Arc::get_mut(&mut ctx.inner)
+            .expect("sole owner of inner right after construction")
+            .dbt_profile = Arc::new(DbtProfile {
+            allow_clones,
+            ..ctx.dbt_profile().clone()
+        });
+        ctx
+    }
+
+    /// Seed body hashing reads the CSV off disk relative to the project root,
+    /// so the write-only record can't be built without pointing the ctx at one.
+    fn set_project_root(ctx: &mut TaskRunnerCtx, project_root: &Path) {
+        let inner =
+            Arc::get_mut(&mut ctx.inner).expect("sole owner of inner right after construction");
+        Arc::get_mut(&mut inner.arg)
+            .expect("sole owner of args right after construction")
+            .io
+            .in_dir = project_root.to_path_buf();
+    }
+
+    fn test_seed_on_adapter(adapter: AdapterType) -> DbtSeed {
+        let mut seed = DbtSeed::default();
+        seed.__base_attr__.adapter = adapter;
+        seed
+    }
+
+    fn seed_with_csv(project_root: &Path) -> DbtSeed {
+        std::fs::create_dir_all(project_root.join("seeds")).unwrap();
+        std::fs::write(
+            project_root.join("seeds").join("cities.csv"),
+            "id,name\n1,Philadelphia\n",
+        )
+        .unwrap();
+
+        let mut seed = test_seed_on_adapter(AdapterType::Snowflake);
+        seed.__common_attr__.unique_id = "seed.test.cities".to_string();
+        seed.__common_attr__.name = "cities".to_string();
+        seed.__common_attr__.original_file_path = DbtPath::from("seeds/cities.csv");
+        set_state_explain_base(&mut seed.__base_attr__, DbtMaterialization::Seed, "cities");
+        seed
+    }
+
+    fn values_request(record: RunCachePendingExecutionRecord) -> SubmitValuesRequest {
+        match record.input {
+            RunCachePendingExecutionInput::Values(request) => *request,
+            RunCachePendingExecutionInput::Sql(_) => panic!("a seed submits values, not SQL"),
+        }
+    }
+
+    async fn seed_write_only_request(allow_clones: bool) -> SubmitValuesRequest {
+        let project_root = tempfile::tempdir().unwrap();
+        let seed = seed_with_csv(project_root.path());
+        let mut ctx = test_task_runner_ctx_with_allow_clones(allow_clones);
+        set_project_root(&mut ctx, project_root.path());
+
+        let record =
+            prepare_write_only_execution_record(&ctx, &seed, &task_result_with_sql(""), None)
+                .await
+                .unwrap()
+                .expect("a seed always produces a write-only record");
+        values_request(record)
+    }
+
+    #[tokio::test]
+    async fn seed_request_sends_zero_clone_chain_depth_limit_when_clones_disallowed() {
+        // Regression test for https://github.com/dbt-labs/dbt-core/issues/16136.
+        // Asserted on the built request rather than on the derivation: the bug
+        // was that seeds hardcoded `clone_chain_depth_limit: None`, so a test of
+        // the helper alone stays green through a revert. On Snowflake (no adapter
+        // default) `Some(0)` can only come from `allow_clones: false`.
+        assert_eq!(
+            seed_write_only_request(false).await.clone_chain_depth_limit,
+            Some(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_request_omits_clone_chain_depth_limit_when_clones_allowed() {
+        assert_eq!(
+            seed_write_only_request(true).await.clone_chain_depth_limit,
+            None
+        );
+    }
+
+    #[test]
+    fn clone_chain_depth_limit_for_seed_uses_the_seed_adapter() {
+        // The ctx default is Snowflake (no limit), so a Databricks seed proves
+        // the node's own adapter decides, not `ctx.default_adapter_type()`.
+        let ctx = test_task_runner_ctx_with_allow_clones(true);
+        let seed = test_seed_on_adapter(AdapterType::Databricks);
+        assert_eq!(clone_chain_depth_limit_for_seed(&ctx, &seed), Some(1));
     }
 
     fn state_explain_model(materialized: DbtMaterialization) -> DbtModel {

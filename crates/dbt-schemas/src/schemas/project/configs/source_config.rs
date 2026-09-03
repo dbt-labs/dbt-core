@@ -143,7 +143,7 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+catalog")]
     pub catalog: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]
@@ -419,6 +419,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 intermediate_format: None,
                 storage_uri: None,
                 incremental_apply_config_changes: None,
+                persist_constraints: None,
                 use_safer_relation_operations: None,
                 view_update_via_alter: None,
 
@@ -431,6 +432,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
                 zorder: None,
+                skip_optimize: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,

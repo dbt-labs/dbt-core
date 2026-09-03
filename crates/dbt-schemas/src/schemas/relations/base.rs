@@ -330,6 +330,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         matches!(self.relation_type(), Some(RelationType::DynamicTable))
     }
 
+    /// Helper: check if the relation is an interactive table
+    fn is_interactive_table(&self) -> bool {
+        matches!(self.relation_type(), Some(RelationType::InteractiveTable))
+    }
+
     /// Helper: check if the relation is for a pointer table
     fn is_pointer(&self) -> bool {
         matches!(self.relation_type(), Some(RelationType::PointerTable))
@@ -548,7 +553,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             | AdapterType::Salesforce
             | AdapterType::Spark
             | AdapterType::DuckDB
-            | AdapterType::Alt
+            | AdapterType::LakeCompute
             | AdapterType::Fabric => (
                 start.map(|start| format!("{event_time} >= '{start}'")),
                 end.map(|end| format!("{event_time} < '{end}'")),

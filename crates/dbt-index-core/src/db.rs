@@ -5,7 +5,7 @@ use adbc_core::error::{Error as AdbcError, Status};
 use dbt_adbc::driver::Builder as DriverBuilder;
 use dbt_adbc::driver::LoadStrategy;
 use dbt_adbc::{Backend, Connection, Database, database};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::IndexError;
 use crate::format::{cell_to_string, first_nonempty};
@@ -89,10 +89,11 @@ pub fn write_views_sql(dir: &Path) -> Result<(), IndexError> {
         .unwrap();
     }
 
-    // Analytical views
+    // Analytical views. The parse-safe views are deliberately not here: they carry the
+    // information schema's names (`dbt.macros`, `dbt.edges`, ...), which in this file are
+    // already taken by the source tables above. They are registered where they are read,
+    // over `dbt_internal` — see `info_schema::parse_safe`.
     sql.push_str(ANALYTICAL_VIEWS);
-    sql.push_str(GRAPH_NODES_VIEWS_DDL);
-    sql.push_str(COLUMNS_VIEW_DDL);
 
     std::fs::write(dir.join("views.sql"), sql)?;
     Ok(())
@@ -166,85 +167,6 @@ LEFT JOIN dbt_rt.test_failures tf ON n.unique_id = tf.unique_id AND r.invocation
 WHERE n.resource_type IN ('test');
 ";
 
-/// The `dbt.nodes`-derived half of the parse-safe surface: `dbt.graph_nodes` plus the
-/// per-resource-type views built on it. Split from [`COLUMNS_VIEW_DDL`] because the two halves
-/// depend on different base tables (`dbt.nodes` vs `dbt.node_columns`), which is not always
-/// registered (it only exists once something has written `node_columns.parquet`) -- a caller
-/// executing this DDL should skip it, not fail, when `dbt.nodes` itself is not registered, without
-/// that also taking down the columns view or vice versa.
-pub const GRAPH_NODES_VIEWS_DDL: &str = "
--- Parse-safe views: columns are enumerated (never `SELECT *`) so a
--- dbt.nodes column that is never populated at parse cannot leak into
--- these views as a silent NULL. Per-resource-type views select from
--- dbt.graph_nodes, not dbt.nodes directly, so they inherit the guarantee.
-CREATE OR REPLACE VIEW dbt.graph_nodes AS
-SELECT
-    unique_id, name, resource_type, package_name, file_path, original_file_path,
-    fqn, alias, checksum, description, raw_code, database_name, schema_name,
-    relation_name, identifier, enabled, materialized, config, access_level,
-    group_name, contract_enforced, version, latest_version, deprecation_date,
-    primary_key, patch_path, tags, meta, source_name, source_description,
-    loader, loaded_at_field, ingested_at
-FROM dbt.nodes;
-
-CREATE OR REPLACE VIEW dbt.models AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'model';
-CREATE OR REPLACE VIEW dbt.seeds AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'seed';
-CREATE OR REPLACE VIEW dbt.tests AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'test';
-CREATE OR REPLACE VIEW dbt.snapshots AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'snapshot';
-CREATE OR REPLACE VIEW dbt.sources AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'source';
-CREATE OR REPLACE VIEW dbt.analyses AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'analysis';
-CREATE OR REPLACE VIEW dbt.operations AS SELECT * FROM dbt.graph_nodes WHERE resource_type IN ('operation', 'sql_operation');
-CREATE OR REPLACE VIEW dbt.functions AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'function';
-CREATE OR REPLACE VIEW dbt.checks AS SELECT * FROM dbt.graph_nodes WHERE resource_type = 'check';
-";
-
-/// The `dbt.node_columns`-derived half of the parse-safe surface. See [`GRAPH_NODES_VIEWS_DDL`]
-/// for why this is a separate constant rather than one bundled with it.
-pub const COLUMNS_VIEW_DDL: &str = "
--- dbt.columns: dbt.node_columns restricted to columns populated at parse
--- (catalog/inferred-type/expression columns require static analysis or
--- `dbt docs generate` and are NULL until then).
-CREATE OR REPLACE VIEW dbt.columns AS
-SELECT unique_id, column_name, declared_type, description, tags, ingested_at
-FROM dbt.node_columns;
-";
-
-/// Splits a `;`-separated DDL script into individual statements, stripping `--` line
-/// comments (respecting `'...'` string literals so a comment marker inside a string is not
-/// mistaken for one). Some execution paths run one statement per call rather than a whole
-/// script, `GRAPH_NODES_VIEWS_DDL` / `COLUMNS_VIEW_DDL`'s consumers among them.
-pub fn split_ddl_statements(ddl: &str) -> Vec<String> {
-    let stripped: String = ddl
-        .lines()
-        .map(|line| {
-            let mut in_string = false;
-            let mut chars = line.char_indices().peekable();
-            while let Some((i, ch)) = chars.next() {
-                if ch == '\'' {
-                    // `''` is SQL's escaped quote within a string literal, not two delimiters:
-                    // consume the pair without toggling, so an escaped quote doesn't prematurely
-                    // close the string and expose a later `--` as a real comment marker.
-                    if chars.peek() == Some(&(i + 1, '\'')) {
-                        chars.next();
-                        continue;
-                    }
-                    in_string = !in_string;
-                } else if ch == '-' && !in_string && chars.peek().map(|&(_, c)| c) == Some('-') {
-                    return &line[..i];
-                }
-            }
-            line
-        })
-        .collect::<Vec<&str>>()
-        .join("\n");
-
-    stripped
-        .split(';')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect()
-}
-
 /// Manages an in-memory DuckDB connection via the ADBC adapter.
 ///
 /// The `shared_database` field allows multiple connections to the same DuckDB
@@ -252,8 +174,7 @@ pub fn split_ddl_statements(ddl: &str) -> Vec<String> {
 /// connections see a consistent committed snapshot and never block writers.
 pub struct Db {
     /// Shared database handle — multiple connections can be created from it.
-    /// `Arc<Mutex<>>` because `new_connection()` takes `&mut self` on the Box.
-    shared_database: Arc<Mutex<Box<dyn Database>>>,
+    shared_database: Arc<Box<dyn Database>>,
     connection: Box<dyn Connection>,
 }
 
@@ -270,11 +191,11 @@ impl Db {
             .with_named_option("path", ":memory:")
             .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
 
-        let mut database = db_builder.build(&mut driver)?;
+        let database = db_builder.build(&mut driver)?;
         let connection = database.new_connection()?;
 
         let mut db = Self {
-            shared_database: Arc::new(Mutex::new(database)),
+            shared_database: Arc::new(database),
             connection,
         };
         db.disable_checkpoint()?;
@@ -293,11 +214,11 @@ impl Db {
             .with_named_option("path", path.to_string_lossy().as_ref())
             .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
 
-        let mut database = db_builder.build(&mut driver)?;
+        let database = db_builder.build(&mut driver)?;
         let connection = database.new_connection()?;
 
         let mut db = Self {
-            shared_database: Arc::new(Mutex::new(database)),
+            shared_database: Arc::new(database),
             connection,
         };
         db.disable_checkpoint()?;
@@ -309,7 +230,7 @@ impl Db {
     /// Shares the catalog via DuckDB MVCC: sees the last committed snapshot,
     /// never blocks writers, multiple readers can run concurrently.
     pub fn new_reader(&self) -> Result<Self, IndexError> {
-        let connection = self.shared_database.lock().unwrap().new_connection()?;
+        let connection = self.shared_database.new_connection()?;
         Ok(Self {
             shared_database: self.shared_database.clone(),
             connection,
@@ -366,36 +287,5 @@ impl Db {
             })?);
         }
         Ok(batches)
-    }
-}
-
-#[cfg(test)]
-mod split_ddl_statements_tests {
-    use super::split_ddl_statements;
-
-    #[test]
-    fn strips_trailing_comment() {
-        let ddl = "SELECT 1; -- a comment\nSELECT 2;";
-        assert_eq!(split_ddl_statements(ddl), vec!["SELECT 1", "SELECT 2"]);
-    }
-
-    #[test]
-    fn preserves_comment_marker_inside_string_literal() {
-        let ddl = "SELECT '--not a comment' AS x;";
-        assert_eq!(
-            split_ddl_statements(ddl),
-            vec!["SELECT '--not a comment' AS x"]
-        );
-    }
-
-    #[test]
-    fn escaped_quote_does_not_prematurely_close_string() {
-        // A doubled `''` inside the literal is SQL's escaped quote, not the string's end — a
-        // `--` later in the same string must not be treated as a real comment marker.
-        let ddl = "SELECT 'it''s -- odd' AS x;";
-        assert_eq!(
-            split_ddl_statements(ddl),
-            vec!["SELECT 'it''s -- odd' AS x"]
-        );
     }
 }

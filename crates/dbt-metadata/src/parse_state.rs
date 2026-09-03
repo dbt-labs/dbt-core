@@ -68,17 +68,17 @@ use dbt_schemas::{
         DbtTest, DbtUnitTest, Nodes,
         common::ConstraintType,
         macros::{DbtDocsMacro, DbtMacro, MacroArgument},
-        manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
-        nodes::DbtGroup,
+        manifest::{DbtMetric, DbtOperation, DbtSavedQuery, DbtSemanticModel},
+        nodes::{DbtGroup, InternalDbtNodeAttributes},
     },
-    state::{DbtPackage, Macros, ManifestPathConfig, ResourcePathKind},
+    state::{DbtPackage, Macros, ManifestPathConfig, Operations, ResourcePathKind},
 };
 
 use crate::partial_parse::PackageSnapshot;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-pub const CACHE_DIR_NAME: &str = "metadata/parse";
+pub const CACHE_DIR_NAME: &str = "private/metadata/parse";
 
 const SCHEMA_VERSION: u32 = 1;
 
@@ -382,7 +382,7 @@ fn node_fields() -> Vec<FieldRef> {
 
 fn node_row_from_trait<N>(uid: &str, node: &N, kind: &str, is_disabled: i32) -> NodeRow
 where
-    N: dbt_schemas::schemas::nodes::InternalDbtNode + Serialize,
+    N: dbt_schemas::schemas::nodes::InternalDbtNode + InternalDbtNodeAttributes + Serialize,
 {
     let c = node.common();
     let b = node.base();
@@ -413,6 +413,12 @@ where
         Some(b.alias.clone())
     };
     let group_name = node.get_group();
+    let access = node.get_access().map(|a| a.to_string());
+    let source = node.as_any().downcast_ref::<DbtSource>();
+    let identifier = source
+        .map(|s| s.__source_attr__.identifier.clone())
+        .or_else(|| alias.clone());
+    let source_name = source.map(|s| s.__source_attr__.source_name.clone());
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
@@ -432,8 +438,44 @@ where
         schema,
         alias,
         relation_name: b.relation_name.clone(),
+        access,
         group_name,
+        source_name,
+        identifier,
         ..Default::default()
+    }
+}
+
+fn append_operation_rows(rows: &mut Vec<NodeRow>, operations_json: &str) {
+    let Ok(ops) = serde_json::from_str::<Operations>(operations_json) else {
+        return;
+    };
+    for op in ops.on_run_start.iter().chain(ops.on_run_end.iter()) {
+        let node: &DbtOperation = op;
+        rows.push(node_row_from_trait(
+            &node.__common_attr__.unique_id,
+            node,
+            "operation",
+            0,
+        ));
+    }
+}
+
+fn append_operation_alive(
+    rows: &mut Vec<dbt_metadata_parquet::parse_alive::AliveRow>,
+    operations_json: &str,
+    ingested_at: i64,
+) {
+    let Ok(ops) = serde_json::from_str::<Operations>(operations_json) else {
+        return;
+    };
+    for op in ops.on_run_start.iter().chain(ops.on_run_end.iter()) {
+        let node: &DbtOperation = op;
+        rows.push(dbt_metadata_parquet::parse_alive::AliveRow {
+            unique_id: node.__common_attr__.unique_id.clone(),
+            resource_type: "operation".to_string(),
+            ingested_at,
+        });
     }
 }
 
@@ -523,7 +565,12 @@ fn node_row_from_docs_macro(uid: &str, node: &DbtDocsMacro, is_disabled: i32) ->
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> Vec<NodeRow> {
+fn collect_all_rows(
+    nodes: &Nodes,
+    disabled_nodes: &Nodes,
+    macros: &Macros,
+    operations_json: &str,
+) -> Vec<NodeRow> {
     let mut rows = Vec::new();
     macro_rules! push_trait {
         ($map:expr, $kind:literal, $dis:expr) => {
@@ -573,6 +620,7 @@ fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> V
     for (uid, node) in macros.docs_macros.iter() {
         rows.push(node_row_from_docs_macro(uid, node, 0));
     }
+    append_operation_rows(&mut rows, operations_json);
     rows
 }
 
@@ -654,6 +702,7 @@ fn collect_alive_rows(
     nodes: &Nodes,
     disabled_nodes: &Nodes,
     macros: &Macros,
+    operations_json: &str,
     ingested_at: i64,
 ) -> Vec<dbt_metadata_parquet::parse_alive::AliveRow> {
     use dbt_metadata_parquet::parse_alive::AliveRow;
@@ -706,6 +755,7 @@ fn collect_alive_rows(
             ingested_at,
         });
     }
+    append_operation_alive(&mut rows, operations_json, ingested_at);
     rows
 }
 
@@ -1041,7 +1091,12 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
         None => {
             // Cold start: write epoch 0, remove any delta epochs.
             let tc = Instant::now();
-            let mut all_rows = collect_all_rows(args.nodes, args.disabled_nodes, args.macros);
+            let mut all_rows = collect_all_rows(
+                args.nodes,
+                args.disabled_nodes,
+                args.macros,
+                args.operations_json,
+            );
             for r in &mut all_rows {
                 r.ingested_at = args.ingested_at;
             }
@@ -1100,7 +1155,12 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
                 // `changed` get the current invocation timestamp.
                 let prior_ingested = read_ingested_at(&dir);
                 let tc = Instant::now();
-                let mut all_rows = collect_all_rows(args.nodes, args.disabled_nodes, args.macros);
+                let mut all_rows = collect_all_rows(
+                    args.nodes,
+                    args.disabled_nodes,
+                    args.macros,
+                    args.operations_json,
+                );
                 for r in &mut all_rows {
                     r.ingested_at = if changed.contains(&r.unique_id) {
                         args.ingested_at
@@ -1187,6 +1247,7 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
         args.nodes,
         args.disabled_nodes,
         args.macros,
+        args.operations_json,
         args.ingested_at,
     );
     let alive_path = dir.join("alive.parquet");

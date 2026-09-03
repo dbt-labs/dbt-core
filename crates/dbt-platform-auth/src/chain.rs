@@ -73,6 +73,7 @@ pub struct AuthChainBuilder {
     client_id: String,
     source_application: Option<String>,
     include_interactive: bool,
+    account_id: Option<String>,
     allow_kinds: Option<HashSet<ResolverKind>>,
     deny_kinds: Option<HashSet<ResolverKind>>,
 }
@@ -90,6 +91,7 @@ impl AuthChainBuilder {
             client_id: client_id.into(),
             source_application: None,
             include_interactive: false,
+            account_id: None,
             allow_kinds: None,
             deny_kinds: None,
         }
@@ -99,6 +101,14 @@ impl AuthChainBuilder {
     /// identify the application initiating the login flow.
     pub fn source_application(mut self, v: impl Into<String>) -> Self {
         self.source_application = Some(v.into());
+        self
+    }
+
+    /// Restrict cached OAuth session lookup to the given dbt platform account.
+    /// Without this, a session cache holding sessions for several accounts
+    /// resolves whichever session comes first.
+    pub fn account_id(mut self, account_id: impl Into<String>) -> Self {
+        self.account_id = Some(account_id.into());
         self
     }
 
@@ -123,9 +133,11 @@ impl AuthChainBuilder {
 
     pub fn build(self) -> AuthChain {
         let client_id = std::env::var("DBT_OAUTH_CLIENT_ID").unwrap_or(self.client_id);
+        let mut passive = OAuthPassiveResolver::new(&client_id);
+        passive.account_id = self.account_id.clone();
         let mut resolvers = vec![
             AuthResolver::EnvVar(EnvVarResolver),
-            AuthResolver::OAuthPassive(OAuthPassiveResolver::new(&client_id)),
+            AuthResolver::OAuthPassive(passive),
             AuthResolver::CloudYaml(CloudYamlResolver::default()),
         ];
         if self.include_interactive {
@@ -270,6 +282,34 @@ projects:
                 .iter()
                 .any(|r| matches!(r, AuthResolver::OAuthInteractive(_)))
         );
+    }
+
+    #[test]
+    fn builder_account_id_is_applied_to_passive_resolver() {
+        let chain = AuthChainBuilder::new("test-client").account_id("7").build();
+        let passive = chain
+            .resolvers
+            .iter()
+            .find_map(|r| match r {
+                AuthResolver::OAuthPassive(p) => Some(p),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(passive.account_id.as_deref(), Some("7"));
+    }
+
+    #[test]
+    fn builder_without_account_id_leaves_passive_resolver_unrestricted() {
+        let chain = AuthChainBuilder::new("test-client").build();
+        let passive = chain
+            .resolvers
+            .iter()
+            .find_map(|r| match r {
+                AuthResolver::OAuthPassive(p) => Some(p),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(passive.account_id, None);
     }
 
     #[test]

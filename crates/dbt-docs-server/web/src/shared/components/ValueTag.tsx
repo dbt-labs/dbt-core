@@ -1,5 +1,4 @@
 import { FC } from 'react';
-
 import { type CellContext } from '@tanstack/react-table';
 
 type ValueCellProps = CellContext<any, string | undefined>;

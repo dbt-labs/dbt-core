@@ -4,8 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { type ColumnDef } from '@tanstack/react-table';
 import { Clock, Copy, Table } from 'lucide-react';
 
-import type { ResourceTypeExplorer } from '@dbt-labs/dbt-dag';
-
+import type { ResourceTypeExplorer } from '../lib/resourceType';
 import type { FreshnessStatusValue, SourceAsset } from '../shared';
 import {
   asCellRenderer,

@@ -212,17 +212,11 @@ impl AdbcEngine {
         let use_cloud_credentials = config.use_dbt_cloud_credentials();
         let backend = self.auth.backend();
 
-        let (database_builder, warnings) = config
+        let database_builder = config
             .build_connection_builder(self.auth.as_ref(), |backend| {
                 self.configure_cloud_database(backend)
             })
             .map_err(crate::errors::auth_error_to_adapter_error)?;
-        for warning in &warnings {
-            dbt_common::tracing::dbt_emit::emit_warn_log_message(
-                dbt_common::ErrorCode::InvalidConfig,
-                warning,
-            );
-        }
         let load_strategy = match (use_cloud_credentials, self.adapter_type) {
             (true, _) => LoadStrategy::Remote,
             (false, AdapterType::DuckDB) => LoadStrategy::SystemThenCdnCache,
@@ -251,11 +245,11 @@ impl AdbcEngine {
                 let database: Box<dyn Database> = database.clone();
                 Ok((database, fingerprint))
             } else {
-                let mut database = driver
+                let database = driver
                     .new_database_with_opts(opts)
                     .map_err(adbc_error_to_adapter_error)?;
                 if self.adapter_type == AdapterType::DuckDB {
-                    self.apply_duckdb_init_sql(&mut database, config)?;
+                    self.apply_duckdb_init_sql(database.as_ref(), config)?;
                 }
                 write_guard.inner.insert(fingerprint, database.clone());
                 Ok((database, fingerprint))
@@ -329,7 +323,7 @@ impl AdbcEngine {
     /// to a newly created database instance. Uses a temporary connection.
     fn apply_duckdb_init_sql(
         &self,
-        database: &mut Box<dyn Database>,
+        database: &dyn Database,
         config: &AdapterConfig,
     ) -> AdapterResult<()> {
         let mut all_stmts = dbt_auth::generate_duckdb_init_sql(config)
@@ -376,11 +370,11 @@ impl AdbcEngine {
         let Ok(view) = catalogs.view_v2() else {
             return Ok(Vec::new());
         };
-        // The compute engine (Alt) attaches via each catalog's `lake_compute`
+        // The compute engine attaches via each catalog's `lake_compute`
         // block when present; the base DuckDB adapter uses the `duckdb` block.
         // Both fall back to `duckdb`.
-        let platform = if self.adapter_type == AdapterType::Alt {
-            AdapterType::Alt.as_ref()
+        let platform = if self.adapter_type == AdapterType::LakeCompute {
+            AdapterType::LakeCompute.as_ref()
         } else {
             AdapterType::DuckDB.as_ref()
         };
@@ -494,7 +488,7 @@ impl AdapterEngine for AdbcEngine {
             // Mock mode never connects, so mock configs don't need real auth data.
             EngineMode::Mock => Ok(self.fingerprint()),
             EngineMode::Live => {
-                let (builder, _warnings) = config
+                let builder = config
                     .build_connection_builder(self.auth.as_ref(), |backend| {
                         self.configure_cloud_database(backend)
                     })

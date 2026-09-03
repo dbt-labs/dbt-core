@@ -19,7 +19,7 @@ use dbt_common::{
     artifact_io::write_artifact_to_file,
     constants::{
         DBT_CATALOG_JSON, DBT_COMPILED_DIR_NAME, DBT_MANIFEST_JSON, DBT_PROJECT_YML, ERROR,
-        INSTALLING, VALIDATING,
+        INSTALLING, VALIDATING, default_index_dir, default_metadata_dir,
     },
     create_root_info_span, fs_err,
     io_args::{DisplayFormat, EvalArgs, ListOutputFormat, Phases, ShowOptions, SystemArgs},
@@ -105,7 +105,7 @@ use vortex_events::{build_result_string, invocation_end_event};
 use crate::{
     compilation::{
         DbtCustomScheduleDescription, DbtProjectCompilation, DbtProjectCompilationCacheChanges,
-        DbtRunTasksResult, DbtScheduleDescription, update_manifest,
+        DbtRunTasksResult, DbtScheduleDescription, show_queries_info_schema, update_manifest,
     },
     retry::{RETRIABLE_COMMANDS, RetryState},
     utils::{InvocationContext, write_catalog_stats_parquet, write_runtime_results_parquet},
@@ -1103,6 +1103,24 @@ impl<'a> AllPhasesExecutor<'a> {
     pub async fn execute_all_phases(&mut self, token: &CancellationToken) -> FsResult<()> {
         use CoreCommand::*;
 
+        // `dbt show --info` / `--inline` with `{{ info_schema() }}` only reads
+        // `target/info_schema/`. Do not parse, compile, or write artifacts.
+        if let Command::Core(Show(show_args)) = &self.cli.command
+            && show_queries_info_schema(show_args)
+        {
+            use dbt_index_core::info_schema::versioned_dir;
+            let info_schema_dir = versioned_dir(&self.arg.info_schema_dir());
+            dbt_tasks_sa::show_info::run_show_info_schema(
+                show_args.info.as_deref(),
+                show_args.inline.as_deref(),
+                &info_schema_dir,
+                self.arg.format,
+                self.arg.limit,
+                token.clone(),
+            )?;
+            return Ok(());
+        }
+
         let type_ops_factory = Arc::clone(&self.feature_stack.adapter.type_ops_factory);
 
         let retry_schedule = self.prepare_for_potential_retry()?;
@@ -1127,8 +1145,10 @@ impl<'a> AllPhasesExecutor<'a> {
         let (mut compilation, jinja_env, compilation_cache_changes) =
             self.load_and_resolve_state(token).await?;
 
-        // Inform the user that schemas require --static-analysis strict, and CLL requires
-        // --write-lineage in addition. Emitted after load_and_resolve_state so the project's
+        // Inform the user that schemas and CLL require --static-analysis strict.
+        // CLL is auto-enabled when generate-info-schema (or write-index) meets
+        // strict SA; this advisory covers the remaining epochs-only path.
+        // Emitted after load_and_resolve_state so the project's
         // warn_error_options (applied during loading) can silence/upgrade these warnings.
         //
         // Not when `docs generate` drove this compile: the user passed none of these flags,
@@ -1150,12 +1170,15 @@ impl<'a> AllPhasesExecutor<'a> {
             .arg
             .static_analysis
             .is_some_and(dbt_common::static_analysis::is_strict_static_analysis);
-        // Name the flag the user actually passed, so the advice is actionable.
-        let advised_flag = match (self.arg.write_index, self.arg.generate_info_schema) {
-            (true, true) => "--write-index / --generate-info-schema",
-            (false, true) => "--generate-info-schema",
-            (true, false) => "--write-index",
-            (false, false) => "--write-metadata",
+        // Name the public flag when the user passed one, so the advice is actionable.
+        // `--write-index` / `--write-metadata` are hidden; still name them if that is
+        // what the invocation actually set.
+        let advised_flag = if self.arg.generate_info_schema {
+            "--generate-info-schema"
+        } else if self.arg.write_index {
+            "--write-index"
+        } else {
+            "--write-metadata"
         };
         if advise_index_flags && !strict_static_analysis {
             emit_warn_log_message(
@@ -1168,7 +1191,7 @@ impl<'a> AllPhasesExecutor<'a> {
             emit_warn_log_message(
                 ErrorCode::Generic,
                 format!(
-                    "{advised_flag}: add `--write-lineage` to write column-level lineage into compile/cll parquet."
+                    "{advised_flag}: column-level lineage is not written. Pass `--generate-info-schema` with `--static-analysis strict` to include it."
                 ),
             );
         }
@@ -1296,15 +1319,18 @@ impl<'a> AllPhasesExecutor<'a> {
                         format!("{reason}. Skipping checks..."),
                     );
                 } else {
-                    // Naming checks explicitly (`dbt check <name>`, or a retry of failed checks) is a
-                    // request to *run those checks*, not to scope their rows — scoping them against a
-                    // selection that contains no models leaves nothing to report and yields a green
-                    // `skipped`, which is how a retry of a failing check came to exit 0.
-                    // Never on a retry: its schedule holds only the failed nodes, so scoping to it
-                    // would verify a fraction of the gate.
-                    let selection_active = !retrying
-                        && self.arg.check_names.is_empty()
-                        && (schedule.select.is_some() || schedule.exclude.is_some());
+                    // Naming checks and scoping their rows are orthogonal: `check_names` chooses
+                    // which checks run, a selector chooses which of their rows are reported. So
+                    // `dbt check <name> --select <subset>` composes -- run that check, report only
+                    // the subset's violations.
+                    //
+                    // Never on a retry, and that exclusion is load-bearing rather than tidy:
+                    // `check_names` is set from the retry artifact, and the accompanying schedule
+                    // holds only the failed nodes. Scoping to it would verify a fraction of the gate
+                    // and report the rest as a green `skipped`, which is how a retry of a failing
+                    // check once came to exit 0.
+                    let selection_active =
+                        !retrying && (schedule.select.is_some() || schedule.exclude.is_some());
                     let scope = dbt_tasks_sa::check::scope_for_selection(
                         selection_active,
                         schedule.selected_nodes.iter(),
@@ -1342,6 +1368,13 @@ impl<'a> AllPhasesExecutor<'a> {
                                 // check without also catching every unrelated `Generic` warning.
                                 // Error-severity violations are errors; warn-severity stays a
                                 // warning so it can still be promoted.
+                                //
+                                // A check that could not be evaluated at all is an error whatever
+                                // its severity, and the level here is what makes that stick: the
+                                // exit code comes off the error counter, so emitting this as a
+                                // warning exited 0 — the same as a check that ran and found
+                                // nothing. A check that has quietly stopped working is exactly the
+                                // one CI must not wave through.
                                 match r.status {
                                     "fail" => emit_error_log_message(
                                         ErrorCode::CheckFailed,
@@ -1351,7 +1384,7 @@ impl<'a> AllPhasesExecutor<'a> {
                                         ErrorCode::CheckWarned,
                                         format!("check '{}' found{count}{detail}", r.name),
                                     ),
-                                    _ => emit_warn_log_message(
+                                    _ => emit_error_log_message(
                                         ErrorCode::CheckEvaluationFailed,
                                         format!(
                                             "check '{}' could not be evaluated:{count}{detail}",
@@ -1843,7 +1876,7 @@ impl<'a> AllPhasesExecutor<'a> {
                         if column_lineage.is_empty() {
                             emit_warn_log_message(
                                 ErrorCode::Generic,
-                                "--lineage requires --static-analysis strict; no column lineage written.",
+                                "column-level lineage requires --static-analysis strict; no column lineage written.",
                             );
                         }
                         write_metadata_parquet(
@@ -1960,7 +1993,7 @@ impl<'a> AllPhasesExecutor<'a> {
 
             // The information schema is written independently of the index:
             // either, neither, or both may be requested. Its intermediate is the
-            // flat index at `target/index` when one is present — the same ingest
+            // flat index at `target/private/index` when one is present — the same ingest
             // builds both, so an index written by the block just above (or by a
             // prior run) is reused via the delta path rather than re-ingested. With
             // no index to reuse — e.g. `--no-write-index` — it stages privately, so
@@ -2154,7 +2187,7 @@ async fn run_docs_generate(
     let index_dir = eval_arg
         .index_dir
         .clone()
-        .unwrap_or_else(|| target_dir.join("index"));
+        .unwrap_or_else(|| default_index_dir(&target_dir));
     let output_dir = generate_args
         .output_dir
         .clone()
@@ -2167,15 +2200,14 @@ async fn run_docs_generate(
     let metadata_dir = eval_arg
         .metadata_dir
         .clone()
-        .unwrap_or_else(|| target_dir.join("metadata"));
+        .unwrap_or_else(|| default_metadata_dir(&target_dir));
     ingest_metadata_into_index(&metadata_dir, &index_dir, "dbt docs generate");
 
     // Compile unless the user said not to, the way v1 does. `--no-compile` falls through
     // to the export, and to the error below when there is nothing to export.
     if !generate_args.no_compile {
         emit_info_log_message(
-            "Running `compile --write-index`; pass `--no-compile` to export the existing \
-             index instead.",
+            "Running compile; pass `--no-compile` to export the existing index instead.",
         );
         build_index_for_docs(
             &target_dir,
@@ -2248,8 +2280,7 @@ async fn run_docs_generate(
             if summary.has_column_lineage {
                 ""
             } else {
-                " — no column lineage; rerun the compile or build with \
-                 `--write-index --static-analysis strict` to include it"
+                " — no column lineage; rerun with `--static-analysis strict` to include it"
             },
         ),
     ));
@@ -2429,7 +2460,7 @@ async fn run_docs_serve(
         .target_path
         .clone()
         .unwrap_or_else(|| std::path::PathBuf::from("./target"));
-    let metadata_dir = target.join("metadata");
+    let metadata_dir = default_metadata_dir(&target);
 
     if !index_dir.exists() && !metadata_dir.exists() {
         emit_error_log_message(
@@ -2437,8 +2468,8 @@ async fn run_docs_serve(
             format!(
                 "dbt docs serve: no data to serve\n\n\
                  Index directory not found: {}\n\
-                 Run `dbt --write-index <run|build|compile>` to generate parquet artifacts,\n\
-                 or pass `--target-path <DIR>` pointing at a directory whose `index/` subdirectory contains them.",
+                 Run `dbt build` or `dbt docs generate` to generate parquet artifacts,\n\
+                 or pass `--target-path <DIR>` pointing at a directory whose `private/index/` subdirectory contains them.",
                 index_dir.display(),
             ),
         );

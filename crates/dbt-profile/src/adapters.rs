@@ -48,13 +48,25 @@ const TYPE_KEY: &str = "type";
 const LAKE_COMPUTE_TYPE: &str = "lake_compute";
 /// The tag `DbConfig` is actually keyed by for lake compute.
 ///
-/// `DbConfig::Alt` is spelled `Alt` in Rust, and `UntaggedEnumDeserialize`
-/// derives its tag from the variant identifier alone -- it *rejects* any
-/// per-variant `#[serde(..)]` attribute outright, and no available rename policy
-/// turns `Alt` into `lake_compute`. So the external name is mapped to the
-/// internal tag here, before the mapping reaches `DbConfig`. Remove this once
-/// `dbt-yaml`'s derive honours variant renames.
-const LAKE_COMPUTE_INTERNAL_TAG: &str = "alt";
+/// `DbConfig` is `#[serde(tag = "type", rename_all = "lowercase")]`, so each
+/// variant's tag is its identifier lowercased -- `LakeCompute` becomes
+/// `lakecompute`, with no underscore. `UntaggedEnumDeserialize` *rejects* any
+/// per-variant `#[serde(..)]` attribute outright, and switching the enum to
+/// `snake_case` would rewrite every other variant's tag, so the external name is
+/// mapped to the internal one here, before the mapping reaches `DbConfig`.
+/// Remove this once `dbt-yaml`'s derive honours variant renames.
+const LAKE_COMPUTE_INTERNAL_TAG: &str = "lakecompute";
+/// Lake compute's external name before the rename. Not an accepted alias.
+const RETIRED_LAKE_COMPUTE_TYPE: &str = "alt";
+
+/// The spellings that name lake compute but are not what authors write.
+///
+/// Both deserialize as `DbConfig::LakeCompute` if passed straight through --
+/// `alt` because it was the name before the rename, `lakecompute` because it is
+/// the tag the enum is keyed by. Neither is an alias, so both are rejected in
+/// favour of the one external name.
+const NON_EXTERNAL_LAKE_COMPUTE_SPELLINGS: &[&str] =
+    &[RETIRED_LAKE_COMPUTE_TYPE, LAKE_COMPUTE_INTERNAL_TAG];
 
 /// Canonicalize a connection's `type:` and rewrite it in place.
 ///
@@ -63,18 +75,21 @@ const LAKE_COMPUTE_INTERNAL_TAG: &str = "alt";
 /// split; every other adapter's external name and `DbConfig` tag are the same
 /// string, so they pass straight through.
 ///
-/// `alt` was lake compute's external name before the rename and is *not* an
-/// accepted alias. It has to be rejected here explicitly: it is still
-/// `DbConfig`'s internal tag, so left alone it would deserialize successfully
-/// and quietly keep working.
+/// `lake_compute` is the only accepted spelling. The two that are not -- `alt`
+/// and the internal tag `lakecompute` -- are rejected here rather than aliased,
+/// because both would otherwise deserialize successfully and quietly keep
+/// working under a name authors are not meant to write.
 fn canonicalize_adapter_type(
     credentials: &mut dbt_yaml::Mapping,
     adapter_type: &str,
 ) -> Result<String> {
-    if adapter_type.eq_ignore_ascii_case(LAKE_COMPUTE_INTERNAL_TAG) {
-        return Err(ProfileError::RetiredAdapterType {
+    if NON_EXTERNAL_LAKE_COMPUTE_SPELLINGS
+        .iter()
+        .any(|s| adapter_type.eq_ignore_ascii_case(s))
+    {
+        return Err(ProfileError::UnacceptedAdapterType {
             written: adapter_type.to_owned(),
-            replacement: LAKE_COMPUTE_TYPE.to_owned(),
+            expected: LAKE_COMPUTE_TYPE.to_owned(),
         });
     }
     if !adapter_type.eq_ignore_ascii_case(LAKE_COMPUTE_TYPE) {
@@ -544,11 +559,11 @@ mod connection_tests {
     }
 
     /// Lake compute is the one adapter whose external name and `DbConfig` tag
-    /// differ: authors write `lake_compute`, `DbConfig::Alt` is tagged `alt`.
-    /// So the credentials handed on must always carry the internal tag, while
-    /// the adapter reports under the external one.
+    /// differ: authors write `lake_compute`, `DbConfig::LakeCompute` is tagged
+    /// `lakecompute`. So the credentials handed on must always carry the
+    /// internal tag, while the adapter reports under the external one.
     #[test]
-    fn lake_compute_is_the_external_name_for_alt() {
+    fn lake_compute_is_the_external_name_for_the_dbconfig_tag() {
         for written in ["lake_compute", "LAKE_COMPUTE"] {
             let adapters = parse(&format!(
                 "- type: {written}
@@ -568,34 +583,35 @@ mod connection_tests {
                     .credentials
                     .get("type")
                     .and_then(|v| v.as_str()),
-                Some("alt"),
+                Some(LAKE_COMPUTE_INTERNAL_TAG),
                 "`type: {written}` must be handed to `DbConfig` as its internal tag"
             );
         }
     }
 
-    /// `alt` is `DbConfig`'s internal tag, so a profile that writes it would
-    /// deserialize fine if it were passed through. It has to be rejected
-    /// explicitly, in both target shapes, or the retired name keeps working.
+    /// `lake_compute` is the only spelling authors may write. `alt` is the
+    /// retired name and `lakecompute` is the internal `DbConfig` tag; both
+    /// deserialize if passed through, so both must be rejected, in both target
+    /// shapes, or they keep working as undocumented aliases.
     #[test]
-    fn the_retired_alt_type_is_rejected() {
-        for yaml in [
-            "- type: alt
-  base_url: https://example.invalid
-",
-            "type: alt
-base_url: https://example.invalid
-",
-        ] {
-            let err = parse(yaml).expect_err("`type: alt` must be rejected");
-            assert!(
-                matches!(
-                    &err,
-                    ProfileError::RetiredAdapterType { replacement, .. }
-                        if replacement == "lake_compute"
-                ),
-                "expected a retired-type error naming the replacement, got: {err}"
-            );
+    fn the_non_external_lake_compute_spellings_are_rejected() {
+        for written in NON_EXTERNAL_LAKE_COMPUTE_SPELLINGS {
+            for yaml in [
+                format!("- type: {written}\n  base_url: https://example.invalid\n"),
+                format!("type: {written}\nbase_url: https://example.invalid\n"),
+            ] {
+                let Err(err) = parse(&yaml) else {
+                    panic!("`type: {written}` must be rejected, but it parsed");
+                };
+                assert!(
+                    matches!(
+                        &err,
+                        ProfileError::UnacceptedAdapterType { expected, .. }
+                            if expected == "lake_compute"
+                    ),
+                    "expected an error naming the accepted spelling, got: {err}"
+                );
+            }
         }
     }
 
@@ -617,7 +633,7 @@ base_url: https://example.invalid
                 .credentials
                 .get("type")
                 .and_then(|v| v.as_str()),
-            Some("alt")
+            Some(LAKE_COMPUTE_INTERNAL_TAG)
         );
     }
 

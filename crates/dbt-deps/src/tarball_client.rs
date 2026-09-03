@@ -4,6 +4,7 @@
 //! Uses async streaming extraction (no intermediate files or memory buffering)
 //! and automatic retry logic for transient failures.
 //! Supports selective extraction with root directory stripping and subdirectory filtering.
+//! A supplied sha1 is verified against the buffered body before extraction.
 
 use crate::utils::ensure_dir;
 use async_compression::tokio::bufread::GzipDecoder;
@@ -13,8 +14,11 @@ use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use futures::StreamExt;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
+use sha1::Digest;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use tokio::io::AsyncBufRead;
 use tokio_tar::{Archive, EntryType};
 use tokio_util::io::StreamReader;
 
@@ -44,9 +48,12 @@ impl TarballClient {
     /// * `subdirectory` - If provided, only extract entries from this subdirectory
     /// * `headers` - Additional HTTP request headers (e.g. `Authorization`);
     ///   pass `&[]` when none are needed
+    /// * `expected_sha1` - If provided, the body is buffered and verified
+    ///   before extraction; on mismatch nothing is extracted
     ///
     /// Streams download directly from network through gzip decoder to tar extractor,
-    /// avoiding intermediate memory buffering or file I/O.
+    /// avoiding intermediate memory buffering or file I/O, unless `expected_sha1`
+    /// is provided.
     pub async fn download_and_extract_tarball(
         &self,
         download_url: &str,
@@ -54,6 +61,7 @@ impl TarballClient {
         strip_root: bool,
         subdirectory: Option<&str>,
         headers: &[(&str, &str)],
+        expected_sha1: Option<&str>,
     ) -> FsResult<PathBuf> {
         self.cancellation.check_cancellation()?;
 
@@ -77,12 +85,28 @@ impl TarballClient {
             );
         }
 
-        // Convert reqwest stream to AsyncRead
-        let stream = res.bytes_stream().map(|result| {
-            result.map_err(|e| io::Error::other(format!("Failed to read stream: {}", e)))
-        });
+        let reader: Pin<Box<dyn AsyncBufRead + Send>> = if let Some(expected_sha1) = expected_sha1 {
+            let body = res.bytes().await.map_err(|e| {
+                fs_err!(
+                    ErrorCode::RuntimeError,
+                    "Failed to read tarball body from {download_url}: {e}"
+                )
+            })?;
+            let actual_sha1 = format!("{:x}", sha1::Sha1::digest(&body));
+            if !actual_sha1.eq_ignore_ascii_case(expected_sha1) {
+                return err!(
+                    ErrorCode::RuntimeError,
+                    "sha1 checksum mismatch for tarball downloaded from {download_url}: expected {expected_sha1}, got {actual_sha1}"
+                );
+            }
+            Box::pin(io::Cursor::new(body))
+        } else {
+            // Convert reqwest stream to AsyncRead
+            Box::pin(StreamReader::new(res.bytes_stream().map(|result| {
+                result.map_err(|e| io::Error::other(format!("Failed to read stream: {}", e)))
+            })))
+        };
 
-        let reader = StreamReader::new(stream);
         let decoder = GzipDecoder::new(reader);
         let archive = Archive::new(decoder);
 
@@ -532,5 +556,94 @@ mod tests {
             std::fs::read(target.join("models/my_model.sql")).unwrap(),
             b"select 1\n"
         );
+    }
+
+    /// Unlike `extract`, the download path decodes gzip, so these tests need a
+    /// real `.tar.gz`. Deterministic: the tar headers carry no mtime.
+    async fn good_package_tarball_gz() -> Vec<u8> {
+        use async_compression::tokio::write::GzipEncoder;
+        use tokio::io::AsyncWriteExt;
+
+        let mut builder = Builder::new(Vec::new());
+        append_file(
+            &mut builder,
+            "good_package/dbt_project.yml",
+            b"name: good_package\n",
+        )
+        .await;
+        let tar_bytes = builder.into_inner().await.unwrap();
+
+        let mut encoder = GzipEncoder::new(Vec::new());
+        encoder.write_all(&tar_bytes).await.unwrap();
+        encoder.shutdown().await.unwrap();
+        encoder.into_inner()
+    }
+
+    /// Serve `good_package_tarball_gz` over HTTP and download it into `target`.
+    async fn download_good_package(
+        target: &Path,
+        expected_sha1: Option<&str>,
+    ) -> FsResult<PathBuf> {
+        use wiremock::matchers::method;
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_bytes(good_package_tarball_gz().await),
+            )
+            .mount(&server)
+            .await;
+
+        let http_client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new()).build();
+        TarballClient::from_client(http_client, never_cancels())
+            .download_and_extract_tarball(&server.uri(), target, true, None, &[], expected_sha1)
+            .await
+    }
+
+    fn assert_extracted(target: &Path) {
+        assert_eq!(
+            std::fs::read(target.join("dbt_project.yml")).unwrap(),
+            b"name: good_package\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn download_and_extract_tarball_matching_sha1_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = extraction_root(&tmp);
+        let sha1 = format!("{:x}", sha1::Sha1::digest(good_package_tarball_gz().await));
+
+        let result = download_good_package(&target, Some(&sha1)).await;
+
+        assert!(result.is_ok(), "expected download to succeed: {result:?}");
+        assert_extracted(&target);
+    }
+
+    #[tokio::test]
+    async fn download_and_extract_tarball_mismatched_sha1_fails_and_extracts_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = extraction_root(&tmp);
+        let wrong_sha1 = "0000000000000000000000000000000000000000";
+
+        let result = download_good_package(&target, Some(wrong_sha1)).await;
+
+        assert_rejected(&result, "sha1 checksum mismatch", "mismatched sha1");
+        assert!(
+            !target.join("dbt_project.yml").exists(),
+            "nothing should be extracted when the sha1 check fails"
+        );
+    }
+
+    /// Guards the untouched streaming path, which the `expected_sha1` branch moved.
+    #[tokio::test]
+    async fn download_and_extract_tarball_no_expected_sha1_is_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = extraction_root(&tmp);
+
+        let result = download_good_package(&target, None).await;
+
+        assert!(result.is_ok(), "expected download to succeed: {result:?}");
+        assert_extracted(&target);
     }
 }

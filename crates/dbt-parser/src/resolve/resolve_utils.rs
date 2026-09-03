@@ -8,7 +8,7 @@ use dbt_common::error::FsError;
 use dbt_common::fs_err;
 use dbt_common::io_args::ComputeArg;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
-use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting};
+use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::project::AdapterProjectConfig;
 use dbt_schemas::state::ProfileAdapter;
 use indexmap::IndexMap;
@@ -307,125 +307,6 @@ pub(crate) fn validate_compute(compute: Option<ComputeArg>, path: &Path) -> FsRe
     }
 }
 
-/// Resolves and validates a node's `+adapter` selection at parse time.
-///
-/// Returns the selected [`AdapterType`], so the run layer can pick an execution
-/// path without needing the profile. `None` in, `None` out: a node that selects
-/// no adapter uses the target's default and is unconstrained.
-///
-/// Deliberately does **not** check that the target declares the selected adapter.
-/// A project may carry `+adapter: bigquery` and be run against a Snowflake-only
-/// target, so long as selection excludes those nodes -- and parse cannot know what
-/// selection will do. That check lives after scheduling, where the set of nodes
-/// that will actually execute is known; see
-/// `check_scheduled_adapters_are_declared`.
-///
-/// What is checked here is only what no selection can rescue: an `alt`-typed
-/// selection must satisfy the v1 preconditions:
-///
-/// 1. catalogs v2 must be enabled and the node must resolve a `catalog_name`
-///    (the compute target reads its inputs and writes its output through an
-///    attached catalog);
-/// 2. the default adapter must be one of the v1-supported warehouses
-///    (`snowflake`, or `duckdb`/`alt` for the standalone/dev case);
-/// 3. the materialization must be one that runs natively — `table`, `view`, or
-///    `incremental` — or a custom (user-authored) materialization; the managed
-///    materializations that are out of v1 scope (`snapshot`, `materialized_view`,
-///    `dynamic_table`, `streaming_table`) are rejected;
-/// 4. Python models are not supported in v1.
-///
-/// Rule 3 is what keeps `alt` off the node types it cannot materialize: a
-/// snapshot arrives with `DbtMaterialization::Snapshot` and a function with
-/// `Function`, so an `alt` selection on either is rejected here rather than
-/// failing at run time. Data tests inherit their adapter from the node they are
-/// attached to instead, and never inherit `alt` (see `resolve_data_tests`).
-///
-/// The upstream-reachability check (every `ref`/`source` input must be available
-/// through a reachable catalog) is enforced later, at DAG build, where the
-/// upstream materializations are known.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn validate_node_adapter(
-    adapter: Option<AdapterType>,
-    materialized: &DbtMaterialization,
-    catalog_name: Option<&str>,
-    default_adapter: AdapterType,
-    use_catalogs_v2: bool,
-    is_python: bool,
-    path: &Path,
-) -> FsResult<Option<AdapterType>> {
-    let err = |msg: String| -> Box<FsError> {
-        fs_err!(
-            code => ErrorCode::InvalidConfig,
-            loc => path.to_path_buf(),
-            "{msg}",
-        )
-    };
-
-    let Some(selected_type) = adapter else {
-        return Ok(None);
-    };
-
-    // Selecting the default adapter explicitly is a no-op, and always allowed.
-    if selected_type == default_adapter {
-        return Ok(Some(selected_type));
-    }
-
-    // Selecting any declared adapter is allowed -- the primitive is that several
-    // adapters are supported. What follows are `alt`'s own preconditions, not an
-    // allowlist of selectable adapters, so a non-`alt` selection passes straight
-    // through.
-    if selected_type != AdapterType::Alt {
-        return Ok(Some(selected_type));
-    }
-    // The external name (`lake_compute`), so diagnostics quote what the author wrote.
-    let name = selected_type.as_ref();
-
-    // Rule 4: Python models are not supported.
-    if is_python {
-        return Err(err(format!(
-            "adapter: '{name}' does not support Python models in v1"
-        )));
-    }
-
-    // Rule 2: v1 warehouse guard.
-    if !matches!(
-        default_adapter,
-        AdapterType::Snowflake | AdapterType::DuckDB | AdapterType::Alt
-    ) {
-        return Err(err(format!(
-            "adapter: '{name}' in v1 supports Snowflake and lake compute only;              the target's default adapter is '{default_adapter}'"
-        )));
-    }
-
-    // Rule 1: catalogs v2 + a resolvable catalog_name.
-    if !use_catalogs_v2 {
-        return Err(err(format!(
-            "adapter: '{name}' requires catalogs v2              (set the 'use_catalogs_v2' flag)"
-        )));
-    }
-    if catalog_name.is_none() {
-        return Err(err(format!(
-            "adapter: '{name}' requires a 'catalog_name' that resolves              to an attachable catalog"
-        )));
-    }
-
-    // Rule 3: materialization must run natively or be a custom materialization.
-    match materialized {
-        DbtMaterialization::Table
-        | DbtMaterialization::View
-        | DbtMaterialization::Incremental
-        // A custom (user-authored) materialization; enforced against the run path.
-        | DbtMaterialization::Unknown(_) => {}
-        other => {
-            return Err(err(format!(
-                "adapter: '{name}' supports table, view, and incremental                  materializations in v1; got '{other}'"
-            )));
-        }
-    }
-
-    Ok(Some(selected_type))
-}
-
 /// Unit tests can run on either on the `remote` warehouse or `sidecar`
 pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Path) -> FsResult<()> {
     match compute {
@@ -442,318 +323,6 @@ pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Pat
 mod tests {
     use super::*;
     use crate::utils::RawProjectConfig;
-
-    /// Validate a selection of the `alt` adapter against a given target default.
-    fn validate_alt(
-        materialized: DbtMaterialization,
-        catalog_name: Option<&str>,
-        default_adapter: AdapterType,
-        use_catalogs_v2: bool,
-        is_python: bool,
-    ) -> FsResult<Option<AdapterType>> {
-        validate_node_adapter(
-            Some(AdapterType::Alt),
-            &materialized,
-            catalog_name,
-            default_adapter,
-            use_catalogs_v2,
-            is_python,
-            Path::new("models/m.sql"),
-        )
-    }
-
-    fn validate_selection(selected: Option<AdapterType>) -> FsResult<Option<AdapterType>> {
-        validate_node_adapter(
-            selected,
-            &DbtMaterialization::Table,
-            Some("horizon"),
-            AdapterType::Snowflake,
-            true,
-            false,
-            Path::new("models/m.sql"),
-        )
-    }
-
-    #[test]
-    fn no_selection_is_always_accepted_and_resolves_to_none() {
-        // An absent selection ignores every other precondition.
-        assert_eq!(
-            validate_node_adapter(
-                None,
-                &DbtMaterialization::MaterializedView,
-                None,
-                AdapterType::Bigquery,
-                false,
-                true,
-                Path::new("models/m.sql"),
-            )
-            .unwrap(),
-            None
-        );
-    }
-
-    /// Naming the default adapter explicitly is a no-op, and skips the alt
-    /// preconditions entirely.
-    #[test]
-    fn selecting_the_default_adapter_is_accepted() {
-        let resolved = validate_selection(Some(AdapterType::Snowflake))
-            .unwrap()
-            .unwrap();
-        assert_eq!(resolved, AdapterType::Snowflake);
-    }
-
-    // A value that is not an adapter type at all cannot reach here: `+adapter` is
-    // typed `AdapterType`, so it is rejected at deserialization against the full
-    // set of supported adapters. Covered by `seed_config` and `dbt_project` tests.
-
-    /// An adapter the active target does not declare is **accepted** here. Parse
-    /// cannot know whether the node will be selected, and a project spanning
-    /// adapters run against a narrower target is legitimate so long as selection
-    /// excludes the nodes needing the missing one. The error belongs after
-    /// scheduling -- see `check_scheduled_adapters_are_declared`.
-    #[test]
-    fn an_undeclared_adapter_is_accepted_at_parse() {
-        let resolved = validate_selection(Some(AdapterType::Redshift))
-            .expect("membership is not parse's question to answer");
-        assert_eq!(resolved, Some(AdapterType::Redshift));
-    }
-
-    /// Selecting any declared adapter is allowed -- the primitive is that several
-    /// adapters are supported, so there is no allowlist of selectable types. The
-    /// `alt` preconditions that follow gate on the *selected* adapter being `alt`,
-    /// so a DuckDB selection skips them entirely.
-    #[test]
-    fn selecting_a_declared_non_alt_adapter_is_accepted() {
-        let resolved = validate_selection(Some(AdapterType::DuckDB))
-            .unwrap()
-            .unwrap();
-        assert_eq!(resolved, AdapterType::DuckDB);
-    }
-
-    #[test]
-    fn a_valid_alt_selection_resolves_to_its_name_and_type() {
-        let resolved = validate_alt(
-            DbtMaterialization::Table,
-            Some("horizon"),
-            AdapterType::Snowflake,
-            true,
-            false,
-        )
-        .unwrap()
-        .unwrap();
-
-        assert_eq!(resolved, AdapterType::Alt);
-    }
-
-    #[test]
-    fn alt_happy_paths() {
-        // The warehouses rule 2 admits as a target default. `alt` itself is not
-        // among them: an `alt` selection against an `alt` default is the no-op
-        // asserted by `alt_on_an_alt_target_is_the_default_selection_no_op`, and
-        // never reaches rule 2.
-        for adapter in [AdapterType::Snowflake, AdapterType::DuckDB] {
-            assert!(
-                validate_alt(
-                    DbtMaterialization::Table,
-                    Some("horizon"),
-                    adapter,
-                    true,
-                    false
-                )
-                .is_ok()
-            );
-        }
-        // view + incremental + a custom materialization are all accepted.
-        assert!(
-            validate_alt(
-                DbtMaterialization::View,
-                Some("horizon"),
-                AdapterType::Snowflake,
-                true,
-                false
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_alt(
-                DbtMaterialization::Incremental,
-                Some("horizon"),
-                AdapterType::Snowflake,
-                true,
-                false
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_alt(
-                DbtMaterialization::Unknown("my_custom_mat".to_string()),
-                Some("horizon"),
-                AdapterType::Snowflake,
-                true,
-                false
-            )
-            .is_ok()
-        );
-    }
-
-    /// When the target's default adapter *is* `alt`, selecting `alt` names the
-    /// default explicitly: it returns at the no-op guard before any of the alt
-    /// preconditions run, so even inputs rule 1 and rule 3 would reject pass.
-    /// This is also why rule 2's own `AdapterType::Alt` arm is unreachable: rule 2
-    /// runs only when the selection is `alt` *and* differs from the default.
-    #[test]
-    fn alt_on_an_alt_target_is_the_default_selection_no_op() {
-        let resolved = validate_alt(
-            DbtMaterialization::MaterializedView,
-            None,
-            AdapterType::Alt,
-            false,
-            false,
-        )
-        .expect("naming the target's own default adapter is always allowed")
-        .expect("an explicit selection resolves to itself");
-
-        assert_eq!(resolved, AdapterType::Alt);
-    }
-
-    #[test]
-    fn alt_rejects_python_models() {
-        assert!(
-            validate_alt(
-                DbtMaterialization::Table,
-                Some("horizon"),
-                AdapterType::Snowflake,
-                true,
-                true
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn alt_rejects_unsupported_warehouse() {
-        assert!(
-            validate_alt(
-                DbtMaterialization::Table,
-                Some("horizon"),
-                AdapterType::Bigquery,
-                true,
-                false
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn alt_requires_catalogs_v2_and_catalog_name() {
-        assert!(
-            validate_alt(
-                DbtMaterialization::Table,
-                Some("horizon"),
-                AdapterType::Snowflake,
-                false,
-                false
-            )
-            .is_err()
-        );
-        assert!(
-            validate_alt(
-                DbtMaterialization::Table,
-                None,
-                AdapterType::Snowflake,
-                true,
-                false
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn alt_rejects_out_of_scope_materializations() {
-        for mat in [
-            DbtMaterialization::Snapshot,
-            DbtMaterialization::MaterializedView,
-            DbtMaterialization::DynamicTable,
-            DbtMaterialization::StreamingTable,
-        ] {
-            assert!(
-                validate_alt(mat, Some("horizon"), AdapterType::Snowflake, true, false).is_err()
-            );
-        }
-    }
-
-    /// Rule 3 is what keeps `alt` off the node types it cannot materialize, so
-    /// extending `+adapter` to them needed no new gate: a snapshot arrives with
-    /// `Snapshot` and a function with `Function`, and both land in the reject arm.
-    #[test]
-    fn alt_is_rejected_for_the_node_types_it_cannot_materialize() {
-        for mat in [DbtMaterialization::Snapshot, DbtMaterialization::Function] {
-            let err = validate_alt(
-                mat.clone(),
-                Some("horizon"),
-                AdapterType::Snowflake,
-                true,
-                false,
-            )
-            .expect_err("alt does not materialize {mat} in v1");
-            assert!(
-                err.to_string().contains("table, view, and incremental"),
-                "expected the materialization diagnostic for {mat}, got: {err}"
-            );
-        }
-    }
-
-    /// The same selection is accepted for every node type when the adapter is a
-    /// plain warehouse -- the `alt` preconditions are `alt`'s, not an allowlist of
-    /// which node types may select at all.
-    #[test]
-    fn a_non_alt_selection_is_accepted_for_every_node_type() {
-        for mat in [
-            DbtMaterialization::Table,
-            DbtMaterialization::Snapshot,
-            DbtMaterialization::Test,
-            DbtMaterialization::Function,
-        ] {
-            assert_eq!(
-                validate_node_adapter(
-                    Some(AdapterType::DuckDB),
-                    &mat,
-                    None,
-                    AdapterType::Snowflake,
-                    true,
-                    false,
-                    Path::new("models/m.sql"),
-                )
-                .unwrap(),
-                Some(AdapterType::DuckDB),
-                "a duckdb selection should be accepted for {mat}"
-            );
-        }
-    }
-
-    /// Likewise for every node type. What no selection can rescue -- `alt`'s
-    /// preconditions -- is still checked at parse, which is the distinction the two
-    /// severities turn on.
-    #[test]
-    fn an_undeclared_adapter_is_accepted_for_every_node_type() {
-        for mat in [
-            DbtMaterialization::Snapshot,
-            DbtMaterialization::Test,
-            DbtMaterialization::Function,
-        ] {
-            let resolved = validate_node_adapter(
-                Some(AdapterType::Redshift),
-                &mat,
-                None,
-                AdapterType::Snowflake,
-                true,
-                false,
-                Path::new("models/m.sql"),
-            )
-            .unwrap_or_else(|e| panic!("membership is not parse's question for {mat}: {e}"));
-            assert_eq!(resolved, Some(AdapterType::Redshift));
-        }
-    }
 
     fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
         pairs
@@ -1189,7 +758,9 @@ mod adapter_quoting_tests {
                 DbConfig::Snowflake(
                     Box::<dbt_schemas::schemas::profiles::SnowflakeDbConfig>::default(),
                 ),
-                DbConfig::Alt(Box::<dbt_schemas::schemas::profiles::AltConfig>::default()),
+                DbConfig::LakeCompute(
+                    Box::<dbt_schemas::schemas::profiles::LakeComputeConfig>::default(),
+                ),
             ]
             .map(|config| (config.adapter_type(), ProfileAdapter::single(config))),
         )
@@ -1204,13 +775,13 @@ mod adapter_quoting_tests {
     }
 
     /// The rule the chain exists to express: the top-level `quoting:` block
-    /// configures the *default* adapter and nothing else. A node on `alt` gets
-    /// only `alt`'s own entry, so it is free to differ without every model
+    /// configures the *default* adapter and nothing else. A node on `lake_compute` gets
+    /// only `lake_compute`'s own entry, so it is free to differ without every model
     /// having to say so.
     #[test]
     fn top_level_quoting_reaches_only_the_default_adapter() {
         let top_level = Some(quoting(false, false, false));
-        let adapters = entry(AdapterType::Alt, Some(quoting(true, true, true)));
+        let adapters = entry(AdapterType::LakeCompute, Some(quoting(true, true, true)));
 
         let per_adapter = authored_quoting_per_adapter(
             Some(&adapters),
@@ -1225,7 +796,7 @@ mod adapter_quoting_tests {
             "the default adapter takes the top-level block"
         );
         assert_eq!(
-            per_adapter[&AdapterType::Alt],
+            per_adapter[&AdapterType::LakeCompute],
             quoting(true, true, true),
             "a non-default adapter takes only its own entry"
         );
@@ -1241,7 +812,10 @@ mod adapter_quoting_tests {
             authored_quoting_per_adapter(None, &adapters_fixture(), AdapterType::Snowflake, None);
 
         assert_eq!(per_adapter.len(), 2, "every declared adapter gets a key");
-        assert_eq!(per_adapter[&AdapterType::Alt], DbtQuoting::default());
+        assert_eq!(
+            per_adapter[&AdapterType::LakeCompute],
+            DbtQuoting::default()
+        );
         assert_eq!(per_adapter[&AdapterType::Snowflake], DbtQuoting::default());
     }
 
@@ -1279,7 +853,7 @@ mod adapter_quoting_tests {
     #[test]
     fn snowflake_ignore_case_survives_layering() {
         let adapters = entry(
-            AdapterType::Alt,
+            AdapterType::LakeCompute,
             Some(DbtQuoting {
                 snowflake_ignore_case: Some(true),
                 ..Default::default()
@@ -1294,7 +868,7 @@ mod adapter_quoting_tests {
         );
 
         assert_eq!(
-            per_adapter[&AdapterType::Alt].snowflake_ignore_case,
+            per_adapter[&AdapterType::LakeCompute].snowflake_ignore_case,
             Some(true)
         );
     }

@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 use dbt_common::FsResult;
 use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize};
@@ -50,7 +50,7 @@ pub struct DbtColumn {
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<StringOrMap>>,
     pub classifiers: Option<Vec<String>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub codec: Option<String>,
@@ -126,7 +126,7 @@ pub struct ColumnProperties {
     #[serde(default, deserialize_with = "policy_tags_from_scalar_or_list")]
     pub policy_tags: Option<Vec<StringOrMap>>,
     pub classifiers: Option<Vec<String>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub codec: Option<String>,
@@ -156,7 +156,7 @@ pub struct VersionColumnProperties {
     #[serde(default, deserialize_with = "policy_tags_from_scalar_or_list")]
     pub policy_tags: Option<Vec<StringOrMap>>,
     pub classifiers: Option<Vec<String>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub codec: Option<String>,
@@ -225,7 +225,7 @@ pub struct ColumnConfig {
     #[serde(default)]
     pub tags: Option<StringOrArrayOfStrings>,
     pub meta: Option<IndexMap<String, YmlValue>>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(default, deserialize_with = "policy_tags_from_scalar_or_list")]
     pub policy_tags: Option<Vec<StringOrMap>>,
 }

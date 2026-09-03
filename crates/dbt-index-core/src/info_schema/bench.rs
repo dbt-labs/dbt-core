@@ -2,10 +2,11 @@
 //!
 //! `--generate-info-schema` is opt-in because its cost is unknown. Two decisions
 //! need numbers: whether the conversion can be on by default, and whether a
-//! DuckDB-side materializer should replace the Arrow one. Neither is answered by
-//! a total — they turn on *which* stage dominates, so the harness reports the
-//! per-stage attribution collected by [`crate::ingest::timings`] and the total as
-//! a fraction of the invocation that produced the metadata.
+//! DuckDB-side materializer should replace the Arrow one. [`run_with`] times
+//! each path on the same corpus; the report attributes wall time to stages and
+//! as a fraction of the invocation that produced the metadata. The default-flag
+//! decision turns on *cold* conversion as a share of compile, not the steady
+//! delta path.
 //!
 //! This is not shipped library code: the module is gated behind `cfg(test)` and
 //! the `bench` feature (see `info_schema/mod.rs`). A plain `#[cfg(test)]` would
@@ -27,7 +28,7 @@ use crate::IndexError;
 use crate::ingest::metadata_to_parquet::{f64_col, read_parquet_batches};
 use crate::ingest::timings::{self, Stage};
 
-use super::{STAGING_DIR_NAME, versioned_dir, write_info_schema};
+use super::{Materializer, STAGING_DIR_NAME, versioned_dir, write_info_schema_with};
 
 /// One conversion of a fixed metadata directory.
 pub struct Iteration {
@@ -69,6 +70,8 @@ impl Iteration {
 pub struct Report {
     /// Project or corpus name, for the report header.
     pub label: String,
+    /// Which materializer produced these numbers.
+    pub materializer: Materializer,
     pub metadata_dir: PathBuf,
     pub iterations: Vec<Iteration>,
     /// `elapsed_time` of the longest invocation recorded in the metadata, in
@@ -79,7 +82,8 @@ pub struct Report {
 }
 
 /// Convert `metadata_dir` into an information schema under `workdir`
-/// `iterations` times, timing each one.
+/// `iterations` times, timing each one. Uses [`Materializer::Arrow`], the
+/// historical path the recorded numbers were taken on.
 ///
 /// `workdir` stands in for a target directory: the output lands in
 /// `workdir/info_schema/v<n>/` and the staging tables in
@@ -87,6 +91,24 @@ pub struct Report {
 /// between iterations, so iteration 1 measures a first run and the rest measure
 /// the steady state.
 pub fn run(
+    label: impl Into<String>,
+    metadata_dir: &Path,
+    workdir: &Path,
+    iterations: usize,
+) -> Result<Report, IndexError> {
+    run_with(
+        Materializer::Arrow,
+        label,
+        metadata_dir,
+        workdir,
+        iterations,
+    )
+}
+
+/// [`run`] with an explicit materializer, so Arrow and COPY can be timed on
+/// the same corpus without one path's leftover staging affecting the other.
+pub fn run_with(
+    how: Materializer,
     label: impl Into<String>,
     metadata_dir: &Path,
     workdir: &Path,
@@ -101,7 +123,7 @@ pub fn run(
         let cold = !out_dir.exists();
         timings::reset();
         let start = Instant::now();
-        let tables = write_info_schema(metadata_dir, &info_schema_dir, &staging_dir)?;
+        let tables = write_info_schema_with(how, metadata_dir, &info_schema_dir, &staging_dir)?;
         let wall = start.elapsed();
         runs.push(Iteration {
             cold,
@@ -113,6 +135,7 @@ pub fn run(
 
     Ok(Report {
         label: label.into(),
+        materializer: how,
         metadata_dir: metadata_dir.to_path_buf(),
         invocation_secs: longest_invocation_secs(&out_dir),
         iterations: runs,
@@ -179,10 +202,17 @@ impl Report {
     }
 
     /// Conversion cost as a fraction of the command that produced the metadata.
-    /// This is the number the opt-in decision turns on.
+    /// Steady-state wall over invocation elapsed time.
     pub fn fraction_of_invocation(&self) -> Option<f64> {
         let secs = self.invocation_secs.filter(|s| *s > 0.0)?;
         Some(self.mean_wall().as_secs_f64() / secs)
+    }
+
+    /// Cold conversion as a fraction of the command that produced the metadata.
+    /// This is the number the opt-in-default decision turns on.
+    pub fn cold_fraction_of_invocation(&self) -> Option<f64> {
+        let secs = self.invocation_secs.filter(|s| *s > 0.0)?;
+        Some(self.cold()?.wall.as_secs_f64() / secs)
     }
 
     /// A pasteable report: one row per stage with the cold run beside the
@@ -199,7 +229,12 @@ impl Report {
         let cold_wall = self.cold().map(|i| i.wall).unwrap_or_default();
         let tables = self.iterations.first().map(|i| i.tables).unwrap_or(0);
 
-        let _ = writeln!(out, "info schema conversion — {}", self.label);
+        let _ = writeln!(
+            out,
+            "info schema conversion ({}) — {}",
+            self.materializer.label(),
+            self.label
+        );
         let _ = writeln!(out, "  metadata:   {}", self.metadata_dir.display());
         let _ = writeln!(
             out,
@@ -207,13 +242,18 @@ impl Report {
             self.iterations.len(),
             tables
         );
-        match (self.invocation_secs, self.fraction_of_invocation()) {
-            (Some(secs), Some(frac)) => {
+        match (
+            self.invocation_secs,
+            self.cold_fraction_of_invocation(),
+            self.fraction_of_invocation(),
+        ) {
+            (Some(secs), Some(cold_frac), Some(steady_frac)) => {
                 let _ = writeln!(
                     out,
-                    "  invocation: {:.1} ms → steady conversion is {:.1}% of it",
+                    "  invocation: {:.1} ms → cold is {:.1}% of it, steady is {:.1}%",
                     secs * 1000.0,
-                    frac * 100.0
+                    cold_frac * 100.0,
+                    steady_frac * 100.0
                 );
             }
             _ => {

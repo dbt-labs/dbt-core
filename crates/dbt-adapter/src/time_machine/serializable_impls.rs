@@ -143,6 +143,7 @@ impl TimeMachineSerializable for RelationObject {
             "is_materialized_view": self.is_materialized_view(),
             "is_cte": self.is_cte(),
             "is_dynamic_table": self.is_dynamic_table(),
+            "is_interactive_table": self.is_interactive_table(),
             "is_streaming_table": self.is_streaming_table(),
             "is_delta": self.is_delta(),
             "quote_policy": {
@@ -205,6 +206,8 @@ impl TimeMachineSerializable for RelationObject {
             Some(RelationType::CTE)
         } else if ext.bool_or("is_dynamic_table", false) {
             Some(RelationType::DynamicTable)
+        } else if ext.bool_or("is_interactive_table", false) {
+            Some(RelationType::InteractiveTable)
         } else if ext.bool_or("is_streaming_table", false) {
             Some(RelationType::StreamingTable)
         } else {
@@ -685,6 +688,42 @@ mod tests {
 
         // Verify adapter type is also restored from serialized data
         assert!(matches!(restored.adapter_type(), AdapterType::Snowflake));
+    }
+
+    /// The relation type survives replay only if it has both a serialized flag and a matching
+    /// arm in the reconstruction chain; without either one it silently comes back as `None`.
+    #[test]
+    fn test_relation_object_roundtrip_preserves_relation_type() {
+        use dbt_schemas::dbt_types::RelationType;
+
+        for relation_type in [
+            RelationType::Table,
+            RelationType::View,
+            RelationType::MaterializedView,
+            RelationType::DynamicTable,
+            RelationType::InteractiveTable,
+            RelationType::StreamingTable,
+        ] {
+            let relation = do_create_relation(
+                AdapterType::Snowflake,
+                "MY_DB".to_string(),
+                "MY_SCHEMA".to_string(),
+                Some("my_table".to_string()),
+                Some(relation_type),
+                ResolvedQuoting::default(),
+            )
+            .unwrap();
+
+            let json = RelationObject::from(relation).to_time_machine_json();
+            let value = RelationObject::from_time_machine_json(&json, &ctx()).unwrap();
+            let restored = value.downcast_object::<RelationObject>().unwrap();
+
+            assert_eq!(
+                restored.relation_type(),
+                Some(relation_type),
+                "{relation_type:?} did not survive replay"
+            );
+        }
     }
 
     #[test]

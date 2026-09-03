@@ -1,8 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
-import type { DropdownOption } from '@dbt-labs/sourdough';
-
+import type { DropdownOption } from '../../components/ui/DropdownButton';
 import { FilterDropdown } from './FilterDropdown';
 
 /** Shaped the way `lib/facetOptions.ts` builds them: a leading "All" option with an

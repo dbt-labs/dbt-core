@@ -1,4 +1,6 @@
 use dbt_adapter_core::AdapterType;
+
+use crate::schemas::serde::AdapterTypeOrArray;
 use dbt_common::path::DbtPath;
 use indexmap::IndexMap;
 use std::{collections::BTreeMap, path::PathBuf};
@@ -450,6 +452,9 @@ pub struct ManifestSnapshotConfig {
     // Internal-only placement hint; never written to the manifest.
     #[serde(skip_serializing, default)]
     pub adapter: Option<AdapterType>,
+    // Internal-only placement hint; never written to the manifest.
+    #[serde(skip_serializing, default)]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -517,6 +522,7 @@ impl From<SnapshotConfig> for ManifestSnapshotConfig {
             target_database: config.target_database,
             target_schema: config.target_schema,
             adapter: config.adapter,
+            propagate: config.propagate,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: config.tags.into_inner(),
@@ -563,6 +569,7 @@ impl From<ManifestSnapshotConfig> for SnapshotConfig {
             target_database: config.target_database,
             target_schema: config.target_schema,
             adapter: config.adapter,
+            propagate: config.propagate,
             enabled: config.enabled,
             full_refresh: config.full_refresh,
             tags: crate::schemas::project::configs::config_merge::Tags(config.tags),
@@ -860,6 +867,10 @@ pub struct ManifestModelConfig {
     #[serde(skip_serializing, default)]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    // Internal-only placement hint; never written to the manifest.
+    #[serde(skip_serializing, default)]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(
         default,
         deserialize_with = "crate::schemas::serde::default_type",
@@ -1015,6 +1026,10 @@ pub struct ManifestSeedConfig {
     #[serde(skip_serializing, default)]
     #[schemars(with = "Option<String>")]
     pub adapter: Option<AdapterType>,
+    // Internal-only placement hint; never written to the manifest.
+    #[serde(skip_serializing, default)]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(
         default,
         serialize_with = "crate::schemas::serde::serialize_option_docs_with_nulls"
@@ -1071,6 +1086,7 @@ impl From<SeedConfig> for ManifestSeedConfig {
             schema: config.schema,
             catalog_name: config.catalog_name,
             adapter: config.adapter,
+            propagate: config.propagate,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,
@@ -1107,6 +1123,7 @@ impl From<ManifestSeedConfig> for SeedConfig {
             schema: config.schema,
             catalog_name: config.catalog_name,
             adapter: config.adapter,
+            propagate: config.propagate,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,
@@ -1147,6 +1164,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             classifiers: config.classifiers.into_inner(),
             catalog_name: config.catalog_name,
             adapter: config.adapter,
+            propagate: config.propagate,
             meta: config.meta,
             group: config.group,
             materialized: config.materialized,
@@ -1225,6 +1243,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             ),
             catalog_name: config.catalog_name,
             adapter: config.adapter,
+            propagate: config.propagate,
             compute: config.compute,
             meta: config.meta,
             group: config.group,
@@ -2285,15 +2304,15 @@ mod node_adapter_manifest_round_trip_tests {
     #[test]
     fn seed_config_adapter_round_trips_through_manifest_seed_config() {
         let seed_config = SeedConfig {
-            adapter: Some(AdapterType::Alt),
+            adapter: Some(AdapterType::LakeCompute),
             ..Default::default()
         };
 
         let manifest_config: ManifestSeedConfig = seed_config.into();
-        assert_eq!(manifest_config.adapter, Some(AdapterType::Alt));
+        assert_eq!(manifest_config.adapter, Some(AdapterType::LakeCompute));
 
         let round_tripped: SeedConfig = manifest_config.into();
-        assert_eq!(round_tripped.adapter, Some(AdapterType::Alt));
+        assert_eq!(round_tripped.adapter, Some(AdapterType::LakeCompute));
     }
 
     #[test]
@@ -2327,7 +2346,7 @@ mod node_adapter_manifest_round_trip_tests {
     #[test]
     fn manifest_seed_config_never_serializes_adapter() {
         let manifest_config = ManifestSeedConfig {
-            adapter: Some(AdapterType::Alt),
+            adapter: Some(AdapterType::LakeCompute),
             ..Default::default()
         };
 

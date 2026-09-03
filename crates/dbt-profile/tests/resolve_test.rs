@@ -896,10 +896,10 @@ my_project:
 }
 
 /// The alternate compute target is not a separate `x_alt_target` output -- it is
-/// an `alt` adapter in the active target. This is the seam `dbt-loader` reads to
+/// an `lake_compute` adapter in the active target. This is the seam `dbt-loader` reads to
 /// build `DbtProfile::adapters`.
 #[test]
-fn test_resolve_surfaces_alt_adapter_as_non_default() {
+fn test_resolve_surfaces_lake_compute_adapter_as_non_default() {
     let tmp = tempfile::tempdir().unwrap();
     let profiles_dir = tmp.path();
 

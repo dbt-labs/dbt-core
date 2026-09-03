@@ -448,10 +448,22 @@ fn accumulate_view_definition_fetch_result(
     Ok(())
 }
 
-/// Helper to differentiate between tables and dynamic tables using the is_dynamic flag.
 /// TODO: When we implement iceberg tables, we might want to pass in the is_iceberg flag here.
-pub fn relation_type_from_table_flags(is_dynamic: &str) -> Result<RelationType, AdapterError> {
-    if is_dynamic.eq_ignore_ascii_case("y") {
+///
+/// `is_interactive` must be checked before `is_dynamic`: a dynamic interactive table reports
+/// both `is_dynamic='Y'` and `is_interactive='Y'`, so checking `is_dynamic` first would
+/// misclassify it as a plain dynamic table.
+///
+/// Callers pass `is_interactive` tolerantly defaulted to `"n"`: the column is absent on
+/// accounts and versions without interactive table support, and its cell can be NULL or empty
+/// even when the column is present, neither of which may fail the surrounding query.
+pub fn relation_type_from_table_flags(
+    is_dynamic: &str,
+    is_interactive: &str,
+) -> Result<RelationType, AdapterError> {
+    if try_canonicalize_bool_column_field(is_interactive)? {
+        Ok(RelationType::InteractiveTable)
+    } else if is_dynamic.eq_ignore_ascii_case("y") {
         Ok(RelationType::DynamicTable)
     } else if is_dynamic.eq_ignore_ascii_case("n") {
         Ok(RelationType::Table)
@@ -476,6 +488,10 @@ fn build_relations_from_show_objects(
     let table_kind = show_objects_result.column_values::<StringArray>("kind")?;
     let is_dynamic = show_objects_result.column_values::<StringArray>("is_dynamic")?;
     let is_iceberg = show_objects_result.column_values::<StringArray>("is_iceberg")?;
+    // See `relation_type_from_table_flags`'s doc.
+    let is_interactive = show_objects_result
+        .column_values::<StringArray>("is_interactive")
+        .ok();
 
     for i in 0..show_objects_result.num_rows() {
         let name = name.value(i);
@@ -484,9 +500,14 @@ fn build_relations_from_show_objects(
         let table_kind = table_kind.value(i);
         let is_dynamic = is_dynamic.value(i);
         let is_iceberg = is_iceberg.value(i);
+        let is_interactive = is_interactive
+            .as_ref()
+            .map(|col| col.value(i))
+            .filter(|value| !value.is_empty())
+            .unwrap_or("n");
 
         let relation_type = if table_kind.eq_ignore_ascii_case("table") {
-            Some(relation_type_from_table_flags(is_dynamic)?)
+            Some(relation_type_from_table_flags(is_dynamic, is_interactive)?)
         } else if table_kind.eq_ignore_ascii_case("view") {
             Some(RelationType::View)
         } else if table_kind.eq_ignore_ascii_case("temporary") {
@@ -2307,6 +2328,122 @@ mod tests {
         .expect("valid view-definition batch")
     }
 
+    /// Build a `SHOW OBJECTS`-shaped `RecordBatch`. `is_interactive` is `None` to
+    /// simulate accounts/versions where that column doesn't exist yet; when present,
+    /// individual cells may themselves be `None` to simulate a NULL value.
+    fn show_objects_batch(
+        rows: Vec<(&str, &str, &str, &str, &str, &str)>,
+        is_interactive: Option<Vec<Option<&str>>>,
+    ) -> RecordBatch {
+        let mut fields = vec![
+            Field::new("name", DataType::Utf8, false),
+            Field::new("database_name", DataType::Utf8, false),
+            Field::new("schema_name", DataType::Utf8, false),
+            Field::new("kind", DataType::Utf8, false),
+            Field::new("is_dynamic", DataType::Utf8, false),
+            Field::new("is_iceberg", DataType::Utf8, false),
+        ];
+        let mut names = Vec::with_capacity(rows.len());
+        let mut database_names = Vec::with_capacity(rows.len());
+        let mut schema_names = Vec::with_capacity(rows.len());
+        let mut kinds = Vec::with_capacity(rows.len());
+        let mut is_dynamics = Vec::with_capacity(rows.len());
+        let mut is_icebergs = Vec::with_capacity(rows.len());
+        for (name, database_name, schema_name, kind, is_dynamic, is_iceberg) in rows {
+            names.push(name);
+            database_names.push(database_name);
+            schema_names.push(schema_name);
+            kinds.push(kind);
+            is_dynamics.push(is_dynamic);
+            is_icebergs.push(is_iceberg);
+        }
+        let mut columns: Vec<Arc<dyn Array>> = vec![
+            Arc::new(StringArray::from(names)),
+            Arc::new(StringArray::from(database_names)),
+            Arc::new(StringArray::from(schema_names)),
+            Arc::new(StringArray::from(kinds)),
+            Arc::new(StringArray::from(is_dynamics)),
+            Arc::new(StringArray::from(is_icebergs)),
+        ];
+        if let Some(is_interactive) = is_interactive {
+            fields.push(Field::new("is_interactive", DataType::Utf8, true));
+            columns.push(Arc::new(StringArray::from(is_interactive)));
+        }
+        RecordBatch::try_new(Arc::new(Schema::new(fields)), columns)
+            .expect("valid show-objects batch")
+    }
+
+    #[test]
+    fn build_relations_from_show_objects_tolerates_missing_is_interactive_column() {
+        let batch = show_objects_batch(vec![("MY_DT", "DB", "SCHEMA", "TABLE", "y", "n")], None);
+
+        let relations = build_relations_from_show_objects(&batch, ResolvedQuoting::trues())
+            .expect("missing is_interactive column should degrade gracefully, not error");
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(
+            relations[0].relation_type(),
+            Some(RelationType::DynamicTable)
+        );
+    }
+
+    #[test]
+    fn build_relations_from_show_objects_classifies_interactive_table_when_column_present() {
+        let batch = show_objects_batch(
+            vec![("MY_IT", "DB", "SCHEMA", "TABLE", "n", "n")],
+            Some(vec![Some("y")]),
+        );
+
+        let relations = build_relations_from_show_objects(&batch, ResolvedQuoting::trues())
+            .expect("valid show-objects batch");
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(
+            relations[0].relation_type(),
+            Some(RelationType::InteractiveTable)
+        );
+    }
+
+    #[test]
+    fn build_relations_from_show_objects_classifies_interactive_table_for_canonical_truthy_value() {
+        let batch = show_objects_batch(
+            vec![("MY_IT", "DB", "SCHEMA", "TABLE", "n", "n")],
+            Some(vec![Some("yes")]),
+        );
+
+        let relations = build_relations_from_show_objects(&batch, ResolvedQuoting::trues())
+            .expect("valid show-objects batch");
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(
+            relations[0].relation_type(),
+            Some(RelationType::InteractiveTable)
+        );
+    }
+
+    #[test]
+    fn build_relations_from_show_objects_tolerates_null_is_interactive_value() {
+        let batch = show_objects_batch(
+            vec![("MY_DT", "DB", "SCHEMA", "TABLE", "y", "n")],
+            Some(vec![None]),
+        );
+
+        let relations = build_relations_from_show_objects(&batch, ResolvedQuoting::trues())
+            .expect("NULL is_interactive cell should degrade gracefully, not error");
+
+        assert_eq!(relations.len(), 1);
+        assert_eq!(
+            relations[0].relation_type(),
+            Some(RelationType::DynamicTable)
+        );
+    }
+
+    #[test]
+    fn relation_type_from_table_flags_errors_on_malformed_is_interactive_value() {
+        let err = relation_type_from_table_flags("n", "maybe").unwrap_err();
+        assert!(err.message().contains("maybe"));
+    }
+
     #[test]
     fn snowflake_freshness_sql_rejects_blank_database() {
         let err =
@@ -2606,6 +2743,23 @@ mod tests {
                 "use warehouse metadata_wh".to_string(),
                 "list_relations".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn interactive_flag_takes_precedence_over_dynamic() {
+        assert_eq!(
+            relation_type_from_table_flags("y", "y").unwrap(),
+            RelationType::InteractiveTable
+        );
+        // static IT: is_dynamic=n, is_interactive=y
+        assert_eq!(
+            relation_type_from_table_flags("n", "y").unwrap(),
+            RelationType::InteractiveTable
+        );
+        assert_eq!(
+            relation_type_from_table_flags("y", "n").unwrap(),
+            RelationType::DynamicTable
         );
     }
 

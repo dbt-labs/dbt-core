@@ -4,7 +4,6 @@ use crate::dbt_project_config::{
 };
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map,
-    validate_node_adapter,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -34,6 +33,7 @@ use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -59,6 +59,7 @@ pub async fn resolve_seeds(
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     node_resolver: &mut NodeResolver,
 ) -> FsResult<(HashMap<String, Arc<DbtSeed>>, HashMap<String, Arc<DbtSeed>>)> {
     let mut seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
@@ -139,7 +140,7 @@ pub async fn resolve_seeds(
     // TODO: update this to be relative of the root project
     let mut duplicate_errors = Vec::new();
     // Track seed names seen so far (name → relative path) to detect duplicates across subdirs
-    let mut seen_seed_names: HashMap<String, std::path::PathBuf> = HashMap::new();
+    let mut seen_seed_names: HashMap<String, PathBuf> = HashMap::new();
     for seed_file in package.seed_files.iter() {
         // Validate that path extension is one of csv, parquet, or json
         let path = seed_file.path.clone();
@@ -319,15 +320,9 @@ pub async fn resolve_seeds(
 
         validate_delimiter(&properties_config.delimiter)?;
 
-        let resolved_node_adapter = validate_node_adapter(
-            properties_config.adapter,
-            &DbtMaterialization::Table,
-            properties_config.catalog_name.as_deref(),
-            default_adapter,
-            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
-            false,
-            &path,
-        )?;
+        // See `resolve_models`: the flag overrides the config, and nothing is
+        // validated at parse.
+        let resolved_node_adapter = arg.adapter_override.or(properties_config.adapter);
 
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds
@@ -337,6 +332,14 @@ pub async fn resolve_seeds(
         // See `resolve_models`: both remaining layers depend on the node's
         // `+adapter`, which the config merge cannot know. Written back so
         // `deprecated_config` carries the resolved value too.
+        // `propagate` comes straight off the node's own config. Unlike
+        // `adapter` there is no target default to fall back to and nothing to
+        // inherit: an unset `+propagate` means "publish nowhere".
+        let selected_propagate: Vec<AdapterType> = properties_config
+            .propagate
+            .clone()
+            .map(Into::into)
+            .unwrap_or_default();
         let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
         properties_config.quoting = resolve_package_quoting(
             Some(match adapter_quoting.get(&selected_adapter) {
@@ -379,6 +382,7 @@ pub async fn resolve_seeds(
             },
             __base_attr__: NodeBaseAttributes {
                 adapter: selected_adapter,
+                propagate: selected_propagate,
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -448,6 +452,7 @@ pub async fn resolve_seeds(
                         &root_package.dbt_project.name,
                         collected_generic_tests,
                         test_name_truncations,
+                        seen_generic_test_paths,
                         default_adapter,
                         io_args,
                         patch_path.as_ref().unwrap_or(&path),

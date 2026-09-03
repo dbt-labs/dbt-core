@@ -68,7 +68,7 @@ pub fn get_relation(
         AdapterType::Spark => {
             spark_get_relation(adapter, state, ctx, conn, schema, identifier, token)
         }
-        AdapterType::DuckDB | AdapterType::Alt => duckdb_get_relation(
+        AdapterType::DuckDB | AdapterType::LakeCompute => duckdb_get_relation(
             adapter, state, ctx, conn, database, schema, identifier, token,
         ),
         AdapterType::Fabric => fabric_get_relation(
@@ -148,8 +148,10 @@ fn snowflake_get_relation(
         identifier.to_uppercase()
     };
     // this is a case-insenstive search
+    let lit_fmt = SqlLiteralFormatter::new(adapter.adapter_type());
     let sql = format!(
-        "show objects like '{quoted_identifier}' in schema {quoted_database}.{quoted_schema}"
+        "show objects like {} in schema {quoted_database}.{quoted_schema}",
+        lit_fmt.format_str(&quoted_identifier)
     );
 
     let batch = match adapter
@@ -206,9 +208,21 @@ fn snowflake_get_relation(
     }
     let is_dynamic = is_dynamic_column.value(0);
 
+    // See `snowflake::relation_type_from_table_flags`'s doc.
+    let is_interactive = batch
+        .column_values::<StringArray>("is_interactive")
+        .ok()
+        .filter(|col| col.len() == 1)
+        .map(|col| col.value(0).to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "n".to_string());
+
     let relation_type_name = kind_column.value(0);
     let relation_type = if relation_type_name.eq_ignore_ascii_case("table") {
-        Some(snowflake::relation_type_from_table_flags(is_dynamic)?)
+        Some(snowflake::relation_type_from_table_flags(
+            is_dynamic,
+            &is_interactive,
+        )?)
     } else if relation_type_name.eq_ignore_ascii_case("view") {
         Some(RelationType::View)
     } else {

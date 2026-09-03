@@ -27,7 +27,9 @@ impl ColumnBuilder {
             Bigquery => Ok(Self::build_bigquery(field, type_ops)),
             Databricks | Spark => Ok(Self::build_databricks(field, type_ops)),
             Redshift => Ok(Self::build_redshift(field, type_ops)),
-            Postgres | Salesforce | DuckDB | Alt => Ok(Self::build_postgres_like(field, type_ops)),
+            Postgres | Salesforce | DuckDB | LakeCompute => {
+                Ok(Self::build_postgres_like(field, type_ops))
+            }
             Fabric => Ok(Self::build_fabric(field, type_ops)),
             ClickHouse => Self::build_clickhouse(field, type_ops),
             Exasol => Ok(Self::build_exasol(field, type_ops)),
@@ -67,8 +69,8 @@ impl ColumnBuilder {
                 numeric_precision,
                 numeric_scale,
             ),
-            Alt => Column::new(
-                Alt,
+            LakeCompute => Column::new(
+                LakeCompute,
                 name,
                 dtype,
                 char_size,

@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { Badge } from '@dbt-labs/sourdough';
-
+import { Badge } from '../../../components/ui/Badge';
 import { HealthIssueType } from '../../typings/discoveryEnums';
 import { RichSearchResultItem } from './RichSearchResultItem';
 import type { SearchResultDisplayData } from './types';
@@ -68,7 +67,7 @@ export const WithExtras: Story = {
     metadata: {
       projectName: 'jaffle_shop',
       numColumns: 4,
-      extras: <Badge text="incremental" type="default" size="xs" />,
+      extras: <Badge text="incremental" variant="default" size="xs" />,
     },
   },
 };

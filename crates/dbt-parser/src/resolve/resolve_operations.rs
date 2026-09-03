@@ -151,6 +151,8 @@ fn new_operation(
                 // hook resolves `dbt.run_query` and friends through, and a wrong
                 // one yields an empty namespace rather than an error.
                 adapter: adapter_type,
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),

@@ -1159,11 +1159,11 @@ fn classify_version_output(stdout: &str) -> Option<(Generation, Distribution, Op
 
 /// Classifies a CLI-brand name (the same string printed as the leading token
 /// of a v2 binary's `--version` banner, and injected into the running
-/// process as its own `command_name`) into a [Distribution]. `dbt-core` is
-/// kept for preview builds already in the wild; `dbt-oss` is the final OSS
-/// v2 name. Everything else is the proprietary distribution.
+/// process as its own `command_name`) into a [Distribution]. Any name in
+/// [`upgrade::UPGRADABLE_TARGET_NAMES`] is OSS; everything else is
+/// proprietary.
 fn distribution_from_name(name: &str) -> Distribution {
-    if name == "dbt-core" || name == "dbt-oss" {
+    if upgrade::UPGRADABLE_TARGET_NAMES.contains(&name) {
         Distribution::Oss
     } else {
         Distribution::Dbt
@@ -2383,8 +2383,12 @@ Plugins:
         // `dbt-sa-cli` (the OSS-only v2 build) is planned to brand its
         // `--version` banner as `dbt-oss` once it leaves preview.
         assert_eq!(
-            classify_version_output("dbt-oss 2.0.0\n"),
-            Some((Generation::V2, Distribution::Oss, Some("2.0.0".to_string())))
+            classify_version_output("dbt-oss 2.0.0-preview.200\n"),
+            Some((
+                Generation::V2,
+                Distribution::Oss,
+                Some("2.0.0-preview.200".to_string())
+            ))
         );
     }
 

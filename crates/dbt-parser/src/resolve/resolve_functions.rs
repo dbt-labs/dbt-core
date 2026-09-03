@@ -36,9 +36,7 @@ use crate::dbt_project_config::{
     ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
 };
 use crate::renderer::{RenderCtx, RenderCtxInner};
-use crate::resolve::resolve_utils::{
-    build_unrendered_config, extract_config_map, validate_node_adapter,
-};
+use crate::resolve::resolve_utils::{build_unrendered_config, extract_config_map};
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, parse_unrendered_config,
     update_node_relation_components,
@@ -291,18 +289,10 @@ pub async fn resolve_functions(
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
 
         let unique_id = get_unique_id(function_name, package_name, None, "function");
-        // Resolved here rather than in the config merge, for the reason given in
-        // `resolve_models`: the merge cannot see the target's adapter list. A
-        // function selects explicitly; it has no attached node to inherit from.
-        let resolved_node_adapter = validate_node_adapter(
-            model_config.adapter,
-            &DbtMaterialization::Function,
-            None,
-            default_adapter,
-            dbt_adapter::load_catalogs::fetch_use_catalogs_v2(),
-            dbt_asset.is_python(),
-            &dbt_asset.path,
-        )?;
+        // See `resolve_models`: the flag overrides the config, and nothing is
+        // validated at parse. A function selects explicitly; it has no attached
+        // node to inherit from.
+        let resolved_node_adapter = arg.adapter_override.or(model_config.adapter);
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
         let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
@@ -405,6 +395,9 @@ pub async fn resolve_functions(
             },
             __base_attr__: NodeBaseAttributes {
                 adapter: selected_adapter,
+                // A function is not a relation, so there is nothing to bind into another
+                // platform's catalog: no `+propagate` config exists for this node type.
+                propagate: Vec::new(),
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below

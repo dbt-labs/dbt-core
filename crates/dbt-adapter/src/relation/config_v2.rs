@@ -76,6 +76,21 @@ pub(crate) mod diff {
         }
     }
 
+    /// Compare an optional string against its readback under a caller-supplied equality, for
+    /// components whose value survives Snowflake's normalization only up to that equality.
+    pub(crate) fn optional_by(
+        desired: &Option<String>,
+        current: &Option<String>,
+        eq: impl Fn(&str, &str) -> bool,
+    ) -> Option<Option<String>> {
+        let equal = match (desired, current) {
+            (Some(desired), Some(current)) => eq(desired, current),
+            (None, None) => true,
+            _ => false,
+        };
+        if equal { None } else { Some(desired.clone()) }
+    }
+
     /// The resulting diff contains only the keys:
     /// 1. that are present in the desired state but not the current state; or
     /// 2. whose value in the desired state does not match the current state.
@@ -492,6 +507,7 @@ pub struct RelationComponentConfigChangeSet {
     adapter_type: AdapterType,
     changes: IndexMap<&'static str, ComponentConfigChange>,
     requires_full_refresh_fn: RequiresFullRefreshFn,
+    forced_full_refresh: bool,
 }
 
 impl RelationComponentConfigChangeSet {
@@ -504,7 +520,19 @@ impl RelationComponentConfigChangeSet {
             adapter_type,
             changes: changes.into(),
             requires_full_refresh_fn,
+            forced_full_refresh: false,
         }
+    }
+
+    /// Require a full refresh regardless of what `requires_full_refresh_fn` concludes.
+    ///
+    /// `RequiresFullRefreshFn` sees only the changeset, and a component diff carries just the
+    /// desired value, so a transition that is only recognizable by comparing both
+    /// configuration states cannot be detected from inside it. The caller holding both
+    /// states decides those cases and marks the changeset here.
+    pub(crate) fn forcing_full_refresh(mut self) -> Self {
+        self.forced_full_refresh = true;
+        self
     }
 
     pub fn len(&self) -> usize {
@@ -531,7 +559,7 @@ impl RelationComponentConfigChangeSet {
 
     /// Whether applying this config to an existing table requires a full refresh
     pub fn requires_full_refresh(&self) -> bool {
-        (self.requires_full_refresh_fn)(&self.changes)
+        self.forced_full_refresh || (self.requires_full_refresh_fn)(&self.changes)
     }
 }
 

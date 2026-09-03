@@ -1,6 +1,7 @@
 use crate::schemas::common::DocsConfig;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::properties::model_properties::ModelConstraint;
+use dbt_adapter_core::AdapterType;
 use dbt_common::serde_utils::Omissible;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
 use dbt_proc_macros::StringOrArrayNewtype;
@@ -805,6 +806,59 @@ impl From<StringOrArrayOfStrings> for Vec<String> {
     }
 }
 
+/// One or more adapter types, as `propagate: snowflake` or
+/// `propagate: [snowflake]`.
+///
+/// Typed rather than a [`StringOrArrayOfStrings`], so serde rejects a value that
+/// is not an adapter type at parse -- the same guarantee
+/// `adapter: Option<AdapterType>` already gives for its single-valued sibling.
+///
+/// The extra typing is about validation, not about the accepted shape, so fields
+/// of this type carry `#[schemars(with = "Option<StringOrArrayOfStrings>")]`:
+/// `AdapterType` has no `JsonSchema` impl, and the shape a document may actually
+/// contain here *is* a string or an array of strings. Describing it as
+/// `Option<Vec<String>>` instead would emit an array-only schema and have
+/// editors reject the scalar form (`propagate: snowflake`) that this type
+/// accepts.
+#[derive(Serialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum AdapterTypeOrArray {
+    One(AdapterType),
+    Many(Vec<AdapterType>),
+}
+
+impl<'de> Deserialize<'de> for AdapterTypeOrArray {
+    /// Hand-written rather than derived: `UntaggedEnumDeserialize` reports only
+    /// "data did not match any variant of untagged enum AdapterTypeOrArray" on a
+    /// bad value, while `+adapter`'s error names the offending value. Dispatching
+    /// on the shape first, then letting `AdapterType`'s own error surface, keeps
+    /// the two diagnostics consistent -- which is the whole reason this type is
+    /// typed rather than a `StringOrArrayOfStrings`.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = YmlValue::deserialize(deserializer)?;
+        match value {
+            YmlValue::Sequence(..) => dbt_yaml::from_value::<Vec<AdapterType>>(value)
+                .map(Self::Many)
+                .map_err(de::Error::custom),
+            scalar => dbt_yaml::from_value::<AdapterType>(scalar)
+                .map(Self::One)
+                .map_err(de::Error::custom),
+        }
+    }
+}
+
+impl From<AdapterTypeOrArray> for Vec<AdapterType> {
+    fn from(value: AdapterTypeOrArray) -> Self {
+        match value {
+            AdapterTypeOrArray::One(a) => vec![a],
+            AdapterTypeOrArray::Many(a) => a,
+        }
+    }
+}
+
 /// Types that can be viewed as `&Option<StringOrArrayOfStrings>`, e.g. the type itself or a
 /// newtype wrapping it (like `Tags`/`Classifiers`). A local trait, since `AsRef` can't be
 /// implemented for the foreign `Option<StringOrArrayOfStrings>` type (orphan rule).
@@ -1418,6 +1472,35 @@ mod tests {
     struct TestConfig {
         #[serde(default)]
         grants: OmissibleGrantConfig,
+    }
+
+    /// `propagate` accepts a bare adapter name or a list of them, and both
+    /// collapse to the same `Vec<AdapterType>` for callers.
+    #[test]
+    fn adapter_type_or_array_accepts_one_or_many() {
+        let one: AdapterTypeOrArray = dbt_yaml::from_str("snowflake").unwrap();
+        assert_eq!(one, AdapterTypeOrArray::One(AdapterType::Snowflake));
+        assert_eq!(Vec::<AdapterType>::from(one), vec![AdapterType::Snowflake]);
+
+        let many: AdapterTypeOrArray = dbt_yaml::from_str("[snowflake, bigquery]").unwrap();
+        assert_eq!(
+            Vec::<AdapterType>::from(many),
+            vec![AdapterType::Snowflake, AdapterType::Bigquery]
+        );
+    }
+
+    /// The point of typing this rather than reusing `StringOrArrayOfStrings`:
+    /// a value that is not an adapter type fails here, at deserialization.
+    #[test]
+    fn adapter_type_or_array_rejects_a_value_that_is_not_an_adapter() {
+        let err = dbt_yaml::from_str::<AdapterTypeOrArray>("compute")
+            .expect_err("`compute` is not an adapter type");
+        assert!(
+            format!("{err}").contains("compute"),
+            "error should name the offending value: {err}"
+        );
+        dbt_yaml::from_str::<AdapterTypeOrArray>("[snowflake, compute]")
+            .expect_err("one bad entry rejects the whole list");
     }
 
     #[test]

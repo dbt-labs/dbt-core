@@ -190,7 +190,7 @@ export function LocatePane({
       if (aSelf !== bSelf) return aSelf - bSelf;
       return a.localeCompare(b);
     });
-  }, [filtered, project.name]);
+  }, [filtered, project]);
 
   // Hide analysis files from the File tree until FEATURE_FLAGS.hasAnalysis flips on.
   const visibleFiles = useMemo(

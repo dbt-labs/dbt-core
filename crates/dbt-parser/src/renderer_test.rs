@@ -93,6 +93,7 @@ mod tests {
             static_analysis: Some(dbt_common::io_args::StaticAnalysisKind::Strict),
             store_failures: false,
             skip_creating_generic_tests: false,
+            adapter_override: None,
             maximum_seed_size_mib: 1,
         };
 
@@ -269,6 +270,7 @@ mod tests {
             static_analysis: Some(dbt_common::io_args::StaticAnalysisKind::Strict),
             store_failures: false,
             skip_creating_generic_tests: false,
+            adapter_override: None,
             maximum_seed_size_mib: 1,
         };
 
