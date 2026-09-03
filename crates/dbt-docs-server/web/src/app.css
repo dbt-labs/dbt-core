@@ -66,8 +66,7 @@ button {
 }
 
 /* ---------- Topbar v2 ----------
-   Aurora gradient bar inspired by the catalog Figma. Translucent brand
-   tints stacked on a dark base; magnify icon + search field + ⌘K hint. */
+   Magnify icon + search field + ⌘K hint. */
 
 .topbar-v2 {
   position: relative;
@@ -76,6 +75,7 @@ button {
   align-items: center;
   padding: 0 16px;
   gap: 16px;
+  background: var(--bgNavHeader);
   border-bottom: 1px solid var(--borderMuted);
   overflow: hidden;
   isolation: isolate;
@@ -151,30 +151,6 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-.topbar-v2__bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    /* aurora tints, bottom-anchored */
-    linear-gradient(
-      178.84deg,
-      rgba(254, 103, 2, 0) 78.15%,
-      rgba(254, 103, 2, 0.3) 98.7%
-    ),
-    linear-gradient(
-      181.69deg,
-      rgba(99, 47, 245, 0) 71.1%,
-      rgba(99, 47, 245, 0.3) 96.95%
-    ),
-    linear-gradient(
-      179.59deg,
-      rgba(255, 204, 37, 0) 67.02%,
-      rgba(255, 204, 37, 0.2) 94.05%
-    ),
-    /* dark base */ var(--bgNavHeader);
 }
 .topbar {
   display: grid;

@@ -22,9 +22,7 @@ import {
 import { SourceCollectionPage } from './components/SourceCollectionPage';
 import { SourceFilterView } from './components/SourceFilterView';
 import { TestFilterView } from './components/TestFilterView';
-import { Badge } from './components/ui/Badge';
 import { Input } from './components/ui/Input';
-import { Tooltip } from './components/ui/Tooltip';
 import { useAllNodes } from './hooks/useAllNodes';
 import { deriveUpgradeCapabilities } from './hooks/useCapabilities';
 import { useIdentity } from './hooks/useIdentity';
@@ -600,7 +598,6 @@ function Topbar({
 }) {
   return (
     <header className="topbar-v2">
-      <div className="topbar-v2__bg" aria-hidden />
       <div className="topbar-v2__left">
         <div className="topbar-v2__brand">
           {project && (
@@ -612,12 +609,7 @@ function Topbar({
               title="Overview — reset view"
             >
               <div className="topbar-v2__brand-text">
-                <div className="topbar-v2__brand-name">
-                  {project.name}
-                  <Tooltip content="This docs site is in beta." placement="bottom">
-                    <Badge text="beta" variant="default" size="xs" />
-                  </Tooltip>
-                </div>
+                <div className="topbar-v2__brand-name">{project.name}</div>
                 <div className="topbar-v2__brand-sub">
                   {project.adapterType ?? ''}
                   {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}
