@@ -456,8 +456,11 @@ impl DatabricksMetadataAdapter {
         };
 
         // IMPORTANT (Mantle replay): query ordering is observable in replay.
-        // Match dbt-databricks `_describe_relation`, replacing only the legacy
-        // view/constraint/row-filter queries with JSON metadata where supported.
+        // Match dbt-databricks v1 `_describe_relation` query order:
+        //   MV:    DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
+        //   ST:    DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
+        //   View:  optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   Table: UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
         match relation_type {
             RelationType::MaterializedView => {
                 metadata.insert(
