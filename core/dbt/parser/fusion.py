@@ -10,6 +10,7 @@ resulting manifest artifacts.
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import shlex
@@ -17,6 +18,7 @@ import shutil
 import subprocess
 import sysconfig
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
@@ -34,6 +36,7 @@ from dbt.exceptions import (
 from dbt.flags import get_flags
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event, get_invocation_id
+from dbt_common.events.types import Note
 
 if TYPE_CHECKING:
     from dbt.config import RuntimeConfig
@@ -234,6 +237,12 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
       --project-dir, --profiles-dir, --profile, --target,
       --target-path, --vars, --packages-install-path
 
+    Also always forwards --log-format json so the subprocess emits structured
+    per-line JSON on stdout/stderr instead of human-formatted text. This is not
+    a user-configurable passthrough (unlike the flags above) — it's how
+    _run_fusion talks to the subprocess, so it's added unconditionally rather
+    than gated on a dbt-core flag.
+
     When target_path_override is provided, it replaces the user's --target-path
     so the fusion parser writes its handoff manifest where dbt expects it (a
     temp dir).
@@ -286,6 +295,12 @@ def _build_argv(flags, target_path_override: Optional[str] = None) -> List[str]:
     if invocation_id:
         forwarded += ["--invocation-id", str(invocation_id)]
 
+    # json-compat output lets _run_fusion re-level each line by its real
+    # severity instead of a single hardcoded level per stream. Request full
+    # verbosity here and let dbt-core's own event system filter by level,
+    # rather than also forwarding a --log-level and double-filtering.
+    forwarded += ["--log-format", "json"]
+
     return base + forwarded
 
 
@@ -331,26 +346,55 @@ def _fusion_subprocess_env() -> dict:
     return env
 
 
+_FUSION_JSON_LEVELS = {
+    "error": EventLevel.ERROR,
+    "warn": EventLevel.WARN,
+    "info": EventLevel.INFO,
+    "debug": EventLevel.DEBUG,
+}
+
+
 def _run_fusion(argv: List[str]) -> None:
-    # Passthrough mode: the fusion parser inherits dbt's stdout/stderr so users
-    # see progress and errors live. This bypasses dbt's event system (no
-    # log-file capture, no --log-format json, no level filtering), but is the
-    # only way to get streaming output without re-parsing the parser's
-    # free-form text.
-    #
-    # TODO: replace with Popen + line-by-line streaming and re-emit through
-    # fire_event once the fusion parser ships its structured (JSON) log stream
-    # and the Python parsing library lands. Sketch:
-    #   proc = subprocess.Popen(argv, stdout=PIPE, stderr=PIPE, text=True, bufsize=1)
-    #   - read stdout/stderr concurrently (threads or selectors; a single
-    #     blocking readline() on one stream deadlocks if the other fills its pipe)
-    #   - parse each line as a structured log record
-    #   - map level/message to a dbt event type and fire_event(...)
-    #   - proc.wait() and check returncode
-    # Until then, capturing-then-printing-at-end would lose streaming (fusion
-    # parsing can take minutes on large projects), so we inherit fds instead.
+    """Run the fusion parser subprocess, capturing stdout/stderr and re-emitting
+    each line live through dbt-core's event system as it arrives.
+
+    Piping (rather than inheriting) the child's fds means its output only
+    reaches the user via fire_event — this is what makes it visible to any
+    consumer of dbt-core's own event stream (e.g. dbt Studio's IDE log
+    capture), which previously only saw the fusion parser's output if
+    something was reading the raw inherited file descriptors directly (true
+    for a CLI terminal, not true inside Studio's execution model).
+
+    _build_argv requests --log-format json, so each line is normally a JSON
+    object with the fusion-assigned severity at `info.level` and message at
+    `info.msg`; those are re-emitted as a Note at the mapped level rather than
+    the stream's fallback level. json-compat is not a stable, fully-supported
+    fusion contract (schema/fields/level strings may change between fusion
+    releases without notice), and fusion emits plain text before its JSON
+    logger initializes (e.g. CLI-arg errors) or after a panic — so any line
+    that isn't valid JSON, or is missing the fields above, falls back to
+    today's behavior: re-emitted verbatim at the stream's fallback level
+    (stdout at INFO, stderr at WARN).
+
+    On a nonzero exit, raises FusionParserError with just the exit code;
+    the actual failure detail was already streamed live as Note events
+    above, so it isn't duplicated into the exception message.
+    TODO: once the Python library to decode fusion's native OTel log stream
+    lands, replace this json-compat parsing with a real parse into properly
+    leveled/structured dbt events (also preserving info.code/info.name,
+    which json-compat exposes but this still discards into a flat Note).
+    """
     try:
-        result = subprocess.run(argv, check=False, env=_fusion_subprocess_env())
+        proc = subprocess.Popen(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=_fusion_subprocess_env(),
+        )
     except FileNotFoundError as e:
         raise FusionParserError(
             f"Fusion parser command not found: {argv[0]!r}. "
@@ -358,10 +402,42 @@ def _run_fusion(argv: List[str]) -> None:
             f"point to an alternate engine binary."
         ) from e
 
-    if result.returncode != 0:
+    assert (
+        proc.stdout is not None and proc.stderr is not None
+    )  # guaranteed by stdout/stderr=PIPE above
+
+    def _pump(stream, fallback_level: EventLevel) -> None:
+        for raw_line in stream:
+            line = raw_line.rstrip("\n")
+            level = fallback_level
+            msg = line
+            try:
+                parsed = json.loads(line)
+                info = parsed["info"]
+                msg = info["msg"]
+                level = _FUSION_JSON_LEVELS.get(info.get("level"), fallback_level)
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
+            fire_event(Note(msg=msg), level=level)
+
+    # Separate threads per stream avoid the deadlock a single blocking
+    # readline() would hit if the other stream fills its OS pipe buffer.
+    readers = [
+        threading.Thread(target=_pump, args=(proc.stdout, EventLevel.INFO), daemon=True),
+        threading.Thread(target=_pump, args=(proc.stderr, EventLevel.WARN), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    for reader in readers:
+        reader.join()
+    proc.stdout.close()
+    proc.stderr.close()
+    returncode = proc.wait()
+
+    if returncode != 0:
         raise FusionParserError(
-            f"Fusion parser failed (exit {result.returncode}); see parser output above.",
-            returncode=result.returncode,
+            f"Fusion parser failed (exit {returncode}); see parser output above.",
+            returncode=returncode,
         )
 
 
