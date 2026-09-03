@@ -1200,6 +1200,7 @@ impl BaseRelation for Relation {
             .with_metadata(self.metadata.clone())
             .with_is_delta(self.is_delta)
             .with_temporary(self.temporary)
+            .with_table_format(self.table_format)
             .validate()?;
         Ok(Arc::new(relation))
     }
@@ -2173,6 +2174,24 @@ mod tests {
             let iceberg = snowflake_relation(RelationType::InteractiveTable, TableFormat::Iceberg);
             assert!(!iceberg.can_be_renamed());
             assert!(iceberg.can_be_replaced());
+        }
+
+        #[test]
+        fn incorporate_preserves_table_format() {
+            // `incorporate` (e.g. `target_relation.incorporate(type='table')` in the
+            // incremental materialization) rebuilds the relation via `create_relation`,
+            // which used to default `table_format` back to `Default` and silently
+            // turn Iceberg models into non-Iceberg ones for anything computed from the
+            // incorporated relation, e.g. `persist_docs`' `alter_relation_comment`
+            // (fs#14268).
+            let iceberg: Arc<dyn BaseRelation> = Arc::new(snowflake_relation(
+                RelationType::Table,
+                TableFormat::Iceberg,
+            ));
+            let incorporated = iceberg
+                .incorporate(None, Some(RelationType::Table), None)
+                .unwrap();
+            assert!(incorporated.is_iceberg_format());
         }
     }
 
