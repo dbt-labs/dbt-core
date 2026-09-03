@@ -57,10 +57,8 @@ pub enum ExportError {
     #[error(
         "no index to export\n\n\
          Expected parquet artifacts in {index_dir}\n\n\
-         Build the index first, then rerun `dbt docs generate`:\n\
-         \x20 dbt compile --write-index --static-analysis strict\n\
-         \x20 dbt build   --write-index --static-analysis strict\n\n\
-         `--static-analysis strict` is what produces column-level lineage; \
+         Run `dbt build` or `dbt docs generate` (without `--no-compile`), then retry.\n\
+         `--static-analysis strict` on that build produces column-level lineage; \
          without it the site simply omits that feature."
     )]
     NoIndex { index_dir: PathBuf },
@@ -68,9 +66,7 @@ pub enum ExportError {
         "the index in {index_dir} has no nodes, so the site would be empty\n\n\
          The artifacts are there but hold no rows, which usually means the index \
          was written partially.\n\n\
-         Rebuild it, then rerun `dbt docs generate`:\n\
-         \x20 dbt compile --write-index --static-analysis strict\n\
-         \x20 dbt build   --write-index --static-analysis strict"
+         Run `dbt build` or `dbt docs generate` (without `--no-compile`), then retry."
     )]
     EmptyIndex { index_dir: PathBuf },
     #[error(

@@ -23,6 +23,9 @@ pub struct CachedToken {
     pub scope: String,
     pub expires_at: Option<SystemTime>,
     pub refresh_token: Option<String>,
+    /// dbt platform account whose credential was exchanged for this token.
+    /// `None` when the token was not minted from a platform credential.
+    pub platform_account_id: Option<String>,
 }
 
 impl CachedToken {
@@ -40,6 +43,7 @@ pub struct OAuthTokenSource {
     client_id: String,
     client_secret: Option<String>,
     configured_org_id: Option<String>,
+    platform_account_id: Option<String>,
     store: TokenStore,
     cached: Arc<Mutex<Option<CachedToken>>>,
     disk_loaded: Arc<AtomicBool>,
@@ -53,6 +57,7 @@ impl std::fmt::Debug for OAuthTokenSource {
             .field("token_url", &self.token_url)
             .field("client_id", &self.client_id)
             .field("configured_org_id", &self.configured_org_id)
+            .field("platform_account_id", &self.platform_account_id)
             .finish()
     }
 }
@@ -91,11 +96,12 @@ impl OAuthTokenSource {
             client_id: config.oauth_client_id.clone(),
             client_secret: config.oauth_client_secret.clone(),
             configured_org_id: config.org_id.clone(),
+            platform_account_id: config.platform_account_id.clone(),
             store,
             cached: Arc::new(Mutex::new(None)),
             disk_loaded: Arc::new(AtomicBool::new(false)),
             interactive_flow,
-            auth_chain: AuthChainBuilder::new(OAUTH_CLIENT_ID).build(),
+            auth_chain: platform_auth_chain(config.platform_account_id.as_deref()),
         })
     }
 
@@ -116,6 +122,7 @@ impl OAuthTokenSource {
             client_id: config.oauth_client_id.clone(),
             client_secret: config.oauth_client_secret.clone(),
             configured_org_id: config.org_id.clone(),
+            platform_account_id: config.platform_account_id.clone(),
             store,
             cached: Arc::new(Mutex::new(None)),
             disk_loaded: Arc::new(AtomicBool::new(false)),
@@ -157,6 +164,21 @@ impl OAuthTokenSource {
             return Ok(None);
         };
         let cached = stored.clone().into_cached();
+
+        // A token minted against a different dbt platform account cannot serve
+        // this configuration, and refreshing it would only extend the wrong
+        // identity — drop it and mint a new one from the configured account.
+        if self.platform_account_changed(&cached) {
+            tracing::debug!(
+                "discarding cached dbt State token minted for dbt platform account {:?}; \
+                 configuration selects {:?}",
+                cached.platform_account_id,
+                self.platform_account_id
+            );
+            let _ = self.store.delete().await;
+            return Ok(None);
+        }
+
         let is_fresh = cached.is_fresh();
 
         // If a configured org_id isn't in the cached scope, force a refresh in case the
@@ -174,7 +196,10 @@ impl OAuthTokenSource {
             return Ok(if is_fresh { Some(cached) } else { None });
         };
 
-        match self.fetch_refresh(&refresh_token).await {
+        match self
+            .fetch_refresh(&refresh_token, stored.platform_account_id.clone())
+            .await
+        {
             Ok(token) => Ok(Some(token)),
             Err(err) => {
                 if is_fresh {
@@ -204,24 +229,51 @@ impl OAuthTokenSource {
     /// re-prompted on the next run.
     async fn acquire_fresh_token(&self) -> Result<(CachedToken, bool), RunCacheServiceError> {
         let interactive = self.interactive_flow.is_available();
-        let (response, cache_to_disk) = if self.client_secret.is_some() {
-            (self.fetch_client_credentials().await?, interactive)
+        let (response, cache_to_disk, platform_account_id) = if self.client_secret.is_some() {
+            (self.fetch_client_credentials().await?, interactive, None)
         } else {
             match self.auth_chain.resolve().await {
-                Ok(credential) => (
-                    self.fetch_platform_token_exchange(&credential).await?,
-                    interactive,
-                ),
-                // No platform credentials available — fall back to dbt State
-                // standalone authentication via the interactive browser flow,
-                // unless there's nobody around to complete a browser login
-                // (CI, batch replay). Checking this up front avoids waiting
-                // out the full interactive timeout just to fail anyway.
+                Ok(credential) => {
+                    // Only the cached-session resolver honors the configured
+                    // account, so a later resolver in the chain can hand back a
+                    // credential for a different one. Exchanging it would
+                    // authenticate as the wrong account, which is precisely what
+                    // the configuration asks us not to do.
+                    let account_id = credential.account_id().to_string();
+                    if let Some(configured) = self.platform_account_id.as_deref() {
+                        if configured != account_id {
+                            return Err(RunCacheServiceError::PlatformAccountUnavailable {
+                                configured: configured.to_string(),
+                                found: Some(account_id),
+                            });
+                        }
+                    }
+                    (
+                        self.fetch_platform_token_exchange(&credential).await?,
+                        interactive,
+                        Some(account_id),
+                    )
+                }
                 Err(AuthError::NotAuthenticated) => {
+                    // The standalone browser flow authenticates against dbt
+                    // State directly, so it cannot produce a credential for the
+                    // configured platform account. Report the missing session
+                    // instead of logging in as somebody else.
+                    if let Some(configured) = self.platform_account_id.as_deref() {
+                        return Err(RunCacheServiceError::PlatformAccountUnavailable {
+                            configured: configured.to_string(),
+                            found: None,
+                        });
+                    }
+                    // No platform credentials and no configured account — fall
+                    // back to dbt State standalone authentication, unless
+                    // there's nobody around to complete a browser login (CI,
+                    // batch replay). Checking this up front avoids waiting out
+                    // the full interactive timeout just to fail anyway.
                     if !interactive {
                         return Err(RunCacheServiceError::NoInteractiveTerminal);
                     }
-                    (self.interactive_flow.run().await?, true)
+                    (self.interactive_flow.run().await?, true, None)
                 }
                 Err(err) => {
                     return Err(RunCacheServiceError::Auth(format!(
@@ -230,7 +282,29 @@ impl OAuthTokenSource {
                 }
             }
         };
-        Ok((self.process_response(response)?, cache_to_disk))
+        Ok((
+            self.process_response(response, platform_account_id)?,
+            cache_to_disk,
+        ))
+    }
+
+    /// Whether a cached token was minted against a different dbt platform
+    /// account than the one this configuration selects. Unknown provenance
+    /// (`None`, e.g. a standalone dbt State login or a file written before the
+    /// account was recorded) is never treated as a mismatch.
+    ///
+    /// A token is only ever minted from a credential for the configured account
+    /// (see [`Self::acquire_fresh_token`]), so a mismatch here means the
+    /// configuration changed since the token was minted — discarding it converges
+    /// rather than repeating on every run.
+    fn platform_account_changed(&self, cached: &CachedToken) -> bool {
+        match (
+            self.platform_account_id.as_deref(),
+            cached.platform_account_id.as_deref(),
+        ) {
+            (Some(configured), Some(minted)) => configured != minted,
+            _ => false,
+        }
     }
 
     /// Whether a token whose scope is `scope_str` can serve the configured org_id.
@@ -301,6 +375,7 @@ impl OAuthTokenSource {
     async fn fetch_refresh(
         &self,
         refresh_token: &str,
+        platform_account_id: Option<String>,
     ) -> Result<CachedToken, RunCacheServiceError> {
         let mut form: Vec<(&str, &str)> = vec![
             ("grant_type", "refresh_token"),
@@ -311,7 +386,7 @@ impl OAuthTokenSource {
             form.push(("client_secret", secret));
         }
         let token_resp = send_token_form(&self.http, &self.token_url, &form).await?;
-        let cached = self.process_response(token_resp)?;
+        let cached = self.process_response(token_resp, platform_account_id)?;
         let stored = (&cached).into_stored(&self.token_type_or_default());
         if let Err(err) = self.store.save(&stored).await {
             tracing::warn!("failed to persist refreshed dbt State auth token: {err}");
@@ -322,6 +397,7 @@ impl OAuthTokenSource {
     fn process_response(
         &self,
         response: TokenResponse,
+        platform_account_id: Option<String>,
     ) -> Result<CachedToken, RunCacheServiceError> {
         let claims = jwt_claims(&response.id_token)?;
         let scope_str = claims.scope.ok_or_else(|| {
@@ -339,7 +415,21 @@ impl OAuthTokenSource {
             scope: scope_str,
             expires_at,
             refresh_token: response.refresh_token,
+            platform_account_id,
         })
+    }
+}
+
+/// Builds the dbt platform credential chain used for token exchange, pinned to
+/// the configured platform account when one is set. Without the pin, a
+/// `~/.dbt/oauth_sessions.json` holding sessions for several accounts resolves
+/// whichever session comes first, which may not be the account the project is
+/// configured against.
+fn platform_auth_chain(platform_account_id: Option<&str>) -> AuthChain {
+    let builder = AuthChainBuilder::new(OAUTH_CLIENT_ID);
+    match platform_account_id {
+        Some(account_id) => builder.account_id(account_id).build(),
+        None => builder.build(),
     }
 }
 
@@ -380,6 +470,7 @@ impl IntoStored for &CachedToken {
                 .map(|d| d.as_secs_f64()),
             access_token: None,
             refresh_token: self.refresh_token.clone(),
+            platform_account_id: self.platform_account_id.clone(),
         }
     }
 }
@@ -395,6 +486,7 @@ impl FromStored for StoredToken {
             scope: self.scope,
             expires_at: self.expires_at.map(epoch_seconds_to_system_time),
             refresh_token: self.refresh_token,
+            platform_account_id: self.platform_account_id,
         }
     }
 }
@@ -707,6 +799,7 @@ projects:
             expires_at: Some(1.0), // ancient
             access_token: None,
             refresh_token: Some("refresh-old".to_string()),
+            platform_account_id: None,
         };
         store.save(&stale).await.unwrap();
 
@@ -789,6 +882,7 @@ projects:
                 expires_at: Some(9_999_999_999.0),
                 access_token: None,
                 refresh_token: Some("refresh-old".to_string()),
+                platform_account_id: None,
             })
             .await
             .unwrap();
@@ -820,6 +914,7 @@ projects:
                 expires_at: Some(9_999_999_999.0),
                 access_token: None,
                 refresh_token: None,
+                platform_account_id: None,
             })
             .await
             .unwrap();
@@ -854,6 +949,7 @@ projects:
                 expires_at: Some(9_999_999_999.0),
                 access_token: None,
                 refresh_token: Some("refresh".to_string()),
+                platform_account_id: None,
             })
             .await
             .unwrap();
@@ -907,6 +1003,7 @@ projects:
                 expires_at: Some(near_expiry),
                 access_token: None,
                 refresh_token: Some("old-refresh".to_string()),
+                platform_account_id: None,
             })
             .await
             .unwrap();
@@ -946,6 +1043,7 @@ projects:
                 expires_at: Some(9_999_999_999.0),
                 access_token: None,
                 refresh_token: None,
+                platform_account_id: None,
             })
             .await
             .unwrap();
@@ -1005,6 +1103,203 @@ projects:
 
         let token = source.token().await.unwrap();
         assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
+    }
+
+    #[tokio::test]
+    async fn cached_token_from_other_platform_account_is_discarded_and_reminted() {
+        let server = MockServer::start().await;
+        // Distinct scopes let the returned token identify its origin: only a
+        // token-exchange response carries the admin scope. The mock matches the
+        // exchange grant alone, so a refresh attempt would go unmatched and fail
+        // the request rather than silently pass.
+        let cached_scope = "runcache:scope:org:dev:developer";
+        let minted_scope = "runcache:scope:org:dev:admin";
+        let token_resp = serde_json::json!({
+            "id_token": make_jwt(minted_scope),
+            "scope": minted_scope,
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        });
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .and(body_string_contains(
+                "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(token_resp))
+            .mount(&server)
+            .await;
+
+        let dir = TempDir::new().unwrap();
+        let store = token_store_in(&dir);
+        // A still-fresh, refreshable token minted for account 1.
+        store
+            .save(&StoredToken {
+                scope: cached_scope.to_string(),
+                token_type: "Bearer".to_string(),
+                id_token: make_jwt(cached_scope),
+                expires_at: Some(9_999_999_999.0),
+                access_token: None,
+                refresh_token: Some("refresh-old".to_string()),
+                platform_account_id: Some("1".to_string()),
+            })
+            .await
+            .unwrap();
+
+        // Configuration now selects account 2.
+        let auth_chain =
+            cloud_yaml_auth_chain(&dir, "dbtc_platform_token", "ab123.us1.dbt.com", "2");
+        let mut config = config_with(&server.uri(), None, Some("dev"));
+        config.platform_account_id = Some("2".to_string());
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            auth_chain,
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        // Freshly exchanged against account 2 — neither the cached token nor its
+        // refresh token was reused.
+        assert_eq!(token.scope, minted_scope);
+        assert_eq!(token.refresh_token, None);
+        assert_eq!(token.platform_account_id.as_deref(), Some("2"));
+    }
+
+    #[tokio::test]
+    async fn credential_for_another_platform_account_is_rejected() {
+        // The only resolvable credential belongs to account 111 while the
+        // project configures account 42. Exchanging it would authenticate as
+        // the wrong account, so dbt State reports the missing session instead —
+        // an error that fails validation open, bypassing dbt State for the run.
+        let dir = TempDir::new().unwrap();
+        let auth_chain =
+            cloud_yaml_auth_chain(&dir, "dbtc_platform_token", "ab123.us1.dbt.com", "111");
+        // Unreachable token URL: no exchange may be attempted.
+        let mut config = config_with("http://127.0.0.1:1", None, Some("dev"));
+        config.platform_account_id = Some("42".to_string());
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![token_response(
+                "runcache:scope:org:dev:admin",
+                3600.0,
+                None,
+            )]),
+            auth_chain,
+        )
+        .unwrap();
+
+        let err = source.token().await.unwrap_err();
+        assert!(matches!(
+            err,
+            RunCacheServiceError::PlatformAccountUnavailable {
+                ref configured,
+                found: Some(ref found),
+            } if configured == "42" && found == "111"
+        ));
+        assert!(!err.is_user_actionable_auth(), "must fail validation open");
+        assert!(token_store_in(&dir).load().await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn configured_account_without_any_credential_skips_standalone_login() {
+        // With an account configured, the standalone dbt State browser login
+        // cannot produce a credential for it, so it must not run.
+        let dir = TempDir::new().unwrap();
+        let mut config = config_with("http://127.0.0.1:1", None, Some("dev"));
+        config.platform_account_id = Some("42".to_string());
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![token_response(
+                "runcache:scope:org:dev:admin",
+                3600.0,
+                None,
+            )]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let err = source.token().await.unwrap_err();
+        assert!(matches!(
+            err,
+            RunCacheServiceError::PlatformAccountUnavailable {
+                ref configured,
+                found: None,
+            } if configured == "42"
+        ));
+        assert!(token_store_in(&dir).load().await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn cached_token_for_configured_platform_account_is_reused() {
+        let dir = TempDir::new().unwrap();
+        let store = token_store_in(&dir);
+        let scope = "runcache:scope:org:dev:admin";
+        let id_token = make_jwt(scope);
+        store
+            .save(&StoredToken {
+                scope: scope.to_string(),
+                token_type: "Bearer".to_string(),
+                id_token: id_token.clone(),
+                expires_at: Some(9_999_999_999.0),
+                access_token: None,
+                refresh_token: None,
+                platform_account_id: Some("42".to_string()),
+            })
+            .await
+            .unwrap();
+
+        // Unreachable token URL: reuse must not hit the network.
+        let mut config = config_with("http://127.0.0.1:1", None, Some("dev"));
+        config.platform_account_id = Some("42".to_string());
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        assert_eq!(token.id_token, id_token);
+    }
+
+    #[tokio::test]
+    async fn cached_token_without_platform_account_is_kept() {
+        // Tokens of unknown provenance (standalone dbt State login, or a file
+        // written before the account was recorded) are not invalidated.
+        let dir = TempDir::new().unwrap();
+        let store = token_store_in(&dir);
+        let scope = "runcache:scope:org:dev:admin";
+        let id_token = make_jwt(scope);
+        store
+            .save(&StoredToken {
+                scope: scope.to_string(),
+                token_type: "Bearer".to_string(),
+                id_token: id_token.clone(),
+                expires_at: Some(9_999_999_999.0),
+                access_token: None,
+                refresh_token: None,
+                platform_account_id: None,
+            })
+            .await
+            .unwrap();
+
+        let mut config = config_with("http://127.0.0.1:1", None, Some("dev"));
+        config.platform_account_id = Some("42".to_string());
+        let source = OAuthTokenSource::with_components(
+            &config,
+            token_store_in(&dir),
+            FakeFlow::new(vec![]),
+            empty_auth_chain(),
+        )
+        .unwrap();
+
+        let token = source.token().await.unwrap();
+        assert_eq!(token.id_token, id_token);
+        assert!(token_store_in(&dir).load().await.unwrap().is_some());
     }
 
     #[tokio::test]
@@ -1145,6 +1440,7 @@ projects:
                 expires_at: Some(1.0), // ancient
                 access_token: None,
                 refresh_token: Some("old-refresh".to_string()),
+                platform_account_id: None,
             })
             .await
             .unwrap();

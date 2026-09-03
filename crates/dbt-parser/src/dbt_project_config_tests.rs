@@ -8,11 +8,13 @@
 
 #[cfg(test)]
 mod init_project_config_tests {
+    use dbt_adapter_core::AdapterType;
     use dbt_common::tracing::fs_error_log::get_log_message;
     use dbt_common::{ErrorCode, FsResult};
     use dbt_schemas::schemas::project::{
-        DbtProjectConfig, ModelConfig, ProjectModelConfig, ProjectSnapshotConfig, ResolvableConfig,
-        SnapshotConfig, TypedRecursiveConfig, init_project_config,
+        DbtProjectConfig, ModelConfig, ProjectConfigResolver, ProjectModelConfig,
+        ProjectSnapshotConfig, ResolvableConfig, SnapshotConfig, TypedRecursiveConfig,
+        init_project_config,
     };
     use dbt_tracing::{
         SeverityNumber, TelemetryOutputFlags,
@@ -21,6 +23,7 @@ mod init_project_config_tests {
         layer::ConsumerLayer,
         test_support::mocks::{MockDynSpanEvent, TestLayer, test_data_layer},
     };
+    use indexmap::IndexMap;
 
     #[allow(clippy::type_complexity)]
     fn init_project_config_from_yaml<T, S>(
@@ -70,6 +73,7 @@ mod init_project_config_tests {
                 Default::default(),
                 None,
                 disallow_plus_prefix,
+                AdapterType::Snowflake,
             )
         });
 
@@ -312,5 +316,167 @@ my_project:
         assert_eq!(errors.len(), 1);
         let (_, msg) = &errors[0];
         assert!(msg.contains("Unrecognized key `my_project.staging.+contract`"));
+    }
+
+    #[test]
+    fn persist_constraints_is_valid_and_inherits_with_nested_override() {
+        let yml = r#"
++persist_constraints: true
+my_project:
+  inherited:
+    +enabled: true
+  disabled:
+    +persist_constraints: false
+"#;
+
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+        assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+
+        let config = result.unwrap();
+        let inherited = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "inherited".to_string(),
+            "model".to_string(),
+        ]);
+        assert_eq!(
+            inherited.__warehouse_specific_config__.persist_constraints,
+            Some(true)
+        );
+
+        let disabled = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "disabled".to_string(),
+            "model".to_string(),
+        ]);
+        assert_eq!(
+            disabled.__warehouse_specific_config__.persist_constraints,
+            Some(false)
+        );
+
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<SnapshotConfig, ProjectSnapshotConfig>(yml, false);
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+        assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+
+        let config = result.unwrap();
+        let inherited = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "inherited".to_string(),
+            "snapshot".to_string(),
+        ]);
+        assert_eq!(
+            inherited.__warehouse_specific_config__.persist_constraints,
+            Some(true)
+        );
+
+        let disabled = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "disabled".to_string(),
+            "snapshot".to_string(),
+        ]);
+        assert_eq!(
+            disabled.__warehouse_specific_config__.persist_constraints,
+            Some(false)
+        );
+    }
+
+    /// Residual (fs#13424): Databricks' `target_catalog` -> `target_database`
+    /// alias has no dedicated field the way `catalog` -> `database` does (there is no
+    /// `target_catalog` field on `SnapshotConfig`/`ProjectSnapshotConfig` to canonicalize),
+    /// and unlike the inline `{{ config(...) }}` layer, `dbt_project.yml`'s subtree levels are
+    /// already-typed structs by the time `recur_build_dbt_project_config` runs -- there is no
+    /// raw YAML map left in which to rename the key. So `+target_catalog:` in `dbt_project.yml`
+    /// remains an unrecognized key, unlike the same alias authored via inline config (see
+    /// `test_parse_config_inline_target_catalog_alias_resolves_on_databricks_snapshot` in
+    /// `dbt-jinja-utils`). `#[ignore]`d because this pins the *gap*, not the desired behavior;
+    /// delete it and add real coverage instead if the gap is ever closed (see the comment on
+    /// `SnapshotConfig::canonicalize_adapter_aliases`).
+    #[test]
+    #[ignore = "fs#13424 residual: +target_catalog: in dbt_project.yml has no typed \
+                field to canonicalize into (see SnapshotConfig::canonicalize_adapter_aliases)"]
+    fn test_snapshot_target_catalog_in_project_yml_is_unrecognized_key() {
+        let yml = "+target_catalog: some_cat\n";
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<SnapshotConfig, ProjectSnapshotConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `+target_catalog`"));
+    }
+
+    /// Residual (fs#13424): postgres/redshift's `dbname` -> `database` alias has
+    /// the same shape of gap as `target_catalog` above, on a different config type -- `dbname`
+    /// has no dedicated field at all (unlike `catalog`, which has one to move out of), so it can
+    /// only resolve via a raw config-key rename before typing, which is only available at the
+    /// inline `{{ config(...) }}` layer (see
+    /// `test_parse_config_inline_dbname_alias_resolves_on_postgres` in `dbt-jinja-utils`).
+    /// `#[ignore]`d for the same reason as the test above: this pins the gap, not the desired
+    /// behavior.
+    #[test]
+    #[ignore = "fs#13424 residual: +dbname: in dbt_project.yml has no typed field to \
+                canonicalize into (see ResolvableConfig::canonicalize_adapter_aliases)"]
+    fn test_dbname_in_project_yml_is_unrecognized_key() {
+        let yml = "+dbname: some_db\n";
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+        assert!(result.is_ok());
+        assert!(warnings.is_empty());
+        assert_eq!(errors.len(), 1);
+        let (_, msg) = &errors[0];
+        assert!(msg.contains("Unrecognized key `+dbname`"));
+    }
+
+    /// The predicate must fire only on an explicit `+enabled: true`; an absent value must not be
+    /// read as `true`, or every dependency package node would be treated as force-enabled.
+    #[test]
+    fn test_is_enabled_by_root_overlay() {
+        let fqn = vec!["pkg".to_string(), "my_model".to_string()];
+        let cases = [
+            (
+                "exact model",
+                "pkg:\n  my_model:\n    +enabled: true\n",
+                true,
+            ),
+            ("inherited from package", "pkg:\n  +enabled: true\n", true),
+            ("global", "+enabled: true\n", true),
+            (
+                "absent",
+                "pkg:\n  my_model:\n    +materialized: view\n",
+                false,
+            ),
+            (
+                "explicitly disabled",
+                "pkg:\n  my_model:\n    +enabled: false\n",
+                false,
+            ),
+        ];
+
+        for (label, yml, expected) in cases {
+            let (root, errors, _) =
+                init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, true);
+            assert!(errors.is_empty(), "{label}: {errors:?}");
+            let root = root.expect("root overlay config builds");
+            let local = DbtProjectConfig::<ModelConfig> {
+                config: ModelConfig::default(),
+                children: IndexMap::new(),
+            };
+            let resolver =
+                ProjectConfigResolver::for_dependency(local, root.clone(), AdapterType::Snowflake);
+            assert_eq!(
+                resolver.is_enabled_by_root_overlay(&fqn),
+                expected,
+                "{label}"
+            );
+
+            // Root packages have no overlay, so their own inline disable keeps winning.
+            let root_resolver = ProjectConfigResolver::for_root(root, AdapterType::Snowflake);
+            assert!(
+                !root_resolver.is_enabled_by_root_overlay(&fqn),
+                "{label}: root package must never be force-enabled"
+            );
+        }
     }
 }

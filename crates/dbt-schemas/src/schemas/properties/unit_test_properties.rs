@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::{
-    common::{Expect, Given},
+    common::{Expect, Given, verbatim_option_is_none},
     project::UnitTestConfig,
 };
 use dbt_common::io_args::StaticAnalysisOffReason;
@@ -38,6 +38,7 @@ pub struct UnitTestOverrides {
     // rendering would round-trip a Jinja expression's return value through
     // `YmlValue` and lose non-scalar values (e.g. a datetime) before the
     // real render ever runs.
+    #[serde(skip_serializing_if = "verbatim_option_is_none")]
     pub macros: Verbatim<Option<BTreeMap<String, YmlValue>>>,
     pub vars: Option<BTreeMap<String, YmlValue>>,
 }

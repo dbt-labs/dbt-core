@@ -604,6 +604,49 @@ mod tests {
 
         assert_eq!(column_data_type(&model, "float_col"), "FLOAT");
     }
+
+    #[test]
+    fn write_file_creates_nested_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run/pkg/snapshots/my_snap.sql/my_snap.sql");
+
+        write_file(&path, "snapshot", "select 1").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "select 1");
+    }
+
+    #[test]
+    fn write_file_replaces_stale_flat_file_on_parent_chain() {
+        // A pre-#14125 Fusion (or dbt Core v1) left a flat file where we now
+        // need a directory: target/run/pkg/snapshots/my_snap.sql is a file, but
+        // the nested layout requires it to be a directory. Writing must succeed
+        // rather than fail with ENOTDIR. See dbt-core#15692.
+        let dir = tempfile::tempdir().unwrap();
+        let stale = dir.path().join("run/pkg/snapshots/my_snap.sql");
+        fs::create_dir_all(stale.parent().unwrap()).unwrap();
+        fs::write(&stale, "stale flat file").unwrap();
+
+        let nested = stale.join("my_snap.sql");
+        write_file(&nested, "snapshot", "select 1").unwrap();
+
+        assert!(stale.is_dir());
+        assert_eq!(fs::read_to_string(&nested).unwrap(), "select 1");
+    }
+
+    #[test]
+    fn write_file_replaces_stale_directory_at_target() {
+        // The reverse layout drift: a stale directory sits where we now write a
+        // flat file. Writing must succeed rather than fail with EISDIR.
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("run/pkg/models/my_model.sql");
+        fs::create_dir_all(target.join("my_model.sql").parent().unwrap()).unwrap();
+        fs::write(target.join("my_model.sql"), "nested leftover").unwrap();
+
+        write_file(&target, "model", "select 1").unwrap();
+
+        assert!(target.is_file());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "select 1");
+    }
 }
 
 fn parse_hook_item(item: &YmlValue) -> Option<HookConfig> {
@@ -687,14 +730,49 @@ fn write_file(full_path: &Path, resource_type: &str, payload: &str) -> Result<()
         ));
     }
 
-    // Create parent directories if needed
+    // Reconcile a target/ left behind by a different artifact layout — e.g.
+    // dbt Core v1, or a pre-#14125 Fusion that wrote snapshot run artifacts as
+    // a flat file where we now write a nested directory (or vice versa). Without
+    // this, a stale file sitting where we now need a directory fails the write
+    // below with ENOTDIR ("Not a directory"), and a stale directory sitting
+    // where we now write a flat file fails with EISDIR ("Is a directory").
+    // See https://github.com/dbt-labs/dbt-core/issues/15692.
     if let Some(parent) = full_path.parent()
-        && !parent.exists()
-        && let Err(e) = fs::create_dir_all(parent)
+        && !parent.is_dir()
+    {
+        // Parent is missing, or a stale file on the parent chain (from an older
+        // layout) sits where we now need a directory. Remove the deepest such
+        // file so create_dir_all can rebuild the tree, then create it.
+        for ancestor in parent.ancestors() {
+            if ancestor.is_file() {
+                if let Err(e) = fs::remove_file(ancestor) {
+                    return Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Failed to remove stale file {}: {}", ancestor.display(), e),
+                    ));
+                }
+                break;
+            }
+        }
+        if let Err(e) = fs::create_dir_all(parent) {
+            return Err(Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Failed to create directory {}: {}", parent.display(), e),
+            ));
+        }
+    }
+
+    // A stale directory sitting where we now write a flat file fails with EISDIR.
+    if full_path.is_dir()
+        && let Err(e) = fs::remove_dir_all(full_path)
     {
         return Err(Error::new(
             ErrorKind::InvalidOperation,
-            format!("Failed to create directory {}: {}", parent.display(), e),
+            format!(
+                "Failed to remove stale directory {}: {}",
+                full_path.display(),
+                e
+            ),
         ));
     }
 

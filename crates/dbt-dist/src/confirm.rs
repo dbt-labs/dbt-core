@@ -6,6 +6,13 @@ use std::io::IsTerminal;
 
 use dbt_common::{ErrorCode, FsResult, fs_err};
 
+/// Whether stdin is a terminal an interactive prompt could actually be
+/// answered on -- shared by [`confirm`] and any other prompt in this crate
+/// that needs the same "don't guess, don't hang" gating.
+pub fn is_interactive() -> bool {
+    std::io::stdin().is_terminal()
+}
+
 /// Asks the user to confirm `prompt` before proceeding.
 ///
 /// - `assume_yes` (from a command's `--yes`/`-y` flag) skips the prompt
@@ -19,7 +26,7 @@ pub fn confirm(prompt: &str, assume_yes: bool) -> FsResult<bool> {
         return Ok(true);
     }
 
-    if !std::io::stdin().is_terminal() {
+    if !is_interactive() {
         return Err(fs_err!(
             ErrorCode::InvalidArgument,
             "{prompt}\n\nThis is not an interactive terminal, so this action can't be confirmed. \

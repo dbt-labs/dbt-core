@@ -1,17 +1,11 @@
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-
-import {
-  Badge,
-  Icon,
-  RyeconColorDbt,
-  RyeconMagnifyingGlass,
-  Tooltip,
-} from '@dbt-labs/sourdough';
+import { Search as SearchIcon } from 'lucide-react';
 
 import { AnalysisFilterView } from './components/AnalysisFilterView';
 import FullLineagePage from './components/FullLineagePage';
+import { FullLineagePageV2 } from './components/LineageV2/FullLineagePage';
 import { LocatePane, type LocatePaneMode } from './components/LocatePane';
 import { MacroFilterView } from './components/MacroFilterView';
 import { ModelFilterView } from './components/ModelFilterView';
@@ -28,6 +22,7 @@ import {
 import { SourceCollectionPage } from './components/SourceCollectionPage';
 import { SourceFilterView } from './components/SourceFilterView';
 import { TestFilterView } from './components/TestFilterView';
+import { Input } from './components/ui/Input';
 import { useAllNodes } from './hooks/useAllNodes';
 import { deriveUpgradeCapabilities } from './hooks/useCapabilities';
 import { useIdentity } from './hooks/useIdentity';
@@ -147,6 +142,7 @@ export default function App() {
 
   const view = useMemo(() => viewFromPath(location.pathname), [location.pathname]);
   const isLineageRoute = location.pathname.startsWith('/lineage');
+  const isLineageV2Route = location.pathname.startsWith('/lineageV2');
   const selectedId = view.kind === 'detail' ? view.uniqueId : null;
 
   // Resolve the selected node's `{ uniqueId, resourceType }` for useAssetDetail:
@@ -218,20 +214,6 @@ export default function App() {
     allNodes.error?.message ??
     (detailFetchError && !detailNotFound ? detailFetchError.message : null) ??
     null;
-
-  // Spin the topbar dbt mark briefly whenever a "parent filter" changes —
-  // active view kind/type or the package filter. Detail navigations don't
-  // trigger; this is meant for orientation moments.
-  const [spinTrigger, setSpinTrigger] = useState(0);
-  const firstRender = useRef(true);
-  const parentKey = `${view.kind === 'list' ? filters.resourceType.slice().sort().join(',') || 'all' : view.kind}|${filters.pkg.slice().sort().join(',')}`;
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
-    setSpinTrigger((s) => s + 1);
-  }, [parentKey]);
 
   // URL → filters sync: when the route's `:resourceType` param changes
   // (e.g. back/forward, Asset-tab click), mirror it into filters.resourceType
@@ -394,7 +376,11 @@ export default function App() {
   }
 
   if (isLineageRoute) {
-    return (
+    return isLineageV2Route ? (
+      <Routes>
+        <Route path={ROUTES.lineageV2} element={<FullLineagePageV2 />} />
+      </Routes>
+    ) : (
       <Routes>
         <Route path={ROUTES.lineage} element={<FullLineagePage />} />
       </Routes>
@@ -408,7 +394,6 @@ export default function App() {
         search={search}
         onSearch={setSearch}
         onResetHome={onResetHome}
-        spinTrigger={spinTrigger}
         onSubmitSearch={onSubmitTopbarSearch}
       />
       <div
@@ -603,64 +588,52 @@ function Topbar({
   search,
   onSearch,
   onResetHome,
-  spinTrigger,
   onSubmitSearch,
 }: {
   project: Project | null;
   search: string;
   onSearch: (v: string) => void;
   onResetHome?: () => void;
-  spinTrigger?: number;
   onSubmitSearch?: () => void;
 }) {
   return (
     <header className="topbar-v2">
-      <div className="topbar-v2__bg" aria-hidden />
       <div className="topbar-v2__left">
         <div className="topbar-v2__brand">
-          <button
-            type="button"
-            className="topbar-v2__brand-btn"
-            onClick={onResetHome}
-            aria-label="Overview — reset view"
-            title="Overview — reset view"
-          >
-            <span key={spinTrigger ?? 0} className="topbar-v2__brand-anim">
-              <Icon ryecon={RyeconColorDbt} size="xl" alt="dbt" />
-            </span>
-          </button>
           {project && (
-            <div className="topbar-v2__brand-text">
-              <div className="topbar-v2__brand-name">
-                {project.name}
-                <Tooltip content="This docs site is in beta." placement="bottom">
-                  <Badge text="beta" type="purple" size="xs" />
-                </Tooltip>
+            <button
+              type="button"
+              className="topbar-v2__brand-btn topbar-v2__brand-btn--text"
+              onClick={onResetHome}
+              aria-label="Overview — reset view"
+              title="Overview — reset view"
+            >
+              <div className="topbar-v2__brand-text">
+                <div className="topbar-v2__brand-name">{project.name}</div>
+                <div className="topbar-v2__brand-sub">
+                  {project.adapterType ?? ''}
+                  {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}
+                </div>
               </div>
-              <div className="topbar-v2__brand-sub">
-                {project.adapterType ?? ''}
-                {project.dbtVersion ? ` · v${project.dbtVersion}` : ''}
-              </div>
-            </div>
+            </button>
           )}
         </div>
       </div>
-      <label className="topbar-v2__search">
-        <Icon ryecon={RyeconMagnifyingGlass} size="sm" alt="Search" />
-        <input
-          type="search"
-          placeholder="Search models, sources, tests, metrics…"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              onSubmitSearch?.();
-            }
-          }}
-          aria-label={project ? `Search ${project.name}` : 'Search project'}
-        />
-      </label>
+      <Input
+        type="search"
+        startIcon={{ icon: <SearchIcon className="size-3" /> }}
+        placeholder="Search models, sources, tests, metrics…"
+        value={search}
+        onChange={(e) => onSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSubmitSearch?.();
+          }
+        }}
+        aria-label={project ? `Search ${project.name}` : 'Search project'}
+        className="w-full"
+      />
     </header>
   );
 }

@@ -306,12 +306,8 @@ impl Object for RelationObject {
                     }
                 })
             }
-            "dynamic_table_config_changeset" => {
-                let iter = ArgsIter::new(
-                    "dynamic_table_config_changeset",
-                    &["relation_results", "relation_config"],
-                    args,
-                );
+            "dynamic_table_config_changeset" | "interactive_table_config_changeset" => {
+                let iter = ArgsIter::new(name, &["relation_results", "relation_config"], args);
                 let relation_results = iter.next_arg::<Value>()?;
                 let relation_config = iter.next_arg::<Value>()?;
                 iter.finish()?;
@@ -378,6 +374,7 @@ impl Object for RelationObject {
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
             Some("is_dynamic_table") => Some(Value::from(self.is_dynamic_table())),
+            Some("is_interactive_table") => Some(Value::from(self.is_interactive_table())),
             Some("is_iceberg_format") => Some(Value::from(self.is_iceberg_format())),
             Some("is_cte") => Some(Value::from(self.is_cte())),
             Some("is_pointer") => Some(Value::from(self.is_pointer())),
@@ -390,6 +387,9 @@ impl Object for RelationObject {
             }
             Some("Table") => Some(Value::from(RelationType::Table.to_string())),
             Some("DynamicTable") => Some(Value::from(RelationType::DynamicTable.to_string())),
+            Some("InteractiveTable") => {
+                Some(Value::from(RelationType::InteractiveTable.to_string()))
+            }
             Some("StreamingTable") => Some(Value::from(RelationType::StreamingTable.to_string())),
             // the Jinja logics `if resolved.render is defined and resolved.render is callable `
             // in `macro build_ref_function` depends on this
@@ -1004,6 +1004,66 @@ mod tests {
 
         assert_eq!(relation.render_self_as_str(), "`analytics`.`events`");
         assert_eq!(relation.database(), Some(""));
+    }
+
+    #[test]
+    fn interactive_table_exposes_its_own_jinja_flag_and_type_name() {
+        let relation = do_create_relation(
+            AdapterType::Snowflake,
+            "d".to_string(),
+            "s".to_string(),
+            Some("i".to_string()),
+            Some(RelationType::InteractiveTable),
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap();
+        let relation = Arc::new(RelationObject::new(relation.into()));
+
+        for (key, expected) in [
+            ("is_interactive_table", true),
+            ("is_dynamic_table", false),
+            ("is_table", false),
+            ("is_view", false),
+        ] {
+            assert_eq!(
+                relation.get_value(&Value::from(key)),
+                Some(Value::from(expected)),
+                "{key}"
+            );
+        }
+
+        assert_eq!(
+            relation.get_value(&Value::from("InteractiveTable")),
+            Some(Value::from("interactive_table"))
+        );
+        assert_eq!(
+            relation.get_value(&Value::from("type")),
+            Some(Value::from("interactive_table"))
+        );
+    }
+
+    /// Asserts on `ErrorKind`, not the message: both this arm and the catch-all name the called
+    /// method in their message text, so a message-only assertion would pass either way.
+    #[test]
+    fn interactive_table_config_changeset_alias_is_reachable_by_name() {
+        let relation = do_create_relation(
+            AdapterType::Snowflake,
+            "d".to_string(),
+            "s".to_string(),
+            Some("i".to_string()),
+            Some(RelationType::InteractiveTable),
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap();
+        let relation = Arc::new(RelationObject::new(relation.into()));
+
+        let env = minijinja::Environment::new();
+        let state = env.empty_state();
+        let err = relation
+            .call_method(&state, "interactive_table_config_changeset", &[], &[])
+            .unwrap_err();
+
+        assert_eq!(err.kind(), minijinja::ErrorKind::MissingArgument, "{err}");
     }
 
     #[test]

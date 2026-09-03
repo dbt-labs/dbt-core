@@ -114,7 +114,7 @@ pub fn prepare_microbatch_batches(
         build_run_node_context(
             model,
             &model.deprecated_config,
-            ctx.adapter_type(),
+            model.node_adapter(),
             None,
             &base_context,
             &ctx.inner.arg.io,
@@ -185,7 +185,7 @@ fn resolve_batch_window(
         .deprecated_config
         .full_refresh
         .unwrap_or(ctx.inner.arg.full_refresh);
-    let is_incremental = is_incremental(model, full_refresh, ctx.adapter_type(), ctx.env.clone());
+    let is_incremental = is_incremental(model, full_refresh, model.node_adapter(), ctx.env.clone());
 
     let end_time = batch_builder.build_end_time(ctx.inner.arg.event_time_end.clone())?;
     let start_time = batch_builder.build_start_time(
@@ -262,7 +262,7 @@ pub fn execute_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
         &ctx.inner.materialization_resolver,
         ctx.env.clone(),
         &mb_unit.batch_ctx,
-        ctx.adapter_type(),
+        model.node_adapter(),
         ctx_for_batch,
         mb_unit.event_time_mapping,
         &ctx.inner.arg.io,
@@ -305,7 +305,7 @@ pub fn execute_model_remote(
     match materialize_model(
         &task_result.sql_instruction.sql,
         model,
-        ctx.adapter_type(),
+        model.node_adapter(),
         ctx.runtime_config(),
         &ctx.inner.materialization_resolver,
         ctx.env.clone(),
@@ -330,7 +330,7 @@ pub fn execute_model_remote(
     if should_create_latest_version_pointer(model, ctx.runtime_config()) {
         let relations_map = materialize_latest_version_pointer(
             model,
-            ctx.adapter_type(),
+            model.node_adapter(),
             ctx.runtime_config(),
             &ctx.inner.materialization_resolver,
             ctx.env.clone(),

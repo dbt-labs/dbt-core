@@ -63,32 +63,51 @@ impl RawProjectConfig {
     }
 }
 
-/// Merges a parent raw config map with config keys from a child raw YAML mapping.
+/// Merges a parent raw config map (already canonical) with config keys from a child raw YAML
+/// mapping, i.e. one `dbt_project.yml` hierarchy level.
 /// Keys prefixed with `+` are config keys (prefix stripped before inserting).
 /// Non-`+` keys are hierarchy keys (package/folder names) and are ignored.
-/// Child values overwrite parent values.
+///
+/// The child level's own keys are canonicalized against `adapter_type`'s alias map *before*
+/// merging, mirroring dbt-mantle's `fqn_search`/`_update_from_config`
+/// (`core/dbt/context/context_config.py:120-127,222,302`): each hierarchy level is translated on
+/// its own, then folded into the accumulating result one level at a time. Canonicalizing only
+/// the child level here -- not the already-merged `parent` -- is what makes that possible: a
+/// parent-level alias (e.g. `+catalog:`) and a child-level canonical spelling (`+database:`) are
+/// two different levels' dicts, never one dict with two colliding keys, so this cannot spuriously
+/// raise `DuplicateAliasKey` the way canonicalizing the pre-merged result of both levels at once
+/// would. A single level authoring both an alias and its canonical spelling still errors, via
+/// `canonicalize_source_config_keys`. Child values overwrite parent values.
 pub fn merge_raw_config_mappings(
     parent: &BTreeMap<String, dbt_yaml::Value>,
     child_mapping: &dbt_yaml::Mapping,
-) -> BTreeMap<String, dbt_yaml::Value> {
-    let mut merged = parent.clone();
+    adapter_type: AdapterType,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+    let mut own_level = BTreeMap::new();
     for (k, v) in child_mapping.iter() {
         if let Some(key_str) = k.as_str() {
             if let Some(stripped) = key_str.strip_prefix('+') {
-                merged.insert(stripped.to_string(), v.clone());
+                own_level.insert(stripped.to_string(), v.clone());
             }
         }
     }
-    merged
+    let own_level =
+        crate::resolve::resolve_utils::canonicalize_source_config_keys(adapter_type, own_level)?;
+    let mut merged = parent.clone();
+    merged.extend(own_level);
+    Ok(merged)
 }
 
 /// Recursively builds a `RawProjectConfig` tree from a raw YAML mapping.
-/// At each level, `+`-prefixed keys are merged into the config; non-`+` keys with mapping values are recursed into as children.
+/// At each level, `+`-prefixed keys are canonicalized and merged into the config; non-`+` keys
+/// with mapping values are recursed into as children. See [`merge_raw_config_mappings`] for why
+/// canonicalization happens per level rather than once on the fully-merged tree.
 pub fn recur_raw_project_config(
     mapping: &dbt_yaml::Mapping,
     parent_config: &BTreeMap<String, dbt_yaml::Value>,
-) -> RawProjectConfig {
-    let current_config = merge_raw_config_mappings(parent_config, mapping);
+    adapter_type: AdapterType,
+) -> FsResult<RawProjectConfig> {
+    let current_config = merge_raw_config_mappings(parent_config, mapping, adapter_type)?;
     let mut children = BTreeMap::new();
     for (k, v) in mapping.iter() {
         if let Some(key_str) = k.as_str() {
@@ -96,16 +115,16 @@ pub fn recur_raw_project_config(
                 if let Some(child_mapping) = v.as_mapping() {
                     children.insert(
                         key_str.to_string(),
-                        recur_raw_project_config(child_mapping, &current_config),
+                        recur_raw_project_config(child_mapping, &current_config, adapter_type)?,
                     );
                 }
             }
         }
     }
-    RawProjectConfig {
+    Ok(RawProjectConfig {
         config: current_config,
         children,
-    }
+    })
 }
 
 /// Coalesce a list of optional values into a single value
@@ -652,7 +671,8 @@ pub fn update_node_relation_components(
 pub fn extract_resource_config_from_raw_project(
     raw_yml: &dbt_yaml::Value,
     resource_type: &str,
-) -> RawProjectConfig {
+    adapter_type: AdapterType,
+) -> FsResult<RawProjectConfig> {
     if let Some(raw_subtree) = raw_yml.get(resource_type).cloned().and_then(|v| {
         if let dbt_yaml::Value::Mapping(m, _) = v {
             Some(m)
@@ -660,9 +680,9 @@ pub fn extract_resource_config_from_raw_project(
             None
         }
     }) {
-        recur_raw_project_config(&raw_subtree, &BTreeMap::new())
+        recur_raw_project_config(&raw_subtree, &BTreeMap::new(), adapter_type)
     } else {
-        RawProjectConfig::empty()
+        Ok(RawProjectConfig::empty())
     }
 }
 

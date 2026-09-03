@@ -89,6 +89,7 @@ impl TestProject {
             None,  // replay_mode
             &CancellationToken::never_cancels(),
             false, // use_v2_compatible_package_downloads
+            false, // require_hub_verified_downloads
             Arc::new(LocalPrivatePackageResolver),
             None, // cloud_config
             ai_provider,

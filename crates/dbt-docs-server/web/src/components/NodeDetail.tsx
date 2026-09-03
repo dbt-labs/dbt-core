@@ -1,14 +1,29 @@
+import { createElement } from 'react';
 import {
-  resourceIconMap,
-  resourceNameMap,
-  type ResourceTypeExplorer,
-  resourceTypesWithColumns,
-} from '@dbt-labs/dbt-dag';
-import { Button, Card, RyeconShare, RyeconTable } from '@dbt-labs/sourdough';
+  Box,
+  Camera,
+  ChartColumn,
+  CircleGauge,
+  ClipboardCheck,
+  Copy,
+  Database,
+  FileText,
+  type LucideIcon,
+  Save,
+  Sprout,
+  Table,
+  Users,
+  Waypoints,
+} from 'lucide-react';
 
 import { getColumns, toRelationshipItem } from '../lib/assetView';
 import { filterConfig } from '../lib/configView';
 import { decorateOutboundHref } from '../lib/outboundReferrer';
+import {
+  RESOURCE_TYPE_SINGULAR,
+  RESOURCE_TYPES_WITH_COLUMNS,
+  type ResourceTypeExplorer,
+} from '../lib/resourceType';
 import { handleUpsellEvent } from '../lib/upsellAnalytics';
 import {
   ArgumentsView,
@@ -46,6 +61,8 @@ import {
 import { ColumnLineageMini, useColumnLineage } from './ColumnLineageView';
 import { LineageView } from './LineageView';
 import { NoColumnMetadataFallback } from './NoColumnMetadataFallback';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
 
 interface Props {
   asset: Asset;
@@ -55,6 +72,21 @@ interface Props {
    *  while capabilities are loading. */
   userState: UserState | null;
 }
+
+const RESOURCE_TYPE_ICON: Record<string, LucideIcon> = {
+  model: Box,
+  source: Database,
+  test: ClipboardCheck,
+  exposure: CircleGauge,
+  group: Users,
+  metric: ChartColumn,
+  semantic_model: Waypoints,
+  seed: Sprout,
+  macro: FileText,
+  snapshot: Camera,
+  saved_query: Save,
+  analysis: FileText,
+};
 
 /** Coerce a field into `string[]`. Backend may emit a bare string. */
 function toStringArray(value: unknown): string[] {
@@ -136,7 +168,7 @@ function getResourceTabsForAsset(asset: Asset): TabInfo[] {
       ];
     }
     default: {
-      const showColumns = (resourceTypesWithColumns as readonly string[]).includes(
+      const showColumns = (RESOURCE_TYPES_WITH_COLUMNS as readonly string[]).includes(
         asset.resourceType,
       );
       return [
@@ -176,13 +208,15 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
 
   const headerIcons: AssetHeaderIconItem[] = [
     {
-      ryecon: resourceIconMap[resourceType] ?? resourceIconMap.unknown,
-      text: resourceNameMap[resourceType] ?? asset.resourceType,
+      icon: createElement(RESOURCE_TYPE_ICON[resourceType] ?? FileText, {
+        className: 'size-3 align-middle',
+      }),
+      text: RESOURCE_TYPE_SINGULAR[resourceType] ?? asset.resourceType,
     },
   ];
   if (materialization) {
     headerIcons.push({
-      ryecon: RyeconTable,
+      icon: <Table className="size-3 align-middle" />,
       text: materialization.charAt(0).toUpperCase() + materialization.slice(1),
     });
   }
@@ -199,8 +233,8 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
   const actions = (
     <div className="flex items-center gap-2">
       <Button
-        type="secondary"
-        ryecon={RyeconShare}
+        variant="outline"
+        icon={<Copy className="size-3" />}
         tooltip="Copy link"
         onClick={() => {
           void navigator.clipboard.writeText(window.location.href);
@@ -211,15 +245,19 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
 
   return (
     <article className="flex flex-col gap-6 px-8 pb-20 pt-6 text-fgMain">
-      <AssetHeader
-        name={asset.name}
-        resourceType={resourceType}
-        packageName={asset.packageName || null}
-        headerIcons={headerIcons}
-        actions={actions}
-      />
-
-      <DetailTabs tabs={tabs} show={true}>
+      <DetailTabs
+        tabs={tabs}
+        show={true}
+        stickyHeader={
+          <AssetHeader
+            name={asset.name}
+            resourceType={resourceType}
+            packageName={asset.packageName || null}
+            headerIcons={headerIcons}
+            actions={actions}
+          />
+        }
+      >
         {(tabType) => {
           switch (tabType) {
             case 'general': {
@@ -376,7 +414,7 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
               if (!visibleConfig) return null;
               return (
                 <div className="p-4">
-                  <Card className="!p-3 overflow-hidden">
+                  <Card className="overflow-hidden !p-3">
                     <ConfigDisplay config={visibleConfig} />
                   </Card>
                 </div>

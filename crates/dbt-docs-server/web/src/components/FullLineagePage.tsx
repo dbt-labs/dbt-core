@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Crosshair, ExternalLink, X } from 'lucide-react';
 
 import { Dag } from '@dbt-labs/dbt-dag';
-import {
-  Button,
-  RyeconClose,
-  RyeconCrosshair,
-  RyeconLinkExternal,
-} from '@dbt-labs/sourdough';
 
 import { useLineageData } from '../hooks/useLineageData';
 import { asToolbarItems, type LabelOnlyToolbarItem } from '../lib/dagToolbar';
@@ -18,6 +13,7 @@ import { paths } from '../routes';
 import { LineageEmptyState, Spinner } from '../shared';
 import { UNSUPPORTED_SURFACE_MESSAGE } from '../shared/hooks/unsupportedSurface';
 import { NodeLineagePanel } from './NodeLineagePanel';
+import { Button } from './ui/Button';
 
 export default function FullLineagePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -107,12 +103,12 @@ export default function FullLineagePage() {
       },
       {
         label: 'Refocus lineage here',
-        ryecon: RyeconCrosshair,
+        ryecon: Crosshair,
         onSelect: () => refocus(node.id),
       },
       {
         label: 'Open in new tab',
-        ryecon: RyeconLinkExternal,
+        ryecon: ExternalLink,
         onSelect: () => {
           window.open(paths.details(node.id), '_blank', 'noopener,noreferrer');
         },
@@ -193,8 +189,8 @@ export default function FullLineagePage() {
           <div className="pointer-events-none absolute left-6 top-6 z-30 flex items-center gap-2">
             <div className="pointer-events-auto">
               <Button
-                type="secondary"
-                ryecon={RyeconClose}
+                variant="outline"
+                icon={<X className="size-3" />}
                 tooltip="Close full lineage"
                 onClick={onClose}
               />

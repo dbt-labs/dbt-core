@@ -27,7 +27,13 @@ dbt Core is written in Rust. Please make sure that you have the [rust toolchain 
 
 
 ## Making a Change to dbt Core
-Contribute by opening a pull request against the current development branch, `main`. A dbt Core maintainer will triage the PR and, once it's on the right track, assign a reviewer. They may suggest code revisions for style or clarity, or request that you add test(s).
+After you're done making your code change, make sure:
+- your code is formatted: `cargo fmt`
+- all tests pass: `cargo nextest run`
+- all lints pass: `cargo clippy --all-targets --all-features`.
+- you have manually verified it works with a local build of dbt against a real project
+
+Then, open a pull request against the current development branch, `main`. A dbt Core maintainer will triage the PR and, once it's on the right track, assign a reviewer. They may suggest code revisions for style or clarity, or request that you add test(s).
 
 Once your PR has been approved, a maintainer will take it from there and shepherd your changes into dbt Core. And that's it! Happy developing 🎉
 

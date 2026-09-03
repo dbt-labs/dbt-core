@@ -20,8 +20,7 @@ use fs_deps::private_package::PrivatePackageResolver;
 
 use crate::args::LoadArgs;
 use crate::loader::{
-    get_packages_install_path, resolve_and_reload_weo_from_project,
-    resolve_use_v2_compatible_package_download_options,
+    get_packages_install_path, resolve_and_reload_weo_from_project, resolve_bool_project_flag,
 };
 
 /// Execute `dbt deps` without loading a profile.
@@ -95,9 +94,15 @@ pub async fn execute_deps_command(
     // No profile context is needed.
     let env = initialize_load_profile_jinja_environment();
 
-    let use_v2_compatible_package_downloads = resolve_use_v2_compatible_package_download_options(
+    let use_v2_compatible_package_downloads = resolve_bool_project_flag(
         load_args.io.use_v2_compatible_package_downloads,
         simplified_dbt_project.flags.as_ref(),
+        "use_v2_compatible_package_downloads",
+    );
+    let require_hub_verified_downloads = resolve_bool_project_flag(
+        load_args.io.require_hub_verified_downloads,
+        simplified_dbt_project.flags.as_ref(),
+        "require_hub_verified_downloads",
     );
 
     get_or_install_packages(
@@ -115,6 +120,7 @@ pub async fn execute_deps_command(
         None, // replay_mode
         token,
         use_v2_compatible_package_downloads,
+        require_hub_verified_downloads,
         private_package_resolver,
         cloud_config,
         load_args.ai_provider.as_deref(),
@@ -154,12 +160,6 @@ fn load_simplified_project_only(arg: &LoadArgs) -> FsResult<DbtProjectSimplified
     let simplified_dbt_project: DbtProjectSimplified =
         into_typed_with_jinja(raw, true, &env, &ctx, &[], None, true)?;
 
-    if simplified_dbt_project.data_paths.is_some() {
-        return Err(fs_err!(
-            ErrorCode::InvalidConfig,
-            "'data-paths' cannot be specified in dbt_project.yml",
-        ));
-    }
     if simplified_dbt_project.source_paths.is_some() {
         return Err(fs_err!(
             ErrorCode::InvalidConfig,

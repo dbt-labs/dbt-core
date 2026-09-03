@@ -144,6 +144,10 @@ pub trait Task: Send + Sync {
         ctx: &'a mut TaskRunnerCtx,
     ) -> Pin<Box<dyn Future<Output = FsResult<NodeStatus>> + Send + 'a>>;
 
+    fn adapter_type(&self) -> Option<AdapterType> {
+        None
+    }
+
     /// Apply backpressure to task scheduling.
     ///
     /// This tells the `tokio` runtime to poll for readiness later when demand
@@ -153,8 +157,11 @@ pub trait Task: Send + Sync {
         ctx: &'a mut TaskRunnerCtx,
     ) -> Pin<Box<dyn Future<Output = FsResult<NodeStatus>> + Send + 'a>> {
         Box::pin(async move {
-            let backpressure =
-                ConnectionBackpressure::from_config(ctx.adapter_type(), ctx.dbt_profile().threads);
+            let backpressure = ConnectionBackpressure::from_config(
+                self.adapter_type()
+                    .unwrap_or_else(|| ctx.default_adapter_type()),
+                ctx.dbt_profile().threads,
+            );
             let _wake_next_on_drop = backpressure.await;
             self.run_task(ctx).await
         })

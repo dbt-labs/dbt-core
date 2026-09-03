@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
-
-import type { SortingState } from '@dbt-labs/sourdough';
+import type { ColumnDef, SortingState } from '@tanstack/react-table';
 
 import type { AssetFilter, AssetSummary, ListSort, ResourceType } from '../shared';
 import type { Project } from '../shared';

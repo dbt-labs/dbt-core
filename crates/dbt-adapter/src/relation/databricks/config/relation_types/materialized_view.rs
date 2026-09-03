@@ -13,16 +13,16 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 /// Create a `RelationConfigLoader` for Databricks materialized views
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
-    // - liquid clustering
     // - relation tags
     // - query
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
-        // Box::new(components::LiquidClusteringLoader),
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
+        Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::PartitionByLoader),
         // Box::new(components::QueryLoader),
         Box::new(components::RefreshLoader),
         // Box::new(components::RelationTagsLoader),
+        Box::new(components::RowFilterLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::ColumnMasksLoader),
     ];
@@ -53,12 +53,12 @@ mod tests {
                     persist_relation_comments: true,
                     query: Some("SELECT 1".to_string()),
                     tbl_properties: IndexMap::from_iter([
-                        ("delta.enableRowTracking".to_string(), "false".to_string()),
                         (
                             "pipelines.pipelineId".to_string(),
-                            "my_old_pipeline".to_string(),
+                            "dlt-pipeline-1".to_string(),
                         ),
-                        ("custom.key".to_string(), "old".to_string()),
+                        ("data.quality".to_string(), "silver".to_string()),
+                        ("reporting.audience".to_string(), "internal".to_string()),
                     ]),
                     partition_by: vec!["partition_column_old".to_string()],
                     ..Default::default()
@@ -67,12 +67,12 @@ mod tests {
                     persist_relation_comments: true,
                     query: Some("SELECT 1000".to_string()),
                     tbl_properties: IndexMap::from_iter([
-                        ("delta.enableRowTracking".to_string(), "true".to_string()),
                         (
                             "pipelines.pipelineId".to_string(),
-                            "my_old_pipeline".to_string(),
+                            "dlt-pipeline-1".to_string(),
                         ),
-                        ("custom.key".to_string(), "new".to_string()),
+                        ("data.quality".to_string(), "gold".to_string()),
+                        ("reporting.audience".to_string(), "company-wide".to_string()),
                     ]),
                     partition_by: vec!["partition_column_new".to_string()],
                     ..Default::default()
@@ -84,10 +84,17 @@ mod tests {
                             components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
-                                    IndexMap::from_iter([(
-                                        "custom.key".to_string(),
-                                        "new".to_string(),
-                                    )]),
+                                    IndexMap::from_iter([
+                                        (
+                                            "pipelines.pipelineId".to_string(),
+                                            "dlt-pipeline-1".to_string(),
+                                        ),
+                                        ("data.quality".to_string(), "gold".to_string()),
+                                        (
+                                            "reporting.audience".to_string(),
+                                            "company-wide".to_string(),
+                                        ),
+                                    ]),
                                 ),
                             ),
                         ),
@@ -110,15 +117,15 @@ mod tests {
 </partitioned_by>
 <tblproperties>
     <tblproperties>
-        <custom.key>
-            new
-        </custom.key>
-        <delta.enableRowTracking>
-            true
-        </delta.enableRowTracking>
+        <data.quality>
+            gold
+        </data.quality>
+        <reporting.audience>
+            company-wide
+        </reporting.audience>
     </tblproperties>
     <pipeline_id>
-        my_old_pipeline
+        dlt-pipeline-1
     </pipeline_id>
 </tblproperties>
                     ",
@@ -140,6 +147,8 @@ mod tests {
                     cron: Some("*/60 * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
                     tags: IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
+                    row_filter_function: Some("new_row_filter_fn".to_string()),
+                    row_filter_columns: vec!["col1".to_string(), "col3".to_string()],
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
@@ -161,6 +170,15 @@ mod tests {
                         //         IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
                         //     )),
                         // ),
+                        (
+                            components::RowFilterLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::RowFilterLoader::new_component_type_erased(
+                                    Some("test_db.test_schema.new_row_filter_fn".to_string()),
+                                    vec!["col1".to_string(), "col3".to_string()],
+                                ),
+                            ),
+                        ),
                     ],
                     requires_full_refresh,
                 ),
@@ -176,6 +194,21 @@ mod tests {
         True
     </is_altered>
 </refresh>
+<row_filter>
+    <function>
+        test_db.test_schema.new_row_filter_fn
+    </function>
+    <columns>
+        col1
+        col3
+    </columns>
+    <should_unset>
+        False
+    </should_unset>
+    <is_change>
+        True
+    </is_change>
+</row_filter>
                     ",
                 requires_full_refresh: false,
             },

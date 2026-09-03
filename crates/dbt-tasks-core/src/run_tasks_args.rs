@@ -96,10 +96,6 @@ pub struct RunTasksArgs {
     pub full_refresh: bool,
     /// Whether to run with `--empty` (creates relations with schema only, no data).
     pub empty: bool,
-    pub infer_schemas: bool,
-    pub skip_type_checking: bool,
-    pub show_sources: bool,
-    pub resolve_ambiguous_cols: bool,
     /// If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).
     pub event_time_end: Option<String>,
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
@@ -123,6 +119,15 @@ pub struct RunTasksArgs {
     /// Previous batch_results from run_results.json, populated during retry
     /// so that already-successful overloads can be skipped.
     pub previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
+    /// Resolved metadata directory (`--metadata-dir` or `<out_dir>/metadata`). Carried here so a
+    /// task can find it — `EvalArgs::metadata_dir()` is not reachable from the task layer, and
+    /// deriving it from `out_dir` would silently ignore the override.
+    pub metadata_dir: PathBuf,
+    /// Resolved index directory (`--index-dir` or `<out_dir>/index`). See `metadata_dir`.
+    pub index_dir: PathBuf,
+    /// `show --job-id <id>`: fetch a previously completed dbt-compute job's
+    /// result directly. See `EvalArgs::job_id`.
+    pub job_id: Option<String>,
 }
 
 impl RunTasksArgs {
@@ -130,6 +135,9 @@ impl RunTasksArgs {
         let run_tasks_args = Self {
             command: arg.command,
             io: arg.io.clone(),
+            metadata_dir: arg.metadata_dir(),
+            index_dir: arg.index_dir(),
+            job_id: arg.job_id.clone(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),
             packages_install_path: arg.packages_install_path.clone(),
@@ -175,10 +183,6 @@ impl RunTasksArgs {
             run_cache_service: arg.run_cache_service,
             warn_error_options: arg.warn_error_options.clone(),
             empty: arg.empty,
-            infer_schemas: arg.infer_schemas,
-            skip_type_checking: arg.skip_type_checking,
-            show_sources: arg.show_sources,
-            resolve_ambiguous_cols: arg.resolve_ambiguous_cols,
             previous_batch_results: Default::default(),
         };
         Box::new(run_tasks_args)

@@ -34,7 +34,7 @@ pub async fn run_default_render(
     result_sender: Option<std::sync::mpsc::SyncSender<TaskResult>>,
     local_exec_unit_test_overrides: Option<UnitTestOverrides>,
 ) -> FsResult<NodeStatus> {
-    let adapter_type = ctx.adapter_type();
+    let adapter_type = node.node_adapter();
     let max_threads = ctx.dbt_profile().threads;
     let bypass = bypass_backpressure(node.introspection(), *node.static_analysis_enabled());
     let render_step = Box::new(move || {
@@ -265,7 +265,7 @@ fn render_python_model(
     )
     .map_err(|e| *e)?;
 
-    let compiled_python = format!("{}\n{}", raw_python, rendered_postfix);
+    let compiled_python = format!("{}\n\n{}", raw_python.trim_end(), rendered_postfix);
 
     emit_compiled_code(node, ctx, &compiled_python);
 

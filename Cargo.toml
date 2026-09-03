@@ -7,6 +7,8 @@ members = [
   "crates/dbt-agate",
   "crates/dbt-auth",
   "crates/dbt-base",
+  "crates/dbt-runtime",
+  "crates/dbt-runtime-macros",
   "crates/dbt-clap-core",
   "crates/dbt-goldie",
   "crates/dbt-docs-core",
@@ -24,6 +26,7 @@ members = [
   "crates/dbt-tasks-core",
   "crates/dbt-tasks-sa",
   "crates/dbt-init",
+  "crates/dbt-profile-schemas",
   "crates/dbt-index-core",
   "crates/dbt-lineage-core",
   "crates/dbt-error",
@@ -44,7 +47,8 @@ members = [
   "crates/dbt-metadata",
   "crates/dbt-metadata-parquet",
   "crates/dbt-profile",
-  "crates/dbt-python",
+  "crates/dbt-python-core",
+  "crates/dbt-sa-python",
   "crates/dbt-state",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
@@ -55,6 +59,7 @@ members = [
   "crates/dbt-proc-macros",
 
   "crates/dbt-adapter",
+  "crates/dbt-adapter-engine",
   "crates/dbt-adapter-sql",
   "crates/dbt-ident",
   "crates/dbt-jinja-utils",
@@ -62,6 +67,7 @@ members = [
   "crates/dbt-dist",
   "crates/dbt-sa-cli",
   "crates/dbt-adbc",
+  "crates/dbt-tracked-stmt",
   "crates/adbc-record-replay",
   "crates/dbt-deps",
   "crates/dbt-skills",
@@ -88,6 +94,7 @@ members = [
   "crates/dbt-login",
   "crates/dbt-platform-auth",
 
+  # COPYBARA-END-PRIVATE
 ]
 exclude = [
   "wizard/wizard-app/src-tauri",
@@ -105,7 +112,7 @@ homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "Apache-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
-version = "2.0.0-beta.1"
+version = "2.0.0-rc.1"
 
 [patch.crates-io]
 
@@ -229,6 +236,7 @@ opt-level = 3
 # fs source available dependencies
 dbt-adapter = { path = "crates/dbt-adapter" }
 dbt-adapter-core = { path = "crates/dbt-adapter-core" }
+dbt-adapter-engine = { path = "crates/dbt-adapter-engine" }
 dbt-adapter-sql = { path = "crates/dbt-adapter-sql" }
 dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
@@ -272,6 +280,10 @@ dbt-platform-auth = { path = "crates/dbt-platform-auth" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 dbt-profile = { path = "crates/dbt-profile" }
+dbt-profile-schemas = { path = "crates/dbt-profile-schemas" }
+dbt-python-core = { path = "crates/dbt-python-core" }
+dbt-runtime = { path = "crates/dbt-runtime" }
+dbt-runtime-macros = { path = "crates/dbt-runtime-macros" }
 dbt-scheduler = { path = "crates/dbt-scheduler" }
 dbt-state = { path = "crates/dbt-state" }
 
@@ -371,6 +383,7 @@ adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package 
 adbc-ffi = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_ffi", version = "0.22.0", rev = "d2808cf465feb6efc54ee862cb63104803535adb" } # @ apache-arrow-adbc-22-rust
 adbc-record-replay = { path = "crates/adbc-record-replay" }
 dbt-adbc = { path = "crates/dbt-adbc" }
+dbt-tracked-stmt = { path = "crates/dbt-tracked-stmt" }
 
 # antlr for frontend
 dbt-antlr4 = { version = "2.0.2", features = [

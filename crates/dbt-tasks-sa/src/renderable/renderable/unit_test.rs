@@ -43,7 +43,7 @@ use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
 use dbt_telemetry::{ExecutionPhase as TelemetryExecutionPhase, NodeType};
 
-use crate::renderable::unit_test_typing::{BigqueryTyping, SnowflakeTyping};
+use crate::renderable::unit_test_typing::{BigqueryTyping, DatabricksTyping, SnowflakeTyping};
 use dbt_tasks_core::task::TaskResult;
 
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
@@ -146,7 +146,7 @@ pub(crate) async fn run_unit_test_render(
             &given_relations.relations_to_fetch,
             &node.common().unique_id,
             &mut ctx,
-            task_hooks,
+            Arc::clone(&task_hooks),
         ))
         .await;
         if let Err(e) = fetch_outcome {
@@ -167,7 +167,7 @@ pub(crate) async fn run_unit_test_render(
             .as_any()
             .downcast_ref::<DbtUnitTest>()
             .expect("run_unit_test_render called on non-DbtUnitTest");
-        let res = render_unit_test(ut_ref, &mut ctx, given_relations);
+        let res = render_unit_test(ut_ref, &mut ctx, given_relations, task_hooks.as_ref());
         handle_render_result(
             res,
             &node.unique_id(),
@@ -220,7 +220,7 @@ fn try_get_schema_from_cache(
             || node_unique_id.starts_with("snapshot.")
             || node_unique_id.starts_with("source.")
         {
-            let node_relation = create_relation_from_node(ctx.adapter_type(), node, None)?;
+            let node_relation = create_relation_from_node(node.node_adapter(), node, None)?;
             let node_canonical_fqn = node_relation.get_canonical_fqn().ok();
 
             // If we have a hit
@@ -404,6 +404,7 @@ fn populate_schema_from_empty_relation(
     compiled_model_sql: &str,
     subqueries: &[(String, String)],
     infer_with_query_schema: bool,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<SchemaRef> {
     let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -415,7 +416,7 @@ fn populate_schema_from_empty_relation(
     let (mut run_context, _result_store) = build_run_node_context(
         unit_test,
         &unit_test.deprecated_config,
-        ctx.adapter_type(),
+        unit_test.node_adapter(),
         None,
         &ctx.inner.base_context,
         &ctx.inner.arg.io,
@@ -450,7 +451,12 @@ fn populate_schema_from_empty_relation(
     // where temp tables are session-scoped. Sidecar/service adapter calls route
     // DDL through an Execute task, which cannot handle Snowflake-qualified temp
     // tables, so sidecar inference uses the query-schema path as well.
-    let materialization = if ctx.adapter_type() == AdapterType::DuckDB || infer_with_query_schema {
+    // The unit test's own adapter throughout: it carries the tested model's
+    // (`resolve_unit_tests`), so a test on a non-default model must not be
+    // rendered for the default's dialect.
+    let materialization = if unit_test.node_adapter() == AdapterType::DuckDB
+        || infer_with_query_schema
+    {
         r#"
   {% macro get_expected_columns(sql, select_sql_header) -%}
       {%- if select_sql_header is not none -%}
@@ -494,7 +500,7 @@ fn populate_schema_from_empty_relation(
 
     let type_ops = adapter.engine().type_ops();
     let schema_sql = replace_subquery_refs_with_cte_names(
-        ctx.adapter_type(),
+        unit_test.node_adapter(),
         type_ops.as_ref(),
         compiled_model_sql.to_string(),
         &rewrite_targets,
@@ -503,7 +509,8 @@ fn populate_schema_from_empty_relation(
     let ctes = rewrite_targets
         .iter()
         .filter_map(|(id, q)| {
-            let cte_name = create_cte_name_from_fqn(ctx.adapter_type(), type_ops.as_ref(), id);
+            let cte_name =
+                create_cte_name_from_fqn(unit_test.node_adapter(), type_ops.as_ref(), id);
             if schema_sql.contains(&cte_name) {
                 Some(format!("{cte_name} as ({q})"))
             } else {
@@ -512,6 +519,18 @@ fn populate_schema_from_empty_relation(
         })
         .collect::<Vec<_>>()
         .join(",");
+
+    if infer_with_query_schema {
+        let sql = if ctes.is_empty() {
+            Cow::Borrowed(schema_sql.as_str())
+        } else {
+            Cow::Owned(format!("WITH {ctes} {schema_sql}"))
+        };
+        // Let distribution-specific hooks handle schemas that the adapter query path cannot bind.
+        if let Some(schema) = task_hooks.try_infer_unit_test_schema(ctx, unit_test, &sql)? {
+            return Ok(schema);
+        }
+    }
 
     let template = ctx.env.template_from_str(materialization).map_err(|e| {
         fs_err!(
@@ -553,8 +572,8 @@ fn populate_schema_from_empty_relation(
         )
     })?;
 
-    let columns =
-        Column::vec_from_jinja_value(ctx.adapter_type(), columns_as_value).map_err(|e| {
+    let columns = Column::vec_from_jinja_value(unit_test.node_adapter(), columns_as_value)
+        .map_err(|e| {
             fs_err!(
                 ErrorCode::Generic,
                 "Internal error while extracting columns from inferred schema for unit test {}: {}",
@@ -785,7 +804,9 @@ fn extract_expect_values<'a>(
         .env
         .get_base_adapter()
         .map(|a| a.engine().type_ops().clone())
-        .unwrap_or_else(|| Arc::new(DefaultTypeOps::new(ctx.adapter_type())) as Arc<dyn TypeOps>);
+        .unwrap_or_else(|| {
+            Arc::new(DefaultTypeOps::new(unit_test.node_adapter())) as Arc<dyn TypeOps>
+        });
     let type_ops = type_ops_arc.as_ref();
     let column_names = Vec::from_iter(
         expect_schema
@@ -804,7 +825,7 @@ fn extract_expect_values<'a>(
             create_values(
                 expect_schema,
                 rows,
-                ctx.adapter_type(),
+                unit_test.node_adapter(),
                 type_ops,
                 None,
                 &unit_test.__unit_test_attr__.model,
@@ -832,7 +853,7 @@ fn extract_expect_values<'a>(
                 create_values(
                     expect_schema,
                     &rows,
-                    ctx.adapter_type(),
+                    unit_test.node_adapter(),
                     type_ops,
                     None,
                     &unit_test.__unit_test_attr__.model,
@@ -866,7 +887,7 @@ fn extract_expect_values<'a>(
                 create_values(
                     expect_schema,
                     &rows,
-                    ctx.adapter_type(),
+                    unit_test.node_adapter(),
                     type_ops,
                     None,
                     &unit_test.__unit_test_attr__.model,
@@ -1015,7 +1036,9 @@ fn check_defer_relation(
 ) -> Option<Arc<dyn BaseRelation>> {
     ctx.defer_nodes()
         .and_then(|nodes| nodes.get_node(model_unique_id))
-        .and_then(|defer_node| create_relation_from_node(ctx.adapter_type(), defer_node, None).ok())
+        .and_then(|defer_node| {
+            create_relation_from_node(defer_node.node_adapter(), defer_node, None).ok()
+        })
         .map(|r| Arc::from(r) as Arc<dyn BaseRelation>)
 }
 
@@ -1023,6 +1046,7 @@ fn render_unit_test(
     node: &DbtUnitTest,
     ctx: &mut TaskRunnerCtx,
     given_relations: DiscoveredGivenRelations,
+    task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<(SqlInstruction, Arc<DashMap<String, MinijinjaValue>>)> {
     let DiscoveredGivenRelations {
         given_relations,
@@ -1046,7 +1070,7 @@ fn render_unit_test(
         .map(Path::to_path_buf)
         .unwrap_or_else(|_| absolute_path_unit_test.clone());
 
-    let adapter_type = ctx.adapter_type();
+    let adapter_type = node.node_adapter();
     let type_ops_arc = ctx
         .env
         .get_base_adapter()
@@ -1131,16 +1155,19 @@ fn render_unit_test(
             }
             // dict: inline YAML rows only
             schemas::common::Formats::Dict => {
-                let given_schema = get_schema_for_unit_test_relation(
-                    ctx,
-                    Arc::clone(relation),
-                    UnitTestSchemaTarget::GivenUpstream,
-                )?;
+                let given_schema = strip_pseudocolumns(
+                    &get_schema_for_unit_test_relation(
+                        ctx,
+                        Arc::clone(relation),
+                        UnitTestSchemaTarget::GivenUpstream,
+                    )?,
+                    node.node_adapter(),
+                );
                 if let Some(Rows::List(rows)) = &given.rows {
                     create_values(
                         &given_schema,
                         rows,
-                        ctx.adapter_type(),
+                        node.node_adapter(),
                         type_ops,
                         None,
                         given.input.as_str(),
@@ -1156,11 +1183,14 @@ fn render_unit_test(
             }
             // csv: inline string or fixture file
             schemas::common::Formats::Csv => {
-                let given_schema = get_schema_for_unit_test_relation(
-                    ctx,
-                    Arc::clone(relation),
-                    UnitTestSchemaTarget::GivenUpstream,
-                )?;
+                let given_schema = strip_pseudocolumns(
+                    &get_schema_for_unit_test_relation(
+                        ctx,
+                        Arc::clone(relation),
+                        UnitTestSchemaTarget::GivenUpstream,
+                    )?,
+                    node.node_adapter(),
+                );
 
                 if let Some(Rows::String(csv_str)) = &given.rows {
                     let rows = parse_csv_rows(csv_str.as_bytes()).map_err(|e| {
@@ -1176,7 +1206,7 @@ fn render_unit_test(
                     create_values(
                         &given_schema,
                         &rows,
-                        ctx.adapter_type(),
+                        node.node_adapter(),
                         type_ops,
                         None,
                         given.input.as_str(),
@@ -1187,7 +1217,7 @@ fn render_unit_test(
                     create_values(
                         &given_schema,
                         &rows,
-                        ctx.adapter_type(),
+                        node.node_adapter(),
                         type_ops,
                         None,
                         given.input.as_str(),
@@ -1349,6 +1379,7 @@ fn render_unit_test(
                     compiled_model_sql.as_str(),
                     &subqueries,
                     infer_with_query_schema,
+                    task_hooks,
                 )?
             }
         }
@@ -1396,7 +1427,7 @@ fn render_unit_test(
             let col_lower = col.to_ascii_lowercase();
             let data_type = column_names_to_data_types.get(&col_lower)?;
             let col_name = column_names_to_field_names.get(&col_lower)?;
-            if is_orderable_type(ctx.adapter_type(), data_type) {
+            if is_orderable_type(node.node_adapter(), data_type) {
                 Some(type_ops.format_ident(col_name))
             } else {
                 None
@@ -1568,6 +1599,7 @@ fn is_supported_type(adapter_type: AdapterType, ref_type: &DataType) -> bool {
                     || BigqueryTyping::is_json(ref_type)
                     || BigqueryTyping::is_geography(ref_type)
             }
+            AdapterType::Databricks => DatabricksTyping::is_timestamp_ntz(ref_type),
             AdapterType::DuckDB => {
                 // DuckDB distinct types are wrapped as FixedSizeList(Field(name, ..), 1)
                 matches!(ref_type, DataType::FixedSizeList(_, 1))
@@ -1788,6 +1820,26 @@ fn known_pseudocolumns(adapter_type: AdapterType) -> &'static [&'static str] {
         AdapterType::Bigquery => &BIGQUERY_PSEUDOCOLUMNS,
         _ => &[],
     }
+}
+
+fn strip_pseudocolumns(ref_schema: &SchemaRef, adapter_type: AdapterType) -> SchemaRef {
+    let pseudocolumns = known_pseudocolumns(adapter_type);
+    if pseudocolumns.is_empty() {
+        return ref_schema.clone();
+    }
+
+    let fields: Vec<Field> = ref_schema
+        .fields()
+        .iter()
+        .filter(|f| !pseudocolumns.contains(&f.name().as_str()))
+        .map(|f| f.as_ref().clone())
+        .collect();
+
+    if fields.len() == ref_schema.fields().len() {
+        return ref_schema.clone();
+    }
+
+    Arc::new(Schema::new(fields))
 }
 
 /// Return `ref_schema` extended with any recognized pseudocolumns (see
@@ -2073,11 +2125,28 @@ fn create_select_with_union_all(
                         ty
                     };
 
+                    let safe_cast_literal = match adapter_type {
+                        AdapterType::Snowflake => match value.as_bool() {
+                            Some(value) => SqlLiteralFormatter::new(adapter_type)
+                                .format_str(if value { "True" } else { "False" }),
+                            None if value.is_number() => {
+                                SqlLiteralFormatter::new(adapter_type).format_str(&sql_literal)
+                            }
+                            None => sql_literal.clone(),
+                        },
+                        _ => sql_literal.clone(),
+                    };
+
                     match adapter_type {
                         AdapterType::Snowflake if SnowflakeTyping::is_geography(df_type) =>
                             Ok(format!("TO_GEOGRAPHY({sql_literal}) AS {formatted_name}")),
                         AdapterType::Snowflake if SnowflakeTyping::is_geometry(df_type) =>
                             Ok(format!("TO_GEOMETRY({sql_literal}) AS {formatted_name}")),
+                        AdapterType::Snowflake
+                            if !SnowflakeTyping::is_variant(df_type)
+                                && !SnowflakeTyping::is_object(df_type)
+                                && !SnowflakeTyping::is_semi_structured_array(df_type) =>
+                            Ok(format!("TRY_CAST({safe_cast_literal} AS {ty}) AS {formatted_name}")),
                         _ => Ok(format!("CAST({sql_literal} AS {ty}) AS {formatted_name}"))
                     }
                 })
@@ -2186,6 +2255,7 @@ fn get_unique_id(
 fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
+        .flexible(true)
         .from_reader(Cursor::new(data));
 
     let headers = reader
@@ -2197,22 +2267,35 @@ fn parse_csv_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
     for result in reader.records() {
         let record = result
             .map_err(|e| fs_err!(ErrorCode::InvalidConfig, "Failed to read record: {}", e))?;
+        if record.len() > headers.len() {
+            let error = record.position().map_or_else(
+                || {
+                    format!(
+                        "CSV error: found record with {} fields, but the previous record has {} fields",
+                        record.len(),
+                        headers.len()
+                    )
+                },
+                |position| {
+                    format!(
+                        "CSV error: record {} (line: {}, byte: {}): found record with {} fields, but the previous record has {} fields",
+                        position.record(),
+                        position.line(),
+                        position.byte(),
+                        record.len(),
+                        headers.len()
+                    )
+                },
+            );
+            return err!(ErrorCode::InvalidConfig, "Failed to read record: {}", error);
+        }
         let mut row = BTreeMap::new();
-        for (i, field) in record.iter().enumerate() {
-            let value = if field.is_empty() {
-                YmlValue::null()
-            } else if let Ok(v) = field.parse::<i64>() {
-                YmlValue::number(v.into())
-            } else if let Ok(v) = field.parse::<f64>() {
-                YmlValue::number(v.into())
-            } else if field.eq_ignore_ascii_case("true") {
-                YmlValue::bool(true)
-            } else if field.eq_ignore_ascii_case("false") {
-                YmlValue::bool(false)
-            } else {
-                YmlValue::string(field.to_string())
+        for (i, header) in headers.iter().enumerate() {
+            let value = match record.get(i) {
+                None => YmlValue::null(),
+                Some(field) => YmlValue::string(field.to_string()),
             };
-            row.insert(headers[i].to_string(), value);
+            row.insert(header.to_string(), value);
         }
         rows.push(row);
     }
@@ -2257,6 +2340,47 @@ mod tests {
     use dbt_test_primitives::assert_contains;
 
     type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn test_parse_csv_rows_fills_missing_trailing_fields_with_null() {
+        let rows = parse_csv_rows(b"id,name,note\n1,alpha\n")
+            .expect("a short CSV record should match Python DictReader semantics");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("note"), Some(&YmlValue::null()));
+        assert_eq!(rows[0].len(), 3);
+    }
+
+    #[test]
+    fn test_parse_csv_rows_preserves_scalar_text() {
+        let rows = parse_csv_rows(b"id,code,enabled,ratio,empty\n1,000001,true,1.5,\n")
+            .expect("present CSV cells should preserve DictReader string semantics");
+
+        assert_eq!(rows.len(), 1);
+        for (column, expected) in [
+            ("id", "1"),
+            ("code", "000001"),
+            ("enabled", "true"),
+            ("ratio", "1.5"),
+            ("empty", ""),
+        ] {
+            assert_eq!(
+                rows[0].get(column),
+                Some(&YmlValue::string(expected.to_string()))
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_csv_rows_rejects_fields_beyond_the_header() {
+        let error = parse_csv_rows(b"id,name\n1,alpha,extra\n")
+            .expect_err("an extra CSV field must not be silently discarded");
+
+        assert_contains!(
+            error.to_string(),
+            "found record with 3 fields, but the previous record has 2 fields"
+        );
+    }
 
     /// Binds `value` as the `run_started_at` override and renders `template`,
     /// exercising the same path unit tests use.
@@ -2957,6 +3081,87 @@ mod tests {
             "CAST([4, 'abcdef', PARSE_JSON('{\"foo\":\"bar\"}')] AS ARRAY) AS \"array_col\"",
             "array_col should be a heterogeneous array literal"
         );
+    }
+
+    #[test]
+    fn test_create_select_with_union_all_snowflake_safe_scalar_casts() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("invalid_number", DataType::Decimal128(19, 0), true),
+            Field::new("valid_number", DataType::Decimal128(19, 0), true),
+            Field::new("numeric_yaml", DataType::Decimal128(19, 0), true),
+            Field::new("boolean_yaml", DataType::Boolean, true),
+            Field::new("boolean_string", DataType::Utf8, true),
+            Field::new("invalid_binary", DataType::Binary, true),
+            Field::new("valid_binary", DataType::Binary, true),
+            Field::new("time_value", DataType::Time64(TimeUnit::Microsecond), true),
+            Field::new(
+                "timestamp_value",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            ),
+            Field::new("null_value", DataType::Utf8, true),
+            Field::new("string_value", DataType::Utf8, true),
+        ]));
+        let formatted_types = [
+            "NUMBER(19,0)",
+            "NUMBER(19,0)",
+            "NUMBER(19,0)",
+            "BOOLEAN",
+            "VARCHAR",
+            "BINARY",
+            "BINARY",
+            "TIME(6)",
+            "TIMESTAMP_NTZ(6)",
+            "VARCHAR",
+            "VARCHAR",
+        ];
+        let columns = schema
+            .fields()
+            .iter()
+            .zip(formatted_types)
+            .map(|(field, formatted_type)| {
+                (field.name(), field.data_type(), formatted_type.to_string())
+            })
+            .collect();
+        let rows = vec![vec![
+            YmlValue::string("invalid-number".to_string()),
+            YmlValue::string("42".to_string()),
+            YmlValue::number(7.into()),
+            YmlValue::bool(true),
+            YmlValue::bool(false),
+            YmlValue::string("not-hex".to_string()),
+            YmlValue::string("4142".to_string()),
+            YmlValue::string("12:34:56".to_string()),
+            YmlValue::string("2024-01-02 03:04:05".to_string()),
+            YmlValue::null(),
+            YmlValue::string("ordinary".to_string()),
+        ]];
+
+        let result = create_select_with_union_all(
+            AdapterType::Snowflake,
+            &DefaultTypeOps::new(AdapterType::Snowflake),
+            rows,
+            &schema,
+            &columns,
+            "",
+        )
+        .unwrap();
+
+        for expected in [
+            "TRY_CAST('invalid-number' AS NUMBER) AS \"invalid_number\"",
+            "TRY_CAST('42' AS NUMBER) AS \"valid_number\"",
+            "TRY_CAST('7' AS NUMBER) AS \"numeric_yaml\"",
+            "TRY_CAST('True' AS BOOLEAN) AS \"boolean_yaml\"",
+            "TRY_CAST('False' AS VARCHAR) AS \"boolean_string\"",
+            "TRY_CAST('not-hex' AS BINARY) AS \"invalid_binary\"",
+            "TRY_CAST('4142' AS BINARY) AS \"valid_binary\"",
+            "TRY_CAST('12:34:56' AS TIME(6)) AS \"time_value\"",
+            "TRY_CAST('2024-01-02 03:04:05' AS TIMESTAMP_NTZ(6)) AS \"timestamp_value\"",
+            "TRY_CAST(NULL AS VARCHAR) AS \"null_value\"",
+            "TRY_CAST('ordinary' AS VARCHAR) AS \"string_value\"",
+        ] {
+            assert_contains!(result, expected);
+        }
     }
 
     #[test]

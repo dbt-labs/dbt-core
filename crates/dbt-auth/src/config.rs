@@ -1,5 +1,9 @@
 use std::borrow::Cow;
 
+use dbt_adbc::{Backend, database};
+
+use crate::{Auth, AuthError};
+
 pub use dbt_yaml::Value as YmlValue;
 
 // TODO(felipecrv): move this struct for generic use as it now has nothing specific to adapters
@@ -101,6 +105,18 @@ impl AdapterConfig {
         self.get("use_dbt_cloud_credentials")
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
+    }
+
+    pub fn build_connection_builder(
+        &self,
+        auth: &dyn Auth,
+        configure_cloud_database: impl FnOnce(Backend) -> Result<database::Builder, AuthError>,
+    ) -> Result<database::Builder, AuthError> {
+        if self.use_dbt_cloud_credentials() {
+            configure_cloud_database(auth.backend())
+        } else {
+            auth.configure(self)
+        }
     }
 }
 

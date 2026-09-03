@@ -602,6 +602,7 @@ mod tests {
                 token: "config-token".to_string(),
             }),
             project_id: Some("157".to_string()),
+            account_id: Some("123".to_string()),
             account_identifier: None,
             environment_id: Some("216".to_string()),
             defer_env_id: None,

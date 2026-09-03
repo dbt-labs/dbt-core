@@ -13,9 +13,10 @@ use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::JinjaFactory;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
+use dbt_jinja_utils::invocation_graph::reset_invocation_graph;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{
-    NodeResolver, check_for_model_deprecations, resolve_dependencies,
+    NodeResolver, PackageSearchOrder, check_for_model_deprecations, resolve_dependencies,
 };
 use dbt_jinja_utils::phases::parse::{
     build_docs_jinja_environment, build_docs_resolve_context, build_resolve_context,
@@ -23,7 +24,7 @@ use dbt_jinja_utils::phases::parse::{
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
-use dbt_schemas::schemas::common::ComputePlatform;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{Access, DbtIncrementalStrategy};
 use dbt_schemas::schemas::macros::{DbtDocsMacro, build_macro_units};
 use dbt_schemas::schemas::properties::{
@@ -31,6 +32,8 @@ use dbt_schemas::schemas::properties::{
     ModelProperties,
 };
 use dbt_schemas::schemas::{DbtModel, InternalDbtNode, Nodes};
+
+use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
@@ -50,9 +53,11 @@ use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use dbt_schemas::state::{DbtState, ResolverState};
 use minijinja::constants::CURRENT_PATH;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
+use crate::resolve::resolve_checks::resolve_checks;
 use crate::resolve::resolve_exposures::resolve_exposures;
 use crate::resolve::resolve_functions::resolve_functions;
 use crate::resolve::resolve_macros::apply_macro_patches;
@@ -70,6 +75,7 @@ use crate::resolve::resolve_snapshots::resolve_snapshots;
 use crate::resolve::resolve_sources::resolve_sources;
 use crate::resolve::resolve_tests::resolve_data_tests::resolve_data_tests;
 use crate::resolve::resolve_tests::resolve_unit_tests::resolve_unit_tests;
+use crate::resolve::resolve_utils::validate_adapter_project_configs;
 
 use crate::resolve::primary_key_inference::infer_and_apply_primary_keys;
 use crate::resolve::resolve_selectors::{
@@ -108,6 +114,12 @@ pub async fn resolve(
     resolver_hooks: Arc<dyn ResolverHooks>,
     jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
+    // Hand this invocation a fresh `graph` mapping before any Jinja renders.
+    // Macros use `graph` as scratch state (Elementary's `set_cache`), and in a
+    // long-lived process (LSP, service) one invocation's scratch state must not
+    // be visible to the next. dbt-labs/fs#13454.
+    reset_invocation_graph();
+
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
 
@@ -137,7 +149,7 @@ pub async fn resolve(
 
     inject_default_overview(&mut macros.docs_macros);
 
-    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
+    let adapter_type = dbt_state.dbt_profile.default_db_config().adapter_type();
 
     // Build the root project config
     let root_project_quoting =
@@ -151,7 +163,8 @@ pub async fn resolve(
             &dbt_state.dbt_profile.profile,
             &dbt_state.dbt_profile.target,
             adapter_type,
-            dbt_state.dbt_profile.db_config.clone(),
+            dbt_state.dbt_profile.default_db_config().clone(),
+            dbt_state.dbt_profile.adapter_types(),
             root_project_quoting,
             build_macro_units(&macros.macros, &arg.io.in_dir),
             dbt_state.vars.clone(),
@@ -180,8 +193,18 @@ pub async fn resolve(
     // let mut nodes = Nodes::default();
     let mut disabled_nodes = disabled_nodes;
     resolver_hooks.pre_resolve(&arg.io, adapter_type, &mut nodes, root_project_quoting)?;
-    let root_project_configs =
-        build_root_project_configs(dbt_state.root_project(), root_project_quoting)?;
+    // The root project's `adapters:` list is validated once per run, not per
+    // package: it is a root-only key, so re-checking it per package would repeat
+    // the same warning for every dependency.
+    validate_adapter_project_configs(
+        dbt_state.root_project().adapters.as_ref(),
+        &dbt_state.dbt_profile.adapters,
+    );
+    let root_project_configs = build_root_project_configs(
+        dbt_state.root_project(),
+        &dbt_state.dbt_profile.adapters,
+        dbt_state.dbt_profile.default_adapter,
+    )?;
     let root_project_configs = Arc::new(root_project_configs);
     // Process packages in topological order
 
@@ -193,6 +216,7 @@ pub async fn resolve(
         arg.sample_config.clone(),
         arg.sample_renaming.clone(),
         arg.command == FsCommand::Compile || arg.command == FsCommand::Test,
+        PackageSearchOrder::resolve(dbt_state.root_project().flags.as_ref()),
     )?;
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),
@@ -279,7 +303,7 @@ pub async fn resolve(
         jinja_env.clone(),
         adapter_type,
         root_project_name,
-        minijinja::Value::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+        minijinja::Value::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespaces()),
     )?;
 
     // Ensure that there are no duplicate relations
@@ -364,7 +388,7 @@ pub async fn resolve(
 
     // A model on a non-`default` compute platform requires each of its upstreams
     // to be reachable through a catalog (see `check_compute_platform_upstreams`).
-    check_compute_platform_upstreams(&nodes)?;
+    check_compute_platform_upstreams(&nodes, dbt_state.catalogs.as_deref())?;
 
     // Check access
     let nodes_with_access_errors = check_access(&nodes, &all_runtime_configs);
@@ -650,6 +674,7 @@ pub async fn resolve_inner(
     mut node_resolver: NodeResolver,
     runtime_config: Arc<DbtRuntimeConfig>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(
@@ -691,6 +716,7 @@ pub async fn resolve_inner(
         &jinja_env,
         &base_ctx,
         token,
+        adapter_type,
     )?;
 
     let package_name = package.dbt_project.name.as_str();
@@ -756,6 +782,7 @@ pub async fn resolve_inner(
         &jinja_env,
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         &mut node_resolver,
     )
     .await?;
@@ -767,7 +794,7 @@ pub async fn resolve_inner(
         arg,
         min_properties.seeds,
         package,
-        package_quoting,
+        &root_project_configs.adapter_quoting,
         dbt_state.root_package(),
         root_project_configs,
         database,
@@ -778,6 +805,7 @@ pub async fn resolve_inner(
         &base_ctx,
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         &mut node_resolver,
     )
     .await?;
@@ -799,12 +827,14 @@ pub async fn resolve_inner(
         database,
         schema,
         adapter_type,
+        &root_project_configs.adapter_quoting,
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
         &mut node_resolver,
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         token,
     )
     .await?;
@@ -812,6 +842,7 @@ pub async fn resolve_inner(
     disabled_nodes.snapshots.extend(disabled_snapshots);
 
     let (groups, disabled_groups) = resolve_groups(
+        adapter_type,
         &mut min_properties.groups,
         package_name,
         &jinja_env,
@@ -827,6 +858,7 @@ pub async fn resolve_inner(
         arg,
         package,
         package_quoting,
+        &root_project_configs.adapter_quoting,
         dbt_state.root_package(),
         root_project_configs,
         &min_properties.models,
@@ -841,6 +873,7 @@ pub async fn resolve_inner(
         runtime_config.clone(),
         &mut collected_generic_tests,
         test_name_truncations,
+        seen_generic_test_paths,
         &mut node_resolver,
         token,
         jinja_type_checking_event_listener_factory.clone(),
@@ -870,6 +903,27 @@ pub async fn resolve_inner(
     .await?;
     nodes.analyses.extend(analyses);
 
+    // Resolve checks
+    let (checks, disabled_checks, checks_rendering_results) = resolve_checks(
+        arg,
+        package,
+        package_quoting,
+        dbt_state.root_package(),
+        root_project_configs,
+        &mut min_properties.checks,
+        database,
+        schema,
+        adapter_type,
+        package_name,
+        jinja_env.clone(),
+        &base_ctx,
+        runtime_config.clone(),
+        token,
+    )
+    .await?;
+    nodes.checks.extend(checks);
+    disabled_nodes.checks.extend(disabled_checks);
+
     // Resolve functions
     let (functions, functions_rendering_results) = resolve_functions(
         arg,
@@ -881,6 +935,7 @@ pub async fn resolve_inner(
         database,
         schema,
         adapter_type,
+        &root_project_configs.adapter_quoting,
         package_name,
         jinja_env.clone(),
         &base_ctx,
@@ -910,6 +965,7 @@ pub async fn resolve_inner(
 
     if !semantic_layer_spec_is_legacy {
         let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
+            adapter_type,
             arg,
             package,
             dbt_state.root_package(),
@@ -928,6 +984,7 @@ pub async fn resolve_inner(
             .extend(disabled_semantic_models);
 
         let (metrics, disabled_metrics) = resolve_metrics(
+            adapter_type,
             arg,
             package,
             dbt_state.root_package(),
@@ -944,6 +1001,7 @@ pub async fn resolve_inner(
         disabled_nodes.metrics.extend(disabled_metrics);
 
         let (saved_queries, disabled_saved_queries) = resolve_saved_queries(
+            adapter_type,
             arg,
             package,
             dbt_state.root_package(),
@@ -978,8 +1036,11 @@ pub async fn resolve_inner(
         &node_resolver,
         token,
         jinja_type_checking_event_listener_factory.clone(),
+        &root_project_configs.adapter_quoting,
         &nodes.models,
         &disabled_nodes.models,
+        &nodes.seeds,
+        &nodes.snapshots,
     )
     .await?;
     nodes.tests.extend(data_tests);
@@ -999,6 +1060,9 @@ pub async fn resolve_inner(
         &base_ctx,
         &min_properties.models,
         &nodes.models,
+        &dbt_state.packages,
+        adapter_type,
+        &node_resolver,
     )?;
 
     nodes.unit_tests.extend(unit_tests);
@@ -1012,6 +1076,7 @@ pub async fn resolve_inner(
         rendering_results: rendering_results
             .into_iter()
             .chain(analyses_rendering_results)
+            .chain(checks_rendering_results)
             .chain(functions_rendering_results)
             .collect(),
     };
@@ -1028,19 +1093,35 @@ pub async fn resolve_inner(
     ))
 }
 
-/// Returns `true` if `upstream` is reachable as an input for a node running on a
-/// non-`default` compute platform: it targets a catalog (`catalog_name` set), is
-/// Iceberg-formatted, or itself runs on a non-`default` compute platform (and so
-/// writes to a catalog).
-fn upstream_is_catalog_reachable(upstream: &DbtModel) -> bool {
+/// Returns `true` if `upstream` is readable as an input for a node running on
+/// `lake_compute`.
+///
+/// The question is about the *catalog*, never about which adapter wrote the
+/// upstream: a BigQuery model landing in a lake-compute-readable catalog is a legal input,
+/// while a Snowflake model in warehouse-native storage is not.
+///
+/// Where the catalog type is known, it decides. Where it cannot be resolved — no
+/// `catalogs.yml`, or a name that is not a v2 catalog — a named catalog stays
+/// permissive, so this only ever tightens on positive knowledge.
+fn upstream_is_catalog_reachable(upstream: &DbtModel, catalogs: Option<&DbtCatalogs>) -> bool {
     let attr = &upstream.__model_attr__;
-    attr.alt_compute
-        .is_some_and(|c| c != ComputePlatform::Default)
-        || attr.catalog_name.is_some()
-        || attr
+
+    // An upstream on `lake_compute` itself writes somewhere `lake_compute` can read, by definition.
+    if upstream.node_adapter() == AdapterType::LakeCompute {
+        return true;
+    }
+
+    match attr.catalog_name.as_deref() {
+        Some(name) => match catalogs.and_then(|c| c.v2_catalog_type(name).ok().flatten()) {
+            Some(catalog_type) => catalog_type.lake_compute_can_read(),
+            None => true,
+        },
+        // Iceberg without a named catalog is still an open format.
+        None => attr
             .table_format
             .as_deref()
-            .is_some_and(|f| f.eq_ignore_ascii_case("iceberg"))
+            .is_some_and(|f| f.eq_ignore_ascii_case("iceberg")),
+    }
 }
 
 /// WS1 rule 5: every `ref`/`source` upstream of a model on a non-`default` compute
@@ -1050,13 +1131,12 @@ fn upstream_is_catalog_reachable(upstream: &DbtModel) -> bool {
 ///
 /// Sources are external tables whose catalog reachability is validated elsewhere,
 /// so they are skipped here.
-pub fn check_compute_platform_upstreams(nodes: &Nodes) -> FsResult<()> {
+pub fn check_compute_platform_upstreams(
+    nodes: &Nodes,
+    catalogs: Option<&DbtCatalogs>,
+) -> FsResult<()> {
     for (unique_id, model) in nodes.models.iter() {
-        let on_alt_compute = model
-            .__model_attr__
-            .alt_compute
-            .is_some_and(|c| c != ComputePlatform::Default);
-        if !on_alt_compute {
+        if model.node_adapter() != AdapterType::LakeCompute {
             continue;
         }
         for upstream_id in &model.__base_attr__.depends_on.nodes {
@@ -1066,16 +1146,19 @@ pub fn check_compute_platform_upstreams(nodes: &Nodes) -> FsResult<()> {
             let reachable = nodes
                 .models
                 .get(upstream_id)
-                .is_some_and(|up| upstream_is_catalog_reachable(up));
+                .is_some_and(|up| upstream_is_catalog_reachable(up, catalogs));
             if !reachable {
                 return err!(
                     ErrorCode::InvalidConfig,
-                    "Model '{}' runs on alt_compute: 'alt' but its upstream '{}' is not \
-                     reachable through a catalog. Materialize '{}' into a catalog (set \
-                     'catalog_name') or place it on alt_compute: 'alt'.",
+                    "Model '{}' runs on adapter: '{}' but its upstream '{}' is not \
+                     reachable through a catalog. Materialize '{}' into an open table \
+                     format (set 'catalog_name', or set 'table_format: iceberg' to land \
+                     it in Iceberg without a named catalog) or place it on adapter: '{}'.",
                     unique_id,
+                    AdapterType::LakeCompute.as_ref(),
                     upstream_id,
-                    upstream_id
+                    upstream_id,
+                    AdapterType::LakeCompute.as_ref()
                 );
             }
         }
@@ -1167,6 +1250,7 @@ async fn resolve_package(
     ));
 
     let mut test_name_truncations: HashMap<String, String> = HashMap::new();
+    let mut seen_generic_test_paths: HashMap<PathBuf, String> = HashMap::new();
     let (
         new_nodes,
         new_disabled_nodes,
@@ -1186,6 +1270,7 @@ async fn resolve_package(
         node_resolver,
         runtime_config.clone(),
         &mut test_name_truncations,
+        &mut seen_generic_test_paths,
         token,
         jinja_type_checking_event_listener_factory.clone(),
     )
@@ -1528,22 +1613,53 @@ mod tests {
         assert!(!has_event_time_input(&nodes, &model));
     }
 
-    /// WS1 rule 5: an `alt_compute: alt` model requires each of its model
-    /// upstreams to be reachable through a catalog; a plain warehouse-native
-    /// upstream is rejected, while catalog-backed / Iceberg / alt upstreams pass.
+    /// `lake_compute_can_read` is the whole of the capability question, and it is a property
+    /// of the catalog type rather than of anything a project declares. Pinned
+    /// exhaustively so that adding a `CatalogType` has to answer it.
+    #[test]
+    fn lake_compute_reads_open_catalogs_and_not_engine_owned_ones() {
+        use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
+
+        for readable in [
+            CatalogType::Horizon,
+            CatalogType::Glue,
+            CatalogType::IcebergRest,
+        ] {
+            assert!(
+                readable.lake_compute_can_read(),
+                "lake compute should read {readable:?}"
+            );
+        }
+        for unreadable in [
+            CatalogType::DuckLake,
+            CatalogType::LocalFilesystem,
+            CatalogType::BiglakeMetastore,
+            CatalogType::Unity,
+            CatalogType::HiveMetastore,
+        ] {
+            assert!(
+                !unreadable.lake_compute_can_read(),
+                "lake compute does not support {unreadable:?} today"
+            );
+        }
+    }
+
+    /// WS1 rule 5: an `adapter: lake_compute` model requires each of its model upstreams to
+    /// be reachable through a catalog; a plain warehouse-native upstream is
+    /// rejected, while catalog-backed / Iceberg / lake compute upstreams pass.
     #[test]
     fn test_check_compute_platform_upstreams() {
         use std::sync::Arc;
 
+        use dbt_adapter_core::AdapterType;
         use dbt_schemas::schemas::CommonAttributes;
-        use dbt_schemas::schemas::common::ComputePlatform;
         use dbt_schemas::schemas::{DbtModel, Nodes};
 
         use super::check_compute_platform_upstreams;
 
         // Build a model with the given placement and upstream config knobs.
         let make_model = |uid: &str,
-                          alt_compute: Option<ComputePlatform>,
+                          adapter: AdapterType,
                           catalog_name: Option<&str>,
                           table_format: Option<&str>,
                           upstreams: &[&str]| {
@@ -1556,7 +1672,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            model.__model_attr__.alt_compute = alt_compute;
+            model.__base_attr__.adapter = adapter;
             model.__model_attr__.catalog_name = catalog_name.map(str::to_string);
             model.__model_attr__.table_format = table_format.map(str::to_string);
             model.__base_attr__.depends_on.nodes =
@@ -1571,7 +1687,7 @@ mod tests {
         let run = |upstream: DbtModel| {
             let consumer = make_model(
                 consumer_uid,
-                Some(ComputePlatform::Alt),
+                AdapterType::LakeCompute,
                 Some("horizon"),
                 None,
                 &[upstream_uid],
@@ -1583,16 +1699,34 @@ mod tests {
             nodes
                 .models
                 .insert(upstream_uid.to_string(), Arc::new(upstream));
-            check_compute_platform_upstreams(&nodes)
+            check_compute_platform_upstreams(&nodes, None)
         };
 
         // Catalog-backed / Iceberg / dbt upstreams are reachable.
-        assert!(run(make_model(upstream_uid, None, Some("horizon"), None, &[])).is_ok());
-        assert!(run(make_model(upstream_uid, None, None, Some("iceberg"), &[])).is_ok());
         assert!(
             run(make_model(
                 upstream_uid,
-                Some(ComputePlatform::Alt),
+                AdapterType::Snowflake,
+                Some("horizon"),
+                None,
+                &[]
+            ))
+            .is_ok()
+        );
+        assert!(
+            run(make_model(
+                upstream_uid,
+                AdapterType::Snowflake,
+                None,
+                Some("iceberg"),
+                &[]
+            ))
+            .is_ok()
+        );
+        assert!(
+            run(make_model(
+                upstream_uid,
+                AdapterType::LakeCompute,
                 Some("horizon"),
                 None,
                 &[]
@@ -1601,11 +1735,26 @@ mod tests {
         );
 
         // A plain warehouse-native upstream is rejected.
-        assert!(run(make_model(upstream_uid, None, None, None, &[])).is_err());
+        assert!(
+            run(make_model(
+                upstream_uid,
+                AdapterType::Snowflake,
+                None,
+                None,
+                &[]
+            ))
+            .is_err()
+        );
 
         // A `default` consumer is unconstrained even with a warehouse-native upstream.
-        let consumer = make_model(consumer_uid, None, None, None, &[upstream_uid]);
-        let upstream = make_model(upstream_uid, None, None, None, &[]);
+        let consumer = make_model(
+            consumer_uid,
+            AdapterType::Snowflake,
+            None,
+            None,
+            &[upstream_uid],
+        );
+        let upstream = make_model(upstream_uid, AdapterType::Snowflake, None, None, &[]);
         let mut nodes = Nodes::default();
         nodes
             .models
@@ -1613,13 +1762,13 @@ mod tests {
         nodes
             .models
             .insert(upstream_uid.to_string(), Arc::new(upstream));
-        assert!(check_compute_platform_upstreams(&nodes).is_ok());
+        assert!(check_compute_platform_upstreams(&nodes, None).is_ok());
 
         // A `source.*` upstream is skipped (validated elsewhere), so no error even
         // though it is not present in `nodes.models`.
         let consumer = make_model(
             consumer_uid,
-            Some(ComputePlatform::Alt),
+            AdapterType::LakeCompute,
             Some("horizon"),
             None,
             &["source.test.raw"],
@@ -1628,6 +1777,6 @@ mod tests {
         nodes
             .models
             .insert(consumer_uid.to_string(), Arc::new(consumer));
-        assert!(check_compute_platform_upstreams(&nodes).is_ok());
+        assert!(check_compute_platform_upstreams(&nodes, None).is_ok());
     }
 }

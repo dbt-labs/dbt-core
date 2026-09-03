@@ -89,6 +89,17 @@ pub fn do_load_catalogs(
         let view = catalogs.view_v2()?;
         validate_catalogs_v2(&view, path)?;
     } else {
+        emit_warn_log_message(
+            ErrorCode::DeprecatedOption,
+            format!(
+                "catalogs.yml is being validated against the v1 schema. The `use_catalogs_v2` \
+                 project flag will default to `true` in a future release, which will validate \
+                 catalogs.yml against the v2 schema instead. To migrate now, set \
+                 `use_catalogs_v2: true` under `flags:` in dbt_project.yml. To keep the current \
+                 v1 behavior after the default changes, set `use_catalogs_v2: false` explicitly. \
+                 See {CATALOGS_V2_DISCUSSION_URL}"
+            ),
+        );
         let view = catalogs.view()?;
         validate_catalogs(&view, path)?;
     }

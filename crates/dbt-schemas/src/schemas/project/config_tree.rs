@@ -11,12 +11,15 @@ use indexmap::IndexMap;
 use crate::schemas::{common::DbtQuoting, project::DbtProject};
 use crate::schemas::{
     project::{
-        AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
-        ResolvableConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SkillConfig,
-        SnapshotConfig, SourceConfig, TypedRecursiveConfig, UnitTestConfig,
+        AdapterProjectConfig, AnalysesConfig, CheckConfig, DataTestConfig, ExposureConfig,
+        FunctionConfig, MetricConfig, ModelConfig, ResolvableConfig, SavedQueryConfig, SeedConfig,
+        SemanticModelConfig, SkillConfig, SnapshotConfig, SourceConfig, TypedRecursiveConfig,
+        UnitTestConfig,
     },
     serde::yaml_to_fs_error,
 };
+use crate::state::ProfileAdapter;
+use dbt_adapter_core::AdapterType;
 use dbt_common::{
     FsResult,
     tracing::dbt_emit::{emit_strict_parse_error, emit_warn_log_message},
@@ -56,6 +59,7 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
         configs: &S,
         dependency_package_name: Option<&str>,
         disallow_plus_prefix: bool,
+        default_adapter: AdapterType,
     ) -> FsResult<Self>
     where
         T: PartialEq,
@@ -129,6 +133,7 @@ impl<T: ResolvableConfig<T>> DbtProjectConfig<T> {
             "",
             &on_error,
             disallow_plus_prefix,
+            default_adapter,
         ))
     }
 
@@ -194,24 +199,31 @@ pub struct ProjectConfigResolver<T: ResolvableConfig<T>> {
     local: DbtProjectConfig<T>,
     root: Option<DbtProjectConfig<T>>,
     resolve_defaults: T::ResolveDefaults,
+    default_adapter: AdapterType,
 }
 
 impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     /// Use when the current package is the root project (no root overlay needed).
-    pub fn for_root(config: DbtProjectConfig<T>) -> Self {
+    pub fn for_root(config: DbtProjectConfig<T>, default_adapter: AdapterType) -> Self {
         ProjectConfigResolver {
             local: config,
             root: None,
             resolve_defaults: T::ResolveDefaults::default(),
+            default_adapter,
         }
     }
 
     /// Use when the current package is a dependency.
-    pub fn for_dependency(local: DbtProjectConfig<T>, root: DbtProjectConfig<T>) -> Self {
+    pub fn for_dependency(
+        local: DbtProjectConfig<T>,
+        root: DbtProjectConfig<T>,
+        default_adapter: AdapterType,
+    ) -> Self {
         ProjectConfigResolver {
             local,
             root: Some(root),
             resolve_defaults: T::ResolveDefaults::default(),
+            default_adapter,
         }
     }
 
@@ -225,18 +237,22 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     /// called to construct the local package config; the closure is never called for root packages
     /// because the `root` argument itself serves as the local config (root packages have no
     /// separate overlay to apply).
+    ///
+    /// `default_adapter` is required (not an optional setter) so no resolver can be built without
+    /// wiring the per-layer alias-canonicalization hook below.
     pub fn build<F>(
         root: DbtProjectConfig<T>,
         is_dependency: bool,
         build_local: F,
+        default_adapter: AdapterType,
     ) -> FsResult<Self>
     where
         F: FnOnce() -> FsResult<DbtProjectConfig<T>>,
     {
         if is_dependency {
-            Ok(Self::for_dependency(build_local()?, root))
+            Ok(Self::for_dependency(build_local()?, root, default_adapter))
         } else {
-            Ok(Self::for_root(root))
+            Ok(Self::for_root(root, default_adapter))
         }
     }
 
@@ -244,6 +260,7 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
     fn apply_root_overlay(&self, config: &mut T, fqn: &[String]) {
         if let Some(root) = &self.root {
             let mut root_config = root.get_config_for_fqn(fqn).clone();
+            root_config.canonicalize_adapter_aliases(self.default_adapter);
             root_config.default_to(config);
             *config = root_config;
         }
@@ -256,6 +273,7 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
         let mut config = self.local.get_config_for_fqn(fqn).clone();
         for c in configs.iter().flatten() {
             let mut c = (*c).clone();
+            c.canonicalize_adapter_aliases(self.default_adapter);
             c.default_to(&config);
             config = c;
         }
@@ -339,6 +357,16 @@ impl<T: ResolvableConfig<T>> ProjectConfigResolver<T> {
             .map(|root| !root.get_config_for_fqn(fqn).get_enabled_with_default())
             .unwrap_or(false)
     }
+
+    /// Returns true if the root overlay explicitly sets `enabled = true` for this FQN.
+    /// The root overlay has the highest precedence for dependency packages, so an inline
+    /// `{{ config(enabled=false) }}` must not short-circuit rendering in that case.
+    pub fn is_enabled_by_root_overlay(&self, fqn: &[String]) -> bool {
+        self.root
+            .as_ref()
+            .map(|root| root.get_config_for_fqn(fqn).get_enabled() == Some(true))
+            .unwrap_or(false)
+    }
 }
 
 /// Recursively build the [DbtProjectConfig] from a parent and child configuration.
@@ -351,6 +379,7 @@ pub fn recur_build_dbt_project_config<T, S, F>(
     key_path: &str,
     on_error: &F,
     disallow_plus_prefix: bool,
+    default_adapter: AdapterType,
 ) -> DbtProjectConfig<T>
 where
     T: ResolvableConfig<T> + PartialEq,
@@ -358,6 +387,9 @@ where
     F: Fn(&ShouldBe<S>, &str, &str),
 {
     let mut child_config: T = child.clone().into();
+    // Canonicalize this level's own config source before merging with its (already-canonical)
+    // parent, per-layer. [dbt-core `credentials.translate_aliases`]
+    child_config.canonicalize_adapter_aliases(default_adapter);
     child_config.default_to(parent_config);
     let mut children = IndexMap::new();
 
@@ -392,6 +424,7 @@ where
                 &child_key_path,
                 on_error,
                 disallow_plus_prefix,
+                default_adapter,
             ),
         );
     }
@@ -497,13 +530,24 @@ pub struct RootProjectConfigs {
     pub analyses: DbtProjectConfig<AnalysesConfig>,
     /// Function configs
     pub functions: DbtProjectConfig<FunctionConfig>,
+    /// Check configs
+    pub checks: DbtProjectConfig<CheckConfig>,
     /// Skill configs
     pub skills: DbtProjectConfig<SkillConfig>,
+    /// Authored identifier quoting per declared adapter name — the adapter's
+    /// `adapters:` entry, plus the top-level `quoting:` block for the target's
+    /// default adapter only. Left unresolved so node config still wins over it.
+    ///
+    /// Root-project config, hence its home here: `adapters:` is a root-only key,
+    /// and the top-level `quoting:` block that layers under it is the root's for
+    /// every package — a dependency's own `quoting:` block was already overridden
+    /// by the root's via [`ProjectConfigResolver::apply_root_overlay`], and stays
+    /// overridden.
+    pub adapter_quoting: IndexMap<AdapterType, DbtQuoting>,
 }
 
 /// Read the `require_resource_names_without_plus_prefix` behavior flag from a
 /// project's `flags` block. Absent or non-boolean values resolve to `false`.
-/// Whether `+`-prefixed resource paths in `dbt_project.yml` are an error.
 ///
 /// `pub` rather than `pub(crate)` because this module moved down from
 /// dbt-parser, whose modules still need it.
@@ -517,9 +561,68 @@ pub fn disallow_plus_prefix_from_flags(flags: Option<&dbt_yaml::Value>) -> bool 
 }
 
 /// Build the [RootProjectConfigs] from a [DbtProject]
+///
+/// Every resource type that carries quoting — models, seeds, snapshots, data tests
+/// and functions — is also one that can select an adapter with `+adapter`, so all
+/// of them seed **nothing** for quoting, not even the authored top-level block. The
+/// top-level block applies only to the target's *default* adapter, so it cannot be
+/// folded in before the node's adapter is known; the matching `resolve_*` layers it
+/// back on per node, out of `adapter_quoting`. Seeding all-`None` is also what keeps
+/// the subtree and node-level `+quoting:` values distinguishable from the top-level
+/// block after the field-wise merge.
+///
+/// Every other resource type has no quoting to seed at all.
+/// The authored quoting each declared adapter contributes, keyed by adapter type.
+///
+/// Two layers, left **unresolved** (`None`s preserved) so that a node's own
+/// `+quoting:` still wins over both:
+///
+/// 1. the adapter's entry in the root `dbt_project.yml` `adapters:` block;
+/// 2. the top-level `quoting:` block — but **only for the target's default
+///    adapter**. A node on a non-default adapter does not inherit the top-level
+///    block; it takes its own entry and then falls through to its adapter type's
+///    default. Configuring the default adapter is what the top-level block is for,
+///    and letting it leak across adapters is what would otherwise force every
+///    adapter in a target to agree on one policy.
+///
+/// Both inputs come from the **root** project, so this is computed once per run and
+/// lives on `RootProjectConfigs`. A dependency package's own top-level `quoting:`
+/// block does not enter the chain: it was already overridden by the root's via the
+/// root-config overlay, and stays overridden.
+///
+/// `pub` and living here rather than in dbt-parser because its only caller,
+/// `build_root_project_configs`, moved down into this crate; dbt-parser's tests
+/// still exercise it through this path.
+pub fn authored_quoting_per_adapter(
+    adapters: Option<&IndexMap<AdapterType, AdapterProjectConfig>>,
+    target_adapters: &IndexMap<AdapterType, ProfileAdapter>,
+    default_adapter: AdapterType,
+    top_level_quoting: Option<DbtQuoting>,
+) -> IndexMap<AdapterType, DbtQuoting> {
+    let top_level = top_level_quoting.unwrap_or_default();
+
+    target_adapters
+        .keys()
+        .map(|adapter_type| {
+            let own = adapters
+                .and_then(|configured| configured.get(adapter_type))
+                .and_then(|entry| entry.quoting)
+                .unwrap_or_default();
+
+            let layered = if *adapter_type == default_adapter {
+                own.filled_from(&top_level)
+            } else {
+                own
+            };
+            (*adapter_type, layered)
+        })
+        .collect()
+}
+
 pub fn build_root_project_configs(
     root_project: &DbtProject,
-    root_project_quoting: DbtQuoting,
+    target_adapters: &IndexMap<AdapterType, ProfileAdapter>,
+    default_adapter: AdapterType,
 ) -> FsResult<RootProjectConfigs> {
     let maybe_root_project_config =
         match (root_project.tests.clone(), root_project.data_tests.clone()) {
@@ -535,52 +638,108 @@ pub fn build_root_project_configs(
     Ok(RootProjectConfigs {
         models: init_project_config(
             &root_project.models,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        sources: init_project_config(&root_project.sources, (), None, disallow_plus_prefix)?,
+        sources: init_project_config(
+            &root_project.sources,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         snapshots: init_project_config(
             &root_project.snapshots,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
         seeds: init_project_config(
             &root_project.seeds,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
         tests: init_project_config(
             &maybe_root_project_config,
-            root_project_quoting,
+            DbtQuoting::default(),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        unit_tests: init_project_config(&root_project.unit_tests, (), None, disallow_plus_prefix)?,
-        exposures: init_project_config(&root_project.exposures, (), None, disallow_plus_prefix)?,
+        unit_tests: init_project_config(
+            &root_project.unit_tests,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        exposures: init_project_config(
+            &root_project.exposures,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         semantic_models: init_project_config(
             &root_project.semantic_models,
             (),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        metrics: init_project_config(&root_project.metrics, (), None, disallow_plus_prefix)?,
+        metrics: init_project_config(
+            &root_project.metrics,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
         saved_queries: init_project_config(
             &root_project.saved_queries,
             (),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        analyses: init_project_config(&root_project.analyses, (), None, disallow_plus_prefix)?,
-        functions: init_project_config(
-            &root_project.functions,
-            root_project_quoting,
+        analyses: init_project_config(
+            &root_project.analyses,
+            (),
             None,
             disallow_plus_prefix,
+            default_adapter,
         )?,
-        skills: init_project_config(&root_project.skills, (), None, disallow_plus_prefix)?,
+        functions: init_project_config(
+            &root_project.functions,
+            DbtQuoting::default(),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        checks: init_project_config(
+            &root_project.checks,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        skills: init_project_config(
+            &root_project.skills,
+            (),
+            None,
+            disallow_plus_prefix,
+            default_adapter,
+        )?,
+        adapter_quoting: authored_quoting_per_adapter(
+            root_project.adapters.as_ref(),
+            target_adapters,
+            default_adapter,
+            *root_project.quoting,
+        ),
     })
 }
 
@@ -593,6 +752,7 @@ pub fn init_project_config<
     package_defaults: T::PackageDefaults,
     dependency_package_name: Option<&str>,
     disallow_plus_prefix: bool,
+    default_adapter: AdapterType,
 ) -> FsResult<DbtProjectConfig<T>> {
     let mut default_config = T::default();
     default_config.apply_package_defaults(package_defaults);
@@ -602,6 +762,7 @@ pub fn init_project_config<
             configs,
             dependency_package_name,
             disallow_plus_prefix,
+            default_adapter,
         )?
     } else {
         DbtProjectConfig {

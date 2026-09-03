@@ -743,6 +743,123 @@ select {{ pivot(vals) }} from t";
     }
 
     #[test]
+    fn removing_an_absent_value_from_a_tainted_list_degrades_instead_of_erroring() {
+        // Regression test for a real production failure: a macro builds a
+        // column-order list from a tainted `adapter.get_columns_in_relation()`
+        // result (tainting the list itself, per
+        // `appending_a_tainted_item_taints_the_list`), then does
+        // `col_order.remove('_DBT_SOURCE_RELATION')` assuming that column is
+        // present. Because the list's real contents are unreliable once
+        // tainted, `remove()` can legitimately find nothing to remove and
+        // must degrade like every other introspective-stub operation
+        // (`IntrospectiveValue::call`/`call_method`) instead of raising a
+        // hard "value not found in list" render error.
+        let env = test_env();
+        let out = env
+            .render_str(
+                "{%- set cols = [] -%}\
+{%- for c in rel -%}\
+{%- set _ = cols.append(c) -%}\
+{%- endfor -%}\
+{%- set _ = cols.remove('not_actually_there') -%}\
+done",
+                context! { rel => IntrospectiveValue::wrap(Value::from_object(TestRelation)) },
+                &[],
+            )
+            .unwrap();
+        assert_eq!(out, "done");
+    }
+
+    #[test]
+    fn removing_an_absent_value_from_an_untainted_list_still_errors() {
+        // Contrast with the above: a plain (never-tainted) list must keep
+        // raising a hard error for a genuine "value not found" -- the new
+        // leniency in `remove_impl` only applies once the container has
+        // actually absorbed fabricated data.
+        let env = test_env();
+        let err = env
+            .render_str(
+                "{%- set cols = ['a', 'b'] -%}\
+{%- set _ = cols.remove('c') -%}\
+done",
+                context! {},
+                &[],
+            )
+            .unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::InvalidOperation);
+    }
+
+    #[test]
+    fn calling_a_native_function_with_a_tainted_argument_degrades_instead_of_erroring() {
+        // Regression test for a real production failure: a macro sizes a
+        // `{% for i in range(results['col']|length) %}` loop off a value
+        // derived from an introspective query result. `|length` on a
+        // tainted operand short-circuits to the tainted operand itself
+        // (`ApplyFilter`'s override handling), which previously then hit
+        // `range()`'s real Rust implementation and failed to convert to
+        // `i32` with "cannot convert plain object to i32" -- a hard render
+        // error, unlike every other introspective-stub operation. Plain
+        // (non-macro) function calls now get the same override
+        // short-circuit filters/tests/`in` already have.
+        let env = test_env();
+        let out = env
+            .render_str(
+                "{%- set d = {} -%}\
+{%- for c in rel -%}\
+{%- set _ = d.update({'col': c}) -%}\
+{%- endfor -%}\
+{%- for i in range(d['col'] | length) -%}X{%- endfor -%}\
+done",
+                context! { rel => IntrospectiveValue::wrap(Value::from_object(TestRelation)) },
+                &taint_gate(),
+            )
+            .unwrap();
+        assert_eq!(out, "done");
+    }
+
+    #[test]
+    fn macro_call_with_a_tainted_argument_skips_the_body_instead_of_executing_it() {
+        // Regression test for a real user report: `dbt_utils.date_spine`
+        // passes a tainted `upper_bound` (force-tainted, per
+        // `is_known_introspective_macro`, since it came from a macro that
+        // touches `statement()`) into `dbt_utils.generate_series`, whose
+        // body calls `get_powers_of_two`, which raises
+        // `exceptions.raise_compiler_error("upper bound must be positive")`
+        // for a non-positive value (stood in for here by `fail()`, since
+        // `exceptions` lives in `dbt-jinja-utils`, which this crate doesn't
+        // depend on). A macro call used to always execute its body for real
+        // even with a tainted argument (see the removed
+        // `macro_call_still_executes_and_absorbs_taint_from_an_argument`),
+        // so this fabricated stand-in could actually reach that guard and
+        // fail the whole render -- a call the real run (with a live
+        // warehouse) would never make. Since a tainted argument means
+        // *everything* the macro could compute from it is equally
+        // unknowable, skipping the body outright (mirroring how a plain
+        // native function call already short-circuits on a tainted
+        // argument) avoids ever reaching a guard like this.
+        let mut env = test_env();
+        env.add_function("fail", |msg: String| -> Result<Value, Error> {
+            Err(Error::new(ErrorKind::InvalidOperation, msg))
+        });
+        let env_source = "\
+{%- macro boom(n) -%}\
+{%- if n <= 0 -%}\
+{{ fail(\"n must be positive\") }}\
+{%- endif -%}\
+ok\
+{%- endmacro -%}\
+select {{ boom(n) }} from t";
+        let out = env
+            .render_str(
+                env_source,
+                context! { n => IntrospectiveValue::wrap(Value::from(0)) },
+                &taint_gate(),
+            )
+            .unwrap();
+        assert_eq!(out, "select {{}} from t");
+    }
+
+    #[test]
     fn updating_a_map_with_a_tainted_value_taints_the_map() {
         // Mirrors `appending_a_tainted_item_taints_the_list` for the dict
         // side of the same idiom (`namespace()`/`{% set d = {} %}` +

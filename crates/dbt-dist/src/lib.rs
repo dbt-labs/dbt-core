@@ -6,6 +6,7 @@ pub mod dist;
 mod proc;
 pub mod python;
 pub mod upgrade;
+pub mod version;
 use std::{
     collections::HashSet,
     env,
@@ -19,6 +20,7 @@ use dbt_common::{ErrorCode, FsResult, err, error::WrappedError, fs_err};
 pub use dist::{Channel, DistInfo, Distribution, Generation, uninstall_command_for_package};
 
 use crate::proc::{GRACE_WAIT, NORMAL_WAIT, ProcessOutput, real_run};
+use crate::python::PythonManifestFormat;
 pub use crate::python::PythonPackageManager;
 
 /// Entry point for discovering [`DistInfo`] about one or more `dbt`
@@ -34,7 +36,7 @@ pub enum DistInfoDiscovery<'a> {
 
 impl<'a> DistInfoDiscovery<'a> {
     /// `command_name` is the CLI-brand name of the currently running binary
-    /// (e.g. `"dbt-core"` for OSS, or the proprietary Fusion build's name) —
+    /// (e.g. `"dbt-core"` for OSS, or the proprietary dbt v2 build's name) —
     /// used only to resolve the *current* process's own distribution, since a
     /// process can't `--version`-probe itself the way it does other `dbt`s
     /// found on `PATH`.
@@ -51,9 +53,15 @@ impl<'a> DistInfoDiscovery<'a> {
 /// than called directly) so the channel-detection rules that depend on them
 /// can be exercised with canned inputs instead of real env mutation or real
 /// tools on `PATH`.
-struct DiscoveryContext<'a> {
-    env: &'a dyn Fn(&str) -> Option<String>,
-    run: &'a dyn Fn(&str, &[&str]) -> Option<ProcessOutput>,
+///
+/// `+ Send + Sync` on both trait objects: `upgrade::resolve_manager` holds a
+/// `&DiscoveryContext` across an `.await` point in its caller
+/// (`exec_managed_project_upgrade`), so the whole thing has to stay `Send`
+/// for that `async fn`'s generated future to be `Send` -- required since the
+/// CLI dispatch layer boxes it as `Pin<Box<dyn Future<Output = _> + Send>>`.
+pub(crate) struct DiscoveryContext<'a> {
+    env: &'a (dyn Fn(&str) -> Option<String> + Send + Sync),
+    run: &'a (dyn Fn(&str, &[&str]) -> Option<ProcessOutput> + Send + Sync),
 }
 
 fn real_env(name: &str) -> Option<String> {
@@ -61,7 +69,7 @@ fn real_env(name: &str) -> Option<String> {
 }
 
 impl DiscoveryContext<'static> {
-    fn real() -> Self {
+    pub(crate) fn real() -> Self {
         DiscoveryContext {
             env: &real_env,
             run: &real_run,
@@ -605,12 +613,13 @@ fn venv_root(ctx: &DiscoveryContext, resolved: &Path) -> Option<String> {
 }
 
 fn manager_from_manifest_signals(cwd: &Path) -> Option<PythonPackageManager> {
-    const SIGNALS: [(&str, PythonPackageManager); 7] = [
+    const SIGNALS: [(&str, PythonPackageManager); 8] = [
         ("uv.lock", PythonPackageManager::Uv),
         ("poetry.lock", PythonPackageManager::Poetry),
         ("pdm.lock", PythonPackageManager::Pdm),
         ("Pipfile.lock", PythonPackageManager::Pipenv),
         ("environment.yml", PythonPackageManager::Conda),
+        ("environment.yaml", PythonPackageManager::Conda),
         ("requirements.txt", PythonPackageManager::Pip),
         ("setup.cfg", PythonPackageManager::Pip),
     ];
@@ -638,19 +647,54 @@ const PACKAGE_MANAGER_CANDIDATES: [(&str, PythonPackageManager); 9] = [
     ("pip", PythonPackageManager::Pip),
 ];
 
+/// Shared loop behind [`probe_package_manager`] and
+/// [`probe_manager_for_manifest`]: whichever `candidates` entry's command
+/// runs successfully first, via a global `PATH` search, wins.
+fn probe_candidates(
+    ctx: &DiscoveryContext,
+    candidates: &[(&str, PythonPackageManager)],
+) -> Option<PythonPackageManager> {
+    for (command, manager) in candidates {
+        if let Some(output) = (ctx.run)(command, &["--version"]) {
+            if output.success {
+                return Some(*manager);
+            }
+        }
+    }
+    None
+}
+
+/// Shared loop behind [`probe_package_manager_in_venv`] and
+/// [`probe_manager_for_manifest`]: like [`probe_candidates`], but only for
+/// an executable living inside `venv_bin` specifically, never a `PATH`
+/// search.
+fn probe_candidates_in_venv(
+    ctx: &DiscoveryContext,
+    venv_bin: &Path,
+    candidates: &[(&str, PythonPackageManager)],
+) -> Option<PythonPackageManager> {
+    for (command, manager) in candidates {
+        let exe_name = if cfg!(windows) {
+            format!("{command}.exe")
+        } else {
+            command.to_string()
+        };
+        let exe = venv_bin.join(exe_name);
+        if let Some(output) = (ctx.run)(&exe.to_string_lossy(), &["--version"]) {
+            if output.success {
+                return Some(*manager);
+            }
+        }
+    }
+    None
+}
+
 /// Presence probe of installed package managers, searched via `PATH` (i.e.
 /// `run` resolves each bare command name itself). Used only when there's no
 /// venv/conda env to scope the search to -- see `probe_package_manager_in_venv`
 /// for the scoped equivalent.
 fn probe_package_manager(ctx: &DiscoveryContext) -> Option<PythonPackageManager> {
-    for (command, manager) in PACKAGE_MANAGER_CANDIDATES {
-        if let Some(output) = (ctx.run)(command, &["--version"]) {
-            if output.success {
-                return Some(manager);
-            }
-        }
-    }
-    None
+    probe_candidates(ctx, &PACKAGE_MANAGER_CANDIDATES)
 }
 
 /// Presence probe scoped to `venv_bin` (a venv/conda-env's `bin`/`Scripts`
@@ -664,20 +708,53 @@ fn probe_package_manager_in_venv(
     ctx: &DiscoveryContext,
     venv_bin: &Path,
 ) -> Option<PythonPackageManager> {
-    for (command, manager) in PACKAGE_MANAGER_CANDIDATES {
-        let exe_name = if cfg!(windows) {
-            format!("{command}.exe")
-        } else {
-            command.to_string()
-        };
-        let exe = venv_bin.join(exe_name);
-        if let Some(output) = (ctx.run)(&exe.to_string_lossy(), &["--version"]) {
-            if output.success {
-                return Some(manager);
-            }
+    probe_candidates_in_venv(ctx, venv_bin, &PACKAGE_MANAGER_CANDIDATES)
+}
+
+/// Presence probe for a *project's* package manager, scoped to
+/// `manifest_dir` and narrowed to managers compatible with `format` --
+/// independent of how the running `dbt` binary itself was installed.
+///
+/// [`resolve_package_manager`] (and the `dist_info.py_package_manager` hint
+/// derived from it, in turn fed into `dist::resolve_manager_for_manifest`)
+/// answers a different question: which manager installed *dbt's own
+/// binary*. That's frequently `None`, or simply irrelevant to a project's
+/// dependencies, when dbt ships as a standalone binary placed directly onto
+/// `PATH` (the common case for the proprietary dbt v2 build) -- there's no venv/tool-dir signal to
+/// derive a hint from at all, even though `manifest_dir` obviously has
+/// *some* real package manager governing it. This probes that directory
+/// directly instead, as a fallback once every other signal
+/// (`resolve_manager_for_manifest`'s lockfile check and the `dist_info`
+/// hint) has come up empty.
+///
+/// Checks the same candidates as [`probe_package_manager`], in the same
+/// priority order, but narrowed with
+/// [`PythonPackageManager::is_compatible_with`] first -- so a machine with
+/// several managers installed can't return one that doesn't even manage
+/// projects in this manifest's format (e.g. `uv` for a `requirements.txt`
+/// project). Scoped first to a project-local `.venv`/`venv` directory if one
+/// exists, then falls back to a global `PATH` search.
+pub(crate) fn probe_manager_for_manifest(
+    ctx: &DiscoveryContext,
+    manifest_dir: &Path,
+    format: PythonManifestFormat,
+) -> Option<PythonPackageManager> {
+    let candidates: Vec<(&str, PythonPackageManager)> = PACKAGE_MANAGER_CANDIDATES
+        .into_iter()
+        .filter(|(_, manager)| manager.is_compatible_with(format))
+        .collect();
+
+    for venv_name in [".venv", "venv"] {
+        let venv_bin =
+            manifest_dir
+                .join(venv_name)
+                .join(if cfg!(windows) { "Scripts" } else { "bin" });
+        if let Some(manager) = probe_candidates_in_venv(ctx, &venv_bin, &candidates) {
+            return Some(manager);
         }
     }
-    None
+
+    probe_candidates(ctx, &candidates)
 }
 
 /// Resolves the Python package manager for a `pypi`-channel install, in
@@ -1019,12 +1096,11 @@ fn discover_dist_info_from_legacy_dbt(
 /// distribution signal.
 ///
 /// v1 prints a multi-line `Core:\n  - installed: ...` block and is always
-/// the OSS distribution. v2 prints a single `<name> <version>` banner line
-/// (clap's default `--version` format): the OSS v2 build (`dbt-sa-cli`)
-/// brands itself `dbt-core`, while the proprietary Fusion build brands
-/// itself something else — currently `dbt-fusion`, though that string is
-/// cosmetic and may change (e.g. dropping "fusion") — so `dbt-core` is the
-/// one name checked for and everything else is treated as Fusion.
+/// the legacy `dbt-core` distribution. v2 prints a single `<name> <version>`
+/// banner line (clap's default `--version` format): the OSS v2 build
+/// (`dbt-sa-cli`) will brand itself `dbt-oss`, but `dbt-core` is still
+/// checked for too since preview builds already installed print that name;
+/// everything else is treated as the proprietary distribution.
 ///
 /// Callers should only reach for this once the path-based channel resolver
 /// couldn't already name a distribution outright (e.g. a Homebrew-tap
@@ -1056,15 +1132,15 @@ fn classify_version_output(stdout: &str) -> Option<(Generation, Distribution, Op
     if stdout.contains("Core:") {
         return Some((
             Generation::V1,
-            Distribution::OSS,
+            Distribution::Core,
             extract_v1_installed_version(stdout),
         ));
     }
     if stdout.starts_with("dbt Cloud CLI") {
         return Some((Generation::NotApplicable, Distribution::CloudCLI, None));
     }
-    // Validation check: OSS, Fusion, and Cloud CLI contain "dbt"
-    // in the output.
+    // Validation check: dbt-oss, dbt (proprietary), and the Cloud CLI all
+    // contain "dbt" in the output.
     if !stdout.contains("dbt") {
         return None;
     }
@@ -1083,14 +1159,14 @@ fn classify_version_output(stdout: &str) -> Option<(Generation, Distribution, Op
 
 /// Classifies a CLI-brand name (the same string printed as the leading token
 /// of a v2 binary's `--version` banner, and injected into the running
-/// process as its own `command_name`) into a [Distribution]. The OSS v2
-/// build (`dbt-sa-cli`) brands itself `dbt-core`; every other name is
-/// treated as Fusion.
+/// process as its own `command_name`) into a [Distribution]. Any name in
+/// [`upgrade::UPGRADABLE_TARGET_NAMES`] is OSS; everything else is
+/// proprietary.
 fn distribution_from_name(name: &str) -> Distribution {
-    if name == "dbt-core" {
-        Distribution::OSS
+    if upgrade::UPGRADABLE_TARGET_NAMES.contains(&name) {
+        Distribution::Oss
     } else {
-        Distribution::Fusion
+        Distribution::Dbt
     }
 }
 
@@ -1756,6 +1832,25 @@ mod tests {
     }
 
     #[test]
+    fn conda_environment_yaml_signal_is_detected() {
+        // `SIGNALS` must recognize the `.yaml` spelling of the conda manifest
+        // filename, not just `.yml` -- otherwise a project whose only conda
+        // signal is `environment.yaml` never resolves `py_package_manager`
+        // to `Conda` at all, and the managed-project upgrade flow bails
+        // before it can even compute a sync command.
+        let map = env_from(&[]);
+        let env = |n: &str| map.get(n).cloned();
+        let ctx = DiscoveryContext {
+            env: &env,
+            run: &no_run,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("environment.yaml"), "").unwrap();
+        let manager = resolve_package_manager(&ctx, dir.path(), None, None);
+        assert_eq!(manager, Some(PythonPackageManager::Conda));
+    }
+
+    #[test]
     fn presence_probe_used_when_no_hint_or_manifest() {
         let map = env_from(&[]);
         let env = |n: &str| map.get(n).cloned();
@@ -1854,6 +1949,152 @@ mod tests {
         let venv_bin = tempfile::tempdir().unwrap();
         let cwd = tempfile::tempdir().unwrap();
         let manager = resolve_package_manager(&ctx, cwd.path(), Some(venv_bin.path()), None);
+        assert_eq!(manager, None);
+    }
+
+    // ---- probe_manager_for_manifest ----
+
+    fn run_finding(found: &'static str) -> impl Fn(&str, &[&str]) -> Option<ProcessOutput> {
+        move |cmd: &str, _: &[&str]| -> Option<ProcessOutput> {
+            if cmd == found {
+                Some(ProcessOutput {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            } else {
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn probe_manager_for_manifest_finds_a_tool_only_manager_on_path() {
+        // Reproduces the reported gap: dbt v2 shipped as a standalone binary
+        // has no venv/tool-dir signal of its own, so `existing_hint` is
+        // `None` -- but a Hatch- or Rye-managed pyproject.toml project (no
+        // recognized lockfile of its own) still has a real manager
+        // installed and runnable on `PATH`; this must find it instead of
+        // leaving the project "undetermined".
+        for manager_name in ["hatch", "rye", "uv"] {
+            let map = env_from(&[]);
+            let env = |n: &str| map.get(n).cloned();
+            let run = run_finding(manager_name);
+            let ctx = DiscoveryContext {
+                env: &env,
+                run: &run,
+            };
+            let dir = tempfile::tempdir().unwrap();
+            let manager =
+                probe_manager_for_manifest(&ctx, dir.path(), PythonManifestFormat::Pyproject);
+            assert_eq!(
+                manager,
+                PythonPackageManager::parse_cli_name(manager_name),
+                "manager_name={manager_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn probe_manager_for_manifest_falls_back_to_pip_for_requirements_format() {
+        // The common case for `asdf`/`pyenv`/plain-`pip`
+        // `requirements.txt` projects: no dedicated package-manager
+        // executable exists (asdf/pyenv only manage the Python *version*),
+        // but `pip` itself is always present -- and produces the correct
+        // sync command regardless (see `sync_command_for_manager`'s Pip/
+        // Asdf/Mise/Pyenv arm).
+        let map = env_from(&[]);
+        let env = |n: &str| map.get(n).cloned();
+        let run = run_finding("pip");
+        let ctx = DiscoveryContext {
+            env: &env,
+            run: &run,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let manager =
+            probe_manager_for_manifest(&ctx, dir.path(), PythonManifestFormat::Requirements);
+        assert_eq!(manager, Some(PythonPackageManager::Pip));
+    }
+
+    #[test]
+    fn probe_manager_for_manifest_ignores_incompatible_managers_on_path() {
+        // A machine with `uv`/`poetry`/`pdm` globally installed alongside
+        // plain `pip` must not credit any of them for a `requirements.txt`
+        // project -- none of them are `is_compatible_with(Requirements)`,
+        // so they must never even be checked, only `pip` (the last
+        // candidate) should be found.
+        let map = env_from(&[]);
+        let env = |n: &str| map.get(n).cloned();
+        let run = |cmd: &str, _: &[&str]| -> Option<ProcessOutput> {
+            if matches!(cmd, "uv" | "poetry" | "pdm" | "pip") {
+                Some(ProcessOutput {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            } else {
+                None
+            }
+        };
+        let ctx = DiscoveryContext {
+            env: &env,
+            run: &run,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let manager =
+            probe_manager_for_manifest(&ctx, dir.path(), PythonManifestFormat::Requirements);
+        assert_eq!(
+            manager,
+            Some(PythonPackageManager::Pip),
+            "uv/poetry/pdm must be skipped for a requirements.txt project even though they're \
+             on PATH"
+        );
+    }
+
+    #[test]
+    fn probe_manager_for_manifest_prefers_a_venv_local_manager_over_global_path() {
+        let map = env_from(&[]);
+        let env = |n: &str| map.get(n).cloned();
+        let dir = tempfile::tempdir().unwrap();
+        let venv_bin_name = if cfg!(windows) { "Scripts" } else { "bin" };
+        let venv_bin = dir.path().join(".venv").join(venv_bin_name);
+        std::fs::create_dir_all(&venv_bin).unwrap();
+        let hatch_name = if cfg!(windows) { "hatch.exe" } else { "hatch" };
+        let hatch_path = venv_bin.join(hatch_name).to_string_lossy().into_owned();
+        let run = move |cmd: &str, _: &[&str]| -> Option<ProcessOutput> {
+            if cmd == hatch_path || cmd == "rye" {
+                Some(ProcessOutput {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            } else {
+                None
+            }
+        };
+        let ctx = DiscoveryContext {
+            env: &env,
+            run: &run,
+        };
+        let manager = probe_manager_for_manifest(&ctx, dir.path(), PythonManifestFormat::Pyproject);
+        assert_eq!(
+            manager,
+            Some(PythonPackageManager::Hatch),
+            "a manager local to the project's own .venv should win over an unrelated one on \
+             the global PATH"
+        );
+    }
+
+    #[test]
+    fn probe_manager_for_manifest_returns_none_when_nothing_found() {
+        let map = env_from(&[]);
+        let env = |n: &str| map.get(n).cloned();
+        let ctx = DiscoveryContext {
+            env: &env,
+            run: &no_run,
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let manager = probe_manager_for_manifest(&ctx, dir.path(), PythonManifestFormat::Pyproject);
         assert_eq!(manager, None);
     }
 
@@ -2060,7 +2301,7 @@ mod tests {
         }"#;
         let info = parse_dist_info_json(json).unwrap();
         assert_eq!(info.channel, Some(Channel::Pypi));
-        assert_eq!(info.distribution, Some(Distribution::Fusion));
+        assert_eq!(info.distribution, Some(Distribution::Dbt));
     }
 
     #[test]
@@ -2084,39 +2325,39 @@ Plugins:
 ";
 
     #[test]
-    fn classify_version_output_v1_core_block_is_oss() {
+    fn classify_version_output_v1_core_block_is_core() {
         assert_eq!(
             classify_version_output(V1_VERSION_OUTPUT),
             Some((
                 Generation::V1,
-                Distribution::OSS,
+                Distribution::Core,
                 Some("1.12.0".to_string())
             ))
         );
     }
 
     #[test]
-    fn classify_version_output_v2_banner_is_fusion() {
+    fn classify_version_output_v2_banner_is_dbt() {
         assert_eq!(
             classify_version_output("dbt-fusion 2.0.0-preview.196\n"),
             Some((
                 Generation::V2,
-                Distribution::Fusion,
+                Distribution::Dbt,
                 Some("2.0.0-preview.196".to_string())
             ))
         );
     }
 
     #[test]
-    fn classify_version_output_v2_banner_without_fusion_branding_is_still_fusion() {
+    fn classify_version_output_v2_banner_without_fusion_branding_is_still_dbt() {
         // The banner's display name is cosmetic and may change (e.g. drop
         // "fusion"); anything other than the OSS build's `dbt-core` name is
-        // treated as Fusion.
+        // treated as the proprietary distribution.
         assert_eq!(
             classify_version_output("dbt 2.0.0-preview.196\n"),
             Some((
                 Generation::V2,
-                Distribution::Fusion,
+                Distribution::Dbt,
                 Some("2.0.0-preview.196".to_string())
             ))
         );
@@ -2125,12 +2366,27 @@ Plugins:
     #[test]
     fn classify_version_output_v2_dbt_core_banner_is_oss() {
         // `dbt-sa-cli` (the OSS-only v2 build) brands its `--version` banner
-        // as `dbt-core`, so v2 alone doesn't imply Fusion.
+        // as `dbt-core`, so v2 alone doesn't imply the proprietary
+        // distribution.
         assert_eq!(
             classify_version_output("dbt-core 2.0.0-preview.200\n"),
             Some((
                 Generation::V2,
-                Distribution::OSS,
+                Distribution::Oss,
+                Some("2.0.0-preview.200".to_string())
+            ))
+        );
+    }
+
+    #[test]
+    fn classify_version_output_v2_dbt_oss_banner_is_oss() {
+        // `dbt-sa-cli` (the OSS-only v2 build) is planned to brand its
+        // `--version` banner as `dbt-oss` once it leaves preview.
+        assert_eq!(
+            classify_version_output("dbt-oss 2.0.0-preview.200\n"),
+            Some((
+                Generation::V2,
+                Distribution::Oss,
                 Some("2.0.0-preview.200".to_string())
             ))
         );
@@ -2269,7 +2525,7 @@ Plugins:
 
         let result = get_at_path(&exe, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V1);
-        assert_eq!(result.distribution, Some(Distribution::OSS));
+        assert_eq!(result.distribution, Some(Distribution::Core));
     }
 
     #[test]
@@ -2290,7 +2546,7 @@ Plugins:
 
         let result = get_at_path(&exe, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V2);
-        assert_eq!(result.distribution, Some(Distribution::Fusion));
+        assert_eq!(result.distribution, Some(Distribution::Dbt));
     }
 
     #[test]
@@ -2312,7 +2568,7 @@ Plugins:
 
         let result = get_at_path(&exe, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V2);
-        assert_eq!(result.distribution, Some(Distribution::OSS));
+        assert_eq!(result.distribution, Some(Distribution::Oss));
     }
 
     #[test]
@@ -2323,7 +2579,7 @@ Plugins:
         let current = env::current_exe().unwrap();
         let result = get_at_path(&current, "dbt-core").unwrap();
         assert_eq!(result.generation, Generation::V2);
-        assert_eq!(result.distribution, Some(Distribution::OSS));
+        assert_eq!(result.distribution, Some(Distribution::Oss));
     }
 
     #[test]
@@ -2343,7 +2599,7 @@ Plugins:
     fn get_current_succeeds_against_real_binary() {
         let info = get_current("dbt-core").unwrap();
         assert_eq!(info.generation, Generation::V2);
-        assert_eq!(info.distribution, Some(Distribution::OSS));
+        assert_eq!(info.distribution, Some(Distribution::Oss));
         assert!(!info.path.is_empty());
         assert_eq!(
             Path::new(&info.path),

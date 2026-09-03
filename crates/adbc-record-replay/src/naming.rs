@@ -11,8 +11,35 @@ pub fn cleanup_schema_name(input: &str) -> String {
     re.replace_all(input, "").to_string()
 }
 
+/// Strips real wall-clock content embedded in SQL that has no node context
+/// to hash against instead (`checksum8` is the only key such a statement
+/// gets, so anything time-based inside it must be normalized away, or the
+/// same statement gets a different recording key every run). Currently just
+/// `dbt_compute_<millis>`, the token name
+/// `mint_snowflake_catalog_credential` mints for Horizon catalog access.
+fn cleanup_ephemeral_timestamps(input: &str) -> String {
+    let re = Regex::new(r"dbt_compute_\d+").unwrap();
+    re.replace_all(input, "dbt_compute_TIMESTAMP").to_string()
+}
+
+/// Masks the quoted Snowflake username in `alter user "<user>" add/remove
+/// programmatic access token ...` (`mint_snowflake_catalog_credential` /
+/// `drop_minted_token` in `compute_platform.rs`). This statement has no node
+/// context, so `checksum8` is its only recording key -- and the username is
+/// whichever real Snowflake identity recorded the fixture, which will never
+/// match another engineer's identity or the `fake_user`/`FAKE_USER` fallback
+/// used at pure-replay time. Normalize it away for the same reason as the
+/// timestamp above, rather than requiring every recorder to share one
+/// identity.
+fn cleanup_alter_user_identifier(input: &str) -> String {
+    let re = Regex::new(r#"(?i)(alter user )"[^"]+""#).unwrap();
+    re.replace_all(input, r#"$1"MASKED_USER""#).to_string()
+}
+
 fn checksum8(input: &str) -> String {
     let input = cleanup_schema_name(input);
+    let input = cleanup_ephemeral_timestamps(&input);
+    let input = cleanup_alter_user_identifier(&input);
     let mut hasher = DefaultHasher::new();
     input.hash(&mut hasher);
     let hash = hasher.finish();

@@ -3,7 +3,7 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{
     ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
 };
-use crate::resolve::resolve_utils::extract_config_map;
+use crate::resolve::resolve_utils::{canonicalize_source_config_keys, extract_config_map};
 use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
 use crate::validation::check_node_static_analysis;
 
@@ -24,12 +24,14 @@ use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{ResolvableConfig, SourceConfig, Tags};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables, TablesConfig};
 use dbt_schemas::schemas::relations::default_dbt_quoting_for;
+use dbt_schemas::schemas::serde::strip_one_trailing_newline_at_keys;
 use dbt_schemas::schemas::{CommonAttributes, DbtSource, DbtSourceAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset, ModelStatus, NodeResolverTracker};
 use minijinja::Value as MinijinjaValue;
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -99,7 +101,8 @@ fn build_source_unrendered_config(
     raw_root_project_models_cfg: Option<&crate::utils::RawProjectConfig>,
     raw_schema_yml_config: Option<BTreeMap<String, dbt_yaml::Value>>,
     raw_table_yml_config: Option<BTreeMap<String, dbt_yaml::Value>>,
-) -> BTreeMap<String, dbt_yaml::Value> {
+    adapter_type: AdapterType,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
     let mut unrendered = BTreeMap::new();
 
     // Core unconditionally pre-populates these fields before merging schema.yml config,
@@ -109,17 +112,30 @@ fn build_source_unrendered_config(
     unrendered.insert("loaded_at_query".to_string(), dbt_yaml::Value::null());
 
     // Merge configs in hierarchical order: project < root < schema.config < table.config
-    // For most keys, we completely overwrite the previous value.
-    unrendered.extend(raw_local_project_config.get_config_for_fqn(fqn).clone());
+    // For most keys, we completely overwrite the previous value. Each source's config-key
+    // aliases are canonicalized, to be consistent during merging.
+    unrendered.extend(canonicalize_source_config_keys(
+        adapter_type,
+        raw_local_project_config.get_config_for_fqn(fqn).clone(),
+    )?);
 
     if let Some(root_cfg) = raw_root_project_models_cfg {
-        unrendered.extend(root_cfg.get_config_for_fqn(fqn).clone());
+        unrendered.extend(canonicalize_source_config_keys(
+            adapter_type,
+            root_cfg.get_config_for_fqn(fqn).clone(),
+        )?);
     }
     if let Some(schema_cfg) = raw_schema_yml_config.as_ref() {
-        unrendered.extend(schema_cfg.clone());
+        unrendered.extend(canonicalize_source_config_keys(
+            adapter_type,
+            schema_cfg.clone(),
+        )?);
     }
     if let Some(table_cfg) = raw_table_yml_config.as_ref() {
-        unrendered.extend(table_cfg.clone());
+        unrendered.extend(canonicalize_source_config_keys(
+            adapter_type,
+            table_cfg.clone(),
+        )?);
     }
 
     // Special precedence config: meta, tags, and freshness are merged across source and table levels,
@@ -180,7 +196,7 @@ fn build_source_unrendered_config(
         );
     }
 
-    unrendered
+    Ok(unrendered)
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -197,6 +213,7 @@ pub async fn resolve_sources(
     jinja_env: &JinjaEnv,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
+    seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     node_resolver: &mut NodeResolver,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSource>>,
@@ -216,13 +233,17 @@ pub async fn resolve_sources(
     let is_dependency = dependency_package_name.is_some();
     // Best-effort raw parse of the root project's `sources:` subtree, used only to hydrate
     // dependency package nodes' `unrendered_config` with root overrides (preserving Jinja).
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "sources");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "sources",
+        adapter_type,
+    )?;
     let raw_root_project_models_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "sources",
-        ))
+            adapter_type,
+        )?)
     } else {
         None
     };
@@ -235,19 +256,24 @@ pub async fn resolve_sources(
     // https://docs.getdbt.com/reference/resource-properties/quoting
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
-    let config_resolver =
-        ProjectConfigResolver::build(root_project_configs.sources.clone(), is_dependency, || {
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.sources.clone(),
+        is_dependency,
+        || {
             init_project_config(
                 &package.dbt_project.sources,
                 (),
                 dependency_package_name,
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
-        })?
-        .with_resolve_defaults((
-            arg.static_analysis.unwrap_or_default(),
-            root_package.dbt_project.sync.clone(),
-        ));
+        },
+        adapter_type,
+    )?
+    .with_resolve_defaults((
+        arg.static_analysis.unwrap_or_default(),
+        root_package.dbt_project.sync.clone(),
+    ));
     for ((source_name, table_name), mpe) in source_properties.into_iter() {
         // Extract raw (unrendered) database and schema from the YAML before Jinja rendering.
         // These preserve Jinja templates like `{{ env_var('DBT_ENV') }}` for state comparisons.
@@ -274,8 +300,16 @@ pub async fn resolve_sources(
             .map(extract_test_unrendered_configs)
             .unwrap_or_default();
 
-        let source: SourceProperties = into_typed_with_jinja(
-            mpe.schema_value,
+        // Strip before Jinja renders, not after; `unrendered_*` above deliberately keeps the
+        // raw newline, matching a Core-produced state manifest.
+        let mut schema_value = mpe.schema_value;
+        strip_one_trailing_newline_at_keys(
+            &mut schema_value,
+            &["name", "schema", "database", "catalog"],
+        );
+
+        let mut source: SourceProperties = into_typed_with_jinja(
+            schema_value,
             false,
             jinja_env,
             base_ctx,
@@ -283,9 +317,26 @@ pub async fn resolve_sources(
             dependency_package_name,
             true,
         )?;
+        // Canonicalize Databricks' `catalog` alias into `database`, mirroring dbt-core's
+        // `credentials.translate_aliases` (D1: gated on adapter type, unlike the ungated fold
+        // this replaces). `database` -- an explicit value already set on this same source --
+        // takes precedence, matching ordinary same-source-dict alias precedence.
+        //
+        // TODO: resove divergence with Mantle, depending on [https://github.com/dbt-labs/dbt-core/issues/16108].
+        // Mantle recurses into every nested mapping and sequence, possibly unintentionally.
+        // We here only canonicalize the top-level keys of the source.
+        if matches!(adapter_type, AdapterType::Databricks)
+            && source.database.is_none()
+            && let Some(catalog) = source.catalog.take()
+        {
+            source.database = Some(catalog);
+        }
+
+        let mut table_value = mpe.table_value.unwrap();
+        strip_one_trailing_newline_at_keys(&mut table_value, &["name", "identifier"]);
 
         let table: Tables = into_typed_with_jinja(
-            mpe.table_value.unwrap(),
+            table_value,
             false,
             jinja_env,
             base_ctx,
@@ -293,12 +344,6 @@ pub async fn resolve_sources(
             dependency_package_name,
             true,
         )?;
-        let database: String = source
-            .database
-            .clone()
-            .or_else(|| source.catalog.clone())
-            .unwrap_or_else(|| database.to_owned());
-        let schema = source.schema.clone().unwrap_or_else(|| source.name.clone());
 
         let fqn = get_node_fqn(
             package_name,
@@ -354,17 +399,8 @@ pub async fn resolve_sources(
         table_quoting.default_to(&source_default_quoting);
         let quoting_ignore_case = table_quoting.snowflake_ignore_case.unwrap_or(false);
 
-        // Preserve the raw user-provided identifier (including any embedded quote
-        // characters) for `__source_attr__.identifier`. dbt-core stores this verbatim
-        // and packages such as `zendesk` rely on `source(...).identifier` round-tripping
-        // through Jinja — see `union_zendesk_connections` calling
-        // `adapter.get_relation(identifier=source(...).identifier)`. Stripping the
-        // quotes here would turn `"GROUP"` into `GROUP` and produce SQL that fails on
-        // reserved-keyword tables in Snowflake.
-        let raw_identifier = table
-            .identifier
-            .clone()
-            .unwrap_or_else(|| table_name.to_owned());
+        let (database, schema, raw_identifier) =
+            resolve_relation_parts(&source, &table, &table_name, database);
         let (database, schema, identifier, quoting) = normalize_quoting(
             &table_quoting.try_into()?,
             adapter_type,
@@ -442,7 +478,8 @@ pub async fn resolve_sources(
             raw_root_project_models_cfg.as_ref(),
             raw_schema_yml_config,
             raw_table_yml_config,
-        );
+            adapter_type,
+        )?;
 
         let dbt_source = DbtSource {
             __common_attr__: CommonAttributes {
@@ -475,6 +512,9 @@ pub async fn resolve_sources(
                 language: None,
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: adapter_type,
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: identifier.to_owned(),
@@ -547,6 +587,7 @@ pub async fn resolve_sources(
                         root_package_name,
                         collected_generic_tests,
                         test_name_truncations,
+                        seen_generic_test_paths,
                         adapter_type,
                         io_args,
                         &mpe.relative_path,
@@ -630,6 +671,37 @@ fn merge_table_into_schema_config(
         .into();
 
     Ok(table_as_source)
+}
+
+fn resolve_relation_parts(
+    source: &SourceProperties,
+    table: &Tables,
+    table_name: &str,
+    default_database: &str,
+) -> (String, String, String) {
+    let database: String = source
+        .database
+        .clone()
+        .unwrap_or_else(|| default_database.to_owned());
+    let schema = source
+        .schema
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| source.name.clone());
+
+    // Preserve the raw user-provided identifier (including any embedded quote
+    // characters) for `__source_attr__.identifier`. dbt-core stores this verbatim
+    // and packages such as `zendesk` rely on `source(...).identifier` round-tripping
+    // through Jinja — see `union_zendesk_connections` calling
+    // `adapter.get_relation(identifier=source(...).identifier)`. Stripping the
+    // quotes here would turn `"GROUP"` into `GROUP` and produce SQL that fails on
+    // reserved-keyword tables in Snowflake.
+    let raw_identifier = table
+        .identifier
+        .clone()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| table_name.to_owned());
+    (database, schema, raw_identifier)
 }
 
 /// Resolved (`loaded_at_field`, `loaded_at_query`) pair after merging
@@ -799,6 +871,100 @@ mod tests {
     use super::*;
     use dbt_jinja_utils::serde::Omissible;
     use dbt_schemas::schemas::common::{FreshnessDefinition, FreshnessPeriod, FreshnessRules};
+
+    fn source_with(name: &str, schema: Option<&str>) -> SourceProperties {
+        SourceProperties {
+            config: None,
+            database: None,
+            schema: schema.map(str::to_string),
+            catalog: None,
+            description: None,
+            loader: None,
+            name: name.to_string(),
+            quoting: None,
+            tables: None,
+        }
+    }
+
+    fn table_with(name: &str, identifier: Option<&str>) -> Tables {
+        Tables {
+            columns: None,
+            config: None,
+            data_tests: None,
+            description: None,
+            external: None,
+            identifier: identifier.map(str::to_string),
+            loader: None,
+            name: name.to_string(),
+            quoting: None,
+            tests: None,
+        }
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_schema_omitted_defaults_to_source_name() {
+        let source = source_with("dummy_src", None);
+        let table = table_with("src", None);
+        let (_, schema, _) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(schema, "dummy_src");
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_schema_explicit_empty_defaults_to_source_name() {
+        let source = source_with("dummy_src", Some(""));
+        let table = table_with("src", None);
+        let (_, schema, _) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(schema, "dummy_src");
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_schema_explicit_non_empty_is_kept() {
+        let source = source_with("dummy_src", Some("custom_schema"));
+        let table = table_with("src", None);
+        let (_, schema, _) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(schema, "custom_schema");
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_identifier_omitted_defaults_to_table_name() {
+        let source = source_with("dummy_src", None);
+        let table = table_with("src", None);
+        let (_, _, identifier) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(identifier, "src");
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_identifier_explicit_empty_defaults_to_table_name() {
+        let source = source_with("dummy_src", None);
+        let table = table_with("src", Some(""));
+        let (_, _, identifier) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(identifier, "src");
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_identifier_explicit_non_empty_is_kept() {
+        let source = source_with("dummy_src", None);
+        let table = table_with("src", Some("custom_identifier"));
+        let (_, _, identifier) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(identifier, "custom_identifier");
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_database_omitted_defaults_to_default_database() {
+        let source = source_with("dummy_src", None);
+        let table = table_with("src", None);
+        let (database, _, _) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(database, "default_db");
+    }
+
+    #[test]
+    fn test_resolve_relation_parts_database_explicit_empty_is_kept() {
+        let mut source = source_with("dummy_src", None);
+        source.database = Some(String::new());
+        let table = table_with("src", None);
+        let (database, _, _) = resolve_relation_parts(&source, &table, "src", "default_db");
+        assert_eq!(database, "");
+    }
 
     #[test]
     fn test_merge_freshness_unwrapped_update_overrides_base() {

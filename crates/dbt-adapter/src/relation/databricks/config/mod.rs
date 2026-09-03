@@ -16,6 +16,7 @@ pub(crate) enum DatabricksRelationMetadataKey {
     DescribeExtended,
     ShowTblProperties,
     ColumnMasks,
+    RowFilters,
     PrimaryKeyConstraints,
     ForeignKeyConstraints,
     NonNullConstraints,
@@ -38,6 +39,7 @@ impl From<DatabricksRelationMetadataKey> for String {
             DatabricksRelationMetadataKey::DescribeExtended => "describe_extended".to_string(),
             DatabricksRelationMetadataKey::ShowTblProperties => "show_tblproperties".to_string(),
             DatabricksRelationMetadataKey::ColumnMasks => "column_masks".to_string(),
+            DatabricksRelationMetadataKey::RowFilters => "row_filters".to_string(),
             DatabricksRelationMetadataKey::PrimaryKeyConstraints => {
                 "primary_key_constraints".to_string()
             }

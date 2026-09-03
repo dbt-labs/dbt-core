@@ -37,9 +37,9 @@ pub use builder::*;
 /// dyn-compatible trait covering functionality from the adbc_core::{Database, Optionable} traits.
 pub trait Database: Send + Sync + DatabaseInfo {
     // adbc_core::Database<Box<dyn Connection>> functions -----------------------
-    fn new_connection(&mut self) -> Result<Box<dyn Connection>>;
+    fn new_connection(&self) -> Result<Box<dyn Connection>>;
     fn new_connection_with_opts(
-        &mut self,
+        &self,
         opts: Vec<(OptionConnection, OptionValue)>,
     ) -> Result<Box<dyn Connection>>;
 
@@ -440,13 +440,13 @@ impl DatabaseInfo for AdbcDatabase {
 }
 
 impl Database for AdbcDatabase {
-    fn new_connection(&mut self) -> Result<Box<dyn Connection>> {
+    fn new_connection(&self) -> Result<Box<dyn Connection>> {
         let opts = Vec::new();
         self.new_connection_with_opts(opts)
     }
 
     fn new_connection_with_opts(
-        &mut self,
+        &self,
         conn_opts: Vec<(OptionConnection, OptionValue)>,
     ) -> Result<Box<dyn Connection>> {
         self.inner

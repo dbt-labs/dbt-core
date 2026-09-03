@@ -1,5 +1,5 @@
 # **what?**
-# Cut a `dbt-sa-cli` release: bump version on a release branch, build the
+# Cut a `dbt` release: bump version on a release branch, build the
 # binary matrix via `cargo build`, pack each binary into a wheel via
 # `cargo ci pypi pack`, tag the build commit, publish to PyPI, create a
 # GitHub Release with the platform tarballs, and push a Homebrew formula
@@ -15,7 +15,7 @@
 # and serves tarballs straight from the GitHub Release.
 #
 # dbt-core itself, though, is the maturin abi3 extension wheel (CLI +
-# dbtRunner) built from `crates/dbt-python` — see **PyPI publishing** below.
+# dbtRunner) built from `crates/dbt-sa-python` — see **PyPI publishing** below.
 #
 # **when?**
 # Manual `workflow_dispatch` only — every release goes through
@@ -45,9 +45,9 @@
 # assembles an sdist pinning those filenames + sha256s; pip fetches the
 # matching wheel from the Release at install time. Runs with
 # `--environment prod`, authenticating with the repo-level `PYPI_API_TOKEN`
-# secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`). Two distributions
-# are published — `dbt-core` and `dbt-core-experimental-parser` — selected
-# by the `release_target` input.
+# secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`). Three distributions
+# are published — `dbt-core`, `dbt-core-experimental-parser`, and `dbt-oss`
+# — selected by the `release_target` input.
 #
 # `dbt-core`'s wheels are built by `maturin build` in the `build` job
 # (abi3-py311, one cp311-abi3 wheel per platform) — not `cargo ci pypi pack`,
@@ -56,7 +56,15 @@
 # dbt-core publish step so the sdist's manifest matches the maturin wheel
 # filenames actually sitting at the GitHub Release download URL (the default
 # `py3`/`none` tags are for the binary-CLI wheel, used for the parser publish
-# step instead).
+# step instead), and `--runtime-metadata-from crates/dbt-sa-python` so the
+# sdist declares those wheels' `requires-python`/dependencies while keeping
+# the root pyproject's descriptive metadata — uv trusts the sdist's PKG-INFO
+# for the former, and the PyPI project page renders from the latter.
+#
+# `dbt-oss` is the identical rebrand of `dbt-core` — same extension, only
+# `[project].name` differs — built by a second `maturin build` in the
+# `build` job and published with the same `cp311`/`abi3` tags. Its publish
+# step swaps `[project].name` in the root pyproject, like the parser's.
 #
 # **Homebrew publishing**
 # `publish-homebrew` renders `Formula/dbt-core.rb` from the SHA256SUMS the
@@ -125,14 +133,15 @@ on:
         type: string
         default: "main"
       release_target:
-        description: "Which package(s) to publish to PyPI. Pack always builds both; no effect on dry runs or Homebrew publish."
+        description: "Which package(s) to publish to PyPI. Pack always builds all three; no effect on dry runs or Homebrew publish."
         required: false
         type: choice
         options:
-          - both
+          - all
           - core
           - parser
-        default: both
+          - oss
+        default: all
 
 concurrency:
   group: >-
@@ -186,7 +195,7 @@ jobs:
       CARGO_INCREMENTAL: 0
       RUST_BACKTRACE: 1
       RUSTC_WRAPPER: sccache
-      BINARY_NAME: dbt-sa-cli
+      BINARY_NAME: dbt
       PACKAGE_NAME: dbt-core
     strategy:
       fail-fast: false
@@ -397,7 +406,7 @@ jobs:
 
       # dbt-core is the maturin abi3 extension wheel (CLI + dbtRunner), not a
       # packed binary. abi3-py311 → one cp311-abi3 wheel per platform, valid
-      # on any interpreter >= 3.11 (crates/dbt-python's own requires-python
+      # on any interpreter >= 3.11 (crates/dbt-sa-python's own requires-python
       # floor). abi3 does NOT support older interpreters — maturin only
       # *warns* and silently falls back to a version-specific, non-abi3
       # cp3xx-cp3xx wheel if handed one, so `--interpreter` must resolve to
@@ -421,6 +430,11 @@ jobs:
       # install anything, unlike `maturin develop`), so the venv only needs
       # to hold the `maturin` CLI itself — `--interpreter "$PY"` is what
       # actually controls which Python's ABI the wheel targets.
+      # rust-cache restores `target/`; these wheel dirs aren't cargo-managed
+      # so nothing else prunes stale wheels left from a prior cached run.
+      - name: Clean stale wheel output dirs
+        run: rm -rf target/wheels target/wheels-oss
+
       - name: Build maturin wheel (dbt-core)
         env:
           TARGET: ${{ matrix.target }}
@@ -444,9 +458,14 @@ jobs:
           "$VENV_BIN/maturin" build --release --locked \
             --target "$TARGET" \
             --interpreter "$PY" \
-            -m crates/dbt-python/Cargo.toml \
+            -m crates/dbt-sa-python/Cargo.toml \
             --out target/wheels
           ls -la target/wheels/
+
+          # Reused by the dbt-oss build below so it doesn't need to re-detect
+          # the interpreter/venv.
+          echo "MATURIN_PY=$PY" >> "$GITHUB_ENV"
+          echo "MATURIN_VENV_BIN=$VENV_BIN" >> "$GITHUB_ENV"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
@@ -469,9 +488,45 @@ jobs:
           path: target/wheels/*.whl
           if-no-files-found: error
 
+      # dbt-oss is an identical rebrand of dbt-core (same compiled extension,
+      # only [project].name differs) — swap it, rebuild (cache hits mean this
+      # just repackages, no recompile), restore. Python, not `sed -i`: BSD
+      # sed (macOS) and GNU sed disagree on `-i`. `$MATURIN_PY`, not `python3`:
+      # the manylinux container legs don't put Python on PATH by default.
+      # `grep -qx` asserts the swap actually landed, not just that some
+      # `name =` line exists.
+      - name: Rename pyproject for oss wheel
+        run: |
+          "$MATURIN_PY" -c 'import pathlib; p = pathlib.Path("crates/dbt-sa-python/pyproject.toml"); p.write_text(p.read_text().replace("name = \"dbt-core\"", "name = \"dbt-oss\"", 1))'
+          grep -qx 'name = "dbt-oss"' crates/dbt-sa-python/pyproject.toml
+
+      - name: Build maturin wheel (dbt-oss)
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          "$MATURIN_VENV_BIN/maturin" build --release --locked \
+            --target "$TARGET" \
+            --interpreter "$MATURIN_PY" \
+            -m crates/dbt-sa-python/Cargo.toml \
+            --out target/wheels-oss
+          ls -la target/wheels-oss/
+
+      - name: Restore pyproject name after oss wheel
+        if: always()
+        run: |
+          "$MATURIN_PY" -c 'import pathlib; p = pathlib.Path("crates/dbt-sa-python/pyproject.toml"); p.write_text(p.read_text().replace("name = \"dbt-oss\"", "name = \"dbt-core\"", 1))'
+          grep -qx 'name = "dbt-core"' crates/dbt-sa-python/pyproject.toml
+
+      - name: Upload wheel artifact (dbt-oss)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+        with:
+          name: wheel-oss-${{ matrix.target }}
+          path: target/wheels-oss/*.whl
+          if-no-files-found: error
+
   # ------------------------------------------------------------------
   # Run the workspace test suite, then the dbt-python crate's pytest suite
-  # (crates/dbt-python) in the same job so both reuse the Rust
+  # (crates/dbt-sa-python) in the same job so both reuse the Rust
   # toolchain/sccache/protoc setup instead of paying for it twice. No
   # lint (ruff/mypy) — that's a PR-time check, not a release gate.
   # Parallel to `build` (both fan out from `prepare-release`) and gates
@@ -544,7 +599,7 @@ jobs:
       # Pinned to 3.11 explicitly, same as the `build` job's maturin
       # invocation — this job's whole point is gating `pack` on a build of
       # the actual shipped artifact, so testing against anything other than
-      # the abi3 floor (crates/dbt-python's own requires-python) wouldn't
+      # the abi3 floor (crates/dbt-sa-python's own requires-python) wouldn't
       # actually exercise what gets published.
       - name: Setup Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
@@ -553,10 +608,10 @@ jobs:
 
       # Prepending .venv/bin to PATH lets every later step call `maturin`/
       # `pytest` directly instead of the full .venv/bin/... path. This
-      # doesn't require declaring maturin/pytest in crates/dbt-python's own
+      # doesn't require declaring maturin/pytest in crates/dbt-sa-python's own
       # pyproject.toml.
       - name: Create venv and install maturin + pytest
-        working-directory: crates/dbt-python
+        working-directory: crates/dbt-sa-python
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip "maturin>=1.0,<2.0" "pytest>=9.1"
@@ -568,11 +623,11 @@ jobs:
       # maturin develop also installs [project.dependencies] (mashumaro)
       # into .venv as part of installing the built wheel.
       - name: Build extension (maturin develop)
-        working-directory: crates/dbt-python
+        working-directory: crates/dbt-sa-python
         run: maturin develop
 
       - name: pytest (dbt-python)
-        working-directory: crates/dbt-python
+        working-directory: crates/dbt-sa-python
         run: pytest
 
       - name: sccache stats
@@ -621,12 +676,11 @@ jobs:
       - name: List binaries
         run: ls -la binaries/
 
-      # Two distributions are produced by different mechanisms:
-      #   - dbt-core                     → maturin abi3 wheel, built in `build`
-      #                                    and downloaded here into target/wheels.
-      #   - dbt-core-experimental-parser → packed from the binary via
-      #                                    `cargo ci pypi pack` (unchanged).
-      - name: Download all wheels (dbt-core, maturin)
+      # dbt-core and dbt-oss are maturin wheels built in `build` (artifacts
+      # `wheel-<target>`/`wheel-oss-<target>`, both matched below);
+      # dbt-core-experimental-parser is packed from the binary further down
+      # via `cargo ci pypi pack`.
+      - name: Download all wheels (dbt-core, dbt-oss, maturin)
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
         with:
           path: target/wheels
@@ -743,8 +797,8 @@ jobs:
   # Release at install time. Authenticates with the repo-level
   # `PYPI_API_TOKEN`/`TEST_PYPI_API_TOKEN` secret depending on mode
   # (passed to the tool as `DBT_PYPI_PROD_TOKEN`/`DBT_PYPI_TEST_TOKEN`).
-  # `release_target` selects which of the two distributions (`dbt-core`,
-  # `dbt-core-experimental-parser`) to publish, in both modes.
+  # `release_target` selects which of the three distributions (`dbt-core`,
+  # `dbt-core-experimental-parser`, `dbt-oss`) to publish, in both modes.
   # ------------------------------------------------------------------
   publish-pypi:
     name: Publish to PyPI
@@ -794,13 +848,21 @@ jobs:
       # the binary CLI wheel (py3-none) `cargo ci pypi pack` produces — pass
       # the matching python/abi tags so the sdist manifest's filenames match
       # what's actually sitting at BASE_URL.
+      #
+      # No --project-dir: the workspace root carries the descriptive metadata
+      # the PyPI page renders from, and --runtime-metadata-from overlays just
+      # requires-python + dependencies from the crate maturin built (>=3.11 +
+      # mashumaro; the root says >=3.9, for the binary CLI wheel). uv trusts
+      # the sdist's PKG-INFO over the wheel's, so a mismatch installs broken —
+      # `cargo ci pypi publish` cross-checks both and fails the release.
       - name: Publish (dbt-core)
-        if: inputs.release_target != 'parser'
+        if: inputs.release_target == 'all' || inputs.release_target == 'core'
         run: |
           cargo ci pypi publish \
             --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --download-base-url "$BASE_URL" \
+            --runtime-metadata-from crates/dbt-sa-python \
             --python-tag cp311 \
             --abi-tag abi3 \
             --target x86_64-unknown-linux-gnu \
@@ -810,13 +872,13 @@ jobs:
             --target x86_64-pc-windows-msvc
 
       - name: Rename pyproject for parser publish
-        if: inputs.release_target != 'core'
+        if: inputs.release_target == 'all' || inputs.release_target == 'parser'
         run: |
           sed -i 's/^name = "dbt-core"$/name = "dbt-core-experimental-parser"/' pyproject.toml
           grep '^name = ' pyproject.toml
 
       - name: Publish (dbt-core-experimental-parser)
-        if: inputs.release_target != 'core'
+        if: inputs.release_target == 'all' || inputs.release_target == 'parser'
         run: |
           cargo ci pypi publish \
             --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
@@ -829,10 +891,43 @@ jobs:
             --target x86_64-pc-windows-msvc
 
       - name: Restore pyproject name after parser publish
-        if: ${{ always() && inputs.release_target != 'core' }}
+        if: ${{ always() && (inputs.release_target == 'all' || inputs.release_target == 'parser') }}
         run: |
           sed -i 's/^name = "dbt-core-experimental-parser"$/name = "dbt-core"/' pyproject.toml
           grep '^name = ' pyproject.toml
+
+      # dbt-oss is the identical rebrand of dbt-core (see the `build` job) —
+      # same tags, same --runtime-metadata-from. The name swap targets the
+      # root pyproject, like the parser's above: with no --project-dir that's
+      # where the sdist's name and descriptive metadata come from.
+      # `grep -qx` guards against a silent no-op `sed` (exits 0 either way).
+      - name: Rename pyproject for oss publish
+        if: inputs.release_target == 'all' || inputs.release_target == 'oss'
+        run: |
+          sed -i 's/^name = "dbt-core"$/name = "dbt-oss"/' pyproject.toml
+          grep -qx 'name = "dbt-oss"' pyproject.toml
+
+      - name: Publish (dbt-oss)
+        if: inputs.release_target == 'all' || inputs.release_target == 'oss'
+        run: |
+          cargo ci pypi publish \
+            --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
+            --version "${{ needs.prepare-release.outputs.version }}" \
+            --download-base-url "$BASE_URL" \
+            --runtime-metadata-from crates/dbt-sa-python \
+            --python-tag cp311 \
+            --abi-tag abi3 \
+            --target x86_64-unknown-linux-gnu \
+            --target aarch64-unknown-linux-gnu \
+            --target x86_64-apple-darwin \
+            --target aarch64-apple-darwin \
+            --target x86_64-pc-windows-msvc
+
+      - name: Restore pyproject name after oss publish
+        if: ${{ always() && (inputs.release_target == 'all' || inputs.release_target == 'oss') }}
+        run: |
+          sed -i 's/^name = "dbt-oss"$/name = "dbt-core"/' pyproject.toml
+          grep -qx 'name = "dbt-core"' pyproject.toml
 
   # ------------------------------------------------------------------
   # Create the GitHub Release with all assets. Skipped on dry-run.
@@ -928,7 +1023,7 @@ jobs:
       # `ARCHIVE_BASE` template's `${PACKAGE_NAME}-` prefix. Hardcoded
       # because reusable-workflow `with:` blocks don't accept the `env`
       # context — keep these in lockstep with the build job manually.
-      binary_name: dbt-sa-cli
+      binary_name: dbt
       tarball_prefix: dbt-core-
     permissions:
       contents: read
@@ -1024,7 +1119,10 @@ jobs:
       - name: Open or update pull request
         if: steps.backport.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Not GITHUB_TOKEN: Actions won't trigger workflows from the
+          # events it creates, so the reverse sync in
+          # auto-public-pr-copybara.yml would never run for this PR.
+          GH_TOKEN: ${{ secrets.FS_SERVICE_PAT }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
           PR_BRANCH: ${{ steps.backport.outputs.pr_branch }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

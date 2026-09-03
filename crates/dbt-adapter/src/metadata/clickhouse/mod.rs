@@ -1,6 +1,8 @@
 use crate::AdapterEngine;
-use crate::adapter::adapter_impl::AdapterImpl;
+use crate::adapter::adapter_impl::{AdapterImpl, InnerAdapter};
+use crate::column::Column;
 use crate::connection::AdapterConnectionFactory;
+use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::record_batch::RecordBatchExt;
 use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
@@ -10,7 +12,8 @@ use arrow_schema::Schema;
 use arrow_array::{Array, RecordBatch, StringArray, UInt64Array};
 
 use dbt_adapter_core::ExecutionPhase;
-use dbt_adbc::{Connection, MapReduce, QueryCtx};
+use dbt_adapter_engine::MapReduce;
+use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::dbt_types::RelationType;
@@ -20,6 +23,8 @@ use dbt_schemas::schemas::{
 };
 use indexmap::IndexMap;
 use minijinja::State;
+use minijinja::Value;
+use minijinja::value::ValueKind;
 use std::collections::btree_map::Entry;
 
 use std::collections::{BTreeMap, HashMap};
@@ -402,30 +407,620 @@ pub fn relation_type_from_engine(engine_name: &str) -> RelationType {
     }
 }
 
+/// The `(name, type)` pairs from a `DESCRIBE TABLE` result batch (which also
+/// carries default/comment/codec/ttl columns; only name/type are consumed).
+fn describe_name_type_pairs(batch: &RecordBatch) -> AdapterResult<Vec<(String, String)>> {
+    let names = batch.column_values::<StringArray>("name")?;
+    let types = batch.column_values::<StringArray>("type")?;
+    Ok((0..batch.num_rows())
+        .map(|i| (names.value(i).to_string(), types.value(i).to_string()))
+        .collect())
+}
+
+/// Column names and ClickHouse type text of an arbitrary SELECT, via
+/// `DESCRIBE TABLE (<sql>)`. DESCRIBE preserves the server's own type text —
+/// the ADBC/Arrow result schema marks every column Nullable, which breaks
+/// downstream DDL and contract/type comparisons. `settings_clause` (rendered
+/// by [`query_settings_clause`]) makes introspected types match runtime
+/// settings such as `join_use_nulls`.
+pub fn describe_query_columns(
+    engine: &dyn AdapterEngine,
+    state: Option<&State>,
+    conn: &mut dyn Connection,
+    ctx: &QueryCtx,
+    sql: &str,
+    settings_clause: &str,
+    token: CancellationToken,
+) -> AdapterResult<Vec<(String, String)>> {
+    // The closing paren goes on its own line: model SQL routinely ends with a
+    // `-- line comment` (no trailing newline), which would otherwise swallow
+    // the `)` and break the query.
+    let batch = engine.execute(
+        state,
+        conn,
+        ctx,
+        &format!("DESCRIBE TABLE ({sql}\n){settings_clause}"),
+        token,
+    )?;
+    describe_name_type_pairs(&batch)
+}
+
 /// Build an Arrow Schema from ClickHouse's `DESCRIBE TABLE` output.
-///
-/// ClickHouse `DESCRIBE TABLE` returns columns: name, type, default_type,
-/// default_expression, comment, codec_expression, ttl_expression.
 fn build_schema_from_clickhouse_describe(
     describe_result: Arc<RecordBatch>,
     type_ops: &dyn TypeOps,
 ) -> AdapterResult<Arc<Schema>> {
-    let column_names = describe_result.column_values::<StringArray>("name")?;
-    let data_types = describe_result.column_values::<StringArray>("type")?;
-
     let mut fields = vec![];
-    for i in 0..describe_result.num_rows() {
-        let name = column_names.value(i);
-        let text_data_type = data_types.value(i);
+    for (name, text_data_type) in describe_name_type_pairs(&describe_result)? {
         // ClickHouse encodes nullability via the `Nullable(...)` wrapper in the
         // type text; the type parser handles that and the Arrow nullable bit is
         // derived from there.
-        let field = make_arrow_field_v2(type_ops, name.to_string(), text_data_type, None, None)?;
+        let field = make_arrow_field_v2(type_ops, name, &text_data_type, None, None)?;
         fields.push(field);
     }
 
     let schema = Schema::new(fields);
     Ok(Arc::new(schema))
+}
+
+/// ClickHouse server capabilities, probed once per process and reused for every
+/// model/thread afterwards (as the Python client does at connection init).
+/// Later capability probes (atomic exchange) extend this struct.
+#[derive(Debug, Clone)]
+pub struct ClickHouseCapabilities {
+    /// `SELECT version()` result; empty when the probe failed (callers treat
+    /// unknown as "modern server").
+    pub server_version: String,
+    /// Whether lightweight deletes are usable. Mirrors dbclient.py
+    /// `_check_lightweight_deletes`.
+    pub has_lw_deletes: bool,
+    /// `has_lw_deletes` gated by the profile `use_lw_deletes` flag; picks the
+    /// default incremental strategy.
+    pub use_lw_deletes: bool,
+}
+
+impl ClickHouseCapabilities {
+    /// Whether the connected server is older than `version`; an unknown
+    /// server version is treated as modern (false).
+    pub fn is_before(&self, version: &str) -> AdapterResult<bool> {
+        if self.server_version.is_empty() {
+            return Ok(false);
+        }
+        Ok(compare_versions(version, &self.server_version)? > 0)
+    }
+
+    /// Inclusive counterpart of [`ClickHouseCapabilities::is_before`]; an
+    /// unknown server version is treated as modern (true).
+    pub fn is_at_or_after(&self, version: &str) -> AdapterResult<bool> {
+        if self.server_version.is_empty() {
+            return Ok(true);
+        }
+        Ok(compare_versions(&self.server_version, version)? >= 0)
+    }
+}
+
+/// Mirrors dbt-clickhouse util.py `compare_versions`: 1/-1/0 comparing dotted
+/// numeric versions segment by segment; errors on non-numeric segments.
+fn compare_versions(v1: &str, v2: &str) -> AdapterResult<i32> {
+    for (part1, part2) in v1.split('.').zip(v2.split('.')) {
+        match (part1.parse::<i64>(), part2.parse::<i64>()) {
+            (Ok(a), Ok(b)) => {
+                if a != b {
+                    return Ok(if a > b { 1 } else { -1 });
+                }
+            }
+            _ => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "Version must consist of only numbers separated by '.'",
+                ));
+            }
+        }
+    }
+    Ok(0)
+}
+
+/// Read a dict-valued key (e.g. `settings`, `query_settings`) from
+/// `model['config']`, preserving iteration order. Missing/undefined -> empty.
+pub(crate) fn model_config_map(model: &Value, key: &str) -> Vec<(String, Value)> {
+    let Ok(config) = model.get_attr("config") else {
+        return Vec::new();
+    };
+    let Ok(map) = config.get_attr(key) else {
+        return Vec::new();
+    };
+    if map.is_none() || map.is_undefined() {
+        return Vec::new();
+    }
+    let Ok(keys) = map.try_iter() else {
+        return Vec::new();
+    };
+    keys.filter_map(|k| {
+        let name = k.as_str()?.to_string();
+        let value = map.get_item(&k).ok()?;
+        Some((name, value))
+    })
+    .collect()
+}
+
+/// Mirrors dbt-clickhouse impl.py `_build_settings_str`: string values not
+/// already single-quoted get single-quoted, other values are emitted verbatim;
+/// '' for no entries, otherwise newline-terminated.
+pub(crate) fn build_settings_str(settings: &[(String, Value)]) -> String {
+    let res: Vec<String> = settings
+        .iter()
+        .map(|(key, value)| match value.as_str() {
+            Some(s) if !s.starts_with('\'') => format!("{key}='{s}'"),
+            _ => format!("{key}={value}"),
+        })
+        .collect();
+    if res.is_empty() {
+        String::new()
+    } else {
+        format!("SETTINGS {}\n", res.join(", "))
+    }
+}
+
+/// Mirrors ClickHouse impl.py `format_columns`:
+/// `[{'name': c.name, 'data_type': c.data_type}, ...]`.
+pub(crate) fn format_columns(columns: &Value) -> Value {
+    let mut out: Vec<Value> = Vec::new();
+    if let Ok(items) = columns.try_iter() {
+        for column in items {
+            let mut map: BTreeMap<String, Value> = BTreeMap::new();
+            map.insert(
+                "name".to_string(),
+                column.get_attr("name").unwrap_or_default(),
+            );
+            map.insert(
+                "data_type".to_string(),
+                column.get_attr("data_type").unwrap_or_default(),
+            );
+            out.push(Value::from(map));
+        }
+    }
+    Value::from(out)
+}
+
+/// impl.py: `s3config = {**self.config.vars.vars.get(config_name, {}), **s3_model_config}`
+pub(crate) fn merge_s3_config(vars_config: Option<&Value>, model_config: Option<&Value>) -> Value {
+    let mut merged: BTreeMap<String, Value> = BTreeMap::new();
+    for config in [vars_config, model_config].into_iter().flatten() {
+        if let Ok(keys) = config.try_iter() {
+            for key in keys {
+                if let (Some(name), Ok(value)) = (key.as_str(), config.get_item(&key)) {
+                    merged.insert(name.to_string(), value);
+                }
+            }
+        }
+    }
+    Value::from(merged)
+}
+
+/// Mirrors dbt-clickhouse impl.py `s3source_clause`: build the `s3(...)` table function.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn s3source_clause(
+    s3config: &Value,
+    structure: &Value,
+    bucket: &str,
+    path: &str,
+    fmt: &str,
+    aws_access_key_id: &str,
+    aws_secret_access_key: &str,
+    role_arn: &str,
+    compression: &str,
+    external_id: &str,
+) -> AdapterResult<String> {
+    let cfg_str = |key: &str| -> String {
+        match s3config.get_attr(key) {
+            // Python `s3config.get(key, '')` stringifies non-string values too.
+            Ok(v) if !v.is_undefined() && !v.is_none() => match v.as_str() {
+                Some(s) => s.to_string(),
+                None => v.to_string(),
+            },
+            _ => String::new(),
+        }
+    };
+    // impl.py: `arg or s3config.get(key, '')`
+    let or_cfg = |arg: &str, key: &str| -> String {
+        if arg.is_empty() {
+            cfg_str(key)
+        } else {
+            arg.to_string()
+        }
+    };
+
+    // impl.py-exact shapes: dict -> ", 'name type,...'"; list -> ", 'a,b'";
+    // plain string -> ",'...'" (no space).
+    let structure = if structure.is_true() {
+        structure.clone()
+    } else {
+        s3config.get_attr("structure").unwrap_or_default()
+    };
+    let mut struct_clause = if structure.is_true() {
+        match structure.kind() {
+            ValueKind::Map => {
+                let mut cols = Vec::new();
+                if let Ok(keys) = structure.try_iter() {
+                    for key in keys {
+                        let col_type = structure
+                            .get_item(&key)
+                            .ok()
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        cols.push(format!("{key} {col_type}"));
+                    }
+                }
+                format!(", '{}'", cols.join(","))
+            }
+            ValueKind::Seq => {
+                let mut cols = Vec::new();
+                if let Ok(items) = structure.try_iter() {
+                    for item in items {
+                        cols.push(item.to_string());
+                    }
+                }
+                format!(", '{}'", cols.join(","))
+            }
+            _ => format!(",'{structure}'"),
+        }
+    } else {
+        String::new()
+    };
+
+    let fmt = or_cfg(fmt, "fmt");
+
+    let bucket = or_cfg(bucket, "bucket");
+    let mut path = or_cfg(path, "path");
+    let mut url = bucket.replace("https://", "");
+    if !path.is_empty() {
+        if !bucket.is_empty() && !bucket.ends_with('/') && !bucket.starts_with('/') {
+            path = format!("/{path}");
+        }
+        url = format!("{url}{path}").replace("//", "/");
+    }
+    let url = format!("https://{url}");
+
+    let aws_access_key_id = or_cfg(aws_access_key_id, "aws_access_key_id");
+    let aws_secret_access_key = or_cfg(aws_secret_access_key, "aws_secret_access_key");
+    if !aws_access_key_id.is_empty() && aws_secret_access_key.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "S3 aws_access_key_id specified without aws_secret_access_key",
+        ));
+    }
+    if !aws_secret_access_key.is_empty() && aws_access_key_id.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "S3 aws_secret_access_key specified without aws_access_key_id",
+        ));
+    }
+    let access = if aws_access_key_id.is_empty() {
+        String::new()
+    } else {
+        format!(", '{aws_access_key_id}', '{aws_secret_access_key}'")
+    };
+
+    // impl.py: compression forces an empty structure placeholder (s3() args are positional).
+    let comp = or_cfg(compression, "compression");
+    let comp = if comp.is_empty() {
+        String::new()
+    } else {
+        if struct_clause.is_empty() {
+            struct_clause = ", ''".to_string();
+        }
+        format!(", '{comp}'")
+    };
+
+    let role_arn = or_cfg(role_arn, "role_arn");
+    let external_id = or_cfg(external_id, "external_id");
+    if !external_id.is_empty() && role_arn.is_empty() {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "S3 external_id specified without role_arn",
+        ));
+    }
+    let extra_credentials = if role_arn.is_empty() {
+        String::new()
+    } else if external_id.is_empty() {
+        format!(", extra_credentials(role_arn='{role_arn}')")
+    } else {
+        format!(", extra_credentials(role_arn='{role_arn}', external_id='{external_id}')")
+    };
+
+    Ok(format!(
+        "s3('{url}'{access}, '{fmt}'{struct_clause}{comp}{extra_credentials})"
+    ))
+}
+
+/// Render a `query_settings` map (from macro kwargs) into a `" SETTINGS k=v, ..."`
+/// suffix for introspection queries; empty string when absent or empty.
+pub(crate) fn query_settings_clause(query_settings: Option<&Value>) -> String {
+    let Some(qs) = query_settings else {
+        return String::new();
+    };
+    let mut pairs: Vec<(String, Value)> = Vec::new();
+    if let Ok(keys) = qs.try_iter() {
+        for key in keys {
+            if let (Some(name), Ok(value)) = (key.as_str(), qs.get_item(&key)) {
+                pairs.push((name.to_string(), value));
+            }
+        }
+    }
+    let rendered = build_settings_str(&pairs);
+    if rendered.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", rendered.trim_end())
+    }
+}
+
+static CLICKHOUSE_CAPABILITIES: std::sync::OnceLock<ClickHouseCapabilities> =
+    std::sync::OnceLock::new();
+
+/// Return the server capabilities, probing only on the very first call
+/// process-wide (concurrent callers block until it completes).
+pub fn server_capabilities(
+    adapter: &AdapterImpl,
+    state: &State,
+    token: CancellationToken,
+) -> &'static ClickHouseCapabilities {
+    CLICKHOUSE_CAPABILITIES.get_or_init(|| {
+        let has_lw_deletes = probe_lightweight_deletes(adapter, state, token.clone());
+        let use_lw_deletes_requested = adapter
+            .get_db_config_value("use_lw_deletes")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        ClickHouseCapabilities {
+            server_version: probe_server_version(adapter, state, token).unwrap_or_default(),
+            has_lw_deletes,
+            use_lw_deletes: has_lw_deletes && use_lw_deletes_requested,
+        }
+    })
+}
+
+/// Run a capability-probe query; None when the probe cannot run (replay has no
+/// live connection) or the query fails.
+fn probe_query(
+    adapter: &AdapterImpl,
+    state: &State,
+    sql: &str,
+    token: CancellationToken,
+) -> Option<RecordBatch> {
+    let InnerAdapter::Impl(_, engine) = adapter.inner_adapter() else {
+        return None;
+    };
+    let engine = Arc::clone(engine);
+    let ctx = query_ctx_from_state(state)
+        .ok()?
+        .with_desc("clickhouse capability probe");
+    let mut conn = adapter
+        .borrow_tlocal_connection(Some(state), node_id_from_state(state))
+        .ok()?;
+    engine.execute(None, conn.as_mut(), &ctx, sql, token).ok()
+}
+
+/// `SELECT version()`; None leaves the version unknown -> "assume modern server".
+fn probe_server_version(
+    adapter: &AdapterImpl,
+    state: &State,
+    token: CancellationToken,
+) -> Option<String> {
+    let batch = probe_query(adapter, state, "SELECT version() AS v", token)?;
+    if batch.num_rows() == 0 {
+        return None;
+    }
+    let values = batch.column_values::<StringArray>("v").ok()?;
+    Some(values.value(0).to_string())
+}
+
+/// dbclient.py `ND_MUTATION_SETTING`.
+const ND_MUTATION_SETTING: &str = "allow_nondeterministic_mutations";
+
+/// Mirrors dbclient.py `_check_lightweight_deletes` (only
+/// `allow_nondeterministic_mutations` needs checking — lightweight deletes
+/// themselves are GA since ClickHouse 23.3). Divergences: Python raises a
+/// config error at connection time when the setting is readonly and the
+/// profile requested `use_lw_deletes` — here the probe just reports
+/// "unavailable" and `validate_incremental_strategy` errors when a
+/// lightweight-delete strategy is actually used; and Python enables the
+/// disabled-but-changeable case with a per-session `SET` — the v2 equivalent
+/// (a per-connection driver setting) arrives with the new adbc_clickhouse
+/// driver (issue #70).
+fn probe_lightweight_deletes(
+    adapter: &AdapterImpl,
+    state: &State,
+    token: CancellationToken,
+) -> bool {
+    let sql = format!(
+        "SELECT value, toString(readonly) AS readonly FROM system.settings \
+         WHERE name = '{ND_MUTATION_SETTING}'"
+    );
+    let Some(batch) = probe_query(adapter, state, &sql, token.clone()) else {
+        return false;
+    };
+    if batch.num_rows() == 0 {
+        return false;
+    }
+    let (Ok(values), Ok(readonlys)) = (
+        batch.column_values::<StringArray>("value"),
+        batch.column_values::<StringArray>("readonly"),
+    ) else {
+        return false;
+    };
+    let enabled = values
+        .value(0)
+        .parse::<i64>()
+        .map(|v| v > 0)
+        .unwrap_or(false);
+    if enabled {
+        return true;
+    }
+    if readonlys.value(0) != "0" {
+        return false;
+    }
+    // Python's `SET {setting} = 1` try/except: verify the user may override
+    // the setting.
+    let probe = format!("SELECT 1 SETTINGS {ND_MUTATION_SETTING} = 1");
+    probe_query(adapter, state, &probe, token).is_some()
+}
+
+/// Mirrors impl.py `calculate_incremental_strategy`.
+pub(crate) fn calculate_incremental_strategy(
+    strategy: Option<&str>,
+    use_lw_deletes: bool,
+) -> String {
+    let strategy = match strategy {
+        None | Some("") | Some("default") => {
+            if use_lw_deletes {
+                "delete_insert"
+            } else {
+                "legacy"
+            }
+        }
+        Some(s) => s,
+    };
+    strategy.replace('+', "_")
+}
+
+/// Mirrors impl.py `validate_incremental_strategy`: ClickHouse-specific
+/// cross-config checks, with Python-exact messages.
+pub(crate) fn validate_incremental_strategy(
+    strategy: &str,
+    has_predicates: bool,
+    has_unique_key: bool,
+    has_partition_by: bool,
+    has_lw_deletes: bool,
+) -> AdapterResult<()> {
+    let err = |msg: String| Err(AdapterError::new(AdapterErrorKind::Configuration, msg));
+    if !matches!(
+        strategy,
+        "legacy" | "append" | "delete_insert" | "insert_overwrite" | "microbatch"
+    ) {
+        return err(format!(
+            "The incremental strategy '{strategy}' is not valid for ClickHouse."
+        ));
+    }
+    if matches!(strategy, "delete_insert" | "microbatch") && !has_lw_deletes {
+        return err(format!(
+            "'{strategy}' strategy requires lightweight deletes, but the required setting \
+             '{ND_MUTATION_SETTING}' could not be enabled on this ClickHouse server \
+             (see the warnings logged at connection time)."
+        ));
+    }
+    if matches!(strategy, "delete_insert" | "microbatch") && !has_unique_key {
+        return err(format!(
+            "'{strategy}' strategy requires a non-empty 'unique_key'."
+        ));
+    }
+    if !matches!(strategy, "delete_insert" | "microbatch") && has_predicates {
+        return err(format!(
+            "Cannot apply incremental predicates with '{strategy}' strategy."
+        ));
+    }
+    if strategy == "insert_overwrite" && !has_partition_by {
+        return err(format!(
+            "'{strategy}' strategy requires non-empty 'partition_by'. Current partition_by is None."
+        ));
+    }
+    if strategy == "insert_overwrite" && has_unique_key {
+        return err(format!(
+            "'{strategy}' strategy does not support unique_key."
+        ));
+    }
+    Ok(())
+}
+
+/// Mirrors column.py `ClickHouseColumnChanges` as a Jinja value: none when
+/// there are no changes (its `__bool__`, so `{% if column_changes %}` skips),
+/// else a map; errors when the strategy cannot reconcile the changes.
+pub(crate) fn column_changes_value(
+    on_schema_change: &str,
+    source: Vec<Column>,
+    target: Vec<Column>,
+    materialization: &str,
+) -> AdapterResult<Value> {
+    let in_target = |name: &str| target.iter().any(|c| c.name() == name);
+    let source_of = |name: &str| source.iter().find(|c| c.name() == name);
+
+    let columns_to_drop: Vec<Column> = source
+        .iter()
+        .filter(|c| !in_target(c.name()))
+        .cloned()
+        .collect();
+    let columns_to_add: Vec<Column> = target
+        .iter()
+        .filter(|c| source_of(c.name()).is_none())
+        .cloned()
+        .collect();
+    let columns_to_modify: Vec<Column> = target
+        .iter()
+        .filter(|c| source_of(c.name()).is_some_and(|s| s.dtype() != c.dtype()))
+        .cloned()
+        .collect();
+
+    let has_schema_changes =
+        !(columns_to_add.is_empty() && columns_to_drop.is_empty() && columns_to_modify.is_empty());
+    let has_sync_changes = !(columns_to_drop.is_empty() && columns_to_modify.is_empty());
+    let has_conflicting_changes = (on_schema_change == "fail" && has_schema_changes)
+        || (on_schema_change != "sync_all_columns" && has_sync_changes);
+
+    if has_conflicting_changes {
+        // Python list-repr of `[str(col), ...]` — tests assert on it.
+        let fmt = |cols: &[Column]| {
+            if cols.is_empty() {
+                "[]".to_string()
+            } else {
+                format!(
+                    "['{}']",
+                    cols.iter()
+                        .map(|c| format!("{} {}", c.name(), c.data_type()))
+                        .collect::<Vec<_>>()
+                        .join("', '")
+                )
+            }
+        };
+        // errors.py schema_change_fail_error
+        let config_name = if materialization == "table" {
+            "mv_on_schema_change"
+        } else {
+            "on_schema_change"
+        };
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "The source and target schemas on this {materialization} model are out of sync.\n\
+                 They can be reconciled in several ways:\n  \
+                 - set the `{config_name}` config to `append_new_columns` or `sync_all_columns`.\n  \
+                 - Re-run the {materialization} model with `full_refresh: True` to update the target schema.\n  \
+                 - update the schema manually and re-run the process.\n\n\
+                 Additional troubleshooting context:\n   \
+                 Source columns not in target: {}\n   \
+                 Target columns not in source: {}\n   \
+                 New column types: {}",
+                fmt(&columns_to_drop),
+                fmt(&columns_to_add),
+                fmt(&columns_to_modify),
+            ),
+        ));
+    }
+
+    if !has_schema_changes {
+        return Ok(Value::from(()));
+    }
+
+    let mut changes = BTreeMap::new();
+    changes.insert(
+        "on_schema_change".to_string(),
+        Value::from(on_schema_change),
+    );
+    changes.insert("columns_to_add".to_string(), Value::from(columns_to_add));
+    changes.insert("columns_to_drop".to_string(), Value::from(columns_to_drop));
+    changes.insert(
+        "columns_to_modify".to_string(),
+        Value::from(columns_to_modify),
+    );
+    Ok(Value::from(changes))
 }
 
 #[cfg(test)]
@@ -435,6 +1030,403 @@ mod tests {
     use crate::stmt_splitter::DefaultStmtSplitter;
     use arrow_schema::{DataType, Field};
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+    #[test]
+    fn test_build_settings_str_mirrors_python() {
+        // Mirrors dbt-clickhouse _build_settings_str: unquoted strings get
+        // single-quoted, other values verbatim; trailing newline; '' when empty.
+        assert_eq!(build_settings_str(&[]), "");
+        assert_eq!(
+            build_settings_str(&[
+                ("index_granularity".to_string(), Value::from(4096)),
+                (
+                    "replicated_deduplication_window".to_string(),
+                    Value::from("0")
+                ),
+                ("prequoted".to_string(), Value::from("'x'")),
+            ]),
+            "SETTINGS index_granularity=4096, replicated_deduplication_window='0', prequoted='x'\n"
+        );
+    }
+
+    #[test]
+    fn test_model_config_map_reads_model_config() {
+        let model = Value::from_serialize(serde_json::json!({
+            "config": {
+                "settings": {"index_granularity": 4096},
+                "query_settings": {"join_use_nulls": 1},
+            }
+        }));
+        let settings = model_config_map(&model, "settings");
+        assert_eq!(settings.len(), 1);
+        assert_eq!(settings[0].0, "index_granularity");
+
+        // missing key -> empty
+        assert!(model_config_map(&model, "not_there").is_empty());
+        // model without config -> empty
+        assert!(model_config_map(&Value::from(()), "settings").is_empty());
+    }
+
+    /// Mirrors impl.py rendering, incl. the TestS3* fixture shapes and URL join.
+    #[test]
+    fn test_s3source_clause_mirrors_python() {
+        let s3config = Value::from_serialize(serde_json::json!({
+            "bucket": "https://datasets-documentation.s3.eu-west-3.amazonaws.com/nyc-taxi/",
+            "fmt": "TabSeparatedWithNames",
+        }));
+        let structure = Value::from_serialize(serde_json::json!([
+            "trip_id UInt32",
+            "pickup_datetime DateTime"
+        ]));
+        let clause = s3source_clause(
+            &s3config,
+            &structure,
+            "",
+            "/trips_5.gz",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://datasets-documentation.s3.eu-west-3.amazonaws.com/nyc-taxi/trips_5.gz', \
+             'TabSeparatedWithNames', 'trip_id UInt32,pickup_datetime DateTime')"
+        );
+
+        // dict structure -> "name type,..."; plain string -> ",'...'" (no space)
+        let dict_structure =
+            Value::from_serialize(serde_json::json!({"fare": "Float64", "trip_id": "UInt32"}));
+        let clause = s3source_clause(
+            &s3config,
+            &dict_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://bucket.com', 'CSV', 'fare Float64,trip_id UInt32')"
+        );
+        let string_structure = Value::from("a UInt32, b String");
+        let clause = s3source_clause(
+            &s3config,
+            &string_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://bucket.com', 'CSV','a UInt32, b String')"
+        );
+    }
+
+    /// Access keys come in pairs; compression forces the empty structure
+    /// placeholder; external_id requires role_arn.
+    #[test]
+    fn test_s3source_clause_credentials_and_compression() {
+        let empty = Value::from_serialize(serde_json::json!({}));
+        let no_structure = Value::from(());
+
+        let clause = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "KEY",
+            "SECRET",
+            "",
+            "",
+            "",
+        )
+        .unwrap();
+        assert_eq!(clause, "s3('https://bucket.com', 'KEY', 'SECRET', 'CSV')");
+
+        let err = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "KEY",
+            "",
+            "",
+            "",
+            "",
+        )
+        .unwrap_err();
+        assert!(
+            err.message()
+                .contains("S3 aws_access_key_id specified without aws_secret_access_key")
+        );
+        let err = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "SECRET",
+            "",
+            "",
+            "",
+        )
+        .unwrap_err();
+        assert!(
+            err.message()
+                .contains("S3 aws_secret_access_key specified without aws_access_key_id")
+        );
+
+        let clause = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "gzip",
+            "",
+        )
+        .unwrap();
+        assert_eq!(clause, "s3('https://bucket.com', 'CSV', '', 'gzip')");
+
+        let clause = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "arn:aws:iam::123456789012:role/my-role",
+            "",
+            "my-external-id",
+        )
+        .unwrap();
+        assert_eq!(
+            clause,
+            "s3('https://bucket.com', 'CSV', extra_credentials(\
+             role_arn='arn:aws:iam::123456789012:role/my-role', external_id='my-external-id'))"
+        );
+
+        let err = s3source_clause(
+            &empty,
+            &no_structure,
+            "bucket.com",
+            "",
+            "CSV",
+            "",
+            "",
+            "",
+            "",
+            "my-external-id",
+        )
+        .unwrap_err();
+        assert!(
+            err.message()
+                .contains("S3 external_id specified without role_arn")
+        );
+    }
+
+    #[test]
+    fn test_compare_versions_mirrors_python() {
+        assert_eq!(compare_versions("26.6", "26.3.12.3").unwrap(), 1);
+        assert_eq!(compare_versions("22.7.1.2484", "26.3.12.3").unwrap(), -1);
+        assert_eq!(compare_versions("26.3", "26.3.12.3").unwrap(), 0); // zip stops at shorter
+        assert!(compare_versions("26.x", "26.3").is_err());
+    }
+
+    #[test]
+    fn test_calculate_incremental_strategy_mirrors_python() {
+        for unset in [None, Some(""), Some("default")] {
+            assert_eq!(calculate_incremental_strategy(unset, true), "delete_insert");
+            assert_eq!(calculate_incremental_strategy(unset, false), "legacy");
+        }
+        // explicit strategies pass through regardless of the capability
+        assert_eq!(
+            calculate_incremental_strategy(Some("append"), true),
+            "append"
+        );
+        // '+' -> '_' (dbt-core spells it delete+insert)
+        assert_eq!(
+            calculate_incremental_strategy(Some("delete+insert"), false),
+            "delete_insert"
+        );
+    }
+
+    #[test]
+    fn test_validate_incremental_strategy_mirrors_python() {
+        let msg = |result: AdapterResult<()>| result.unwrap_err().to_string();
+
+        assert!(validate_incremental_strategy("legacy", false, true, false, true).is_ok());
+        assert!(validate_incremental_strategy("delete_insert", true, true, false, true).is_ok());
+        assert!(
+            validate_incremental_strategy("insert_overwrite", false, false, true, false).is_ok()
+        );
+
+        assert!(
+            msg(validate_incremental_strategy(
+                "merge", false, false, false, true
+            ))
+            .contains("The incremental strategy 'merge' is not valid for ClickHouse.")
+        );
+        assert!(
+            msg(validate_incremental_strategy(
+                "delete_insert",
+                false,
+                true,
+                false,
+                false
+            ))
+            .contains(
+                "'delete_insert' strategy requires lightweight deletes, but the required setting \
+                 'allow_nondeterministic_mutations' could not be enabled on this ClickHouse server \
+                 (see the warnings logged at connection time)."
+            )
+        );
+        assert!(
+            msg(validate_incremental_strategy(
+                "microbatch",
+                false,
+                false,
+                false,
+                true
+            ))
+            .contains("'microbatch' strategy requires a non-empty 'unique_key'.")
+        );
+        assert!(
+            msg(validate_incremental_strategy(
+                "append", true, false, false, true
+            ))
+            .contains("Cannot apply incremental predicates with 'append' strategy.")
+        );
+        assert!(
+            msg(validate_incremental_strategy(
+                "insert_overwrite",
+                false,
+                false,
+                false,
+                true
+            ))
+            .contains(
+                "'insert_overwrite' strategy requires non-empty 'partition_by'. \
+                     Current partition_by is None."
+            )
+        );
+        assert!(
+            msg(validate_incremental_strategy(
+                "insert_overwrite",
+                false,
+                true,
+                true,
+                true
+            ))
+            .contains("'insert_overwrite' strategy does not support unique_key.")
+        );
+    }
+
+    fn ch_column(name: &str, dtype: &str) -> Column {
+        Column::new(
+            AdapterType::ClickHouse,
+            name.to_string(),
+            dtype.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn test_column_changes_value_mirrors_python() {
+        let source = vec![ch_column("id", "UInt64"), ch_column("name", "String")];
+
+        // identical schemas -> none (ClickHouseColumnChanges.__bool__)
+        let unchanged = column_changes_value(
+            "append_new_columns",
+            source.clone(),
+            source.clone(),
+            "incremental",
+        )
+        .unwrap();
+        assert!(unchanged.is_none());
+
+        let target = vec![
+            ch_column("id", "UInt64"),
+            ch_column("name", "String"),
+            ch_column("age", "UInt8"),
+        ];
+        let changes = column_changes_value(
+            "append_new_columns",
+            source.clone(),
+            target.clone(),
+            "incremental",
+        )
+        .unwrap();
+        assert_eq!(
+            changes.get_attr("on_schema_change").unwrap().as_str(),
+            Some("append_new_columns")
+        );
+        let added = changes.get_attr("columns_to_add").unwrap();
+        assert_eq!(added.len(), Some(1));
+        let first = added.get_item(&Value::from(0)).unwrap();
+        assert_eq!(first.get_attr("name").unwrap().as_str(), Some("age"));
+
+        // any change with fail -> Python's schema_change_fail_error, list-repr'd
+        let err = column_changes_value("fail", source.clone(), target.clone(), "incremental")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains(
+                "The source and target schemas on this incremental model are out of sync."
+            )
+        );
+        assert!(err.contains("set the `on_schema_change` config"));
+        assert!(err.contains("Source columns not in target: []"));
+        assert!(err.contains("Target columns not in source: ['age UInt8']"));
+        assert!(err.contains("New column types: []"));
+
+        // dropped column requires sync_all_columns; append_new_columns conflicts
+        let narrowed = vec![ch_column("id", "UInt64")];
+        let err = column_changes_value(
+            "append_new_columns",
+            source.clone(),
+            narrowed.clone(),
+            "incremental",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("Source columns not in target: ['name String']"));
+        let synced =
+            column_changes_value("sync_all_columns", source.clone(), narrowed, "incremental")
+                .unwrap();
+        assert_eq!(synced.get_attr("columns_to_drop").unwrap().len(), Some(1));
+
+        // table materialization names the MV config key instead
+        let err = column_changes_value("fail", source, target, "table")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("set the `mv_on_schema_change` config"));
+        assert!(err.contains("this table model"));
+    }
 
     /// A ClickHouse metadata adapter backed by a mock engine (no live
     /// connection); the catalog batch parsers never touch the engine.

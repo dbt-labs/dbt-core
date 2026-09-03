@@ -9,6 +9,7 @@
 
 use std::collections::BTreeMap;
 
+use dbt_adapter_core::AdapterType;
 use dbt_common::ErrorCode;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{FsResult, fs_err};
@@ -18,6 +19,22 @@ use dbt_schemas::schemas::project::{
 
 use crate::discover::{DiscoveredSkill, SkillOrigin, SkillSourceProject};
 use crate::provenance::ShadowedSkill;
+
+/// The adapter handed to the shared config resolver, which requires one.
+///
+/// Resolving skill config does not depend on the adapter. `SkillConfig` has no
+/// adapter-specific keys, so it inherits the no-op
+/// `ResolvableConfig::canonicalize_adapter_aliases` — the only path by which
+/// this value reaches config-tree resolution. The one other consumer,
+/// `authored_quoting_per_adapter`, is reached solely through
+/// `build_root_project_configs`, which this pass never calls.
+///
+/// So the value is arbitrary, and it has to be *something*: `AdapterType` has no
+/// neutral variant. It cannot be the project's real adapter either, because this
+/// pass runs during `dbt deps`, before any profile has been read.
+///
+/// `skill_config_resolution_ignores_the_adapter` keeps this assumption honest.
+const CONFIG_RESOLVER_ADAPTER: AdapterType = AdapterType::Snowflake;
 
 /// A skill that survived config resolution and collision handling, plus the
 /// skills it shadowed.
@@ -44,22 +61,32 @@ pub fn filter_enabled(
             "Cannot resolve skill config without a root project"
         )
     })?;
-    let root_config: DbtProjectConfig<SkillConfig> =
-        init_project_config(&root_project.skills_config, (), None, disallow_plus_prefix)?;
+    let root_config: DbtProjectConfig<SkillConfig> = init_project_config(
+        &root_project.skills_config,
+        (),
+        None,
+        disallow_plus_prefix,
+        CONFIG_RESOLVER_ADAPTER,
+    )?;
 
     // One resolver per source project, built once and reused across its skills.
     let mut resolvers: BTreeMap<usize, ProjectConfigResolver<SkillConfig>> = BTreeMap::new();
     for (index, project) in projects.iter().enumerate() {
         let resolver = if index == 0 {
-            ProjectConfigResolver::for_root(root_config.clone())
+            ProjectConfigResolver::for_root(root_config.clone(), CONFIG_RESOLVER_ADAPTER)
         } else {
             let local = init_project_config(
                 &project.skills_config,
                 (),
                 Some(project.package_name.as_str()),
                 disallow_plus_prefix,
+                CONFIG_RESOLVER_ADAPTER,
             )?;
-            ProjectConfigResolver::for_dependency(local, root_config.clone())
+            ProjectConfigResolver::for_dependency(
+                local,
+                root_config.clone(),
+                CONFIG_RESOLVER_ADAPTER,
+            )
         };
         resolvers.insert(index, resolver);
     }
@@ -147,6 +174,7 @@ fn warn_collision(name: &str, winner: &DiscoveredSkill, losers: &[DiscoveredSkil
 mod tests {
     use super::*;
     use crate::validate::SkillFrontmatter;
+    use dbt_schemas::schemas::project::ProjectSkillConfig;
     use std::path::PathBuf;
 
     fn skill(name: &str, precedence: usize, origin: SkillOrigin) -> DiscoveredSkill {
@@ -288,5 +316,44 @@ mod tests {
 
         assert_eq!(selected.len(), 2);
         assert!(selected.iter().all(|s| s.shadowed.is_empty()));
+    }
+
+    /// `filter_enabled` has to hand the shared resolver an adapter it does not
+    /// need (see `CONFIG_RESOLVER_ADAPTER`). That is only sound while
+    /// `SkillConfig` stays adapter-independent. If someone gives it a
+    /// dialect-aliased key -- or implements `canonicalize_adapter_aliases` for
+    /// it -- skills would start resolving differently depending on an arbitrary
+    /// constant, silently. This fails instead.
+    #[test]
+    fn skill_config_resolution_ignores_the_adapter() {
+        let yaml = "root_project:\n  alpha:\n    +enabled: false\n  beta:\n    +enabled: true\n";
+        let project_config: Option<ProjectSkillConfig> = Some(crate::yaml::from_str(yaml).unwrap());
+
+        let resolve = |adapter: AdapterType| {
+            let root: DbtProjectConfig<SkillConfig> =
+                init_project_config(&project_config, (), None, false, adapter).unwrap();
+            let resolver = ProjectConfigResolver::for_root(root, adapter);
+            ["alpha", "beta"].map(|name| {
+                let fqn = vec!["root_project".to_string(), name.to_string()];
+                resolver.resolve_with_configs(&fqn, &fqn, &[]).enabled()
+            })
+        };
+
+        // Sanity check that the fixture actually distinguishes the two skills,
+        // so the comparison below cannot pass by resolving nothing.
+        assert_eq!(resolve(CONFIG_RESOLVER_ADAPTER), [false, true]);
+
+        for adapter in [
+            AdapterType::DuckDB,
+            AdapterType::Bigquery,
+            AdapterType::Postgres,
+            AdapterType::Databricks,
+        ] {
+            assert_eq!(
+                resolve(adapter),
+                resolve(CONFIG_RESOLVER_ADAPTER),
+                "skill config resolved differently for {adapter}"
+            );
+        }
     }
 }

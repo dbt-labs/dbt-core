@@ -15,6 +15,7 @@ use crate::constants::{
     DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
     NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
 };
+use crate::dispatch_object::dbt_and_adapters_namespace_for;
 use crate::error::{Error, ErrorKind};
 use crate::expression::Expression;
 use crate::listener::{RenderingEventListener, TokenizerEventListener};
@@ -820,7 +821,10 @@ impl<'source> Environment<'source> {
         parse_expr(expr).and_then(|ast| {
             let mut gen = CodeGenerator::new("<expression>", expr, self.profile.clone());
             gen.compile_expr(&ast)?;
-            gen.add(crate::machinery::Instruction::Return { explicit: true });
+            gen.add(crate::machinery::Instruction::Return {
+                explicit: true,
+                arg_count: None,
+            });
             Ok(gen.finish().0)
         })
     }
@@ -956,12 +960,28 @@ impl<'source> Environment<'source> {
         Some(kv.1)
     }
 
-    /// Get the macros registered in the dbt and adapters namespace in the correct lookup order
-    pub fn get_dbt_and_adapters_namespace(&self) -> Arc<ValueMap> {
+    /// The full `dialect -> (macro_name -> package)` namespace.
+    ///
+    /// Keyed by dialect because a run may load several adapters' internal
+    /// packages at once, and an *unprefixed* internal macro (`run_hooks`,
+    /// `py_write_table`) is defined by more than one of them. A flat map cannot
+    /// say "DuckDB's `run_hooks` for a DuckDB node, `dbt`'s for a Snowflake one".
+    /// Prefixed names (`duckdb__generate_series`) are unambiguous either way.
+    pub fn get_dbt_and_adapters_namespaces(&self) -> Arc<ValueMap> {
         self.get_global(DBT_AND_ADAPTERS_NAMESPACE)
             .unwrap_or_default()
             .downcast_object::<ValueMap>()
             .unwrap_or_else(|| Arc::new(ValueMap::new()))
+    }
+
+    /// Get the macros registered in the dbt and adapters namespace for `dialect`,
+    /// in the correct lookup order.
+    ///
+    /// Within a dialect the reverse-order, last-wins layering of its package
+    /// chain is preserved — that is how a more specific adapter package
+    /// overrides `dbt-adapters`, and it is load-bearing.
+    pub fn get_dbt_and_adapters_namespace(&self, dialect: &str) -> Arc<ValueMap> {
+        dbt_and_adapters_namespace_for(&self.get_dbt_and_adapters_namespaces(), dialect)
     }
 
     /// Looks up a filter.

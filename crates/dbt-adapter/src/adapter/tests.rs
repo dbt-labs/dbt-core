@@ -23,6 +23,20 @@ fn dispatch_test(
     adapter.call_method_impl(&state, name, args, &[])
 }
 
+/// As `dispatch_test`, but with a `dialect` global standing in for the render
+/// context a node that selected an adapter via `+adapter` would carry.
+fn dispatch_test_with_dialect(
+    adapter: &Arc<Adapter>,
+    dialect: &str,
+    name: &str,
+    args: &[Value],
+) -> Result<Value, minijinja::Error> {
+    let mut env = minijinja::Environment::new();
+    env.add_global(minijinja::constants::DIALECT, Value::from(dialect));
+    let state = State::new_for_env(&env);
+    adapter.call_method_impl(&state, name, args, &[])
+}
+
 /// Minimal listener that opts into introspective-hole rendering, standing in
 /// for `dbt_jinja_utils::listener::SymbolicRenderingEventListener` (which
 /// this crate doesn't depend on): `Adapter::call_method`'s Parse-mode
@@ -345,6 +359,21 @@ fn test_render_equals_flag_on_databricks_is_not_distinct_from() {
     assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
 }
 
+/// `LakeCompute` defines no null-comparison form of its own, so it must answer as
+/// DuckDB. It previously fell into the `_` arm and emitted the verbose
+/// `case when ... end = 0` form.
+#[test]
+fn test_render_equals_flag_on_lake_compute_matches_duckdb() {
+    let adapter = make_adapter_with_truthy_nulls(AdapterType::LakeCompute);
+    let result = dispatch_test(
+        &adapter,
+        "render_equals",
+        &[Value::from("a"), Value::from("b")],
+    )
+    .unwrap();
+    assert_eq!(result.as_str().unwrap(), "(a IS NOT DISTINCT FROM b)");
+}
+
 // -- location_exists tests ------------------------------------------------
 
 #[test]
@@ -565,6 +594,32 @@ fn test_typed_mode_execute_result_is_not_tainted() {
     let adapter = make_duckdb_adapter();
     let result = call_method_test(&adapter, "execute", &[Value::from("select 1")]).unwrap();
     assert!(!result.is_introspective_stub());
+}
+
+/// `adapter.type()` must report the adapter the *node* runs on. Model bodies
+/// branch on it, so a node that selected a `lake_compute` adapter seeing the
+/// target's default would take the wrong branch.
+#[test]
+fn adapter_type_follows_the_nodes_selected_dialect() {
+    let adapter = make_duckdb_adapter();
+
+    // No selection: the adapter's own type.
+    let default = dispatch_test(&adapter, "type", &[]).unwrap();
+    assert_eq!(default.as_str().unwrap(), "duckdb");
+
+    // Selection: the node's dialect wins.
+    let selected = dispatch_test_with_dialect(&adapter, "lake_compute", "type", &[]).unwrap();
+    assert_eq!(selected.as_str().unwrap(), "lake_compute");
+}
+
+/// An unparseable or absent dialect must fall back to the adapter's own type
+/// rather than erroring or silently reporting something else.
+#[test]
+fn adapter_type_falls_back_on_an_unknown_dialect() {
+    let adapter = make_duckdb_adapter();
+
+    let result = dispatch_test_with_dialect(&adapter, "not_an_adapter", "type", &[]).unwrap();
+    assert_eq!(result.as_str().unwrap(), "duckdb");
 }
 
 #[test]

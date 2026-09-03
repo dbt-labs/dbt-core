@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => ({
     }),
   ],
   resolve: {
-    dedupe: ['@dbt-labs/sourdough', '@tanstack/react-query', 'react', 'react-dom'],
+    dedupe: ['@tanstack/react-query', 'react', 'react-dom'],
   },
   build: {
     target: 'esnext',

@@ -52,7 +52,6 @@ impl SemanticCategory {
             | "get_relations_without_caching"
             | "valid_snapshot_target"
             | "describe_relation"
-            | "describe_dynamic_table"
             | "get_column_schema_from_query"
             | "get_columns_in_select_sql"
             | "get_partitions_metadata"
@@ -64,7 +63,8 @@ impl SemanticCategory {
             | "has_dbr_capability"
             | "get_missing_columns"
             | "is_replaceable"
-            | "location_exists" => SemanticCategory::MetadataRead,
+            | "location_exists"
+            | "check_incremental_schema_changes" => SemanticCategory::MetadataRead,
 
             // Mutate database state (DDL/DML)
             "execute"
@@ -141,6 +141,8 @@ impl SemanticCategory {
             | "get_clickhouse_local_db_prefix"
             | "clickhouse_db_engine_clause"
             | "is_before_version"
+            | "is_at_or_after_version"
+            | "format_columns"
             | "supports_atomic_exchange"
             | "can_exchange"
             | "should_on_cluster"
@@ -151,6 +153,7 @@ impl SemanticCategory {
             | "filter_settings_by_engine"
             | "get_ch_database"
             | "get_credentials"
+            | "s3source_clause"
             | "get_csv_data"
             | "table_format" => SemanticCategory::Pure,
 
@@ -239,6 +242,12 @@ mod tests {
         );
         assert_eq!(
             SemanticCategory::from_adapter_method("list_schemas"),
+            SemanticCategory::MetadataRead
+        );
+        // `describe_*` issues a read-only SHOW. An unregistered method falls through to
+        // `Write`, which would record a read as mutating during replay.
+        assert_eq!(
+            SemanticCategory::from_adapter_method("describe_relation"),
             SemanticCategory::MetadataRead
         );
 

@@ -54,17 +54,17 @@ use dbt_tasks_core::run_cache::run_cache_service::{
     CachedTestExecutionResult, RunCacheAfterSuccess, RunCacheCloneDecision, RunCacheCloneError,
     RunCacheReuseHookExecutor, RunCacheReuseHookPhase, RunCacheServiceDecision,
     clear_stale_missing_last_modified_epoch_for_node, confirm_run_cache_service_execution,
-    execute_run_cache_service_clone, insert_compiled_view_definition,
-    record_run_cache_clone_decision, record_run_cache_service_execution, replay_dev_clone_decision,
-    replay_run_cache_clone_decision, run_cache_service_before_execution,
-    should_execute_hooks_for_skip_reuse,
+    evict_node_metadata_for_untracked_rebuild, execute_run_cache_service_clone,
+    insert_compiled_view_definition, record_run_cache_clone_decision,
+    record_run_cache_service_execution, replay_dev_clone_decision, replay_run_cache_clone_decision,
+    run_cache_service_before_execution, should_execute_hooks_for_skip_reuse,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunExecutionPath {
     Remote,
     SideCar,
-    AltCompute,
+    LakeCompute,
 }
 
 pub struct RunTask {
@@ -106,7 +106,8 @@ impl Task for RunTask {
     ) -> Pin<Box<dyn Future<Output = FsResult<NodeStatus>> + Send + 'a>> {
         Box::pin(async move {
             let unique_id = self.node.unique_id();
-            let adapter_type = ctx.adapter_type();
+            // The node's own adapter drives its execution; see `+adapter`.
+            let adapter_type = self.node.node_adapter();
             let max_threads = ctx.dbt_profile().threads;
             let mut result_receiver = { self.result_receiver.lock().take() };
             let task_result = receive_task_result(&unique_id, &mut result_receiver)?;
@@ -273,11 +274,18 @@ impl Task for RunTask {
                         ) {
                             let severity =
                                 test.deprecated_config.severity.clone().unwrap_or_default();
-                            let cached_status = cached_data_test_status(
+                            let emit_reused_status = ctx
+                                .inner
+                                .run_cache_ctx
+                                .run_cache_service_config
+                                .as_ref()
+                                .is_some_and(|config| config.emit_reused_status);
+                            let cached_status = cached_data_test_status_with_emit_reused_status(
                                 status,
                                 *cached_result,
                                 severity,
                                 &ctx.inner.arg.warn_error_options,
+                                emit_reused_status,
                             );
                             let reported_result = cached_status.reported_result();
                             record_test_metric(reported_result.status);
@@ -429,7 +437,7 @@ impl Task for RunTask {
                                         f: Box::new(move || {
                                             let relations_map = materialize_latest_version_pointer(
                                                 &model_clone,
-                                                ctx_clone.adapter_type(),
+                                                model_clone.node_adapter(),
                                                 ctx_clone.runtime_config(),
                                                 &ctx_clone.inner.materialization_resolver,
                                                 ctx_clone.env.clone(),
@@ -528,12 +536,12 @@ impl Task for RunTask {
                 }
                 (None, RunExecutionPath::SideCar) => {
                     self.task_hooks
-                        .run_alt_compute_sidecar(ctx, Arc::clone(&self.node), task_result.clone())
+                        .run_lake_compute_sidecar(ctx, Arc::clone(&self.node), task_result.clone())
                         .await
                 }
-                (None, RunExecutionPath::AltCompute) => {
+                (None, RunExecutionPath::LakeCompute) => {
                     self.task_hooks
-                        .run_on_alt_compute(ctx, Arc::clone(&self.node), task_result.clone())
+                        .run_on_lake_compute(ctx, Arc::clone(&self.node), task_result.clone())
                         .await
                 }
             };
@@ -603,7 +611,7 @@ impl Task for RunTask {
                         self.execution_path,
                         RunExecutionPath::Remote
                             | RunExecutionPath::SideCar
-                            | RunExecutionPath::AltCompute
+                            | RunExecutionPath::LakeCompute
                     ) {
                         emit_error_log_from_fs_error(*e);
                     }
@@ -731,7 +739,7 @@ async fn execute_hooks_for_run_cache_skip_reuse(
             hook_executor(&ctx_inner, RunCacheReuseHookPhase::Pre)?;
             hook_executor(&ctx_inner, RunCacheReuseHookPhase::Post)
         }),
-        adapter_type: ctx.adapter_type(),
+        adapter_type: node.node_adapter(),
         max_threads: ctx.dbt_profile().threads,
     }
     .run()
@@ -820,20 +828,20 @@ fn execute_hook_node_blocking(
         RunCacheReuseHookNode::Model(model) => execute_node_hooks(
             model.as_ref(),
             &model.deprecated_config,
-            ctx.adapter_type(),
+            model.node_adapter(),
             ctx.runtime_config(),
             ctx.env.clone(),
             base_context,
             &ctx.inner.arg.io,
             sql,
-            model_hook_style(ctx.adapter_type(), &model.__base_attr__.materialized),
+            model_hook_style(model.node_adapter(), &model.__base_attr__.materialized),
             NodePathKind::Compiled,
             phase,
         ),
         RunCacheReuseHookNode::Snapshot(snapshot) => execute_node_hooks(
             snapshot.as_ref(),
             &snapshot.deprecated_config,
-            ctx.adapter_type(),
+            snapshot.node_adapter(),
             ctx.runtime_config(),
             ctx.env.clone(),
             base_context,
@@ -846,7 +854,7 @@ fn execute_hook_node_blocking(
         RunCacheReuseHookNode::Seed(seed) => execute_node_hooks(
             seed.as_ref(),
             &seed.deprecated_config,
-            ctx.adapter_type(),
+            seed.node_adapter(),
             ctx.runtime_config(),
             ctx.env.clone(),
             base_context,
@@ -881,6 +889,15 @@ async fn run_cache_after_success_action(
             // planned prefetch path.
             if ctx.inner.run_cache_ctx.run_cache_service_requested {
                 clear_stale_missing_last_modified_epoch_for_node(ctx, node);
+            }
+        }
+        RunCacheAfterSuccess::InvalidateFreshness => {
+            // The node rebuilt its target but no decision was sought and no
+            // execution will be recorded, so nothing refreshed the cached
+            // epoch. Drop it: the next submit that needs this relation takes
+            // the prefetch-miss path and re-reads it from the warehouse.
+            if ctx.inner.run_cache_ctx.run_cache_service_requested {
+                evict_node_metadata_for_untracked_rebuild(ctx, node);
             }
         }
         RunCacheAfterSuccess::Confirm(mut confirmation) => {
@@ -938,11 +955,28 @@ impl CachedDataTestStatus {
 /// a passing test stat. Cached failures use the cached threshold booleans plus data test severity
 /// to report warn/error stats and increment the matching invocation metric so command status
 /// matches a normally executed test.
+#[cfg(test)]
 fn cached_data_test_status(
     reused_status: &NodeStatus,
     result: CachedTestExecutionResult,
     severity: Severity,
     warn_error_options: &WarnErrorOptions,
+) -> CachedDataTestStatus {
+    cached_data_test_status_with_emit_reused_status(
+        reused_status,
+        result,
+        severity,
+        warn_error_options,
+        true,
+    )
+}
+
+fn cached_data_test_status_with_emit_reused_status(
+    reused_status: &NodeStatus,
+    result: CachedTestExecutionResult,
+    severity: Severity,
+    warn_error_options: &WarnErrorOptions,
+    emit_reused_status: bool,
 ) -> CachedDataTestStatus {
     let failures = result.failures.max(0) as usize;
     let status = reported_test_verdict_from_components(
@@ -951,17 +985,21 @@ fn cached_data_test_status(
         result.should_error,
     );
     let status = status_with_warn_error_overrides(status, warn_error_options);
-    let stat_status = status.node_status();
+    let stat_status = match status.node_status() {
+        NodeStatus::TestPassed if emit_reused_status => reused_status.clone(),
+        status => status,
+    };
+    let final_status = if stat_status == NodeStatus::TestPassed {
+        reused_status.clone()
+    } else {
+        stat_status.clone()
+    };
 
     CachedDataTestStatus {
         failures,
         status,
-        stat_status: stat_status.clone(),
-        final_status: if stat_status == NodeStatus::TestPassed {
-            reused_status.clone()
-        } else {
-            stat_status
-        },
+        stat_status,
+        final_status,
     }
 }
 
@@ -1055,7 +1093,9 @@ fn emit_run_usage_stats(
 ) {
     let (maybe_incremental_strategy, is_contract_enforced, has_group, table_format, catalog_name) =
         match execution_path {
-            RunExecutionPath::Remote | RunExecutionPath::SideCar | RunExecutionPath::AltCompute => {
+            RunExecutionPath::Remote
+            | RunExecutionPath::SideCar
+            | RunExecutionPath::LakeCompute => {
                 if let Some(model) = node.as_any().downcast_ref::<DbtModel>() {
                     (
                         model
@@ -1200,11 +1240,11 @@ async fn execute_remote_node_no_result(
 }
 
 /// Determine whether to prefer SQL over LP for local execution of a node.
-pub fn prefer_sql_for_node(node: &dyn InternalDbtNodeAttributes, ctx: &TaskRunnerCtx) -> bool {
+pub fn prefer_sql_for_node(node: &dyn InternalDbtNodeAttributes) -> bool {
     if node.as_any().is::<DbtSnapshot>() {
         true
     } else if node.as_any().is::<DbtModel>() {
-        ctx.adapter_type() == AdapterType::DuckDB
+        node.node_adapter() == AdapterType::DuckDB
     } else {
         false
     }
@@ -1243,6 +1283,7 @@ mod tests {
     use dbt_schemas::schemas::common::Hooks;
     use dbt_schemas::schemas::properties::ModelState;
     use dbt_yaml::Verbatim;
+    use std::time::SystemTime;
 
     fn model_with_pre_hook_and_reuse_hook_config(
         execute_hooks_on_any_reuse: Option<bool>,
@@ -1404,9 +1445,42 @@ mod tests {
 
         assert_eq!(status.failures, 0);
         assert_eq!(status.status, TestExecutionStatus::Passed);
-        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(
+            status.stat_status,
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string())
+        );
+        let stat = Stat::new(
+            "test.project.cached_test".to_string(),
+            SystemTime::now(),
+            Some(status.failures),
+            status.stat_status.clone(),
+            None,
+            1,
+        );
+        assert_eq!(stat.result_status_string(), "reused");
         assert_eq!(status.final_status, reused_status);
         assert_eq!(status.status.metric_key(), None);
+    }
+
+    #[test]
+    fn cached_passing_data_test_keeps_pass_status_when_reuse_status_is_disabled() {
+        let reused_status =
+            NodeStatus::ReusedNoChanges("No new changes on any upstreams".to_string());
+
+        let status = cached_data_test_status_with_emit_reused_status(
+            &reused_status,
+            CachedTestExecutionResult {
+                failures: 0,
+                should_warn: false,
+                should_error: false,
+            },
+            Severity::Error,
+            &WarnErrorOptions::default(),
+            false,
+        );
+
+        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(status.final_status, reused_status);
     }
 
     #[test]
@@ -1539,7 +1613,7 @@ mod tests {
 
         assert_eq!(status.failures, 2);
         assert_eq!(status.status, TestExecutionStatus::Passed);
-        assert_eq!(status.stat_status, NodeStatus::TestPassed);
+        assert_eq!(status.stat_status, reused_status);
         assert_eq!(status.final_status, reused_status);
         assert_eq!(status.status.metric_key(), None);
     }

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactFlowProvider } from '@xyflow/react';
 
 import App from './App';
 import { BootstrapProvider } from './lib/bootstrapContext';
@@ -58,12 +59,14 @@ createRoot(root).render(
         keeps `document.baseURI` stable for resolving `data/` URLs.
       */}
       <HashRouter>
-        <LinkPrefixProvider prefix="#/">
-          <BootstrapProvider value={bootstrapData}>
-            <MetadataDataProvider source={wrapDataSource(dataSource, queryClient)}>
-              <App />
-            </MetadataDataProvider>
-          </BootstrapProvider>
+        <LinkPrefixProvider prefix="/">
+          <ReactFlowProvider>
+            <BootstrapProvider value={bootstrapData}>
+              <MetadataDataProvider source={wrapDataSource(dataSource, queryClient)}>
+                <App />
+              </MetadataDataProvider>
+            </BootstrapProvider>
+          </ReactFlowProvider>
         </LinkPrefixProvider>
       </HashRouter>
     </QueryClientProvider>

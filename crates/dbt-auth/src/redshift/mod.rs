@@ -1,6 +1,6 @@
 mod token_service;
 
-use crate::{AdapterConfig, Auth, AuthError, AuthOutcome, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, AuthWarningPrinter, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 
 use crate::redshift::token_service::{TokenEndpoint, create_token_service_client};
@@ -109,7 +109,11 @@ enum RedshiftAuthIR<'a> {
 }
 
 impl<'a> RedshiftAuthIR<'a> {
-    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+    pub fn apply(
+        self,
+        mut builder: DatabaseBuilder,
+        _warning_printer: &dyn AuthWarningPrinter,
+    ) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::Database {
                 user,
@@ -223,7 +227,10 @@ to obtain an OIDC-compliant access token.",
     }
 }
 
-fn parse_auth(config: &AdapterConfig) -> Result<RedshiftAuthIR<'_>, AuthError> {
+fn parse_auth<'a>(
+    config: &'a AdapterConfig,
+    _warning_printer: &dyn AuthWarningPrinter,
+) -> Result<RedshiftAuthIR<'a>, AuthError> {
     // todo: update with Redshift specific configs once available
     let method = config
         .get("method")
@@ -364,19 +371,28 @@ fn parse_auth(config: &AdapterConfig) -> Result<RedshiftAuthIR<'_>, AuthError> {
 fn apply_connection_args(
     _config: &AdapterConfig,
     builder: DatabaseBuilder,
+    _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<DatabaseBuilder, AuthError> {
     Ok(builder)
 }
 
-pub struct RedshiftAuth;
+pub struct RedshiftAuth {
+    pub warning_printer: Box<dyn AuthWarningPrinter>,
+}
+
+impl RedshiftAuth {
+    pub fn new(warning_printer: Box<dyn AuthWarningPrinter>) -> Self {
+        Self { warning_printer }
+    }
+}
 
 impl Auth for RedshiftAuth {
     fn backend(&self) -> Backend {
         Backend::Redshift
     }
 
-    fn configure(&self, config: &AdapterConfig) -> Result<AuthOutcome, AuthError> {
-        auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
+    fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
+        auth_configure_pipeline!(self, &config, parse_auth, apply_connection_args)
     }
 }
 
@@ -400,9 +416,8 @@ mod tests_adbc {
     }
 
     fn configure(config: Mapping) -> Result<database::Builder, AuthError> {
-        RedshiftAuth
+        RedshiftAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
-            .map(|outcome| outcome.builder)
     }
 
     fn assert_error_contains(config: Mapping, needle: &str) {

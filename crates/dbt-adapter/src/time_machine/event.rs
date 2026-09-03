@@ -521,7 +521,7 @@ mod tests {
             status: SaoStatus::ReusedCloned {
                 freshness_seconds: Some(3600),
             },
-            message: "Cloned from cached relation within freshness tolerance".to_string(),
+            message: "Cloned from other environment within tolerance".to_string(),
             stored_hash: "ghi789".to_string(),
             cached_test_result: None,
             timestamp_ns: 67890,
