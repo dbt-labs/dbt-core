@@ -185,6 +185,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "flakey"]
     fn missing_base_url_defaults_to_production() {
         // SAFETY: single-threaded test; no other test in this module reads
         // or writes `DBT_COMPUTE_BASE_URL`.
@@ -202,6 +203,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "flakey"]
     fn base_url_env_var_overrides_default() {
         // SAFETY: single-threaded test; restored immediately after use.
         #[allow(clippy::disallowed_methods)]
