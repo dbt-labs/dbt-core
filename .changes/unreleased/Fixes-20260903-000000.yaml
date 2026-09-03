@@ -1,0 +1,8 @@
+kind: Fixes
+body: Capture and re-emit fusion parser subprocess output through dbt-core's event
+  system instead of letting it pass through to raw stdout/stderr, re-leveling each
+  line by its json-compat severity when available
+time: 2026-09-03T00:00:00.000000+00:00
+custom:
+    Author: aiguofer
+    Issue: "15672"
