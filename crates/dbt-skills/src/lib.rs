@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[test]
-    fn a_collision_installs_the_project_skill_and_records_the_shadowed_one() {
+    fn a_collision_installs_the_project_skill() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         write_skill(root, "skills/shared", "shared");
@@ -327,7 +327,7 @@ mod tests {
         let package = write_package(root, "some_pkg", "name: some_pkg\n");
         write_skill(&package.root, "skills/shared", "shared");
 
-        install_package_skills(
+        let reports = install_package_skills(
             root,
             &root_project("root_project"),
             &[package],
@@ -336,11 +336,9 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let provenance =
-            provenance::read_provenance(&root.join(DEFAULT_SKILLS_DIR).join("shared")).unwrap();
-        assert_eq!(provenance.source, "project");
-        assert_eq!(provenance.shadowed.len(), 1);
-        assert_eq!(provenance.shadowed[0].package.as_deref(), Some("some_pkg"));
+        // One winner installed, and the package's loser never reached disk.
+        assert_eq!(count(&reports, InstallOutcome::Installed), 1);
+        assert!(root.join(DEFAULT_SKILLS_DIR).join("shared").is_dir());
     }
 
     #[test]

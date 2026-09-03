@@ -14,8 +14,7 @@ use dbt_common::{ErrorCode, FsResult, stdfs};
 use dbt_telemetry::ProgressMessage;
 use walkdir::WalkDir;
 
-use crate::config::SelectedSkill;
-use crate::discover::SkillOrigin;
+use crate::discover::{DiscoveredSkill, SkillOrigin};
 use crate::hash::hash_skill_dir;
 use crate::provenance::{
     MANAGED_BY_DBT, PROVENANCE_FILE, Provenance, read_provenance, write_provenance,
@@ -101,7 +100,7 @@ fn report_progress(report: &InstallReport, origin: Option<&SkillOrigin>) {
 pub fn install_skills(
     project_root: &Path,
     destinations: &[PathBuf],
-    selected: &[SelectedSkill],
+    selected: &[DiscoveredSkill],
 ) -> FsResult<Vec<InstallReport>> {
     let mut reports = Vec::new();
 
@@ -109,14 +108,14 @@ pub fn install_skills(
         let absolute = project_root.join(destination);
         let mut wanted = BTreeSet::new();
 
-        for selection in selected {
-            wanted.insert(selection.skill.name.clone());
+        for skill in selected {
+            wanted.insert(skill.name.clone());
             let report = InstallReport {
                 destination: destination.clone(),
-                skill_name: selection.skill.name.clone(),
-                outcome: install_one(&absolute, selection)?,
+                skill_name: skill.name.clone(),
+                outcome: install_one(&absolute, skill)?,
             };
-            report_progress(&report, Some(&selection.skill.origin));
+            report_progress(&report, Some(&skill.origin));
             reports.push(report);
         }
 
@@ -126,8 +125,7 @@ pub fn install_skills(
     Ok(reports)
 }
 
-fn install_one(destination: &Path, selection: &SelectedSkill) -> FsResult<InstallOutcome> {
-    let skill = &selection.skill;
+fn install_one(destination: &Path, skill: &DiscoveredSkill) -> FsResult<InstallOutcome> {
     let target = destination.join(&skill.name);
 
     // A project may author its skills directly inside a provider directory. In
@@ -139,19 +137,19 @@ fn install_one(destination: &Path, selection: &SelectedSkill) -> FsResult<Instal
     let source_hash = hash_skill_dir(&skill.dir)?;
 
     if target.exists() {
-        match classify_existing(&target, selection, &source_hash)? {
+        match classify_existing(&target, skill, &source_hash)? {
             // Leave it alone: not ours, or ours but edited since.
             Some(outcome) => return Ok(outcome),
             // Ours and stale — replace it.
             None => {
                 stdfs::remove_dir_all(&target)?;
-                write_skill(selection, &target, &source_hash)?;
+                write_skill(skill, &target, &source_hash)?;
                 return Ok(InstallOutcome::Updated);
             }
         }
     }
 
-    write_skill(selection, &target, &source_hash)?;
+    write_skill(skill, &target, &source_hash)?;
     Ok(InstallOutcome::Installed)
 }
 
@@ -161,10 +159,10 @@ fn install_one(destination: &Path, selection: &SelectedSkill) -> FsResult<Instal
 /// out of date, so the caller should replace it.
 fn classify_existing(
     target: &Path,
-    selection: &SelectedSkill,
+    skill: &DiscoveredSkill,
     source_hash: &str,
 ) -> FsResult<Option<InstallOutcome>> {
-    let name = &selection.skill.name;
+    let name = &skill.name;
 
     let Some(existing) = read_provenance(target) else {
         emit_warn_log_message(
@@ -188,15 +186,13 @@ fn classify_existing(
         return Ok(Some(InstallOutcome::SkippedUserModified));
     }
 
-    let up_to_date =
-        existing.content_hash == source_hash && existing.shadowed == selection.shadowed;
-    Ok(up_to_date.then_some(InstallOutcome::Unchanged))
+    Ok((existing.content_hash == source_hash).then_some(InstallOutcome::Unchanged))
 }
 
 /// Copy a skill into `target` and record where it came from.
-fn write_skill(selection: &SelectedSkill, target: &Path, source_hash: &str) -> FsResult<()> {
-    copy_skill(&selection.skill.dir, target)?;
-    write_provenance(target, &build_provenance(selection, source_hash))
+fn write_skill(skill: &DiscoveredSkill, target: &Path, source_hash: &str) -> FsResult<()> {
+    copy_skill(&skill.dir, target)?;
+    write_provenance(target, &build_provenance(skill, source_hash))
 }
 
 /// Remove dbt-installed skills in `destination` that are no longer wanted.
@@ -269,8 +265,8 @@ pub fn prune_all(project_root: &Path, destinations: &[PathBuf]) -> FsResult<Vec<
     Ok(reports)
 }
 
-fn build_provenance(selection: &SelectedSkill, content_hash: &str) -> Provenance {
-    let (source, package, version) = match &selection.skill.origin {
+fn build_provenance(skill: &DiscoveredSkill, content_hash: &str) -> Provenance {
+    let (source, package, version) = match &skill.origin {
         SkillOrigin::Project => ("project", None, None),
         SkillOrigin::Package { name, version } => ("package", Some(name.clone()), version.clone()),
     };
@@ -280,15 +276,11 @@ fn build_provenance(selection: &SelectedSkill, content_hash: &str) -> Provenance
         source: source.to_string(),
         package,
         version,
-        source_path: selection
-            .skill
-            .source_path
-            .to_string_lossy()
-            .replace('\\', "/"),
+        source_path: skill.source_path.to_string_lossy().replace('\\', "/"),
         install_mode: "copy".to_string(),
         content_hash: content_hash.to_string(),
         installed_at: Utc::now().to_rfc3339(),
-        shadowed: selection.shadowed.clone(),
+        shadowed: vec![],
     }
 }
 
@@ -375,13 +367,6 @@ mod tests {
         }
     }
 
-    fn selection(skill: DiscoveredSkill) -> SelectedSkill {
-        SelectedSkill {
-            skill,
-            shadowed: vec![],
-        }
-    }
-
     fn outcomes(reports: &[InstallReport]) -> Vec<InstallOutcome> {
         reports.iter().map(|r| r.outcome).collect()
     }
@@ -390,7 +375,7 @@ mod tests {
     fn installs_flat_with_a_provenance_sidecar() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let selected = vec![selection(make_source(root, "alpha", "body"))];
+        let selected = vec![make_source(root, "alpha", "body")];
 
         let reports = install_skills(root, &[PathBuf::from(DEST)], &selected).unwrap();
         assert_eq!(outcomes(&reports), vec![InstallOutcome::Installed]);
@@ -412,7 +397,7 @@ mod tests {
         fs::create_dir_all(skill.dir.join("scripts")).unwrap();
         fs::write(skill.dir.join("scripts/run.sh"), "echo hi").unwrap();
 
-        install_skills(root, &[PathBuf::from(DEST)], &[selection(skill)]).unwrap();
+        install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
         assert!(root.join(DEST).join("alpha/scripts/run.sh").is_file());
     }
 
@@ -420,7 +405,7 @@ mod tests {
     fn re_running_is_a_no_op() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let selected = vec![selection(make_source(root, "alpha", "body"))];
+        let selected = vec![make_source(root, "alpha", "body")];
 
         install_skills(root, &[PathBuf::from(DEST)], &selected).unwrap();
         let reports = install_skills(root, &[PathBuf::from(DEST)], &selected).unwrap();
@@ -432,14 +417,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         let skill = make_source(root, "alpha", "first");
-        install_skills(root, &[PathBuf::from(DEST)], &[selection(skill.clone())]).unwrap();
+        install_skills(root, &[PathBuf::from(DEST)], &[skill.clone()]).unwrap();
 
         fs::write(
             skill.dir.join(SKILL_FILE),
             "---\nname: alpha\ndescription: A skill.\n---\nsecond",
         )
         .unwrap();
-        let reports = install_skills(root, &[PathBuf::from(DEST)], &[selection(skill)]).unwrap();
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
 
         assert_eq!(outcomes(&reports), vec![InstallOutcome::Updated]);
         let installed = fs::read_to_string(root.join(DEST).join("alpha").join(SKILL_FILE)).unwrap();
@@ -451,12 +436,12 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         let skill = make_source(root, "alpha", "body");
-        install_skills(root, &[PathBuf::from(DEST)], &[selection(skill.clone())]).unwrap();
+        install_skills(root, &[PathBuf::from(DEST)], &[skill.clone()]).unwrap();
 
         let installed = root.join(DEST).join("alpha");
         fs::write(installed.join(SKILL_FILE), "the user rewrote this").unwrap();
 
-        let reports = install_skills(root, &[PathBuf::from(DEST)], &[selection(skill)]).unwrap();
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
         assert_eq!(
             outcomes(&reports),
             vec![InstallOutcome::SkippedUserModified]
@@ -477,7 +462,7 @@ mod tests {
         fs::create_dir_all(&occupied).unwrap();
         fs::write(occupied.join(SKILL_FILE), "hand written").unwrap();
 
-        let reports = install_skills(root, &[PathBuf::from(DEST)], &[selection(skill)]).unwrap();
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
         assert_eq!(outcomes(&reports), vec![InstallOutcome::SkippedNotOurs]);
         assert_eq!(
             fs::read_to_string(occupied.join(SKILL_FILE)).unwrap(),
@@ -489,8 +474,8 @@ mod tests {
     fn a_skill_that_is_no_longer_wanted_is_pruned() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let alpha = selection(make_source(root, "alpha", "body"));
-        let beta = selection(make_source(root, "beta", "body"));
+        let alpha = make_source(root, "alpha", "body");
+        let beta = make_source(root, "beta", "body");
 
         install_skills(root, &[PathBuf::from(DEST)], &[alpha.clone(), beta]).unwrap();
         assert!(root.join(DEST).join("beta").is_dir());
@@ -542,7 +527,7 @@ mod tests {
             precedence: 0,
         };
 
-        let reports = install_skills(root, &[PathBuf::from(DEST)], &[selection(skill)]).unwrap();
+        let reports = install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
         assert_eq!(
             outcomes(&reports),
             vec![InstallOutcome::SourceIsDestination]
@@ -554,7 +539,7 @@ mod tests {
     fn writes_into_every_destination() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let selected = vec![selection(make_source(root, "alpha", "body"))];
+        let selected = vec![make_source(root, "alpha", "body")];
         let destinations = [PathBuf::from(DEST), PathBuf::from(".claude/skills")];
 
         install_skills(root, &destinations, &selected).unwrap();
@@ -574,7 +559,7 @@ mod tests {
         install_skills(
             root,
             &[PathBuf::from(DEST)],
-            &[selection(make_source(root, "alpha", "body"))],
+            &[make_source(root, "alpha", "body")],
         )
         .unwrap();
 
@@ -596,7 +581,7 @@ mod tests {
         // just-written copy rather than duplicating or clobbering it.
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        let selected = vec![selection(make_source(root, "alpha", "body"))];
+        let selected = vec![make_source(root, "alpha", "body")];
 
         fs::create_dir_all(root.join(DEST)).unwrap();
         fs::create_dir_all(root.join(".claude")).unwrap();
@@ -633,7 +618,7 @@ mod tests {
         std::os::unix::fs::symlink(root.join("secret.txt"), skill.dir.join("stolen.txt")).unwrap();
         std::os::unix::fs::symlink(root, skill.dir.join("everything")).unwrap();
 
-        install_skills(root, &[PathBuf::from(DEST)], &[selection(skill)]).unwrap();
+        install_skills(root, &[PathBuf::from(DEST)], &[skill]).unwrap();
 
         let installed = root.join(DEST).join("leaky");
         assert!(installed.join(SKILL_FILE).is_file());
