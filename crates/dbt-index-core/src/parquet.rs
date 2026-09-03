@@ -1410,23 +1410,25 @@ impl IndexWriter {
     /// write `views.sql`, and return total files written.
     /// Standard finish: writes empty schema-placeholder parquet files for any
     /// tables not yet written (for standalone DuckDB / views.sql compatibility),
-    /// then writes views.sql. Use this for export and CLI ingest paths.
+    /// then writes views.sql. Placeholders are only written for files that
+    /// don't exist yet, so repeated ingests into the same index dir pay a
+    /// stat per table, not a rewrite.
     pub fn finish(mut self) -> Result<usize, IndexError> {
         self.ensure_dbt_tables()?;
         self.ensure_rt_tables()?;
         write_views_sql(&self.index_dir)?;
         Ok(self.count)
     }
+}
 
-    /// Ingest-optimized finish: skips writing empty placeholder parquet files.
-    /// import_parquet already skips missing files, so this saves ~29ms per reload
-    /// (43% of import cost) by not writing 0-row parquet files for unused tables.
-    /// Use this when the index will be loaded via import_parquet, not queried
-    /// directly by standalone DuckDB.
-    pub fn finish_for_ingest(self) -> Result<usize, IndexError> {
-        write_views_sql(&self.index_dir)?;
-        Ok(self.count)
-    }
+/// Very simple hash for raw_code (not cryptographic). Every writer of
+/// `dbt.nodes.raw_code_hash` must use this so the two ingest paths stamp
+/// identical values for identical code
+pub fn raw_code_hash(s: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 // ── Schema definitions ──────────────────────────────────────────────────────
@@ -1607,19 +1609,19 @@ define_row! {
     /// Path fields are `String` (owned) because `PathBuf::to_string_lossy()` returns `Cow`.
     pub struct NodeRow<'a> => schema_nodes {
         [utf8!] pub unique_id: &'a str,
-        [utf8]  pub name: &'a str,
+        [utf8]  pub name: Option<&'a str>,
         [utf8]  pub resource_type: &'a str,
-        [utf8]  pub package_name: &'a str,
-        [utf8]  pub file_path: String,
-        [utf8]  pub original_file_path: String,
+        [utf8]  pub package_name: Option<&'a str>,
+        [utf8]  pub file_path: Option<String>,
+        [utf8]  pub original_file_path: Option<String>,
         [list_utf8!] pub fqn: Vec<String>,
         [utf8]  pub alias: Option<&'a str>,
         [utf8]  pub checksum: Option<&'a str>,
         [utf8]  pub description: Option<&'a str>,
         [utf8]  pub node_language: Option<&'a str>,
         [utf8]  pub raw_code: Option<&'a str>,
-        [utf8]  pub database_name: &'a str,
-        [utf8]  pub schema_name: &'a str,
+        [utf8]  pub database_name: Option<&'a str>,
+        [utf8]  pub schema_name: Option<&'a str>,
         [utf8]  pub relation_name: Option<&'a str>,
         [utf8]  pub identifier: Option<&'a str>,
         [bool]  pub enabled: Option<bool>,
