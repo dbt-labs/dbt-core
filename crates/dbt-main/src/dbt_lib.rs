@@ -1346,6 +1346,35 @@ impl<'a> AllPhasesExecutor<'a> {
                         5,
                     );
 
+                    // A selector that matched nothing is one fact about the invocation, not one
+                    // fact per check: twenty checks produced twenty identical `CheckSkipped`
+                    // warnings, none of which said why. Say it once, in the words every other
+                    // command uses for an empty selection, and drop the per-check lines it
+                    // explains -- their `skipped` *status* still goes to `run_results.json`,
+                    // which is what `dbt retry` and any honest reading of the run depend on.
+                    //
+                    // `check` is the command that has to say it here, because it is the one
+                    // deliberately exempt from the schedule phase's own empty-selection warning
+                    // (its schedule is emptied on purpose once the gate passes, so "nothing to
+                    // do" would be a lie). `build` reaches that warning normally; repeating it
+                    // is exactly what this is trying to stop.
+                    let empty_selection = scope.as_ref().is_some_and(|s| s.is_empty());
+                    if empty_selection && self.arg.command == FsCommand::Check {
+                        if let Some(select_expr) = &schedule.select {
+                            emit_warn_log_message(
+                                ErrorCode::NoNodesForSelectionCriteria,
+                                format!(
+                                    "The selection criterion '{select_expr}' does not match any enabled nodes"
+                                ),
+                            );
+                        }
+                    }
+                    // Suppress only where the reason does get stated. An `--exclude`-only
+                    // `dbt check` has no criterion to name and no schedule-phase warning coming,
+                    // so silence there would be worse than repetition: it keeps its lines.
+                    let empty_selection_explained = empty_selection
+                        && (schedule.select.is_some() || self.arg.command != FsCommand::Check);
+
                     for r in &outcome.results {
                         // One result line per check, in the shape a test's takes:
                         // right-aligned verdict, fixed-width duration, node type, name.
@@ -1392,6 +1421,8 @@ impl<'a> AllPhasesExecutor<'a> {
                         match r.status {
                             // The line above is the whole report for a pass.
                             "pass" => {}
+                            // And for a skip whose reason was already given once, above.
+                            "skipped" if empty_selection_explained => {}
                             "skipped" => emit_warn_log_message(
                                 ErrorCode::CheckSkipped,
                                 format!(
