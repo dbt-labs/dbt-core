@@ -7515,6 +7515,48 @@ mod tests {
         );
     }
 
+    /// BigQuery constraints on dotted columns must render inside their STRUCT types.
+    #[test]
+    fn test_render_raw_columns_constraints_bigquery_nested() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let not_null = Constraint {
+            type_: ConstraintType::NotNull,
+            expression: None,
+            name: None,
+            to: None,
+            to_columns: None,
+            warn_unsupported: None,
+            warn_unenforced: None,
+        };
+        let column = |name: &str, data_type: &str, constraints| {
+            (
+                name.to_string(),
+                DbtColumn {
+                    name: name.to_string(),
+                    data_type: Some(data_type.to_string()),
+                    constraints,
+                    ..Default::default()
+                },
+            )
+        };
+        let columns = IndexMap::from([
+            column("id", "int64", vec![]),
+            column("my_array", "array", vec![]),
+            column("my_array.sub_id", "string", vec![not_null.clone()]),
+            column("my_array.my_struct", "struct", vec![]),
+            column("my_array.my_struct.first_field", "string", vec![not_null]),
+            column("my_array.my_struct.second_field", "string", vec![]),
+        ]);
+
+        assert_eq!(
+            adapter.render_raw_columns_constraints(columns).unwrap(),
+            vec![
+                "id int64",
+                "my_array array<struct<sub_id string not null, my_struct struct<first_field string not null, second_field string>>>",
+            ]
+        );
+    }
+
     /// Build a single-column `show databases` style result with the given column
     /// name and schema values.
     fn schemas_batch(col_name: &str, values: &[&str]) -> Arc<RecordBatch> {
