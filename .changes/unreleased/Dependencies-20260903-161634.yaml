@@ -1,0 +1,7 @@
+kind: Dependencies
+body: 'Bump the ClickHouse ADBC driver to 0.1.1: arbitrary connection settings via clickhouse.setting.<name> driver options, default database on connections, and literal ? in SQL no longer treated as a bind parameter.'
+time: 2026-09-03T16:16:34.645792+02:00
+custom:
+    author: koletzilla
+    issue: "16184"
+    project: dbt-core
