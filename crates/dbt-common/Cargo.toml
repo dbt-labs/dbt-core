@@ -59,6 +59,8 @@ dirs = { workspace = true }
 
 sha2 = { workspace = true }
 
+url = { workspace = true }
+
 # Tracing
 proto-rust = { workspace = true }
 tracing = { workspace = true }
