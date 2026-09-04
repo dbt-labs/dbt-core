@@ -383,6 +383,7 @@ impl ReplaceIfNone for dbt_adapter_core::AdapterType {}
 // list replaces the parent's rather than unioning with it -- matching `adapter`,
 // its single-valued sibling, not `Tags`.
 impl ReplaceIfNone for crate::schemas::serde::AdapterTypeOrArray {}
+impl ReplaceIfNone for crate::schemas::serde::RefreshableConfig {}
 impl ReplaceIfNone for crate::schemas::common::DbtBatchSize {}
 impl ReplaceIfNone for crate::schemas::common::DbtContract {}
 impl ReplaceIfNone for crate::schemas::common::DbtIncrementalStrategy {}

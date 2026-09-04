@@ -1,0 +1,7 @@
+kind: Features
+body: '[ClickHouse] `table` now compatible with MVs (mv_on_schema_change defaults to fail, repopulate_from_mvs_on_full_refresh replays the MV queries), `materialized_view` supports on_schema_change, in-place refresh-schedule updates (MODIFY REFRESH) with safe transition errors, multi-MV update/rename flows and refreshable: false, and projections accept the index form with up-front validation.'
+time: 2026-09-03T18:41:38.291916+02:00
+custom:
+    author: koletzilla
+    issue: "14585"
+    project: dbt-core

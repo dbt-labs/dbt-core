@@ -404,6 +404,12 @@ impl Object for RelationObject {
             Some("project") => Some(Value::from(self.database())),
             Some("dataset") => Some(Value::from(self.schema())),
 
+            // ClickHouse
+            Some("can_exchange") => Some(Value::from(self.can_exchange())),
+            Some("mvs_pointing_to_it") => Some(Value::from_serialize(self.mvs_pointing_to_it())),
+            Some("is_refreshable") => Some(Value::from(self.is_refreshable())),
+            Some("refreshable_append") => Some(Value::from(self.refreshable_append())),
+
             _ => None,
         }
     }
@@ -1311,6 +1317,82 @@ mod tests {
         assert_eq!(
             result_get_part.detail().unwrap(),
             "'bad' is not a valid argument"
+        );
+    }
+
+    #[test]
+    fn clickhouse_relation_exposes_catalog_state_attributes() {
+        let relation = Relation::new(
+            AdapterType::ClickHouse,
+            None,
+            Some("analytics".to_string()),
+            Some("events".to_string()),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING)
+        .with_mvs_pointing_to_it(vec![BTreeMap::from([
+            ("schema".to_string(), "analytics".to_string()),
+            ("name".to_string(), "events_mv".to_string()),
+            ("sql".to_string(), "select 1".to_string()),
+        ])])
+        .with_is_refreshable(true)
+        .with_can_exchange(true)
+        .validate()
+        .unwrap();
+        let obj = Arc::new(RelationObject::new(Arc::new(relation)));
+
+        assert!(
+            obj.get_value(&Value::from("can_exchange"))
+                .unwrap()
+                .is_true()
+        );
+        let mvs = obj.get_value(&Value::from("mvs_pointing_to_it")).unwrap();
+        assert_eq!(mvs.len(), Some(1));
+        assert_eq!(
+            mvs.get_item_by_index(0)
+                .unwrap()
+                .get_attr("name")
+                .unwrap()
+                .as_str(),
+            Some("events_mv")
+        );
+        assert!(
+            obj.get_value(&Value::from("is_refreshable"))
+                .unwrap()
+                .is_true()
+        );
+        assert!(
+            !obj.get_value(&Value::from("refreshable_append"))
+                .unwrap()
+                .is_true()
+        );
+
+        let bare = Relation::new(
+            AdapterType::ClickHouse,
+            None,
+            Some("analytics".to_string()),
+            Some("plain".to_string()),
+        )
+        .validate()
+        .unwrap();
+        let bare = Arc::new(RelationObject::new(Arc::new(bare)));
+        assert_eq!(
+            bare.get_value(&Value::from("mvs_pointing_to_it"))
+                .unwrap()
+                .len(),
+            Some(0)
+        );
+        assert!(
+            !bare
+                .get_value(&Value::from("is_refreshable"))
+                .unwrap()
+                .is_true()
+        );
+        assert!(
+            !bare
+                .get_value(&Value::from("can_exchange"))
+                .unwrap()
+                .is_true()
         );
     }
 }
