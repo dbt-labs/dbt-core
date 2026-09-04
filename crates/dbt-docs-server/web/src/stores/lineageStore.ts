@@ -82,6 +82,19 @@ export type LineageState = {
    *  instead of filtering `nodes` — see the note above. */
   selectedNodeIds: string[];
 
+  /** Level-of-detail: true below the zoom threshold, where individual node cards
+   *  read as unreadable clutter and every unselected node should collapse to just
+   *  its resource badge. Written from a single `onMove` callback on <ReactFlow>
+   *  (see BaseDag), guarded so `set` only fires on the rare frame the threshold is
+   *  actually crossed -- not from each node polling `useViewport()` itself, which
+   *  would re-render every node on every pan/zoom frame. */
+  isCompact: boolean;
+
+  /** Which lens DagLensesDropdown has selected -- lives here, not local state
+   *  in that component, so DagNode can read it too and render the matching
+   *  badge. See lib/lensBadges for the label→badge mapping. */
+  activeLens: string;
+
   // ---- React Flow handlers, wired straight into <ReactFlow> ----
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
@@ -90,6 +103,8 @@ export type LineageState = {
   // ---- actions ----
   setNodes: (nodes: ReactFlowNode[]) => void;
   setEdges: (edges: Edge[]) => void;
+  setCompact: (isCompact: boolean) => void;
+  setActiveLens: (lens: string) => void;
   /** Mark a fetch as in flight. Clears the graph when the root changes, so a stale
    *  graph never shows under a new root. */
   startHydration: (rootUniqueId: string) => void;
@@ -118,6 +133,8 @@ const initialState = {
   status: 'empty' as LineageStatus,
   error: null,
   selectedNodeIds: EMPTY_SELECTION,
+  isCompact: false,
+  activeLens: 'Default',
 };
 
 function sameIds(a: string[], b: string[]): boolean {
@@ -181,6 +198,19 @@ export const useLineageStore = create<LineageState>()(
 
       setEdges: (edges) => {
         set({ edges }, false, 'lineage/setEdges');
+      },
+
+      setCompact: (isCompact) => {
+        // The caller (BaseDag's onMove) already guards this to only fire on the
+        // frame the threshold is crossed, but guard here too -- this is a set on
+        // a module singleton, cheap insurance against a redundant write if that
+        // ever changes.
+        if (get().isCompact === isCompact) return;
+        set({ isCompact }, false, 'lineage/setCompact');
+      },
+
+      setActiveLens: (lens) => {
+        set({ activeLens: lens }, false, 'lineage/setActiveLens');
       },
 
       startHydration: (rootUniqueId) => {

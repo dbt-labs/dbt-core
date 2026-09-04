@@ -1886,6 +1886,15 @@ code.inline {
 .dark .qq-lineage-canvas .react-flow__edge:focus .react-flow__edge-path {
   stroke: var(--fgBrand);
 }
+/* The v2 (xyflow) canvas -- white, mostly-transparent so edges read as
+   structure rather than competing with the node cards for attention. */
+.dag-v2-canvas .react-flow__edge-path {
+  stroke: #ffffff;
+}
+.dag-v2-canvas .react-flow__edge.selected .react-flow__edge-path,
+.dag-v2-canvas .react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--fgBrand);
+}
 .qq-lineage-error,
 .qq-lineage-loading,
 .qq-lineage-empty {
@@ -2190,8 +2199,8 @@ code.inline {
   display: flex;
   flex-direction: column;
   /* `stretch`, so the header and body span whatever width the widest of them asks
-     for. With `flex-start` they collapse to their own content and the divider and
-     body fill stop short of the border. */
+    for. With `flex-start` they collapse to their own content and the divider and
+    body fill stop short of the border. */
   align-items: stretch;
   /* Accommodates the full node name unless it's extremely long */
   width: max-content;
@@ -2212,10 +2221,28 @@ code.inline {
     0 12px 12px rgba(0, 0, 0, 0.4);
 }
 
-/* Active/selected. Only the border changes: the shadow is the node's resting
-   elevation, not a selection cue. */
+/* LOD compact state: just the resource badge, no card chrome. Shrinks to content
+   instead of the full node's fixed 245x108 -- dagre still reserves that footprint
+   (layout happens once, independent of zoom), so this floats inside it rather than
+   filling it, matching the reference mock. */
+.dag-node--compact {
+  flex-direction: row;
+  align-items: center;
+  width: auto;
+  height: auto;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Active/selected. Thicker and colored by the node's own resource type (via
+   `data-resource-type` on the outer card, see the token list below) rather than a
+   flat neutral, so the selected state reads clearly against the badge next to it.
+   Only the border changes: the shadow is the node's resting elevation, not a
+   selection cue. */
 .dag-node--active {
-  border-color: var(--fgMain);
+  border-width: 2px;
+  border-color: var(--dag-node-type-color, var(--fgMain));
 }
 
 /* Handles carry the edges. Kept in the layout (opacity, not `display: none`,
@@ -2236,29 +2263,27 @@ code.inline {
   display: flex;
   flex: 0 0 51px;
   align-items: center;
+  width: 100%;
   height: 51px;
   padding: 0 24px;
   border-bottom: 1.5px solid var(--borderMuted);
 }
 
 /* The Tooltip trigger wrapper sits between the header and the name, so it is the
-   thing that has to be allowed to shrink — without `min-width: 0` a name past the
-   card's max-width overflows the border instead of ellipsing. */
+   thing that has to be allowed to shrink — without `min-width: 0` a long name makes
+   the flex item overflow instead of ellipsing. */
 .dag-node__name-wrap {
   display: block;
   min-width: 0;
   overflow: hidden;
 }
 
-/* `nowrap` is what turns the name into a width the card grows to, rather than a second
-   line. The ellipsis only ever comes into play past `max-width` — and only for the
-   generated test names that get there, which carry a tooltip. */
 .dag-node__name {
   display: block;
   overflow: hidden;
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
   color: var(--fgMain);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2270,6 +2295,7 @@ code.inline {
   flex: 1 1 auto;
   align-items: center;
   gap: 12px;
+  width: 100%;
   padding: 0 24px;
   background: var(--bgMainHover);
 }
@@ -2283,7 +2309,7 @@ code.inline {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  height: 36px;
+  height: 30px;
   padding: 0 8px;
   /* Smaller than the design's badge text on purpose: at 16px, "Source" and "Snapshot"
      ellipsed as soon as a node also had a column chip, and those are ordinary types
@@ -2293,16 +2319,45 @@ code.inline {
   line-height: 1;
   color: var(--bgMain);
   white-space: nowrap;
-  background: var(--dag-node-type-color, var(--fgVizNeutral));
+  background: var(--dag-node-type-color, var(--bgDisabled));
   border-radius: 6px;
 }
 
 .dag-node__type-label {
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 500;
 }
 
 .dag-node__type-icon {
+  flex: none;
+}
+
+/* Lens badge -- same recipe as .dag-node__type (height/padding/font/dark
+   text), but the background is a plain hex set inline (style=), not a CSS
+   var: these are a fixed "status color" set, not per-resource-type tokens.
+   See lensBadges.tsx. Always short labels (Table, Stg, Pass, ...), so no
+   truncation/tooltip machinery needed here the way the name and resource
+   badge have. */
+.dag-node__lens-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--bgMain);
+  white-space: nowrap;
+  border-radius: 6px;
+}
+
+.dag-node__lens-badge-label {
+  font-weight: 500;
+}
+
+.dag-node__lens-badge-icon {
   flex: none;
 }
 
@@ -2312,57 +2367,81 @@ code.inline {
   min-width: 0;
 }
 
-.dag-node__type--analysis {
+/* Keyed off the `data-resource-type` attribute rather than the `.dag-node__type--*`
+   class so the same token is reachable from the outer `.dag-node` card too (see
+   `.dag-node--active`), not just the inner badge -- a custom property set on the
+   badge span wouldn't cascade back up to its own parent.
+   `--fgViz*` base values (not `--bgDag*`, not `--fgViz*Hover`/`Muted`) -- confirmed
+   against Jess's reference swatch of all 8 types as the universal OSS palette.
+   These are theme-invariant (same hex in both the light and dark theme blocks in
+   tokens.css), unlike the Hover/Muted variants. */
+[data-resource-type='analysis'] {
   --dag-node-type-color: var(--fgVizAnalysis);
 }
-.dag-node__type--column {
+[data-resource-type='column'] {
   --dag-node-type-color: var(--fgVizColumn);
 }
-.dag-node__type--exposure {
+[data-resource-type='exposure'] {
   --dag-node-type-color: var(--fgVizExposure);
 }
-.dag-node__type--function {
+[data-resource-type='function'] {
   --dag-node-type-color: var(--fgVizFunction);
 }
-.dag-node__type--macro {
+[data-resource-type='macro'] {
   --dag-node-type-color: var(--fgVizMacro);
 }
-.dag-node__type--metric {
+[data-resource-type='metric'] {
   --dag-node-type-color: var(--fgVizMetric);
 }
-.dag-node__type--model {
+[data-resource-type='model'] {
   --dag-node-type-color: var(--fgVizModel);
 }
-.dag-node__type--saved_query {
+[data-resource-type='saved_query'] {
   --dag-node-type-color: var(--fgVizSavedquery);
 }
-.dag-node__type--seed {
+[data-resource-type='seed'] {
   --dag-node-type-color: var(--fgVizSeed);
 }
-.dag-node__type--semantic_model {
+[data-resource-type='semantic_model'] {
   --dag-node-type-color: var(--fgVizSemanticmodel);
 }
-.dag-node__type--snapshot {
+[data-resource-type='snapshot'] {
   --dag-node-type-color: var(--fgVizSnapshot);
 }
-.dag-node__type--source {
+[data-resource-type='source'] {
   --dag-node-type-color: var(--fgVizSource);
 }
-.dag-node__type--test {
+[data-resource-type='test'] {
   --dag-node-type-color: var(--fgVizTest);
 }
-.dag-node__type--unit_test {
-  --dag-node-type-color: var(--fgVizTest);
+[data-resource-type='unit_test'] {
+  --dag-node-type-color: var(--bgDagTest);
 }
 
 /* Column count — two abutting segments, icon then count, so the pair reads as
    one control while each keeps its own rounded outer edge. Present only when
-   the node has column-level lineage. */
+   the node has column-level lineage. A real <button> (not a <span>) since it's
+   meant to open the node's Columns tab -- reset the native button chrome so it
+   still just looks like the badge underneath. */
 .dag-node__columns {
   display: inline-flex;
   flex: none;
   align-items: center;
   margin-left: auto;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.dag-node__columns:hover .dag-node__columns-icon,
+.dag-node__columns:hover .dag-node__columns-count {
+  background: var(--bgMainHover);
+}
+
+.dag-node__columns:focus-visible {
+  outline: 2px solid var(--fgBrand);
+  outline-offset: 1px;
 }
 
 .dag-node__columns-icon,
@@ -2370,7 +2449,7 @@ code.inline {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 36px;
+  height: 30px;
   background: var(--bgMainActive);
   box-shadow:
     0 1.5px 1.5px rgba(29, 0, 81, 0.64),

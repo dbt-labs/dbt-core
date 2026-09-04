@@ -373,6 +373,9 @@ export interface RestLineageNode {
   name: string;
   resource_type: string;
   materialized?: string | null;
+  /** Used to infer the modeling layer (staging/intermediate/marts) for the
+   *  DAG's "Model layer" lens -- see inferModelingLayer in lib/resourceType. */
+  original_file_path?: string | null;
   depth: number;
 }
 
@@ -738,6 +741,20 @@ export function fromExposureDetail(d: RestExposureDetail): ExposureAsset {
   };
 }
 
+/** A metric/measure ref in the raw manifest JSON is sometimes just the bare
+ *  name string (e.g. `"measure": "ad_id"`) and sometimes an object (e.g.
+ *  `"measure": {"name": "ad_id", "filter": ...}`), depending on the metric
+ *  and manifest schema version. Reading `.name` off a string silently
+ *  produces `undefined` rather than an error, so this was rendering blank
+ *  Expression rows for the string-shaped case -- handle both. */
+function metricRefName(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'name' in value) {
+    return String((value as { name?: unknown }).name ?? '');
+  }
+  return '';
+}
+
 function parseMetricTypeParams(
   metricType: string | null | undefined,
   typeParams: unknown,
@@ -746,19 +763,16 @@ function parseMetricTypeParams(
   const kind = (metricType ?? 'simple') as MetricTypeParams['kind'];
 
   if (kind === 'ratio') {
-    const num = p?.numerator as Record<string, unknown> | undefined;
-    const den = p?.denominator as Record<string, unknown> | undefined;
     return {
       kind: 'ratio',
-      numerator: { name: String(num?.name ?? ''), alias: null, filter: null },
-      denominator: { name: String(den?.name ?? ''), alias: null, filter: null },
+      numerator: { name: metricRefName(p?.numerator), alias: null, filter: null },
+      denominator: { name: metricRefName(p?.denominator), alias: null, filter: null },
     };
   }
   if (kind === 'cumulative') {
-    const measure = p?.measure as Record<string, unknown> | undefined;
     return {
       kind: 'cumulative',
-      measure: { name: String(measure?.name ?? ''), filter: null },
+      measure: { name: metricRefName(p?.measure), filter: null },
       window: p?.window != null ? String(p.window) : null,
       grainToDate: p?.grain_to_date != null ? String(p.grain_to_date) : null,
     };
@@ -767,17 +781,17 @@ function parseMetricTypeParams(
     const metrics = (p?.metrics as unknown[] | undefined) ?? [];
     return {
       kind: 'derived',
-      metrics: metrics.map((m) => {
-        const mm = m as Record<string, unknown>;
-        return { name: String(mm.name ?? ''), alias: null, filter: null };
-      }),
+      metrics: metrics.map((m) => ({
+        name: metricRefName(m),
+        alias: null,
+        filter: null,
+      })),
       expr: p?.expr != null ? String(p.expr) : null,
     };
   }
-  const measure = p?.measure as Record<string, unknown> | undefined;
   return {
     kind: 'simple',
-    measure: { name: String(measure?.name ?? ''), filter: null },
+    measure: { name: metricRefName(p?.measure), filter: null },
   };
 }
 
@@ -1274,6 +1288,7 @@ export function fromLineageResponse(r: RestLineageResponse): LineageGraph {
       packageName: '',
       tags: [],
       materialized: n.materialized ?? null,
+      originalFilePath: n.original_file_path ?? null,
     })),
     edges: r.edges.map((e) => ({
       upstreamUniqueId: e.from_id,

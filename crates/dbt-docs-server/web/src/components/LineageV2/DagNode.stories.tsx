@@ -4,10 +4,9 @@ import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import {
   DAG_NODE_HEIGHT,
-  DAG_NODE_MAX_WIDTH,
-  DAG_NODE_MIN_WIDTH,
   DAG_NODE_TYPE,
   DAG_NODE_TYPES,
+  DAG_NODE_WIDTH,
   type DagNodeData,
   type DagNodeType,
 } from './DagNode';
@@ -38,15 +37,14 @@ type PreviewProps = {
 /** A real component rather than an inline `render` closure, because the node list has
  *  to be built from args before React Flow sees it. */
 function DagNodePreview({ nodes, connected, colorMode = 'dark' }: PreviewProps) {
-  // Hand-positioned on a grid: these stories are about the card, not the layout, so
-  // they skip the measure-then-lay-out cycle and just wrap so several nodes stay
-  // legible instead of running off-canvas.
+  // Spaced by the layout constants, the same way dagre spaces the real graph, and
+  // wrapped so a story with several nodes stays legible instead of running off-canvas.
   const perRow = connected ? nodes.length : 3;
   const flowNodes: DagNodeType[] = nodes.map((node, i) => ({
     id: `n${i}`,
     type: DAG_NODE_TYPE,
     position: {
-      x: (i % perRow) * (DAG_NODE_MIN_WIDTH + 260),
+      x: (i % perRow) * (DAG_NODE_WIDTH + 60),
       y: Math.floor(i / perRow) * (DAG_NODE_HEIGHT + 48),
     },
     data: node.data,
@@ -149,79 +147,34 @@ export const ZeroColumns: Story = {
   },
 };
 
-/**
- * A long name widens the node instead of ellipsing. Names in a real project share long
- * prefixes — `int_order_items_…` clipped to 245px is indistinguishable from its
- * neighbours — so the card grows, and the layout reads that measured width back off
- * the DOM and spaces the rank around it. No model, source or seed in the three real
- * lineages this was measured against reaches the max, so this is the normal case.
- */
-const LONG_NAME = 'int_order_items_joined_to_customers_and_products';
-
+/** A long name ellipses rather than widening the node — the width is fixed because
+ *  dagre lays the graph out from the same number. Hover reveals the full name, and
+ *  only because it is truncated. */
 export const LongName: Story = {
   args: {
-    nodes: [{ data: { name: LONG_NAME, resourceType: 'model', columnCount: 132 } }],
+    nodes: [
+      {
+        data: {
+          name: 'int_order_items_joined_to_customers_and_products',
+          resourceType: 'model',
+          columnCount: 132,
+        },
+      },
+    ],
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const name = await waitFor(() => {
-      const el = canvas.getByText(LONG_NAME);
-      expect(el).toBeVisible();
-      return el;
-    });
 
-    // Rendered in full, not clipped: `scrollWidth` would exceed `clientWidth` if the
-    // ellipsis had kicked in.
-    await expect(name.scrollWidth).toBe(name.clientWidth);
-
-    const node = name.closest<HTMLElement>('.dag-node');
-    expect(node).not.toBeNull();
-    // fitView scales the canvas, so compare the unscaled offset box.
-    await expect(node!.offsetWidth).toBeGreaterThan(DAG_NODE_MIN_WIDTH);
-    await expect(node!.offsetWidth).toBeLessThanOrEqual(DAG_NODE_MAX_WIDTH);
-  },
-};
-
-/**
- * Past the max the card stops growing and the name ellipses, with the tooltip back to
- * make it recoverable. This is what dbt's generated test names look like — the one
- * below is real, and 3737px wide if nothing caps it, which would set the width of its
- * whole rank and zoom the rest of the graph down to illegible.
- */
-const GENERATED_TEST_NAME =
-  'accepted_values_int__customer_oam_stage_summary_stage_action__Orchestration_Has_Models_Built__Users_Cloud_CLI_or_Cloud_IDE';
-
-export const NamePastTheMaximum: Story = {
-  args: {
-    nodes: [{ data: { name: GENERATED_TEST_NAME, resourceType: 'test' } }],
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const name = await waitFor(() => {
-      const el = canvas.getByText(GENERATED_TEST_NAME);
-      expect(el).toBeVisible();
-      return el;
-    });
-
-    const node = name.closest<HTMLElement>('.dag-node');
-    expect(node).not.toBeNull();
-    await expect(node!.offsetWidth).toBe(DAG_NODE_MAX_WIDTH);
-    // Clipped, which is the precondition for the tooltip existing at all.
-    await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
-
-    await userEvent.hover(name);
-    // By role, not by text: the card itself still *contains* the full name (it is
-    // clipped by CSS, not truncated in the DOM), so matching on text would be
-    // ambiguous. Portalled to <body>, behind the tooltip's 200ms open delay.
-    const tooltip = await within(document.body).findByRole('tooltip', undefined, {
-      timeout: 3000,
-    });
-    await expect(tooltip).toHaveTextContent(GENERATED_TEST_NAME);
-    // And it wraps inside its own bubble. A name this long is a single unbroken token,
-    // so without `break-words` on the tooltip it renders 2286px wide across a 320px
-    // box and the text spills across the canvas — the tooltip is there to make the
-    // name recoverable, which it is not if it overflows.
-    await expect(tooltip.scrollWidth).toBeLessThanOrEqual(tooltip.clientWidth + 1);
+    await waitFor(() =>
+      expect(canvas.getByText(/int_order_items_joined/)).toBeVisible(),
+    );
+    await userEvent.hover(canvas.getByText(/int_order_items_joined/));
+    // Portalled to <body>, behind the tooltip's 200ms open delay.
+    await within(document.body).findByText(
+      'int_order_items_joined_to_customers_and_products',
+      undefined,
+      { timeout: 3000 },
+    );
   },
 };
 
@@ -265,13 +218,9 @@ export const UnknownResourceType: Story = {
   },
 };
 
-/** A name shorter than the minimum does not shrink the card below it — short names
- *  would otherwise render as chips and a rank would lose its rhythm. Height is fixed
- *  either way, so a rank still reads as a row. See `LongName` for the other end. */
-export const MinimumWidth: Story = {
-  args: {
-    nodes: [{ data: { name: 'orders', resourceType: 'model', columnCount: 4 } }],
-  },
+/** Fixed 245×108 regardless of content, so the graph dagre lays out matches what
+ *  renders. This asserts the contract the layout depends on. */
+export const FixedDimensions: Story = {
   play: async ({ canvasElement }) => {
     const node = await waitFor(() => {
       const el = canvasElement.querySelector<HTMLElement>('.dag-node');
@@ -282,7 +231,7 @@ export const MinimumWidth: Story = {
 
     // fitView scales the canvas, so compare the unscaled offset box rather than the
     // rendered rect.
-    await expect(node.offsetWidth).toBe(DAG_NODE_MIN_WIDTH);
+    await expect(node.offsetWidth).toBe(DAG_NODE_WIDTH);
     await expect(node.offsetHeight).toBe(DAG_NODE_HEIGHT);
   },
 };
