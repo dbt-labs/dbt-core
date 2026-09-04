@@ -171,6 +171,13 @@ pub(crate) fn adapter_args_match_for_type(
             (Ok(recorded), Ok(actual)) => recorded == actual,
             _ => values_match(recorded, actual),
         },
+        // A relation's name uniquely identifies the warehouse object, so its columns do not
+        // depend on the relation *type* flags. Compare everything else strictly.
+        "get_columns_in_relation" => {
+            let recorded = without_relation_type_flags(recorded);
+            let actual = without_relation_type_flags(actual);
+            values_match(recorded.as_ref(), actual.as_ref())
+        }
         "get_column_schema_from_query" | "get_columns_in_select_sql" => {
             extract_sql_from_args(recorded)
                 .zip(extract_sql_from_args(actual))
@@ -189,6 +196,70 @@ pub(crate) fn adapter_args_match_for_type(
             ),
         "submit_python_job" => python_job_args_match(recorded, actual),
         _ => values_match(recorded, actual),
+    }
+}
+
+/// Relation flags derived from a relation's materialization rather than its name.
+///
+/// These are the `RelationObject` fields written by `serializable_impls.rs` that answer
+/// "what kind of thing is this", as opposed to "which thing is this".
+const RELATION_TYPE_FLAG_KEYS: &[&str] = &[
+    "is_delta",
+    "is_dynamic_table",
+    "is_interactive_table",
+    "is_materialized_view",
+    "is_streaming_table",
+    "is_table",
+    "is_view",
+];
+
+/// Drop the relation-type flags from every object in the tree, borrowing when none are present.
+///
+/// `Adapter::get_columns_in_relation` resolves a relation by `database`/`schema`/`identifier`
+/// only — the type flags never reach the query — so a relation whose inferred type differs
+/// between record and replay must still match. That is not hypothetical: a cross-project (Mesh)
+/// `ref` to a public node with no materialization records as `relation_type: None`
+/// (`is_table: false, is_view: false`) and replays as `View` (`is_view: true`), which made
+/// otherwise-valid recordings unreplayable even on the version that produced them.
+///
+/// Stripping the flags rather than allowlisting identity fields keeps every *other* field
+/// strict, so a genuine divergence (different `quote_policy`, `is_cte`, ...) still fails, and
+/// newly added type flags are covered without another edit here — `is_interactive_table` was
+/// added to the serialized shape after the recordings that hit this.
+fn without_relation_type_flags(value: &serde_json::Value) -> Cow<'_, serde_json::Value> {
+    if has_relation_type_flag(value) {
+        Cow::Owned(strip_relation_type_flags(value))
+    } else {
+        Cow::Borrowed(value)
+    }
+}
+
+/// True if any object in the JSON tree carries a relation-type flag.
+fn has_relation_type_flag(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Array(arr) => arr.iter().any(has_relation_type_flag),
+        serde_json::Value::Object(obj) => {
+            obj.keys()
+                .any(|key| RELATION_TYPE_FLAG_KEYS.contains(&key.as_str()))
+                || obj.values().any(has_relation_type_flag)
+        }
+        _ => false,
+    }
+}
+
+/// Recursively remove [`RELATION_TYPE_FLAG_KEYS`] from every object in the tree.
+fn strip_relation_type_flags(value: &serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(strip_relation_type_flags).collect())
+        }
+        serde_json::Value::Object(obj) => serde_json::Value::Object(
+            obj.iter()
+                .filter(|(key, _)| !RELATION_TYPE_FLAG_KEYS.contains(&key.as_str()))
+                .map(|(key, value)| (key.clone(), strip_relation_type_flags(value)))
+                .collect(),
+        ),
+        other => other.clone(),
     }
 }
 
@@ -2501,6 +2572,112 @@ mod tests {
             "get_relation",
             &positional,
             &kwargs,
+            AdapterType::Snowflake
+        ));
+    }
+
+    /// Serialized `RelationObject` in the shape `serializable_impls.rs` writes, so these tests
+    /// exercise the real recorded payload rather than a hand-trimmed subset.
+    fn relation_args(extra: serde_json::Value) -> serde_json::Value {
+        let mut relation = serde_json::json!({
+            "__type__": "RelationObject",
+            "adapter_type": "snowflake",
+            "database": "CERTIFIED_UAT",
+            "schema": "common",
+            "identifier": "dim_opportunity",
+            "is_cte": false,
+            "is_delta": false,
+            "is_dynamic_table": false,
+            "is_materialized_view": false,
+            "is_streaming_table": false,
+            "is_table": false,
+            "is_view": false,
+            "quote_policy": { "database": false, "identifier": false, "schema": false },
+        });
+        let map = relation.as_object_mut().expect("object");
+        for (key, value) in extra.as_object().expect("object") {
+            map.insert(key.clone(), value.clone());
+        }
+        serde_json::json!([relation])
+    }
+
+    /// A cross-project (Mesh) `ref` to a public node with no materialization records as
+    /// `relation_type: None` and replays as `View`. The relation name is identical, so the
+    /// recorded columns are a valid answer and the match must succeed.
+    #[test]
+    fn test_get_columns_in_relation_ignores_relation_type_flags() {
+        let recorded = relation_args(serde_json::json!({}));
+        // `is_interactive_table` is absent from recordings predating that materialization.
+        let actual = relation_args(serde_json::json!({
+            "is_view": true,
+            "is_interactive_table": false,
+        }));
+
+        assert!(adapter_args_match_for_type(
+            "get_columns_in_relation",
+            &recorded,
+            &actual,
+            AdapterType::Snowflake
+        ));
+        assert!(adapter_args_match_for_type(
+            "get_columns_in_relation",
+            &actual,
+            &recorded,
+            AdapterType::Snowflake
+        ));
+    }
+
+    /// Only the type flags are exempt: relation identity must still match exactly, or a read
+    /// against one relation could be answered with another relation's columns.
+    #[test]
+    fn test_get_columns_in_relation_still_compares_identity() {
+        let recorded = relation_args(serde_json::json!({}));
+
+        for divergence in [
+            serde_json::json!({ "database": "CERTIFIED_PROD" }),
+            serde_json::json!({ "schema": "customer_success" }),
+            serde_json::json!({ "identifier": "dim_product" }),
+        ] {
+            assert!(
+                !adapter_args_match_for_type(
+                    "get_columns_in_relation",
+                    &recorded,
+                    &relation_args(divergence.clone()),
+                    AdapterType::Snowflake
+                ),
+                "identity divergence must not match: {divergence}"
+            );
+        }
+    }
+
+    /// Non-type fields stay strict — quoting changes how the relation renders into the
+    /// `get_columns_in_relation` query, so it is not interchangeable.
+    #[test]
+    fn test_get_columns_in_relation_still_compares_quote_policy() {
+        let recorded = relation_args(serde_json::json!({}));
+        let actual = relation_args(serde_json::json!({
+            "quote_policy": { "database": false, "identifier": true, "schema": false },
+        }));
+
+        assert!(!adapter_args_match_for_type(
+            "get_columns_in_relation",
+            &recorded,
+            &actual,
+            AdapterType::Snowflake
+        ));
+    }
+
+    /// The exemption is scoped to `get_columns_in_relation`. Other relation-taking methods keep
+    /// the strict structural comparison, because for them the type can change the behavior.
+    #[test]
+    fn test_relation_type_flags_still_compared_for_other_methods() {
+        let recorded = relation_args(serde_json::json!({}));
+        let actual = relation_args(serde_json::json!({ "is_view": true }));
+
+        assert!(!adapter_args_match_for_type(
+            "drop_relation",
+            &recorded,
+            &actual,
             AdapterType::Snowflake
         ));
     }

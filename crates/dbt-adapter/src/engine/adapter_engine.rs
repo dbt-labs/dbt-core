@@ -330,6 +330,26 @@ pub(crate) fn adbc_execute_with_options(
                 OptionValue::String(p.to_string()),
             )?;
         }
+        if adapter_type == AdapterType::LakeCompute {
+            if let Some(project) = ctx.project_name() {
+                stmt.set_option(
+                    OptionStatement::Other(DBT_PROJECT.to_string()),
+                    OptionValue::String(project.clone()),
+                )?;
+            }
+            if let Some(model) = ctx.model_name() {
+                stmt.set_option(
+                    OptionStatement::Other(DBT_MODEL.to_string()),
+                    OptionValue::String(model.clone()),
+                )?;
+            }
+            if let Some(run_id) = ctx.run_id() {
+                stmt.set_option(
+                    OptionStatement::Other(DBT_RUN_ID.to_string()),
+                    OptionValue::String(run_id.clone()),
+                )?;
+            }
+        }
         stmt.set_option(
             OptionStatement::Other(DBT_METADATA.to_string()),
             OptionValue::Int(ctx.is_metadata() as i64),

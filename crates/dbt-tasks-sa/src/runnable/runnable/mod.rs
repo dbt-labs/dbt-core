@@ -155,7 +155,25 @@ impl Task for RunTask {
                     .then_some(test),
                 None => None,
             };
-            let result = match (statically_checked_test, self.execution_path) {
+            // `LakeCompute` only has a bypass-Jinja-materialization hook
+            // (`run_on_lake_compute`) for models and seeds -- the two node
+            // types that actually materialize something. Every other node
+            // type that resolves onto `lakecompute` (a generic/singular test
+            // inheriting `+adapter: lakecompute` from the model/seed it
+            // tests, a snapshot, ...) has no such bypass to offer and no
+            // need for one: its compiled SQL is a plain read, so it executes
+            // exactly like it would on `RunExecutionPath::Remote`, generically,
+            // through the adapter store's `LakeCompute` entry. Without this
+            // downgrade, a test would reach `run_on_lake_compute`, which only
+            // downcasts to `DbtModel`, and error.
+            let effective_execution_path = if self.execution_path == RunExecutionPath::LakeCompute
+                && !(self.node.as_any().is::<DbtModel>() || self.node.as_any().is::<DbtSeed>())
+            {
+                RunExecutionPath::Remote
+            } else {
+                self.execution_path
+            };
+            let result = match (statically_checked_test, effective_execution_path) {
                 (Some(test), _) => {
                     let node_status =
                         process_statically_checked_test_result(test, ctx, start_time.into());

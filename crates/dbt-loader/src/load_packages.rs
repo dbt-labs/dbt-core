@@ -332,7 +332,7 @@ pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
 /// A target may declare several adapters, so a run can need more than one
 /// adapter's internal packages at once. The union is over transitive closures:
 /// a Snowflake plus a lake compute adapter yields `dbt-adapters`,
-/// `dbt-snowflake`, `dbt-lake_compute`, `dbt-duckdb`.
+/// `dbt-snowflake`, `dbt-lakecompute`, `dbt-duckdb`.
 ///
 /// The per-adapter [`internal_package_names`] keeps its shape deliberately: the
 /// adapter-inheritance relation (`lake_compute` derives from `duckdb`, `databricks` from
@@ -579,7 +579,7 @@ mod internal_package_union_tests {
             vec![
                 "dbt-adapters".to_string(),
                 "dbt-snowflake".to_string(),
-                "dbt-lake_compute".to_string(),
+                "dbt-lakecompute".to_string(),
                 "dbt-duckdb".to_string(),
             ]
         );

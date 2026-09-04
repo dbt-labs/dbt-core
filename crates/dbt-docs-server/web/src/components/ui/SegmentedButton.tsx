@@ -47,6 +47,8 @@ export interface SegmentedButtonProps extends VariantProps<typeof rootVariants> 
   selectedValue?: string;
   size?: VariantProps<typeof segmentVariants>['size'];
   className?: string;
+  /** Extra classes on each segment item, e.g. to match a taller toolbar's height. */
+  itemClassName?: string;
   testId?: string;
 }
 
@@ -57,6 +59,7 @@ export function SegmentedButton({
   size,
   variant,
   className,
+  itemClassName,
   testId,
 }: SegmentedButtonProps) {
   return (
@@ -73,7 +76,7 @@ export function SegmentedButton({
         <ToggleGroupPrimitive.Item
           key={segment.value}
           value={segment.value}
-          className={cn(segmentVariants({ size, variant }))}
+          className={cn(segmentVariants({ size, variant }), itemClassName)}
         >
           {segment.startIcon}
           {segment.label}

@@ -20,11 +20,10 @@ type Story = StoryObj<typeof Overview>;
 export const Authored: Story = {};
 
 /**
- * No authored block. The bundled default renders — a byte-copy of dbt Core's own
- * global-project overview, so an unconfigured project sees exactly what it saw under
- * docs v1. This is the most common landing page in practice.
+ * No authored block. The dashboard default renders — icon cards, copyable commands,
+ * and live resource counts. This is the most common landing page in practice.
  */
-export const BundledDefault: Story = {
+export const UnconfiguredDefault: Story = {
   parameters: {
     docsApp: { source: storyDataSource({ fetchOverview: async () => null }) },
   },
@@ -45,8 +44,8 @@ export const BlankAuthoredBlock: Story = {
 };
 
 /**
- * A failed read falls through to the bundled default too: an unreadable `dbt.docs`
- * must not blank the landing page, and the built-in overview is a correct answer
+ * A failed read falls through to the dashboard default too: an unreadable `dbt.docs`
+ * must not blank the landing page, and the built-in dashboard is a correct answer
  * rather than a degraded one.
  */
 export const ReadErrorFallsBackToDefault: Story = {

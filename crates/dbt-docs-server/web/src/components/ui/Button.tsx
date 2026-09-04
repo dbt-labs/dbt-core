@@ -46,6 +46,7 @@ export interface ButtonProps extends Omit<VariantProps<typeof buttonVariants>, '
   onClick?(event: MouseEvent<HTMLButtonElement>): void;
   className?: string;
   testId?: string;
+  disabled?: boolean;
 }
 
 export function Button({
@@ -58,12 +59,14 @@ export function Button({
   onClick,
   className,
   testId,
+  disabled,
 }: ButtonProps) {
   const button = (
     <button
       type="button"
       aria-label={ariaLabel}
       onClick={onClick}
+      disabled={disabled}
       data-testid={testId}
       className={cn(
         buttonVariants({ variant, size: size as ButtonVariantSize }),

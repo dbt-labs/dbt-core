@@ -1,0 +1,7 @@
+kind: Fixes
+body: Skip Databricks get_relation_config tag and column-tag metadata queries when the model does not configure tags
+time: 2026-08-31T22:35:40.05634+05:30
+custom:
+    author: sd-db
+    issue: "16057"
+    project: dbt-core

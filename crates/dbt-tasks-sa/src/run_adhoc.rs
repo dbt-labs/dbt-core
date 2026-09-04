@@ -20,10 +20,10 @@ use dbt_tasks_core::AdhocRunner;
 pub struct RemoteAdhocRunner {
     pub env: Arc<JinjaEnv>,
     pub adapter_type: AdapterType,
-    /// `show --job-id <id>`: when set, `run_adhoc` ignores `instruction`/
-    /// `rendered_sql` entirely and fetches this already-completed dbt-compute
-    /// job's result directly instead. See `EvalArgs::job_id`.
-    pub job_id: Option<String>,
+    /// `show --query-id <id>`: when set, `run_adhoc` ignores `instruction`/
+    /// `rendered_sql` entirely and fetches this already-completed LakeCompute
+    /// query's result directly instead. See `EvalArgs::query_id`.
+    pub query_id: Option<String>,
 }
 
 impl AdhocRunner for RemoteAdhocRunner {
@@ -35,8 +35,8 @@ impl AdhocRunner for RemoteAdhocRunner {
         connection: &'a mut Option<Box<dyn Connection>>,
     ) -> Pin<Box<dyn Future<Output = FsResult<(Vec<RecordBatch>, SchemaRef)>> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(job_id) = &self.job_id {
-                return fetch_job_result_with_connection(job_id, &self.env, connection).await;
+            if let Some(query_id) = &self.query_id {
+                return fetch_query_result_with_connection(query_id, &self.env, connection).await;
             }
             run_remote_adhoc_with_connection(
                 instruction,
@@ -52,7 +52,7 @@ impl AdhocRunner for RemoteAdhocRunner {
 
 /// Reuse `conn_box`'s connection if present, otherwise open and cache one
 /// from the workspace's base adapter engine. Shared by the ordinary
-/// `--inline` path and the `--job-id` result-fetch path below.
+/// `--inline` path and the `--query-id` result-fetch path below.
 fn get_or_open_connection<'a>(
     env: &JinjaEnv,
     conn_box: &'a mut Option<Box<dyn Connection>>,
@@ -72,22 +72,22 @@ fn get_or_open_connection<'a>(
     Ok(conn_box.as_mut().unwrap().as_mut())
 }
 
-/// `show --job-id <id>`: fetch an already-completed dbt-compute job's result
-/// directly, by setting `RESULT_JOB_ID` on a fresh statement instead of a SQL
+/// `show --query-id <id>`: fetch an already-completed LakeCompute query's result
+/// directly, by setting `RESULT_QUERY_ID` on a fresh statement instead of a SQL
 /// query. No submission, no worker/Temporal round trip -- the driver turns
 /// this into a `Client::status()` lookup plus the same object-store fetch a
 /// normal export uses (see `adbc_driver_dbt::statement::ComputeStatement::
 /// fetch_existing_result`).
-async fn fetch_job_result_with_connection(
-    job_id: &str,
+async fn fetch_query_result_with_connection(
+    query_id: &str,
     env: &JinjaEnv,
     conn_box: &mut Option<Box<dyn Connection>>,
 ) -> FsResult<(Vec<RecordBatch>, SchemaRef)> {
     let conn = get_or_open_connection(env, conn_box)?;
     let mut stmt = conn.new_statement().map_err(from_adbc_error)?;
     stmt.set_option(
-        OptionStatement::Other(dbt_adbc::lake_compute::RESULT_JOB_ID.to_string()),
-        adbc_core::options::OptionValue::String(job_id.to_string()),
+        OptionStatement::Other(dbt_adbc::lake_compute::RESULT_QUERY_ID.to_string()),
+        adbc_core::options::OptionValue::String(query_id.to_string()),
     )
     .map_err(from_adbc_error)?;
 
@@ -226,12 +226,12 @@ fn from_adbc_error(err: adbc_core::error::Error) -> Box<FsError> {
 }
 
 /// Surface any non-fatal backend warning attached to the just-executed
-/// statement (e.g. dbt-compute's export-limit truncation notice) via
+/// statement (e.g. LakeCompute's export-limit truncation notice) via
 /// `tracing::warn!`, matching `compute_platform.rs`'s
 /// `warn_if_response_has_message` so warning formatting is consistent across
 /// both `show --inline` and normal model execution.
 ///
-/// Not gated to a specific adapter: only the `LakeCompute` (dbt-compute) driver ever
+/// Not gated to a specific adapter: only the `LakeCompute` driver ever
 /// populates `LAST_WARNINGS`, but calling this unconditionally is safe --
 /// every concrete `Statement` implementation in this codebase (the
 /// driver-manager's generic wrapper used by every non-lake-compute backend, and the
@@ -255,9 +255,9 @@ fn warn_if_last_warnings(stmt: &dyn dbt_adbc::statement::Statement) {
     }
 }
 
-/// Read the dbt-compute job id of the just-executed statement (e.g. from
+/// Read the LakeCompute job id of the just-executed statement (e.g. from
 /// `show --inline`) and stamp it onto `schema`'s metadata, the only way to
-/// later recover this result via dbt-compute's `/download_credentials`
+/// later recover this result via LakeCompute's `/download_credentials`
 /// endpoint. This function's caller talks to the raw ADBC `Statement`
 /// directly (unlike model materializations, which go through
 /// `AdapterEngine::execute_with_options`/`adapter_engine.rs`'s
@@ -276,7 +276,7 @@ fn attach_last_query_id(stmt: &dyn dbt_adbc::statement::Statement, schema: Schem
     if query_id.is_empty() {
         return schema;
     }
-    tracing::debug!("show --inline completed via dbt Compute (job_id={query_id})");
+    tracing::debug!("show --inline completed via LakeCompute (query_id={query_id})");
     let mut metadata = schema.metadata().clone();
     metadata.insert(
         dbt_adbc::lake_compute::schema_metadata::QUERY_ID.to_string(),

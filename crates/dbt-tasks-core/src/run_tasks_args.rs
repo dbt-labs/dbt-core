@@ -125,9 +125,9 @@ pub struct RunTasksArgs {
     pub metadata_dir: PathBuf,
     /// Resolved index directory (`--index-dir` or `<out_dir>/index`). See `metadata_dir`.
     pub index_dir: PathBuf,
-    /// `show --job-id <id>`: fetch a previously completed dbt-compute job's
-    /// result directly. See `EvalArgs::job_id`.
-    pub job_id: Option<String>,
+    /// `show --query-id <id>`: fetch a previously completed LakeCompute query's
+    /// result directly. See `EvalArgs::query_id`.
+    pub query_id: Option<String>,
 }
 
 impl RunTasksArgs {
@@ -137,7 +137,7 @@ impl RunTasksArgs {
             io: arg.io.clone(),
             metadata_dir: arg.metadata_dir(),
             index_dir: arg.index_dir(),
-            job_id: arg.job_id.clone(),
+            query_id: arg.query_id.clone(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),
             packages_install_path: arg.packages_install_path.clone(),

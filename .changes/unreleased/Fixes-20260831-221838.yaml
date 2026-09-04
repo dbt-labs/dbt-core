@@ -1,0 +1,7 @@
+kind: Fixes
+body: Detect Databricks materialized view query changes and require full refresh when compiled SQL changes
+time: 2026-08-31T22:18:38.765773+05:30
+custom:
+    author: sd-db
+    issue: "16123"
+    project: dbt-core

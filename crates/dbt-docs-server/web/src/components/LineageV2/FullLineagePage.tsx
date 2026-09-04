@@ -1,33 +1,24 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-
-import {
-  Button,
-  RyeconClose,
-  RyeconCrosshair,
-  RyeconLinkExternal,
-} from '@dbt-labs/sourdough';
+import { X } from 'lucide-react';
 
 import { useLineageData } from '../../hooks/useLineageData';
-import { asToolbarItems, type LabelOnlyToolbarItem } from '../../lib/dagToolbar';
 import { inferResourceType } from '../../lib/inferResourceType';
 import { decorateOutboundHref } from '../../lib/outboundReferrer';
 import { isTelemetryInitialized, trackLineageViewed } from '../../lib/telemetry';
 import { paths } from '../../routes';
 import { LineageEmptyState, Spinner } from '../../shared';
 import { UNSUPPORTED_SURFACE_MESSAGE } from '../../shared/hooks/unsupportedSurface';
-import { NodeLineagePanel } from './../NodeLineagePanel';
+import { Button } from './../ui/Button';
 import { BaseDag } from './BaseDag';
+import { DagNodePanel } from './DagNodePanel';
 
 export default function FullLineagePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rootUniqueId = searchParams.get('uniqueId') ?? '';
   const panelId = searchParams.get('panel');
   const navigate = useNavigate();
-  const { data, error, dagNodes, selector, isSupported } = useLineageData(
-    rootUniqueId,
-    3,
-  );
+  const { data, error, isSupported } = useLineageData(rootUniqueId, 1);
 
   // Analytics: `lineage_viewed` (fullscreen) once the graph resolves for the
   // current root. Re-fires when the root changes (refetch → data null → data).
@@ -57,38 +48,37 @@ export default function FullLineagePage() {
     [setSearchParams],
   );
 
-  const openPanel = useCallback(
-    (id: string) => {
-      updateParams((p) => p.set('panel', id));
-    },
-    [updateParams],
-  );
+  // Lives here, not in DagNodePanel, because the canvas's own width (below)
+  // has to react to it too.
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   const closePanel = useCallback(() => {
     updateParams((p) => p.delete('panel'));
+    setPanelCollapsed(false);
   }, [updateParams]);
 
   const onClose = useCallback(() => {
     navigate(paths.details(rootUniqueId));
   }, [navigate, rootUniqueId]);
 
-  const refocus = useCallback(
-    (id: string) => {
-      navigate(paths.lineage(id));
+  // Groups pill click -> that resource becomes the new root. BaseDag resets
+  // hops to 1+/+1 on its own whenever rootUniqueId changes.
+  const onRecenter = useCallback(
+    (uniqueId: string) => {
+      updateParams((p) => p.set('uniqueId', uniqueId));
     },
-    [navigate],
+    [updateParams],
   );
 
-  const toolbarItems = useMemo<LabelOnlyToolbarItem[]>(
-    () => [
-      {
-        label: selector,
-        tooltip: '',
-        isDisabled: true,
-        className: 'max-w-md overflow-auto text-fgDisabled dark:text-fgDecorative',
-      },
-    ],
-    [selector],
+  // Canvas node click -> reveal its detail drawer. Un-collapses too, so
+  // clicking a node while the rail is showing brings back the full panel
+  // rather than silently swapping which node the collapsed rail points at.
+  const onNodeClick = useCallback(
+    (uniqueId: string) => {
+      updateParams((p) => p.set('panel', uniqueId));
+      setPanelCollapsed(false);
+    },
+    [updateParams],
   );
 
   // Breadcrumb stops at project (package) — current resource lives in the
@@ -98,28 +88,6 @@ export default function FullLineagePage() {
     if (!rootUniqueId) return null;
     return rootUniqueId.split('.')[1] ?? null;
   }, [rootUniqueId]);
-
-  const getContextMenuOptions = useCallback(
-    (node: { id: string }) => [
-      {
-        label: 'View details',
-        onSelect: () => navigate(paths.details(node.id)),
-      },
-      {
-        label: 'Refocus lineage here',
-        ryecon: RyeconCrosshair,
-        onSelect: () => refocus(node.id),
-      },
-      {
-        label: 'Open in new tab',
-        ryecon: RyeconLinkExternal,
-        onSelect: () => {
-          window.open(paths.details(node.id), '_blank', 'noopener,noreferrer');
-        },
-      },
-    ],
-    [navigate, refocus],
-  );
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-bgMain">
@@ -167,50 +135,44 @@ export default function FullLineagePage() {
       {data && (
         <>
           <div
-            className={`absolute bottom-0 left-0 top-0 transition-[right] duration-300 motion-reduce:duration-0 ${panelId ? 'right-[450px]' : 'right-0'}`}
+            className={`absolute bottom-0 left-0 top-0 transition-[right] duration-300 motion-reduce:duration-0 ${
+              panelId ? (panelCollapsed ? 'right-14' : 'right-[450px]') : 'right-0'
+            }`}
           >
-            <BaseDag rootUniqueId={rootUniqueId} depth={3} />
-            {/* <Dag
-              nodes={dagNodes}
-              activeDbtCloudProject="local"
-              grain="project"
-              primaryNodeIds={[rootUniqueId]}
-              status="success"
-              toolbarItems={asToolbarItems(toolbarItems)}
-              getContextMenuOptions={getContextMenuOptions}
-              onNodeInteraction={(event) => {
-                if (!event.targetNode) return;
-                if (event.interactionType === 'single_click') {
-                  openPanel(event.targetNode.id);
-                } else if (event.interactionType === 'double_click') {
-                  navigate(paths.details(event.targetNode.id));
-                }
-              }}
-            >
-              <Dag.ZoomControls />
-              <Dag.LensSwitcher lenses={['materialization']} />
-            </Dag> */}
+            <BaseDag
+              rootUniqueId={rootUniqueId}
+              onRecenter={onRecenter}
+              onNodeClick={onNodeClick}
+              topBarLeft={
+                <>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    icon={<X className="size-4" />}
+                    ariaLabel="Close full lineage"
+                    tooltip="Close full lineage"
+                    onClick={onClose}
+                    className="h-9 w-9"
+                  />
+                  {rootProject && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(paths.home())}
+                      className="h-9 rounded-md border border-borderMain bg-bgMain px-4 text-sm text-fgMain hover:bg-bgMainHover"
+                    >
+                      {rootProject}
+                    </button>
+                  )}
+                </>
+              }
+            />
           </div>
-          <div className="pointer-events-none absolute left-6 top-6 z-30 flex items-center gap-2">
-            <div className="pointer-events-auto">
-              <Button
-                type="secondary"
-                ryecon={RyeconClose}
-                tooltip="Close full lineage"
-                onClick={onClose}
-              />
-            </div>
-            {rootProject && (
-              <button
-                type="button"
-                onClick={() => navigate(paths.home())}
-                className="pointer-events-auto h-10 rounded-md border border-borderMain bg-bgMain px-4 text-xs text-fgMain hover:underline"
-              >
-                {rootProject}
-              </button>
-            )}
-          </div>
-          <NodeLineagePanel uniqueId={panelId} onClose={closePanel} />
+          <DagNodePanel
+            uniqueId={panelId}
+            onClose={closePanel}
+            collapsed={panelCollapsed}
+            onToggleCollapse={() => setPanelCollapsed((v) => !v)}
+          />
         </>
       )}
     </div>

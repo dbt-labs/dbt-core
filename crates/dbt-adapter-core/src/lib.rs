@@ -85,13 +85,11 @@ pub enum AdapterType {
     Oracle,
     /// The dbt lake compute engine.
     ///
-    /// `lake_compute` is the name everywhere -- profiles.yml `type:`,
+    /// `lakecompute` is the name everywhere -- profiles.yml `type:`,
     /// `+adapter:`, `adapters:` keys, catalogs.yml config blocks, the
-    /// manifest's `adapter_type`, and the Jinja dispatch dialect. `alt`, the
-    /// name before the rename, is not accepted on input; see
-    /// `test_alt_is_not_accepted_on_input`.
-    #[strum(to_string = "lake_compute")]
-    #[serde(rename = "lake_compute")]
+    /// manifest's `adapter_type`, and the Jinja dispatch dialect. `alt` and
+    /// `lake_compute`, its names before its two renames, are not accepted on
+    /// input; see `test_retired_names_are_not_accepted_on_input`.
     LakeCompute,
 }
 
@@ -99,13 +97,11 @@ impl AdapterType {
     /// Returns an iterator of `(AdapterType, &'static str)` pairs.
     ///
     /// The string is the lowercased name of the variant, except `Postgres`,
-    /// which is rendered as `"postgresql"`, and `LakeCompute`, which carries an explicit
-    /// `lake_compute` override.
+    /// which is rendered as `"postgresql"`.
     pub fn iter_with_names() -> impl Iterator<Item = (AdapterType, &'static str)> {
         Self::iter().map(|v| {
             let name: &'static str = match v {
                 AdapterType::Postgres => "postgresql",
-                AdapterType::LakeCompute => "lake_compute",
                 _ => v.into(),
             };
             (v, name)
@@ -184,7 +180,7 @@ mod tests {
             ("sTarburst", AdapterType::Starburst),
             ("tRino", AdapterType::Trino),
             ("dAtafusion", AdapterType::Datafusion),
-            ("lAke_Compute", AdapterType::LakeCompute),
+            ("lAkecompute", AdapterType::LakeCompute),
         ];
         for (input, expected) in cases {
             let res = input.parse::<AdapterType>();
@@ -208,34 +204,36 @@ mod tests {
         assert_eq!(s, "postgres");
     }
 
-    /// `lake_compute` is the only name that leaves the process.
+    /// `lakecompute` is the only name that leaves the process.
     /// Display/AsRef/IntoStaticStr all have to agree on it, because the Jinja
     /// dialect key is built from `as_ref()` in some places and `to_string()` in
     /// others.
     #[test]
     fn test_lake_compute_renders_as_lake_compute() {
         let lake_compute = AdapterType::LakeCompute;
-        assert_eq!(lake_compute.to_string(), "lake_compute");
-        assert_eq!(lake_compute.as_ref(), "lake_compute");
+        assert_eq!(lake_compute.to_string(), "lakecompute");
+        assert_eq!(lake_compute.as_ref(), "lakecompute");
         let s: &'static str = lake_compute.into();
-        assert_eq!(s, "lake_compute");
+        assert_eq!(s, "lakecompute");
 
-        assert_eq!("lake_compute".parse::<AdapterType>().unwrap(), lake_compute);
+        assert_eq!("lakecompute".parse::<AdapterType>().unwrap(), lake_compute);
     }
 
-    /// `alt` was the external name before the rename and is deliberately not
-    /// kept as an alias: it must fail to parse rather than resolve silently, on
-    /// both the strum and serde paths.
+    /// `alt` and `lake_compute` were the external names before this adapter's
+    /// two renames, and neither is kept as an alias: both must fail to parse
+    /// rather than resolve silently, on both the strum and serde paths.
     #[test]
-    fn test_alt_is_not_accepted_on_input() {
-        assert!(
-            "alt".parse::<AdapterType>().is_err(),
-            "`alt` must not parse as an adapter type"
-        );
-        assert!(
-            serde_json::from_str::<AdapterType>("\"alt\"").is_err(),
-            "`alt` must not deserialize as an adapter type"
-        );
+    fn test_retired_names_are_not_accepted_on_input() {
+        for retired in ["alt", "lake_compute"] {
+            assert!(
+                retired.parse::<AdapterType>().is_err(),
+                "`{retired}` must not parse as an adapter type"
+            );
+            assert!(
+                serde_json::from_str::<AdapterType>(&format!("\"{retired}\"")).is_err(),
+                "`{retired}` must not deserialize as an adapter type"
+            );
+        }
     }
 
     /// serde is a separate mechanism from strum and drives `+adapter:`, the
@@ -244,10 +242,10 @@ mod tests {
     #[test]
     fn test_lake_compute_serde_round_trip() {
         let json = serde_json::to_string(&AdapterType::LakeCompute).unwrap();
-        assert_eq!(json, "\"lake_compute\"");
+        assert_eq!(json, "\"lakecompute\"");
 
         assert_eq!(
-            serde_json::from_str::<AdapterType>("\"lake_compute\"").unwrap(),
+            serde_json::from_str::<AdapterType>("\"lakecompute\"").unwrap(),
             AdapterType::LakeCompute
         );
     }
@@ -275,7 +273,7 @@ mod tests {
                 (AdapterType::Datafusion, "datafusion"),
                 (AdapterType::Dremio, "dremio"),
                 (AdapterType::Oracle, "oracle"),
-                (AdapterType::LakeCompute, "lake_compute"),
+                (AdapterType::LakeCompute, "lakecompute"),
             ]
         );
     }

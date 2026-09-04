@@ -250,7 +250,7 @@ fn cold_ingest_inner(
     total += write_seed_catalog_stats(&mut writer, index_dir, metadata_dir, &now)?;
     total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, true)?;
     total += write_run_freshness(&mut writer, metadata_dir, state, &now, true)?;
-    timings::time(timings::Stage::StagingWrite, || writer.finish_for_ingest())?;
+    timings::time(timings::Stage::StagingWrite, || writer.finish())?;
 
     // Store at µs precision to match what save_state serializes.
     let alive_us: Option<u64> = std::fs::metadata(metadata_dir.join(PARSE_ALIVE))
@@ -419,7 +419,7 @@ fn apply_delta_direct_inner(
         total += write_warehouse_catalog_stats(&mut writer, metadata_dir, state, &now, false)?;
         total += write_run_freshness(&mut writer, metadata_dir, state, &now, false)?;
     }
-    timings::time(timings::Stage::StagingWrite, || writer.finish_for_ingest())?;
+    timings::time(timings::Stage::StagingWrite, || writer.finish())?;
 
     Ok(total)
 }
@@ -914,38 +914,54 @@ pub fn load_compile_nodes_map(
 
 pub struct OwnedNodeRow {
     pub unique_id: String,
-    pub name: String,
+    pub name: Option<String>,
     pub resource_type: String,
-    pub package_name: String,
-    pub file_path: String,
-    pub original_file_path: String,
+    pub package_name: Option<String>,
+    pub file_path: Option<String>,
+    pub original_file_path: Option<String>,
     pub fqn: Vec<String>,
     pub alias: Option<String>,
     pub checksum: Option<String>,
     pub description: Option<String>,
+    pub node_language: Option<String>,
     pub raw_code: Option<String>,
-    pub database_name: String,
-    pub schema_name: String,
+    pub raw_code_hash: Option<String>,
+    pub database_name: Option<String>,
+    pub schema_name: Option<String>,
     pub relation_name: Option<String>,
     pub identifier: Option<String>,
     pub enabled: Option<bool>,
     pub materialized: Option<String>,
+    pub incremental_strategy: Option<String>,
+    pub on_schema_change: Option<String>,
+    pub unique_key: Option<String>,
+    pub full_refresh: Option<bool>,
+    pub persist_docs: Option<String>,
+    pub pre_hook: Option<String>,
+    pub post_hook: Option<String>,
+    pub grants: Option<String>,
     pub access_level: Option<String>,
     pub group_name: Option<String>,
     pub contract_enforced: bool,
+    pub node_constraints: Option<String>,
     pub primary_key: Vec<String>,
+    pub docs_show: bool,
+    pub time_spine: Option<String>,
     pub tags: Vec<String>,
     pub source_name: Option<String>,
     pub source_description: Option<String>,
     pub loader: Option<String>,
     pub loaded_at_field: Option<String>,
+    pub loaded_at_query: Option<String>,
+    pub freshness: Option<String>,
+    pub external_config: Option<String>,
+    pub quoting: Option<String>,
     pub patch_path: Option<String>,
     pub meta: Option<String>,
     pub config: Option<String>,
     pub deprecation_date: Option<String>,
     pub version: Option<String>,
     pub latest_version: Option<String>,
-    pub node_language: Option<String>,
     pub compiled_code: Option<String>,
     pub compiled_code_hash: Option<String>,
     pub compiled_path: Option<String>,
@@ -955,6 +971,85 @@ pub struct OwnedNodeRow {
     pub grain_tested: Vec<String>,
     pub classifiers: Vec<String>,
     pub ingested_at: String,
+}
+
+impl OwnedNodeRow {
+    /// Borrowed typed view for serde_arrow serialization. Both the batch
+    /// ingest and the serve delta path build `dbt.nodes` rows through this
+    /// one mapping so the two cannot drift
+    pub fn as_node_row(&self) -> crate::parquet::NodeRow<'_> {
+        crate::parquet::NodeRow {
+            unique_id: &self.unique_id,
+            name: self.name.as_deref(),
+            resource_type: &self.resource_type,
+            package_name: self.package_name.as_deref(),
+            file_path: self.file_path.clone(),
+            original_file_path: self.original_file_path.clone(),
+            fqn: self.fqn.clone(),
+            alias: self.alias.as_deref(),
+            checksum: self.checksum.as_deref(),
+            description: self.description.as_deref(),
+            node_language: self.node_language.as_deref(),
+            raw_code: self.raw_code.as_deref(),
+            database_name: self.database_name.as_deref(),
+            schema_name: self.schema_name.as_deref(),
+            relation_name: self.relation_name.as_deref(),
+            identifier: self.identifier.as_deref(),
+            enabled: self.enabled,
+            materialized: self.materialized.clone(),
+            incremental_strategy: self.incremental_strategy.clone(),
+            on_schema_change: self.on_schema_change.clone(),
+            unique_key: self.unique_key.clone(),
+            full_refresh: self.full_refresh,
+            persist_docs: self.persist_docs.clone(),
+            pre_hook: self.pre_hook.clone(),
+            post_hook: self.post_hook.clone(),
+            grants: self.grants.clone(),
+            config: self.config.clone(),
+            access_level: self.access_level.clone(),
+            group_name: self.group_name.as_deref(),
+            contract_enforced: self.contract_enforced,
+            version: self.version.clone(),
+            latest_version: self.latest_version.clone(),
+            deprecation_date: self.deprecation_date.as_deref(),
+            node_constraints: self.node_constraints.clone(),
+            primary_key: self.primary_key.clone(),
+            docs_show: self.docs_show,
+            patch_path: self.patch_path.clone(),
+            time_spine: self.time_spine.clone(),
+            tags: self.tags.clone(),
+            meta: self.meta.clone(),
+            // Not present in fusion metadata; only the manifest.json path
+            // populates it
+            ai_context: None,
+            source_name: self.source_name.as_deref(),
+            source_description: self.source_description.as_deref(),
+            loader: self.loader.as_deref(),
+            loaded_at_field: self.loaded_at_field.as_deref(),
+            loaded_at_query: self.loaded_at_query.as_deref(),
+            freshness: self.freshness.clone(),
+            external_config: self.external_config.clone(),
+            // Not present in fusion metadata (source-block meta is folded into
+            // `meta`); only the manifest.json path populates it
+            source_meta: None,
+            quoting: self.quoting.clone(),
+            compiled_code: self.compiled_code.as_deref(),
+            compiled_code_hash: self.compiled_code_hash.as_deref(),
+            compiled_path: self.compiled_path.as_deref(),
+            // Compile-time manifest fields with no parse-metadata equivalent
+            extra_ctes: None,
+            compiled_at: None,
+            raw_code_hash: self.raw_code_hash.clone(),
+            search_text: None,
+            grain: self.grain.clone(),
+            grain_declared: self.grain_declared.clone(),
+            grain_tested: self.grain_tested.clone(),
+            grain_inferred: vec![],
+            classifiers: self.classifiers.clone(),
+            table_role: self.table_role.as_deref(),
+            ingested_at: &self.ingested_at,
+        }
+    }
 }
 
 fn write_parse_nodes(
@@ -1117,75 +1212,7 @@ fn write_parse_nodes(
 
     // Convert owned node rows to typed NodeRow<'_> for fast serde_arrow serialization.
     use crate::parquet::NodeRow;
-    let typed_nodes: Vec<NodeRow<'_>> = node_rows
-        .iter()
-        .map(|r| NodeRow {
-            unique_id: &r.unique_id,
-            name: &r.name,
-            resource_type: &r.resource_type,
-            package_name: &r.package_name,
-            file_path: r.file_path.clone(),
-            original_file_path: r.original_file_path.clone(),
-            fqn: r.fqn.clone(),
-            alias: r.alias.as_deref(),
-            checksum: r.checksum.as_deref(),
-            description: r.description.as_deref(),
-            node_language: r.node_language.as_deref(),
-            raw_code: r.raw_code.as_deref(),
-            database_name: r.database_name.as_str(),
-            schema_name: r.schema_name.as_str(),
-            relation_name: r.relation_name.as_deref(),
-            identifier: r.identifier.as_deref(),
-            enabled: r.enabled,
-            materialized: r.materialized.clone(),
-            incremental_strategy: None,
-            on_schema_change: None,
-            unique_key: None,
-            full_refresh: None,
-            persist_docs: None,
-            pre_hook: None,
-            post_hook: None,
-            grants: None,
-            config: r.config.clone(),
-            access_level: r.access_level.clone(),
-            group_name: r.group_name.as_deref(),
-            contract_enforced: r.contract_enforced,
-            version: r.version.clone(),
-            latest_version: r.latest_version.clone(),
-            deprecation_date: r.deprecation_date.as_deref(),
-            node_constraints: None,
-            primary_key: r.primary_key.clone(),
-            docs_show: true,
-            patch_path: r.patch_path.clone(),
-            time_spine: None,
-            tags: r.tags.clone(),
-            meta: r.meta.clone(),
-            ai_context: None,
-            source_name: r.source_name.as_deref(),
-            source_description: r.source_description.as_deref(),
-            loader: r.loader.as_deref(),
-            loaded_at_field: r.loaded_at_field.as_deref(),
-            loaded_at_query: None,
-            freshness: None,
-            external_config: None,
-            source_meta: None,
-            quoting: None,
-            compiled_code: r.compiled_code.as_deref(),
-            compiled_code_hash: r.compiled_code_hash.as_deref(),
-            compiled_path: r.compiled_path.as_deref(),
-            extra_ctes: None,
-            compiled_at: None,
-            raw_code_hash: None,
-            search_text: None,
-            grain: r.grain.clone(),
-            grain_declared: r.grain_declared.clone(),
-            grain_tested: r.grain_tested.clone(),
-            grain_inferred: vec![],
-            classifiers: r.classifiers.clone(),
-            table_role: r.table_role.as_deref(),
-            ingested_at: &r.ingested_at,
-        })
-        .collect();
+    let typed_nodes: Vec<NodeRow<'_>> = node_rows.iter().map(OwnedNodeRow::as_node_row).collect();
 
     if need_full {
         writer.write_dbt_items("nodes", &typed_nodes)?;
@@ -1354,18 +1381,45 @@ pub fn extract_parse_nodes_batch(
         // Use pre-parsed payload (parsed in parallel before this loop)
         let payload: &Value = payloads.get(i).unwrap_or(&Value::Null);
 
+        // Fusion payloads nest node fields under attr envelopes
+        // (`__common_attr__`, `__model_attr__`, `__source_attr__`); every read
+        // below tries the envelope first and falls back to the same key at the
+        // payload top level for legacy payload shapes
         let common = payload
             .get("__common_attr__")
             .cloned()
             .unwrap_or(Value::Null);
-        let file_path: Option<String> = common
-            .get("path")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        let model_attr = payload
+            .get("__model_attr__")
+            .cloned()
+            .unwrap_or(Value::Null);
+        let source_attr = payload
+            .get("__source_attr__")
+            .cloned()
+            .unwrap_or(Value::Null);
 
+        let str_at = |v: &Value, key: &str| -> Option<String> {
+            v.get(key).and_then(|x| x.as_str()).map(|s| s.to_string())
+        };
+        // JSON-typed columns store the value's JSON text (matching the
+        // manifest ingest's stringification)
+        let json_at = |v: &Value, key: &str| -> Option<String> {
+            v.get(key).filter(|x| !x.is_null()).map(|x| x.to_string())
+        };
+
+        let file_path = str_at(&common, "path");
+
+        // `checksum` is either the {"name", "checksum"} object or a bare string
         let checksum = common
             .get("checksum")
-            .and_then(|c| c.get("checksum"))
+            .or_else(|| payload.get("checksum"))
+            .and_then(|c| {
+                if c.is_object() {
+                    c.get("checksum")
+                } else {
+                    Some(c)
+                }
+            })
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| {
@@ -1390,6 +1444,13 @@ pub fn extract_parse_nodes_batch(
             .get("language")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let raw_code_hash = raw_code.as_deref().map(crate::parquet::raw_code_hash);
+        let patch_path = str_at(&common, "patch_path").or_else(|| str_at(payload, "patch_path"));
+        let meta = common
+            .get("meta")
+            .filter(|v| !v.is_null())
+            .or_else(|| payload.get("meta"))
+            .cloned();
 
         // `contract` is mirrored on the model `config` (and on `DbtModelAttr`
         // under `__model_attr__`); it is NOT at the payload top level. For model
@@ -1408,19 +1469,68 @@ pub fn extract_parse_nodes_batch(
         let contract_enforced = config_obj
             .as_ref()
             .and_then(|c| c.get("contract"))
-            .or_else(|| {
-                payload
-                    .get("__model_attr__")
-                    .and_then(|m| m.get("contract"))
-            })
+            .or_else(|| model_attr.get("contract"))
             .or_else(|| payload.get("contract"))
             .and_then(|c| c.get("enforced"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let primary_key: Vec<String> = payload
-            .get("__model_attr__")
-            .and_then(|m| m.get("primary_key"))
+        let cfg = |key: &str| -> Option<&Value> {
+            config_obj
+                .as_ref()
+                .and_then(|c| c.get(key))
+                .filter(|v| !v.is_null())
+        };
+        let cfg_str = |key: &str| cfg(key).and_then(|v| v.as_str()).map(|s| s.to_string());
+        // Empty containers count as unset, matching the manifest ingest
+        let cfg_json = |key: &str| {
+            cfg(key)
+                .filter(|v| !matches!(v, Value::Object(m) if m.is_empty()))
+                .filter(|v| !matches!(v, Value::Array(a) if a.is_empty()))
+                .map(|v| v.to_string())
+        };
+        let incremental_strategy = cfg_str("incremental_strategy");
+        let on_schema_change = cfg_str("on_schema_change");
+        let unique_key = cfg_str("unique_key");
+        let full_refresh = cfg("full_refresh").and_then(|v| v.as_bool());
+        let persist_docs = cfg_json("persist_docs");
+        // Fusion serializes hooks as pre_hook/post_hook; manifest configs use
+        // the dashed spelling
+        let pre_hook = cfg_json("pre_hook").or_else(|| cfg_json("pre-hook"));
+        let post_hook = cfg_json("post_hook").or_else(|| cfg_json("post-hook"));
+        let grants = cfg_json("grants");
+        let docs_show = cfg("docs")
+            .and_then(|d| d.get("show"))
+            .or_else(|| payload.get("docs").and_then(|d| d.get("show")))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        let node_constraints =
+            json_at(&model_attr, "constraints").or_else(|| json_at(payload, "constraints"));
+        let time_spine =
+            json_at(&model_attr, "time_spine").or_else(|| json_at(payload, "time_spine"));
+        let deprecation_date =
+            str_at(&model_attr, "deprecation_date").or_else(|| str_at(payload, "deprecation_date"));
+
+        // Model versions are strings or integers; both become their string form
+        let version_str = |v: &Value| -> Option<String> {
+            match v {
+                Value::String(s) => Some(s.clone()),
+                Value::Number(n) => Some(n.to_string()),
+                _ => None,
+            }
+        };
+        let version = model_attr
+            .get("version")
+            .and_then(version_str)
+            .or_else(|| payload.get("version").and_then(version_str));
+        let latest_version = model_attr
+            .get("latest_version")
+            .and_then(version_str)
+            .or_else(|| payload.get("latest_version").and_then(version_str));
+
+        let primary_key: Vec<String> = model_attr
+            .get("primary_key")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
@@ -1432,110 +1542,25 @@ pub fn extract_parse_nodes_batch(
 
         let enabled = get_i32(dis_col, i).map(|d| d == 0).unwrap_or(true);
 
-        let source_attr = payload
-            .get("__source_attr__")
-            .cloned()
-            .unwrap_or(Value::Null);
-        let model_attr = payload
-            .get("__model_attr__")
-            .cloned()
-            .unwrap_or(Value::Null);
         let source_name = get_str(src_col, i)
-            .or_else(|| {
-                source_attr
-                    .get("source_name")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            })
-            .or_else(|| {
-                payload
-                    .get("source_name")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        let source_description = source_attr
-            .get("source_description")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                payload
-                    .get("source_description")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        let loader = source_attr
-            .get("loader")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                payload
-                    .get("loader")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        let loaded_at_field = source_attr
-            .get("loaded_at_field")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                payload
-                    .get("loaded_at_field")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        let patch_path = common
-            .get("patch_path")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                payload
-                    .get("patch_path")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        let meta = common
-            .get("meta")
-            .cloned()
-            .or_else(|| payload.get("meta").cloned());
+            .or_else(|| str_at(&source_attr, "source_name"))
+            .or_else(|| str_at(payload, "source_name"));
+        let source_description = str_at(&source_attr, "source_description")
+            .or_else(|| str_at(payload, "source_description"));
+        let loader = str_at(&source_attr, "loader").or_else(|| str_at(payload, "loader"));
+        let loaded_at_field =
+            str_at(&source_attr, "loaded_at_field").or_else(|| str_at(payload, "loaded_at_field"));
+        let loaded_at_query =
+            str_at(&source_attr, "loaded_at_query").or_else(|| str_at(payload, "loaded_at_query"));
+        let freshness =
+            json_at(&source_attr, "freshness").or_else(|| json_at(payload, "freshness"));
+        let external_config =
+            json_at(&source_attr, "external").or_else(|| json_at(payload, "external"));
+        // The user-declared quoting block; `__base_attr__.quoting` is the
+        // resolved form and intentionally not read here
+        let quoting = json_at(&source_attr, "user_quoting").or_else(|| json_at(payload, "quoting"));
+
         let config = payload.get("config").cloned();
-        let deprecation_date = model_attr
-            .get("deprecation_date")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| {
-                payload
-                    .get("deprecation_date")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            });
-        let version = model_attr
-            .get("version")
-            .cloned()
-            .or_else(|| payload.get("version").cloned());
-        let latest_version = model_attr
-            .get("latest_version")
-            .cloned()
-            .or_else(|| payload.get("latest_version").cloned());
-        let identifier = get_str(ident_col, i)
-            .or_else(|| {
-                source_attr
-                    .get("identifier")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-            })
-            .or_else(|| get_str(alias_col, i));
-        let access_level = get_str(access_col, i).or_else(|| {
-            model_attr
-                .get("access")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-        });
-        let group_name = get_str(grp_col, i).or_else(|| {
-            model_attr
-                .get("group")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-        });
 
         // Nodes that go into dbt.nodes
         let write_to_nodes = matches!(
@@ -1577,38 +1602,62 @@ pub fn extract_parse_nodes_batch(
             };
             node_rows.push(OwnedNodeRow {
                 unique_id: uid.clone(),
-                name: get_str(name_col, i).unwrap_or_default(),
+                name: get_str(name_col, i),
                 resource_type: rt.clone(),
-                package_name: get_str(pkg_col, i).unwrap_or_default(),
-                file_path: file_path.unwrap_or_default(),
-                original_file_path: get_str(orig_col, i).unwrap_or_default(),
+                package_name: get_str(pkg_col, i),
+                file_path,
+                original_file_path: get_str(orig_col, i),
                 fqn,
                 alias: get_str(alias_col, i),
                 checksum,
                 description: get_str(desc_col, i),
+                node_language,
                 raw_code,
-                database_name: get_str(db_col, i).unwrap_or_default(),
-                schema_name: get_str(schema_col, i).unwrap_or_default(),
+                raw_code_hash,
+                database_name: get_str(db_col, i),
+                schema_name: get_str(schema_col, i),
                 relation_name: get_str(rel_col, i),
-                identifier,
+                identifier: get_str(ident_col, i)
+                    .or_else(|| str_at(&source_attr, "identifier"))
+                    .or_else(|| get_str(alias_col, i)),
                 enabled: Some(enabled),
                 materialized: get_str(mat_col, i),
-                access_level,
-                group_name,
+                incremental_strategy,
+                on_schema_change,
+                unique_key,
+                full_refresh,
+                persist_docs,
+                pre_hook,
+                post_hook,
+                grants,
+                access_level: get_str(access_col, i).or_else(|| str_at(&model_attr, "access")),
+                group_name: get_str(grp_col, i),
                 contract_enforced,
+                node_constraints,
                 primary_key,
+                docs_show,
+                time_spine,
                 tags: tags.clone(),
                 source_name,
                 source_description,
                 loader,
                 loaded_at_field,
+                loaded_at_query,
+                freshness,
+                external_config,
+                quoting,
                 patch_path,
-                meta: meta.as_ref().map(|v| v.to_string()),
-                config: config.as_ref().map(|v| v.to_string()),
+                meta: meta
+                    .as_ref()
+                    .filter(|v| !v.is_null())
+                    .map(|v| v.to_string()),
+                config: config.as_ref().map(|v| match v {
+                    Value::String(s) => s.clone(),
+                    other => other.to_string(),
+                }),
                 deprecation_date,
                 version: version.as_ref().map(|v| v.to_string()),
                 latest_version: latest_version.as_ref().map(|v| v.to_string()),
-                node_language,
                 compiled_code,
                 compiled_code_hash,
                 compiled_path,
@@ -1621,12 +1670,18 @@ pub fn extract_parse_nodes_batch(
             });
         }
 
-        // Edges from depends_on
+        // Edges from depends_on. Macro dependencies are typed 'macro' so
+        // graph traversals over dbt.nodes-joined edges can exclude them
         for parent in &deps {
+            let edge_type = if parent.starts_with("macro.") {
+                "macro"
+            } else {
+                "ref"
+            };
             edge_rows.push(json!({
                 "parent_unique_id": parent,
                 "child_unique_id": uid,
-                "edge_type": "ref",
+                "edge_type": edge_type,
                 "ingested_at": ts,
             }));
         }
@@ -1651,21 +1706,37 @@ pub fn extract_parse_nodes_batch(
                     .and_then(|c| c.get("severity"))
                     .or_else(|| config.and_then(|c| c.get("severity")))
                     .and_then(|v| v.as_str());
+                // Fusion configs omit unset thresholds; the manifest carries
+                // dbt's materialized defaults, so default the same way
                 let warn_if = dep_config
                     .and_then(|c| c.get("warn_if"))
-                    .and_then(|v| v.as_str());
+                    .or_else(|| config.and_then(|c| c.get("warn_if")))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("!= 0");
                 let error_if = dep_config
                     .and_then(|c| c.get("error_if"))
-                    .and_then(|v| v.as_str());
+                    .or_else(|| config.and_then(|c| c.get("error_if")))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("!= 0");
                 let fail_calc = dep_config
                     .and_then(|c| c.get("fail_calc"))
-                    .and_then(|v| v.as_str());
+                    .or_else(|| config.and_then(|c| c.get("fail_calc")))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("count(*)");
                 let store_failures = dep_config
                     .and_then(|c| c.get("store_failures"))
                     .and_then(|v| v.as_bool());
                 let store_failures_as = dep_config
                     .and_then(|c| c.get("store_failures_as"))
                     .and_then(|v| v.as_str());
+                let test_where = dep_config
+                    .and_then(|c| c.get("where"))
+                    .or_else(|| config.and_then(|c| c.get("where")))
+                    .and_then(|v| v.as_str());
+                let test_limit = dep_config
+                    .and_then(|c| c.get("limit"))
+                    .or_else(|| config.and_then(|c| c.get("limit")))
+                    .and_then(|v| v.as_i64());
                 test_meta_rows.push(json!({
                     "unique_id": uid,
                     "test_name": tm.get("name").and_then(|v| v.as_str()),
@@ -1679,6 +1750,8 @@ pub fn extract_parse_nodes_batch(
                     "fail_calc": fail_calc,
                     "store_failures": store_failures,
                     "store_failures_as": store_failures_as,
+                    "test_where": test_where,
+                    "test_limit": test_limit,
                     "ingested_at": ts,
                 }));
             }
@@ -2113,6 +2186,81 @@ fn write_parse_columns(
 // Parse project → dbt.project + dbt.project_vars + dbt.project_env_vars + dbt.packages
 // ---------------------------------------------------------------------------
 
+/// Packages dbt installs itself, which no one writes `vars` for: the adapter's
+/// dispatch package, its parent where one exists, and `dbt` itself.
+fn internal_packages(adapter_type: &str) -> Vec<String> {
+    let mut v = vec!["dbt".to_string()];
+    if !adapter_type.is_empty() {
+        v.push(format!("dbt_{adapter_type}"));
+        match adapter_type {
+            "redshift" => v.push("dbt_postgres".to_string()),
+            "databricks" => v.push("dbt_spark".to_string()),
+            _ => {}
+        }
+    }
+    v
+}
+
+/// A string variable reads as itself; anything else as the JSON it was written
+/// as. `Value::to_string` would quote the string.
+fn render_var_value(value: Value) -> String {
+    match value {
+        Value::String(s) => s,
+        other => other.to_string(),
+    }
+}
+
+/// `dbt.project_vars` rows: one per (project, variable).
+///
+/// `vars_json` is `{package: {var: value}}` and each package's map is already
+/// *resolved for that package* -- a dependency's map carries the value the
+/// dependency sees, root default or scoped override -- so there is nothing to
+/// un-nest here. Walking each package's own map is the whole job; scoping has
+/// already happened upstream.
+///
+/// Two kinds of key are not variables:
+///
+/// - a package nobody sets vars for. `dbt` and `dbt_<adapter>` are installed by
+///   dbt itself, and their maps are a copy of the root's with no one to read them.
+/// - inside a map, a nested object whose key names an installed package. That is
+///   the scope *declaration* (`vars: {dbt_utils: {...}}`), not a variable of the
+///   enclosing package, and the scope's effect is already in `dbt_utils`' own map.
+///   A nested object whose key is *not* installed is an ordinary object-valued
+///   variable, which dbt allows, so it stays.
+fn project_var_rows(
+    vars_json: Option<&str>,
+    installed: &HashSet<String>,
+    adapter_type: &str,
+    now: &str,
+) -> Vec<Value> {
+    let internal = internal_packages(adapter_type);
+    vars_json
+        .and_then(|s| serde_json::from_str::<serde_json::Map<String, Value>>(s).ok())
+        .map(|obj| {
+            obj.into_iter()
+                .filter(|(package, _)| !internal.iter().any(|i| i == package))
+                .flat_map(|(package, vars)| {
+                    let vars = match vars {
+                        Value::Object(map) => map,
+                        _ => serde_json::Map::new(),
+                    };
+                    vars.into_iter()
+                        .filter(|(name, value)| !(value.is_object() && installed.contains(name)))
+                        .map(|(name, value)| {
+                            json!({
+                                "project_name": package,
+                                "var_name": name,
+                                "var_value": render_var_value(value),
+                                "ingested_at": now,
+                            })
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn write_parse_project(
     writer: &mut IndexWriter,
@@ -2244,22 +2392,12 @@ fn write_parse_project(
         })],
     )?;
 
-    // project_vars
-    let var_rows: Vec<Value> = vars_json
+    let installed: HashSet<String> = pkg_kinds_json
         .as_deref()
         .and_then(|s| serde_json::from_str::<serde_json::Map<String, Value>>(s).ok())
-        .map(|obj| {
-            obj.into_iter()
-                .map(|(k, v)| {
-                    json!({
-                        "var_name": k,
-                        "var_value": v.to_string(),
-                        "ingested_at": now,
-                    })
-                })
-                .collect()
-        })
+        .map(|obj| obj.into_iter().map(|(k, _)| k).collect())
         .unwrap_or_default();
+    let var_rows = project_var_rows(vars_json.as_deref(), &installed, &adapter_type, now);
     writer.write_dbt_table("project_vars", var_rows)?;
 
     // project_env_vars
@@ -3455,9 +3593,108 @@ mod tests {
 
     use super::{
         CATALOG_COLUMNS_SUBDIR, COMPILE_COLUMNS_SUBDIR, IngestState, extract_json_field_raw,
-        read_parquet_batches, trim_model_payload, write_catalog_columns, write_compile_columns,
+        project_var_rows, read_parquet_batches, trim_model_payload, write_catalog_columns,
+        write_compile_columns,
     };
     use crate::parquet::IndexWriter;
+
+    /// `(project_name, var_name, var_value)` of each row, sorted, for comparing
+    /// against an expected table.
+    fn var_table(rows: &[serde_json::Value]) -> Vec<(String, String, String)> {
+        let mut got: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                let f = |k: &str| r[k].as_str().expect(k).to_string();
+                (f("project_name"), f("var_name"), f("var_value"))
+            })
+            .collect();
+        got.sort();
+        got
+    }
+
+    /// The shape a real parse produces: one entry per package, each holding that
+    /// package's *resolved* vars, plus the root's scope declaration repeated in
+    /// every entry. The scope is already applied in `my_pkg`'s own entry, so the
+    /// answer is four rows -- one per variable per project.
+    ///
+    /// Reading the declaration as well as the resolved entry is what produced
+    /// duplicates: `my_pkg`'s two variables came back once from its own entry and
+    /// once from every other package's copy of the declaration.
+    #[test]
+    fn project_vars_is_one_row_per_project_and_variable() {
+        let root = r#"{"grace":"goheen","peanut":"jelly","my_pkg":{"peanut":"butter"}}"#;
+        let scoped = r#"{"grace":"goheen","peanut":"butter","my_pkg":{"peanut":"butter"}}"#;
+        let vars =
+            format!(r#"{{"proj":{root},"my_pkg":{scoped},"dbt":{root},"dbt_duckdb":{root}}}"#,);
+        let installed = ["proj", "my_pkg"].into_iter().map(String::from).collect();
+
+        let rows = project_var_rows(Some(&vars), &installed, "duckdb", "2026-09-03T00:00:00Z");
+
+        assert_eq!(
+            var_table(&rows),
+            vec![
+                ("my_pkg".into(), "grace".into(), "goheen".into()),
+                ("my_pkg".into(), "peanut".into(), "butter".into()),
+                ("proj".into(), "grace".into(), "goheen".into()),
+                ("proj".into(), "peanut".into(), "jelly".into()),
+            ],
+        );
+    }
+
+    /// The packages dbt installs itself carry a copy of the root's vars that no
+    /// one set and no one reads. `dbt_postgres` is in for Redshift, whose
+    /// dispatch package is a child of it.
+    #[test]
+    fn project_vars_leaves_out_the_packages_dbt_installs() {
+        let map = r#"{"grace":"goheen"}"#;
+        let vars =
+            format!(r#"{{"proj":{map},"dbt":{map},"dbt_redshift":{map},"dbt_postgres":{map}}}"#);
+        let installed = ["proj"].into_iter().map(String::from).collect();
+
+        let rows = project_var_rows(Some(&vars), &installed, "redshift", "2026-09-03T00:00:00Z");
+
+        assert_eq!(
+            var_table(&rows),
+            vec![("proj".into(), "grace".into(), "goheen".into())],
+        );
+    }
+
+    /// A nested map is a scope only when its key names an installed package.
+    /// `dbt` supports object-valued variables, so a nested map keyed by anything
+    /// else is a variable and keeps its JSON as the value -- and a string value is
+    /// rendered bare rather than re-quoted.
+    #[test]
+    fn project_vars_keeps_an_object_valued_variable() {
+        let vars = r#"{"proj":{"thresholds":{"warn":10},"dbt_utils":{"x":1},"note":"hi","n":90}}"#;
+        let installed = ["proj", "dbt_utils"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+        let rows = project_var_rows(Some(vars), &installed, "duckdb", "2026-09-03T00:00:00Z");
+
+        assert_eq!(
+            var_table(&rows),
+            vec![
+                ("proj".into(), "n".into(), "90".into()),
+                ("proj".into(), "note".into(), "hi".into()),
+                ("proj".into(), "thresholds".into(), r#"{"warn":10}"#.into()),
+            ],
+            "'dbt_utils' is a scope; 'thresholds' is a variable",
+        );
+    }
+
+    /// A project with no `vars` block at all, and metadata too old to carry the
+    /// field, both mean no rows rather than an error.
+    #[test]
+    fn project_vars_tolerates_missing_vars() {
+        let installed = ["proj"].into_iter().map(String::from).collect();
+        let now = "2026-09-03T00:00:00Z";
+        assert!(project_var_rows(None, &installed, "duckdb", now).is_empty());
+        assert!(project_var_rows(Some("{}"), &installed, "duckdb", now).is_empty());
+        assert!(project_var_rows(Some("not json"), &installed, "duckdb", now).is_empty());
+        assert!(project_var_rows(Some(r#"{"proj":{}}"#), &installed, "duckdb", now).is_empty());
+    }
 
     /// A `catalog/columns` epoch holding `nodes × columns_per_node` rows.
     fn write_catalog_epoch(dir: &std::path::Path, nodes: &[&str], columns_per_node: &[&str]) {

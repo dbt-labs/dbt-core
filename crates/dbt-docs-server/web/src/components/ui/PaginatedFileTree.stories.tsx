@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
-import { buildFileTreeItems, iconForResourceType } from '../../lib/fileTree';
+import { buildFileTreeItems } from '../../lib/fileTree';
 import { storyFiles } from '../../shared/testing/storyFixtures';
 import {
   type FileTreeItemType,
@@ -19,14 +19,6 @@ import {
 const ROOT = 'root';
 const PROJECT = 'jaffle_shop';
 
-/** `iconForResourceType` hands back the icon *component*, while `iconOverride.icon`
- *  wants a rendered node — `size-3 shrink-0` is what `buildFileTreeItems` uses, so
- *  these rows match the ones the locate pane builds. */
-function resourceIcon(resourceType: string) {
-  const Icon = iconForResourceType(resourceType);
-  return <Icon className="size-3 shrink-0" />;
-}
-
 function dir(id: string, parent: string, name?: string): FileTreeItemType {
   return { id, parent, data: { pathType: 'directory', ...(name && { name }) } };
 }
@@ -42,7 +34,6 @@ function file(
     parent,
     data: {
       pathType: 'file',
-      iconOverride: { icon: resourceIcon(resourceType), label: resourceType },
       ...(info && { info: { text: info } }),
     },
   };
@@ -80,7 +71,6 @@ const ITEMS: FileTreeItemType[] = [
     data: {
       pathType: 'file',
       name: 'raw_customers',
-      iconOverride: { icon: resourceIcon('source'), label: 'source' },
     },
   },
   file(`${PROJECT}/seeds/raw_customers.csv`, `${PROJECT}/seeds`, 'seed'),

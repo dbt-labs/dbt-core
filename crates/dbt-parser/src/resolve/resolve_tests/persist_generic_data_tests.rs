@@ -490,6 +490,7 @@ fn persist_inner(
         unique_id_hash: Some(test_hash),
         column_tags: column_tags.to_vec(),
         unrendered_schema_config,
+        description: test.description().map(|s| s.to_string()),
     })
 }
 
@@ -3850,5 +3851,103 @@ mod tests {
             "expected generated test SQL at {}",
             written_path.display()
         );
+    }
+
+    #[test]
+    fn test_persist_inner_carries_generic_test_description() {
+        let out_dir = tempfile::tempdir().unwrap();
+        let io_args = IoArgs {
+            out_dir: out_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "orders".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let test = DataTests::CustomTest(
+            CustomTest::MultiKey(Box::new(CustomTestMultiKey {
+                test_name: "unique".to_string(),
+                name: None,
+                description: Some("Order id must be unique across all orders.".to_string()),
+                config: None,
+                column_name: None,
+                arguments: Verbatim::from(None),
+                __deprecated_args_and_configs__: Verbatim::from(BTreeMap::new()),
+            }))
+            .into(),
+        );
+
+        let test_asset = persist_inner(
+            "project_name",
+            "project_name",
+            &test_config,
+            Some("id".to_string()),
+            Some(StringOrArrayOfStrings::String("id".to_string())),
+            &test,
+            &io_args,
+            Path::new("models/schema.yml"),
+            &mut HashSet::new(),
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &[],
+            false,
+            LegacyTestSyntaxHandling::Strict,
+            RawTestConfig::default(),
+        )
+        .expect("persist_inner should succeed");
+
+        assert_eq!(
+            test_asset.description,
+            Some("Order id must be unique across all orders.".to_string())
+        );
+    }
+
+    #[test]
+    fn test_persist_inner_bare_string_test_has_no_description() {
+        // The `- unique` bare form has no description slot at all; a generic test
+        // authored this way must not silently inherit some other value.
+        let out_dir = tempfile::tempdir().unwrap();
+        let io_args = IoArgs {
+            out_dir: out_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "orders".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let test = DataTests::String("unique".to_string().into());
+
+        let test_asset = persist_inner(
+            "project_name",
+            "project_name",
+            &test_config,
+            Some("id".to_string()),
+            Some(StringOrArrayOfStrings::String("id".to_string())),
+            &test,
+            &io_args,
+            Path::new("models/schema.yml"),
+            &mut HashSet::new(),
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &[],
+            false,
+            LegacyTestSyntaxHandling::Strict,
+            RawTestConfig::default(),
+        )
+        .expect("persist_inner should succeed");
+
+        assert_eq!(test_asset.description, None);
     }
 }

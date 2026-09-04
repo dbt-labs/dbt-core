@@ -519,23 +519,19 @@ fn own_sql(
             );
             Some((sql, Some("epoch_parse_generation")))
         }
-        // One row per (package, variable) of the snapshot's two-level
-        // `{package: {var: value}}` map — `build_project_vars`' nested loop, as a
-        // nested `list_transform` flattened to one list and unnested once.
+        // One row per (package, variable) of the snapshot's `{package: {var: value}}`
+        // map, which the ingest writes in the same shape: each package's map is
+        // already resolved for that package, so this walks it rather than
+        // un-nesting it.
         //
-        // `project_name` holds the *package* name, which is what the Rust builder
-        // puts there: a package's vars are scoped to it, and the root project is
-        // one of the packages.
-        //
-        // Nested object keys that name an installed package (a key of
-        // `pkg_kinds_json`) are scopes, not variables: the parent's scalar vars
-        // are inherited into the scope and the nested map overlays them. An
-        // object whose key is not installed stays an object-valued variable on
-        // the parent. The skip list is `internal_packages`, whose contents
-        // depend on the adapter, so it is built from the snapshot's
-        // `adapter_type` rather than being a literal. `COALESCE(.., '')` on the
-        // conditional entry because a NULL inside `NOT IN` makes the whole
-        // predicate NULL — which would drop every package rather than none.
+        // Two kinds of key are dropped, matching `write_parse_project`: an internal
+        // package (`internal_packages`, whose contents depend on the adapter, so it
+        // is built from the snapshot's `adapter_type` rather than being a literal),
+        // and a nested object whose key names an installed package -- that is a
+        // scope declaration, and the scope's effect is already in that package's own
+        // row. `COALESCE(.., '')` on the conditional skip entry because a NULL
+        // inside `NOT IN` makes the whole predicate NULL, which would drop every
+        // package rather than none.
         "project_vars" => {
             let skip = format!(
                 "'dbt', 'dbt_' || {BASE}.adapter_type, \
@@ -548,33 +544,19 @@ fn own_sql(
             let value = "CASE WHEN json_type(q.val) = 'VARCHAR' \
                          THEN json_extract_string(q.val, '$') \
                          ELSE CAST(q.val AS VARCHAR) END";
-            let inherited_value = "CASE WHEN json_type(r.val) = 'VARCHAR' \
-                                  THEN json_extract_string(r.val, '$') \
-                                  ELSE CAST(r.val AS VARCHAR) END";
             let installed = format!("{BASE}.installed_packages");
             let is_scope =
                 format!("json_type(q.val) = 'OBJECT' AND list_contains({installed}, q.key)");
-            let parent_scalars = format!(
+            let own_vars = format!(
                 "list_filter({vars}, q -> NOT ({is_scope}))",
                 vars = json_entries("p.val"),
             );
             let list = format!(
                 "flatten(list_transform(\
                  list_filter({packages}, p -> p.key NOT IN ({skip})), \
-                 p -> list_concat(\
-                 list_transform({parent_scalars}, \
-                 q -> struct_pack(package := p.key, name := q.key, value := {value})), \
-                 flatten(list_transform(\
-                 list_filter({vars}, q -> {is_scope} AND q.key NOT IN ({skip})), \
-                 q -> list_transform(\
-                 list_concat(\
-                 list_filter({parent_scalars}, s -> \
-                 NOT list_contains(COALESCE(json_keys(q.val), []), s.key)), \
-                 {scope_vars}), \
-                 r -> struct_pack(package := q.key, name := r.key, value := {inherited_value})))))))",
+                 p -> list_transform({own_vars}, \
+                 q -> struct_pack(package := p.key, name := q.key, value := {value}))))",
                 packages = json_entries(&format!("{BASE}.vars_json")),
-                vars = json_entries("p.val"),
-                scope_vars = json_entries("q.val"),
             );
             let cols = cast_cols(
                 spec,

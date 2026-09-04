@@ -82,18 +82,22 @@ pub fn run_show_info_schema(
     token: CancellationToken,
 ) -> FsResult<()> {
     let sql = render_show_info_sql(info, inline)?;
+    // The artifact, not the argument: `--info <view>` is well-formed, and what is
+    // missing is state the user has not produced yet.
     if !info_schema_dir.join("views.sql").exists() {
         return Err(fs_err!(
-            ErrorCode::InvalidArgument,
+            ErrorCode::InfoSchemaUnavailable,
             "no information schema at {} — run `dbt build --generate-info-schema` \
              (or `dbt parse --generate-info-schema`)",
             info_schema_dir.display()
         ));
     }
     let adapter = open_info_schema_adapter(info_schema_dir, token)
-        .map_err(|e| fs_err!(ErrorCode::InvalidArgument, "{e}"))?;
+        .map_err(|e| fs_err!(ErrorCode::InfoSchemaUnavailable, "{e}"))?;
 
     let limited_sql = wrap_with_limit(sql, limit);
+    // The query keeps `InvalidArgument`: an unknown view or a syntax error is the
+    // argument, which is what that code is for.
     let batches = query_index(&adapter, &limited_sql)
         .map_err(|e| fs_err!(ErrorCode::InvalidArgument, "{e}"))?;
     let schema = batches.first().map(|b| b.schema()).ok_or_else(|| {

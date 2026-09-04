@@ -635,10 +635,13 @@ fn packages_is_one_row_per_installed_package() {
     assert!(names.contains(&"dbt_utils"));
 }
 
-/// `project_vars` is one row per (project, variable), and the adapter's
-/// built-in packages are left out.
+/// `project_vars` is projected, not assembled: the ingest already writes one row
+/// per (project, variable), so the published table is those rows. It used to
+/// un-nest a `{package: {var: value}}` map here, which double-counted every
+/// scoped variable -- once from the package's own row and once from each copy of
+/// the scope declaration.
 #[test]
-fn project_vars_is_one_row_per_project_and_variable() {
+fn project_vars_is_projected_row_for_row() {
     let staging = tempfile::tempdir().unwrap();
     let out = tempfile::tempdir().unwrap();
     write_source(
@@ -650,100 +653,25 @@ fn project_vars_is_one_row_per_project_and_variable() {
             "ingested_at": "2026-08-21T00:00:00Z",
         })],
     );
-    // The source keys each package's whole variable map by package name.
-    let vars = "{\"region\":\"emea\",\"retention_days\":90}";
-    write_source(
-        staging.path(),
-        "project_vars",
-        &[
-            json!({"var_name": "pkg", "var_value": vars, "ingested_at": "2026-08-21T00:00:00Z"}),
-            json!({"var_name": "dbt", "var_value": vars, "ingested_at": "2026-08-21T00:00:00Z"}),
-            json!({"var_name": "dbt_duckdb", "var_value": vars, "ingested_at": "2026-08-21T00:00:00Z"}),
-        ],
-    );
+    let rows = [
+        json!({"project_name": "pkg", "var_name": "region", "var_value": "emea", "ingested_at": "2026-08-21T00:00:00Z"}),
+        json!({"project_name": "pkg", "var_name": "retention_days", "var_value": "90", "ingested_at": "2026-08-21T00:00:00Z"}),
+        json!({"project_name": "dbt_utils", "var_name": "region", "var_value": "apac", "ingested_at": "2026-08-21T00:00:00Z"}),
+    ];
+    write_source(staging.path(), "project_vars", &rows);
     super::project_all(staging.path(), out.path()).unwrap();
 
-    let rows = out_rows(out.path(), "dbt.project_vars.parquet");
-    assert_eq!(
-        rows.len(),
-        2,
-        "one row per variable, built-in packages skipped"
-    );
-    for row in &rows {
-        assert_eq!(row["project_name"], json!("pkg"));
-    }
-    let region = rows
-        .iter()
-        .find(|r| r["var_name"] == json!("region"))
-        .unwrap();
-    // A plain string is rendered bare rather than as JSON.
-    assert_eq!(region["var_value"], json!("emea"));
-    let retention = rows
-        .iter()
-        .find(|r| r["var_name"] == json!("retention_days"))
-        .unwrap();
-    assert_eq!(retention["var_value"], json!("90"));
-}
-
-/// A nested vars block whose key is an installed package is a scope, not a
-/// variable: the parent's scalars are inherited and the nested map overlays
-/// them. An object whose key is not installed stays an object-valued variable.
-#[test]
-fn project_vars_inherits_into_installed_package_scopes() {
-    let staging = tempfile::tempdir().unwrap();
-    let out = tempfile::tempdir().unwrap();
-    write_source(
-        staging.path(),
-        "project",
-        &[json!({
-            "project_name": "my_project",
-            "adapter_type": "duckdb",
-            "ingested_at": "2026-08-21T00:00:00Z",
-        })],
-    );
-    write_source(
-        staging.path(),
-        "packages",
-        &[
-            json!({"package_name": "my_project", "ingested_at": "2026-08-21T00:00:00Z"}),
-            json!({"package_name": "dbt_utils", "ingested_at": "2026-08-21T00:00:00Z"}),
-        ],
-    );
-    let vars = r#"{"region":"emea","retention_days":90,"dbt_utils":{"region":"apac"},"uninstalled":{"foo":1}}"#;
-    write_source(
-        staging.path(),
-        "project_vars",
-        &[json!({
-            "var_name": "my_project",
-            "var_value": vars,
-            "ingested_at": "2026-08-21T00:00:00Z",
-        })],
-    );
-    super::project_all(staging.path(), out.path()).unwrap();
-
-    let rows = out_rows(out.path(), "dbt.project_vars.parquet");
-    let pair = |r: &Value| {
+    let got = out_rows(out.path(), "dbt.project_vars.parquet");
+    let triple = |r: &Value| {
         (
             r["project_name"].as_str().unwrap().to_string(),
             r["var_name"].as_str().unwrap().to_string(),
             r["var_value"].as_str().unwrap().to_string(),
         )
     };
-    let got: Vec<_> = rows.iter().map(pair).collect();
-    assert!(got.contains(&("my_project".into(), "region".into(), "emea".into())));
-    assert!(got.contains(&("my_project".into(), "retention_days".into(), "90".into())));
-    assert!(got.contains(&("dbt_utils".into(), "region".into(), "apac".into())));
-    assert!(got.contains(&("dbt_utils".into(), "retention_days".into(), "90".into())));
-    let uninstalled = rows
-        .iter()
-        .find(|r| r["var_name"] == json!("uninstalled"))
-        .expect("uninstalled nested map stays a variable on the parent");
-    assert_eq!(uninstalled["project_name"], json!("my_project"));
-    assert_eq!(uninstalled["var_value"], json!("{\"foo\":1}"));
-    assert!(
-        !got.iter()
-            .any(|(p, n, _)| p == "my_project" && n == "dbt_utils"),
-        "installed nested maps are scopes, not variables on the parent"
+    assert_eq!(
+        got.iter().map(triple).collect::<Vec<_>>(),
+        rows.iter().map(triple).collect::<Vec<_>>(),
     );
 }
 

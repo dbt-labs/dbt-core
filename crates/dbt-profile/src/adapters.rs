@@ -16,7 +16,27 @@
 //!       method: service-account
 //! ```
 //!
-//! Both resolve to the same thing: connections grouped by their `type:` into an
+//! A legacy mapping also accepts a `lakecompute:` sibling key as shorthand for
+//! the two-entry list pairing it with lake compute:
+//!
+//! ```yaml
+//!   staging:
+//!     type: snowflake
+//!     account: abc123
+//!     lakecompute:                # equivalent to a second list entry with
+//!       method: token             # `type: lakecompute` and these fields
+//!       token: "{{ env_var('DBT_COMPUTE_AUTH_TOKEN') }}"
+//! ```
+//!
+//! This exists only because dbt platform generates `profiles.yml` from a web
+//! form that can produce a legacy mapping but not the list shape, while its
+//! "extended attributes" mechanism can still append a sibling key to that
+//! mapping -- so this is the one shape such a generated profile can express a
+//! second, lake-compute connection in. See
+//! [`split_legacy_lake_compute_extension`] and dbt-labs/fs#14234. It is a
+//! transitional accommodation for that gap, not a general-purpose feature.
+//!
+//! All three resolve to the same thing: connections grouped by their `type:` into an
 //! ordered list of [`AdapterConnections`], exactly one of which holds the default.
 //! The legacy mapping yields a single adapter with a single connection, which is
 //! the default -- so callers never branch on the shape.
@@ -45,45 +65,40 @@ pub const DEFAULT_CONNECTION_NAME: &str = "default";
 const TYPE_KEY: &str = "type";
 
 /// The lake compute adapter, as authors write it.
-const LAKE_COMPUTE_TYPE: &str = "lake_compute";
-/// The tag `DbConfig` is actually keyed by for lake compute.
 ///
-/// `DbConfig` is `#[serde(tag = "type", rename_all = "lowercase")]`, so each
-/// variant's tag is its identifier lowercased -- `LakeCompute` becomes
-/// `lakecompute`, with no underscore. `UntaggedEnumDeserialize` *rejects* any
-/// per-variant `#[serde(..)]` attribute outright, and switching the enum to
-/// `snake_case` would rewrite every other variant's tag, so the external name is
-/// mapped to the internal one here, before the mapping reaches `DbConfig`.
-/// Remove this once `dbt-yaml`'s derive honours variant renames.
-const LAKE_COMPUTE_INTERNAL_TAG: &str = "lakecompute";
-/// Lake compute's external name before the rename. Not an accepted alias.
-const RETIRED_LAKE_COMPUTE_TYPE: &str = "alt";
+/// This is also `DbConfig`'s tag for the variant: `DbConfig` is
+/// `#[serde(tag = "type", rename_all = "lowercase")]`, so each variant's tag is
+/// its identifier lowercased -- `LakeCompute` becomes `lakecompute`. Because the
+/// external name and the tag are the same string, lake compute needs no
+/// special-casing here, unlike before this adapter's external name was renamed
+/// from `lake_compute` to `lakecompute` to match.
+const LAKE_COMPUTE_TYPE: &str = "lakecompute";
 
-/// The spellings that name lake compute but are not what authors write.
+/// Lake compute's retired external names. Not accepted aliases.
 ///
-/// Both deserialize as `DbConfig::LakeCompute` if passed straight through --
-/// `alt` because it was the name before the rename, `lakecompute` because it is
-/// the tag the enum is keyed by. Neither is an alias, so both are rejected in
-/// favour of the one external name.
-const NON_EXTERNAL_LAKE_COMPUTE_SPELLINGS: &[&str] =
-    &[RETIRED_LAKE_COMPUTE_TYPE, LAKE_COMPUTE_INTERNAL_TAG];
+/// `alt` was the name before the `lake_compute` rename; `lake_compute` was the
+/// name before *this* rename. Both would otherwise deserialize successfully as
+/// `DbConfig::LakeCompute` if passed straight through, so both are rejected
+/// here rather than aliased, so they cannot keep working as undocumented
+/// spellings.
+const RETIRED_LAKE_COMPUTE_TYPES: &[&str] = &["alt", "lake_compute"];
 
-/// Canonicalize a connection's `type:` and rewrite it in place.
+/// Canonicalize a connection's `type:` and rewrite it in place, rejecting
+/// retired lake-compute spellings and folding lake compute's case to its
+/// canonical lowercase.
 ///
-/// Returns the name to report the adapter by and leaves `credentials[TYPE_KEY]`
-/// holding the tag `DbConfig` deserializes by. Only lake compute needs the
-/// split; every other adapter's external name and `DbConfig` tag are the same
-/// string, so they pass straight through.
-///
-/// `lake_compute` is the only accepted spelling. The two that are not -- `alt`
-/// and the internal tag `lakecompute` -- are rejected here rather than aliased,
-/// because both would otherwise deserialize successfully and quietly keep
-/// working under a name authors are not meant to write.
+/// Every adapter's external name and `DbConfig` tag are the same string now,
+/// so this only does real work for lake compute: `DbConfig`'s tag match is
+/// exact-case, so `LAKECOMPUTE`/`LakeCompute` etc. must still be folded to
+/// `lakecompute` -- both in the returned name and in `credentials[TYPE_KEY]`,
+/// which is what `DbConfig` actually deserializes -- same as before this
+/// adapter's external name was renamed to match the tag. Every other
+/// adapter's rewrite is a no-op: it is handed back exactly what it was given.
 fn canonicalize_adapter_type(
     credentials: &mut dbt_yaml::Mapping,
     adapter_type: &str,
 ) -> Result<String> {
-    if NON_EXTERNAL_LAKE_COMPUTE_SPELLINGS
+    if RETIRED_LAKE_COMPUTE_TYPES
         .iter()
         .any(|s| adapter_type.eq_ignore_ascii_case(s))
     {
@@ -92,15 +107,16 @@ fn canonicalize_adapter_type(
             expected: LAKE_COMPUTE_TYPE.to_owned(),
         });
     }
-    if !adapter_type.eq_ignore_ascii_case(LAKE_COMPUTE_TYPE) {
-        return Ok(adapter_type.to_owned());
-    }
-
+    let canonical = if adapter_type.eq_ignore_ascii_case(LAKE_COMPUTE_TYPE) {
+        LAKE_COMPUTE_TYPE
+    } else {
+        adapter_type
+    };
     credentials.insert(
         dbt_yaml::Value::from(TYPE_KEY),
-        dbt_yaml::Value::from(LAKE_COMPUTE_INTERNAL_TAG),
+        dbt_yaml::Value::from(canonical),
     );
-    Ok(LAKE_COMPUTE_TYPE.to_owned())
+    Ok(canonical.to_owned())
 }
 
 /// One connection under an adapter: a rendered credential set.
@@ -191,10 +207,17 @@ pub fn parse_target_connections(
     raw: &dbt_yaml::Value,
     penv: &ProfileEnvironment,
 ) -> Result<Vec<AdapterConnections>> {
-    let raw_connections = match raw {
-        dbt_yaml::Value::Sequence(entries, _) => entries,
-        // The legacy shape: the whole block is one connection.
-        dbt_yaml::Value::Mapping(_, _) => return parse_legacy_target(raw, penv),
+    let raw_connections: Vec<dbt_yaml::Value> = match raw {
+        dbt_yaml::Value::Sequence(entries, _) => entries.clone(),
+        dbt_yaml::Value::Mapping(mapping, _) => {
+            match split_legacy_lake_compute_extension(mapping) {
+                // dbt platform's extended-attributes hack: treat it as the
+                // two-entry list it stands in for.
+                Some((primary, lake_compute)) => vec![primary, lake_compute],
+                // The ordinary legacy shape: the whole block is one connection.
+                None => return parse_legacy_target(raw, penv),
+            }
+        }
         _ => {
             return Err(ProfileError::TargetNotConnectionList {
                 profile: profile.to_owned(),
@@ -359,6 +382,72 @@ fn parse_legacy_target(
     }])
 }
 
+/// Split dbt platform's "extended attributes" lake-compute hack out of an
+/// otherwise-legacy target mapping, into the equivalent two-entry list shape.
+///
+/// dbt platform generates `profiles.yml` from a web form that only supports one
+/// warehouse connection per target, so it cannot produce the list shape a
+/// Snowflake + lake compute pairing needs. It does support "extended
+/// attributes" -- arbitrary extra keys appended to a generated target -- so a
+/// `lakecompute:` sibling key smuggles the second connection in that way
+/// instead. This turns that sibling into the `[primary, lake_compute]` list the
+/// rest of this module already knows how to parse, so nothing downstream has
+/// to know the shape came from the hack rather than the real list syntax.
+///
+/// This is a transitional accommodation for dbt platform's UI gap, not a
+/// general-purpose feature -- it applies to `lakecompute` specifically because
+/// that is what platform customers are currently unable to configure any other
+/// way. See dbt-labs/fs#14234.
+///
+/// Returns `None` -- deferring to the ordinary legacy path -- when there is no
+/// `lakecompute:` mapping sibling to split out, or when the target's own
+/// `type:` is already lake compute (appending lake compute to itself is
+/// nonsensical, so it is left for the ordinary legacy path to accept or reject
+/// as-is rather than special-cased here).
+fn split_legacy_lake_compute_extension(
+    mapping: &dbt_yaml::Mapping,
+) -> Option<(dbt_yaml::Value, dbt_yaml::Value)> {
+    let lake_compute_block = mapping.get(LAKE_COMPUTE_TYPE)?;
+    if !matches!(lake_compute_block, dbt_yaml::Value::Mapping(_, _)) {
+        // Not this hack's shape -- e.g. some other adapter's config
+        // legitimately has an unrelated field named `lakecompute`.
+        return None;
+    }
+    let already_lake_compute = mapping
+        .get(TYPE_KEY)
+        .and_then(|v| v.as_str())
+        .is_some_and(|t| t.eq_ignore_ascii_case(LAKE_COMPUTE_TYPE));
+    if already_lake_compute {
+        return None;
+    }
+
+    let mut primary = mapping.clone();
+    let lake_compute_block = primary
+        .shift_remove(LAKE_COMPUTE_TYPE)
+        .expect("checked present above");
+    // The legacy shape's one connection was always the implicit default; make
+    // that explicit now that it is joining a list, which requires the marker
+    // to resolve one unambiguously.
+    primary.insert(
+        dbt_yaml::Value::from(DEFAULT_KEY),
+        dbt_yaml::Value::from(true),
+    );
+
+    let mut lake_compute = match lake_compute_block {
+        dbt_yaml::Value::Mapping(m, _) => m,
+        _ => unreachable!("checked present and a mapping above"),
+    };
+    lake_compute.insert(
+        dbt_yaml::Value::from(TYPE_KEY),
+        dbt_yaml::Value::from(LAKE_COMPUTE_TYPE),
+    );
+
+    Some((
+        dbt_yaml::Value::from(primary),
+        dbt_yaml::Value::from(lake_compute),
+    ))
+}
+
 /// Resolve the target-wide `default: true` marker into a default connection per
 /// adapter, erroring when the target is ambiguous.
 ///
@@ -478,13 +567,13 @@ mod connection_tests {
         let adapters = parse(
             "- type: snowflake\n  default: true\n  account: abc\n\
              - type: bigquery\n  method: service-account\n\
-             - type: lake_compute\n  base_url: https://example.invalid\n",
+             - type: lakecompute\n  base_url: https://example.invalid\n",
         )
         .expect("list shape should parse");
 
         assert_eq!(
             types(&adapters),
-            vec!["snowflake", "bigquery", "lake_compute"]
+            vec!["snowflake", "bigquery", "lakecompute"]
         );
         assert!(adapters.iter().all(|a| a.connections.len() == 1));
         assert_eq!(
@@ -558,13 +647,13 @@ mod connection_tests {
         );
     }
 
-    /// Lake compute is the one adapter whose external name and `DbConfig` tag
-    /// differ: authors write `lake_compute`, `DbConfig::LakeCompute` is tagged
-    /// `lakecompute`. So the credentials handed on must always carry the
-    /// internal tag, while the adapter reports under the external one.
+    /// Lake compute's external name is case-insensitive like every other
+    /// adapter's, and (unlike before this adapter's external name was renamed
+    /// to `lakecompute`) is identical to `DbConfig`'s tag, so it needs no
+    /// special handling to report correctly or to reach `DbConfig` correctly.
     #[test]
-    fn lake_compute_is_the_external_name_for_the_dbconfig_tag() {
-        for written in ["lake_compute", "LAKE_COMPUTE"] {
+    fn lake_compute_is_case_insensitive() {
+        for written in ["lakecompute", "LAKECOMPUTE"] {
             let adapters = parse(&format!(
                 "- type: {written}
   base_url: https://example.invalid
@@ -574,7 +663,7 @@ mod connection_tests {
 
             assert_eq!(
                 types(&adapters),
-                vec!["lake_compute"],
+                vec!["lakecompute"],
                 "`type: {written}` must report as the external name"
             );
             assert_eq!(
@@ -583,19 +672,19 @@ mod connection_tests {
                     .credentials
                     .get("type")
                     .and_then(|v| v.as_str()),
-                Some(LAKE_COMPUTE_INTERNAL_TAG),
-                "`type: {written}` must be handed to `DbConfig` as its internal tag"
+                Some("lakecompute"),
+                "`type: {written}` must be handed to `DbConfig` as its tag"
             );
         }
     }
 
-    /// `lake_compute` is the only spelling authors may write. `alt` is the
-    /// retired name and `lakecompute` is the internal `DbConfig` tag; both
-    /// deserialize if passed through, so both must be rejected, in both target
-    /// shapes, or they keep working as undocumented aliases.
+    /// `lakecompute` is the only spelling authors may write. `lake_compute` and
+    /// `alt` are its retired names; both deserialize if passed through, so both
+    /// must be rejected, in both target shapes, or they keep working as
+    /// undocumented aliases.
     #[test]
-    fn the_non_external_lake_compute_spellings_are_rejected() {
-        for written in NON_EXTERNAL_LAKE_COMPUTE_SPELLINGS {
+    fn the_retired_lake_compute_spellings_are_rejected() {
+        for written in RETIRED_LAKE_COMPUTE_TYPES {
             for yaml in [
                 format!("- type: {written}\n  base_url: https://example.invalid\n"),
                 format!("type: {written}\nbase_url: https://example.invalid\n"),
@@ -607,7 +696,7 @@ mod connection_tests {
                     matches!(
                         &err,
                         ProfileError::UnacceptedAdapterType { expected, .. }
-                            if expected == "lake_compute"
+                            if expected == "lakecompute"
                     ),
                     "expected an error naming the accepted spelling, got: {err}"
                 );
@@ -615,26 +704,80 @@ mod connection_tests {
         }
     }
 
-    /// The legacy mapping shape goes through a separate code path, so it needs
-    /// the same canonicalization.
+    // -- dbt platform's extended-attributes lake_compute hack ---------------
+
+    /// dbt platform can only generate one connection per target, so a
+    /// `lakecompute:` sibling key on an otherwise-legacy mapping is the only
+    /// way its "extended attributes" mechanism can add a second one. This must
+    /// parse exactly like the equivalent two-entry list.
     #[test]
-    fn lake_compute_is_canonicalized_in_the_legacy_shape_too() {
+    fn a_legacy_mapping_with_a_lake_compute_sibling_splits_into_two_adapters() {
         let adapters = parse(
-            "type: lake_compute
-base_url: https://example.invalid
+            "type: snowflake
+account: abc123
+lakecompute:
+  method: token
+  token: test-token
+  threads: 4
 ",
         )
-        .expect("should parse");
+        .expect("the sibling-key shape should parse");
 
-        assert_eq!(types(&adapters), vec!["lake_compute"]);
+        assert_eq!(types(&adapters), vec!["snowflake", "lakecompute"]);
         assert_eq!(
-            adapters[0]
+            default_of(&adapters),
+            ("snowflake", DEFAULT_CONNECTION_NAME)
+        );
+
+        let lake_compute = &adapters[1];
+        assert_eq!(lake_compute.connections.len(), 1);
+        assert_eq!(
+            lake_compute
                 .default_connection()
                 .credentials
                 .get("type")
                 .and_then(|v| v.as_str()),
-            Some(LAKE_COMPUTE_INTERNAL_TAG)
+            Some("lakecompute"),
+            "the split-out connection must still be canonicalized"
         );
+        assert_eq!(
+            lake_compute
+                .default_connection()
+                .credentials
+                .get("threads")
+                .and_then(|v| v.as_i64()),
+            Some(4),
+            "the sibling block's own fields must survive the split"
+        );
+    }
+
+    /// A `lakecompute:` field that isn't a mapping (e.g. some unrelated
+    /// adapter's scalar config field that happens to share the name) is not
+    /// this hack's shape, so it must fall through to the ordinary legacy path
+    /// untouched rather than erroring.
+    #[test]
+    fn a_non_mapping_lake_compute_field_is_not_treated_as_the_extension() {
+        let adapters = parse("type: duckdb\npath: ./dev.db\nlakecompute: true\n")
+            .expect("should still parse as ordinary legacy shape");
+
+        assert_eq!(types(&adapters), vec!["duckdb"]);
+    }
+
+    /// Appending the hack's sibling key to a connection whose own `type:` is
+    /// already `lakecompute` is nonsensical; it must not be split, leaving it
+    /// for the ordinary legacy path to handle as a single connection.
+    #[test]
+    fn a_lake_compute_target_with_a_lake_compute_sibling_is_not_split() {
+        let adapters = parse(
+            "type: lakecompute
+base_url: https://example.invalid
+lakecompute:
+  threads: 4
+",
+        )
+        .expect("should still parse as ordinary legacy shape");
+
+        assert_eq!(types(&adapters), vec!["lakecompute"]);
     }
 
     /// Two connections of one type are legal and land under one adapter -- the

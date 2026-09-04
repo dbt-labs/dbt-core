@@ -382,8 +382,14 @@ pub struct ProjectModelConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub merge_with_schema_evolution: Option<bool>,
+    // Verbatim: skips the whole-document `into_typed` render pass for this field. A render
+    // failure nested inside a `meta` value (e.g. an unknown macro call under a misplaced
+    // `+meta` block) would otherwise fail the entire enclosing directory-path node -- not just
+    // that key -- silently dropping unrelated sibling directories' config too (fs#14217).
+    // `dbt_project_yml_loader::render_meta_tolerantly` re-renders this field on its own,
+    // afterward, falling back to the unrendered value on failure instead of propagating.
     #[serde(rename = "+meta")]
-    pub meta: Option<IndexMap<String, YmlValue>>,
+    pub meta: Verbatim<Option<IndexMap<String, YmlValue>>>,
     #[serde(rename = "+not_matched_by_source_action")]
     pub not_matched_by_source_action: Option<String>,
     #[serde(rename = "+not_matched_by_source_condition")]
@@ -1003,7 +1009,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: config.meta,
+            meta: config.meta.0,
             on_configuration_change: config.on_configuration_change,
             on_error: config.on_error,
             on_schema_change: config.on_schema_change,
@@ -1206,7 +1212,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: config.meta,
+            meta: config.meta.into(),
             submission_method: config.submission_method.clone(),
             job_cluster_config: config.job_cluster_config.clone(),
             python_job_config: config.python_job_config.clone(),
@@ -1430,6 +1436,9 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
         }
         if self.sync.is_none() {
             self.sync = sync;
+        }
+        if self.on_configuration_change.is_none() {
+            self.on_configuration_change = Some(OnConfigurationChange::default());
         }
         // Lake compute writes open-format tables: a node placed there materializes
         // an Iceberg table unless its author says otherwise. Applied here rather
@@ -2042,7 +2051,9 @@ fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization
 #[cfg(test)]
 mod tests {
     use super::ModelConfig;
-    use crate::schemas::common::{ConstraintType, FreshnessPeriod, UpdatesOn};
+    use crate::schemas::common::{
+        ConstraintType, FreshnessPeriod, OnConfigurationChange, UpdatesOn,
+    };
     use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::WarehouseSpecificNodeConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
@@ -2267,6 +2278,31 @@ __additional_properties__: {}
         assert_eq!(
             overridden.__warehouse_specific_config__.skip_optimize,
             Some(false)
+        );
+    }
+
+    #[test]
+    fn omitted_on_configuration_change_defaults_to_apply_in_runtime_configs() {
+        use dbt_common::io_args::StaticAnalysisKind;
+
+        let project: ProjectModelConfig =
+            dbt_yaml::from_str("__additional_properties__: {}\n").unwrap();
+        let mut project_runtime: ModelConfig = project.into();
+        assert_eq!(project_runtime.on_configuration_change, None);
+        project_runtime.apply_resolve_defaults((StaticAnalysisKind::default(), None, None));
+        assert_eq!(
+            project_runtime.on_configuration_change,
+            Some(OnConfigurationChange::Apply)
+        );
+
+        let manifest: ManifestModelConfig =
+            dbt_yaml::from_str("__warehouse_specific_config__: {}\n").unwrap();
+        let mut manifest_runtime: ModelConfig = manifest.into();
+        assert_eq!(manifest_runtime.on_configuration_change, None);
+        manifest_runtime.apply_resolve_defaults((StaticAnalysisKind::default(), None, None));
+        assert_eq!(
+            manifest_runtime.on_configuration_change,
+            Some(OnConfigurationChange::Apply)
         );
     }
 

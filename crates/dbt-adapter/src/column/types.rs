@@ -1351,6 +1351,36 @@ mod tests {
     }
 
     #[test]
+    fn databricks_create_column_omits_empty_comment() {
+        let column = Column::new(
+            AdapterType::Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(Some(String::new()));
+
+        assert_eq!(column.render_for_create(), "`id` int");
+    }
+
+    #[test]
+    fn databricks_create_column_preserves_non_empty_comment() {
+        let column = Column::new(
+            AdapterType::Databricks,
+            "id".to_string(),
+            "int".to_string(),
+            None,
+            None,
+            None,
+        )
+        .with_comment(Some("documented".to_string()));
+
+        assert_eq!(column.render_for_create(), "`id` int COMMENT 'documented'");
+    }
+
+    #[test]
     fn test_try_from_snowflake_raw_data_type_object() {
         let result = Column::try_from_snowflake_raw_data_type(
             "test_col",

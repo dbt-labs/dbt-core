@@ -114,19 +114,17 @@ pub const INFO_SCHEMA: &[TableSpec] = &[
             c("ingested_at"),
         ],
     },
-    // One row per (project, variable). Assembled by the writer, which
-    // un-nests the two-level `{package: {var: value}}` map that the source
-    // table collapses into one row per package.
+    // One row per (project, variable) -- the shape the ingest writes.
     TableSpec {
         ns: Ns::Dbt,
         name: "project_vars",
-        src: Src::Own,
+        src: Src::Table("project_vars"),
         filter: Filter::All,
         cols: &[
-            n("project_name", ColTy::Utf8),
-            n("var_name", ColTy::Utf8),
-            n("var_value", ColTy::Utf8),
-            n("ingested_at", ColTy::TsUtc),
+            c("project_name"),
+            c("var_name"),
+            c("var_value"),
+            c("ingested_at"),
         ],
     },
     // `used_in` is dropped: it is never populated.

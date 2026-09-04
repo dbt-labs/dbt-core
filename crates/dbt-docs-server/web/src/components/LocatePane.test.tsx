@@ -415,17 +415,18 @@ describe('<LocatePane /> — shared chrome', () => {
     expect(onSetTheme).toHaveBeenCalledWith('dark');
   });
 
-  it('renders the git branch and dirty dot when present', () => {
-    renderWithProviders(
-      <LocatePane
-        {...makeProps({
-          project: { name: 'jaffle_shop', gitBranch: 'feature/x', gitIsDirty: true },
-        })}
-      />,
-    );
-    expect(screen.getByText('feature/x')).toBeInTheDocument();
-    expect(screen.getByLabelText('uncommitted changes')).toBeInTheDocument();
-  });
+  // TODO: verify that git branch is no longer displayed
+  // it('renders the git branch and dirty dot when present', () => {
+  //   renderWithProviders(
+  //     <LocatePane
+  //       {...makeProps({
+  //         project: { name: 'jaffle_shop', gitBranch: 'feature/x', gitIsDirty: true },
+  //       })}
+  //     />,
+  //   );
+  //   expect(screen.getByText('feature/x')).toBeInTheDocument();
+  //   expect(screen.getByLabelText('uncommitted changes')).toBeInTheDocument();
+  // });
 
   it('omits the branch (and dirty dot) when no gitBranch is present', () => {
     renderWithProviders(

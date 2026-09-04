@@ -902,21 +902,21 @@ pub struct ShowArgs {
     pub common_args: CommonArgs,
 
     /// Show the given query
-    #[arg(long, allow_hyphen_values = true, conflicts_with = "job_id")]
+    #[arg(long, allow_hyphen_values = true, conflicts_with = "query_id")]
     pub inline: Option<String>,
 
     /// Query a dbt information schema view (e.g. `models`, `dag_nodes`) instead of
     /// the warehouse. Equivalent to `--inline "select * from {{ info_schema('<view>') }}"`.
     /// Requires a prior `dbt parse|compile|run|build --generate-info-schema`.
-    #[arg(long, value_name = "VIEW", conflicts_with_all = ["inline", "adapter", "job_id"])]
+    #[arg(long, value_name = "VIEW", conflicts_with_all = ["inline", "adapter", "query_id"])]
     pub info: Option<String>,
 
-    /// Fetch the result of a previously completed dbt-compute job directly,
-    /// by job id, instead of compiling and running a query. No worker/compute
-    /// round trip -- this reads the job's already-materialized result.
-    /// Requires `--adapter lake_compute`.
+    /// Fetch the result of a previously completed LakeCompute query directly,
+    /// by query id, instead of compiling and running a query. No worker/compute
+    /// round trip -- this reads the query's already-materialized result.
+    /// Requires `--adapter lakecompute`.
     #[arg(long, conflicts_with_all = ["inline", "info"])]
-    pub job_id: Option<String>,
+    pub query_id: Option<String>,
 
     /// Select nodes of a specific type;
     #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
@@ -961,7 +961,7 @@ pub struct ShowArgs {
     #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 
-    /// Run against a non-default adapter the target declares (e.g. `lake_compute`),
+    /// Run against a non-default adapter the target declares (e.g. `lakecompute`),
     /// instead of the target's default adapter. Only meaningful for targets
     /// declaring more than one adapter, and only with `--inline`.
     #[arg(long)]
@@ -973,7 +973,7 @@ impl ShowArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::Show;
         eval_args.adapter_override = self.adapter.clone();
-        eval_args.job_id = self.job_id.clone();
+        eval_args.query_id = self.query_id.clone();
         if let Some(resource_type) = &self.resource_type {
             eval_args.resource_types = resource_type.clone();
         } else {
@@ -1458,7 +1458,7 @@ pub struct RunOperationArgs {
     #[arg(long, conflicts_with_all = ["MACRO", "args"])]
     pub sql: Option<String>,
 
-    /// Run against a non-default adapter the target declares (e.g. `lake_compute`),
+    /// Run against a non-default adapter the target declares (e.g. `lakecompute`),
     /// instead of the target's default adapter. Only meaningful for targets
     /// declaring more than one adapter.
     #[arg(long)]
@@ -2816,7 +2816,7 @@ impl CommonArgs {
             macro_args: BTreeMap::new(),
             macro_sql: None,
             adapter_override: None,
-            job_id: None,
+            query_id: None,
             selector: self.selector.clone(),
             resource_types: vec![],
             exclude_resource_types: vec![],
@@ -3280,7 +3280,7 @@ mod tests {
             "--info must conflict with --inline"
         );
         assert!(
-            ShowArgs::try_parse_from(["show", "--info", "models", "--adapter", "lake_compute"])
+            ShowArgs::try_parse_from(["show", "--info", "models", "--adapter", "lakecompute"])
                 .is_err(),
             "--info must conflict with --adapter"
         );

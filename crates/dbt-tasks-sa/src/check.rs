@@ -9,6 +9,7 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use dbt_index_core::ingest::metadata_to_parquet::index_is_current;
 
@@ -168,8 +169,12 @@ pub struct Evaluation {
     /// Rows that survived scoping. Zero is a pass -- unless it is vacuous; see
     /// [`zero_rows_is_vacuous`].
     pub violations: u64,
-    /// First few rows, for the log.
+    /// First few rows as `col=value` text, for `run_results.json`.
     pub preview: Vec<String>,
+    /// The same rows, unmodified, for display as a table. Every column the check
+    /// selected, in the order it selected them -- `dbt show` shows a query's
+    /// output, so a check's rows are shown the same way.
+    pub preview_rows: Option<arrow::record_batch::RecordBatch>,
     /// Resource-type prefixes of the ids found in the scoping columns **before** filtering, so a
     /// zero-row result can be told apart from one whose scope held nothing of the right kind.
     pub reported_kinds: BTreeSet<String>,
@@ -186,6 +191,8 @@ pub fn evaluate_batches(
     let mut count: u64 = 0;
     let mut preview: Vec<String> = Vec::new();
     let mut reported_kinds: BTreeSet<String> = BTreeSet::new();
+    let mut preview_slices: Vec<arrow::record_batch::RecordBatch> = Vec::new();
+    let mut previewed = 0usize;
     for batch in batches {
         let Ok(formatters) = batch
             .columns()
@@ -223,6 +230,7 @@ pub fn evaluate_batches(
                 idxs
             }
         };
+        let mut keep: Vec<u32> = Vec::new();
         for row in 0..batch.num_rows() {
             // Recorded before the row is filtered away: what the check reports on is a property of
             // the check, not of the selection.
@@ -238,7 +246,9 @@ pub fn evaluate_batches(
                 continue;
             }
             count += 1;
-            if preview.len() < max_rows {
+            if previewed < max_rows {
+                previewed += 1;
+                keep.push(row as u32);
                 let cells: Vec<String> = formatters
                     .iter()
                     .enumerate()
@@ -253,10 +263,30 @@ pub fn evaluate_batches(
                 }
             }
         }
+        // `take` rather than a slice: the surviving rows are not contiguous once a
+        // selection has filtered some away.
+        if !keep.is_empty() {
+            let idx = arrow::array::UInt32Array::from(keep);
+            let cols = batch
+                .columns()
+                .iter()
+                .map(|c| arrow::compute::take(c.as_ref(), &idx, None))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            preview_slices.push(
+                arrow::record_batch::RecordBatch::try_new(Arc::clone(&schema), cols)
+                    .map_err(|e| e.to_string())?,
+            );
+        }
     }
+    let preview_rows = match preview_slices.split_first() {
+        None => None,
+        Some((first, _)) => arrow::compute::concat_batches(&first.schema(), &preview_slices).ok(),
+    };
     Ok(Evaluation {
         violations: count,
         preview,
+        preview_rows,
         reported_kinds,
     })
 }
@@ -438,6 +468,55 @@ mod tests {
             vec!["unique_id=model.p.a, column_name=id".to_string()]
         );
     }
+
+    /// The table shows the query's own output, so it keeps the columns the compact
+    /// preview drops -- `message` in particular is usually the point of the rule,
+    /// and it is the one column the `col=value` form always throws away.
+    #[test]
+    fn the_rows_table_keeps_every_column_the_check_selected() {
+        let batch = preview_batch(&[
+            ("unique_id", &["model.p.a"]),
+            ("name", &["a"]),
+            ("message", &["no description"]),
+        ]);
+        let eval = evaluate_batches(&[batch], &SelectionFilter::None, None, 5).unwrap();
+
+        let rows = eval.preview_rows.expect("a violation row");
+        assert_eq!(
+            rows.schema()
+                .fields()
+                .iter()
+                .map(|f| f.name().as_str())
+                .collect::<Vec<_>>(),
+            vec!["unique_id", "name", "message"],
+        );
+        let table = render_rows(&rows, eval.violations).expect("a table");
+        assert!(table.contains("no description"), "{table}");
+        assert!(table.contains("unique_id"), "header row missing: {table}");
+    }
+
+    /// Capped at the preview limit however many rows violate, and the rows kept are
+    /// the ones that survived scoping -- which are not contiguous, so this cannot be
+    /// a slice of the head of the batch.
+    #[test]
+    fn the_rows_table_is_capped_and_holds_only_selected_rows() {
+        let batch = preview_batch(&[(
+            "unique_id",
+            &["model.p.a", "model.p.b", "model.p.c", "model.p.d"],
+        )]);
+        let scope = BTreeSet::from(["model.p.b".to_string(), "model.p.d".to_string()]);
+        let eval = evaluate_batches(&[batch], &SelectionFilter::Auto, Some(&scope), 1).unwrap();
+
+        assert_eq!(eval.violations, 2, "b and d are in scope");
+        let rows = eval.preview_rows.expect("a violation row");
+        assert_eq!(rows.num_rows(), 1, "capped at max_rows, not at violations");
+        let table = render_rows(&rows, eval.violations).expect("a table");
+        assert!(table.contains("model.p.b"), "{table}");
+        assert!(
+            !table.contains("model.p.a") && !table.contains("model.p.c"),
+            "out-of-scope rows must not appear: {table}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -462,6 +541,12 @@ pub struct CheckResult {
     pub status: &'static str,
     pub message: Option<String>,
     pub violations: Option<u64>,
+    /// Wall time for this check's query and evaluation, so the result line can
+    /// report it the way a test's does. Zero for a check that never ran.
+    pub execution_time: f64,
+    /// Violation rows rendered as a table, for the log only. `message` keeps the
+    /// compact form, which is what `run_results.json` carries.
+    pub rows: Option<String>,
 }
 
 impl CheckResult {
@@ -475,8 +560,37 @@ impl CheckResult {
             status: "error",
             message: Some(message),
             violations: None,
+            execution_time: 0.0,
+            rows: None,
         }
     }
+}
+
+/// Violation rows as `dbt show` prints a query's rows: the same renderer, so a
+/// wide result drops columns and reports the width it needs instead of wrapping
+/// past the terminal.
+///
+/// `total` is the violation count, not the number of rows in `batch` -- the batch
+/// is capped at the preview limit, and the width footer would otherwise report
+/// the cap as if it were the result size.
+///
+/// No title, and no row-count footer: the log line above the table already names
+/// the check and counts the violations, and the footer's advice (`--limit -1`) is
+/// about `dbt show`, not about checks.
+fn render_rows(batch: &arrow::record_batch::RecordBatch, total: u64) -> Option<String> {
+    let names = dbt_pretty_table::make_column_names(batch.schema_ref());
+    dbt_pretty_table::pretty_data_table(
+        "",
+        "",
+        &names,
+        std::slice::from_ref(batch),
+        dbt_pretty_table::DisplayFormat::Table,
+        None,
+        false,
+        Some(total as usize),
+    )
+    .ok()
+    .map(|t| t.trim_end().to_string())
 }
 
 /// Run every check against the index, before anything downstream is built.
@@ -495,7 +609,7 @@ impl CheckResult {
 /// never decides whether a check runs. A selector that matches nothing therefore yields `skipped`
 /// rather than `pass`, because a green result must not stand in for a check that examined nothing.
 pub fn run_parse_time_checks(
-    checks: &[std::sync::Arc<dbt_schemas::schemas::DbtCheck>],
+    checks: &[Arc<dbt_schemas::schemas::DbtCheck>],
     index_dir: &Path,
     metadata_dir: &Path,
     selection: Option<&BTreeSet<String>>,
@@ -559,16 +673,19 @@ pub fn run_parse_time_checks(
             continue;
         };
 
-        match crate::check_index_adapter::query_index(&adapter, sql)
-            .and_then(|batches| evaluate_batches(&batches, &filter, selection, max_preview_rows))
-        {
+        let started = std::time::Instant::now();
+        let evaluated = crate::check_index_adapter::query_index(&adapter, sql)
+            .and_then(|batches| evaluate_batches(&batches, &filter, selection, max_preview_rows));
+        let execution_time = started.elapsed().as_secs_f64();
+
+        match evaluated {
             // An execution error is hard whatever the severity: we do not know whether the check
             // would have passed, so reporting a pass would be a lie.
             Err(message) => {
                 outcome.failed += 1;
-                outcome
-                    .results
-                    .push(CheckResult::error(unique_id, name, message));
+                let mut r = CheckResult::error(unique_id, name, message);
+                r.execution_time = execution_time;
+                outcome.results.push(r);
             }
             Ok(eval)
                 if eval.violations == 0
@@ -582,6 +699,8 @@ pub fn run_parse_time_checks(
                         "selection matched no nodes this check can report on".to_string(),
                     ),
                     violations: None,
+                    execution_time,
+                    rows: None,
                 });
             }
             Ok(eval) if eval.violations == 0 => outcome.results.push(CheckResult {
@@ -590,6 +709,8 @@ pub fn run_parse_time_checks(
                 status: "pass",
                 message: None,
                 violations: Some(0),
+                execution_time,
+                rows: None,
             }),
             Ok(eval) => {
                 let (violations, preview) = (eval.violations, eval.preview);
@@ -598,6 +719,10 @@ pub fn run_parse_time_checks(
                 } else {
                     Some(preview.join("\n  "))
                 };
+                let rows = eval
+                    .preview_rows
+                    .as_ref()
+                    .and_then(|b| render_rows(b, violations));
                 let hard = severity == dbt_schemas::schemas::common::Severity::Error;
                 if hard {
                     outcome.failed += 1;
@@ -608,6 +733,8 @@ pub fn run_parse_time_checks(
                     status: if hard { "fail" } else { "warn" },
                     message: detail,
                     violations: Some(violations),
+                    execution_time,
+                    rows,
                 });
             }
         }

@@ -937,7 +937,7 @@ my_project:
         account: test_account
         database: MY_DB
         schema: PUBLIC
-      - type: lake_compute
+      - type: lakecompute
 "#,
     );
 
@@ -952,7 +952,7 @@ my_project:
         .non_default_adapters()
         .map(|a| a.adapter_type.as_str())
         .collect();
-    assert_eq!(non_default, vec!["lake_compute"]);
-    assert!(result.adapter_by_type("lake_compute").is_some());
+    assert_eq!(non_default, vec!["lakecompute"]);
+    assert!(result.adapter_by_type("lakecompute").is_some());
     assert!(result.adapter_by_type("nope").is_none());
 }

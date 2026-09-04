@@ -28,6 +28,8 @@ const DEAD_AT_PARSE: &[(&str, &[&str])] = &[
             "extra_ctes",
             "search_text",
             "raw_code_hash",
+            // `raw_code` is deliberately not listed: it is dead for *model* rows only, which a
+            // table-keyed list cannot express. See `raw_code_is_exposed_only_where_a_node_has_sql`.
             "grain",
             "grain_declared",
             "grain_tested",
@@ -221,7 +223,7 @@ fn projected_view_sql() {
             r#"t."resource_type" AS "resource_type", t."package_name" AS "package_name", "#,
             r#"t."original_file_path" AS "original_file_path", t."fqn" AS "fqn", "#,
             r#"t."alias" AS "alias", t."description" AS "description", "#,
-            r#"t."node_language" AS "node_language", t."raw_code" AS "raw_code", "#,
+            r#"t."node_language" AS "node_language", "#,
             r#"t."database_name" AS "database_name", t."schema_name" AS "schema_name", "#,
             r#"t."relation_name" AS "relation_name", t."identifier" AS "identifier", "#,
             r#"t."enabled" AS "enabled", t."materialized" AS "materialized", "#,
@@ -293,6 +295,41 @@ fn every_view_mirrors_an_information_schema_table() {
             spec_for(Ns::Dbt, view.name).is_some(),
             "the information schema has no '{}' table",
             view.name,
+        );
+    }
+}
+
+/// `raw_code` is per resource type, not per table, so it cannot be settled by
+/// [`DEAD_AT_PARSE`] or by `node_cols!`.
+///
+/// `trim_model_payload` drops it from model payloads only, so it is NULL for `models` and
+/// real SQL for every other node type that has any. Seeds and sources have no SQL at all
+/// and arrive as an empty string, which reads to a check exactly like the NULL does -- a
+/// `like` never matches, so the rule passes -- so they do not carry it either.
+///
+/// Measured per type against the index: model NULL; snapshot, check, analysis, operation
+/// and function populated; seed and source empty.
+#[test]
+fn raw_code_is_exposed_only_where_a_node_has_sql() {
+    let exposes = |name: &str| {
+        VIEWS
+            .iter()
+            .find(|v| v.name == name)
+            .unwrap_or_else(|| panic!("no view '{name}'"))
+            .cols
+            .contains(&"raw_code")
+    };
+
+    for view in ["snapshots", "checks", "analyses", "hooks", "functions"] {
+        assert!(
+            exposes(view),
+            "{view} nodes carry their SQL, so a rule about that SQL must be writable",
+        );
+    }
+    for view in ["models", "seeds", "sources"] {
+        assert!(
+            !exposes(view),
+            "{view}.raw_code is NULL or empty for every row, which only reports false passes",
         );
     }
 }

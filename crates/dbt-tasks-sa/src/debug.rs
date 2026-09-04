@@ -622,7 +622,7 @@ mod tests {
         assert_eq!(adapter_label(AdapterType::Snowflake, true), "snowflake ");
         assert_eq!(
             adapter_label(AdapterType::LakeCompute, true),
-            "lake_compute "
+            "lakecompute "
         );
     }
 
