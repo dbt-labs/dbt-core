@@ -24,7 +24,16 @@ pub struct DefaultStmtSplitter;
 
 impl StmtSplitter for DefaultStmtSplitter {
     fn split<'i>(&self, sql: &'i str, adapter_type: AdapterType) -> Vec<&'i str> {
-        let dialect = dialect_of(adapter_type);
+        let dialect = match adapter_type {
+            // ClickHouse string literals use backslash escapes (\', \\, \xNN),
+            // which the Trino fallback lexer cannot tokenize — everything from
+            // the escape on is then passed through unsplit. The Databricks
+            // (Hive-style) lexer shares ClickHouse's string and backtick lexis.
+            // Local to splitting on purpose: dialect_of() also feeds SQL
+            // analysis, where ClickHouse stays unsupported.
+            AdapterType::ClickHouse => Some(Dialect::Databricks),
+            _ => dialect_of(adapter_type),
+        };
         sql_split_statements(sql, dialect).into_iter().collect()
     }
 
@@ -35,7 +44,8 @@ impl StmtSplitter for DefaultStmtSplitter {
         match adapter_type {
             Snowflake => by_dialect(Dialect::Snowflake),
             Bigquery => by_dialect(Dialect::Bigquery),
-            Databricks | Spark => by_dialect(Dialect::Databricks),
+            // ClickHouse routes to Databricks for the same reason as split()
+            Databricks | Spark | ClickHouse => by_dialect(Dialect::Databricks),
             Redshift => by_dialect(Dialect::Redshift),
             // fallback to the Trino lexer for unsupported lexer dialects
             _ => by_dialect(Dialect::Trino),
@@ -178,6 +188,23 @@ mod tests {
                 "Expected COMMENT ON COLUMN statement, got: {stmt}"
             );
         }
+    }
+
+    #[test]
+    fn test_split_clickhouse_backslash_escaped_strings() {
+        // the Trino fallback lexer cannot split these correctly
+        assert_eq!(
+            split(
+                r#"select 'don\'t; drop'; select '\x3F', 'a\\'; select 2"#,
+                AdapterType::ClickHouse
+            ),
+            vec![
+                r#"select 'don\'t; drop'"#,
+                r#" select '\x3F', 'a\\'"#,
+                " select 2"
+            ]
+        );
+        assert!(!is_empty(r#"select 'don\'t'"#, AdapterType::ClickHouse));
     }
 
     #[test]

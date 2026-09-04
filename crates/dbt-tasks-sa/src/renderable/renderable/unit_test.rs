@@ -454,7 +454,10 @@ fn populate_schema_from_empty_relation(
     // The unit test's own adapter throughout: it carries the tested model's
     // (`resolve_unit_tests`), so a test on a non-default model must not be
     // rendered for the default's dialect.
+    // ClickHouse: the probe's session-scoped TEMPORARY table is invisible to
+    // introspection (never in system.columns), so infer via the query schema.
     let materialization = if unit_test.node_adapter() == AdapterType::DuckDB
+        || unit_test.node_adapter() == AdapterType::ClickHouse
         || infer_with_query_schema
     {
         r#"
@@ -929,6 +932,11 @@ fn discover_given_relations(
     let given_capture = UnitTestGivenCapture::new();
     listeners.push(Rc::clone(&given_capture) as Rc<dyn RenderingEventListener>);
 
+    // ClickHouse runs with static analysis off and the persisted schema cache
+    // has no TTL, so a cached schema goes stale when an upstream model is
+    // rebuilt with different column types between invocations.
+    let force_refetch = ut.node_adapter() == AdapterType::ClickHouse;
+
     for given in &ut.__unit_test_attr__.given {
         let given_relation = {
             ctx.env
@@ -948,7 +956,7 @@ fn discover_given_relations(
         // Only check/fetch schemas for Dict and Csv formats.
         if given.format != schemas::common::Formats::Sql {
             let canonical_fqn = relation.get_canonical_fqn()?;
-            if !ctx.schema_cache.exists(&canonical_fqn) {
+            if force_refetch || !ctx.schema_cache.exists(&canonical_fqn) {
                 relations_to_fetch
                     .push((Arc::clone(&relation), UnitTestSchemaTarget::GivenUpstream));
             }
@@ -984,7 +992,7 @@ fn discover_given_relations(
             let schema_relation = check_defer_relation(&model_unique_id, ctx)
                 .unwrap_or_else(|| expect_relation.clone());
             let canonical_fqn = schema_relation.get_canonical_fqn()?;
-            if !ctx.schema_cache.exists(&canonical_fqn) {
+            if force_refetch || !ctx.schema_cache.exists(&canonical_fqn) {
                 relations_to_fetch.push((
                     schema_relation,
                     UnitTestSchemaTarget::ExpectedModel {
