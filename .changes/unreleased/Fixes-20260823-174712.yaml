@@ -1,7 +1,0 @@
-kind: Fixes
-body: Match dbt-databricks table-property comparison by retaining all remote properties and detecting changes to configured properties.
-time: 2026-08-23T17:47:12.374464+05:30
-custom:
-    author: sd-db
-    issue: "16051"
-    project: dbt-core

@@ -1437,6 +1437,9 @@ impl ResolvableConfig<ModelConfig> for ModelConfig {
         if self.sync.is_none() {
             self.sync = sync;
         }
+        if self.on_configuration_change.is_none() {
+            self.on_configuration_change = Some(OnConfigurationChange::default());
+        }
         // Lake compute writes open-format tables: a node placed there materializes
         // an Iceberg table unless its author says otherwise. Applied here rather
         // than through `#[resolved(default = ...)]` because the default turns on
@@ -2048,7 +2051,9 @@ fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization
 #[cfg(test)]
 mod tests {
     use super::ModelConfig;
-    use crate::schemas::common::{ConstraintType, FreshnessPeriod, UpdatesOn};
+    use crate::schemas::common::{
+        ConstraintType, FreshnessPeriod, OnConfigurationChange, UpdatesOn,
+    };
     use crate::schemas::manifest::ManifestModelConfig;
     use crate::schemas::project::WarehouseSpecificNodeConfig;
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
@@ -2273,6 +2278,31 @@ __additional_properties__: {}
         assert_eq!(
             overridden.__warehouse_specific_config__.skip_optimize,
             Some(false)
+        );
+    }
+
+    #[test]
+    fn omitted_on_configuration_change_defaults_to_apply_in_runtime_configs() {
+        use dbt_common::io_args::StaticAnalysisKind;
+
+        let project: ProjectModelConfig =
+            dbt_yaml::from_str("__additional_properties__: {}\n").unwrap();
+        let mut project_runtime: ModelConfig = project.into();
+        assert_eq!(project_runtime.on_configuration_change, None);
+        project_runtime.apply_resolve_defaults((StaticAnalysisKind::default(), None, None));
+        assert_eq!(
+            project_runtime.on_configuration_change,
+            Some(OnConfigurationChange::Apply)
+        );
+
+        let manifest: ManifestModelConfig =
+            dbt_yaml::from_str("__warehouse_specific_config__: {}\n").unwrap();
+        let mut manifest_runtime: ModelConfig = manifest.into();
+        assert_eq!(manifest_runtime.on_configuration_change, None);
+        manifest_runtime.apply_resolve_defaults((StaticAnalysisKind::default(), None, None));
+        assert_eq!(
+            manifest_runtime.on_configuration_change,
+            Some(OnConfigurationChange::Apply)
         );
     }
 
