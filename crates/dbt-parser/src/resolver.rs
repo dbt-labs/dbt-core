@@ -862,7 +862,6 @@ pub async fn resolve_inner(
         dbt_state.root_package(),
         root_project_configs,
         &min_properties.models,
-        &macros.macros,
         // TODO: pass in typed_models_properties
         database,
         schema,

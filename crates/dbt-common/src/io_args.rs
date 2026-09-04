@@ -1379,6 +1379,10 @@ pub enum StaticAnalysisOffReason {
     ConfiguredOff,
     UnableToFetchSchema,
     NoDownstream,
+    /// No longer produced: a model with a custom materialization now honors its
+    /// configured `static_analysis` (dbt-labs/fs#14357). Retained because
+    /// `RunResultOutput` deserializes this field, so a `run_results.json`
+    /// written by an older Fusion must still parse (e.g. `dbt retry`).
     CustomMaterialization,
 }
 
