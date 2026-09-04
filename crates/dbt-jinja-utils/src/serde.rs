@@ -610,6 +610,7 @@ pub fn single_expression_body(input: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::schemas::properties::DbtPropertiesFile;
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {
@@ -690,5 +691,90 @@ mod tests {
             Value::Mapping(_, _) => {} // minimal structural check
             other => panic!("Expected top-level mapping, got: {:?}", other),
         }
+    }
+
+    /// `anchors:` as a sequence is the shape the field was originally modeled on;
+    /// it must keep working after widening the type to accept any YAML node.
+    #[test]
+    fn test_properties_file_anchors_as_a_sequence_still_parses() {
+        let file: DbtPropertiesFile = from_yaml_raw(
+            r#"
+version: 2
+anchors:
+  - &hx_base
+    name: hx_base
+    database: raw_prod
+sources:
+  - <<: *hx_base
+    name: entries
+    schema: pub
+    tables:
+      - name: entries
+"#,
+            None,
+            false,
+            None,
+        )
+        .expect("properties file should parse");
+        let sources = file.sources.expect("sources");
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].database.as_deref(), Some("raw_prod"));
+    }
+
+    /// fs#14005: a mapping-shaped anchor holder previously failed deserialization of
+    /// the whole properties file with "invalid type: map, expected a sequence",
+    /// which silently discarded the `sources:` block below it.
+    #[test]
+    fn test_properties_file_anchors_as_a_mapping_parses_and_the_source_still_registers() {
+        let file: DbtPropertiesFile = from_yaml_raw(
+            r#"
+version: 2
+anchors:
+  base: &mapping_base
+    database: pub
+    schema: pub
+sources:
+  - name: catalog
+    <<: *mapping_base
+    tables:
+      - name: entries
+"#,
+            None,
+            false,
+            None,
+        )
+        .expect("properties file should parse");
+        let sources = file.sources.expect("sources");
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].database.as_deref(), Some("pub"));
+        assert_eq!(sources[0].schema.as_deref(), Some("pub"));
+    }
+
+    /// fs#14005: an anchor with no wrapping key at all -- `anchors: &name {...}` --
+    /// is another non-sequence shape the same fix must accept.
+    #[test]
+    fn test_properties_file_anchors_as_a_bare_scalar_anchor_parses_and_the_source_still_registers()
+    {
+        let file: DbtPropertiesFile = from_yaml_raw(
+            r#"
+version: 2
+anchors: &scalar_base
+  database: pub
+  schema: pub
+sources:
+  - name: catalog_scalar
+    <<: *scalar_base
+    tables:
+      - name: entries
+"#,
+            None,
+            false,
+            None,
+        )
+        .expect("properties file should parse");
+        let sources = file.sources.expect("sources");
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].database.as_deref(), Some("pub"));
+        assert_eq!(sources[0].schema.as_deref(), Some("pub"));
     }
 }
