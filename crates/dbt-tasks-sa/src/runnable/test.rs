@@ -500,6 +500,15 @@ impl AggregatedTestRunRemoteTask {
 }
 
 impl Task for AggregatedTestRunRemoteTask {
+    // The batched query is issued under TaskOp::BlockingWithConnection in `run_task_inner`,
+    // so taking the default outer guard too would deadlock the gate once it saturates.
+    fn run_task_with_backpressure<'a>(
+        &'a self,
+        ctx: &'a mut TaskRunnerCtx,
+    ) -> Pin<Box<dyn Future<Output = FsResult<NodeStatus>> + Send + 'a>> {
+        self.run_task(ctx)
+    }
+
     fn run_task<'a>(
         &'a self,
         ctx: &'a mut TaskRunnerCtx,
