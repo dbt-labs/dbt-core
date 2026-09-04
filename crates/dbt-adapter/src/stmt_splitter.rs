@@ -13,7 +13,7 @@ pub trait StmtSplitter: Send + Sync + Debug {
     /// The implementation should:
     /// - Split the SQL into individual statements based on delimiters
     /// - Handle dialect-specific syntax correctly
-    fn split(&self, sql: &str, adapter_type: AdapterType) -> Vec<String>;
+    fn split<'i>(&self, sql: &'i str, adapter_type: AdapterType) -> Vec<&'i str>;
 
     /// Determine if a SQL string is either empty or only contains a comment
     fn is_empty(&self, sql: &str, adapter_type: AdapterType) -> bool;
@@ -23,7 +23,7 @@ pub trait StmtSplitter: Send + Sync + Debug {
 pub struct DefaultStmtSplitter;
 
 impl StmtSplitter for DefaultStmtSplitter {
-    fn split(&self, sql: &str, adapter_type: AdapterType) -> Vec<String> {
+    fn split<'i>(&self, sql: &'i str, adapter_type: AdapterType) -> Vec<&'i str> {
         let dialect = dialect_of(adapter_type);
         sql_split_statements(sql, dialect).into_iter().collect()
     }
@@ -64,7 +64,7 @@ mod tests {
         AdapterType::Trino,
     ];
 
-    fn split(sql: &str, adapter_type: AdapterType) -> Vec<String> {
+    fn split(sql: &str, adapter_type: AdapterType) -> Vec<&str> {
         DefaultStmtSplitter.split(sql, adapter_type)
     }
 
@@ -181,11 +181,12 @@ mod tests {
     }
 
     #[test]
-    fn test_split_unterminated_string_drops_partial_trailing() {
-        // The tokenizer aborts on the unterminated string; we keep only the
-        // clean prefix, matching the UNPAIRED_TOKEN behavior of the sdf splitter.
+    fn test_split_unpaired_token_retains_partial_trailing() {
         let result = split("select 1; select 'unterminated", AdapterType::Snowflake);
-        assert_eq!(result, vec!["select 1"]);
+        assert_eq!(result, vec!["select 1", " select 'unterminated"]);
+
+        let result = split("select /* unterminated; select 1", AdapterType::Snowflake);
+        assert_eq!(result, vec!["select /* unterminated; select 1"]);
     }
 
     // ---- is_empty: ported from is_empty_or_comment_only ----

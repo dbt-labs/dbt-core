@@ -733,7 +733,7 @@ impl AdapterImpl {
             // execute() call avoids the need for cross-call connection caching.
             //
             // Lake compute: also supports batching
-            Bigquery | DuckDB | LakeCompute => vec![sql.to_string()],
+            Bigquery | DuckDB | LakeCompute => vec![sql],
             _ => splitter.split(sql, adapter_type),
         };
         // Filter out empty and comment-only statements.
@@ -777,7 +777,7 @@ impl AdapterImpl {
                 state,
                 conn,
                 ctx,
-                &sql,
+                sql,
                 1,
                 &options,
                 fetch,
