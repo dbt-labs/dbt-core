@@ -432,32 +432,6 @@ impl DatabricksMetadataAdapter {
             components::ColumnTagsLoader::requires_server_metadata_for_diff(model_config);
 
         let mut metadata = IndexMap::new();
-        if relation_type == RelationType::MetricView {
-            metadata.insert(
-                DatabricksRelationMetadataKey::ShowTblProperties,
-                self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
-            );
-
-            if fetch_relation_tags {
-                metadata.insert(
-                    DatabricksRelationMetadataKey::InfoSchemaRelationTags,
-                    self.fetch_tags(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                        token.clone(),
-                    )?,
-                );
-            }
-
-            metadata.insert(
-                DatabricksRelationMetadataKey::DescribeExtended,
-                self.describe_extended(&database, &schema, &identifier, state, &mut *conn, token)?,
-            );
-            return Ok((relation_type, metadata));
-        }
 
         // https://github.com/databricks/dbt-databricks/blob/3caad339bb3e60b7c795684374c3c8a1d9042279/dbt/adapters/databricks/impl.py#L421
         // Computed lazily (only inside branches that might use it) since it costs an
@@ -483,13 +457,43 @@ impl DatabricksMetadataAdapter {
 
         // IMPORTANT (Mantle replay): query ordering is observable in replay.
         // Match dbt-databricks v1 `_describe_relation` query order:
-        //   MV:    DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
-        //   ST:    DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
-        //   View:  optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
-        //   Table: UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   MV:          DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
+        //   ST:          DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
+        //   View:        optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   MetricView:  TBLPROPERTIES → optional tags → DESCRIBE EXTENDED
+        //   Table:       UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
         match relation_type {
             RelationType::MetricView => {
-                unreachable!("metric-view metadata is returned before shared relation handling")
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ShowTblProperties,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
+                );
+
+                if fetch_relation_tags {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+
+                metadata.insert(
+                    DatabricksRelationMetadataKey::DescribeExtended,
+                    self.describe_extended(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token,
+                    )?,
+                );
             }
             RelationType::MaterializedView => {
                 metadata.insert(
