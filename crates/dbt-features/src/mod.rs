@@ -13,6 +13,7 @@ pub mod index;
 pub mod jinja;
 pub mod lake_compute;
 pub mod loader;
+pub mod login;
 pub mod metricflow;
 pub mod resolver;
 pub mod sidecar;

@@ -444,6 +444,19 @@ mod tests {
     }
 
     #[test]
+    fn test_normalize_version_banner_for_every_brand() {
+        // The banner's brand comes from the binary's `CliFeature::command_name`,
+        // and the action column is right-aligned, hence the leading padding.
+        for (brand, padding) in [("dbt-fusion", ""), ("dbt-core", "  "), ("dbt-repl", "  ")] {
+            let line = format!("{padding}{brand} {}", env!("CARGO_PKG_VERSION"));
+            assert_eq!(
+                format!("{padding}{brand} "),
+                postprocess_actual(line, false)
+            );
+        }
+    }
+
+    #[test]
     fn test_normalize_inline_sql_files() {
         let line = "Compiling model inline_a1b2c3d4.sql to target/compiled/inline_a1b2c3d4.sql";
         let postprocess_actual = postprocess_actual(line.to_string(), false);

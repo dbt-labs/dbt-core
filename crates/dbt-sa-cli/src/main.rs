@@ -1,5 +1,5 @@
 use dbt_clap_core::{CliParserFactory as _, from_main};
-use dbt_common::tracing::FsTraceConfig;
+use dbt_common::tracing::FsTraceConfigBuilder;
 use dbt_features::cli::DefaultCliParserFactory;
 use dbt_features::feature_stack::{FeatureStack, FeatureStackConfig};
 use dbt_features::tracing::TracingFeature;
@@ -15,18 +15,16 @@ fn main() -> ExitCode {
 
     let mut arg = from_main(&cli);
 
-    let (telemetry_handle, tracing_config_provider) = match FsTraceConfig::new_from_io_args(
-        arg.command,
-        cli.project_dir().as_ref(),
-        cli.target_path().as_ref(),
-        &arg.io,
-        Some(&cli.common_args().get_cli_warn_error_options()),
-        cli.common_args().skip_fusion_only_upgrades(),
-        "dbt",
-    )
-    .with_command_name(cli_parser.command_name())
-    .init()
-    {
+    let trace_config =
+        FsTraceConfigBuilder::from_io_args("dbt", cli_parser.command_name(), &arg.io)
+            .with_command(arg.command)
+            .with_project_dir(cli.project_dir().as_ref())
+            .with_target_path(cli.target_path().as_ref())
+            .with_query_log_enabled(true) // Always enable query log for now
+            .with_warn_error_options(cli.common_args().get_cli_warn_error_options())
+            .with_skip_fusion_only_upgrades(cli.common_args().skip_fusion_only_upgrades())
+            .build();
+    let (telemetry_handle, tracing_config_provider) = match trace_config.init() {
         Ok(handle) => handle,
         Err(e) => {
             let msg = e.to_string();

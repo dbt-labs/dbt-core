@@ -41,6 +41,7 @@ use crate::metricflow::MetricflowClient;
 
 pub struct CliFeature {
     pub command_name: &'static str,
+    pub version_check_enabled: bool,
     pub hooks: Box<dyn CliExtensionHooks>,
     pub cli_parser_factory: Arc<dyn CliParserFactory>,
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
@@ -55,6 +56,7 @@ pub struct CliFeature {
 
 pub struct CliFeatureBuilder {
     command_name: &'static str,
+    version_check_enabled: bool,
     hooks: Option<Box<dyn CliExtensionHooks>>,
     cli_parser_factory: Option<Arc<dyn CliParserFactory>>,
 }
@@ -63,9 +65,15 @@ impl CliFeatureBuilder {
     pub fn new(command_name: &'static str) -> Self {
         Self {
             command_name,
+            version_check_enabled: false,
             hooks: None,
             cli_parser_factory: None,
         }
+    }
+
+    pub fn version_check_enabled(mut self, enabled: bool) -> Self {
+        self.version_check_enabled = enabled;
+        self
     }
 
     pub fn hooks(mut self, hooks: Box<dyn CliExtensionHooks>) -> Self {
@@ -89,6 +97,7 @@ impl CliFeatureBuilder {
 
         CliFeature {
             command_name: self.command_name,
+            version_check_enabled: self.version_check_enabled,
             hooks,
             cli_parser_factory,
             cancellation_token_source: CancellationTokenSource::new(),

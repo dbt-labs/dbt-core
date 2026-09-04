@@ -7,10 +7,10 @@ use dbt_clap_core::commands::{Command, CoreCommand};
 use dbt_clap_core::{Cli, CliParser, from_lib, from_main};
 pub use dbt_common::FsResult;
 use dbt_common::io_args::{FsCommand, SystemArgs};
-use dbt_common::tracing::FsTraceConfig;
 use dbt_common::tracing::dbt_init::{
     InvocationTracingGuard, ProcessTracing, init_tracing_cli_reloadable,
 };
+use dbt_common::tracing::{FsTraceConfig, FsTraceConfigBuilder};
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::tracing::TracingFeature;
 use dbt_main::{print_trimmed_error, run_cli_with_code};
@@ -134,16 +134,15 @@ fn process_tracing(max_log_verbosity: LevelFilter) -> PyResult<&'static ProcessT
 }
 
 fn trace_config(cli: &Cli, cli_parser: &CliParser, arg: &SystemArgs) -> FsTraceConfig {
-    FsTraceConfig::new_from_io_args(
-        arg.command,
-        cli.project_dir().as_ref(),
-        cli.target_path().as_ref(),
-        &arg.io,
-        Some(&cli.common_args().get_cli_warn_error_options()),
-        cli.common_args().skip_fusion_only_upgrades(),
-        "dbt",
-    )
-    .with_command_name(cli_parser.command_name())
+    let brand_name = cli_parser.command_name();
+    FsTraceConfigBuilder::from_io_args("dbt", brand_name, &arg.io)
+        .with_command(arg.command)
+        .with_project_dir(cli.project_dir().as_ref())
+        .with_target_path(cli.target_path().as_ref())
+        .with_query_log_enabled(true) // Always enable query log for now
+        .with_warn_error_options(cli.common_args().get_cli_warn_error_options())
+        .with_skip_fusion_only_upgrades(cli.common_args().skip_fusion_only_upgrades())
+        .build()
 }
 
 /// Installs this invocation's tracing layers and points `arg.io.log_path` at its log file.

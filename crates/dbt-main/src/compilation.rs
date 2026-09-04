@@ -311,7 +311,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
         *version_check_handle = spawn_version_check_if_possible(
             config,
             self.arg.local_execution_backend,
-            !feature_stack.version_check_enabled,
+            !feature_stack.cli.version_check_enabled,
             feature_stack.cli.command_name,
         );
         self.token.check_cancellation()?;
