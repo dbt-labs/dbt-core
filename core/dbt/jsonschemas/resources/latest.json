@@ -386,10 +386,10 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
-        "node_fqn": {
+        "selection_filter_on": {
           "anyOf": [
             {
-              "$ref": "#/definitions/NodeFqn"
+              "$ref": "#/definitions/SelectionFilterOn"
             },
             {
               "type": "null"
@@ -689,6 +689,12 @@
           "items": {
             "$ref": "#/definitions/DataTests"
           }
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -1375,9 +1381,13 @@
           ]
         },
         "dist": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "distribute_by_config": {
@@ -1852,6 +1862,20 @@
             }
           ]
         },
+        "persist_constraints": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
@@ -2084,6 +2108,20 @@
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "skip_optimize": {
           "anyOf": [
             {
               "type": [
@@ -2639,6 +2677,13 @@
           "type": "string",
           "enum": [
             "dynamic_table"
+          ]
+        },
+        {
+          "description": "only for snowflake",
+          "type": "string",
+          "enum": [
+            "interactive_table"
           ]
         },
         {
@@ -3763,9 +3808,13 @@
           ]
         },
         "dist": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "distribute_by_config": {
@@ -4222,6 +4271,20 @@
             }
           ]
         },
+        "persist_constraints": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "post-hook": {
           "default": [],
           "anyOf": [
@@ -4472,6 +4535,20 @@
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "skip_optimize": {
           "anyOf": [
             {
               "type": [
@@ -6051,6 +6128,7 @@
           }
         },
         "constraints": {
+          "default": null,
           "type": [
             "array",
             "null"
@@ -6167,9 +6245,13 @@
           ]
         },
         "dist": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "distribute_by_config": {
@@ -6236,6 +6318,21 @@
           ]
         },
         "engine": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "environment_dependencies": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment_key": {
           "type": [
             "string",
             "null"
@@ -6405,13 +6502,14 @@
           ]
         },
         "incremental_predicates": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "incremental_strategy": {
           "anyOf": [
@@ -6811,6 +6909,20 @@
             }
           ]
         },
+        "persist_constraints": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "persist_docs": {
           "anyOf": [
             {
@@ -6871,6 +6983,16 @@
           "items": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "propagate": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "python_job_config": {
           "type": [
@@ -7096,6 +7218,20 @@
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "skip_optimize": {
           "anyOf": [
             {
               "type": [
@@ -7930,24 +8066,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "NodeFqn": {
-      "description": "Which output column(s) node selection scopes a check's rows by.\n\n`\"none\"` opts out of scoping entirely (the check always evaluates the whole project, which is what aggregate checks want). A single name or a list of names scopes on those output columns: a row is kept when the node id in *any* of them is selected.",
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        {
-          "type": "string",
-          "pattern": "^\\{.*\\}$"
-        }
-      ]
     },
     "OnConfigurationChange": {
       "type": "string",
@@ -8789,9 +8907,13 @@
           ]
         },
         "dist": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "distribute_by_config": {
@@ -9263,6 +9385,20 @@
             }
           ]
         },
+        "persist_constraints": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "persist_docs": {
           "anyOf": [
             {
@@ -9314,6 +9450,16 @@
           "items": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "propagate": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "query_settings": {
           "type": [
@@ -9530,6 +9676,20 @@
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "skip_optimize": {
           "anyOf": [
             {
               "type": [
@@ -9879,6 +10039,24 @@
         }
       },
       "additionalProperties": false
+    },
+    "SelectionFilterOn": {
+      "description": "Which output column(s) node selection scopes a check's rows by.\n\n`\"none\"` opts out of scoping entirely (the check always evaluates the whole project, which is what aggregate checks want). A single name or a list of names scopes on those output columns: a row is kept when the node id in *any* of them is selected. Unset defaults to the `unique_id` column when the check outputs one.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string",
+          "pattern": "^\\{.*\\}$"
+        }
+      ]
     },
     "SemanticLayerElementConfig": {
       "type": "object",
@@ -10240,9 +10418,13 @@
           ]
         },
         "dist": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "distribute_by_config": {
@@ -10740,6 +10922,20 @@
             }
           ]
         },
+        "persist_constraints": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "persist_docs": {
           "anyOf": [
             {
@@ -10791,6 +10987,16 @@
           "items": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "propagate": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "query_settings": {
           "type": [
@@ -11007,6 +11213,20 @@
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "skip_optimize": {
           "anyOf": [
             {
               "type": [
@@ -11757,9 +11977,13 @@
           ]
         },
         "dist": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "distribute_by_config": {
@@ -12218,6 +12442,20 @@
             }
           ]
         },
+        "persist_constraints": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
@@ -12435,6 +12673,20 @@
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "skip_optimize": {
           "anyOf": [
             {
               "type": [
@@ -12820,12 +13072,22 @@
       ]
     },
     "StaticAnalysisOffReason": {
-      "type": "string",
-      "enum": [
-        "configuredoff",
-        "unabletofetchschema",
-        "nodownstream",
-        "custommaterialization"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "configuredoff",
+            "unabletofetchschema",
+            "nodownstream"
+          ]
+        },
+        {
+          "description": "No longer produced: a model with a custom materialization now honors its configured `static_analysis` (dbt-labs/fs#14357). Retained because `RunResultOutput` deserializes this field, so a `run_results.json` written by an older Fusion must still parse (e.g. `dbt retry`).",
+          "type": "string",
+          "enum": [
+            "custommaterialization"
+          ]
+        }
       ]
     },
     "StoreFailuresAs": {
@@ -13447,9 +13709,13 @@
           ]
         },
         "dist": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "distribute_by_config": {
@@ -13865,6 +14131,20 @@
             }
           ]
         },
+        "persist_constraints": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
         "primary_key": {
           "$ref": "#/definitions/PrimaryKeyConfig"
         },
@@ -14071,6 +14351,20 @@
           ]
         },
         "skip_not_matched_step": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{.*\\}$"
+            }
+          ]
+        },
+        "skip_optimize": {
           "anyOf": [
             {
               "type": [
@@ -14635,6 +14929,12 @@
           "items": {
             "$ref": "#/definitions/DataTests"
           }
+        },
+        "ttl": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
