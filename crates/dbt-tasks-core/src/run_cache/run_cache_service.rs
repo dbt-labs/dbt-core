@@ -22,7 +22,7 @@ use crate::context::TaskRunnerCtx;
 use crate::task::{TaskOp, TaskResult};
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{AdapterErrorKind, Cancellable, into_fs_error};
-use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
+use dbt_adapter::metadata::{FreshnessOverride, MetadataAdapter, MetadataQueryOptions};
 use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
@@ -688,6 +688,13 @@ fn heuristic_clock_enabled_for_adapter(adapter_type: AdapterType) -> bool {
         // stored and submitted epochs consistent.
         AdapterType::Snowflake | AdapterType::Redshift | AdapterType::Bigquery
     )
+}
+
+fn schema_dump_empty_requires_fallback(
+    metadata_adapter: &dyn MetadataAdapter,
+    dump_is_empty: bool,
+) -> bool {
+    dump_is_empty && !metadata_adapter.freshness_all_in_schema_empty_result_is_authoritative()
 }
 
 fn has_non_empty_schema(relation: &dyn BaseRelation) -> bool {

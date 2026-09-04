@@ -457,6 +457,11 @@ pub trait MetadataAdapter: Send + Sync {
             }
             Ok(result)
         })
+||||||| parent of 214e1fe04 (refactor: move empty-result fallback policy onto MetadataAdapter, per review)
+    /// Whether an empty result from `freshness_all_in_schema` is authoritative.
+    fn freshness_all_in_schema_empty_result_is_authoritative(&self) -> bool {
+        false
+    }
     }
 
     /// Check whether each relation exists, keyed by semantic FQN.
