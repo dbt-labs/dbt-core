@@ -31,7 +31,7 @@ use dbt_schemas::schemas::properties::{
     FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL, FunctionKind,
     ModelProperties,
 };
-use dbt_schemas::schemas::{DbtModel, InternalDbtNode, Nodes};
+use dbt_schemas::schemas::{DbtModel, DbtSeed, InternalDbtNode, Nodes};
 
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 
@@ -1123,13 +1123,35 @@ fn upstream_is_catalog_reachable(upstream: &DbtModel, catalogs: Option<&DbtCatal
     }
 }
 
+/// Same question as [`upstream_is_catalog_reachable`], for a seed upstream.
+///
+/// Seeds have no `table_format` config, so a seed with no `catalog_name` is
+/// reachable only by being placed on `lake_compute` itself — there is no
+/// "landed in Iceberg with no named catalog" escape hatch for seeds the way
+/// there is for models.
+fn seed_upstream_is_catalog_reachable(upstream: &DbtSeed, catalogs: Option<&DbtCatalogs>) -> bool {
+    if upstream.node_adapter() == AdapterType::LakeCompute {
+        return true;
+    }
+
+    match upstream.__seed_attr__.catalog_name.as_deref() {
+        Some(name) => match catalogs.and_then(|c| c.v2_catalog_type(name).ok().flatten()) {
+            Some(catalog_type) => catalog_type.lake_compute_can_read(),
+            None => true,
+        },
+        None => false,
+    }
+}
+
 /// WS1 rule 5: every `ref`/`source` upstream of a model on a non-`default` compute
 /// platform must be reachable through a catalog. A plain warehouse-native upstream
 /// is rejected with a precise error naming both nodes, since the compute target
 /// reads its inputs through attached catalogs rather than the warehouse.
 ///
 /// Sources are external tables whose catalog reachability is validated elsewhere,
-/// so they are skipped here.
+/// so they are skipped here. Model and seed upstreams are looked up in their own
+/// `Nodes` maps (`unique_id`'s `model.`/`seed.` prefix never overlaps), since a
+/// seed has no `__model_attr__` to check the model-shaped helper against.
 pub fn check_compute_platform_upstreams(
     nodes: &Nodes,
     catalogs: Option<&DbtCatalogs>,
@@ -1142,10 +1164,13 @@ pub fn check_compute_platform_upstreams(
             if upstream_id.starts_with("source.") {
                 continue;
             }
-            let reachable = nodes
-                .models
-                .get(upstream_id)
-                .is_some_and(|up| upstream_is_catalog_reachable(up, catalogs));
+            let reachable = if let Some(up) = nodes.models.get(upstream_id) {
+                upstream_is_catalog_reachable(up, catalogs)
+            } else if let Some(seed) = nodes.seeds.get(upstream_id) {
+                seed_upstream_is_catalog_reachable(seed, catalogs)
+            } else {
+                false
+            };
             if !reachable {
                 return err!(
                     ErrorCode::InvalidConfig,
@@ -1777,5 +1802,75 @@ mod tests {
             .models
             .insert(consumer_uid.to_string(), Arc::new(consumer));
         assert!(check_compute_platform_upstreams(&nodes, None).is_ok());
+    }
+
+    /// WS1 rule 5 for a seed upstream: a seed lives in `nodes.seeds`, not
+    /// `nodes.models`, so it needs its own lookup branch in
+    /// `check_compute_platform_upstreams` -- otherwise every seed upstream
+    /// looks unreachable regardless of where it's actually placed.
+    #[test]
+    fn test_check_compute_platform_upstreams_seed() {
+        use std::sync::Arc;
+
+        use dbt_adapter_core::AdapterType;
+        use dbt_schemas::schemas::{CommonAttributes, DbtModel, DbtSeed, Nodes};
+
+        use super::check_compute_platform_upstreams;
+
+        let consumer_uid = "model.test.consumer";
+        let seed_uid = "seed.test.raw_customers";
+
+        let make_consumer = |upstream: &str| {
+            let mut model = DbtModel {
+                __common_attr__: CommonAttributes {
+                    unique_id: consumer_uid.to_string(),
+                    name: "consumer".to_string(),
+                    package_name: "test".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            model.__base_attr__.adapter = AdapterType::LakeCompute;
+            model.__base_attr__.depends_on.nodes = vec![upstream.to_string()];
+            model
+        };
+
+        let make_seed = |adapter: AdapterType, catalog_name: Option<&str>| {
+            let mut seed = DbtSeed {
+                __common_attr__: CommonAttributes {
+                    unique_id: seed_uid.to_string(),
+                    name: "raw_customers".to_string(),
+                    package_name: "test".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            seed.__base_attr__.adapter = adapter;
+            seed.__seed_attr__.catalog_name = catalog_name.map(str::to_string);
+            seed
+        };
+
+        // A seed placed on `lake_compute` itself is a reachable upstream.
+        let mut nodes = Nodes::default();
+        nodes
+            .models
+            .insert(consumer_uid.to_string(), Arc::new(make_consumer(seed_uid)));
+        nodes.seeds.insert(
+            seed_uid.to_string(),
+            Arc::new(make_seed(AdapterType::LakeCompute, None)),
+        );
+        assert!(check_compute_platform_upstreams(&nodes, None).is_ok());
+
+        // A plain warehouse-native seed (no `lake_compute`, no `catalog_name`) is
+        // rejected, same as a plain warehouse-native model would be.
+        let mut nodes = Nodes::default();
+        nodes
+            .models
+            .insert(consumer_uid.to_string(), Arc::new(make_consumer(seed_uid)));
+        nodes.seeds.insert(
+            seed_uid.to_string(),
+            Arc::new(make_seed(AdapterType::Snowflake, None)),
+        );
+        assert!(check_compute_platform_upstreams(&nodes, None).is_err());
     }
 }

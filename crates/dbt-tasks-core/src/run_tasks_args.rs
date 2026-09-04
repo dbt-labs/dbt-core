@@ -125,7 +125,7 @@ pub struct RunTasksArgs {
     pub metadata_dir: PathBuf,
     /// Resolved index directory (`--index-dir` or `<out_dir>/index`). See `metadata_dir`.
     pub index_dir: PathBuf,
-    /// `show --query-id <id>`: fetch a previously completed dbt-compute query's
+    /// `show --query-id <id>`: fetch a previously completed LakeCompute query's
     /// result directly. See `EvalArgs::query_id`.
     pub query_id: Option<String>,
 }

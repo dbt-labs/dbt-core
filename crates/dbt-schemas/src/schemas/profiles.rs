@@ -49,30 +49,7 @@ pub enum DbConfig {
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
-    // Doc comments on these variants are published verbatim as the JSON
-    // schema's `description`, so the implementation note lives here instead.
-    //
-    // The rename is `schemars`-only on purpose. `UntaggedEnumDeserialize`
-    // rejects *any* `#[serde(..)]` attribute on a variant, so the tag comes from
-    // this enum's `rename_all = "lowercase"` applied to the variant identifier:
-    // `lakecompute`, with no underscore. Authors write `lake_compute`, which
-    // `dbt_profile::adapters::canonicalize_adapter_type` maps onto the tag
-    // before the mapping reaches this enum. Asserted by
-    // `lake_compute_is_tagged_by_its_lowercased_identifier` below, so a future
-    // rename of this variant cannot silently change the tag.
-    //
-    // That the tag is `lakecompute` does *not* make it an accepted
-    // profiles.yml spelling; `canonicalize_adapter_type` only ever writes it.
-    //
-    // What the `schemars` rename fixes is the generated schema, which is
-    // published to dbt-jsonschema and drives editor validation and autocomplete
-    // for profiles.yml: authors are shown the name they should write.
-    //
-    // Once `dbt-yaml`'s derive honours variant renames this collapses into a
-    // plain `#[serde(rename = "lake_compute")]`, matching
-    // `AdapterType::LakeCompute`, and the mapping in `dbt-profile` goes away.
     /// The dbt lake compute engine.
-    #[schemars(rename = "lake_compute")]
     LakeCompute(Box<LakeComputeConfig>),
     // Hive,
     Exasol(Box<ExasolDbConfig>),
@@ -2255,10 +2232,9 @@ mod tests {
 
     /// `DbConfig` is `#[serde(tag = "type", rename_all = "lowercase")]`, so the
     /// tag is the variant identifier lowercased. `dbt-profile` hard-codes the
-    /// resulting string (`LAKE_COMPUTE_INTERNAL_TAG`) because it deliberately
-    /// does not depend on this crate, and `compute_platform.rs` writes it back
-    /// after `to_mapping()` drops it. Neither can notice a rename of the
-    /// variant, so pin the tag here and round trip through it.
+    /// resulting string (`LAKE_COMPUTE_TYPE`) because it deliberately does not
+    /// depend on this crate. Neither can notice a rename of the variant, so pin
+    /// the tag here and round trip through it.
     #[test]
     fn lake_compute_is_tagged_by_its_lowercased_identifier() {
         let value = dbt_yaml::to_value(DbConfig::LakeCompute(Box::default()))
@@ -2268,24 +2244,20 @@ mod tests {
                 .get(dbt_yaml::Value::from("type"))
                 .and_then(|v| v.as_str()),
             Some("lakecompute"),
-            "`dbt_profile::adapters::LAKE_COMPUTE_INTERNAL_TAG` and \
-             `compute_platform::build_lake_compute_adapter` both hard-code this string"
+            "`dbt_profile::adapters::LAKE_COMPUTE_TYPE` hard-codes this string"
         );
 
         let round_tripped: DbConfig =
             dbt_yaml::from_value(value).expect("the tag it emits must be the tag it accepts");
         assert!(matches!(round_tripped, DbConfig::LakeCompute(_)));
 
-        // And the reason the mapping in `dbt-profile` has to exist at all: the
-        // name authors write is not a tag this enum accepts. `dbt-yaml`'s
-        // `UntaggedEnumDeserialize` rejects per-variant `#[serde(..)]`
-        // attributes, so the tag cannot be renamed to match.
+        // The adapter's retired external name is not a tag this enum accepts
+        // either, same as any other unrecognized `type:`.
         assert!(
             dbt_yaml::from_str::<DbConfig>(
                 "type: lake_compute\nbase_url: https://example.invalid\n"
             )
             .is_err(),
-            "if this starts passing, `canonicalize_adapter_type` can go away"
         );
     }
 

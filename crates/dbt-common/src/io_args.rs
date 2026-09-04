@@ -610,7 +610,7 @@ pub struct EvalArgs {
     /// `run-operation --adapter <type>`: run against this non-default adapter
     /// instead of the target's default one.
     pub adapter_override: Option<String>,
-    /// `show --query-id <id>`: fetch a previously completed dbt-compute query's
+    /// `show --query-id <id>`: fetch a previously completed LakeCompute query's
     /// result directly, instead of compiling/executing a query. Mutually
     /// exclusive with `inline`.
     pub query_id: Option<String>,

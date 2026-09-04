@@ -911,10 +911,10 @@ pub struct ShowArgs {
     #[arg(long, value_name = "VIEW", conflicts_with_all = ["inline", "adapter", "query_id"])]
     pub info: Option<String>,
 
-    /// Fetch the result of a previously completed dbt-compute query directly,
+    /// Fetch the result of a previously completed LakeCompute query directly,
     /// by query id, instead of compiling and running a query. No worker/compute
     /// round trip -- this reads the query's already-materialized result.
-    /// Requires `--adapter lake_compute`.
+    /// Requires `--adapter lakecompute`.
     #[arg(long, conflicts_with_all = ["inline", "info"])]
     pub query_id: Option<String>,
 
@@ -961,7 +961,7 @@ pub struct ShowArgs {
     #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
 
-    /// Run against a non-default adapter the target declares (e.g. `lake_compute`),
+    /// Run against a non-default adapter the target declares (e.g. `lakecompute`),
     /// instead of the target's default adapter. Only meaningful for targets
     /// declaring more than one adapter, and only with `--inline`.
     #[arg(long)]
@@ -1458,7 +1458,7 @@ pub struct RunOperationArgs {
     #[arg(long, conflicts_with_all = ["MACRO", "args"])]
     pub sql: Option<String>,
 
-    /// Run against a non-default adapter the target declares (e.g. `lake_compute`),
+    /// Run against a non-default adapter the target declares (e.g. `lakecompute`),
     /// instead of the target's default adapter. Only meaningful for targets
     /// declaring more than one adapter.
     #[arg(long)]
@@ -3280,7 +3280,7 @@ mod tests {
             "--info must conflict with --inline"
         );
         assert!(
-            ShowArgs::try_parse_from(["show", "--info", "models", "--adapter", "lake_compute"])
+            ShowArgs::try_parse_from(["show", "--info", "models", "--adapter", "lakecompute"])
                 .is_err(),
             "--info must conflict with --adapter"
         );
