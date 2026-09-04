@@ -3184,8 +3184,15 @@ impl InternalDbtNode for DbtCheck {
                 &self.__common_attr__.tags,
                 &other_check.__common_attr__.tags,
             );
+            // `meta` is compared for the same reason models compare it: a user editing `meta:`
+            // expects the node to be selected, and this was the one key where a check behaved
+            // differently from a model. Read from common_attr, like tags: that field holds the
+            // resolved value and is not an `Option`, so plain equality is enough --
+            // `indexmap_yml_value_equal` exists to treat `None` and an empty map as equal, which
+            // only arises for the `Option` config wrappers.
+            let meta_eq = self.__common_attr__.meta == other_check.__common_attr__.meta;
 
-            let result = enabled_eq && severity_eq && selection_filter_on_eq && tags_eq;
+            let result = enabled_eq && severity_eq && selection_filter_on_eq && tags_eq && meta_eq;
 
             if !result {
                 log_state_mod_diff(
@@ -3222,6 +3229,14 @@ impl InternalDbtNode for DbtCheck {
                             Some((
                                 format!("{:?}", &self.__common_attr__.tags),
                                 format!("{:?}", &other_check.__common_attr__.tags),
+                            )),
+                        ),
+                        (
+                            "meta",
+                            meta_eq,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.meta),
+                                format!("{:?}", &other_check.__common_attr__.meta),
                             )),
                         ),
                     ],
