@@ -1,5 +1,5 @@
 kind: Features
-body: '[ClickHouse] dbt unit tests are supported; SQL statements containing single quotes are no longer silently dropped by the statement splitter'
+body: '[ClickHouse] dbt unit tests are supported; multi-statement SQL containing ClickHouse backslash escapes is now split correctly by the statement splitter'
 time: 2026-09-01T17:23:56.124814+02:00
 custom:
     author: koletzilla

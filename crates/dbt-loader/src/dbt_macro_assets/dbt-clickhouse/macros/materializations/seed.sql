@@ -19,10 +19,9 @@
         {%- elif val is number -%}
           {% do ns2.vals.append(val | string) %}
         {%- else -%}
-          {#- '' not \': keeps the INSERT tokenizable by any statement-splitter lexer -#}
           {%- set escaped = val | string
               | replace("\\", "\\\\")
-              | replace("'", "''")
+              | replace("'", "\\'")
               | replace("?", "??") -%}
           {% do ns2.vals.append("'" ~ escaped ~ "'") %}
         {%- endif -%}
