@@ -22,7 +22,7 @@ use crate::context::TaskRunnerCtx;
 use crate::task::{TaskOp, TaskResult};
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{AdapterErrorKind, Cancellable, into_fs_error};
-use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
+use dbt_adapter::metadata::{CatalogAndSchema, FreshnessOverride, MetadataQueryOptions};
 use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
@@ -40,6 +40,7 @@ use dbt_frontend_common::ident::FullyQualifiedName;
 use dbt_frontend_common::named_reference::NamedReference;
 use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::{DbtMaterialization, ModelFreshnessRules, ResolvedQuoting};
 use dbt_schemas::schemas::macros::DbtMacro;
@@ -1876,7 +1877,19 @@ pub async fn execute_run_cache_service_clone(
         )));
     }
 
-    let clone_sqls = clone.clone_sqls.clone();
+    let target_relation = create_relation_from_node(node.node_adapter(), node, None)
+        .map_err(RunCacheCloneError::Fatal)?;
+    let target_relation: Arc<dyn BaseRelation> = target_relation.into();
+
+    let mut clone_sqls = clone.clone_sqls.clone();
+    let target_is_view = target_relation_is_view(ctx, &target_relation).await;
+    if let Some(drop_sql) = drop_stale_view_sql(
+        node.materialized(),
+        target_is_view,
+        &target_relation.semantic_fqn(),
+    ) {
+        clone_sqls.insert(0, drop_sql);
+    }
     let node_unique_id = node.unique_id();
     let ctx_inner = ctx.clone();
     let clone_result = TaskOp::BlockingWithConnection {
@@ -1910,15 +1923,55 @@ pub async fn execute_run_cache_service_clone(
     .map_err(RunCacheCloneError::Recoverable)?;
     clone_result?;
 
-    let target_relation = create_relation_from_node(node.node_adapter(), node, None)
-        .map_err(RunCacheCloneError::Fatal)?;
-    let target_relation: Arc<dyn BaseRelation> = target_relation.into();
     ctx.inner
         .run_cache_ctx
         .run_cache_metadata
         .invalidate_relation_metadata(&target_relation.semantic_fqn());
     cache_cloned_relation(ctx, node).map_err(RunCacheCloneError::Fatal)?;
     Ok(clone.success_status())
+}
+
+/// Clone DDL can't replace a relation of a different object kind, so a stale VIEW left at
+/// the target by a prior materialization must be dropped first.
+fn drop_stale_view_sql(
+    materialized: DbtMaterialization,
+    target_is_view: bool,
+    target_relation: &str,
+) -> Option<String> {
+    (target_is_view && materialized != DbtMaterialization::View)
+        .then(|| format!("drop view if exists {target_relation}"))
+}
+
+/// Fail-open on lookup errors. Uses `list_relations_in_parallel` (same primitive as
+/// `relations_exist`) rather than `freshness`, which some adapters (e.g. Redshift) can't
+/// reliably report for views since it depends on a last-altered timestamp.
+async fn target_relation_is_view(
+    ctx: &TaskRunnerCtx,
+    target_relation: &Arc<dyn BaseRelation>,
+) -> bool {
+    let Some(adapter) = ctx.env.get_adapter_ref() else {
+        return false;
+    };
+    let Some(metadata_adapter) = adapter.metadata_adapter() else {
+        return false;
+    };
+    let semantic_fqn = target_relation.semantic_fqn();
+    let catalog_schema = CatalogAndSchema::from(target_relation);
+    let db_schemas = [catalog_schema.clone()];
+    let Ok(listed) = metadata_adapter
+        .list_relations_in_parallel(&db_schemas, adapter.cancellation_token())
+        .await
+    else {
+        return false;
+    };
+    let Some(Ok(schema_relations)) = listed.get(&catalog_schema) else {
+        return false;
+    };
+    schema_relations
+        .iter()
+        .find(|candidate| candidate.semantic_fqn() == semantic_fqn)
+        .and_then(|relation| relation.relation_type())
+        == Some(RelationType::View)
 }
 
 pub enum RunCacheCloneError {
@@ -8426,6 +8479,37 @@ mod tests {
         assert_eq!(
             clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, false, false),
             Some(0)
+        );
+    }
+
+    #[test]
+    fn drop_stale_view_sql_drops_when_target_is_a_view_and_materialization_is_not() {
+        // Regression test: a target left over as a VIEW by a prior materialization
+        // must be dropped before `CREATE OR REPLACE TABLE ... CLONE ...` can succeed.
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::Table, true, "dev.model_a"),
+            Some("drop view if exists dev.model_a".to_string())
+        );
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::Incremental, true, "dev.model_a"),
+            Some("drop view if exists dev.model_a".to_string())
+        );
+    }
+
+    #[test]
+    fn drop_stale_view_sql_is_none_when_target_is_not_a_view() {
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::Table, false, "dev.model_a"),
+            None
+        );
+    }
+
+    #[test]
+    fn drop_stale_view_sql_is_none_when_materialization_is_itself_a_view() {
+        // Cloning a view target as a view is not the mismatch this guards against.
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::View, true, "dev.model_a"),
+            None
         );
     }
 
