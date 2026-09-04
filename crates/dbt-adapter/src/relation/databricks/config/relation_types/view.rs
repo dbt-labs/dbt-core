@@ -12,12 +12,13 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks views
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 6] = [
         Box::new(components::ColumnCommentsLoader),
         Box::new(components::QueryLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
+        Box::new(components::ColumnTagsLoader),
     ];
 
     RelationConfigLoader::new(AdapterType::Databricks, loaders, requires_full_refresh)

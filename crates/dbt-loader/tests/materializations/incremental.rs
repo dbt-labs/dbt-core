@@ -50,13 +50,22 @@ fn incremental_model(alias: &str, sql: &str) -> Value {
 }
 
 fn incremental_config_with(strategy: Option<&str>, full_refresh: bool) -> Arc<MockJinjaObject> {
-    incremental_config_with_contract(strategy, full_refresh, false)
+    incremental_config_with_options(strategy, full_refresh, false, true)
 }
 
 fn incremental_config_with_contract(
     strategy: Option<&str>,
     full_refresh: bool,
     contract_enforced: bool,
+) -> Arc<MockJinjaObject> {
+    incremental_config_with_options(strategy, full_refresh, contract_enforced, true)
+}
+
+fn incremental_config_with_options(
+    strategy: Option<&str>,
+    full_refresh: bool,
+    contract_enforced: bool,
+    apply_config_changes: bool,
 ) -> Arc<MockJinjaObject> {
     let mock = default_mock_config();
     mock.set_attr("materialized", Value::from("incremental"));
@@ -70,6 +79,7 @@ fn incremental_config_with_contract(
                 Value::from(contract_enforced),
             )]))),
             Some("full_refresh") => Ok(Value::from(full_refresh)),
+            Some("incremental_apply_config_changes") => Ok(Value::from(apply_config_changes)),
             Some("incremental_strategy") => Ok(strategy
                 .clone()
                 .map(Value::from)
@@ -308,6 +318,55 @@ mod databricks {
             sqls.len() >= 2,
             "Expected at least 2 SQL statements (temp table + merge), got: {sqls:?}",
         );
+    }
+
+    #[test]
+    fn legacy_incremental_false_skips_relation_config_lookup() {
+        let harness = build_harness();
+
+        let existing = harness.relation(
+            "TEST_DB",
+            "TEST_SCHEMA",
+            "my_incr",
+            Some(RelationType::Table),
+        );
+        harness.mock().on("get_relation", move |_| {
+            Ok(RelationObject::new(Arc::clone(&existing)).into_value())
+        });
+        harness
+            .mock()
+            .on("get_relation_config", |_| Ok(Value::UNDEFINED));
+
+        let model_config = Arc::new(MockJinjaObject::new());
+        model_config.on("get_changeset", |_| Ok(Value::from(())));
+        let model_config_value = Value::from_dyn_object(Arc::clone(&model_config));
+        harness.mock().on("get_config_from_model", move |_| {
+            Ok(model_config_value.clone())
+        });
+        harness.mock().on("get_incremental_strategy_macro", |_| {
+            Ok(Value::from_function(
+                |_args: &[Value]| -> Result<Value, minijinja::Error> {
+                    Ok(Value::from("SELECT 1 /* incremental merge */"))
+                },
+            ))
+        });
+
+        let config = incremental_config_with_options(None, false, false, false);
+        let ctx = incremental_ctx_with_config(&harness, config);
+        render_incremental(&harness, ADAPTER, ctx)
+            .unwrap_or_else(|e| panic!("incremental merge failed: {e:?}"));
+
+        harness
+            .mock()
+            .observed_calls()
+            .assert_not_called("get_relation_config");
+        harness
+            .mock()
+            .observed_calls()
+            .assert_not_called("get_config_from_model");
+        model_config
+            .observed_calls()
+            .assert_not_called("get_changeset");
     }
 
     #[test]

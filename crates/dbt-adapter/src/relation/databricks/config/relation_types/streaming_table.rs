@@ -12,15 +12,14 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks streaming tables
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
-    // TODO: missing from Python dbt-databricks:
-    // - relation tags
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
+    // TODO: query (#16138)
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 8] = [
         Box::new(components::LiquidClusteringLoader),
         Box::new(components::PartitionByLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::RefreshLoader),
-        // Box::new(components::RelationTagsLoader),
+        Box::new(components::RelationTagsLoader),
         Box::new(components::RowFilterLoader),
         Box::new(components::ColumnMasksLoader),
     ];
@@ -120,16 +119,17 @@ mod tests {
                                 )),
                             ),
                         ),
-                        // TODO: re-add tags
-                        // (
-                        //     components::RelationTagsLoader.type_name(),
-                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new_component_type_erased(
-                        //         IndexMap::from_iter([
-                        //             ("a_tag".to_string(), "new".to_string()),
-                        //             ("b_tag".to_string(), "old".to_string()),
-                        //         ]),
-                        //     )),
-                        // ),
+                        (
+                            components::RelationTagsLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::RelationTagsLoader::new_component_type_erased(
+                                    IndexMap::from_iter([
+                                        ("a_tag".to_string(), "new".to_string()),
+                                        ("b_tag".to_string(), "old".to_string()),
+                                    ]),
+                                ),
+                            ),
+                        ),
                         (
                             components::RowFilterLoader.type_name(),
                             ComponentConfigChange::Some(
@@ -198,6 +198,16 @@ mod tests {
         True
     </is_altered>
 </refresh>
+<tags>
+    <set_tags>
+        <a_tag>
+            new
+        </a_tag>
+        <b_tag>
+            old
+        </b_tag>
+    </set_tags>
+</tags>
 <row_filter>
     <function>
         None

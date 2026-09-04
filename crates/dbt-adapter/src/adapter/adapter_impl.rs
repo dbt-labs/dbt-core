@@ -4523,12 +4523,13 @@ impl AdapterImpl {
 
     /// Given a relation, fetch its configurations from the remote data warehouse
     ///
-    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L931
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1088
     pub fn get_relation_config(
         &self,
         state: &State,
         conn: &mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
+        model_config: Option<&RelationConfig>,
         token: CancellationToken,
     ) -> AdapterResult<RelationConfig> {
         use crate::relation::databricks::config::relation_types;
@@ -4556,7 +4557,13 @@ impl AdapterImpl {
             // In replay mode, adapter calls must go through the replay adapter so they consume
             // the recording stream.
             let metadata_adapter = DatabricksMetadataAdapter::new_from_adapter(self.clone());
-            metadata_adapter.fetch_relation_config_from_remote(state, conn, relation, token)?
+            metadata_adapter.fetch_relation_config_from_remote(
+                state,
+                conn,
+                relation,
+                model_config,
+                token,
+            )?
         };
 
         let config_loader = match relation_type {
@@ -4579,7 +4586,7 @@ impl AdapterImpl {
 
     /// Given a model, parse and build its configurations
     ///
-    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L944
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1107
     pub fn get_config_from_model(&self, model: &InternalDbtNodeWrapper) -> AdapterResult<Value> {
         use crate::relation::databricks::config::relation_types;
 
