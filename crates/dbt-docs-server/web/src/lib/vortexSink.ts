@@ -44,10 +44,10 @@ import {
   UpsellPromptDismissedSchema,
   UpsellPromptDisplayedSchema,
 } from '@dbt-labs/proto/public/events/docs_pb';
-import producer from '@dbt-labs/vortex';
 
 import type { AnalyticsEvent } from '../types';
 import type { SiteBootstrap } from './siteBootstrap';
+import producer from './vortexProducer';
 
 /** Where the collector lives. Protobuf only. */
 const COLLECTOR_BASE_URL = 'https://p.vx.dbt.com';

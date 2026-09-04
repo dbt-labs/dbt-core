@@ -29,9 +29,6 @@ importers:
       '@dbt-labs/sourdough':
         specifier: 18.23.0
         version: 18.23.0(@dbt-labs/biga@1.7.2)(@types/node@22.20.1)(@types/react@19.2.18)(classnames@2.5.1)(react-dom@19.2.8(react@19.2.8))(react-router-dom@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(tailwindcss@3.4.19)
-      '@dbt-labs/vortex':
-        specifier: ^0.3.0
-        version: 0.3.0(@bufbuild/protobuf@2.13.0)(@dbt-labs/proto@1.0.560)
       '@radix-ui/react-collapsible':
         specifier: ^1.1.20
         version: 1.1.20(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -125,6 +122,9 @@ importers:
       tailwind-merge:
         specifier: ^2.2.1
         version: 2.6.1
+      uuid:
+        specifier: ^14.0.2
+        version: 14.0.2
       zustand:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
@@ -359,12 +359,6 @@ packages:
       react-router: '*'
       react-router-dom: '*'
       tailwindcss: ^3.4.1
-
-  '@dbt-labs/vortex@0.3.0':
-    resolution: {integrity: sha512-jz2Ig27QohohwFULtX3XBsnpv40Dj5F8uQKKarGWTFGa9YoqVRzvrupWjribOgnTcRQX+qx6rN+H6bpl5Vv8bQ==, tarball: https://npm.pkg.github.com/download/@dbt-labs/vortex/0.3.0/d609779e658b3b0d7503dca3346e8955b68de394}
-    peerDependencies:
-      '@bufbuild/protobuf': ^2.2.5
-      '@dbt-labs/proto': ^1.0.0
 
   '@duckdb/duckdb-wasm@1.32.0':
     resolution: {integrity: sha512-IewXTNYEjsZCPE9weUWgtjGxUlMRo7qhX0GF6tq/KjK8bnY+RAl4cyUdYUfcdzbyb4b9ZxPC+FOsCcxgaKFWMg==}
@@ -4799,8 +4793,8 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  uuid@11.1.1:
-    resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
+  uuid@14.0.2:
+    resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
     hasBin: true
 
   uuid@9.0.1:
@@ -5279,12 +5273,6 @@ snapshots:
       - '@types/node'
       - '@types/react'
       - supports-color
-
-  '@dbt-labs/vortex@0.3.0(@bufbuild/protobuf@2.13.0)(@dbt-labs/proto@1.0.560)':
-    dependencies:
-      '@bufbuild/protobuf': 2.13.0
-      '@dbt-labs/proto': 1.0.560
-      uuid: 11.1.1
 
   '@duckdb/duckdb-wasm@1.32.0':
     dependencies:
@@ -10286,7 +10274,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  uuid@11.1.1: {}
+  uuid@14.0.2: {}
 
   uuid@9.0.1: {}
 
