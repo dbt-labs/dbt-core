@@ -1318,7 +1318,7 @@ impl Object for Exceptions {
                     .unwrap_or_default();
 
                 let warning = format!(
-                    "Data type of {name_part} timestamp columns ({snapshot_time_data_type}) does not match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'.{location_hint}"
+                    "Data type of {name_part} hard-delete timestamps ({snapshot_time_data_type}) does not match its 'updated_at'-derived timestamp columns ({updated_at_data_type}). Values written when closing out deleted rows will be implicitly converted. Override the 'snapshot_get_time' macro in your project to emit a matching type.{location_hint}"
                 );
 
                 emit_warn_log_message(ErrorCode::SnapshotTimestampMismatch, warning);
