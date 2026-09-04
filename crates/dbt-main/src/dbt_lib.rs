@@ -102,7 +102,7 @@ use dbt_vortex::vortex_producer_is_running;
 use git_version::git_version;
 use minijinja::Value;
 use serde_json::{json, to_string_pretty};
-use tracing::{Instrument, Span};
+use tracing::Instrument;
 use vortex_events::{build_result_string, invocation_end_event};
 
 use crate::{
@@ -2865,11 +2865,18 @@ async fn fetch_catalog_data(
         let shared_errors_clone = shared_errors.clone();
         let progress_tracker_clone = progress_tracker.clone();
 
-        let cur_span = Span::current();
+        // Deliberately NOT `Span::current().enter()`ed inside the worker. The poll loop below
+        // abandons workers that blow past `WORKER_TIMEOUT` without joining them, so a worker can
+        // outlive this function. A live thread holding a handle to the invocation span (or any of
+        // its descendants) keeps that span's refcount above zero, so the subscriber never fires
+        // `on_close` for it -- and the end-of-invocation Execution Summary, which is emitted from
+        // `handle_invocation_end`, is silently dropped. Users saw a `--write-index`/`--write-catalog`
+        // build print "Fetched partial catalog.json results" and then simply stop, with no summary
+        // and no result counts (dbt-labs/fs#14424). Abandonment has to be total: these threads must
+        // not participate in the invocation's span lifetime.
         let handle = std::thread::Builder::new()
             .stack_size(8 * 1024 * 1024)
             .spawn(move || -> FsResult<()> {
-                let _sp = cur_span.enter();
                 // Worker loop: process tasks until queue is empty
                 loop {
                     let task = task_queue_clone.lock().unwrap().pop();
