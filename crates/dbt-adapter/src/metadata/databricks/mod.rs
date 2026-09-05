@@ -1033,9 +1033,12 @@ impl DatabricksMetadataAdapter {
         let sql = format!(
             "SELECT tag_name, tag_value
             FROM `system`.`information_schema`.`table_tags`
-            WHERE catalog_name = '{database}'
-                AND schema_name = '{schema}'
-                AND table_name = '{identifier}'"
+            WHERE catalog_name = '{}'
+                AND schema_name = '{}'
+                AND table_name = '{}'",
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
         );
         let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch tags", conn, token)?;
         Ok(result)
@@ -1053,9 +1056,12 @@ impl DatabricksMetadataAdapter {
         let sql = format!(
             "SELECT column_name, tag_name, tag_value
             FROM `system`.`information_schema`.`column_tags`
-            WHERE catalog_name = '{database}'
-                AND schema_name = '{schema}'
-                AND table_name = '{identifier}'"
+            WHERE catalog_name = '{}'
+                AND schema_name = '{}'
+                AND table_name = '{}'",
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
         );
         let (_, result) =
             self.execute_sql_with_context(&sql, state, "Fetch column tags", conn, token)?;
