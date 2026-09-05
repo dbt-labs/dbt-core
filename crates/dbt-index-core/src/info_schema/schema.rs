@@ -654,11 +654,15 @@ pub const INFO_SCHEMA: &[TableSpec] = &[
     // Moved out of the project namespace: this is a runtime result.
     TableSpec {
         ns: Ns::DbtRt,
-        name: "source_freshness",
+        name: "freshness",
         src: Src::Table("source_freshness"),
         filter: Filter::All,
         cols: &[
             c("unique_id"),
+            // Sources and models both land here, so the row has to say which it is. The
+            // epoch has carried this since model freshness shipped; the index dropped it,
+            // leaving the `unique_id` prefix as the only way to tell them apart.
+            c("resource_type"),
             c("invocation_id"),
             c("status"),
             c("max_loaded_at"),

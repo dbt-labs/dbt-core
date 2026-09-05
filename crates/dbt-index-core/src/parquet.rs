@@ -2143,9 +2143,13 @@ define_row! {
 }
 
 define_row! {
-    /// dbt.source_freshness row (snapshot — merge-on-write, one row per source).
+    /// dbt.source_freshness row (snapshot — merge-on-write, one row per resource).
+    ///
+    /// Sources and models both, since `dbt freshness` measures both; `resource_type`
+    /// says which. Published as `dbt_rt.freshness`.
     pub struct SourceFreshnessRow<'a> => schema_source_freshness {
         [utf8!] pub unique_id: &'a str,
+        [utf8]  pub resource_type: Option<&'a str>,
         [utf8]  pub invocation_id: Option<&'a str>,
         [utf8]  pub status: Option<&'a str>,
         [timestamp] pub max_loaded_at: Option<&'a str>,

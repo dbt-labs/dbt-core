@@ -646,9 +646,13 @@ const INVOCATIONS: &[(&str, EpochExpr)] = &[
     ("vars_override", EpochExpr::Null),
 ];
 
-/// `dbt.source_freshness` ← `run/freshness`.
+/// `dbt.source_freshness` ← `run/freshness`, published as `dbt_rt.freshness`.
+///
+/// The staging table keeps its name; only the published one is `freshness`. Rows are
+/// sources *and* models, told apart by `resource_type`.
 const SOURCE_FRESHNESS: &[(&str, EpochExpr)] = &[
     ("unique_id", EpochExpr::Same),
+    ("resource_type", EpochExpr::Same),
     ("invocation_id", EpochExpr::Same),
     ("status", EpochExpr::Same),
     ("max_loaded_at", EpochExpr::Same),
