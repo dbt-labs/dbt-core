@@ -1,0 +1,331 @@
+//! Resolving `enabled` for a skill, and picking a winner when two enabled
+//! skills want the same flat install destination.
+//!
+//! This is the shared helper the spec's risk R1 calls for: the deps-time install
+//! pass and (in a later phase) the parser must resolve `enabled` identically, so
+//! both go through here. It reuses the same FQN config machinery every other
+//! resource type uses, with the same precedence — a package's own `skills:`
+//! block is the base and the root project's `skills:` block overrides it.
+
+use std::collections::BTreeMap;
+
+use dbt_adapter_core::AdapterType;
+use dbt_common::ErrorCode;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_common::{FsResult, fs_err};
+use dbt_schemas::schemas::project::{
+    DbtProjectConfig, ProjectConfigResolver, ResolvedConfig, SkillConfig, init_project_config,
+};
+
+use crate::discover::{DiscoveredSkill, SkillOrigin, SkillSourceProject};
+
+/// The adapter handed to the shared config resolver, which requires one.
+///
+/// Resolving skill config does not depend on the adapter. `SkillConfig` has no
+/// adapter-specific keys, so it inherits the no-op
+/// `ResolvableConfig::canonicalize_adapter_aliases` — the only path by which
+/// this value reaches config-tree resolution. The one other consumer,
+/// `authored_quoting_per_adapter`, is reached solely through
+/// `build_root_project_configs`, which this pass never calls.
+///
+/// So the value is arbitrary, and it has to be *something*: `AdapterType` has no
+/// neutral variant. It cannot be the project's real adapter either, because this
+/// pass runs during `dbt deps`, before any profile has been read.
+///
+/// `skill_config_resolution_ignores_the_adapter` keeps this assumption honest.
+const CONFIG_RESOLVER_ADAPTER: AdapterType = AdapterType::Snowflake;
+
+/// Resolve `enabled` for every discovered skill and drop the disabled ones.
+///
+/// `projects` must be the same slice, in the same order, that produced
+/// `skills`; `precedence` indexes into it. `disallow_plus_prefix` comes from the
+/// root project's behavior flags, the same way the parser sources it, so a
+/// `+`-prefixed resource path is treated identically here and at parse time.
+pub fn filter_enabled(
+    skills: Vec<DiscoveredSkill>,
+    projects: &[SkillSourceProject],
+    disallow_plus_prefix: bool,
+) -> FsResult<Vec<DiscoveredSkill>> {
+    let root_project = projects.first().ok_or_else(|| {
+        fs_err!(
+            ErrorCode::InvalidConfig,
+            "Cannot resolve skill config without a root project"
+        )
+    })?;
+    let root_config: DbtProjectConfig<SkillConfig> = init_project_config(
+        &root_project.skills_config,
+        (),
+        None,
+        disallow_plus_prefix,
+        CONFIG_RESOLVER_ADAPTER,
+    )?;
+
+    // One resolver per source project, built once and reused across its skills.
+    let mut resolvers: BTreeMap<usize, ProjectConfigResolver<SkillConfig>> = BTreeMap::new();
+    for (index, project) in projects.iter().enumerate() {
+        let resolver = if index == 0 {
+            ProjectConfigResolver::for_root(root_config.clone(), CONFIG_RESOLVER_ADAPTER)
+        } else {
+            let local = init_project_config(
+                &project.skills_config,
+                (),
+                Some(project.package_name.as_str()),
+                disallow_plus_prefix,
+                CONFIG_RESOLVER_ADAPTER,
+            )?;
+            ProjectConfigResolver::for_dependency(
+                local,
+                root_config.clone(),
+                CONFIG_RESOLVER_ADAPTER,
+            )
+        };
+        resolvers.insert(index, resolver);
+    }
+
+    let mut enabled = Vec::new();
+    for skill in skills {
+        let Some(resolver) = resolvers.get(&skill.precedence) else {
+            continue;
+        };
+        if resolver
+            .resolve_with_configs(&skill.fqn, &skill.fqn, &[])
+            .enabled()
+        {
+            enabled.push(skill);
+        }
+    }
+
+    Ok(enabled)
+}
+
+/// Resolve same-name collisions into one winner per name.
+///
+/// The install layout is flat and unnamespaced, so two enabled skills with the
+/// same name want the same directory. dbt does not fail: it warns and installs a
+/// deterministic winner. Precedence is the order source projects were supplied
+/// in — the project first, then packages in `packages.yml` declaration order.
+pub fn resolve_collisions(skills: Vec<DiscoveredSkill>) -> Vec<DiscoveredSkill> {
+    let mut by_name: BTreeMap<String, Vec<DiscoveredSkill>> = BTreeMap::new();
+    for skill in skills {
+        by_name.entry(skill.name.clone()).or_default().push(skill);
+    }
+
+    let mut selected = Vec::new();
+    for (name, mut candidates) in by_name {
+        // Stable sort keeps discovery order within a single project, so two
+        // same-named skills inside one package resolve deterministically too.
+        candidates.sort_by_key(|skill| skill.precedence);
+        let mut candidates = candidates.into_iter();
+        let winner = candidates.next().expect("group is never empty");
+        let losers: Vec<DiscoveredSkill> = candidates.collect();
+
+        if !losers.is_empty() {
+            warn_collision(&name, &winner, &losers);
+        }
+
+        selected.push(winner);
+    }
+
+    selected
+}
+
+fn warn_collision(name: &str, winner: &DiscoveredSkill, losers: &[DiscoveredSkill]) {
+    let loser_labels: Vec<String> = losers.iter().map(|l| l.origin.label()).collect();
+    let disable_hint = match losers.first().map(|l| &l.origin) {
+        Some(SkillOrigin::Package {
+            name: package_name, ..
+        }) => format!(
+            " To install a different one, disable this one in dbt_project.yml: \
+             skills: {{{package_name}: {{{name}: {{+enabled: false}}}}}}."
+        ),
+        _ => String::new(),
+    };
+
+    emit_warn_log_message(
+        ErrorCode::SkillNameCollision,
+        format!(
+            "Skill name collision on '{name}': installing the one from {}, skipping {}.{disable_hint}",
+            winner.origin.label(),
+            loser_labels.join(", ")
+        ),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::validate::SkillFrontmatter;
+    use dbt_schemas::schemas::project::ProjectSkillConfig;
+    use std::path::PathBuf;
+
+    fn skill(name: &str, precedence: usize, origin: SkillOrigin) -> DiscoveredSkill {
+        DiscoveredSkill {
+            name: name.to_string(),
+            dir: PathBuf::from(format!("/tmp/{name}")),
+            source_path: PathBuf::from(format!("skills/{name}")),
+            fqn: vec![
+                origin.package_name().unwrap_or("root_project").to_string(),
+                name.to_string(),
+            ],
+            origin,
+            frontmatter: SkillFrontmatter {
+                name: name.to_string(),
+                description: "A skill.".to_string(),
+            },
+            precedence,
+        }
+    }
+
+    fn package(name: &str) -> SkillOrigin {
+        SkillOrigin::Package {
+            name: name.to_string(),
+            version: None,
+        }
+    }
+
+    fn source_project(name: &str, skills_yaml: Option<&str>) -> SkillSourceProject {
+        SkillSourceProject {
+            root: PathBuf::from("/tmp"),
+            package_name: name.to_string(),
+            version: None,
+            origin_is_project: name == "root_project",
+            skill_paths: vec!["skills".to_string()],
+            skills_config: skills_yaml.map(|yaml| crate::yaml::from_str(yaml).unwrap()),
+        }
+    }
+
+    #[test]
+    fn skills_are_enabled_by_default() {
+        let projects = [source_project("root_project", None)];
+        let skills = vec![skill("alpha", 0, SkillOrigin::Project)];
+        assert_eq!(filter_enabled(skills, &projects, false).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_root_project_can_disable_its_own_skill() {
+        let projects = [source_project(
+            "root_project",
+            Some("root_project:\n  alpha:\n    +enabled: false\n"),
+        )];
+        let skills = vec![
+            skill("alpha", 0, SkillOrigin::Project),
+            skill("beta", 0, SkillOrigin::Project),
+        ];
+        let enabled = filter_enabled(skills, &projects, false).unwrap();
+        assert_eq!(enabled.len(), 1);
+        assert_eq!(enabled[0].name, "beta");
+    }
+
+    #[test]
+    fn the_root_project_can_disable_a_whole_package() {
+        let projects = [
+            source_project("root_project", Some("transitive_pkg:\n  +enabled: false\n")),
+            source_project("transitive_pkg", None),
+        ];
+        let skills = vec![skill("bloat", 1, package("transitive_pkg"))];
+        assert!(filter_enabled(skills, &projects, false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_root_project_overrides_a_packages_own_config() {
+        // The package disables its skill; the consuming project turns it back on.
+        let projects = [
+            source_project(
+                "root_project",
+                Some("some_pkg:\n  useful:\n    +enabled: true\n"),
+            ),
+            source_project(
+                "some_pkg",
+                Some("some_pkg:\n  useful:\n    +enabled: false\n"),
+            ),
+        ];
+        let skills = vec![skill("useful", 1, package("some_pkg"))];
+        assert_eq!(filter_enabled(skills, &projects, false).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_package_can_disable_its_own_skill() {
+        let projects = [
+            source_project("root_project", None),
+            source_project(
+                "some_pkg",
+                Some("some_pkg:\n  internal:\n    +enabled: false\n"),
+            ),
+        ];
+        let skills = vec![skill("internal", 1, package("some_pkg"))];
+        assert!(filter_enabled(skills, &projects, false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_project_beats_packages_on_a_collision() {
+        let selected = resolve_collisions(vec![
+            skill("shared", 1, package("package_a")),
+            skill("shared", 0, SkillOrigin::Project),
+        ]);
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].origin, SkillOrigin::Project);
+    }
+
+    #[test]
+    fn the_first_declared_package_wins_among_packages() {
+        let selected = resolve_collisions(vec![
+            skill("nunchuck-skills", 2, package("package_b")),
+            skill("nunchuck-skills", 1, package("package_a")),
+        ]);
+
+        // With no shadow list left to inspect, the count is the only remaining
+        // evidence that the loser was dropped rather than installed alongside.
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].origin.package_name(), Some("package_a"));
+    }
+
+    #[test]
+    fn non_colliding_skills_are_all_kept() {
+        let selected = resolve_collisions(vec![
+            skill("alpha", 0, SkillOrigin::Project),
+            skill("beta", 1, package("package_a")),
+        ]);
+
+        assert_eq!(selected.len(), 2);
+    }
+
+    /// `filter_enabled` has to hand the shared resolver an adapter it does not
+    /// need (see `CONFIG_RESOLVER_ADAPTER`). That is only sound while
+    /// `SkillConfig` stays adapter-independent. If someone gives it a
+    /// dialect-aliased key -- or implements `canonicalize_adapter_aliases` for
+    /// it -- skills would start resolving differently depending on an arbitrary
+    /// constant, silently. This fails instead.
+    #[test]
+    fn skill_config_resolution_ignores_the_adapter() {
+        let yaml = "root_project:\n  alpha:\n    +enabled: false\n  beta:\n    +enabled: true\n";
+        let project_config: Option<ProjectSkillConfig> = Some(crate::yaml::from_str(yaml).unwrap());
+
+        let resolve = |adapter: AdapterType| {
+            let root: DbtProjectConfig<SkillConfig> =
+                init_project_config(&project_config, (), None, false, adapter).unwrap();
+            let resolver = ProjectConfigResolver::for_root(root, adapter);
+            ["alpha", "beta"].map(|name| {
+                let fqn = vec!["root_project".to_string(), name.to_string()];
+                resolver.resolve_with_configs(&fqn, &fqn, &[]).enabled()
+            })
+        };
+
+        // Sanity check that the fixture actually distinguishes the two skills,
+        // so the comparison below cannot pass by resolving nothing.
+        assert_eq!(resolve(CONFIG_RESOLVER_ADAPTER), [false, true]);
+
+        for adapter in [
+            AdapterType::DuckDB,
+            AdapterType::Bigquery,
+            AdapterType::Postgres,
+            AdapterType::Databricks,
+        ] {
+            assert_eq!(
+                resolve(adapter),
+                resolve(CONFIG_RESOLVER_ADAPTER),
+                "skill config resolved differently for {adapter}"
+            );
+        }
+    }
+}

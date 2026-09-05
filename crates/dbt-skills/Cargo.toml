@@ -1,0 +1,32 @@
+[package]
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+name = "dbt-skills"
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+dbt-adapter-core = { workspace = true }
+dbt-common = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-schemas = { workspace = true }
+dbt-telemetry = { workspace = true }
+dbt-yaml = { workspace = true }
+indexmap = { workspace = true }
+serde = { workspace = true }
+sha2 = { workspace = true }
+walkdir = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lib]
+doctest = false
+name = "dbt_skills"

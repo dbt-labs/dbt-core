@@ -8,7 +8,6 @@ use dbt_common::error::FsError;
 use dbt_common::fs_err;
 use dbt_common::io_args::ComputeArg;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
-use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::project::AdapterProjectConfig;
 use dbt_schemas::state::ProfileAdapter;
 use indexmap::IndexMap;
@@ -48,48 +47,6 @@ pub(crate) fn validate_adapter_project_configs(
     }
 }
 
-/// The authored quoting each declared adapter contributes, keyed by adapter type.
-///
-/// Two layers, left **unresolved** (`None`s preserved) so that a node's own
-/// `+quoting:` still wins over both:
-///
-/// 1. the adapter's entry in the root `dbt_project.yml` `adapters:` block;
-/// 2. the top-level `quoting:` block — but **only for the target's default
-///    adapter**. A node on a non-default adapter does not inherit the top-level
-///    block; it takes its own entry and then falls through to its adapter type's
-///    default. Configuring the default adapter is what the top-level block is for,
-///    and letting it leak across adapters is what would otherwise force every
-///    adapter in a target to agree on one policy.
-///
-/// Both inputs come from the **root** project, so this is computed once per run and
-/// lives on `RootProjectConfigs`. A dependency package's own top-level `quoting:`
-/// block does not enter the chain: it was already overridden by the root's via the
-/// root-config overlay, and stays overridden.
-pub(crate) fn authored_quoting_per_adapter(
-    adapters: Option<&IndexMap<AdapterType, AdapterProjectConfig>>,
-    target_adapters: &IndexMap<AdapterType, ProfileAdapter>,
-    default_adapter: AdapterType,
-    top_level_quoting: Option<DbtQuoting>,
-) -> IndexMap<AdapterType, DbtQuoting> {
-    let top_level = top_level_quoting.unwrap_or_default();
-
-    target_adapters
-        .keys()
-        .map(|adapter_type| {
-            let own = adapters
-                .and_then(|configured| configured.get(adapter_type))
-                .and_then(|entry| entry.quoting)
-                .unwrap_or_default();
-
-            let layered = if *adapter_type == default_adapter {
-                own.filled_from(&top_level)
-            } else {
-                own
-            };
-            (*adapter_type, layered)
-        })
-        .collect()
-}
 /// Normalizes hook key names in an unrendered config map, matching dbt-core's
 /// `translate_hook_names` behavior (`context/context_config.py:235`):
 /// `post_hook` → `post-hook`, `pre_hook` → `pre-hook`.
@@ -741,6 +698,10 @@ my_project:
 #[cfg(test)]
 mod adapter_quoting_tests {
     use super::*;
+    // Lives in dbt-schemas now, alongside its only caller
+    // (`build_root_project_configs`); these tests still cover it from here.
+    use dbt_schemas::schemas::common::DbtQuoting;
+    use dbt_schemas::schemas::project::authored_quoting_per_adapter;
 
     fn quoting(database: bool, schema: bool, identifier: bool) -> DbtQuoting {
         DbtQuoting {
