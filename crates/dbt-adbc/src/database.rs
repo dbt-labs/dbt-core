@@ -37,9 +37,9 @@ pub use builder::*;
 /// dyn-compatible trait covering functionality from the adbc_core::{Database, Optionable} traits.
 pub trait Database: Send + Sync + DatabaseInfo {
     // adbc_core::Database<Box<dyn Connection>> functions -----------------------
-    fn new_connection(&mut self) -> Result<Box<dyn Connection>>;
+    fn new_connection(&self) -> Result<Box<dyn Connection>>;
     fn new_connection_with_opts(
-        &mut self,
+        &self,
         opts: Vec<(OptionConnection, OptionValue)>,
     ) -> Result<Box<dyn Connection>>;
 
@@ -368,7 +368,7 @@ impl InnerAdbcDatabase {
                     Err(e)
                 }
             }?;
-            Ok(AdbcConnection(self.backend, conn, semaphore))
+            Ok(AdbcConnection(self.backend, conn, semaphore, 0))
         };
 
         let conn = if db_opts.is_empty() {
@@ -440,13 +440,13 @@ impl DatabaseInfo for AdbcDatabase {
 }
 
 impl Database for AdbcDatabase {
-    fn new_connection(&mut self) -> Result<Box<dyn Connection>> {
+    fn new_connection(&self) -> Result<Box<dyn Connection>> {
         let opts = Vec::new();
         self.new_connection_with_opts(opts)
     }
 
     fn new_connection_with_opts(
-        &mut self,
+        &self,
         conn_opts: Vec<(OptionConnection, OptionValue)>,
     ) -> Result<Box<dyn Connection>> {
         self.inner
@@ -491,6 +491,15 @@ impl Database for AdbcDatabase {
 pub struct Fingerprint {
     h1: u64,
     h2: u64,
+}
+
+impl Fingerprint {
+    /// A 64-bit projection of the fingerprint, suitable as a connection-pool
+    /// reuse key: two connection configurations with the same fingerprint share
+    /// this value.
+    pub fn as_u64(&self) -> u64 {
+        self.h1
+    }
 }
 
 impl Hash for Fingerprint {

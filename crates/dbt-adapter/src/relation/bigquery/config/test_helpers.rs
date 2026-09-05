@@ -170,6 +170,8 @@ pub(crate) fn make_driver_data(cfg: TestTableConfig) -> Schema {
 
 pub(crate) fn make_local_config(cfg: TestTableConfig) -> DbtModel {
     let base_attrs = NodeBaseAttributes {
+        adapter: AdapterType::Snowflake,
+        propagate: Vec::new(),
         database: "test_db".to_string(),
         schema: "test_schema".to_string(),
         alias: "test_table".to_string(),
@@ -234,11 +236,15 @@ pub(crate) fn make_local_config(cfg: TestTableConfig) -> DbtModel {
         },
         // NOTE: For simplicity, we are assuming that "now" is the unix epoch. Such that
         // expiration_ns = ns_to_expiration
-        hours_to_expiration: if cfg.expiration_ns != 0 {
-            Some(TimeDelta::nanoseconds(cfg.expiration_ns as i64).num_hours() as u64)
-        } else {
-            None
-        },
+        hours_to_expiration: dbt_common::serde_utils::Omissible::Present(
+            if cfg.expiration_ns != 0 {
+                Some(dbt_schemas::schemas::serde::StringOrInteger::Integer(
+                    TimeDelta::nanoseconds(cfg.expiration_ns as i64).num_hours(),
+                ))
+            } else {
+                None
+            },
+        ),
         ..Default::default()
     };
 

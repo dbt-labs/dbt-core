@@ -8,21 +8,21 @@ use chrono::Utc;
 use dbt_adapter_core::{AdapterType, MICROBATCH_SUPPORTED_ADAPTERS};
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::path::{get_snapshot_compiled_path, get_target_write_path};
+use dbt_common::path::{DbtPath, get_snapshot_write_path, get_target_write_path};
 use dbt_common::tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message};
-use dbt_common::{ErrorCode, FsResult, err};
+use dbt_common::{ErrorCode, FsResult, Span, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_yaml::Value;
-use crate::schemas::common::{ExternalTable, PersistDocsConfig, hooks_equal, normalize_sql};
+use crate::schemas::common::{
+    ExternalTable, PersistDocsConfig, RowFilterConfig, hooks_equal, normalize_sql,
+};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
-use crate::schemas::project::configs::common::{
-    grants_eq_with_unrendered, tags_eq, tags_eq_vec, unrendered_value_eq,
-};
-use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config_with_unrendered};
+use crate::schemas::project::configs::common::{grants_equal, tags_eq_vec};
+use crate::schemas::project::{TblProperties, WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::relations::default_dbt_quoting_for;
 use crate::schemas::serde::{PartitionsConfig, QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
@@ -37,8 +37,8 @@ use crate::schemas::{
     manifest::semantic_model::NodeRelation,
     manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
     project::{
-        DataTestConfig, ExposureConfig, FunctionConfig, ModelConfig, SeedConfig, SnapshotConfig,
-        SnapshotMetaColumnNames, SourceConfig, UnitTestConfig,
+        CheckConfig, DataTestConfig, ExposureConfig, FunctionConfig, ModelConfig, SeedConfig,
+        SnapshotConfig, SnapshotMetaColumnNames, SourceConfig, UnitTestConfig,
     },
     properties::{
         FunctionArgument, FunctionReturnType, ModelConstraint, ModelFreshness, UnitTestOverrides,
@@ -230,6 +230,13 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn is_extended_model(&self) -> bool {
         false
     }
+    fn has_freshness(&self) -> bool {
+        false
+    }
+    /// The SLA this node is measured against. Empty for node types that carry none.
+    fn freshness_criteria(&self) -> FreshnessDefinition {
+        FreshnessDefinition::default()
+    }
     fn is_versioned(&self) -> bool {
         false
     }
@@ -348,6 +355,14 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         }
     }
 
+    /// The kind of path to cite when this node errors during `phase`.
+    ///
+    /// Defaults to the definition path for every phase. Node types whose reporting is
+    /// phase-accurate override this and opt in per phase.
+    fn error_path_kind(&self, _phase: ExecutionPhase) -> NodePathKind {
+        NodePathKind::Definition
+    }
+
     /// Constructs the absolute path for the requested kind.
     ///
     /// `get_node_path` applies node-kind fallback for display/reporting paths. This lower-level
@@ -355,8 +370,16 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn get_node_path_abs(&self, path_kind: NodePathKind, in_dir: &Path, out_dir: &Path) -> PathBuf {
         let common = self.common();
         let executable_filename = || {
-            // Mirror write_file's filename rule: alias if non-empty, else name. This avoids
-            // ENAMETOOLONG on Linux for generic tests with names exceeding 255 bytes.
+            // Generic test paths are synthesized and bounded before relation aliases are
+            // rendered. Keep the bounded path filename separate from the relation alias.
+            if self.resource_type() == NodeType::Test && self.defined_at().is_some() {
+                if let Some(file_stem) = common.path.file_stem() {
+                    return file_stem.to_string_lossy().into_owned();
+                }
+            }
+
+            // Mirror write_file's filename rule for other node types: alias if non-empty,
+            // else name.
             let alias = &self.base().alias;
             if alias.is_empty() {
                 common.name.clone()
@@ -367,8 +390,8 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         match path_kind {
             NodePathKind::Compiled => {
                 if self.resource_type() == NodeType::Snapshot {
-                    // Snapshots always use the many-to-one nested path — see get_snapshot_compiled_path.
-                    return get_snapshot_compiled_path(
+                    // Snapshots always use the many-to-one nested path — see get_snapshot_write_path.
+                    return get_snapshot_write_path(
                         &out_dir.join(DBT_COMPILED_DIR_NAME),
                         &common.package_name,
                         &common.original_file_path,
@@ -388,14 +411,28 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
                 }
                 abs
             }
-            NodePathKind::Executable => get_target_write_path(
-                in_dir,
-                &out_dir.join(DBT_RUN_DIR_NAME),
-                &common.package_name,
-                &common.path,
-                &common.original_file_path,
-            )
-            .with_file_name(format!("{}.sql", executable_filename())),
+            NodePathKind::Executable => {
+                if self.resource_type() == NodeType::Snapshot {
+                    // Same nested layout as the compiled path — see get_snapshot_write_path.
+                    // Keeping target/run in step with target/compiled is what dbt-core does, and
+                    // it is what lets Fusion reuse a target/ directory left by dbt-core v1
+                    // instead of failing with EISDIR (dbt-core#15692).
+                    return get_snapshot_write_path(
+                        &out_dir.join(DBT_RUN_DIR_NAME),
+                        &common.package_name,
+                        &common.original_file_path,
+                        &common.name,
+                    );
+                }
+                get_target_write_path(
+                    in_dir,
+                    &out_dir.join(DBT_RUN_DIR_NAME),
+                    &common.package_name,
+                    &common.path,
+                    &common.original_file_path,
+                )
+                .with_file_name(format!("{}.sql", executable_filename()))
+            }
             NodePathKind::Definition => self.get_node_definition_path(in_dir, out_dir).into_owned(),
         }
     }
@@ -574,6 +611,21 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 }
 
 pub trait InternalDbtNodeAttributes: InternalDbtNode {
+    /// The adapter this node runs on, fully resolved at parse. Reads
+    /// [`NodeBaseAttributes::adapter`], so every node type answers without the
+    /// caller reaching into its own attr struct or supplying a fallback.
+    fn node_adapter(&self) -> AdapterType {
+        self.base().adapter
+    }
+
+    /// The compute platforms this node is published to after it materializes.
+    /// Reads [`NodeBaseAttributes::propagate`], so every node type answers
+    /// without the caller reaching into its own attr struct. Empty for a node
+    /// that made no `+propagate` selection.
+    fn node_propagate(&self) -> &[AdapterType] {
+        &self.base().propagate
+    }
+
     // Required Fields
     fn skip_generate_database_name_macro(&self) -> bool {
         false
@@ -599,6 +651,10 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.common().name.clone()
     }
 
+    fn name_span(&self) -> Span {
+        self.common().name_span.clone()
+    }
+
     fn description(&self) -> Option<String> {
         self.common().description.clone()
     }
@@ -607,16 +663,24 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.base().columns.clone()
     }
 
+    /// The node's compiled SQL, when the caller has populated it.
+    ///
+    /// Not part of the serialized node: at run scope the Jinja `model` object loads compiled SQL
+    /// lazily from disk, so it only reaches a typed node when something copies it across.
+    fn compiled_code(&self) -> Option<&str> {
+        None
+    }
+
     fn alias(&self) -> String {
         self.base().alias.clone()
     }
 
     fn path(&self) -> PathBuf {
-        self.common().path.clone()
+        self.common().path.to_path_buf()
     }
 
     fn original_file_path(&self) -> PathBuf {
-        self.common().original_file_path.clone()
+        self.common().original_file_path.to_path_buf()
     }
 
     fn package_name(&self) -> String {
@@ -732,6 +796,22 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
 
 fn same_body(self_common: &CommonAttributes, other_common: &CommonAttributes) -> bool {
     self_common.checksum == other_common.checksum
+}
+
+// Compare absorbed overloads for state:modified. Intentionally excludes
+// `compiled_body` — that is a rendering artifact (the Jinja-rendered SQL, which
+// can differ across runs even when the overload source is unchanged), so
+// comparing it would flag `state:modified` spuriously. The overload's source
+// (`raw_body`) and signature (`arguments`/`returns`) are what actually define it.
+fn overloads_have_same_content(a: &[AbsorbedOverload], b: &[AbsorbedOverload]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b.iter()).all(|(x, y)| {
+            x.defined_in == y.defined_in
+                && x.arguments == y.arguments
+                && x.returns == y.returns
+                && x.description == y.description
+                && x.raw_body == y.raw_body
+        })
 }
 
 // Helper function to normalize descriptions: treat None and Some("") as equal
@@ -1041,6 +1121,55 @@ fn same_database_representation_model(
     self_config.same_database_representation(other_config)
 }
 
+/// `latest_version` equality, tolerant of the two ways one version can be spelled.
+///
+/// `StringOrInteger` derives `PartialEq` *structurally*, so `String("1") != Integer(1)`. Real
+/// dbt-core writes `latest_version` as a JSON **number** and Fusion's `From<String>` parses a
+/// numeric string into `Integer`, so a current run against a dbt-core manifest happens to match —
+/// but a manifest written by an older Fusion, or a hand-authored fixture using `"1"`, would not,
+/// and every versioned model in the project would read as modified. Compare the canonical
+/// (`Display`) spelling instead, which is also the spelling a pinned `ref()` uses.
+fn latest_version_eq(a: &Option<StringOrInteger>, b: &Option<StringOrInteger>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a.to_string() == b.to_string(),
+        _ => false,
+    }
+}
+
+/// `deprecation_date` equality, compared as a **date** rather than as a string.
+///
+/// dbt-core compares `datetime` objects, so date semantics — not spelling — is the faithful
+/// transcription here. The two sides can legitimately disagree on spelling in two ways:
+///
+/// - Fusion normalizes an authored date to RFC 3339 on the parse side
+///   (`normalize_deprecation_date`), so an authored `2099-01-01` faces a manifest's
+///   `2099-01-01T00:00:00+00:00`.
+/// - The normalizations do not agree on the *offset* of a naive authored date: Fusion reads it as
+///   UTC, while dbt-core's `normalize_date` re-interprets it in the **system** time zone
+///   (dbt-mantle `core/dbt/contracts/graph/unparsed.py:1012-1024`). A Mantle-produced previous
+///   manifest can therefore carry `2020-01-01T00:00:00-05:00` where this run parses
+///   `2020-01-01T00:00:00+00:00` from the same authored `2020-01-01`.
+///
+/// So two parseable values are equal when they name the same instant *or* the same wall-clock
+/// time. String equality is the fast path, and the fallback when either side fails to parse.
+fn deprecation_date_eq(a: &Option<String>, b: &Option<String>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => {
+            a == b
+                || match (
+                    crate::schemas::common::parse_deprecation_date(a),
+                    crate::schemas::common::parse_deprecation_date(b),
+                ) {
+                    (Some(a), Some(b)) => a == b || a.naive_local() == b.naive_local(),
+                    _ => false,
+                }
+        }
+        _ => false,
+    }
+}
+
 fn same_database_representation_seed(self_config: &SeedConfig, other_config: &SeedConfig) -> bool {
     // Compare database, schema, alias from the deprecated_config
     /*self_config.database == other_config.database
@@ -1143,6 +1272,28 @@ impl InternalDbtNode for DbtModel {
         self.__base_attr__.extended_model
     }
 
+    fn has_freshness(&self) -> bool {
+        self.__model_attr__
+            .freshness
+            .as_ref()
+            .is_some_and(ModelFreshness::has_sla)
+    }
+
+    /// Projects `ModelFreshness`'s SLA fields onto `FreshnessDefinition`.
+    /// `build_after` is a scheduling rule and is excluded.
+    fn freshness_criteria(&self) -> FreshnessDefinition {
+        let Some(freshness) = self.__model_attr__.freshness.as_ref() else {
+            return FreshnessDefinition::default();
+        };
+        FreshnessDefinition {
+            error_after: freshness.error_after.clone(),
+            warn_after: freshness.warn_after.clone(),
+            filter: freshness.filter.clone(),
+            loaded_at_field: freshness.loaded_at_field.clone(),
+            loaded_at_query: freshness.loaded_at_query.clone(),
+        }
+    }
+
     fn resource_type(&self) -> NodeType {
         NodeType::Model
     }
@@ -1167,11 +1318,9 @@ impl InternalDbtNode for DbtModel {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            let deprecated_config_eq = self.deprecated_config.same_config(
-                &other_model.deprecated_config,
-                &self.__base_attr__.unrendered_config,
-                &other_model.__base_attr__.unrendered_config,
-            );
+            let deprecated_config_eq = self
+                .deprecated_config
+                .same_config(&other_model.deprecated_config);
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -1187,7 +1336,7 @@ impl InternalDbtNode for DbtModel {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         // TODO: the checksum for extended model is always different in mantle and fusion, dig more into this
         if self.is_extended_model() {
             return true;
@@ -1196,7 +1345,8 @@ impl InternalDbtNode for DbtModel {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             let same_body_result = same_body(&self.__common_attr__, &other_model.__common_attr__);
-            let same_config_result = self.has_same_config(other, adapter_type);
+            // Config is owned by `check_configs_modified`; calling `has_same_config` here would
+            // double-count it. This check is therefore restricted to non-config fields.
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -1211,13 +1361,14 @@ impl InternalDbtNode for DbtModel {
                 &other_model.deprecated_config,
             );
             let same_contract_result = self.same_contract(other_model);
+            let same_ref_repr_result = self.same_ref_representation(other_model);
 
             let result = same_body_result
-                && same_config_result
                 && same_persisted_desc_result
                 && same_fqn_result
                 && same_db_repr_result
-                && same_contract_result;
+                && same_contract_result
+                && same_ref_repr_result;
 
             if !result {
                 log_state_mod_diff(
@@ -1225,7 +1376,6 @@ impl InternalDbtNode for DbtModel {
                     "model",
                     [
                         ("same_body", same_body_result, None),
-                        ("same_config", same_config_result, None),
                         (
                             "same_persisted_description",
                             same_persisted_desc_result,
@@ -1241,6 +1391,7 @@ impl InternalDbtNode for DbtModel {
                         ),
                         ("same_database_representation", same_db_repr_result, None),
                         ("same_contract", same_contract_result, None),
+                        ("same_ref_representation", same_ref_repr_result, None),
                     ],
                 );
             }
@@ -1277,6 +1428,10 @@ impl InternalDbtNode for DbtModel {
 impl InternalDbtNodeAttributes for DbtModel {
     fn get_access(&self) -> Option<Access> {
         Some(self.__model_attr__.access.clone())
+    }
+
+    fn compiled_code(&self) -> Option<&str> {
+        self.__model_attr__.compiled_code.as_deref()
     }
 
     fn search_name(&self) -> String {
@@ -1321,94 +1476,33 @@ fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterializ
     }
 }
 
-/// Unrendered-aware `quote_columns` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja `quote_columns` config in
-/// `dbt_project.yml` (e.g. `+quote_columns: "{{ true if target.name == 'prod' else false }}"`) that
-/// renders to a different boolean per target is not treated as a modification. This is the
-/// `quote_columns` sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (quote_columns configured && unrendered_same) || rendered_same`.
-///   1. If `quote_columns` is configured (present in `unrendered_config`) on at least one side and
-///      the configured (unrendered) values are equal, the configs are the same.
-///   2. Otherwise fall back to the rendered comparison (`left == right`).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `quote_columns`
-/// is a single key, so an absent-on-both unrendered value must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate `unrendered_config.quote_columns`) would be masked.
-///
-/// This is strictly more lenient than the rendered equality alone (it can only turn a rendered
-/// "different" into "same"), preserving backward compatibility.
-fn quote_columns_eq_with_unrendered(
-    left: &Option<bool>,
-    right: &Option<bool>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_qc = left_unrendered_config.get("quote_columns");
-    let right_qc = right_unrendered_config.get("quote_columns");
-    if (left_qc.is_some() || right_qc.is_some()) && unrendered_value_eq(left_qc, right_qc) {
-        return true;
-    }
-    left == right
-}
-
 /// Helper functions for smart comparison of SeedConfig fields that considers
 /// None vs Some(empty) representations as equivalent
-fn seed_configs_equal(
-    left: &SeedConfig,
-    right: &SeedConfig,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
+fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
     // Compare each field with smart empty comparison
-    let column_types_eq = column_types_eq_with_unrendered(
-        &left.column_types,
-        &right.column_types,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
+    let column_types_eq = btree_map_equal(&left.column_types, &right.column_types);
     let docs_eq = docs_config_equal(&left.docs, &right.docs);
     let enabled_eq = left.enabled == right.enabled;
-    let grants_eq_result = grants_eq_with_unrendered(
-        &left.grants,
-        &right.grants,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
-    let quote_columns_eq = quote_columns_eq_with_unrendered(
-        &left.quote_columns,
-        &right.quote_columns,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
+    let grants_eq = grants_equal(&left.grants, &right.grants);
+    let quote_columns_eq = left.quote_columns == right.quote_columns;
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
     let event_time_eq = left.event_time == right.event_time;
     let full_refresh_eq = left.full_refresh == right.full_refresh;
-    let meta_eq = meta_eq_with_unrendered(
-        &left.meta,
-        &right.meta,
-        left_unrendered_config,
-        right_unrendered_config,
-    );
+    let meta_eq = indexmap_yml_value_equal(&left.meta, &right.meta);
     let persist_docs_eq = persist_docs_configs_equal(&left.persist_docs, &right.persist_docs);
     let post_hook_eq = hooks_equal(&left.post_hook, &right.post_hook);
     let pre_hook_eq = hooks_equal(&left.pre_hook, &right.pre_hook);
     // quoting_equal(&left.quoting, &right.quoting) && // TODO: re-enable when no longer using mantle/core manifests in IA
     let materialized_eq = seed_materialized_eq(&left.materialized, &right.materialized);
-    let warehouse_config_eq = same_warehouse_config_with_unrendered(
+    let warehouse_config_eq = same_warehouse_config(
         &left.__warehouse_specific_config__,
         &right.__warehouse_specific_config__,
-        left_unrendered_config,
-        right_unrendered_config,
     );
 
     let result = column_types_eq
         && docs_eq
         && enabled_eq
-        && grants_eq_result
+        && grants_eq
         && quote_columns_eq
         && event_time_eq
         && full_refresh_eq
@@ -1447,7 +1541,7 @@ fn seed_configs_equal(
                 ),
                 (
                     "grants",
-                    grants_eq_result,
+                    grants_eq,
                     Some((
                         format!("{:?}", &left.grants),
                         format!("{:?}", &right.grants),
@@ -1539,41 +1633,6 @@ fn btree_map_equal(
     }
 }
 
-/// Unrendered-aware `column_types` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so environment-aware Jinja `column_types` configs in
-/// `dbt_project.yml` (e.g.
-/// `+column_types: {id: "{{ 'integer' if target.name == 'prod' else 'bigint' }}"}`) that render
-/// to different types per target are not treated as modifications. This is the `column_types`
-/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (column_types configured && unrendered_same) || rendered_same`.
-///   1. If `column_types` is configured (present in `unrendered_config`) on at least one side and
-///      the configured (unrendered) values are equal, the column types are the same.
-///   2. Otherwise fall back to the rendered comparison ([`btree_map_equal`]).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `column_types`
-/// is a single key, so an absent-on-both unrendered `column_types` must fall back to the rendered
-/// comparison rather than be treated as equal — otherwise a genuine rendered change (e.g. from a
-/// Mantle/core manifest that does not populate `unrendered_config.column_types`) would be masked.
-///
-/// This is strictly more lenient than [`btree_map_equal`] alone (it can only turn a rendered
-/// "different" into "same"), preserving backward compatibility.
-fn column_types_eq_with_unrendered(
-    left: &Option<BTreeMap<Spanned<String>, String>>,
-    right: &Option<BTreeMap<Spanned<String>, String>>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_ct = left_unrendered_config.get("column_types");
-    let right_ct = right_unrendered_config.get("column_types");
-    if (left_ct.is_some() || right_ct.is_some()) && unrendered_value_eq(left_ct, right_ct) {
-        return true;
-    }
-    btree_map_equal(left, right)
-}
-
 /// Compare IndexMap<String, YmlValue> considering None vs Some(empty) as equal
 fn indexmap_yml_value_equal(
     left: &Option<IndexMap<String, YmlValue>>,
@@ -1585,110 +1644,6 @@ fn indexmap_yml_value_equal(
         (None, Some(r)) => r.is_empty(),
         (Some(l), None) => l.is_empty(),
     }
-}
-
-/// Unrendered-aware `meta` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja `meta` config in
-/// `dbt_project.yml` (e.g. `+meta: {owner: "{{ 'prod_team' if target.name == 'prod' else 'dev_team' }}"}`)
-/// that renders to different values per target is not treated as a modification. This is the `meta`
-/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (meta configured && unrendered_same) || rendered_same`.
-///   1. If `meta` is configured (present in `unrendered_config`) on at least one side and the
-///      configured (unrendered) values are equal, the meta is the same.
-///   2. Otherwise fall back to the rendered comparison ([`indexmap_yml_value_equal`]).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `meta` is a
-/// single key, so an absent-on-both unrendered `meta` must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate `unrendered_config.meta`) would be masked.
-///
-/// This is strictly more lenient than [`indexmap_yml_value_equal`] alone (it can only turn a
-/// rendered "different" into "same"), preserving backward compatibility.
-fn meta_eq_with_unrendered(
-    left: &Option<IndexMap<String, YmlValue>>,
-    right: &Option<IndexMap<String, YmlValue>>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_meta = left_unrendered_config.get("meta");
-    let right_meta = right_unrendered_config.get("meta");
-    if (left_meta.is_some() || right_meta.is_some()) && unrendered_value_eq(left_meta, right_meta) {
-        return true;
-    }
-    indexmap_yml_value_equal(left, right)
-}
-
-/// Unrendered-aware `tags` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja `tags` config in
-/// `dbt_project.yml` (e.g. `+tags: "{{ 'prod_tag' if target.name == 'prod' else 'dev_tag' }}"`)
-/// that renders to a different tag set per target is not treated as a modification. This is the
-/// `tags` sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (tags configured && unrendered_same) || rendered_same`.
-///   1. If `tags` is configured (present in `unrendered_config`) on at least one side and the
-///      configured (unrendered) values are equal, the tags are the same.
-///   2. Otherwise fall back to the rendered comparison ([`tags_eq`], which uses set semantics).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: `tags` is a
-/// single key, so an absent-on-both unrendered `tags` must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate `unrendered_config.tags`) would be masked.
-///
-/// This is strictly more lenient than [`tags_eq`] alone (it can only turn a rendered "different"
-/// into "same"), preserving backward compatibility.
-fn tags_eq_with_unrendered(
-    left: &Option<StringOrArrayOfStrings>,
-    right: &Option<StringOrArrayOfStrings>,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_tags = left_unrendered_config.get("tags");
-    let right_tags = right_unrendered_config.get("tags");
-    if (left_tags.is_some() || right_tags.is_some()) && unrendered_value_eq(left_tags, right_tags) {
-        return true;
-    }
-    tags_eq(left, right)
-}
-
-/// Unrendered-aware comparison for a single string-valued config key (e.g. `alias`,
-/// `target_schema`, `target_database`).
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so an environment-aware Jinja config in
-/// `dbt_project.yml` (e.g. `+target_schema: "{{ 'prod_snap' if target.name == 'prod' else 'dev_snap' }}"`)
-/// that renders to a different string per target is not treated as a modification. This is the
-/// string-config sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15286.
-///
-/// Semantics: `same = (key configured && unrendered_same) || rendered_same`.
-///   1. If `key` is configured (present in `unrendered_config`) on at least one side and the
-///      configured (unrendered) values are equal, the values are the same.
-///   2. Otherwise fall back to the rendered comparison (`left == right`).
-///
-/// The "present on at least one side" guard mirrors [`grants_eq_with_unrendered`]: each key is a
-/// single key, so an absent-on-both unrendered value must fall back to the rendered comparison
-/// rather than be treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core
-/// manifest that does not populate the key in `unrendered_config`) would be masked.
-///
-/// This is strictly more lenient than the rendered equality alone (it can only turn a rendered
-/// "different" into "same"), preserving backward compatibility.
-fn string_config_eq_with_unrendered(
-    left: &Option<String>,
-    right: &Option<String>,
-    key: &str,
-    left_unrendered_config: &BTreeMap<String, YmlValue>,
-    right_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let left_v = left_unrendered_config.get(key);
-    let right_v = right_unrendered_config.get(key);
-    if (left_v.is_some() || right_v.is_some()) && unrendered_value_eq(left_v, right_v) {
-        return true;
-    }
-    left == right
 }
 
 /// Compare DocsConfig considering None vs Some(default) as equal
@@ -1755,6 +1710,25 @@ fn quoting_equal(
     resolve(left.as_ref()) == resolve(right.as_ref())
 }
 
+pub(crate) fn test_alias_config_equal(
+    left_config_alias: Option<&str>,
+    right_config_alias: Option<&str>,
+    left_resolved_alias: &str,
+    right_resolved_alias: &str,
+) -> bool {
+    if left_config_alias == right_config_alias {
+        return true;
+    }
+
+    let generated_alias_eq = match (left_config_alias, right_config_alias) {
+        (None, Some(right)) => right == right_resolved_alias,
+        (Some(left), None) => left == left_resolved_alias,
+        _ => false,
+    };
+
+    generated_alias_eq && left_resolved_alias == right_resolved_alias
+}
+
 impl InternalDbtNode for DbtSeed {
     fn resource_type(&self) -> NodeType {
         NodeType::Seed
@@ -1792,12 +1766,8 @@ impl InternalDbtNode for DbtSeed {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-            let deprecated_config_eq = seed_configs_equal(
-                &self.deprecated_config,
-                &other_model.deprecated_config,
-                &self.__base_attr__.unrendered_config,
-                &other_model.__base_attr__.unrendered_config,
-            );
+            let deprecated_config_eq =
+                seed_configs_equal(&self.deprecated_config, &other_model.deprecated_config);
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -1813,7 +1783,7 @@ impl InternalDbtNode for DbtSeed {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_seed) = other.as_any().downcast_ref::<DbtSeed>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             // TODO: Seeds might have path based checksum. When they do,
@@ -1843,7 +1813,8 @@ impl InternalDbtNode for DbtSeed {
                 }
             }
 
-            let same_config_result = self.has_same_config(other, adapter_type);
+            // Config is owned by `check_configs_modified`; calling `has_same_config` here would
+            // double-count it. This check is therefore restricted to non-config fields.
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -1861,7 +1832,6 @@ impl InternalDbtNode for DbtSeed {
             // so we do not need to do a contract check for seeds.
 
             let result = same_body_result
-                && same_config_result
                 && same_persisted_desc_result
                 && same_fqn_result
                 && same_db_repr_result;
@@ -1872,7 +1842,6 @@ impl InternalDbtNode for DbtSeed {
                     "seed",
                     [
                         ("same_body", same_body_result, None),
-                        ("same_config", same_config_result, None),
                         (
                             "same_persisted_description",
                             same_persisted_desc_result,
@@ -1955,35 +1924,34 @@ impl InternalDbtNode for DbtTest {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
-    fn has_same_config(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
-            // these fields are what dbt compares for test nodes
-            // Some other configs were skipped
-            // The dbt-core method compares unrendered_config values for
-            // database as well, but we do not have unrendered_config values
-            // so we do not do that comparison
-            let enabled_eq = self.deprecated_config.enabled == other.deprecated_config.enabled;
-            let alias_eq = self.deprecated_config.alias == other.deprecated_config.alias;
-            let tags_eq = tags_eq_with_unrendered(
-                &self.deprecated_config.tags,
-                &other.deprecated_config.tags,
-                &self.__base_attr__.unrendered_config,
-                &other.__base_attr__.unrendered_config,
-            );
-            let meta_eq = meta_eq_with_unrendered(
-                &self.deprecated_config.meta,
-                &other.deprecated_config.meta,
-                &self.__base_attr__.unrendered_config,
-                &other.__base_attr__.unrendered_config,
-            );
-            let group_eq = self.deprecated_config.group == other.deprecated_config.group;
-            let quoting_eq = quoting_equal(
-                &self.deprecated_config.quoting,
-                &other.deprecated_config.quoting,
-                adapter_type,
-            );
+            // Rendered comparison of a data test node's config fields — the Stage-2 fallback of
+            // `check_configs_modified`.
+            // The checks here are meant to be for the same keys as in the Stage-1 unrendered checks
+            // directed by `DBTTEST_CONFIG_MODIFIERS`.
+            let c = &self.deprecated_config;
+            let o = &other.deprecated_config;
 
-            let result = enabled_eq && alias_eq && tags_eq && meta_eq && group_eq && quoting_eq;
+            let severity_eq = c.severity == o.severity;
+            let where_eq = c.where_ == o.where_;
+            let limit_eq = c.limit == o.limit;
+            let fail_calc_eq = c.fail_calc == o.fail_calc;
+            let warn_if_eq = c.warn_if == o.warn_if;
+            let error_if_eq = c.error_if == o.error_if;
+            let store_failures_eq = c.store_failures == o.store_failures;
+            let store_failures_as_eq = c.store_failures_as == o.store_failures_as;
+            let sql_header_eq = c.sql_header == o.sql_header;
+
+            let result = severity_eq
+                && where_eq
+                && limit_eq
+                && fail_calc_eq
+                && warn_if_eq
+                && error_if_eq
+                && store_failures_eq
+                && store_failures_as_eq
+                && sql_header_eq;
 
             if !result {
                 log_state_mod_diff(
@@ -1991,51 +1959,57 @@ impl InternalDbtNode for DbtTest {
                     "test_config",
                     [
                         (
-                            "enabled",
-                            enabled_eq,
+                            "severity",
+                            severity_eq,
+                            Some((format!("{:?}", &c.severity), format!("{:?}", &o.severity))),
+                        ),
+                        (
+                            "where",
+                            where_eq,
+                            Some((format!("{:?}", &c.where_), format!("{:?}", &o.where_))),
+                        ),
+                        (
+                            "limit",
+                            limit_eq,
+                            Some((format!("{:?}", &c.limit), format!("{:?}", &o.limit))),
+                        ),
+                        (
+                            "fail_calc",
+                            fail_calc_eq,
+                            Some((format!("{:?}", &c.fail_calc), format!("{:?}", &o.fail_calc))),
+                        ),
+                        (
+                            "warn_if",
+                            warn_if_eq,
+                            Some((format!("{:?}", &c.warn_if), format!("{:?}", &o.warn_if))),
+                        ),
+                        (
+                            "error_if",
+                            error_if_eq,
+                            Some((format!("{:?}", &c.error_if), format!("{:?}", &o.error_if))),
+                        ),
+                        (
+                            "store_failures",
+                            store_failures_eq,
                             Some((
-                                format!("{:?}", &self.deprecated_config.enabled),
-                                format!("{:?}", &other.deprecated_config.enabled),
+                                format!("{:?}", &c.store_failures),
+                                format!("{:?}", &o.store_failures),
                             )),
                         ),
                         (
-                            "alias",
-                            alias_eq,
+                            "store_failures_as",
+                            store_failures_as_eq,
                             Some((
-                                format!("{:?}", &self.deprecated_config.alias),
-                                format!("{:?}", &other.deprecated_config.alias),
+                                format!("{:?}", &c.store_failures_as),
+                                format!("{:?}", &o.store_failures_as),
                             )),
                         ),
                         (
-                            "tags",
-                            tags_eq,
+                            "sql_header",
+                            sql_header_eq,
                             Some((
-                                format!("{:?}", &self.deprecated_config.tags),
-                                format!("{:?}", &other.deprecated_config.tags),
-                            )),
-                        ),
-                        (
-                            "meta",
-                            meta_eq,
-                            Some((
-                                format!("{:?}", &self.deprecated_config.meta),
-                                format!("{:?}", &other.deprecated_config.meta),
-                            )),
-                        ),
-                        (
-                            "group",
-                            group_eq,
-                            Some((
-                                format!("{:?}", &self.deprecated_config.group),
-                                format!("{:?}", &other.deprecated_config.group),
-                            )),
-                        ),
-                        (
-                            "quoting",
-                            quoting_eq,
-                            Some((
-                                format!("{:?}", &self.deprecated_config.quoting),
-                                format!("{:?}", &other.deprecated_config.quoting),
+                                format!("{:?}", &c.sql_header),
+                                format!("{:?}", &o.sql_header),
                             )),
                         ),
                     ],
@@ -2048,32 +2022,70 @@ impl InternalDbtNode for DbtTest {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_test) = other.as_any().downcast_ref::<DbtTest>() {
-            let same_config_result = self.has_same_config(other, adapter_type);
             let same_fqn_result = self.common().fqn == other_test.common().fqn;
 
-            let result = same_config_result && same_fqn_result;
-
-            if !result {
-                log_state_mod_diff(
-                    &self.__common_attr__.unique_id,
-                    "test",
-                    [
-                        ("same_config", same_config_result, None),
-                        (
+            // dbt-core: `GenericTestNode.same_contents` overrides `ParsedNode`'s to
+            // `same_config and same_fqn` (nodes.py:1170-1174) -- a generic test's body is just
+            // the macro-call text, not authored content, so body is deliberately excluded.
+            // `SingularTestNode` has no such override, so it inherits `ParsedNode.same_contents`,
+            // which ANDs `same_body` (nodes.py:373-374,402-416). `test_metadata` is populated only
+            // for generic tests (see `DbtTestAttr`), so it's the same discriminator dbt-core's
+            // class split encodes.
+            if self.__test_attr__.test_metadata.is_some() {
+                // Generic test: unchanged, fqn only.
+                if !same_fqn_result {
+                    log_state_mod_diff(
+                        &self.__common_attr__.unique_id,
+                        "test",
+                        [(
                             "same_fqn",
                             same_fqn_result,
                             Some((
                                 format!("{:?}", &self.common().fqn),
                                 format!("{:?}", &other_test.common().fqn),
                             )),
-                        ),
-                    ],
-                );
-            }
+                        )],
+                    );
+                }
 
-            result
+                same_fqn_result
+            } else {
+                // Singular test: also consult body (checksum-based, like `DbtModel`'s).
+                //
+                // Deliberately stop at `same_fqn && same_body`. `ParsedNode.same_contents` also
+                // ANDs relation, persisted-description and contract, but do NOT add those checks
+                // here: `is_modified`'s `Any` case (`prev_state/mod.rs`) already ORs
+                // `check_relation_modified`, `check_persisted_descriptions_modified`,
+                // `check_modified_macros` and `check_contract_modified` for every node type,
+                // singular tests included. Re-adding them here would double-count -- the
+                // selection result would be unchanged, but the `[state_mod_diff]` trace would
+                // misattribute which sub-check actually caught the difference.
+                let same_body_result =
+                    same_body(&self.__common_attr__, &other_test.__common_attr__);
+                let result = same_fqn_result && same_body_result;
+
+                if !result {
+                    log_state_mod_diff(
+                        &self.__common_attr__.unique_id,
+                        "test",
+                        [
+                            (
+                                "same_fqn",
+                                same_fqn_result,
+                                Some((
+                                    format!("{:?}", &self.common().fqn),
+                                    format!("{:?}", &other_test.common().fqn),
+                                )),
+                            ),
+                            ("same_body", same_body_result, None),
+                        ],
+                    );
+                }
+
+                result
+            }
         } else {
             false
         }
@@ -2140,54 +2152,33 @@ impl InternalDbtNode for DbtUnitTest {
         crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
+    // Retained only for the `InternalDbtNode` trait; no longer consulted for state:modified
+    // selection, since config is a non-trigger for unit tests (see `check_configs_modified`).
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
             let self_config = &self.deprecated_config;
             let other_config = &other.deprecated_config;
 
             let enabled_eq = self_config.enabled == other_config.enabled;
-            // Treat None as equivalent to Some(default) so that old manifests
-            // that serialized null (before apply_resolve_defaults ran for unit tests)
-            // do not produce false-positive state:modified detections.
-            let default_sa = StaticAnalysisKind::default();
-            let static_analysis_eq =
-                match (&self_config.static_analysis, &other_config.static_analysis) {
-                    (None, None) => true,
-                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
-                    (Some(a), Some(b)) => a == b,
-                };
-            let warehouse_config_eq = same_warehouse_config_with_unrendered(
-                &self_config.__warehouse_specific_config__,
-                &other_config.__warehouse_specific_config__,
-                &self.__base_attr__.unrendered_config,
-                &other.__base_attr__.unrendered_config,
-            );
+            // `static_analysis` is a Fusion-only, invocation-driven value (e.g. set by
+            // `--static-analysis`) with no dbt-core equivalent, so it can never be a
+            // legitimate dbt-core `state:modified` trigger and is deliberately excluded
+            // from this comparison (see `base_config_excluded_keys`, parity-exclude).
 
-            let result = enabled_eq && static_analysis_eq && warehouse_config_eq;
+            let result = enabled_eq;
 
             if !result {
                 log_state_mod_diff(
                     &self.__common_attr__.unique_id,
                     "unit_test_config",
-                    [
-                        (
-                            "enabled",
-                            enabled_eq,
-                            Some((
-                                format!("{:?}", &self_config.enabled),
-                                format!("{:?}", &other_config.enabled),
-                            )),
-                        ),
-                        (
-                            "static_analysis",
-                            static_analysis_eq,
-                            Some((
-                                format!("{:?}", &self_config.static_analysis),
-                                format!("{:?}", &other_config.static_analysis),
-                            )),
-                        ),
-                        ("warehouse_config", warehouse_config_eq, None),
-                    ],
+                    [(
+                        "enabled",
+                        enabled_eq,
+                        Some((
+                            format!("{:?}", &self_config.enabled),
+                            format!("{:?}", &other_config.enabled),
+                        )),
+                    )],
                 );
             }
 
@@ -2200,8 +2191,10 @@ impl InternalDbtNode for DbtUnitTest {
     fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_unit_test) = other.as_any().downcast_ref::<DbtUnitTest>() {
             let same_fqn_result = self.common().fqn == other_unit_test.common().fqn;
+            // TODO: replace the dummy implementation of same_unit_test_definition with a real comparison
+            let same_definition_result = same_unit_test_definition(self, other_unit_test);
 
-            let result = same_fqn_result;
+            let result = same_fqn_result && same_definition_result;
 
             if !result {
                 log_state_mod_diff(
@@ -2226,6 +2219,18 @@ impl InternalDbtNode for DbtUnitTest {
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtUnitTest does not support setting detected_unsafe");
     }
+}
+
+fn same_unit_test_definition(_self_ut: &DbtUnitTest, _other_ut: &DbtUnitTest) -> bool {
+    // This dummy implementation makes explicit Fusion's current unit-test content under-selection:
+    true
+    // TODO: Implement parity with dbt-core's flagging a unit test on a checksum over
+    // model/versions/given/expect/overrides (+ fixture rows) — build_unit_test_checksum,
+    // dbt-mantle core/dbt/contracts/graph/nodes.py:1226.
+    // HAZARD when fixing: do NOT naively compare `checksum`. dbt-core manifests carry a real
+    // unit-test checksum while Fusion emits DbtChecksum::default(); comparing them directly would
+    // over-select every unit test against a dbt-core state manifest. The fix must populate Fusion's
+    // unit-test checksum consistently first, then compare.
 }
 
 impl InternalDbtNodeAttributes for DbtUnitTest {
@@ -2262,6 +2267,10 @@ impl InternalDbtNode for DbtSource {
 
     fn resource_type(&self) -> NodeType {
         NodeType::Source
+    }
+
+    fn freshness_criteria(&self) -> FreshnessDefinition {
+        self.__source_attr__.freshness.clone().unwrap_or_default()
     }
 
     fn event_time(&self) -> Option<String> {
@@ -2307,69 +2316,14 @@ impl InternalDbtNode for DbtSource {
             let self_config = &self.deprecated_config;
             let other_config = &other_source.deprecated_config;
 
-            // Helper function to compare loaded_at_query where None equals Some("")
-            let loaded_at_eq = |a: &Option<String>, b: &Option<String>| -> bool {
-                match (a, b) {
-                    (None, None) => true,
-                    (None, Some(b_val)) => b_val.is_empty(),
-                    (Some(a_val), None) => a_val.is_empty(),
-                    (Some(a_val), Some(b_val)) => a_val == b_val,
-                }
-            };
             // Compare each field individually
             let enabled_eq = self.__base_attr__.enabled == other_source.__base_attr__.enabled;
 
             let event_time_eq = self_config.event_time == other_config.event_time;
 
-            // Helper function to compare freshness where None equals FreshnessDefinition with empty rules
-            let freshness_eq = {
-                use crate::schemas::common::FreshnessDefinition;
-
-                // Check if a FreshnessDefinition is essentially empty (all fields are None)
-                let is_empty_freshness = |f: &FreshnessDefinition| -> bool {
-                    match (&f.error_after, &f.warn_after, &f.filter) {
-                        (Some(error), Some(warn), None) => {
-                            error.count.is_none()
-                                && error.period.is_none()
-                                && warn.count.is_none()
-                                && warn.period.is_none()
-                        }
-                        (None, None, None) => true,
-                        _ => false,
-                    }
-                };
-
-                match (
-                    &self.__source_attr__.freshness,
-                    &other_source.__source_attr__.freshness,
-                ) {
-                    (None, None) => true,
-                    (None, Some(b_val)) => is_empty_freshness(b_val),
-                    (Some(a_val), None) => is_empty_freshness(a_val),
-                    (Some(a_val), Some(b_val)) => {
-                        let error_after_eq = match (&a_val.error_after, &b_val.error_after) {
-                            (None, None) => true,
-                            (None, Some(b_val)) => b_val.is_empty(),
-                            (Some(a_val), None) => a_val.is_empty(),
-                            (Some(a_val), Some(b_val)) => a_val == b_val,
-                        };
-                        let warn_after_eq = match (&a_val.warn_after, &b_val.warn_after) {
-                            (None, None) => true,
-                            (None, Some(b_val)) => b_val.is_empty(),
-                            (Some(a_val), None) => a_val.is_empty(),
-                            (Some(a_val), Some(b_val)) => a_val == b_val,
-                        };
-                        let filter_eq = match (&a_val.filter, &b_val.filter) {
-                            (None, None) => true,
-                            (None, Some(b_val)) => b_val.is_empty(),
-                            (Some(a_val), None) => a_val.is_empty(),
-                            (Some(a_val), Some(b_val)) => a_val == b_val,
-                        };
-
-                        error_after_eq && warn_after_eq && filter_eq
-                    }
-                }
-            };
+            // Rendered freshness equality (None ≈ empty-FreshnessDefinition). Shared with the
+            // `check_source_freshness_modified` state:modified sub-check via `same_freshness_value`.
+            let freshness_eq = self.same_freshness_value(other_source);
 
             let quoting_eq = quoting_equal(
                 &self.__source_attr__.user_quoting,
@@ -2377,32 +2331,23 @@ impl InternalDbtNode for DbtSource {
                 adapter_type,
             );
 
-            let loaded_at_field_eq = loaded_at_eq(
+            let loaded_at_field_eq = Self::loaded_at_str_eq(
                 &self.__source_attr__.loaded_at_field,
                 &other_source.__source_attr__.loaded_at_field,
             );
 
-            let loaded_at_query_result = loaded_at_eq(
+            let loaded_at_query_result = Self::loaded_at_str_eq(
                 &self.__source_attr__.loaded_at_query,
                 &other_source.__source_attr__.loaded_at_query,
             );
 
-            // Treat None as equivalent to Some(default) so that old manifests
-            // that serialized null (before apply_resolve_defaults ran for sources)
-            // do not produce false-positive state:modified detections.
-            let default_sa = StaticAnalysisKind::default();
-            let static_analysis_eq =
-                match (&self_config.static_analysis, &other_config.static_analysis) {
-                    (None, None) => true,
-                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
-                    (Some(a), Some(b)) => a == b,
-                };
-
-            let warehouse_config_eq = same_warehouse_config_with_unrendered(
+            // `static_analysis` is a Fusion-only, invocation-driven value (e.g. set by
+            // `--static-analysis`) with no dbt-core equivalent, so it can never be a
+            // legitimate dbt-core `state:modified` trigger and is deliberately excluded
+            // from this comparison (see `base_config_excluded_keys`, parity-exclude).
+            let warehouse_config_eq = same_warehouse_config(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
-                &self.__base_attr__.unrendered_config,
-                &other_source.__base_attr__.unrendered_config,
             );
 
             let result = enabled_eq
@@ -2411,7 +2356,6 @@ impl InternalDbtNode for DbtSource {
                 && quoting_eq
                 && loaded_at_field_eq
                 && loaded_at_query_result
-                && static_analysis_eq
                 && warehouse_config_eq;
 
             if !result {
@@ -2467,14 +2411,6 @@ impl InternalDbtNode for DbtSource {
                                 format!("{:?}", &other_source.__source_attr__.loaded_at_query),
                             )),
                         ),
-                        (
-                            "static_analysis",
-                            static_analysis_eq,
-                            Some((
-                                format!("{:?}", &self_config.static_analysis),
-                                format!("{:?}", &other_config.static_analysis),
-                            )),
-                        ),
                         ("warehouse_config", warehouse_config_eq, None),
                     ],
                 );
@@ -2490,8 +2426,28 @@ impl InternalDbtNode for DbtSource {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
             // Sources have no SQL body. Config is owned by `check_configs_modified` and relation
             // identity by `check_relation_modified`; calling `has_same_config` here would
-            // double-count both. This check is therefore restricted to fields without a dedicated
-            // owner: table identifier (last segment of `relation_name`), fqn, and loader.
+            // double-count both. This check is therefore restricted to fields WITHOUT a dedicated
+            // owner: table identifier (last segment of `relation_name`), fqn, loader, and the
+            // RENDERED `freshness` (+ `loaded_at_field`).
+            //
+            // FRESHNESS is compared here — RENDERED — to mirror dbt-core's
+            // `SourceDefinition.same_freshness` (dbt-mantle `core/dbt/contracts/graph/nodes.py:1444`),
+            // which is a distinct conjunct of `same_contents` alongside `same_config`. #11463 routed
+            // source config through a wholesale UNRENDERED comparison (`check_configs_modified`),
+            // faithful to dbt-core for every key it also compares unrendered via `same_config` — but
+            // freshness is the lone exception dbt-core ALSO compares rendered, so the unrendered-only
+            // path stopped selecting an env-aware `freshness`/`loaded_at_field` that renders
+            // differently per target (a change dbt-core still selects under full `state:modified`).
+            // Comparing it here restores that fidelity while keeping the logic node-local: dbt-core
+            // reaches `same_freshness` only through full `same_contents`, and Fusion reaches
+            // `has_same_content` only through `check_modified_content` (the full-`state:modified`
+            // arm) — never under `state:modified.configs`, which routes to `check_configs_modified`
+            // and keeps freshness compared unrendered there, matching dbt-core's `same_config`.
+            //
+            // (This mirrors a dbt-core inconsistency: #10675 migrated database/schema to unrendered
+            // behind `state_modified_compare_more_unrendered_values`, but the older `same_freshness`
+            // was never gated. If dbt-core gates it on that flag, this comparison could be dropped
+            // and freshness left entirely to the unrendered `check_configs_modified` path.)
             let same_relation_name_result = same_relation_name(
                 &self.__base_attr__.relation_name,
                 &other_source.__base_attr__.relation_name,
@@ -2499,8 +2455,12 @@ impl InternalDbtNode for DbtSource {
             let same_fqn_result = self.__common_attr__.fqn == other_source.__common_attr__.fqn;
             let same_loader_result =
                 self.__source_attr__.loader == other_source.__source_attr__.loader;
+            let same_freshness_result = self.same_rendered_freshness(other_source);
 
-            let result = same_relation_name_result && same_fqn_result && same_loader_result;
+            let result = same_relation_name_result
+                && same_fqn_result
+                && same_loader_result
+                && same_freshness_result;
 
             if !result {
                 log_state_mod_diff(
@@ -2522,6 +2482,22 @@ impl InternalDbtNode for DbtSource {
                             Some((
                                 format!("{:?}", &self.__source_attr__.loader),
                                 format!("{:?}", &other_source.__source_attr__.loader),
+                            )),
+                        ),
+                        (
+                            "same_freshness",
+                            same_freshness_result,
+                            Some((
+                                format!(
+                                    "{:?} / loaded_at_field={:?}",
+                                    &self.__source_attr__.freshness,
+                                    &self.__source_attr__.loaded_at_field
+                                ),
+                                format!(
+                                    "{:?} / loaded_at_field={:?}",
+                                    &other_source.__source_attr__.freshness,
+                                    &other_source.__source_attr__.loaded_at_field
+                                ),
                             )),
                         ),
                     ],
@@ -2621,25 +2597,14 @@ impl InternalDbtNode for DbtSnapshot {
             let other_config = &other_snapshot.deprecated_config;
 
             // Snapshot-specific Configuration
-            let alias_eq = string_config_eq_with_unrendered(
-                &self_config.alias,
-                &other_config.alias,
-                "alias",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let alias_eq = self_config.alias == other_config.alias;
             let materialized_eq = self_config.materialized == other_config.materialized;
             let strategy_eq = self_config.strategy == other_config.strategy;
             let unique_key_eq = self_config.unique_key == other_config.unique_key;
             let check_cols_eq = self_config.check_cols == other_config.check_cols;
             let updated_at_eq = self_config.updated_at == other_config.updated_at;
-            let dbt_valid_to_current_eq = string_config_eq_with_unrendered(
-                &self_config.dbt_valid_to_current,
-                &other_config.dbt_valid_to_current,
-                "dbt_valid_to_current",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let dbt_valid_to_current_eq =
+                self_config.dbt_valid_to_current == other_config.dbt_valid_to_current;
 
             let snapshot_meta_column_names_eq = {
                 use crate::schemas::project::configs::snapshot_config::SnapshotMetaColumnNames;
@@ -2665,20 +2630,8 @@ impl InternalDbtNode for DbtSnapshot {
             };
 
             let hard_deletes_eq = self_config.hard_deletes == other_config.hard_deletes;
-            let target_database_eq = string_config_eq_with_unrendered(
-                &self_config.target_database,
-                &other_config.target_database,
-                "target_database",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
-            let target_schema_eq = string_config_eq_with_unrendered(
-                &self_config.target_schema,
-                &other_config.target_schema,
-                "target_schema",
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let target_database_eq = self_config.target_database == other_config.target_database;
+            let target_schema_eq = self_config.target_schema == other_config.target_schema;
 
             // General Configuration
             let enabled_eq = self_config.enabled == other_config.enabled;
@@ -2686,36 +2639,25 @@ impl InternalDbtNode for DbtSnapshot {
             let post_hook_eq = hooks_equal(&self_config.post_hook, &other_config.post_hook);
             let persist_docs_eq =
                 persist_docs_configs_equal(&self_config.persist_docs, &other_config.persist_docs);
-            let grants_eq = grants_eq_with_unrendered(
-                &self_config.grants,
-                &other_config.grants,
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
-            );
+            let meta_eq = indexmap_yml_value_equal(&self_config.meta, &other_config.meta);
+            let grants_eq = grants_equal(&self_config.grants, &other_config.grants);
             let event_time_eq = self_config.event_time == other_config.event_time;
             let quoting_eq =
                 quoting_equal(&self_config.quoting, &other_config.quoting, adapter_type);
-            // Treat None as equivalent to Some(default) so that old manifests
-            // that serialized null (before apply_resolve_defaults ran for snapshots)
-            // do not produce false-positive state:modified detections.
-            let default_sa = StaticAnalysisKind::default();
-            let static_analysis_eq =
-                match (&self_config.static_analysis, &other_config.static_analysis) {
-                    (None, None) => true,
-                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
-                    (Some(a), Some(b)) => a == b,
-                };
-            let group_eq = self_config.group == other_config.group;
+            // `static_analysis` is a Fusion-only, invocation-driven value (e.g. set by
+            // `--static-analysis`) with no dbt-core equivalent, so it can never be a
+            // legitimate dbt-core `state:modified` trigger and is deliberately excluded
+            // from this comparison (see `base_config_excluded_keys`, parity-exclude).
             let quote_columns_eq = self_config.quote_columns == other_config.quote_columns;
             let invalidate_hard_deletes_eq =
                 self_config.invalidate_hard_deletes == other_config.invalidate_hard_deletes;
+            // dbt State configs (mirror `ModelConfig::same_config`).
+            let state_eq = self_config.state == other_config.state;
 
             // Adapter specific configs
-            let warehouse_config_eq = same_warehouse_config_with_unrendered(
+            let warehouse_config_eq = same_warehouse_config(
                 &self_config.__warehouse_specific_config__,
                 &other_config.__warehouse_specific_config__,
-                &self.__base_attr__.unrendered_config,
-                &other_snapshot.__base_attr__.unrendered_config,
             );
 
             let result = alias_eq
@@ -2734,13 +2676,13 @@ impl InternalDbtNode for DbtSnapshot {
                 && pre_hook_eq
                 && post_hook_eq
                 && persist_docs_eq
+                && meta_eq
                 && grants_eq
                 && event_time_eq
                 && quoting_eq
-                && static_analysis_eq
-                && group_eq
                 && quote_columns_eq
                 && invalidate_hard_deletes_eq
+                && state_eq
                 // Adapter specific configs
                 && warehouse_config_eq;
 
@@ -2863,6 +2805,14 @@ impl InternalDbtNode for DbtSnapshot {
                         ),
                         ("persist_docs", persist_docs_eq, None),
                         (
+                            "meta",
+                            meta_eq,
+                            Some((
+                                format!("{:?}", &self_config.meta),
+                                format!("{:?}", &other_config.meta),
+                            )),
+                        ),
+                        (
                             "grants",
                             grants_eq,
                             Some((
@@ -2887,22 +2837,6 @@ impl InternalDbtNode for DbtSnapshot {
                             )),
                         ),
                         (
-                            "static_analysis",
-                            static_analysis_eq,
-                            Some((
-                                format!("{:?}", &self_config.static_analysis),
-                                format!("{:?}", &other_config.static_analysis),
-                            )),
-                        ),
-                        (
-                            "group",
-                            group_eq,
-                            Some((
-                                format!("{:?}", &self_config.group),
-                                format!("{:?}", &other_config.group),
-                            )),
-                        ),
-                        (
                             "quote_columns",
                             quote_columns_eq,
                             Some((
@@ -2918,6 +2852,14 @@ impl InternalDbtNode for DbtSnapshot {
                                 format!("{:?}", &other_config.invalidate_hard_deletes),
                             )),
                         ),
+                        (
+                            "state",
+                            state_eq,
+                            Some((
+                                format!("{:?}", &self_config.state),
+                                format!("{:?}", &other_config.state),
+                            )),
+                        ),
                         ("warehouse_config", warehouse_config_eq, None),
                     ],
                 );
@@ -2929,12 +2871,13 @@ impl InternalDbtNode for DbtSnapshot {
         }
     }
 
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             let same_body_result =
                 same_body(&self.__common_attr__, &other_snapshot.__common_attr__);
-            let same_config_result = self.has_same_config(other, adapter_type);
+            // Config is owned by `check_configs_modified`; calling `has_same_config` here would
+            // double-count it. This check is therefore restricted to non-config fields.
             let same_persisted_desc_result = same_persisted_description(
                 &self.__common_attr__,
                 &self.__base_attr__,
@@ -2954,7 +2897,6 @@ impl InternalDbtNode for DbtSnapshot {
             // See: https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/contracts/graph/nodes.py#L374
 
             let result = same_body_result
-                && same_config_result
                 && same_persisted_desc_result
                 && same_fqn_result
                 && same_db_repr_result;
@@ -2965,7 +2907,6 @@ impl InternalDbtNode for DbtSnapshot {
                     "snapshot",
                     [
                         ("same_body", same_body_result, None),
-                        ("same_config", same_config_result, None),
                         (
                             "same_persisted_description",
                             same_persisted_desc_result,
@@ -3206,6 +3147,199 @@ impl InternalDbtNode for DbtExposure {
     }
 }
 
+impl InternalDbtNode for DbtCheck {
+    fn common(&self) -> &CommonAttributes {
+        &self.__common_attr__
+    }
+    fn base(&self) -> &NodeBaseAttributes {
+        &self.__base_attr__
+    }
+    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
+        &mut self.__base_attr__
+    }
+    fn common_mut(&mut self) -> &mut CommonAttributes {
+        &mut self.__common_attr__
+    }
+    fn resource_type(&self) -> NodeType {
+        NodeType::Check
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
+    }
+    /// Rendered-config comparison for `state:modified`. Checks are on "Approach B" — see the
+    /// `NodeType::Check` arm in `prev_state::check_configs_modified` for why the Stage-1 unrendered
+    /// shortcut is not used.
+    fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
+        if let Some(other_check) = other.as_any().downcast_ref::<DbtCheck>() {
+            let enabled_eq =
+                self.deprecated_config.enabled == other_check.deprecated_config.enabled;
+            let severity_eq =
+                self.deprecated_config.severity == other_check.deprecated_config.severity;
+            let selection_filter_on_eq = self.deprecated_config.selection_filter_on
+                == other_check.deprecated_config.selection_filter_on;
+            // Resolved tags live on common_attr, not the config wrapper (cf. DbtSavedQuery).
+            let tags_eq = tags_eq_vec(
+                &self.__common_attr__.tags,
+                &other_check.__common_attr__.tags,
+            );
+            // `meta` is compared for the same reason models compare it: a user editing `meta:`
+            // expects the node to be selected, and this was the one key where a check behaved
+            // differently from a model. Read from common_attr, like tags: that field holds the
+            // resolved value and is not an `Option`, so plain equality is enough --
+            // `indexmap_yml_value_equal` exists to treat `None` and an empty map as equal, which
+            // only arises for the `Option` config wrappers.
+            let meta_eq = self.__common_attr__.meta == other_check.__common_attr__.meta;
+
+            let result = enabled_eq && severity_eq && selection_filter_on_eq && tags_eq && meta_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "check_config",
+                    [
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.enabled),
+                                format!("{:?}", &other_check.deprecated_config.enabled),
+                            )),
+                        ),
+                        (
+                            "severity",
+                            severity_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.severity),
+                                format!("{:?}", &other_check.deprecated_config.severity),
+                            )),
+                        ),
+                        (
+                            "selection_filter_on",
+                            selection_filter_on_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.selection_filter_on),
+                                format!("{:?}", &other_check.deprecated_config.selection_filter_on),
+                            )),
+                        ),
+                        (
+                            "tags",
+                            tags_eq,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.tags),
+                                format!("{:?}", &other_check.__common_attr__.tags),
+                            )),
+                        ),
+                        (
+                            "meta",
+                            meta_eq,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.meta),
+                                format!("{:?}", &other_check.__common_attr__.meta),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
+        } else {
+            false
+        }
+    }
+    /// Content comparison for `state:modified`.
+    ///
+    /// Must include the checksum. `has_same_body` is NOT consulted by plain `state:modified`:
+    /// `is_modified`'s `Any` arm calls `check_modified_content` (and so this method), while
+    /// `check_body_modified` only runs for the explicit `state:modified.body` sub-selector. An
+    /// earlier version of this compared only identity and phase, on the assumption that
+    /// `has_same_body` covered the SQL — with the result that editing a check's SQL did not mark it
+    /// modified and `--select state:modified` reported "Nothing to do". `DbtAnalysis`, the closest
+    /// analogue, compares the checksum here for the same reason.
+    ///
+    /// Phase is also compared: a check whose inferred phase moved is materially different even if
+    /// its text is byte-identical, which can happen when the tables it references change.
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
+        if let Some(other_check) = other.as_any().downcast_ref::<DbtCheck>() {
+            let same_checksum_result =
+                self.__common_attr__.checksum == other_check.__common_attr__.checksum;
+            let same_name_result = self.__common_attr__.name == other_check.__common_attr__.name;
+            let same_fqn_result = self.__common_attr__.fqn == other_check.__common_attr__.fqn;
+
+            let result = same_checksum_result && same_name_result && same_fqn_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "check",
+                    [
+                        (
+                            "same_checksum",
+                            same_checksum_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.checksum),
+                                format!("{:?}", &other_check.__common_attr__.checksum),
+                            )),
+                        ),
+                        (
+                            "same_name",
+                            same_name_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.name),
+                                format!("{:?}", &other_check.__common_attr__.name),
+                            )),
+                        ),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.fqn),
+                                format!("{:?}", &other_check.__common_attr__.fqn),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
+        } else {
+            false
+        }
+    }
+    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
+        panic!("DbtCheck does not support setting detected_unsafe");
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtCheck {
+    fn materialized(&self) -> DbtMaterialization {
+        self.__base_attr__.materialized.clone()
+    }
+    fn quoting(&self) -> ResolvedQuoting {
+        self.__base_attr__.quoting
+    }
+    fn tags(&self) -> Vec<String> {
+        self.__common_attr__.tags.clone()
+    }
+    fn meta(&self) -> IndexMap<String, YmlValue> {
+        self.__common_attr__.meta.clone()
+    }
+    fn serialized_config(&self) -> YmlValue {
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+    }
+    fn search_name(&self) -> String {
+        self.__common_attr__.name.clone()
+    }
+    fn selector_string(&self) -> String {
+        self.__common_attr__.fqn.join(".")
+    }
+}
+
 impl InternalDbtNodeAttributes for DbtExposure {
     fn materialized(&self) -> DbtMaterialization {
         self.__base_attr__.materialized.clone()
@@ -3267,9 +3401,12 @@ impl InternalDbtNode for DbtSemanticModel {
     // dbt-core does in SemanticModel.same_contents(). See:
     // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L1585-L1602
     // TODO: group is not compared while it is in dbt-core. SemanticModel group is not implemented in dbt-fusion.
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
-            let same_config_result = self.has_same_config(other, adapter_type);
+            // NOTE: config is owned by `check_configs_modified` (a sibling sub-check OR'd into
+            // `is_modified`), so it must not be re-checked here. The wholesale
+            // `same_deprecated_config` comparison below still lives in content pending the
+            // follow-up that moves it into `has_same_config` (see the plan's deferrals).
             let same_model_result = self.__semantic_model_attr__.model
                 == other_semantic_model.__semantic_model_attr__.model;
             let same_description_result = self.__common_attr__.description
@@ -3285,8 +3422,7 @@ impl InternalDbtNode for DbtSemanticModel {
             let same_primary_entity_result = self.__semantic_model_attr__.primary_entity
                 == other_semantic_model.__semantic_model_attr__.primary_entity;
 
-            let result = same_config_result
-                && same_model_result
+            let result = same_model_result
                 && same_description_result
                 && same_entities_result
                 && same_dimensions_result
@@ -3299,7 +3435,6 @@ impl InternalDbtNode for DbtSemanticModel {
                     &self.__common_attr__.unique_id,
                     "semantic_model",
                     [
-                        ("same_config", same_config_result, None),
                         (
                             "same_model",
                             same_model_result,
@@ -3470,60 +3605,40 @@ impl InternalDbtNode for DbtMetric {
             false
         }
     }
-    // This function only compares a subset of the DbMetric node, similar to what
-    // dbt-core does in Metric.same_contents(). See:
-    // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L1496-L1511
-    fn has_same_content(&self, other: &dyn InternalDbtNode, adapter_type: AdapterType) -> bool {
+    // This function only compares a subset of the DbMetric node, mirroring dbt-core's
+    // `Metric.same_contents` (`type`, `description`, `label`, `config`). See:
+    // https://github.com/dbt-labs/dbt-mantle/blob/0153865/core/dbt/contracts/graph/nodes.py#L1672-L1725
+    //
+    // dbt-core intentionally does NOT compare `filter`, `metadata`, or `type_params`
+    // (its `same_filter`/`same_metadata`/`same_type_params` all `return True` as TODOs), so we
+    // drop them here to match — comparing them over-selects on manifest round-trip noise
+    // (dbt-core#15513). `fqn` is not part of `same_contents` either (renames are caught by node
+    // presence). Revisit the dropped fields if dbt-core implements them.
+    fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
-            let same_config_result = self.has_same_config(other, adapter_type);
-            let same_filter_result =
-                self.__metric_attr__.filter == other_metric.__metric_attr__.filter;
-            let same_metadata_result =
-                self.__metric_attr__.metadata == other_metric.__metric_attr__.metadata;
-            let same_type_params_result =
-                self.__metric_attr__.type_params == other_metric.__metric_attr__.type_params;
+            // NOTE: config is owned by `check_configs_modified` (a sibling sub-check OR'd into
+            // `is_modified`, which for metrics compares `!has_same_config`), so it is not
+            // re-checked here — avoiding the double-count.
+            let same_type_result =
+                self.__metric_attr__.metric_type == other_metric.__metric_attr__.metric_type;
             let same_description_result =
                 self.__common_attr__.description == other_metric.__common_attr__.description;
-            let same_fqn_result = self.__common_attr__.fqn == other_metric.__common_attr__.fqn;
             let same_label_result =
                 self.__metric_attr__.label == other_metric.__metric_attr__.label;
 
-            let result = same_config_result
-                && same_filter_result
-                && same_metadata_result
-                && same_type_params_result
-                && same_description_result
-                && same_fqn_result
-                && same_label_result;
+            let result = same_type_result && same_description_result && same_label_result;
 
             if !result {
                 log_state_mod_diff(
                     &self.__common_attr__.unique_id,
                     "metric",
                     [
-                        ("same_config", same_config_result, None),
                         (
-                            "same_filter",
-                            same_filter_result,
+                            "same_type",
+                            same_type_result,
                             Some((
-                                format!("{:?}", &self.__metric_attr__.filter),
-                                format!("{:?}", &other_metric.__metric_attr__.filter),
-                            )),
-                        ),
-                        (
-                            "same_metadata",
-                            same_metadata_result,
-                            Some((
-                                format!("{:?}", &self.__metric_attr__.metadata),
-                                format!("{:?}", &other_metric.__metric_attr__.metadata),
-                            )),
-                        ),
-                        (
-                            "same_type_params",
-                            same_type_params_result,
-                            Some((
-                                format!("{:?}", &self.__metric_attr__.type_params),
-                                format!("{:?}", &other_metric.__metric_attr__.type_params),
+                                format!("{:?}", &self.__metric_attr__.metric_type),
+                                format!("{:?}", &other_metric.__metric_attr__.metric_type),
                             )),
                         ),
                         (
@@ -3532,14 +3647,6 @@ impl InternalDbtNode for DbtMetric {
                             Some((
                                 format!("{:?}", &self.__common_attr__.description),
                                 format!("{:?}", &other_metric.__common_attr__.description),
-                            )),
-                        ),
-                        (
-                            "same_fqn",
-                            same_fqn_result,
-                            Some((
-                                format!("{:?}", &self.__common_attr__.fqn),
-                                format!("{:?}", &other_metric.__common_attr__.fqn),
                             )),
                         ),
                         (
@@ -3832,11 +3939,9 @@ impl InternalDbtNode for DbtFunction {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
-            let deprecated_config_eq = self.deprecated_config.same_config(
-                &other_function.deprecated_config,
-                &self.__base_attr__.unrendered_config,
-                &other_function.__base_attr__.unrendered_config,
-            );
+            let deprecated_config_eq = self
+                .deprecated_config
+                .same_config(&other_function.deprecated_config);
 
             if !deprecated_config_eq {
                 log_state_mod_diff(
@@ -3854,23 +3959,48 @@ impl InternalDbtNode for DbtFunction {
 
     fn has_same_content(&self, other: &dyn InternalDbtNode, _adapter_type: AdapterType) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
+            // TODO: checksum-only under-selects relative to dbt-core.
+            // `FunctionNode.same_contents` also ANDs `same_arguments`/`same_returns`/`same_overloads`
+            // (dbt-mantle core/dbt/contracts/graph/nodes.py:1764-1783), so a signature-only change
+            // in schema.yml (arguments/returns/overloads) that leaves the SQL body checksum
+            // unchanged is not selected. See the ignored marker test
+            // `test_function_signature_change_not_selected_content_gap`.
+            // HAZARD when fixing: compare arguments/returns/overloads *structurally* against what
+            // dbt-core manifests carry — do not just fold them into the checksum.
             let same_checksum_result =
                 self.__common_attr__.checksum == other_function.__common_attr__.checksum;
+            let same_overloads = overloads_have_same_content(
+                &self.__function_attr__.overloads,
+                &other_function.__function_attr__.overloads,
+            );
 
-            let result = same_checksum_result;
+            let result = same_checksum_result && same_overloads;
 
             if !result {
                 log_state_mod_diff(
                     &self.__common_attr__.unique_id,
                     "function",
-                    [(
-                        "same_checksum",
-                        same_checksum_result,
-                        Some((
-                            format!("{:?}", &self.__common_attr__.checksum),
-                            format!("{:?}", &other_function.__common_attr__.checksum),
-                        )),
-                    )],
+                    [
+                        (
+                            "same_checksum",
+                            same_checksum_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.checksum),
+                                format!("{:?}", &other_function.__common_attr__.checksum),
+                            )),
+                        ),
+                        (
+                            "same_overloads",
+                            same_overloads,
+                            Some((
+                                format!("{} overloads", self.__function_attr__.overloads.len()),
+                                format!(
+                                    "{} overloads",
+                                    other_function.__function_attr__.overloads.len()
+                                ),
+                            )),
+                        ),
+                    ],
                 );
             }
 
@@ -3967,7 +4097,7 @@ impl InternalDbtNode for DbtMacro {
         _out_dir: &Path,
     ) -> PathBuf {
         if self.has_absolute_path() {
-            self.absolute_path.clone()
+            self.absolute_path.to_path_buf()
         } else {
             in_dir.join(&self.original_file_path)
         }
@@ -4030,6 +4160,7 @@ pub struct Nodes {
     pub saved_queries: BTreeMap<String, Arc<DbtSavedQuery>>,
     pub groups: BTreeMap<String, Arc<DbtGroup>>,
     pub functions: BTreeMap<String, Arc<DbtFunction>>,
+    pub checks: BTreeMap<String, Arc<DbtCheck>>,
     pub macros: BTreeMap<String, Arc<DbtMacro>>,
     /// The root project name. Used to resolve the `package:this` selector.
     pub project_name: Option<String>,
@@ -4108,6 +4239,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let checks = self
+            .checks
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         let macros = self
             .macros
             .iter()
@@ -4127,12 +4263,18 @@ impl Nodes {
             saved_queries,
             groups,
             functions,
+            checks,
             macros,
             project_name: self.project_name.clone(),
         }
     }
 
-    /// Return only the keys of materializable nodes (this excludes exposures and semantic resources)
+    /// The default selection set: every node considered when no `--select` is given.
+    ///
+    /// NOTE: the name is a misnomer — this is not restricted to materializable nodes, and never has
+    /// been (exposures, semantic models, metrics and saved queries are all here and none of them
+    /// are materialized). Anything omitted here is invisible to a bare `dbt build`, which is why
+    /// checks belong in it.
     pub fn materializable_keys(&self) -> impl Iterator<Item = &String> {
         self.models
             .keys()
@@ -4144,6 +4286,7 @@ impl Nodes {
             .chain(self.analyses.keys())
             .chain(self.exposures.keys())
             .chain(self.functions.keys())
+            .chain(self.checks.keys())
             .chain(self.semantic_models.keys())
             .chain(self.metrics.keys())
             .chain(self.saved_queries.keys())
@@ -4190,6 +4333,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.functions
+                    .get(unique_id)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.checks
                     .get(unique_id)
                     .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
@@ -4255,6 +4403,11 @@ impl Nodes {
                     .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
             })
             .or_else(|| {
+                self.checks
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
                 self.semantic_models
                     .get(unique_id)
                     .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
@@ -4286,6 +4439,7 @@ impl Nodes {
             || self.semantic_models.contains_key(unique_id)
             || self.metrics.contains_key(unique_id)
             || self.functions.contains_key(unique_id)
+            || self.checks.contains_key(unique_id)
             || self.saved_queries.contains_key(unique_id)
     }
 
@@ -4330,6 +4484,11 @@ impl Nodes {
             )
             .chain(
                 self.functions
+                    .iter()
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
+            )
+            .chain(
+                self.checks
                     .iter()
                     .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
@@ -4389,6 +4548,10 @@ impl Nodes {
             .functions
             .iter()
             .map(|(id, node)| (id.clone(), upcast(node.clone())));
+        let checks = self
+            .checks
+            .iter()
+            .map(|(id, node)| (id.clone(), upcast(node.clone())));
         let semantic_models = self
             .semantic_models
             .iter()
@@ -4411,6 +4574,7 @@ impl Nodes {
             .chain(analyses)
             .chain(exposures)
             .chain(functions)
+            .chain(checks)
             .chain(semantic_models)
             .chain(metrics)
             .chain(saved_queries)
@@ -4455,6 +4619,10 @@ impl Nodes {
             .functions
             .values_mut()
             .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
+        let map_checks = self
+            .checks
+            .values_mut()
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
         let map_semantic_models = self
             .semantic_models
             .values_mut()
@@ -4477,6 +4645,7 @@ impl Nodes {
             .chain(map_analyses)
             .chain(map_exposures)
             .chain(map_functions)
+            .chain(map_checks)
             .chain(map_semantic_models)
             .chain(map_metrics)
             .chain(map_saved_queries)
@@ -4523,6 +4692,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.functions
+                    .get_mut(unique_id)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.checks
                     .get_mut(unique_id)
                     .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
@@ -4646,6 +4820,7 @@ impl Nodes {
         self.saved_queries.extend(other.saved_queries);
         self.groups.extend(other.groups);
         self.functions.extend(other.functions);
+        self.checks.extend(other.checks);
     }
 
     pub fn warn_on_custom_materializations(&self) -> FsResult<()> {
@@ -4715,41 +4890,20 @@ where
     }
 }
 
-/// Serialize Option<IndexMap<String, YmlValue>> as empty map when None, otherwise as the map value.
-/// This ensures the field is always present in serialized output, which is required for
-/// Jinja macros that access `node.config.meta.get(...)`.
-pub fn serialize_none_as_empty_map<S>(
-    value: &Option<IndexMap<String, YmlValue>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    use serde::ser::SerializeMap;
-    match value {
-        Some(map) => map.serialize(serializer),
-        None => {
-            let empty_map = serializer.serialize_map(Some(0))?;
-            empty_map.end()
-        }
-    }
-}
-
-/// Serialize Option<StringOrArrayOfStrings> as empty array when None, otherwise as an array.
-/// This ensures the field is always present as a list in serialized output, which is required for
-/// Jinja macros that call `obj.config.tags.extend(...)` or similar list operations.
+/// Serialize Option<StringOrArrayOfStrings> (or a newtype wrapping it, e.g. `Tags`/`Classifiers`)
+/// as empty array when None, otherwise as an array. This ensures the field is always present as a
+/// list in serialized output, which is required for Jinja macros that call
+/// `obj.config.tags.extend(...)` or similar list operations.
 /// See: https://github.com/dbt-labs/dbt-fusion/issues/1198
-pub fn serialize_none_as_empty_list<S>(
-    value: &Option<StringOrArrayOfStrings>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
+pub fn serialize_none_as_empty_list<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
+    T: super::serde::AsStringOrArrayOfStrings,
 {
     use super::serde::StringOrArrayOfStrings::{ArrayOfStrings, String as SingleString};
     use serde::ser::SerializeSeq;
 
-    match value {
+    match value.as_string_or_array_of_strings() {
         Some(ArrayOfStrings(vec)) => vec.serialize(serializer),
         Some(SingleString(s)) => {
             let mut seq = serializer.serialize_seq(Some(1))?;
@@ -4785,14 +4939,14 @@ pub struct CommonAttributes {
     pub fqn: Vec<String>,
 
     // Paths
-    pub path: PathBuf,
+    pub path: DbtPath,
 
     /// The original file path where this node was defined
     ///
     /// **NOTE**: For [DbtTest] nodes, this is currently the path to the
     /// generated SQL file, *NOT* the path to the YAML file where the test was
     /// defined!
-    pub original_file_path: PathBuf,
+    pub original_file_path: DbtPath,
 
     #[serde(
         default,
@@ -4800,8 +4954,8 @@ pub struct CommonAttributes {
         deserialize_with = "deserialize_empty_string_as_none"
     )]
     pub raw_code: Option<String>,
-    pub patch_path: Option<PathBuf>,
-    pub name_span: dbt_common::Span,
+    pub patch_path: Option<DbtPath>,
+    pub name_span: Span,
 
     // Checksum
     pub checksum: DbtChecksum,
@@ -4821,7 +4975,7 @@ pub struct CommonAttributes {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NodeBaseAttributes {
     // Identifiers
@@ -4836,6 +4990,30 @@ pub struct NodeBaseAttributes {
     // TODO: Potentially add ignore_case to ResolvedQuoting
     pub quoting_ignore_case: bool,
     pub materialized: DbtMaterialization,
+    /// The adapter this node runs on: its `+adapter` selection if it made one,
+    /// inherited from its subject if it is a test, and otherwise the target's
+    /// default. Resolved at parse like `quoting` and `materialized`, so nothing
+    /// downstream has to know the target default to answer "where does this run".
+    ///
+    /// Not part of `ManifestNodeBaseAttributes`, so it does not reach the manifest;
+    /// it is serialized only into the partial-parse cache, which a `dbt_version`
+    /// change invalidates.
+    pub adapter: AdapterType,
+    /// The compute platforms this node's output is pushed to after it
+    /// materializes, from `+propagate`. Empty unless the node asked for it.
+    ///
+    /// Distinct from [`Self::adapter`], which says where the node *runs*: a node
+    /// runs in exactly one place but can be published to several. Carried here
+    /// for the same reason `adapter` is -- the run layer has no profile and no
+    /// config, and reads placement off the node.
+    ///
+    /// Skipped when empty, unlike `adapter`. `adapter` always carries a value
+    /// worth recording; `propagate` is empty for almost every node in almost
+    /// every project, so serializing `[]` unconditionally would add a field to
+    /// every node in the partial-parse cache and in every dev-trace payload
+    /// that serializes a node, to say nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub propagate: Vec<AdapterType>,
     pub static_analysis: Spanned<StaticAnalysisKind>,
     #[serde(skip_deserializing, default)]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
@@ -4879,6 +5057,41 @@ pub struct NodeBaseAttributes {
     /// by `state:modified` to ignore target-derived rendering differences for database/schema/alias.
     #[serde(default)]
     pub unrendered_config: BTreeMap<String, YmlValue>,
+}
+
+/// Hand-written rather than derived because [`AdapterType`] has no `Default`, and
+/// deliberately so: this PR removed the implicit adapter defaults that let a caller
+/// resolve against the wrong warehouse by omission. Picking one here is a
+/// construction convenience for tests and nothing more -- every node built by the
+/// resolvers has its adapter set explicitly. Adding a field to the struct breaks
+/// this impl, which is the point: the new field needs a deliberate default too.
+impl Default for NodeBaseAttributes {
+    fn default() -> Self {
+        Self {
+            database: String::default(),
+            schema: String::default(),
+            alias: String::default(),
+            relation_name: None,
+            quoting: ResolvedQuoting::default(),
+            quoting_ignore_case: false,
+            materialized: DbtMaterialization::default(),
+            adapter: AdapterType::Snowflake,
+            propagate: Vec::new(),
+            static_analysis: Spanned::default(),
+            static_analysis_off_reason: None,
+            compute: None,
+            enabled: false,
+            extended_model: false,
+            persist_docs: None,
+            columns: Vec::new(),
+            refs: Vec::new(),
+            sources: Vec::new(),
+            functions: Vec::new(),
+            metrics: Vec::new(),
+            depends_on: NodeDependsOn::default(),
+            unrendered_config: BTreeMap::default(),
+        }
+    }
 }
 
 #[skip_serializing_none]
@@ -4956,6 +5169,42 @@ pub struct DbtExposureAttr {
     pub created_at: f64,
 }
 
+/// A project quality check: user-authored SQL over the dbt metadata index.
+///
+/// A check is a node but not a relation — it is never materialized and has no `ref()`s, so its
+/// `__base_attr__` carries no meaningful database/schema/alias and its `depends_on` stays empty.
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtCheck {
+    pub __common_attr__: CommonAttributes,
+
+    pub __base_attr__: NodeBaseAttributes,
+
+    pub __check_attr__: DbtCheckAttr,
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: CheckConfig,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtCheckAttr {
+    /// The check's Jinja-rendered SQL, carried from parse to execution.
+    ///
+    /// A check is fully rendered during parse — that is what phase inference reads — so it has no
+    /// render task to produce compiled SQL later. Keeping the rendered text on the node means the
+    /// query executed is byte-identical to the one the phase was inferred from.
+    ///
+    /// Serialized: the incremental parse cache (`target/private/metadata/parse`) reconstructs check nodes
+    /// from this representation and then *executes* them, so dropping the rendered text here makes
+    /// every warm run report "no rendered SQL". (It does duplicate `raw_code` for checks that
+    /// contain no Jinja, which is the accepted cost of the round-trip.)
+    pub compiled_sql: Option<String>,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -5014,6 +5263,8 @@ impl DbtUnitTest {
 #[derive(Default)]
 pub struct DbtUnitTestAttr {
     pub model: String,
+    /// The adapter of the model under test, so the unit test runs where its
+    /// subject runs. Inherited only -- a unit test has no `+adapter` of its own.
     pub given: Vec<Given>,
     pub expect: Expect,
     pub versions: Option<IncludeExclude>,
@@ -5032,7 +5283,7 @@ pub struct DbtTest {
     pub defined_at: Option<dbt_common::CodeLocationWithFile>,
 
     // not to be confused with __common_attr__.original_file_path, which is the path to the generated sql file
-    pub manifest_original_file_path: PathBuf,
+    pub manifest_original_file_path: DbtPath,
 
     // To be deprecated
     #[serde(rename = "config")]
@@ -5040,6 +5291,28 @@ pub struct DbtTest {
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
+
+/// Keys in a data test that count as a change for `--select state:modified`.
+/// Based on dbt-core's `TestConfig.same_contents`, which fully overrides `BaseConfig.same_contents`
+/// used for other node types.
+/// This list is used directly in the Stage-1 check of unrendered configs in `check_configs_modified`
+/// and is coordinated with the Stage-2 check of rendered configs in `DbtTest::has_same_config`.
+pub(crate) const DBTTEST_CONFIG_MODIFIERS: &[&str] = &[
+    "severity",
+    "where",
+    "limit",
+    "fail_calc",
+    "warn_if",
+    "error_if",
+    "store_failures",
+    "store_failures_as",
+    "sql_header",
+    // The data-test `state` config is deliberately NOT a modifier: dbt-core's
+    // `TestConfig.same_contents` is a fixed allowlist that does not compare it, so treating it as a
+    // modifier would over-select against a dbt-core-produced state manifest. If dbt-core ever starts
+    // comparing it, add it here and in `DbtTest::has_same_config` together (see the ignored
+    // `data_test_state_not_promoted_to_modifier_conformance_marker`).
+];
 
 impl DbtTest {
     pub fn relation_name(&self) -> String {
@@ -5054,10 +5327,14 @@ impl DbtTest {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtTestAttr {
+    /// The column this test is attached to, from its position in the schema file. `None`
+    /// for a model-level test; a `column_name` macro kwarg lives in `test_metadata.kwargs`.
     pub column_name: Option<String>,
     pub attached_node: Option<String>,
     pub test_metadata: Option<TestMetadata>,
     pub file_key_name: Option<String>,
+    /// dbt State configs (restricted subset), read by the run-cache at run time.
+    pub state: Option<crate::schemas::properties::DataTestState>,
     #[serde(skip_serializing, default = "default_introspection")]
     pub introspection: IntrospectionKind,
     /// The original (untruncated) test name, if truncation occurred.
@@ -5107,6 +5384,8 @@ pub struct DbtSnapshotAttr {
     #[serde(skip_serializing, default = "default_introspection")]
     pub introspection: IntrospectionKind,
     pub sync: Option<SyncConfig>,
+    /// dbt State configs, read by the run-cache at run time.
+    pub state: Option<crate::schemas::properties::ModelState>,
 }
 
 #[skip_serializing_none]
@@ -5168,24 +5447,81 @@ pub struct DbtSourceAttr {
 }
 
 impl DbtSource {
+    /// `None ≈ Some("")` normalized string equality, used for the freshness string attributes
+    /// (`loaded_at_field`, `loaded_at_query`): old manifests may serialize an unset value as
+    /// either `null` or `""`.
+    fn loaded_at_str_eq(a: &Option<String>, b: &Option<String>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (None, Some(v)) | (Some(v), None) => v.is_empty(),
+            (Some(a), Some(b)) => a == b,
+        }
+    }
+
+    /// Rendered equality of the `freshness` attribute alone, treating `None` as equivalent to a
+    /// `FreshnessDefinition` whose rules are all empty (old manifests serialized either form).
+    fn same_freshness_value(&self, other: &DbtSource) -> bool {
+        use crate::schemas::common::FreshnessDefinition;
+
+        // A FreshnessDefinition is "empty" when it carries no rules (all fields None).
+        let is_empty_freshness = |f: &FreshnessDefinition| -> bool {
+            match (&f.error_after, &f.warn_after, &f.filter) {
+                (Some(error), Some(warn), None) => {
+                    error.count.is_none()
+                        && error.period.is_none()
+                        && warn.count.is_none()
+                        && warn.period.is_none()
+                }
+                (None, None, None) => true,
+                _ => false,
+            }
+        };
+
+        match (
+            &self.__source_attr__.freshness,
+            &other.__source_attr__.freshness,
+        ) {
+            (None, None) => true,
+            (None, Some(b_val)) => is_empty_freshness(b_val),
+            (Some(a_val), None) => is_empty_freshness(a_val),
+            (Some(a_val), Some(b_val)) => {
+                let error_after_eq = match (&a_val.error_after, &b_val.error_after) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => v.is_empty(),
+                    (Some(a), Some(b)) => a == b,
+                };
+                let warn_after_eq = match (&a_val.warn_after, &b_val.warn_after) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => v.is_empty(),
+                    (Some(a), Some(b)) => a == b,
+                };
+                let filter_eq = match (&a_val.filter, &b_val.filter) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => v.is_empty(),
+                    (Some(a), Some(b)) => a == b,
+                };
+
+                error_after_eq && warn_after_eq && filter_eq
+            }
+        }
+    }
+
+    /// Rendered `freshness` + `loaded_at_field` equality — mirrors dbt-core's
+    /// `SourceDefinition.same_freshness` (dbt-mantle `core/dbt/contracts/graph/nodes.py:1444`:
+    /// `self.freshness == other.freshness and self.loaded_at_field == other.loaded_at_field`).
+    ///
+    /// Consumed by `DbtSource::has_same_content`, the full-`state:modified` conjunct that restores
+    /// the rendered freshness comparison dropped for source freshness by #11463 (see its doc).
+    fn same_rendered_freshness(&self, other: &DbtSource) -> bool {
+        self.same_freshness_value(other)
+            && Self::loaded_at_str_eq(
+                &self.__source_attr__.loaded_at_field,
+                &other.__source_attr__.loaded_at_field,
+            )
+    }
+
     pub fn get_base_attr(&self) -> NodeBaseAttributes {
         self.__base_attr__.clone()
-    }
-
-    pub fn get_loaded_at_field(&self) -> &str {
-        self.__source_attr__
-            .loaded_at_field
-            .as_ref()
-            .map(AsRef::as_ref)
-            .unwrap_or("")
-    }
-
-    pub fn get_loaded_at_query(&self) -> &str {
-        self.__source_attr__
-            .loaded_at_query
-            .as_ref()
-            .map(AsRef::as_ref)
-            .unwrap_or("")
     }
 }
 
@@ -5209,6 +5545,79 @@ pub struct DbtModel {
 }
 
 impl DbtModel {
+    /// Transcribes dbt-core's `ModelNode.same_ref_representation` (dbt-mantle
+    /// `core/dbt/contracts/graph/nodes.py:684-691`), which is ANDed into `ModelNode.same_contents`
+    /// at `:677-682`:
+    ///
+    /// ```python
+    /// def same_ref_representation(self, old: "ModelNode") -> bool:
+    ///     return (
+    ///         self.latest_version == old.latest_version   # changing it may break downstream unpinned refs
+    ///         and self.access == old.access               # changes may lead to ref-related parsing errors
+    ///         and self.deprecation_date == old.deprecation_date
+    ///     )
+    /// ```
+    ///
+    /// All three are node attributes (`__model_attr__`), compared rendered and ungated by
+    /// `state_modified_compare_more_unrendered_values` — a change to any of them changes what a
+    /// downstream `ref()` resolves to, independently of any config comparison.
+    ///
+    /// **This is not a double-count with `check_configs_modified`**, even though `access` is also
+    /// compared there (Stage 1 via `unrendered_config`, Stage 2 via `deprecated_config.access`), and
+    /// it must not be "fixed": here we compare `__model_attr__.access` — the **node attribute** —
+    /// while `check_configs_modified` compares `ModelConfig.access` — the **config key**. dbt-core
+    /// compares both too: `access` is a `ModelConfig` field with no `CompareBehavior.Exclude`, so
+    /// `BaseConfig.same_contents` sees it *and* `same_ref_representation` sees the node attribute.
+    /// The redundancy is transcribed deliberately.
+    pub fn same_ref_representation(&self, old: &DbtModel) -> bool {
+        let current = &self.__model_attr__;
+        let previous = &old.__model_attr__;
+
+        let same_latest_version =
+            latest_version_eq(&current.latest_version, &previous.latest_version);
+        // Non-`Option` on both sides: `manifest_model_to_dbt_model` already resolved
+        // config key / node attribute / `Protected` default, so no `access_eq`-style tolerance
+        // belongs here. `test_versioned_ref_representation_sparse_state_state_modified` and
+        // `manifest_model_access_falls_back_to_node_attribute` guard that.
+        let same_access = current.access == previous.access;
+        let same_deprecation_date =
+            deprecation_date_eq(&current.deprecation_date, &previous.deprecation_date);
+
+        let result = same_latest_version && same_access && same_deprecation_date;
+
+        if !result {
+            log_state_mod_diff(
+                &self.__common_attr__.unique_id,
+                "model_ref_representation",
+                [
+                    (
+                        "latest_version",
+                        same_latest_version,
+                        Some((
+                            format!("{:?}", &current.latest_version),
+                            format!("{:?}", &previous.latest_version),
+                        )),
+                    ),
+                    (
+                        "access",
+                        same_access,
+                        Some((current.access.to_string(), previous.access.to_string())),
+                    ),
+                    (
+                        "deprecation_date",
+                        same_deprecation_date,
+                        Some((
+                            format!("{:?}", &current.deprecation_date),
+                            format!("{:?}", &previous.deprecation_date),
+                        )),
+                    ),
+                ],
+            );
+        }
+
+        result
+    }
+
     pub fn same_contract(&self, old: &DbtModel) -> bool {
         match (&self.__model_attr__.contract, &old.__model_attr__.contract) {
             (Some(current_contract), Some(old_contract)) => {
@@ -5518,16 +5927,12 @@ impl DbtModel {
             return true;
         }
         // Removed node is past its deprecation_date, so deletion does not constitute a contract change
-        if let Some(deprecation_date_str) = &old.__model_attr__.deprecation_date {
-            // Parse the deprecation date string using common formats
-            if let Ok(deprecation_date) =
-                chrono::NaiveDate::parse_from_str(deprecation_date_str, "%Y-%m-%d")
-            {
-                let deprecation_datetime = deprecation_date.and_hms_opt(0, 0, 0).unwrap();
-                if deprecation_datetime < Utc::now().naive_utc() {
-                    return true;
-                }
-            }
+        if let Some(deprecation_date_str) = &old.__model_attr__.deprecation_date
+            && let Some(deprecation_date) =
+                crate::schemas::common::parse_deprecation_date(deprecation_date_str)
+            && deprecation_date < Utc::now()
+        {
+            return true;
         }
 
         // Disabled, deleted, or renamed node with previously enforced contract.
@@ -5558,7 +5963,7 @@ impl DbtModel {
 
         let breaking_change_message =
             format!("Breaking Change to Contract for model '{node_name}': {error_message}");
-        emit_error_log_message(ErrorCode::InvalidConfig, breaking_change_message, None);
+        emit_error_log_message(ErrorCode::InvalidConfig, breaking_change_message);
     }
 
     fn log_unversioned_breaking_change_warning(
@@ -5573,7 +5978,7 @@ impl DbtModel {
             \n  - {breaking_change}\n"
         );
 
-        emit_warn_log_message(ErrorCode::UnversionedBreakingChange, warning_message, None);
+        emit_warn_log_message(ErrorCode::UnversionedBreakingChange, warning_message);
     }
 }
 
@@ -5669,7 +6074,7 @@ impl AdapterAttr {
                     file_format: config.file_format.clone(),
                     partition_by: config.partition_by.clone(),
                     cluster_by: config.cluster_by.clone(),
-                    hours_to_expiration: config.hours_to_expiration,
+                    hours_to_expiration: config.hours_to_expiration.clone().into_inner().flatten(),
                     job_execution_timeout_seconds: config.job_execution_timeout_seconds,
                     reservation: config.reservation.clone(),
                     labels: config.labels.clone(),
@@ -5708,10 +6113,13 @@ impl AdapterAttr {
                     include_full_name_in_path: config.include_full_name_in_path,
                     liquid_clustered_by: config.liquid_clustered_by.clone(),
                     auto_liquid_cluster: config.auto_liquid_cluster,
+                    zorder: config.zorder.clone(),
+                    skip_optimize: config.skip_optimize,
                     clustered_by: config.clustered_by.clone(),
                     buckets: config.buckets,
                     catalog: config.catalog.clone(),
                     databricks_tags: config.databricks_tags.clone(),
+                    query_tags: config.query_tags.clone(),
                     compression: config.compression.clone(),
                     databricks_compute: config.databricks_compute.clone(),
                     target_alias: config.target_alias.clone(),
@@ -5723,6 +6131,8 @@ impl AdapterAttr {
                     merge_with_schema_evolution: config.merge_with_schema_evolution,
                     skip_matched_step: config.skip_matched_step,
                     skip_not_matched_step: config.skip_not_matched_step,
+                    unique_tmp_table_suffix: config.unique_tmp_table_suffix,
+                    row_filter: config.row_filter.clone(),
                     schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                 })))
             }
@@ -5772,7 +6182,11 @@ impl AdapterAttr {
                         file_format: config.file_format.clone(),
                         partition_by: config.partition_by.clone(),
                         cluster_by: config.cluster_by.clone(),
-                        hours_to_expiration: config.hours_to_expiration,
+                        hours_to_expiration: config
+                            .hours_to_expiration
+                            .clone()
+                            .into_inner()
+                            .flatten(),
                         job_execution_timeout_seconds: config.job_execution_timeout_seconds,
                         reservation: config.reservation.clone(),
                         labels: config.labels.clone(),
@@ -5807,10 +6221,13 @@ impl AdapterAttr {
                         include_full_name_in_path: config.include_full_name_in_path,
                         liquid_clustered_by: config.liquid_clustered_by.clone(),
                         auto_liquid_cluster: config.auto_liquid_cluster,
+                        zorder: config.zorder.clone(),
+                        skip_optimize: config.skip_optimize,
                         clustered_by: config.clustered_by.clone(),
                         buckets: config.buckets,
                         catalog: config.catalog.clone(),
                         databricks_tags: config.databricks_tags.clone(),
+                        query_tags: config.query_tags.clone(),
                         compression: config.compression.clone(),
                         databricks_compute: config.databricks_compute.clone(),
                         target_alias: config.target_alias.clone(),
@@ -5824,6 +6241,8 @@ impl AdapterAttr {
                         merge_with_schema_evolution: config.merge_with_schema_evolution,
                         skip_matched_step: config.skip_matched_step,
                         skip_not_matched_step: config.skip_not_matched_step,
+                        unique_tmp_table_suffix: config.unique_tmp_table_suffix,
+                        row_filter: config.row_filter.clone(),
                         schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                     })))
             }
@@ -5875,14 +6294,17 @@ pub struct DatabricksAttr {
     pub file_format: Option<String>,
     pub location_root: Option<String>,
     pub use_uniform: Option<bool>,
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     pub include_full_name_in_path: Option<bool>,
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     pub auto_liquid_cluster: Option<bool>,
+    pub zorder: Option<StringOrArrayOfStrings>,
+    pub skip_optimize: Option<bool>,
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
+    pub query_tags: Option<String>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,
@@ -5894,6 +6316,8 @@ pub struct DatabricksAttr {
     pub merge_with_schema_evolution: Option<bool>,
     pub skip_matched_step: Option<bool>,
     pub skip_not_matched_step: Option<bool>,
+    pub row_filter: Option<RowFilterConfig>,
+    pub unique_tmp_table_suffix: Option<bool>,
     pub schedule: Option<ScheduleConfig>,
 }
 
@@ -5910,7 +6334,7 @@ pub struct BigQueryAttr {
     pub storage_uri: Option<String>,
     pub partition_by: Option<PartitionConfig>,
     pub cluster_by: Option<ClusterConfig>,
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Option<StringOrInteger>,
     pub job_execution_timeout_seconds: Option<u64>,
     pub reservation: Option<String>,
     pub labels: Option<IndexMap<String, String>>,
@@ -5935,7 +6359,7 @@ pub struct RedshiftAttr {
     pub auto_refresh: Option<bool>,
     pub backup: Option<bool>,
     pub bind: Option<bool>,
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     pub sort: Option<StringOrArrayOfStrings>,
     pub sort_type: Option<String>,
 }
@@ -5962,6 +6386,11 @@ pub struct DbtModelAttr {
     pub catalog_name: Option<String>,
     pub table_format: Option<String>,
     pub sync: Option<SyncConfig>,
+    /// Compiled SQL, populated only by callers that need to diff it (see
+    /// [`InternalDbtNodeAttributes::compiled_code`]). Transient: never round-trips through the
+    /// manifest.
+    #[serde(skip)]
+    pub compiled_code: Option<String>,
 }
 
 #[skip_serializing_none]
@@ -5982,6 +6411,18 @@ pub struct DbtFunction {
 }
 
 #[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub struct AbsorbedOverload {
+    pub defined_in: String,
+    pub arguments: Option<Vec<FunctionArgument>>,
+    pub returns: Option<FunctionReturnType>,
+    pub description: Option<String>,
+    pub raw_body: Option<String>,
+    pub compiled_body: Option<String>,
+}
+
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtFunctionAttr {
@@ -5991,6 +6432,8 @@ pub struct DbtFunctionAttr {
     pub on_configuration_change: Option<String>,
     pub returns: Option<FunctionReturnType>,
     pub arguments: Option<Vec<FunctionArgument>>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overloads: Vec<AbsorbedOverload>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -6018,15 +6461,18 @@ mod tests {
     use serde::Deserialize;
 
     use super::{
-        DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtSeed, DbtSnapshot, DbtSource,
-        InternalDbtNode, InternalDbtNodeAttributes, ModelConfig, NodePathKind, hooks_equal,
-        normalize_description, persist_docs_configs_equal, quoting_equal,
+        AbsorbedOverload, DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtModel, DbtSeed,
+        DbtSnapshot, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig,
+        ModelFreshness, NodePathKind, hooks_equal, normalize_description,
+        persist_docs_configs_equal, quoting_equal, test_alias_config_equal,
     };
-    use crate::schemas::common::{Hooks, PersistDocsConfig};
+    use crate::schemas::common::{
+        FreshnessPeriod, FreshnessRules, Hooks, ModelFreshnessRules, PersistDocsConfig,
+    };
     use crate::schemas::manifest::{DbtMetric, DbtOperation, DbtSavedQuery};
     use crate::schemas::project::SnapshotMetaColumnNames;
     use dbt_adapter_core::AdapterType;
-    use dbt_common::path::path_separator_eq;
+    use dbt_common::path::{DbtPath, path_separator_eq};
     use dbt_telemetry::ExecutionPhase;
     use dbt_yaml::Verbatim;
 
@@ -6036,8 +6482,8 @@ mod tests {
         let mut snapshot = DbtSnapshot::default();
         snapshot.__common_attr__.name = name.to_string();
         snapshot.__common_attr__.package_name = "pkg".to_string();
-        snapshot.__common_attr__.path = PathBuf::from(path);
-        snapshot.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        snapshot.__common_attr__.path = DbtPath::from(path);
+        snapshot.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         snapshot.__base_attr__.alias = name.to_string();
         snapshot
     }
@@ -6068,7 +6514,7 @@ mod tests {
             snapshot
                 .get_node_path(NodePathKind::Executable, in_dir, out_dir)
                 .as_ref(),
-            Path::new("target/run/pkg/snapshots/snapshots.yml/snapshots/daily_orders.sql")
+            Path::new("target/run/pkg/snapshots/snapshots.yml/daily_orders.sql")
         );
     }
 
@@ -6076,10 +6522,44 @@ mod tests {
         let mut analysis = DbtAnalysis::default();
         analysis.__common_attr__.name = name.to_string();
         analysis.__common_attr__.package_name = "pkg".to_string();
-        analysis.__common_attr__.path = PathBuf::from(original_file_path);
-        analysis.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        analysis.__common_attr__.path = DbtPath::from(original_file_path);
+        analysis.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         analysis.__base_attr__.alias = name.to_string();
         analysis
+    }
+
+    #[test]
+    fn generic_test_executable_path_uses_bounded_path_filename() {
+        let mut test = DbtTest::default();
+        test.__common_attr__.name = "full_generic_test_name".to_string();
+        test.__common_attr__.package_name = "pkg".to_string();
+        test.__common_attr__.path = DbtPath::from(
+            "generic_tests/not_null_model_column_4f8cc80baaff29183132758d312c335a.sql",
+        );
+        test.__common_attr__.original_file_path = DbtPath::from("models/schema.yml");
+        test.__base_attr__.alias = "full_generic_test_name_expanded_by_project_macro".to_string();
+        test.defined_at = Some(dbt_common::CodeLocationWithFile::new(
+            1,
+            1,
+            0,
+            "models/schema.yml",
+        ));
+
+        let actual = test.get_node_path_abs(
+            NodePathKind::Executable,
+            Path::new("/workspace"),
+            Path::new("/workspace/target"),
+        );
+
+        let expected = Path::new("/workspace")
+            .join("target")
+            .join("run")
+            .join("pkg")
+            .join("models")
+            .join("schema.yml")
+            .join("generic_tests")
+            .join("not_null_model_column_4f8cc80baaff29183132758d312c335a.sql");
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -6118,8 +6598,8 @@ mod tests {
         let mut function = DbtFunction::default();
         function.__common_attr__.name = name.to_string();
         function.__common_attr__.package_name = "pkg".to_string();
-        function.__common_attr__.path = PathBuf::from(original_file_path);
-        function.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        function.__common_attr__.path = DbtPath::from(original_file_path);
+        function.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         function.__base_attr__.alias = name.to_string();
         function
     }
@@ -6157,12 +6637,46 @@ mod tests {
         );
     }
 
+    #[test]
+    fn function_overload_state_modified_ignores_compiled_body() {
+        // Build two copies of the same function whose single overload differs only
+        // in `compiled_body` (the rendered artifact) — same source, same signature.
+        let make_function = |compiled_body: &str, raw_body: &str| {
+            let mut function = function_with_paths("null_if_empty", "functions/null_if_empty.sql");
+            function.__function_attr__.overloads = vec![AbsorbedOverload {
+                defined_in: "null_if_empty_int".to_string(),
+                arguments: None,
+                returns: None,
+                description: None,
+                raw_body: Some(raw_body.to_string()),
+                compiled_body: Some(compiled_body.to_string()),
+            }];
+            function
+        };
+
+        // compiled_body differs, everything else identical → NOT state:modified.
+        let a = make_function("SELECT 1 -- rendered A", "SELECT {{ x }}");
+        let b = make_function("SELECT 1 -- rendered B", "SELECT {{ x }}");
+        assert!(
+            a.has_same_content(&b, AdapterType::Snowflake),
+            "a compiled_body-only difference must not flag the function as state:modified"
+        );
+
+        // Overload source (raw_body) differs → state:modified.
+        let c = make_function("SELECT 1", "SELECT {{ x }}");
+        let d = make_function("SELECT 1", "SELECT {{ y }}");
+        assert!(
+            !c.has_same_content(&d, AdapterType::Snowflake),
+            "an overload raw_body change must flag the function as state:modified"
+        );
+    }
+
     fn seed_with_paths(name: &str, original_file_path: &str) -> DbtSeed {
         let mut seed = DbtSeed::default();
         seed.__common_attr__.name = name.to_string();
         seed.__common_attr__.package_name = "pkg".to_string();
-        seed.__common_attr__.path = PathBuf::from(original_file_path);
-        seed.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        seed.__common_attr__.path = DbtPath::from(original_file_path);
+        seed.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         seed.__base_attr__.alias = name.to_string();
         seed
     }
@@ -6201,8 +6715,8 @@ mod tests {
         let mut source = DbtSource::default();
         source.__common_attr__.name = name.to_string();
         source.__common_attr__.package_name = "pkg".to_string();
-        source.__common_attr__.path = PathBuf::from(original_file_path);
-        source.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        source.__common_attr__.path = DbtPath::from(original_file_path);
+        source.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         source.__base_attr__.alias = name.to_string();
         source
     }
@@ -6240,8 +6754,8 @@ mod tests {
         let mut exposure = DbtExposure::default();
         exposure.__common_attr__.name = name.to_string();
         exposure.__common_attr__.package_name = "pkg".to_string();
-        exposure.__common_attr__.path = PathBuf::from(original_file_path);
-        exposure.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        exposure.__common_attr__.path = DbtPath::from(original_file_path);
+        exposure.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         exposure.__base_attr__.alias = name.to_string();
         exposure
     }
@@ -6276,8 +6790,8 @@ mod tests {
         let mut metric = DbtMetric::default();
         metric.__common_attr__.name = name.to_string();
         metric.__common_attr__.package_name = "pkg".to_string();
-        metric.__common_attr__.path = PathBuf::from(original_file_path);
-        metric.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        metric.__common_attr__.path = DbtPath::from(original_file_path);
+        metric.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         metric.__base_attr__.alias = name.to_string();
         metric
     }
@@ -6312,8 +6826,8 @@ mod tests {
         let mut saved_query = DbtSavedQuery::default();
         saved_query.__common_attr__.name = name.to_string();
         saved_query.__common_attr__.package_name = "pkg".to_string();
-        saved_query.__common_attr__.path = PathBuf::from(original_file_path);
-        saved_query.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        saved_query.__common_attr__.path = DbtPath::from(original_file_path);
+        saved_query.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         saved_query.__base_attr__.alias = name.to_string();
         saved_query
     }
@@ -6348,8 +6862,8 @@ mod tests {
         let mut operation = DbtOperation::default();
         operation.__common_attr__.name = name.to_string();
         operation.__common_attr__.package_name = "pkg".to_string();
-        operation.__common_attr__.path = PathBuf::from("hooks").join(format!("{name}.sql"));
-        operation.__common_attr__.original_file_path = PathBuf::from(original_file_path);
+        operation.__common_attr__.path = DbtPath::from("hooks").join(format!("{name}.sql"));
+        operation.__common_attr__.original_file_path = DbtPath::from(original_file_path);
         operation
     }
 
@@ -6387,8 +6901,8 @@ mod tests {
         DbtMacro {
             name: name.to_string(),
             package_name: "pkg".to_string(),
-            path: PathBuf::from(original_file_path),
-            original_file_path: PathBuf::from(original_file_path),
+            path: DbtPath::from(original_file_path),
+            original_file_path: DbtPath::from(original_file_path),
             ..Default::default()
         }
     }
@@ -6438,7 +6952,59 @@ mod tests {
             snapshot
                 .get_node_path(NodePathKind::Executable, in_dir, out_dir)
                 .as_ref(),
-            Path::new("target/run/pkg/snapshots/snap_collide.sql/snapshots/snap_non_matching.sql")
+            Path::new("target/run/pkg/snapshots/snap_collide.sql/snap_non_matching.sql")
+        );
+    }
+
+    /// Two `{% snapshot %}` blocks in one file: the one whose name matches the filename would
+    /// take the one-to-one branch of `get_target_write_path` and land on a flat file, while its
+    /// sibling needs that same path to be a directory. Both compiled and run paths must nest.
+    ///
+    /// The same nesting is what dbt-core v1 writes, so a `target/` directory left behind by v1
+    /// is reusable by Fusion instead of blowing up with EISDIR (dbt-core#15692).
+    #[test]
+    fn colliding_snapshots_in_one_file_both_nest_under_the_source_file() {
+        let in_dir = Path::new("/workspace");
+        let out_dir = Path::new("/workspace/target");
+
+        // Name matches the source filename — the case that used to produce a flat file.
+        let matching = snapshot_with_paths("snaps", "snapshots/snaps.sql", "snapshots/snaps.sql");
+        // Sibling block in the same file — always took the nested branch.
+        let sibling = snapshot_with_paths("other", "snapshots/other.sql", "snapshots/snaps.sql");
+
+        for (snapshot, name) in [(&matching, "snaps"), (&sibling, "other")] {
+            assert_eq!(
+                snapshot.get_node_path_abs(NodePathKind::Compiled, in_dir, out_dir),
+                PathBuf::from(format!(
+                    "/workspace/target/compiled/pkg/snapshots/snaps.sql/{name}.sql"
+                )),
+            );
+            assert_eq!(
+                snapshot
+                    .get_node_path(NodePathKind::Executable, in_dir, out_dir)
+                    .as_ref(),
+                Path::new(&format!("target/run/pkg/snapshots/snaps.sql/{name}.sql")),
+            );
+        }
+    }
+
+    /// An `alias` config must not move the run artifact: dbt-core derives snapshot write paths
+    /// from `name`, never the alias, and `target/run` has to mirror `target/compiled`.
+    #[test]
+    fn snapshot_run_path_ignores_alias() {
+        let mut snapshot =
+            snapshot_with_paths("my_snap", "snapshots/my_snap.sql", "snapshots/my_snap.sql");
+        snapshot.__base_attr__.alias = "aliased_elsewhere".to_string();
+
+        assert_eq!(
+            snapshot
+                .get_node_path(
+                    NodePathKind::Executable,
+                    Path::new("/workspace"),
+                    Path::new("/workspace/target")
+                )
+                .as_ref(),
+            Path::new("target/run/pkg/snapshots/my_snap.sql/my_snap.sql")
         );
     }
 
@@ -6458,7 +7024,7 @@ mod tests {
             out_dir,
             "snapshots/snapshots.yml",
             "target/compiled/pkg/snapshots/snapshots.yml/daily_orders.sql",
-            "target/run/pkg/snapshots/snapshots.yml/snapshots/daily_orders.sql",
+            "target/run/pkg/snapshots/snapshots.yml/daily_orders.sql",
         );
 
         let legacy_sql_snapshot = snapshot_with_paths(
@@ -6472,7 +7038,7 @@ mod tests {
             out_dir,
             "snapshots/snap_collide.sql",
             "target/compiled/pkg/snapshots/snap_collide.sql/snap_non_matching.sql",
-            "target/run/pkg/snapshots/snap_collide.sql/snapshots/snap_non_matching.sql",
+            "target/run/pkg/snapshots/snap_collide.sql/snap_non_matching.sql",
         );
     }
 
@@ -6751,6 +7317,81 @@ mod tests {
         ));
     }
 
+    /// The freshness path moved from passing `&source.deprecated_config` to
+    /// `&node.serialized_config()`, which runs the config through `to_value` one
+    /// extra time. A source's `config` dict is Jinja-visible while rendering
+    /// `loaded_at_query` and `collect_freshness`, and `SourceConfig` carries a
+    /// `Verbatim`, an `Omissible`, and a custom `serialize_with`, so the extra hop
+    /// has to be a no-op.
+    #[test]
+    fn source_serialized_config_matches_direct_config_serialization() {
+        use dbt_common::serde_utils::Omissible;
+
+        use crate::schemas::common::{FreshnessDefinition, FreshnessPeriod, FreshnessRules};
+        use dbt_yaml::Verbatim;
+
+        let cases = [
+            // `freshness` omitted entirely, `meta` unset (hits serialize_none_as_empty_map).
+            Omissible::Omitted,
+            // Explicit `freshness: null`, i.e. opted out.
+            Omissible::Present(None),
+            Omissible::Present(Some(FreshnessDefinition {
+                warn_after: Some(FreshnessRules {
+                    count: Some(12),
+                    period: Some(FreshnessPeriod::hour),
+                }),
+                filter: Some("id > 0".to_string()),
+                ..Default::default()
+            })),
+        ];
+
+        for freshness in cases {
+            let mut source = DbtSource::default();
+            source.deprecated_config.enabled = Some(true);
+            source.deprecated_config.meta = None;
+            source.deprecated_config.freshness = freshness;
+            source.deprecated_config.loaded_at_field = Some("updated_at".to_string());
+            source.deprecated_config.loaded_at_query =
+                Verbatim::from(Some("select max(updated_at) from {{ this }}".to_string()));
+
+            let direct = dbt_yaml::to_value(&source.deprecated_config).unwrap();
+            let via_trait = dbt_yaml::to_value(source.serialized_config()).unwrap();
+            assert_eq!(
+                direct, via_trait,
+                "serialized_config() is not a no-op; the Jinja-visible source config changed shape"
+            );
+        }
+    }
+
+    #[test]
+    fn test_alias_config_equal_treats_generated_alias_as_unchanged() {
+        let generated =
+            Some("dbt_utils_unique_combination_o_f03ffd6673790704c4a0250ea2d96410".to_string());
+
+        assert!(test_alias_config_equal(
+            None,
+            generated.as_deref(),
+            "dbt_utils_unique_combination_o_f03ffd6673790704c4a0250ea2d96410",
+            "dbt_utils_unique_combination_o_f03ffd6673790704c4a0250ea2d96410",
+        ));
+        assert!(test_alias_config_equal(
+            generated.as_deref(),
+            None,
+            "dbt_utils_unique_combination_o_f03ffd6673790704c4a0250ea2d96410",
+            "dbt_utils_unique_combination_o_f03ffd6673790704c4a0250ea2d96410",
+        ));
+    }
+
+    #[test]
+    fn test_alias_config_equal_detects_changed_resolved_alias() {
+        assert!(!test_alias_config_equal(
+            None,
+            Some("old_alias"),
+            "new_alias",
+            "old_alias",
+        ));
+    }
+
     #[test]
     fn test_deserialize_wo_meta() {
         let config: YmlValue = dbt_yaml::from_str(
@@ -6764,6 +7405,66 @@ mod tests {
         if let Err(err) = config {
             panic!("Could not deserialize and failed with the following error: {err}");
         }
+    }
+
+    fn model_with_freshness(freshness: Option<ModelFreshness>) -> DbtModel {
+        let mut model = DbtModel::default();
+        model.__model_attr__.freshness = freshness;
+        model
+    }
+
+    #[test]
+    fn has_freshness_false_when_unset_or_build_after_only() {
+        assert!(!model_with_freshness(None).has_freshness());
+
+        let build_after_only = ModelFreshness {
+            build_after: Some(ModelFreshnessRules {
+                count: Some(1),
+                period: Some(FreshnessPeriod::day),
+                updates_on: None,
+            }),
+            ..Default::default()
+        };
+        assert!(!model_with_freshness(Some(build_after_only)).has_freshness());
+    }
+
+    #[test]
+    fn has_freshness_false_when_rule_object_is_empty() {
+        let empty_warn = ModelFreshness {
+            warn_after: Some(FreshnessRules::default()),
+            ..Default::default()
+        };
+        assert!(!model_with_freshness(Some(empty_warn)).has_freshness());
+
+        let empty_error = ModelFreshness {
+            error_after: Some(FreshnessRules::default()),
+            ..Default::default()
+        };
+        assert!(!model_with_freshness(Some(empty_error)).has_freshness());
+    }
+
+    #[test]
+    fn has_freshness_true_when_warn_after_set() {
+        let freshness = ModelFreshness {
+            warn_after: Some(FreshnessRules {
+                count: Some(24),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        };
+        assert!(model_with_freshness(Some(freshness)).has_freshness());
+    }
+
+    #[test]
+    fn has_freshness_true_when_error_after_set() {
+        let freshness = ModelFreshness {
+            error_after: Some(FreshnessRules {
+                count: Some(48),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            ..Default::default()
+        };
+        assert!(model_with_freshness(Some(freshness)).has_freshness());
     }
 
     mod optional_string_vecs_equal_tests {
@@ -7152,6 +7853,11 @@ impl InternalDbtNode for DbtAnalysis {
         NodeType::Analysis
     }
 
+    /// Analysis-phase errors on an analysis cite its compiled SQL under `target/compiled/`.
+    fn error_path_kind(&self, phase: ExecutionPhase) -> NodePathKind {
+        phase.into()
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -7169,41 +7875,25 @@ impl InternalDbtNode for DbtAnalysis {
             let other_config = &other_analysis.deprecated_config;
 
             let enabled_eq = self_config.enabled == other_config.enabled;
-            // Treat None as equivalent to Some(default) so that old manifests
-            // that serialized null (before apply_resolve_defaults ran for analyses)
-            // do not produce false-positive state:modified detections.
-            let default_sa = StaticAnalysisKind::default();
-            let static_analysis_eq =
-                match (&self_config.static_analysis, &other_config.static_analysis) {
-                    (None, None) => true,
-                    (None, Some(v)) | (Some(v), None) => **v == default_sa,
-                    (Some(a), Some(b)) => a == b,
-                };
+            // `static_analysis` is a Fusion-only, invocation-driven value (e.g. set by
+            // `--static-analysis`) with no dbt-core equivalent, so it can never be a
+            // legitimate dbt-core `state:modified` trigger and is deliberately excluded
+            // from this comparison (see `base_config_excluded_keys`, parity-exclude).
 
-            let result = enabled_eq && static_analysis_eq;
+            let result = enabled_eq;
 
             if !result {
                 log_state_mod_diff(
                     &self.__common_attr__.unique_id,
                     "analysis_config",
-                    [
-                        (
-                            "enabled",
-                            enabled_eq,
-                            Some((
-                                format!("{:?}", &self_config.enabled),
-                                format!("{:?}", &other_config.enabled),
-                            )),
-                        ),
-                        (
-                            "static_analysis",
-                            static_analysis_eq,
-                            Some((
-                                format!("{:?}", &self_config.static_analysis),
-                                format!("{:?}", &other_config.static_analysis),
-                            )),
-                        ),
-                    ],
+                    [(
+                        "enabled",
+                        enabled_eq,
+                        Some((
+                            format!("{:?}", &self_config.enabled),
+                            format!("{:?}", &other_config.enabled),
+                        )),
+                    )],
                 );
             }
 
@@ -7265,6 +7955,7 @@ mod seed_has_same_content_tests {
     use std::path::PathBuf;
 
     use dbt_adapter_core::AdapterType;
+    use dbt_common::path::DbtPath;
 
     use crate::schemas::common::{DbtChecksum, DbtChecksumObject};
     use crate::schemas::nodes::{CommonAttributes, DbtSeed, DbtSeedAttr, InternalDbtNode};
@@ -7299,8 +7990,8 @@ mod seed_has_same_content_tests {
                 name: "demo_seed".to_string(),
                 package_name: "test".to_string(),
                 fqn: vec!["test".to_string(), "demo_seed".to_string()],
-                path: PathBuf::from("seeds/demo_seed.csv"),
-                original_file_path: PathBuf::from("seeds/demo_seed.csv"),
+                path: DbtPath::from("seeds/demo_seed.csv"),
+                original_file_path: DbtPath::from("seeds/demo_seed.csv"),
                 ..Default::default()
             },
             ..Default::default()
@@ -7317,8 +8008,8 @@ mod seed_has_same_content_tests {
                 name: "demo_seed".to_string(),
                 package_name: "test".to_string(),
                 fqn: vec!["test".to_string(), "demo_seed".to_string()],
-                path: PathBuf::from("seeds/demo_seed.csv"),
-                original_file_path: PathBuf::from("seeds/demo_seed.csv"),
+                path: DbtPath::from("seeds/demo_seed.csv"),
+                original_file_path: DbtPath::from("seeds/demo_seed.csv"),
                 ..Default::default()
             },
             __seed_attr__: DbtSeedAttr {
@@ -7454,5 +8145,346 @@ mod seed_has_same_content_tests {
         // Even if the fallback were to run, it cannot conjure a matching hash —
         // `root_path` is None so the filesystem code is skipped entirely.
         assert!(!current.has_same_content(&previous as &dyn InternalDbtNode, AdapterType::DuckDB));
+    }
+
+    /// Guards the coordination between the two data-test config comparisons in
+    /// `check_configs_modified`, which encode the SAME dbt-core `TestConfig` modifier set in two
+    /// different representations that can silently drift:
+    ///   * Stage 1 (unrendered) — `unrendered_configs_eq` iterates `DBTTEST_CONFIG_MODIFIERS`
+    ///     mechanically, so it stays in sync by construction.
+    ///   * Stage 2 (rendered)   — `DbtTest::has_same_config` compares typed config fields BY HAND;
+    ///     nothing links it back to the constant, so adding/removing a modifier in one place without
+    ///     the other is an easy mistake.
+    ///
+    /// For every data-test config key, assert that Stage 2 treats the key as a change IFF the key is
+    /// in `DBTTEST_CONFIG_MODIFIERS`. This is bidirectional: it fails on an add/remove in EITHER
+    /// representation (a modifier only in the constant, or a field compared only in Stage 2).
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn data_test_modifier_set_agrees_across_stage1_and_stage2() {
+        use super::{DBTTEST_CONFIG_MODIFIERS, DataTestConfig, DbtTest};
+        use crate::schemas::common::{
+            DbtMaterialization, DbtQuoting, Severity, StoreFailuresAs, UpdatesOn,
+        };
+        use crate::schemas::properties::DataTestState;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        // Each case mutates exactly one config field away from its default so that Stage 2's
+        // rendered comparison can observe it. `expected` is derived from the Stage-1 allowlist, so
+        // this table never hard-codes the modifier/non-modifier split — it only has to exercise the
+        // field. When you add a field to `DataTestConfig`, add a case here too; the coverage check
+        // below fails if any `DBTTEST_CONFIG_MODIFIERS` key is left unexercised.
+        let cases: Vec<(&str, Box<dyn Fn(&mut DataTestConfig)>)> = vec![
+            // --- dbt-core `TestConfig` modifiers: MUST count as a change ---
+            ("severity", Box::new(|c| c.severity = Some(Severity::Warn))),
+            ("where", Box::new(|c| c.where_ = Some("id > 0".to_string()))),
+            ("limit", Box::new(|c| c.limit = Some(10))),
+            (
+                "fail_calc",
+                Box::new(|c| c.fail_calc = Some("count(*)".to_string())),
+            ),
+            (
+                "warn_if",
+                Box::new(|c| c.warn_if = Some("!= 0".to_string())),
+            ),
+            (
+                "error_if",
+                Box::new(|c| c.error_if = Some("!= 0".to_string())),
+            ),
+            (
+                "store_failures",
+                Box::new(|c| c.store_failures = Some(true)),
+            ),
+            (
+                "store_failures_as",
+                Box::new(|c| c.store_failures_as = Some(StoreFailuresAs::Table)),
+            ),
+            (
+                "sql_header",
+                Box::new(|c| c.sql_header = Some("set x = 1".to_string())),
+            ),
+            // --- non-modifiers: dbt-core `TestConfig` ignores these, so they must NOT count ---
+            ("enabled", Box::new(|c| c.enabled = Some(false))),
+            (
+                "alias",
+                Box::new(|c| c.alias = Some("an_alias".to_string())),
+            ),
+            (
+                "database",
+                Box::new(|c| c.database = Some("a_db".to_string())),
+            ),
+            ("group", Box::new(|c| c.group = Some("a_group".to_string()))),
+            (
+                "tags",
+                Box::new(|c| {
+                    c.tags = crate::schemas::project::configs::config_merge::Tags(Some(
+                        StringOrArrayOfStrings::String("a_tag".to_string()),
+                    ))
+                }),
+            ),
+            ("full_refresh", Box::new(|c| c.full_refresh = Some(true))),
+            (
+                "materialized",
+                Box::new(|c| c.materialized = Some(DbtMaterialization::View)),
+            ),
+            (
+                "quoting",
+                Box::new(|c| c.quoting = Some(DbtQuoting::default())),
+            ),
+            (
+                "meta",
+                Box::new(|c| {
+                    let mut m = indexmap::IndexMap::new();
+                    m.insert("owner".to_string(), dbt_yaml::to_value("bob").unwrap());
+                    c.meta = Some(m);
+                }),
+            ),
+            // `state` is honored at run time but is deliberately not a `state:modified` modifier
+            // (see the note on `DBTTEST_CONFIG_MODIFIERS`); exercised here to pin it as a non-modifier.
+            (
+                "state",
+                Box::new(|c| {
+                    c.state = Some(DataTestState {
+                        require_fresh_data_from: Some(UpdatesOn::All),
+                        evaluate_volatile_sql: Some(true),
+                        compare_unrendered_code: None,
+                    })
+                }),
+            ),
+        ];
+
+        // Coverage: every Stage-1 modifier must be exercised, else a modifier could drift untested.
+        for key in DBTTEST_CONFIG_MODIFIERS {
+            assert!(
+                cases.iter().any(|(k, _)| k == key),
+                "DBTTEST_CONFIG_MODIFIERS key `{key}` is not exercised by this test; add a case."
+            );
+        }
+
+        for (key, mutate) in &cases {
+            let base = DbtTest::default();
+            let mut mutated = base.clone();
+            mutate(&mut mutated.deprecated_config);
+
+            // `has_same_config` returns false when Stage 2 considers the config changed.
+            let stage2_is_modifier =
+                !base.has_same_config(&mutated as &dyn InternalDbtNode, AdapterType::DuckDB);
+            let stage1_is_modifier = DBTTEST_CONFIG_MODIFIERS.contains(key);
+
+            assert_eq!(
+                stage2_is_modifier, stage1_is_modifier,
+                "Data-test config key `{key}` disagrees between the two `state:modified` config \
+                 comparisons: Stage 1 (`DBTTEST_CONFIG_MODIFIERS`, unrendered) says \
+                 modifier={stage1_is_modifier}, but Stage 2 (`DbtTest::has_same_config`, rendered) \
+                 says modifier={stage2_is_modifier}. The two must agree. To reconcile: if `{key}` \
+                 should count as a data-test change, add it to BOTH `DBTTEST_CONFIG_MODIFIERS` and \
+                 the field comparisons in `DbtTest::has_same_config`; if it should not, remove it \
+                 from both (both live in nodes.rs)."
+            );
+        }
+    }
+
+    /// Ignored marker: data-test `state` is not a `state:modified` modifier today because dbt-core's
+    /// `TestConfig.same_contents` does not compare it. It asserts the promoted behavior (`state` in
+    /// `DBTTEST_CONFIG_MODIFIERS`), which does not hold yet. If dbt-core starts comparing these fields,
+    /// add `state` to the modifier set and `DbtTest::has_same_config`, then un-ignore this test.
+    #[test]
+    #[ignore = "conformance-gated: dbt-core TestConfig does not compare data-test state configs"]
+    fn data_test_state_not_promoted_to_modifier_conformance_marker() {
+        assert!(
+            super::DBTTEST_CONFIG_MODIFIERS.contains(&"state"),
+            "data-test `state` is not a `state:modified` modifier; see the note on \
+             DBTTEST_CONFIG_MODIFIERS for the conformance rationale."
+        );
+    }
+}
+
+/// Tolerance tests for the three comparators behind `DbtModel::same_ref_representation`
+/// (dbt-core's `ModelNode.same_ref_representation`, dbt-mantle
+/// `core/dbt/contracts/graph/nodes.py:684-691`). Each tolerance exists because the previous
+/// manifest can come from a producer we do not control (real dbt-core, an older Fusion), so naive
+/// `==` on the three fields would report phantom modifications.
+#[cfg(test)]
+mod model_same_ref_representation_tests {
+    use super::{
+        Access, DbtModel, InternalDbtNode, StringOrInteger, deprecation_date_eq, latest_version_eq,
+    };
+    use dbt_adapter_core::AdapterType;
+
+    fn model() -> DbtModel {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.test.table_model.v1".to_string();
+        model.__common_attr__.name = "table_model".to_string();
+        model.__common_attr__.package_name = "test".to_string();
+        model
+    }
+
+    fn same_content(a: &DbtModel, b: &DbtModel) -> bool {
+        a.has_same_content(b as &dyn InternalDbtNode, AdapterType::Snowflake)
+    }
+
+    // --- comparator 1: `latest_version` (StringOrInteger, structurally compared) ---
+
+    /// All four cross combinations of the two spellings of version `1`. Real dbt-core writes a JSON
+    /// number; a hand-authored fixture or an older Fusion manifest can carry a string.
+    #[test]
+    fn latest_version_eq_normalizes_across_string_and_integer() {
+        let int = || Some(StringOrInteger::Integer(1));
+        let str_ = || Some(StringOrInteger::String("1".to_string()));
+
+        assert!(latest_version_eq(&int(), &int()));
+        assert!(latest_version_eq(&str_(), &str_()));
+        assert!(
+            latest_version_eq(&int(), &str_()),
+            "`Integer(1)` and `String(\"1\")` are the same version; \
+             `StringOrInteger` only derives `PartialEq` structurally"
+        );
+        assert!(latest_version_eq(&str_(), &int()));
+    }
+
+    #[test]
+    fn latest_version_eq_still_sees_a_real_bump() {
+        assert!(!latest_version_eq(
+            &Some(StringOrInteger::Integer(2)),
+            &Some(StringOrInteger::Integer(1))
+        ));
+        assert!(
+            !latest_version_eq(
+                &Some(StringOrInteger::Integer(2)),
+                &Some(StringOrInteger::String("1".to_string()))
+            ),
+            "the normalization must not swallow a genuine version change"
+        );
+    }
+
+    #[test]
+    fn latest_version_eq_handles_absence() {
+        assert!(latest_version_eq(&None, &None));
+        assert!(!latest_version_eq(
+            &Some(StringOrInteger::Integer(1)),
+            &None
+        ));
+        assert!(!latest_version_eq(
+            &None,
+            &Some(StringOrInteger::Integer(1))
+        ));
+    }
+
+    // --- comparator 3: `deprecation_date` (date semantics, not string equality) ---
+
+    /// Fusion normalizes an authored date to RFC 3339 on the parse side, so the authored and
+    /// manifest spellings of one date routinely differ.
+    #[test]
+    fn deprecation_date_eq_tolerates_authored_vs_normalized_spelling() {
+        assert!(deprecation_date_eq(
+            &Some("2099-01-01".to_string()),
+            &Some("2099-01-01T00:00:00+00:00".to_string())
+        ));
+        assert!(deprecation_date_eq(
+            &Some("2099-01-01T00:00:00Z".to_string()),
+            &Some("2099-01-01T00:00:00+00:00".to_string())
+        ));
+    }
+
+    /// dbt-core's `normalize_date` re-interprets a naive authored date in the **system** time zone,
+    /// while Fusion reads it as UTC — so the same authored `2020-01-01` reaches this comparator as
+    /// two different offsets whenever the previous manifest was produced by dbt-core outside UTC.
+    #[test]
+    fn deprecation_date_eq_tolerates_a_mantle_local_offset() {
+        assert!(deprecation_date_eq(
+            &Some("2020-01-01T00:00:00+00:00".to_string()),
+            &Some("2020-01-01T00:00:00-05:00".to_string())
+        ));
+    }
+
+    /// dbt-core compares `datetime` objects, so two spellings of one instant are not a change.
+    #[test]
+    fn deprecation_date_eq_tolerates_equal_instants() {
+        assert!(deprecation_date_eq(
+            &Some("2020-01-01T05:00:00+00:00".to_string()),
+            &Some("2020-01-01T00:00:00-05:00".to_string())
+        ));
+    }
+
+    #[test]
+    fn deprecation_date_eq_still_sees_a_real_change() {
+        assert!(!deprecation_date_eq(
+            &Some("2099-01-01".to_string()),
+            &Some("2098-01-01".to_string())
+        ));
+        assert!(!deprecation_date_eq(&Some("2099-01-01".to_string()), &None));
+        assert!(!deprecation_date_eq(&None, &Some("2099-01-01".to_string())));
+        assert!(deprecation_date_eq(&None, &None));
+    }
+
+    /// Unparseable values fall back to string equality rather than comparing equal by accident.
+    #[test]
+    fn deprecation_date_eq_falls_back_to_string_equality() {
+        assert!(deprecation_date_eq(
+            &Some("not-a-date".to_string()),
+            &Some("not-a-date".to_string())
+        ));
+        assert!(!deprecation_date_eq(
+            &Some("not-a-date".to_string()),
+            &Some("2099-01-01".to_string())
+        ));
+    }
+
+    // --- the conjunct as wired into `has_same_content` ---
+
+    #[test]
+    fn latest_version_change_is_state_modified() {
+        let mut current = model();
+        current.__model_attr__.version = Some(StringOrInteger::Integer(1));
+        current.__model_attr__.latest_version = Some(StringOrInteger::Integer(2));
+        let mut previous = current.clone();
+        previous.__model_attr__.latest_version = Some(StringOrInteger::Integer(1));
+
+        assert!(
+            !same_content(&current, &previous),
+            "a `latest_version` bump changes what an unpinned `ref()` resolves to; \
+             dbt-core's `same_ref_representation` reports it as modified"
+        );
+    }
+
+    #[test]
+    fn access_change_is_state_modified() {
+        let current = model();
+        let mut previous = current.clone();
+        previous.__model_attr__.access = Access::Public;
+
+        assert!(
+            !same_content(&current, &previous),
+            "the `access` node attribute is compared by `same_ref_representation`, \
+             independently of the `access` config key owned by `check_configs_modified`"
+        );
+    }
+
+    #[test]
+    fn deprecation_date_change_is_state_modified() {
+        let mut current = model();
+        current.__model_attr__.deprecation_date = Some("2099-01-01T00:00:00+00:00".to_string());
+        let previous = model();
+
+        assert!(
+            !same_content(&current, &previous),
+            "adding a `deprecation_date` is a modification"
+        );
+    }
+
+    /// The migration-path shape: a previous manifest that omits `access`, `latest_version` and
+    /// `deprecation_date` deserializes to the same defaults the current node carries, so nothing
+    /// here may report modified. `manifest_model_to_dbt_model` applies dbt-core's `Protected`
+    /// default when neither `config.access` nor the node-level `access` is present, which is why
+    /// the node-attribute comparison needs no `access_eq`-style tolerance of its own.
+    #[test]
+    fn sparse_previous_manifest_is_not_state_modified() {
+        let current = model();
+        let previous = model();
+
+        assert_eq!(current.__model_attr__.access, Access::Protected);
+        assert!(current.__model_attr__.latest_version.is_none());
+        assert!(current.__model_attr__.deprecation_date.is_none());
+        assert!(same_content(&current, &previous));
     }
 }

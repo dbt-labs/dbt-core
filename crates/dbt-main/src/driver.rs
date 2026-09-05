@@ -11,6 +11,7 @@ use dbt_features::feature_stack::FeatureStack;
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, listener::JinjaTypeCheckingEventListenerFactory,
 };
+use dbt_schemas::schemas::DbtCommandExecutionArtifacts;
 
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooksFactory;
 
@@ -110,6 +111,8 @@ impl TaskExecutionDriver for DbtTaskExecutionDriver {
                 jinja_type_checking_factory,
                 task_runner_hooks_factory,
                 token,
+                Default::default(),
+                &mut DbtCommandExecutionArtifacts::default(),
             )
             .await?;
 

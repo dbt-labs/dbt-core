@@ -32,8 +32,6 @@ rand = { workspace = true }
 regex = { workspace = true }
 uuid = { workspace = true, features = ["v7"] }
 
-arrow = { workspace = true }
-arrow-schema = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }
@@ -56,6 +54,12 @@ pathdiff = { workspace = true }
 
 dbt-tui-progress = { workspace = true }
 rust-embed = { workspace = true }
+
+dirs = { workspace = true }
+
+sha2 = { workspace = true }
+
+url = { workspace = true }
 
 # Tracing
 proto-rust = { workspace = true }

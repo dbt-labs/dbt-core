@@ -1,9 +1,8 @@
-use std::collections::BTreeMap;
-
 use dbt_common::serde_utils::convert_yml_to_value_map;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeWrapper};
+use indexmap::IndexMap;
 use minijinja::Value;
 use minijinja::value::mutable_vec::MutableVec;
 
@@ -50,11 +49,18 @@ pub(crate) fn get_common_table_options_value(
     config: ModelConfig,
     common_attr: &CommonAttributes,
     temporary: bool,
-) -> BTreeMap<String, Value> {
+) -> IndexMap<String, Value> {
     let _ = state;
-    let mut result = BTreeMap::new();
+    // Insertion-ordered: BigQuery `OPTIONS(...)` are rendered in this order, and
+    // dbt-core emits them in insertion order (e.g. `expiration_timestamp` before
+    // `description`). A sorted map would reorder them and break parity.
+    let mut result = IndexMap::new();
 
-    if let Some(hours) = config.__warehouse_specific_config__.hours_to_expiration
+    if let Some(hours) = config
+        .__warehouse_specific_config__
+        .hours_to_expiration
+        .as_ref()
+        .and_then(|o| o.clone())
         && !temporary
     {
         let expiration = format!("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL {hours} hour)");
@@ -133,7 +139,7 @@ pub(crate) fn get_table_options_value(
     node: &InternalDbtNodeWrapper,
     temporary: bool,
     adapter_type: AdapterType,
-) -> AdapterResult<BTreeMap<String, Value>> {
+) -> AdapterResult<IndexMap<String, Value>> {
     // Common options
     let common_attr = node.as_internal_node().common();
     let mut opts = get_common_table_options_value(state, config.clone(), common_attr, temporary);
@@ -179,7 +185,9 @@ pub(crate) fn get_table_options_value(
             );
         }
 
-        if catalog_relation.table_format.is_iceberg() {
+        if catalog_relation.table_format.is_iceberg()
+            && catalog_relation.lakehouse_catalog.is_none()
+        {
             opts.insert(
                 "table_format".to_string(),
                 Value::from(format!("'{}'", catalog_relation.table_format.as_str())),
@@ -210,10 +218,11 @@ pub(crate) fn get_table_options_value(
         }
     }
 
-    // Partition expiration if specified
-    if let Some(days) = config
-        .__warehouse_specific_config__
-        .partition_expiration_days
+    // Partition expiration applies only to the final table.
+    if !temporary
+        && let Some(days) = config
+            .__warehouse_specific_config__
+            .partition_expiration_days
     {
         opts.insert("partition_expiration_days".to_string(), Value::from(days));
     }
@@ -224,6 +233,82 @@ pub(crate) fn get_table_options_value(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_schemas::schemas::serde::StringOrInteger;
+
+    fn expiration_for(hours: Option<StringOrInteger>, temporary: bool) -> Option<String> {
+        let env = minijinja::Environment::new();
+        let state = env.empty_state();
+        let mut config = ModelConfig::default();
+        config.__warehouse_specific_config__.hours_to_expiration =
+            dbt_common::serde_utils::Omissible::Present(hours);
+        let common = CommonAttributes::default();
+        let opts = get_common_table_options_value(&state, config, &common, temporary);
+        opts.get("expiration_timestamp").map(|v| v.to_string())
+    }
+
+    // dbt-labs/fs#11681: dbt-core emits `expiration_timestamp` whenever
+    // `hours_to_expiration` is present and not null (interpolating str(value)),
+    // even when it renders to the string "null". Fusion must match.
+    #[test]
+    fn expiration_timestamp_present_null_string_is_emitted() {
+        assert_eq!(
+            expiration_for(Some(StringOrInteger::String("null".to_string())), false),
+            Some("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL null hour)".to_string())
+        );
+    }
+
+    #[test]
+    fn expiration_timestamp_integer_is_emitted() {
+        assert_eq!(
+            expiration_for(Some(StringOrInteger::Integer(12)), false),
+            Some("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)".to_string())
+        );
+    }
+
+    #[test]
+    fn expiration_timestamp_absent_is_omitted() {
+        assert_eq!(expiration_for(None, false), None);
+    }
+
+    #[test]
+    fn expiration_timestamp_omitted_for_temporary() {
+        assert_eq!(
+            expiration_for(Some(StringOrInteger::Integer(12)), true),
+            None
+        );
+    }
+
+    fn table_options_with_partition_expiration(temporary: bool) -> IndexMap<String, Value> {
+        let env = minijinja::Environment::new();
+        let state = env.empty_state();
+        let mut config = ModelConfig::default();
+        config
+            .__warehouse_specific_config__
+            .partition_expiration_days = Some(90);
+        let node = InternalDbtNodeWrapper::Model(Box::default());
+        get_table_options_value(&state, config, &node, temporary, AdapterType::Bigquery).unwrap()
+    }
+
+    #[test]
+    fn partition_expiration_is_retained_for_final_tables() {
+        let options = table_options_with_partition_expiration(false);
+        assert_eq!(
+            options.get("partition_expiration_days"),
+            Some(&Value::from(90))
+        );
+    }
+
+    #[test]
+    fn partition_expiration_is_omitted_for_temporary_tables() {
+        let options = table_options_with_partition_expiration(true);
+        assert_eq!(options.get("partition_expiration_days"), None);
+        assert_eq!(
+            options.get("expiration_timestamp"),
+            Some(&Value::from(
+                "TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)"
+            ))
+        );
+    }
 
     #[test]
     fn test_sql_escape_ascii() {

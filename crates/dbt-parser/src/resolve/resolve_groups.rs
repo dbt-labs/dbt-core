@@ -1,6 +1,6 @@
-use crate::args::ResolveArgs;
-
+use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
+use dbt_common::path::DbtPath;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -16,7 +16,7 @@ use super::resolve_properties::MinimalPropertiesEntry;
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub async fn resolve_groups(
-    args: &ResolveArgs,
+    adapter_type: AdapterType,
     group_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     package_name: &str,
     env: &JinjaEnv,
@@ -36,7 +36,6 @@ pub async fn resolve_groups(
             let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
             // GroupProperties is for the yaml schema
             let group: GroupProperties = into_typed_with_jinja(
-                &args.io,
                 schema_value,
                 false,
                 env,
@@ -57,12 +56,12 @@ pub async fn resolve_groups(
                 __common_attr__: CommonAttributes {
                     name: group_name.to_string(),
                     package_name: package_name.to_string(),
-                    path: mpe.relative_path.clone(),
+                    path: DbtPath::from(&mpe.relative_path),
                     name_span: dbt_common::Span::from_serde_span(
                         mpe.name_span.clone(),
                         mpe.relative_path.clone(),
                     ),
-                    original_file_path: mpe.relative_path.clone(),
+                    original_file_path: DbtPath::from(&mpe.relative_path),
                     unique_id: unique_id.clone(),
                     fqn: vec![],
                     description: group.description,
@@ -75,6 +74,10 @@ pub async fn resolve_groups(
                     meta: group_properties_config.meta.clone().unwrap_or_default(),
                 },
                 __base_attr__: NodeBaseAttributes {
+                    // Not executed against a warehouse; records the target it parsed under.
+                    adapter: adapter_type,
+                    // This node type has no `+propagate` config; nothing is published.
+                    propagate: Vec::new(),
                     database: "".to_string(),
                     schema: "".to_string(),
                     alias: "".to_string(),

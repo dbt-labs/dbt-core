@@ -6,6 +6,7 @@ use arrow::csv::ReaderBuilder;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_agate::AgateTable;
 use dbt_schemas::schemas::dbt_column::ColumnMask;
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use dbt_schemas::schemas::{
     common::PartitionConfig, common::*, dbt_column::DbtColumn, nodes::*, project::*,
 };
@@ -25,21 +26,22 @@ pub(crate) struct TestModelColumn {
 
 #[derive(Default)]
 pub(crate) struct TestModelConfig {
-    // This will be used once we actually implement liquid clustering
-    #[expect(dead_code)]
     pub auto_cluster: bool,
-    // This will be used once we actually implement liquid clustering
-    #[expect(dead_code)]
     pub cluster_by: Vec<String>,
     pub columns: Vec<TestModelColumn>,
+    /// Defaults to enforced for legacy component tests; set explicitly to `Some(false)` when a
+    /// test exercises the contract ownership boundary.
+    pub contract_enforced: Option<bool>,
     pub cron: Option<String>,
     pub partition_by: Vec<String>,
     pub persist_column_comments: bool,
     pub persist_relation_comments: bool,
-    // This will be used once we actually implement query
-    #[expect(dead_code)]
+    /// The model's compiled SQL, which the `query` component diffs against the applied view
+    /// definition.
     pub query: Option<String>,
     pub relation_comment: Option<String>,
+    pub row_filter_function: Option<String>,
+    pub row_filter_columns: Vec<String>,
     pub tags: IndexMap<String, String>,
     pub tbl_properties: IndexMap<String, String>,
     pub table_format: Option<String>,
@@ -53,6 +55,8 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
     };
 
     let base_attrs = NodeBaseAttributes {
+        adapter: AdapterType::Snowflake,
+        propagate: Vec::new(),
         unrendered_config: Default::default(),
         database: "test_db".to_string(),
         schema: "test_schema".to_string(),
@@ -94,13 +98,16 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
     };
 
     let wh_config = WarehouseSpecificNodeConfig {
-        tblproperties: Some(
+        tblproperties: Some(TblProperties(
             cfg.tbl_properties
                 .into_iter()
                 .map(|(k, v)| (k, dbt_yaml::Value::from(v)))
                 .collect(),
-        ),
+        )),
         partition_by: Some(PartitionConfig::List(cfg.partition_by)),
+        liquid_clustered_by: (!cfg.cluster_by.is_empty())
+            .then_some(StringOrArrayOfStrings::ArrayOfStrings(cfg.cluster_by)),
+        auto_liquid_cluster: Some(cfg.auto_cluster),
         schedule: Some(Schedule::ScheduleConfig(ScheduleConfig {
             cron: cfg.cron,
             time_zone_value: cfg.time_zone,
@@ -111,6 +118,12 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
                 .map(|(k, v)| (k, YmlValue::from(v)))
                 .collect(),
         ),
+        row_filter: cfg.row_filter_function.map(|function| RowFilterConfig {
+            function: Some(function),
+            columns: Some(StringOrArrayOfStrings::ArrayOfStrings(
+                cfg.row_filter_columns,
+            )),
+        }),
         ..Default::default()
     };
 
@@ -118,6 +131,10 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
 
     DbtModel {
         deprecated_config: ModelConfig {
+            contract: Some(DbtContract {
+                enforced: cfg.contract_enforced.unwrap_or(true),
+                ..Default::default()
+            }),
             table_format: cfg.table_format,
             __warehouse_specific_config__: wh_config,
             ..Default::default()
@@ -130,6 +147,10 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
         },
         __adapter_attr__: adapter_attr,
         __base_attr__: base_attrs,
+        __model_attr__: DbtModelAttr {
+            compiled_code: cfg.query,
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -141,7 +162,6 @@ pub(crate) fn create_mock_describe_extended_table<'a>(
 ) -> AgateTable {
     let mut csv_data = "key,value\n".to_string();
 
-    // Add regular table info rows
     csv_data.push_str("Table,test_table\n");
     csv_data.push_str("Owner,test_user\n");
 
@@ -149,7 +169,6 @@ pub(crate) fn create_mock_describe_extended_table<'a>(
         csv_data.push_str(&format!("{label},{value}\n"))
     }
 
-    // Add partition information section
     let partition_columns_vec = Vec::from_iter(partition_columns);
     if !partition_columns_vec.is_empty() {
         csv_data.push_str("# Partition Information,\n");
@@ -160,7 +179,6 @@ pub(crate) fn create_mock_describe_extended_table<'a>(
         csv_data.push_str(",\n");
     }
 
-    // Add remaining info
     csv_data.push_str("# Detailed Table Information,\n");
 
     let schema = Arc::new(Schema::new(vec![

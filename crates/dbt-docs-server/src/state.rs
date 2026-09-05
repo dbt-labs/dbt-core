@@ -2,10 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde::Serialize;
 
 use crate::providers::Providers;
-pub use dbt_docs_core::DistInfo;
+pub use dbt_docs_core::{DistInfo, TelemetryHydration};
 
 /// Shared application state held by the axum router.
 pub struct AppState {
@@ -23,15 +22,6 @@ pub struct AppState {
 }
 
 pub type SharedState = Arc<AppState>;
-
-/// Gated feature surfaces — `true` only when the running distribution
-/// supports the feature. The UI reads this via `GET /api/v1/capabilities`
-/// to decide which features are enabled.
-#[derive(Debug, Clone, Serialize)]
-pub struct Capabilities {
-    pub has_column_lineage: bool,
-    pub has_dbt_state: bool,
-}
 
 impl AppState {
     pub fn new(
@@ -101,18 +91,19 @@ impl AppState {
         self.providers.dist_info.server_version()
     }
 
+    /// Telemetry fields the build knows authoritatively. The server no longer
+    /// hydrates events with them — the export bakes them into the site's
+    /// bootstrap instead (ADR-10). Mirrors [`Self::dist_info`] /
+    /// [`Self::server_version`].
+    pub fn telemetry_hydration(&self) -> TelemetryHydration {
+        self.providers.dist_info.telemetry_hydration()
+    }
+
     pub fn has_column_lineage(&self) -> bool {
         self.providers.column_lineage.is_available()
     }
 
     pub fn has_dbt_state(&self) -> bool {
         self.has_dbt_state
-    }
-
-    pub fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            has_column_lineage: self.has_column_lineage(),
-            has_dbt_state: self.has_dbt_state(),
-        }
     }
 }

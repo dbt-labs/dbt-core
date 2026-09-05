@@ -62,15 +62,22 @@ pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
             !dbtignore.unwrap().matched(rel_path, true).is_ignore()
         }) {
             let entry = entry_result?;
-            if entry.file_type().is_file() {
+            if entry.file_type().is_file()
+                || (entry.file_type().is_symlink() && entry.path().is_file())
+            {
+                // Match dbt-core's [!.#~]* filename discovery pattern. Check only the
+                // basename so files inside dot-prefixed directories remain discoverable.
+                let file_name = entry.file_name().to_string_lossy();
+                if file_name
+                    .as_bytes()
+                    .first()
+                    .is_some_and(|byte| matches!(byte, b'.' | b'#' | b'~'))
+                {
+                    continue;
+                }
                 // Skip macOS AppleDouble resource fork files (._*) — they are never dbt assets
                 // and contain binary metadata that causes UTF-8 read failures on Linux.
-                if entry
-                    .file_name()
-                    .to_str()
-                    .map(|n| n.starts_with("._"))
-                    .unwrap_or(false)
-                {
+                if file_name.starts_with("._") {
                     continue;
                 }
                 // Check if this file should be ignored by .dbtignore
@@ -84,7 +91,7 @@ pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
                 }
                 let metadata = metadata(entry.path())?;
                 let modified_time = metadata.modified()?;
-                info_paths.push((DbtPath::from_path(entry.path()), modified_time));
+                info_paths.push((DbtPath::from(entry.path()), modified_time));
             }
         }
     }
@@ -109,7 +116,6 @@ pub fn indent(data: &str, spaces: usize) -> String {
 /// `dependency_package_name` is used to determine if the file is part of a dependency package,
 /// which affects how errors are reported.
 pub fn load_raw_yml<T: DeserializeOwned>(
-    io_args: &IoArgs,
     path: &Path,
     dependency_package_name: Option<&str>,
 ) -> FsResult<T> {
@@ -131,7 +137,7 @@ pub fn load_raw_yml<T: DeserializeOwned>(
         )
     })?;
 
-    from_yaml_raw(io_args, &data, Some(path), true, dependency_package_name)
+    from_yaml_raw(&data, Some(path), true, dependency_package_name)
 }
 
 fn process_package_file(
@@ -147,8 +153,7 @@ fn process_package_file(
     }
 
     let mut dependencies = BTreeSet::new();
-    let dbt_packages: DbtPackages =
-        load_raw_yml(io_args, package_file_path, dependency_package_name)?;
+    let dbt_packages: DbtPackages = load_raw_yml(package_file_path, dependency_package_name)?;
     for package in dbt_packages.packages {
         let entry_name = match package {
             DbtPackageEntry::Hub(hub_package) => hub_package.package,
@@ -195,7 +200,6 @@ fn process_package_file(
                      Run 'fs deps --upgrade' with a packages.yml to resolve all dependencies.",
                     entry_name
                 ),
-                io_args.status_reporter.as_ref(),
             );
         }
     }
@@ -233,4 +237,81 @@ pub fn identify_package_dependencies(
     }
 
     Ok(dependencies)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::collect_file_info;
+    use std::os::unix::fs::symlink;
+
+    #[test]
+    fn collect_file_info_includes_symlinked_files() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let models_dir = temp_dir.path().join("models");
+        std::fs::create_dir(&models_dir).unwrap();
+        std::fs::write(models_dir.join("shared.sql"), "select 1").unwrap();
+        symlink("shared.sql", models_dir.join("linked.sql")).unwrap();
+
+        let mut paths = Vec::new();
+        collect_file_info(
+            temp_dir.path(),
+            &["models".to_string()],
+            &mut paths,
+            None,
+            |_| true,
+        )
+        .unwrap();
+
+        assert!(
+            paths
+                .iter()
+                .any(|(path, _)| path.as_path() == models_dir.join("linked.sql"))
+        );
+    }
+
+    #[test]
+    fn collect_file_info_matches_core_filename_exclusions() {
+        let dir = tempfile::tempdir().unwrap();
+        let models = dir.path().join("models");
+        std::fs::create_dir_all(models.join(".archive")).unwrap();
+        for name in [
+            "selected_model.sql",
+            ".hidden_source.sql",
+            "#temporary.sql",
+            "~backup.sql",
+        ] {
+            std::fs::write(models.join(name), "select 1").unwrap();
+        }
+        std::fs::write(models.join(".archive/visible.sql"), "select 1").unwrap();
+        std::fs::write(models.join(".archive/.hidden.sql"), "select 1").unwrap();
+
+        let mut files = Vec::new();
+        collect_file_info(
+            dir.path(),
+            &["models".to_string()],
+            &mut files,
+            None,
+            |_| true,
+        )
+        .unwrap();
+
+        let mut paths: Vec<_> = files
+            .into_iter()
+            .map(|(path, _)| path.to_string_lossy().to_string())
+            .collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec![
+                models
+                    .join(".archive/visible.sql")
+                    .to_string_lossy()
+                    .to_string(),
+                models
+                    .join("selected_model.sql")
+                    .to_string_lossy()
+                    .to_string(),
+            ]
+        );
+    }
 }

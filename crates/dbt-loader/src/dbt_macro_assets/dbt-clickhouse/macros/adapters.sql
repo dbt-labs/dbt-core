@@ -25,18 +25,6 @@
   {%- endif -%}
 {% endmacro %}
 
-{% macro clickhouse_model_settings(model, engine) %}
-  {{ return('') }}
-{% endmacro %}
-
-{% macro clickhouse_model_query_settings(model) %}
-  {{ return('') }}
-{% endmacro %}
-
-{% macro clickhouse_is_before_version(version) %}
-  {{ return(false) }}
-{% endmacro %}
-
 {% macro clickhouse_can_exchange(schema, relation_type) %}
   {{ return(false) }}
 {% endmacro %}
@@ -81,7 +69,8 @@
         name as mv_name,
         database as mv_database,
         any(as_select) as mv_sql,
-        any(replaceRegexpOne(create_table_query, '.*TO\\s+`?([^`\\s(]+)`?\\.`?([^`\\s(]+)`?.*', '\\1.\\2')) as target_fqn
+        {#- '\x3F' is the ClickHouse string-literal escape for '?' (regex quantifier); some drivers treat a literal '?' in query text as a bind parameter -#}
+        any(replaceRegexpOne(create_table_query, '.*TO\\s+`\x3F([^`\\s(]+)`\x3F\\.`\x3F([^`\\s(]+)`\x3F.*', '\\1.\\2')) as target_fqn
       {% if get_clickhouse_cluster_name() -%}
       from clusterAllReplicas({{ get_clickhouse_cluster_name() }}, system.tables)
       {% else %}
@@ -177,7 +166,8 @@
     limit 0
   {% endcall %}
 
-  {{ return(load_result('get_columns_in_query').table.columns | map(attribute='name') | list) }}
+  {# DIVERGENCE: Fusion reads the original schema because Agate flattens nested columns. #}
+  {{ return(load_result('get_columns_in_query').table.top_level_column_names) }}
 {% endmacro %}
 
 {% macro clickhouse__alter_column_type(relation, column_name, new_column_type) -%}

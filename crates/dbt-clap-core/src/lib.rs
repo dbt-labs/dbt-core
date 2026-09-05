@@ -10,6 +10,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fmt;
+use std::io::Write;
 use std::sync::LazyLock;
 use std::{
     collections::BTreeMap,
@@ -33,7 +34,8 @@ use dbt_common::io_args::{
     ClapResourceType, ClapSchemaTypes, ComputeArg, EvalArgs, InternalPackageMode, IoArgs,
     LocalExecutionBackendKind, LogFormat, LogLevel, OptimizeTestsOptions, Phases, RunCacheMode,
     ShowOptions, SystemArgs, TimeMachineModeKind, TimeMachineReplayOrdering,
-    check_key_value_cli_arg, check_selector, check_target, validate_project_name,
+    check_key_value_cli_arg, check_key_value_cli_arg_with_recovery, check_selector, check_target,
+    validate_project_name,
 };
 use dbt_common::io_args::{DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::row_limit::RowLimit;
@@ -172,35 +174,99 @@ impl CliParser {
             .help_template(CLI_HELP_TEMPLATE)
     }
 
+    /// Key used for the machine-readable `--format json --version` output, e.g.
+    /// `"dbt-fusion"` -> `"fusion"`, `"dbt-core"` -> `"core"`.
+    fn version_json_key(&self) -> &str {
+        self.command_name
+            .strip_prefix("dbt-")
+            .unwrap_or(self.command_name)
+    }
+
+    pub fn version_json(&self) -> String {
+        serde_json::json!({ self.version_json_key(): self.version }).to_string()
+    }
+
+    fn version_json_error(&self) -> clap::Error {
+        clap::Error::raw(clap::error::ErrorKind::DisplayVersion, self.version_json())
+    }
+
+    fn args_request_json_version<I, T>(itr: I) -> bool
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<OsStr>,
+    {
+        let mut version = false;
+        let mut json_format = false;
+        let mut expect_format_value = false;
+
+        for arg in itr.into_iter().skip(1) {
+            let arg = arg.as_ref();
+
+            if expect_format_value {
+                if arg != OsStr::new("json") {
+                    return false;
+                }
+                json_format = true;
+                expect_format_value = false;
+            } else if arg == OsStr::new("--version") {
+                version = true;
+            } else if arg == OsStr::new("--format") || arg == OsStr::new("--output") {
+                expect_format_value = true;
+            } else if arg == OsStr::new("--format=json") || arg == OsStr::new("--output=json") {
+                json_format = true;
+            } else {
+                return false;
+            }
+        }
+
+        version && json_format && !expect_format_value
+    }
+
+    pub fn json_version_for_args<I, T>(&self, itr: I) -> Option<String>
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<OsStr>,
+    {
+        Self::args_request_json_version(itr).then(|| self.version_json())
+    }
+
+    pub fn print_json_version_and_exit_for_args<I, T>(&self, itr: I)
+    where
+        I: IntoIterator<Item = T>,
+        T: AsRef<OsStr>,
+    {
+        if let Some(version) = self.json_version_for_args(itr) {
+            let mut stdout = std::io::stdout().lock();
+            let _ = writeln!(stdout, "{version}");
+            let _ = stdout.flush();
+            std::process::exit(0);
+        }
+    }
+
     fn format_error(&self, err: clap::Error) -> clap::Error {
         let mut cmd = self.app();
         err.format(&mut cmd)
     }
 
     /// Write shell completion scripts for the given shell to `writer`.
-    pub fn write_completions<W: std::io::Write>(&self, shell: Shell, writer: &mut W) {
+    pub fn write_completions<W: Write>(&self, shell: Shell, writer: &mut W) {
         clap_complete::generate(shell, &mut self.app(), "dbt", writer);
     }
 
     /// Parse from `std::env::args_os()`, [exit][Error::exit] on error.
     pub fn parse(&self) -> Box<Cli> {
-        let mut matches = self.app().get_matches();
-        let res = self
-            .try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err));
-        match res {
-            Ok(s) => Box::new(s),
+        let args = env::args_os().collect::<Vec<_>>();
+        self.print_json_version_and_exit_for_args(&args);
+
+        match self.try_parse_from(args) {
+            Ok(s) => s,
             Err(e) => e.exit(),
         }
     }
 
     /// Parse from `std::env::args_os()`, return Err on error.
     pub fn try_parse(&self) -> Result<Box<Cli>, clap::Error> {
-        let mut matches = self.app().try_get_matches()?;
-        let cli = self
-            .try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err))?;
-        Ok(Box::new(cli))
+        self.try_parse_from(env::args_os())
     }
 
     /// Parse from iterator, [exit][clap::Error::exit] on error.
@@ -209,12 +275,11 @@ impl CliParser {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        let mut matches = self.app().get_matches_from(itr);
-        let res = self
-            .try_parse_from_arg_matches_mut(&mut matches)
-            .map_err(|err| self.format_error(err));
-        match res {
-            Ok(s) => Box::new(s),
+        let args = itr.into_iter().collect::<Vec<_>>();
+        self.print_json_version_and_exit_for_args(args.iter().cloned().map(Into::into));
+
+        match self.try_parse_from(args) {
+            Ok(s) => s,
             Err(e) => e.exit(),
         }
     }
@@ -225,7 +290,12 @@ impl CliParser {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        let mut matches = self.app().try_get_matches_from(itr)?;
+        let args = itr.into_iter().collect::<Vec<_>>();
+        if Self::args_request_json_version(args.iter().cloned().map(Into::into)) {
+            return Err(self.version_json_error());
+        }
+
+        let mut matches = self.app().try_get_matches_from(args)?;
         let cli = self
             .try_parse_from_arg_matches_mut(&mut matches)
             .map_err(|err| self.format_error(err))?;
@@ -297,9 +367,18 @@ got {:?}, expected an instance of {}",
     pub fn is_project_command(&self) -> bool {
         use CoreCommand::*;
         match &self.command {
-            Command::Core(Man(_) | Init(_) | Docs(_) | Login(_) | Completions(_)) => {
+            Command::Core(
+                Man(_) | Init(_) | Login(_) | State(_) | Completions(_) | Internal(_),
+            ) => {
                 // These commands do not require a project directory
                 false
+            }
+            // `docs generate` reads a project's target directory, so it resolves
+            // `--project-dir` / `--target-path` the same way every project command
+            // does. `docs serve` only serves a directory and is documented as not
+            // requiring a project, so it stays out.
+            Command::Core(Docs(args)) => {
+                matches!(args.subcommand, Some(DocsSubcommand::Generate(_)))
             }
             Command::Core(_) => {
                 // Assume all the other core commands require a project directory.
@@ -310,6 +389,8 @@ got {:?}, expected an instance of {}",
     }
 
     pub fn to_eval_args(&self, system_arg: SystemArgs) -> FsResult<EvalArgs> {
+        validate_manage_state_env()?;
+
         use CoreCommand::*;
         let common_args = self.common_args();
         // Determine the input and output directories based on the command.
@@ -329,6 +410,7 @@ got {:?}, expected an instance of {}",
                 Deps(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 List(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Compile(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                Check(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Parse(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Run(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 RunOperation(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
@@ -340,13 +422,16 @@ got {:?}, expected an instance of {}",
                 Clone(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Clean(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Source(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                Freshness(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Show(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Man(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Debug(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Retry(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Docs(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Login(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                State(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
                 Completions(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
+                Internal(args) => args.to_eval_args(system_arg, &in_dir, &out_dir),
             },
             Command::Extension(ext_cmd) => ext_cmd.to_eval_args(&common_args, system_arg)?,
         };
@@ -354,8 +439,30 @@ got {:?}, expected an instance of {}",
         if arg.local_execution_backend != LocalExecutionBackendKind::Remote {
             arg.static_analysis = Some(StaticAnalysisKind::Strict);
         }
-        if arg.write_index && arg.static_analysis == Some(StaticAnalysisKind::Strict) {
+        if (arg.write_index || arg.generate_info_schema)
+            && arg.static_analysis == Some(StaticAnalysisKind::Strict)
+        {
             arg.write_lineage = true;
+        }
+        // `build`, `run`, and `check` write the index by default.
+        //
+        // After the lineage block above so a defaulted index does not turn on `write_lineage`.
+        // Explicit `--write-index` still does. Set on `EvalArgs`, not `Cli.common_args`:
+        // `effective_partial_parse()` / `effective_partial_load()` read the raw flag, so
+        // leaving it unset keeps partial parse/load off for a plain `dbt build`/`run`/`check`.
+        // Skip if the caller already set metadata, index, or catalog so `--write-metadata`
+        // stays epochs-without-index and `--write-catalog` stays explicit.
+        if matches!(
+            arg.command,
+            FsCommand::Build | FsCommand::Run | FsCommand::Check
+        ) && !common_args.write_index
+            && !common_args.write_metadata
+            && !common_args.write_catalog
+            && !common_args.no_write_index
+        {
+            arg.write_metadata = true;
+            arg.write_index = true;
+            arg.write_index_implied = true;
         }
         Ok(arg)
     }
@@ -387,6 +494,7 @@ got {:?}, expected an instance of {}",
                 Ls(args) => args.common_args.phase.clone().unwrap_or(Phases::List),
                 List(args) => args.common_args.phase.clone().unwrap_or(Phases::List),
                 Compile(args) => args.common_args.phase.clone().unwrap_or(Phases::Compile),
+                Check(args) => args.common_args.phase.clone().unwrap_or(Phases::Compile),
                 Run(args) => args.common_args.phase.clone().unwrap_or(Phases::All),
                 RunOperation(args) => args.common_args.phase.clone().unwrap_or(Phases::Parse),
                 Seed(args) => args.common_args.phase.clone().unwrap_or(Phases::All),
@@ -400,13 +508,16 @@ got {:?}, expected an instance of {}",
                     .phase
                     .clone()
                     .unwrap_or(Phases::Freshness),
+                Freshness(args) => args.common_args.phase.clone().unwrap_or(Phases::Freshness),
                 Show(args) => args.common_args.phase.clone().unwrap_or(Phases::Show),
                 Man(_args) => unreachable!("Man command does not need a phase"),
                 Debug(args) => args.common_args.phase.clone().unwrap_or(Phases::Debug),
                 Retry(args) => args.common_args.phase.clone().unwrap_or(Phases::All),
                 Docs(_args) => unreachable!("Docs command does not need a phase"),
                 Login(_args) => unreachable!("Login command does not need a phase"),
+                State(_args) => unreachable!("State command does not need a phase"),
                 Completions(_args) => unreachable!("Completions command does not need a phase"),
+                Internal(_args) => unreachable!("Internal command does not need a phase"),
             },
             Command::Extension(ext_cmd) => ext_cmd.stage(),
         }
@@ -563,11 +674,11 @@ pub struct CompileArgs {
     pub inline: Option<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
@@ -619,7 +730,46 @@ impl CompileArgs {
         if let Some(exclude_resource_type) = &self.exclude_resource_type {
             eval_args.exclude_resource_types = exclude_resource_type.clone();
         }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            false,
+            &RunCacheMode::ReadWrite,
+        );
 
+        eval_args
+    }
+}
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct CheckArgs {
+    /// Names of specific checks to run (the file stem, without `.sql`). Runs all
+    /// discovered checks if omitted.
+    #[arg(value_name = "CHECK")]
+    pub check_names: Vec<String>,
+
+    // Flattened Common args
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+
+    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
+    #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
+    pub static_analysis: Option<StaticAnalysisKind>,
+}
+
+impl CheckArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
+        eval_args.phase = Phases::Compile;
+        eval_args.introspect = self.common_args.get_introspect();
+        // v1 is parse-time only. Do not force static analysis off the way
+        // warehouse-introspecting commands do.
+        eval_args.static_analysis = self.static_analysis;
+        // Implied index is set on `EvalArgs` in `Cli::to_eval_args` (same as
+        // `build` / `run`), not here: setting `write_index` on this struct
+        // before that function's lineage block would turn on `write_lineage`,
+        // and setting `Cli.common_args` would turn on partial parse/load.
+        eval_args.check_names = self.check_names.clone();
         eval_args
     }
 }
@@ -719,20 +869,61 @@ pub struct SourceFreshnessArgs {
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct FreshnessArgs {
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+
+    /// Select nodes of a specific type;
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
+    pub resource_type: Option<Vec<ClapResourceType>>,
+
+    /// Exclude nodes of a specific type;
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
+    pub exclude_resource_type: Option<Vec<ClapResourceType>>,
+}
+
+impl FreshnessArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
+        eval_args.phase = Phases::Freshness;
+        if let Some(resource_type) = &self.resource_type {
+            eval_args.resource_types = resource_type.clone();
+        }
+        if let Some(exclude_resource_type) = &self.exclude_resource_type {
+            eval_args.exclude_resource_types = exclude_resource_type.clone();
+        }
+        eval_args
+    }
+}
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ShowArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
     /// Show the given query
-    #[arg(long)]
+    #[arg(long, allow_hyphen_values = true, conflicts_with = "query_id")]
     pub inline: Option<String>,
 
+    /// Query a dbt information schema view (e.g. `models`, `dag_nodes`) instead of
+    /// the warehouse. Equivalent to `--inline "select * from {{ info_schema('<view>') }}"`.
+    /// Requires a prior `dbt parse|compile|run|build --generate-info-schema`.
+    #[arg(long, value_name = "VIEW", conflicts_with_all = ["inline", "adapter", "query_id"])]
+    pub info: Option<String>,
+
+    /// Fetch the result of a previously completed LakeCompute query directly,
+    /// by query id, instead of compiling and running a query. No worker/compute
+    /// round trip -- this reads the query's already-materialized result.
+    /// Requires `--adapter lakecompute`.
+    #[arg(long, conflicts_with_all = ["inline", "info"])]
+    pub query_id: Option<String>,
+
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
@@ -769,12 +960,20 @@ pub struct ShowArgs {
     /// Add source selectors to sample (e.g., "source:raw.events"). Repeatable.
     #[arg(long, num_args(1..), value_delimiter = ' ', help_heading = help_headings::SAMPLE)]
     pub sampled: Vec<String>,
+
+    /// Run against a non-default adapter the target declares (e.g. `lakecompute`),
+    /// instead of the target's default adapter. Only meaningful for targets
+    /// declaring more than one adapter, and only with `--inline`.
+    #[arg(long)]
+    pub adapter: Option<String>,
 }
 
 impl ShowArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
         eval_args.phase = Phases::Show;
+        eval_args.adapter_override = self.adapter.clone();
+        eval_args.query_id = self.query_id.clone();
         if let Some(resource_type) = &self.resource_type {
             eval_args.resource_types = resource_type.clone();
         } else {
@@ -793,6 +992,12 @@ impl ShowArgs {
         if let Some(exclude_resource_type) = &self.exclude_resource_type {
             eval_args.exclude_resource_types = exclude_resource_type.clone();
         }
+        configure_run_cache(
+            &mut eval_args,
+            &self.common_args,
+            false,
+            &RunCacheMode::ReadWrite,
+        );
         eval_args
     }
 }
@@ -850,9 +1055,17 @@ pub struct TestArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Enable optimizations (testaggregation, testreuse)
-    #[arg(long, num_args(0..), hide = true, help = "Enable optimizations [options: testaggregation, testreuse]\n")]
-    pub optimize_tests: Vec<OptimizeTestsOptions>,
+    /// Batch compatible generic tests.
+    #[arg(long = "batch-tests", hide = true)]
+    pub aggregate_tests: bool,
+
+    /// Select nodes of a specific type;
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
+    pub resource_type: Option<Vec<ClapResourceType>>,
+
+    /// Exclude nodes of a specific type;
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
+    pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -894,8 +1107,19 @@ pub struct TestArgs {
 impl TestArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.optimize_tests = self.optimize_tests.iter().cloned().collect();
-        eval_args.resource_types = vec![ClapResourceType::Test, ClapResourceType::UnitTest];
+        if self.aggregate_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestAggregation);
+        }
+        if let Some(resource_type) = &self.resource_type {
+            eval_args.resource_types = resource_type.clone();
+        } else {
+            eval_args.resource_types = vec![ClapResourceType::Test, ClapResourceType::UnitTest];
+        }
+        if let Some(exclude_resource_type) = &self.exclude_resource_type {
+            eval_args.exclude_resource_types = exclude_resource_type.clone();
+        }
         configure_run_cache(
             &mut eval_args,
             &self.common_args,
@@ -916,16 +1140,20 @@ pub struct BuildArgs {
     pub common_args: CommonArgs,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 
-    /// Enable optimizations (testaggregation, testreuse)
-    #[arg(long, num_args(0..), hide = true, help = "Enable optimizations [options: testaggregation, testreuse]\n")]
-    pub optimize_tests: Vec<OptimizeTestsOptions>,
+    /// Batch compatible generic tests.
+    #[arg(long = "batch-tests", hide = true)]
+    pub aggregate_tests: bool,
+
+    /// Skip data tests that are proven redundant.
+    #[arg(long, hide = true)]
+    pub skip_redundant_tests: bool,
 
     /// Force node selection
     #[arg(long, default_value = "false")]
@@ -942,6 +1170,10 @@ pub struct BuildArgs {
     /// Drop incremental models and fully recalculate incremental tables.
     #[arg(global = true, long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), short = 'f', env = "DBT_FULL_REFRESH")]
     pub full_refresh: bool,
+
+    /// Skip parse-time project quality checks. Models still compile and run.
+    #[arg(long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
+    pub skip_checks: bool,
 
     /// Limiting number of shown rows. Run with --limit -1 to remove limit [default: 10]
     #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true)]
@@ -976,7 +1208,16 @@ pub struct BuildArgs {
 impl BuildArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let mut eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.optimize_tests = self.optimize_tests.iter().cloned().collect();
+        if self.aggregate_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestAggregation);
+        }
+        if self.skip_redundant_tests {
+            eval_args
+                .optimize_tests
+                .insert(OptimizeTestsOptions::TestStaticAnalysis);
+        }
         eval_args.phase = Phases::All;
         // Enable task cache
         if let Some(resource_type) = &self.resource_type {
@@ -989,6 +1230,7 @@ impl BuildArgs {
                 ClapResourceType::Test,
                 ClapResourceType::UnitTest,
                 ClapResourceType::Function,
+                ClapResourceType::Check,
             ];
             if eval_args.export_saved_queries {
                 eval_args.resource_types.push(ClapResourceType::SavedQuery);
@@ -1007,6 +1249,7 @@ impl BuildArgs {
         eval_args.static_analysis = self.static_analysis;
         eval_args.empty = self.common_args.empty;
         eval_args.sample = self.sample.clone();
+        eval_args.skip_checks = self.skip_checks;
         eval_args
     }
 }
@@ -1032,11 +1275,11 @@ pub struct ListArgs {
     pub output_keys: Vec<String>,
 
     /// Select nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["resource-types"], env = "DBT_RESOURCE_TYPES")]
     pub resource_type: Option<Vec<ClapResourceType>>,
 
     /// Exclude nodes of a specific type;
-    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"])]
+    #[arg(long, num_args(1..), value_delimiter = ' ', aliases = ["exclude-resource-types"], env = "DBT_EXCLUDE_RESOURCE_TYPES")]
     pub exclude_resource_type: Option<Vec<ClapResourceType>>,
 }
 
@@ -1160,7 +1403,7 @@ fn configure_run_cache(
         return;
     }
 
-    let manage_state = common_args.get_manage_state(&eval_args.io.in_dir);
+    let manage_state = common_args.get_manage_state(&eval_args.io.in_dir, false);
     if common_args.task_cache_url != NOOP || manage_state {
         eval_args.run_cache_service = manage_state;
         eval_args.run_cache_mode = if force_node_selection {
@@ -1215,6 +1458,12 @@ pub struct RunOperationArgs {
     #[arg(long, conflicts_with_all = ["MACRO", "args"])]
     pub sql: Option<String>,
 
+    /// Run against a non-default adapter the target declares (e.g. `lakecompute`),
+    /// instead of the target's default adapter. Only meaningful for targets
+    /// declaring more than one adapter.
+    #[arg(long)]
+    pub adapter: Option<String>,
+
     // Flattened IO args
     #[clap(flatten)]
     pub common_args: CommonArgs,
@@ -1226,6 +1475,7 @@ impl RunOperationArgs {
         eval_args.phase = Phases::RunOperation;
         eval_args.macro_name = self.macro_name.clone();
         eval_args.macro_sql = self.sql.clone();
+        eval_args.adapter_override = self.adapter.clone();
         if let Some(args) = &self.args {
             eval_args.macro_args = args.clone();
         }
@@ -1273,6 +1523,97 @@ pub enum LoginSubcommand {
     Status,
 }
 
+/// Undocumented plumbing commands, not intended for direct end-user use.
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct InternalArgs {
+    #[command(subcommand)]
+    pub command: InternalCommand,
+}
+
+impl InternalArgs {
+    pub fn common_args(&self) -> &CommonArgs {
+        match &self.command {
+            InternalCommand::GetDistributionInfo(args) => &args.common_args,
+        }
+    }
+
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        self.common_args().to_eval_args(arg, in_dir, out_dir)
+    }
+}
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+#[command()]
+pub enum InternalCommand {
+    /// Resolve release-channel and distribution info for a dbt installation
+    GetDistributionInfo(GetDistributionInfoArgs),
+}
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct GetDistributionInfoArgs {
+    /// Path to a dbt executable to inspect. Defaults to the currently running
+    /// process. Mutually exclusive with `--all`.
+    #[arg(value_name = "PATH", conflicts_with = "all")]
+    pub path: Option<PathBuf>,
+
+    /// Print distribution info for every dbt executable found on PATH.
+    /// Mutually exclusive with the PATH argument.
+    #[arg(short = 'a', long, conflicts_with = "path")]
+    pub all: bool,
+
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+}
+
+/// Args for `dbt system upgrade-distribution`. No `common_args` flatten:
+/// this is a `System` subcommand, and `SystemMgmtArgs` already flattens
+/// `CommonArgs` once (same precedent as `SystemUpdateArgs`/`SystemUninstallArgs`).
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct SystemUpgradeDistributionArgs {
+    /// Skip the confirmation prompt and proceed automatically.
+    #[arg(short = 'y', long)]
+    pub yes: bool,
+
+    /// For a managed-project upgrade, the Python package manager to sync
+    /// the rewritten manifest with (e.g. `uv`, `poetry`, `pdm`, `pipenv`,
+    /// `conda`, `hatch`, `pip`, `pipx`, `rye`, `asdf`, `mise`, `pyenv`).
+    /// Overrides automatic detection -- use this to answer non-interactively
+    /// when detection can't determine the manager on its own (it would
+    /// otherwise prompt for one interactively, or fail if run with --yes or
+    /// outside a terminal).
+    #[arg(long)]
+    pub package_manager: Option<String>,
+}
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+pub struct StateArgs {
+    #[clap(flatten)]
+    pub common_args: CommonArgs,
+
+    #[command(subcommand)]
+    pub subcommand: StateSubcommand,
+}
+
+impl StateArgs {
+    pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
+        self.common_args.to_eval_args(arg, in_dir, out_dir)
+    }
+}
+
+#[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum StateSubcommand {
+    Explain(StateExplainArgs),
+}
+
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct StateExplainArgs {
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    #[arg(short = 'l', long = "log-file")]
+    pub log_file: Option<PathBuf>,
+}
+
 impl ManArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
@@ -1304,12 +1645,19 @@ impl DocsArgs {
 
 #[derive(clap::Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum DocsSubcommand {
-    /// Generate docs catalog (deprecated: use `dbt compile --write-catalog` instead)
-    Generate,
+    /// Generate a self-contained, statically hostable docs site.
+    ///
+    /// Compiles the project, then writes the site that compile describes to
+    /// `--output-dir`. The result is a plain directory of files: host it anywhere,
+    /// no server process required.
+    ///
+    /// Pass `--no-compile` to skip the compile and export an existing index,
+    /// which is then an error if there is none.
+    Generate(DocsGenerateArgs),
     /// Start the dbt docs v2 server backed by parquet artifacts in the target directory.
     ///
-    /// Reads parquet artifacts written by `--use-index` (or `--write-index`) and
-    /// exposes a local HTTP server. Does not require a dbt project.
+    /// Reads parquet artifacts from a previous `build` / `run` / `docs generate`
+    /// and exposes a local HTTP server. Does not require a dbt project.
     Serve(DocsServeArgs),
     #[command(external_subcommand)]
     Other(Vec<String>),
@@ -1317,8 +1665,9 @@ pub enum DocsSubcommand {
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 pub struct DocsServeArgs {
-    /// Path to the dbt target directory containing the `index/` subdirectory of
-    /// parquet artifacts. Defaults to `./target` in the current working directory.
+    /// Path to the dbt target directory containing the `private/index/` subdirectory of
+    /// parquet artifacts. Defaults to the project's target directory, resolved from
+    /// `--project-dir` and `--target-path` like any other project command.
     #[arg(long, value_name = "DIR", env = "DBT_DOCS_TARGET_PATH")]
     pub target_path: Option<PathBuf>,
 
@@ -1344,6 +1693,49 @@ impl Default for DocsServeArgs {
             no_open: false,
         }
     }
+}
+
+/// Args for `dbt docs generate`.
+///
+/// Mirrors [`DocsServeArgs`] on `--target-path`, including the env var, so both
+/// docs subcommands locate the index identically. `generate` compiles and
+/// exports the index that compile produces, so it needs a project directory
+/// and a warehouse connection — unless `--no-compile` reduces it to the
+/// exporter it used to be.
+#[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
+pub struct DocsGenerateArgs {
+    /// Path to the dbt target directory containing the `private/index/` subdirectory of
+    /// parquet artifacts. Defaults to `./target` in the current working directory.
+    #[arg(long, value_name = "DIR", env = "DBT_DOCS_TARGET_PATH")]
+    pub target_path: Option<PathBuf>,
+
+    /// Directory to write the static site to. Defaults to the target directory
+    /// itself, so `index.html` lands where core v1 wrote it.
+    #[arg(long, value_name = "DIR", env = "DBT_DOCS_OUTPUT_DIR")]
+    pub output_dir: Option<PathBuf>,
+
+    /// Base URL the browser loads DuckDB-WASM from at runtime.
+    ///
+    /// Defaults to the pinned jsDelivr path. Point this at a mirror to serve the
+    /// wasm from your own infrastructure; the site never bundles it.
+    #[arg(long, value_name = "URL", env = "DBT_DOCS_DUCKDB_CDN_BASE")]
+    pub duckdb_cdn_base: Option<String>,
+
+    /// Export only what is already indexed; never compile.
+    ///
+    /// Without this, a compile runs first, so the site always reflects the
+    /// project as it is now. With it, the export reads the index a previous
+    /// `build` / `run` / `docs generate` wrote and a missing one is an error
+    /// naming that remedy — useful where the warehouse is unreachable, or to
+    /// keep the command cheap and read-only.
+    #[arg(long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), env = "DBT_DOCS_NO_COMPILE", overrides_with = "compile")]
+    pub no_compile: bool,
+
+    /// Accepted for dbt v1 compatibility, where it was the default. Compiling is
+    /// the default here too, so this is a no-op; it exists so v1 scripts that pass
+    /// it keep working.
+    #[arg(long, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true, overrides_with = "no_compile")]
+    pub compile: bool,
 }
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
@@ -1453,7 +1845,7 @@ pub struct CommonArgs {
 
     /// Supply var bindings in yml format e.g. '{key: value}' or as separate key: value pairs
     // has no ENV_VAR
-    #[arg(global = true, long, value_parser = check_key_value_cli_arg, help_heading = help_headings::PROJECT, hide_short_help = true)]
+    #[arg(global = true, long, value_parser = check_key_value_cli_arg_with_recovery, help_heading = help_headings::PROJECT, hide_short_help = true)]
     pub vars: Option<BTreeMap<String, YValue>>,
 
     /// Select nodes to run
@@ -1591,15 +1983,22 @@ pub struct CommonArgs {
 
     /// Enable full metadata output: incremental parse cache, epoch parquet state, and no JSON
     /// artifacts. Implies --partial-parse --no-write-json.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
+    ///
+    /// Not user-facing: kept for backwards compatibility with programmatic callers.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_METADATA", value_parser = BoolishValueParser::new(), hide = true)]
     pub write_metadata: bool,
 
-    /// Write parquet index to target/index/. Implies --write-metadata so that epoch parquet
-    /// is produced, then converts metadata → index parquet via the snapshot writer.
-    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
+    /// Internal engine index at target/private/index/. Not a user API — `build` / `run` /
+    /// `check` write it by default. Hidden; still accepted for programmatic callers.
+    #[arg(global = true, long = "write-index", alias = "use-index", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_INDEX", value_parser = BoolishValueParser::new(), hide = true)]
     pub write_index: bool,
+    /// Opt out of the index that `build` writes by default. `--write-index` is `SetTrue` with
+    /// no negation, so without this flag defaulting it on would leave no way back.
+    /// Hidden; still accepted for existing scripts.
+    #[arg(global = true, long, action = ArgAction::SetTrue, default_value_t=false, value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_write_index: bool,
 
-    /// Directory for metadata parquet output (default: <target>/metadata/)
+    /// Directory for metadata parquet output (default: <target>/private/metadata/)
     #[arg(
         global = true,
         long,
@@ -1609,36 +2008,36 @@ pub struct CommonArgs {
     )]
     pub metadata_dir: Option<PathBuf>,
 
-    /// Directory for index parquet output (default: <target>/index/)
+    /// Directory for index parquet output (default: <target>/private/index/)
+    #[arg(global = true, long, env = "DBT_INDEX_DIR", hide = true)]
+    pub index_dir: Option<PathBuf>,
+
+    /// Write the dbt information schema to target/info_schema/: a queryable
+    /// parquet layer over your project's metadata. With --static-analysis strict,
+    /// also writes column types and column-level lineage.
+    #[arg(global = true, long = "generate-info-schema", default_value_t=false, action = ArgAction::SetTrue, env = "DBT_GENERATE_INFO_SCHEMA", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS)]
+    pub generate_info_schema: bool,
+
+    /// Directory for information schema parquet output (default: <target>/info_schema/)
     #[arg(
         global = true,
         long,
-        env = "DBT_INDEX_DIR",
+        env = "DBT_INFO_SCHEMA_DIR",
         help_heading = help_headings::ARTIFACTS,
         hide_short_help = true
     )]
-    pub index_dir: Option<PathBuf>,
+    pub info_schema_dir: Option<PathBuf>,
 
     /// Compute and write column-level lineage into compile/cll parquet.
-    /// Requires --write-metadata and --static-analysis strict. Omitting this flag
-    /// skips the expensive CLL graph build, keeping --write-metadata fast.
-    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new(), help_heading = help_headings::ARTIFACTS, hide_short_help = true)]
+    ///
+    /// Hidden. Auto-enabled when `--generate-info-schema` (or the hidden
+    /// `--write-index`) is combined with `--static-analysis strict`.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_WRITE_LINEAGE", value_parser = BoolishValueParser::new(), hide = true)]
     pub write_lineage: bool,
 
     // Support for query cache
     #[arg(global = true, long, env = "DBT_BETA_USE_QUERY_CACHE", hide = true)]
     pub beta_use_query_cache: bool,
-
-    // Support for parquet-based schema store
-    #[arg(global = true, long, env = "DBT_USE_PARQUET_SCHEMA_STORE", hide = true)]
-    pub use_parquet_schema_store: bool,
-    #[arg(
-        global = true,
-        long,
-        env = "DBT_VERIFY_PARQUET_SCHEMA_STORE",
-        hide = true
-    )]
-    pub verify_parquet_schema_store: bool,
 
     //
     // NOTE: The arguments below were generated by a script to temporarily fill gaps between fs and
@@ -1716,7 +2115,7 @@ pub struct CommonArgs {
     pub otel_file_name: Option<String>,
 
     /// Set 'otel-parquet-file-name' for the current run, overriding 'DBT_OTEL_PARQUET_FILE_NAME'.
-    /// If set, OTEL telemetry will be written to `$target_path/metadata/otel-parquet-file-name` in Parquet format.
+    /// If set, OTEL telemetry will be written to `$target_path/private/metadata/otel-parquet-file-name` in Parquet format.
     #[arg(
         global = true,
         long = "otel-parquet-file-name",
@@ -1851,6 +2250,12 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, env = "DBT_USE_EXPERIMENTAL_PARSER", value_parser = BoolishValueParser::new(), hide = true)]
     pub no_use_experimental_parser: bool,
 
+    // Use the v2 parser. Accepted as a no-op for compatibility; fusion always uses its own parser.
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub use_v2_parser: bool,
+    #[arg(global = true, long, default_value_t=false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), hide = true)]
+    pub no_use_v2_parser: bool,
+
     #[arg(global = true, long, default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_USE_FAST_TEST_EDGES", value_parser = BoolishValueParser::new(), hide = true)]
     pub use_fast_test_edges: bool,
     #[arg(global = true, long, default_value_t=false,  action = ArgAction::SetTrue, env = "DBT_USE_FAST_TEST_EDGES", value_parser = BoolishValueParser::new(), hide = true)]
@@ -1916,7 +2321,7 @@ pub struct CommonArgs {
     pub task_cache_url: String,
 
     /// Enable service-backed dbt State without legacy task-cache coordination
-    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, env = MANAGE_STATE_ENV, value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
+    #[arg(global = true, long = "manage-state", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new(), help_heading = help_headings::EXECUTION, hide_short_help = true)]
     pub manage_state: bool,
     /// Disable service-backed dbt State
     #[arg(global = true, long = "no-manage-state", default_value_t = false, action = ArgAction::SetTrue, value_parser = BoolishValueParser::new())]
@@ -2052,6 +2457,10 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_USE_V2_COMPATIBLE_PACKAGE_DOWNLOADS", value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub use_v2_compatible_package_downloads: bool,
 
+    /// When installing packages from Package Hub, require a Hub-provided sha1 checksum and verify it, failing the install if Hub offers neither
+    #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, env = "DBT_REQUIRE_HUB_VERIFIED_DOWNLOADS", value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
+    pub require_hub_verified_downloads: bool,
+
     /// If set, the maximum number of bytes that the ANTLR parser is allowed to
     /// allocate in its (per-dialect) global cache before it aborts with an
     /// error. USE WITH CAUTION: as setting this too low may cause parsing to
@@ -2163,6 +2572,27 @@ fn manage_state_from_yaml(path: &Path) -> Option<bool> {
     file.flags.and_then(|flags| flags.manage_state)
 }
 
+fn parse_manage_state_env(value: Option<&OsStr>) -> FsResult<Option<bool>> {
+    let Some(value) = value.filter(|value| !value.to_string_lossy().trim().is_empty()) else {
+        return Ok(None);
+    };
+    BoolishValueParser::new()
+        .parse_ref(&clap::Command::new("dbt-fusion"), None, value)
+        .map(Some)
+        .map_err(|_| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Invalid value for {}: '{}'. Expected a boolean.",
+                MANAGE_STATE_ENV,
+                value.to_string_lossy()
+            )
+        })
+}
+
+fn validate_manage_state_env() -> FsResult<()> {
+    parse_manage_state_env(env::var_os(MANAGE_STATE_ENV).as_deref()).map(|_| ())
+}
+
 fn maximum_seed_size_mib_from_yaml(path: &Path) -> Option<u64> {
     let content = stdfs::read_to_string(path).ok()?;
     let file = dbt_yaml::from_str::<FlagsFile>(&content).ok()?;
@@ -2185,11 +2615,14 @@ fn user_settings_path() -> Option<PathBuf> {
 }
 
 impl CommonArgs {
-    pub fn get_manage_state(&self, project_dir: &Path) -> bool {
+    /// `default` applies only when neither the flags, `DBT_ENGINE_MANAGE_STATE`,
+    /// `dbt_project.yml`, nor the user settings say anything.
+    pub fn get_manage_state(&self, project_dir: &Path, default: bool) -> bool {
         self.get_manage_state_with(
             project_dir,
             env::var_os(MANAGE_STATE_ENV),
             user_settings_path(),
+            default,
         )
     }
 
@@ -2199,11 +2632,14 @@ impl CommonArgs {
             .unwrap_or(DEFAULT_MAXIMUM_SEED_SIZE_MIB)
     }
 
+    /// Precedence: CLI flag, then an explicit config opt-out, then env var, then
+    /// config. Callers get an authoritative answer and must not re-read the env.
     fn get_manage_state_with(
         &self,
         project_dir: &Path,
         manage_state_env: Option<OsString>,
         user_settings_path: Option<PathBuf>,
+        default: bool,
     ) -> bool {
         if self.no_manage_state {
             return false;
@@ -2211,14 +2647,18 @@ impl CommonArgs {
         if self.manage_state {
             return true;
         }
-        if let Some(value) = manage_state_env {
-            return BoolishValueParser::new()
-                .parse_ref(&clap::Command::new("dbt-fusion"), None, value.as_ref())
-                .unwrap_or(self.manage_state);
+
+        let configured = manage_state_from_yaml(&project_dir.join(DBT_PROJECT_YML))
+            .or_else(|| user_settings_path.and_then(|path| manage_state_from_yaml(&path)));
+
+        if configured == Some(false) {
+            return false;
         }
-        manage_state_from_yaml(&project_dir.join(DBT_PROJECT_YML))
-            .or_else(|| user_settings_path.and_then(|path| manage_state_from_yaml(&path)))
-            .unwrap_or(false)
+
+        let env_value = parse_manage_state_env(manage_state_env.as_deref())
+            .ok()
+            .flatten();
+        env_value.or(configured).unwrap_or(default)
     }
 
     pub fn get_warn_error(&self) -> Option<bool> {
@@ -2240,10 +2680,11 @@ impl CommonArgs {
     /// `--verify-partial-load` → `--partial-load` → `--partial-parse`
     /// `--verify-partial-parse` → `--partial-parse`
     /// `--dirty` → `--partial-parse`
-    /// `--write-index` → `--write-metadata` → `--partial-parse`
+    /// `--write-index` / `--generate-info-schema` → `--write-metadata` → `--partial-parse`
     pub fn effective_partial_parse(&self) -> bool {
         self.write_metadata
-            || self.write_index
+            || self.effective_write_index()
+            || self.generate_info_schema
             || self.partial_parse
             || self.partial_load
             || self.verify_partial_load
@@ -2252,9 +2693,26 @@ impl CommonArgs {
     }
 
     /// `--verify-partial-load` implies `--partial-load`. `--write-metadata` implies both.
-    /// `--write-index` implies `--write-metadata` implies both.
+    /// `--write-index` and `--generate-info-schema` imply `--write-metadata`, hence both.
     pub fn effective_partial_load(&self) -> bool {
-        self.write_metadata || self.write_index || self.partial_load || self.verify_partial_load
+        self.write_metadata
+            || self.effective_write_index()
+            || self.generate_info_schema
+            || self.partial_load
+            || self.verify_partial_load
+    }
+
+    /// `--write-index` after `--no-write-index` cancels it.
+    ///
+    /// Both `effective_partial_*` gates go through this rather than reading `write_index`
+    /// directly, because those implications exist only to serve the index. Cancelling the index
+    /// without cancelling them would leave the caller with no index *and* the partial-load fast
+    /// path, which cannot see files it has not already recorded — the worst of both. An explicit
+    /// `--write-metadata` still implies both on its own; `--no-write-index` only cancels the index.
+    /// (`--generate-info-schema` implies `--write-metadata` independently, so it stays in the gates
+    /// above regardless of `--no-write-index`.)
+    pub fn effective_write_index(&self) -> bool {
+        self.write_index && !self.no_write_index
     }
 
     /// Resolve the effective value of `--quiet` / `--no-quiet`.
@@ -2299,6 +2757,7 @@ impl CommonArgs {
                 send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.log_format,
+                log_format_file: self.log_format_file,
                 log_level: self.log_level,
                 log_level_file: self.log_level_file,
                 log_file_max_bytes: self.log_file_max_bytes,
@@ -2308,11 +2767,10 @@ impl CommonArgs {
                 export_to_otlp: self.export_to_otlp,
                 show_all_deprecations: self.show_all_deprecations,
                 show_timings: arg.io.show_timings,
-                use_parquet_schema_store: self.use_parquet_schema_store,
-                verify_parquet_schema_store: self.verify_parquet_schema_store,
                 host: self.host.clone(),
                 port: self.port,
                 use_v2_compatible_package_downloads: self.use_v2_compatible_package_downloads,
+                require_hub_verified_downloads: self.require_hub_verified_downloads,
             },
             profiles_dir: self.profiles_dir.clone(),
             packages_install_path: self.packages_install_path.clone(),
@@ -2356,6 +2814,8 @@ impl CommonArgs {
             macro_name: None,
             macro_args: BTreeMap::new(),
             macro_sql: None,
+            adapter_override: None,
+            query_id: None,
             selector: self.selector.clone(),
             resource_types: vec![],
             exclude_resource_types: vec![],
@@ -2399,8 +2859,21 @@ impl CommonArgs {
                 self.write_json
             },
             write_catalog: self.write_catalog,
-            write_metadata: self.write_metadata || self.write_index,
-            write_index: self.write_index,
+            // `--no-write-index` is authoritative over `--write-index`, the way
+            // `--no-write-json` is over `--write-json`. It cancels only the index, so
+            // `--write-metadata --no-write-index` still means epochs-without-index.
+            // `--generate-info-schema` implies `--write-metadata` on its own.
+            write_metadata: self.write_metadata
+                || self.effective_write_index()
+                || self.generate_info_schema,
+            write_index: self.effective_write_index(),
+            // Set by `Cli::to_eval_args` for the commands that default the index on; a
+            // per-command conversion cannot know it was a default rather than a request.
+            write_index_implied: false,
+            check_names: Vec::new(),
+            skip_checks: false,
+            generate_info_schema: self.generate_info_schema,
+            info_schema_dir: self.info_schema_dir.clone(),
             classify_with_warehouse_tags: self.classify_with_warehouse_tags,
             index_dir: self.index_dir.clone(),
             metadata_dir: self.metadata_dir.clone(),
@@ -2433,6 +2906,7 @@ impl CommonArgs {
             skip_creating_generic_tests: false,
             write_lineage: self.write_lineage,
             force_enable_linter: false,
+            force_enable_formatter_diagnostics: false,
             maximum_seed_size_mib: self.resolve_maximum_seed_size_mib(in_dir),
             command_entrypoint: arg.command,
         }
@@ -2479,6 +2953,11 @@ impl CommonArgs {
 
         options
     }
+
+    /// True when replaying a prior recorded dbt run via `--dbt-replay`, since those recordings predate fusion-only warnings.
+    pub fn skip_fusion_only_upgrades(&self) -> bool {
+        self.dbt_replay.is_some()
+    }
 }
 
 /// Generate shell completion scripts
@@ -2520,9 +2999,10 @@ pub struct InitArgs {
     #[arg(long, default_value = "false")]
     pub skip_profile_setup: bool,
 
-    /// Run the Fusion onboarding/upgrade flow
-    #[arg(long, default_value = "false")]
-    pub fusion_upgrade: bool,
+    /// Run the dbt v2 onboarding/upgrade flow
+    #[arg(long = "v2-upgrade", alias = "fusion-upgrade", default_value = "false")]
+    #[serde(alias = "fusion_upgrade")]
+    pub v2_upgrade: bool,
 
     /// The sample project to initialize with
     #[arg(long, default_value = "jaffle-shop")]
@@ -2559,6 +3039,7 @@ impl InitArgs {
                 send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.common_args.log_format,
+                log_format_file: self.common_args.log_format_file,
                 log_level: self.common_args.log_level,
                 log_level_file: self.common_args.log_level_file,
                 log_file_max_bytes: self.common_args.log_file_max_bytes,
@@ -2568,18 +3049,23 @@ impl InitArgs {
                 show_all_deprecations: self.common_args.show_all_deprecations,
                 show_timings: arg.from_main,
                 export_to_otlp: self.common_args.export_to_otlp,
-                use_parquet_schema_store: self.common_args.use_parquet_schema_store,
-                verify_parquet_schema_store: self.common_args.verify_parquet_schema_store,
                 host: self.common_args.host.clone(),
                 port: self.common_args.port,
                 use_v2_compatible_package_downloads: self
                     .common_args
                     .use_v2_compatible_package_downloads,
+                require_hub_verified_downloads: self.common_args.require_hub_verified_downloads,
             },
             task_cache_url: "noop".to_string(),
             favor_state: self.common_args.favor_state,
             phase: Phases::Debug,
             send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
+            // Propagate profile-resolution inputs so post-init validation reads the same
+            // profiles.yml the setup step used (e.g. --profiles-dir / DBT_PROFILES_DIR).
+            profiles_dir: self.common_args.profiles_dir.clone(),
+            profile: self.common_args.profile.clone(),
+            target: self.common_args.target.clone(),
+            vars: self.common_args.vars.clone().unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -2603,6 +3089,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             send_anonymous_usage_stats: common_args.get_send_anonymous_usage_stats(),
             status_reporter: None,
             log_format: common_args.log_format,
+            log_format_file: common_args.log_format_file,
             log_level: match (common_args.debug, common_args.log_level) {
                 (true, Some(LogLevel::Trace)) => Some(LogLevel::Trace),
                 (true, _) => Some(LogLevel::Debug),
@@ -2620,13 +3107,13 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: true,
-            use_parquet_schema_store: common_args.use_parquet_schema_store,
-            verify_parquet_schema_store: common_args.verify_parquet_schema_store,
             host: common_args.host,
             port: common_args.port,
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
+            require_hub_verified_downloads: common_args.require_hub_verified_downloads,
         },
         from_main: true,
+        exit_process_on_panic: true,
 
         target: common_args.target,
         num_threads: common_args.threads,
@@ -2653,6 +3140,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             status_reporter: None,
             // should_cancel_compilation: None,
             log_format: common_args.log_format,
+            log_format_file: common_args.log_format_file,
             log_level: common_args.log_level,
             log_level_file: common_args.log_level_file,
             log_file_max_bytes: common_args.log_file_max_bytes,
@@ -2662,13 +3150,13 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             otel_parquet_file_name: common_args.otel_parquet_file_name,
             show_all_deprecations: common_args.show_all_deprecations,
             show_timings: false,
-            use_parquet_schema_store: common_args.use_parquet_schema_store,
-            verify_parquet_schema_store: common_args.verify_parquet_schema_store,
             host: common_args.host,
             port: common_args.port,
             use_v2_compatible_package_downloads: common_args.use_v2_compatible_package_downloads,
+            require_hub_verified_downloads: common_args.require_hub_verified_downloads,
         },
         from_main: false,
+        exit_process_on_panic: true,
         target: common_args.target,
         num_threads: common_args.threads,
         no_parallel: common_args.no_parallel,
@@ -2679,17 +3167,122 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
 mod tests {
     use super::*;
 
+    struct NoopParser;
+
+    impl ExtensionCommandParser for NoopParser {
+        fn has_subcommand(&self, _name: &str) -> bool {
+            false
+        }
+    }
+
     fn get_manage_state_with_env(
         common_args: &CommonArgs,
         project_dir: &Path,
         env_value: Option<&str>,
         user_settings_path: Option<PathBuf>,
+        default: bool,
     ) -> bool {
         common_args.get_manage_state_with(
             project_dir,
             env_value.map(OsString::from),
             user_settings_path,
+            default,
         )
+    }
+
+    #[test]
+    fn no_write_index_cancels_the_index_and_its_implications() {
+        // `--write-index` alone: index on, and it implies partial parse + partial load.
+        let mut args = CommonArgs {
+            write_index: true,
+            ..Default::default()
+        };
+        assert!(args.effective_write_index());
+        assert!(args.effective_partial_parse());
+        assert!(args.effective_partial_load());
+
+        // Adding `--no-write-index` must cancel all three together. Cancelling only the index
+        // would leave the caller with no index *and* the partial-load fast path, which cannot
+        // see files it has not already recorded.
+        args.no_write_index = true;
+        assert!(!args.effective_write_index());
+        assert!(!args.effective_partial_parse());
+        assert!(!args.effective_partial_load());
+    }
+
+    #[test]
+    fn no_write_index_leaves_explicit_write_metadata_alone() {
+        // `--write-metadata` implies partial parse/load on its own, so `--no-write-index`
+        // cancels only the index: this stays epochs-without-index.
+        let args = CommonArgs {
+            write_metadata: true,
+            no_write_index: true,
+            ..Default::default()
+        };
+        assert!(!args.effective_write_index());
+        assert!(args.effective_partial_parse());
+        assert!(args.effective_partial_load());
+    }
+
+    #[test]
+    fn hidden_artifact_flags_are_absent_from_long_help_but_still_parse() {
+        use clap::CommandFactory;
+
+        let help = CommonArgs::command().render_long_help().to_string();
+        for flag in [
+            "--write-lineage",
+            "--write-index",
+            "--write-metadata",
+            "--lineage",
+        ] {
+            assert!(
+                !help.contains(flag),
+                "{flag} must be hidden from --help, got:\n{help}"
+            );
+        }
+        assert!(
+            help.contains("--generate-info-schema"),
+            "public artifacts flag must remain in --help, got:\n{help}"
+        );
+        assert!(
+            help.contains("--write-catalog"),
+            "--write-catalog stays in --help, got:\n{help}"
+        );
+
+        let parsed = CommonArgs::try_parse_from([
+            "dbt",
+            "--write-catalog",
+            "--write-lineage",
+            "--write-index",
+            "--write-metadata",
+        ])
+        .expect("hidden artifact flags must remain accepted");
+        assert!(parsed.write_catalog);
+        assert!(parsed.write_lineage);
+        assert!(parsed.write_index);
+        assert!(parsed.write_metadata);
+
+        assert!(
+            CommonArgs::try_parse_from(["dbt", "--lineage"]).is_err(),
+            "--lineage is not a clap flag"
+        );
+    }
+
+    #[test]
+    fn show_info_parses_and_conflicts_with_inline() {
+        let parsed = ShowArgs::try_parse_from(["show", "--info", "models"])
+            .expect("--info must parse on show");
+        assert_eq!(parsed.info.as_deref(), Some("models"));
+
+        assert!(
+            ShowArgs::try_parse_from(["show", "--info", "models", "--inline", "select 1"]).is_err(),
+            "--info must conflict with --inline"
+        );
+        assert!(
+            ShowArgs::try_parse_from(["show", "--info", "models", "--adapter", "lakecompute"])
+                .is_err(),
+            "--info must conflict with --adapter"
+        );
     }
 
     #[test]
@@ -2701,7 +3294,22 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            None
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn manage_state_uses_supplied_default() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            None,
+            true
         ));
     }
 
@@ -2719,7 +3327,8 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            None
+            None,
+            false
         ));
     }
 
@@ -2736,7 +3345,8 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            Some(user_settings)
+            Some(user_settings),
+            false
         ));
     }
 
@@ -2752,7 +3362,8 @@ mod tests {
             &common_args,
             project_dir.path(),
             Some("false"),
-            None
+            None,
+            false
         ));
     }
 
@@ -2773,8 +3384,227 @@ mod tests {
             &common_args,
             project_dir.path(),
             None,
-            None
+            None,
+            false
         ));
+    }
+
+    /// The dbt platform path: the injected env var alone still enables dbt State.
+    #[test]
+    fn env_true_enables_manage_state() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            None,
+            false
+        ));
+    }
+
+    /// dbt platform injects `DBT_ENGINE_MANAGE_STATE=true` on production
+    /// deployments, so an explicit opt-out has to beat it or users have no way to
+    /// turn dbt State off.
+    #[test]
+    fn no_manage_state_overrides_env_true() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let common_args = CommonArgs {
+            no_manage_state: true,
+            ..Default::default()
+        };
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn project_flag_false_overrides_env_true() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: false\n",
+        )
+        .unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn user_settings_false_overrides_env_true() {
+        let project_dir = tempfile::tempdir().unwrap();
+        let home_dir = tempfile::tempdir().unwrap();
+        stdfs::create_dir_all(home_dir.path().join(".dbt")).unwrap();
+        let user_settings = home_dir.path().join(USER_SETTINGS_YML);
+        stdfs::write(&user_settings, "flags:\n  manage_state: false\n").unwrap();
+        let common_args = CommonArgs::default();
+
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("true"),
+            Some(user_settings),
+            false
+        ));
+    }
+
+    /// Guards the clap wiring itself: if `manage_state` regains `env = ...`, the env
+    /// var becomes indistinguishable from the flag and a config opt-out stops working.
+    #[test]
+    fn manage_state_flag_is_not_populated_from_env() {
+        use clap::CommandFactory;
+
+        let reads_env = CompileArgs::command()
+            .get_arguments()
+            .find(|arg| arg.get_id() == "manage_state")
+            .map(|arg| arg.get_env().is_some());
+
+        assert_eq!(
+            reads_env,
+            Some(false),
+            "--manage-state must not read DBT_ENGINE_MANAGE_STATE via clap"
+        );
+    }
+
+    #[test]
+    fn invalid_env_value_is_rejected() {
+        let err = parse_manage_state_env(Some(OsStr::new("treu"))).unwrap_err();
+
+        assert!(
+            err.to_string().contains(MANAGE_STATE_ENV) && err.to_string().contains("treu"),
+            "error must name the variable and the bad value, got: {err}"
+        );
+    }
+
+    #[test]
+    fn valid_and_unset_env_values_parse() {
+        assert_eq!(parse_manage_state_env(None).unwrap(), None);
+        assert_eq!(
+            parse_manage_state_env(Some(OsStr::new("   "))).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_manage_state_env(Some(OsStr::new("true"))).unwrap(),
+            Some(true)
+        );
+        assert_eq!(
+            parse_manage_state_env(Some(OsStr::new("false"))).unwrap(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn empty_env_value_is_treated_as_unset() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+
+        assert!(get_manage_state_with_env(
+            &CommonArgs::default(),
+            project_dir.path(),
+            Some("   "),
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn project_flag_true_beats_user_settings_false() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+        let home_dir = tempfile::tempdir().unwrap();
+        stdfs::create_dir_all(home_dir.path().join(".dbt")).unwrap();
+        let user_settings = home_dir.path().join(USER_SETTINGS_YML);
+        stdfs::write(&user_settings, "flags:\n  manage_state: false\n").unwrap();
+
+        assert!(get_manage_state_with_env(
+            &CommonArgs::default(),
+            project_dir.path(),
+            None,
+            Some(user_settings),
+            false
+        ));
+    }
+
+    /// An explicit `--manage-state` is the user acting right now, so it still wins
+    /// over a stale project-level opt-out.
+    #[test]
+    fn manage_state_flag_overrides_project_flag_false() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: false\n",
+        )
+        .unwrap();
+        let common_args = CommonArgs {
+            manage_state: true,
+            ..Default::default()
+        };
+
+        assert!(get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            None,
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn compile_resolves_manage_state_from_project_flags() {
+        let project_dir = tempfile::tempdir().unwrap();
+        stdfs::write(
+            project_dir.path().join(DBT_PROJECT_YML),
+            "flags:\n  manage_state: true\n",
+        )
+        .unwrap();
+
+        let compile_args = CompileArgs {
+            common_args: CommonArgs {
+                manage_state: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let system_args = SystemArgs {
+            command: FsCommand::Compile,
+            io: IoArgs::default(),
+            from_main: false,
+            exit_process_on_panic: false,
+            num_threads: None,
+            no_parallel: false,
+            target: None,
+        };
+        let eval_args = compile_args.to_eval_args(
+            system_args,
+            project_dir.path(),
+            &project_dir.path().join("target"),
+        );
+
+        assert!(
+            eval_args.run_cache_service,
+            "compile must resolve dbt State like the other auto-defer commands"
+        );
     }
 
     #[test]
@@ -2791,7 +3621,15 @@ mod tests {
             &common_args,
             project_dir.path(),
             Some("false"),
-            None
+            None,
+            false
+        ));
+        assert!(!get_manage_state_with_env(
+            &common_args,
+            project_dir.path(),
+            Some("false"),
+            None,
+            true
         ));
     }
 
@@ -2803,6 +3641,172 @@ mod tests {
     }
 
     #[test]
+    fn detects_top_level_json_version() {
+        assert!(CliParser::args_request_json_version([
+            "dbt",
+            "--format",
+            "json",
+            "--version"
+        ]));
+        assert!(CliParser::args_request_json_version([
+            "dbt",
+            "--version",
+            "--format=json",
+        ]));
+        assert!(CliParser::args_request_json_version([
+            "dbt",
+            "--output=json",
+            "--version",
+        ]));
+        assert!(!CliParser::args_request_json_version([
+            "dbt",
+            "list",
+            "--format",
+            "json",
+            "--version"
+        ]));
+        assert!(!CliParser::args_request_json_version([
+            "dbt",
+            "--format",
+            "text",
+            "--version"
+        ]));
+    }
+
+    #[test]
+    fn version_json_uses_fusion_key() {
+        let parser = CliParser::new("dbt-fusion", "2.0.0-preview.92", Box::new(NoopParser));
+
+        assert_eq!(parser.version_json(), r#"{"fusion":"2.0.0-preview.92"}"#);
+        assert_eq!(
+            parser.json_version_for_args(["dbt", "--format", "json", "--version"]),
+            Some(r#"{"fusion":"2.0.0-preview.92"}"#.to_string())
+        );
+    }
+
+    fn test_system_args(command: FsCommand) -> SystemArgs {
+        SystemArgs {
+            command,
+            io: IoArgs::default(),
+            from_main: false,
+            exit_process_on_panic: false,
+            num_threads: None,
+            no_parallel: false,
+            target: None,
+        }
+    }
+
+    fn parse_core_command(args: &[&str]) -> CoreCommand {
+        let cli = CliParser::new("dbt-fusion", "2.0.0", Box::new(NoopParser))
+            .try_parse_from(std::iter::once("dbt").chain(args.iter().copied()))
+            .expect("args should parse");
+        match cli.command {
+            Command::Core(cmd) => cmd,
+            Command::Extension(_) => panic!("expected a core command"),
+        }
+    }
+
+    #[test]
+    fn top_level_freshness_command_parses_and_is_not_sources_only() {
+        let cmd = parse_core_command(&["freshness", "--select", "stg_orders+"]);
+
+        let CoreCommand::Freshness(args) = &cmd else {
+            panic!("expected CoreCommand::Freshness, got {cmd:?}");
+        };
+        assert_eq!(
+            args.common_args.select.as_deref(),
+            Some(["stg_orders+".to_string()].as_slice())
+        );
+        assert!(!cmd.as_command().is_sources_only_freshness());
+        assert_eq!(cmd.as_command(), FsCommand::Freshness);
+    }
+
+    #[test]
+    fn top_level_freshness_command_supports_resource_type_filters() {
+        let cmd = parse_core_command(&[
+            "freshness",
+            "--resource-type",
+            "source",
+            "--exclude-resource-type",
+            "model",
+        ]);
+
+        let CoreCommand::Freshness(args) = &cmd else {
+            panic!("expected CoreCommand::Freshness, got {cmd:?}");
+        };
+        assert_eq!(args.resource_type, Some(vec![ClapResourceType::Source]));
+        assert_eq!(
+            args.exclude_resource_type,
+            Some(vec![ClapResourceType::Model])
+        );
+
+        let eval_args = args.to_eval_args(
+            test_system_args(FsCommand::Freshness),
+            Path::new("/tmp/in"),
+            Path::new("/tmp/out"),
+        );
+        assert_eq!(eval_args.resource_types, vec![ClapResourceType::Source]);
+        assert_eq!(
+            eval_args.exclude_resource_types,
+            vec![ClapResourceType::Model]
+        );
+    }
+
+    #[test]
+    fn nested_source_freshness_command_is_sources_only() {
+        let cmd = parse_core_command(&["source", "freshness", "--select", "raw_orders"]);
+
+        let CoreCommand::Source(args) = &cmd else {
+            panic!("expected CoreCommand::Source, got {cmd:?}");
+        };
+        let SourceCommand::Freshness(freshness) = &args.command;
+        assert_eq!(
+            freshness.common_args.select.as_deref(),
+            Some(["raw_orders".to_string()].as_slice())
+        );
+        assert!(cmd.as_command().is_sources_only_freshness());
+        assert_eq!(cmd.as_command(), FsCommand::Source);
+    }
+
+    #[test]
+    fn nested_source_freshness_still_injects_resource_type_source() {
+        let cmd = parse_core_command(&["source", "freshness"]);
+        let CoreCommand::Source(args) = &cmd else {
+            panic!("expected CoreCommand::Source");
+        };
+
+        let eval_args = args.to_eval_args(
+            test_system_args(FsCommand::Source),
+            Path::new("/tmp/in"),
+            Path::new("/tmp/out"),
+        );
+
+        assert_eq!(eval_args.phase, Phases::Freshness);
+        assert_eq!(
+            eval_args.select.as_ref().map(|s| s.to_string()),
+            Some("resource_type:source".to_string())
+        );
+    }
+
+    #[test]
+    fn version_json_key_derives_from_command_name() {
+        let parser = CliParser::new("dbt-core", "1.9.0", Box::new(NoopParser));
+
+        assert_eq!(parser.version_json(), r#"{"core":"1.9.0"}"#);
+    }
+
+    #[test]
+    fn json_version_returns_display_version_error() {
+        let err = CliParser::new("dbt-fusion", "2.0.0-preview.92", Box::new(NoopParser))
+            .try_parse_from(["dbt", "--format", "json", "--version"])
+            .expect_err("json version should short-circuit parsing");
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::DisplayVersion);
+        assert!(!err.use_stderr());
+        assert_eq!(err.exit_code(), 0);
+    }
+
+    #[test]
     fn non_project_core_commands_do_not_require_a_project() {
         use CoreCommand::*;
         let non_project = [
@@ -2810,9 +3814,16 @@ mod tests {
             Man(ManArgs::default()),
             Docs(DocsArgs::default()),
             Login(LoginArgs::default()),
+            State(StateArgs {
+                common_args: CommonArgs::default(),
+                subcommand: StateSubcommand::Explain(StateExplainArgs::default()),
+            }),
             Completions(CompletionsArgs {
                 shell: Shell::Bash,
                 common_args: CommonArgs::default(),
+            }),
+            Internal(InternalArgs {
+                command: InternalCommand::GetDistributionInfo(GetDistributionInfoArgs::default()),
             }),
         ];
         for command in non_project {
@@ -2974,5 +3985,74 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let args = CommonArgs::default();
         assert!(args.get_send_anonymous_usage_stats_for_project(dir.path()));
+    }
+
+    fn parse_internal_args(args: &[&str]) -> Result<InternalArgs, clap::Error> {
+        InternalArgs::try_parse_from(std::iter::once("internal").chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn get_distribution_info_defaults_to_no_path_and_not_all() {
+        let parsed = parse_internal_args(&["get-distribution-info"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert_eq!(args.path, None);
+        assert!(!args.all);
+    }
+
+    #[test]
+    fn get_distribution_info_accepts_a_path() {
+        let parsed = parse_internal_args(&["get-distribution-info", "/some/dbt"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert_eq!(args.path, Some(PathBuf::from("/some/dbt")));
+        assert!(!args.all);
+    }
+
+    #[test]
+    fn get_distribution_info_accepts_all_flag() {
+        let parsed = parse_internal_args(&["get-distribution-info", "--all"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert_eq!(args.path, None);
+        assert!(args.all);
+
+        let parsed = parse_internal_args(&["get-distribution-info", "-a"]).unwrap();
+        let InternalCommand::GetDistributionInfo(args) = parsed.command;
+        assert!(args.all);
+    }
+
+    #[test]
+    fn get_distribution_info_path_and_all_are_mutually_exclusive() {
+        let result = parse_internal_args(&["get-distribution-info", "--all", "/some/dbt"]);
+        assert!(result.is_err());
+    }
+
+    /// Regression test for dbt-core#15685: both entrypoints carry
+    /// `--log-format-file` from `CommonArgs` into `IoArgs`.
+    #[test]
+    fn cli_entrypoints_carry_log_format_file_into_io_args() {
+        // `Cli::common_args()` reads the subcommand's args, not the top-level field.
+        let cli = Cli {
+            command: Command::Core(CoreCommand::Run(RunArgs {
+                common_args: CommonArgs {
+                    log_format: LogFormat::Text,
+                    log_format_file: Some(LogFormat::Json),
+                    ..Default::default()
+                },
+                ..Default::default()
+            })),
+            common_args: CommonArgs::default(),
+        };
+
+        for (entrypoint, args) in [("from_main", from_main(&cli)), ("from_lib", from_lib(&cli))] {
+            assert_eq!(
+                args.io.log_format_file,
+                Some(LogFormat::Json),
+                "expected `{entrypoint}` to carry log_format_file"
+            );
+            assert_eq!(
+                args.io.log_format,
+                LogFormat::Text,
+                "expected `{entrypoint}` to leave log_format alone"
+            );
+        }
     }
 }

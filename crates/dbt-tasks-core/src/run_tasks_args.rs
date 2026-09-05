@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::path::PathBuf;
 
@@ -6,9 +6,11 @@ use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::FsCommand;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::LocalExecutionBackendKind;
+use dbt_common::io_args::OptimizeTestsOptions;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::{DisplayFormat, EvalArgs, ReplayMode};
 use dbt_common::io_args::{Phases, RunCacheMode};
+use dbt_common::node_selector::SelectExpression;
 use dbt_common::static_analysis::{
     is_static_analysis_off_or_baseline, normalize_static_analysis_kind,
 };
@@ -82,6 +84,10 @@ pub struct RunTasksArgs {
     pub phase: Phases,
     /// Optional (resolved) sampling plan to locate local sampled data for sources
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
+    /// Parsed select expression from the invocation.
+    pub select: Option<SelectExpression>,
+    /// Parsed exclude expression from the invocation.
+    pub exclude: Option<SelectExpression>,
     /// Backend used for local execution of runnable nodes
     pub local_execution_backend: LocalExecutionBackendKind,
     /// Sidecar/service should not time out. (Used by REPL to keep the runner alive across multiple commands.)
@@ -94,14 +100,34 @@ pub struct RunTasksArgs {
     pub event_time_end: Option<String>,
     /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
     pub event_time_start: Option<String>,
+    /// The raw `--sample` spec (e.g. `"30 days"` or a `{start, end}` JSON range), if passed.
+    pub sample: Option<String>,
     /// Per-invocation fail-fast signal.
     pub fail_fast: FailFast,
+    /// Whether the user passed `--fail-fast`. The signal above is triggered on
+    /// any error regardless of this flag; this records whether the flag itself
+    /// was set so downstream policy can react (e.g. ignore `on_error: continue`).
+    pub fail_fast_flag: bool,
     /// Whether to skip running post hook operations.
     pub skip_post_hooks: bool,
+    /// Hidden test optimization flags.
+    pub optimize_tests: dbt_common::collections::HashSet<OptimizeTestsOptions>,
     /// Whether the gRPC run-cache service is explicitly requested via CLI flag.
     pub run_cache_service: bool,
     /// Per-invocation warn-error options resolved before task execution.
     pub warn_error_options: WarnErrorOptions,
+    /// Previous batch_results from run_results.json, populated during retry
+    /// so that already-successful overloads can be skipped.
+    pub previous_batch_results: HashMap<String, dbt_schemas::schemas::BatchResults>,
+    /// Resolved metadata directory (`--metadata-dir` or `<out_dir>/metadata`). Carried here so a
+    /// task can find it — `EvalArgs::metadata_dir()` is not reachable from the task layer, and
+    /// deriving it from `out_dir` would silently ignore the override.
+    pub metadata_dir: PathBuf,
+    /// Resolved index directory (`--index-dir` or `<out_dir>/index`). See `metadata_dir`.
+    pub index_dir: PathBuf,
+    /// `show --query-id <id>`: fetch a previously completed LakeCompute query's
+    /// result directly. See `EvalArgs::query_id`.
+    pub query_id: Option<String>,
 }
 
 impl RunTasksArgs {
@@ -109,6 +135,9 @@ impl RunTasksArgs {
         let run_tasks_args = Self {
             command: arg.command,
             io: arg.io.clone(),
+            metadata_dir: arg.metadata_dir(),
+            index_dir: arg.index_dir(),
+            query_id: arg.query_id.clone(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),
             packages_install_path: arg.packages_install_path.clone(),
@@ -138,17 +167,23 @@ impl RunTasksArgs {
             favor_state: arg.favor_state,
             run_cache_mode: arg.run_cache_mode.clone(),
             sample_renaming: arg.sample_renaming.clone(),
+            select: arg.select.clone(),
+            exclude: arg.exclude.clone(),
             phase: arg.phase.clone(),
             local_execution_backend: arg.local_execution_backend,
             long_living: arg.long_living,
             full_refresh: arg.full_refresh,
             event_time_start: arg.event_time_start.clone(),
             event_time_end: arg.event_time_end.clone(),
+            sample: arg.sample.clone(),
             fail_fast,
+            fail_fast_flag: arg.fail_fast,
             skip_post_hooks: arg.skip_post_hooks,
+            optimize_tests: arg.optimize_tests.clone(),
             run_cache_service: arg.run_cache_service,
             warn_error_options: arg.warn_error_options.clone(),
             empty: arg.empty,
+            previous_batch_results: Default::default(),
         };
         Box::new(run_tasks_args)
     }

@@ -3,9 +3,11 @@ use super::log_capture::JsonLogEvent;
 use crate::task::env::TracingReloadHandle;
 use crate::task::task_seq::FeatureStackFactory;
 use dbt_clap_core::{Cli, CliParser};
+use dbt_common::FsError;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::{FsError, tracing::FsTraceConfig};
-use dbt_lib::ctrl_c::run_future_with_ctrlc_support;
+use dbt_common::constants::DBT_FUSION;
+use dbt_common::tracing::FsTraceConfigBuilder;
+use dbt_main::ctrl_c::run_future_with_ctrlc_support;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::{
@@ -282,11 +284,17 @@ pub fn maybe_normalize_time(output: String) -> String {
     result
 }
 
+/// Strip the version number out of the startup version banner, whose brand name
+/// varies per binary (`dbt-fusion`, `dbt-core`, `dbt-repl`).
 pub fn normalize_version(output: String) -> String {
-    output.replace(
-        format!("dbt-fusion {}", env!("CARGO_PKG_VERSION")).as_str(),
-        "dbt-fusion ",
-    )
+    const BRANDS: [&str; 3] = ["dbt-fusion", "dbt-core", "dbt-repl"];
+
+    BRANDS.iter().fold(output, |acc, brand| {
+        acc.replace(
+            format!("{brand} {}", env!("CARGO_PKG_VERSION")).as_str(),
+            format!("{brand} ").as_str(),
+        )
+    })
 }
 
 pub fn normalize_inline_sql_files(output: String) -> String {
@@ -409,14 +417,14 @@ where
     // this helper does not need a `CliParser`.
     let warn_error_options = Some(cli.common_args.get_cli_warn_error_options());
     let fail_fast_flag = cli.common_args.fail_fast;
-    let trace_config = FsTraceConfig::new_from_io_args(
-        arg.command,
-        Some(&project_dir),
-        Some(&target_dir),
-        &arg.io,
-        warn_error_options.as_ref(),
-        "dbt-tests",
-    );
+    let trace_config = FsTraceConfigBuilder::from_io_args("dbt-tests", DBT_FUSION, &arg.io)
+        .with_command(arg.command)
+        .with_project_dir(Some(&project_dir))
+        .with_target_path(Some(&target_dir))
+        .with_query_log_enabled(true) // Always enable query log for now
+        .with_warn_error_options(warn_error_options.as_ref().cloned().unwrap_or_default())
+        .with_skip_fusion_only_upgrades(cli.common_args.skip_fusion_only_upgrades())
+        .build();
     let (middlewares, consumer_layers, mut shutdown_items, feature_handle) =
         match trace_config.build_layers() {
             Ok(layers) => layers.into_parts(),

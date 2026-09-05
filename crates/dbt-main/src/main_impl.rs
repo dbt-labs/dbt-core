@@ -1,5 +1,10 @@
-use crate::ctrl_c::run_future_with_ctrlc_support;
+use std::cell::Cell;
+use std::io::{self, Write};
+use std::process::ExitCode;
+use std::sync::Arc;
+
 use clap::error::ErrorKind;
+
 use dbt_clap_core::Cli;
 use dbt_clap_core::CliParser;
 use dbt_clap_core::commands::CoreCommand;
@@ -12,13 +17,11 @@ use dbt_common::{
 };
 use dbt_error::FsError;
 use dbt_features::feature_stack::FeatureStack;
-use std::io::{self, Write};
-use std::process::ExitCode;
-use std::sync::Arc;
+
+use crate::ctrl_c::run_future_with_ctrlc_support;
 
 use crate::dbt_lib::execute_fs_and_shutdown;
-use crate::vars::apply_engine_env_var_aliases;
-use crate::vars::warn_unused_engine_env_vars;
+use crate::vars::{apply_color_env_overrides, apply_engine_env_var_aliases};
 
 const FS_DEFAULT_STACK_SIZE: usize = 8 * 1024 * 1024;
 
@@ -28,6 +31,22 @@ const FS_DEFAULT_STACK_SIZE: usize = 8 * 1024 * 1024;
 /// These threads are used mostly for blocking I/O operations, so they don't really
 /// consume CPU resources. That's why we can afford and should have a lot of them.
 const FS_DEFAULT_MAX_BLOCKING_THREADS: usize = 512;
+
+thread_local! {
+    static DBT_RT_GUARD: Cell<Option<dbt_runtime::SetCurrentGuard>> =
+        const { Cell::new(None) };
+}
+
+fn on_tokio_thread_start(handle: &dbt_runtime::Handle) {
+    // SAFETY: this is called only from the tokio thread start callback.
+    // Cleanup is performed on the tokio thread stop callback.
+    let guard = unsafe { handle.enter_owned() };
+    DBT_RT_GUARD.set(Some(guard));
+}
+
+fn on_tokio_thread_stop() {
+    DBT_RT_GUARD.set(None);
+}
 
 /// Load environment variables from .env file in the current working directory.
 ///
@@ -46,7 +65,7 @@ fn maybe_load_dotenv() {
     }
 }
 
-fn init_env_before_parse() {
+pub fn init_env_before_parse() {
     // Find project root and load .env BEFORE CLI parsing so that environment
     // variables from .env are available for clap's `env = "VAR"` attributes.
     maybe_load_dotenv();
@@ -55,12 +74,16 @@ fn init_env_before_parse() {
     // This allows users to use DBT_ENGINE_FAIL_FAST instead of DBT_FAIL_FAST.
     apply_engine_env_var_aliases();
 
-    // Warn about env vars that are recognized but not supported by fusion.
-    warn_unused_engine_env_vars();
+    // Translate FORCE_COLOR before CLI parsing, so clap's own usage/error text
+    // is styled consistently with the rest of the output.
+    apply_color_env_overrides();
 }
 
 fn parse_cli_or_exit(cli_parser: &CliParser) -> Box<Cli> {
-    match cli_parser.try_parse() {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    cli_parser.print_json_version_and_exit_for_args(&args);
+
+    match cli_parser.try_parse_from(args) {
         Ok(cli) => {
             // Continue as normal
             cli
@@ -94,6 +117,13 @@ pub fn prepare_cli_or_exit(cli_parser: &CliParser) -> Box<Cli> {
 }
 
 pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>) -> ExitCode {
+    ExitCode::from(run_cli_with_code(cli, arg, feature_stack))
+}
+
+/// Same as [`run_cli`] but yields the raw exit code instead of an [`ExitCode`],
+/// so embedders (e.g. the `dbt-core` Python extension's console entrypoint) can
+/// pass it to `std::process::exit`.
+pub fn run_cli_with_code(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>) -> u8 {
     let event_emitter = feature_stack.instrumentation.event_emitter.as_ref();
     let fail_fast_flag = cli.common_args.fail_fast;
 
@@ -112,6 +142,12 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
         .config
         .apply_configuration(&cli.common_args());
 
+    // Bounded blocking pool for jinja rendering and database work.
+    let dbt_rt = dbt_runtime::builder::Builder::new()
+        .max_blocking_threads(if arg.no_parallel { 1 } else { 48 })
+        .thread_stack_size(FS_DEFAULT_STACK_SIZE)
+        .build();
+
     // Setup tokio runtime and set stack-size to 8MB
     // DO NOT USE Rayon, it is not compatible with Tokio
 
@@ -119,26 +155,32 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
     // `--threads` is exclusively the adapter connection-backpressure knob
     // and does not affect the runtime.
     let tokio_rt = if arg.no_parallel {
+        let dbt_rt_handle = dbt_rt.handle().clone();
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_stack_size(FS_DEFAULT_STACK_SIZE)
             .worker_threads(1)
             .max_blocking_threads(1)
+            .on_thread_start(move || on_tokio_thread_start(&dbt_rt_handle))
+            .on_thread_stop(on_tokio_thread_stop)
             .build()
             .expect("failed to initialize 'single-worker' tokio runtime")
     } else {
+        let dbt_rt_handle = dbt_rt.handle().clone();
         // Multi-threaded runtime: use default (max parallelism)
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .max_blocking_threads(FS_DEFAULT_MAX_BLOCKING_THREADS)
             .thread_stack_size(FS_DEFAULT_STACK_SIZE)
+            .on_thread_start(move || on_tokio_thread_start(&dbt_rt_handle))
+            .on_thread_stop(on_tokio_thread_stop)
             .build()
             .expect("failed to initialize default multi-threaded tokio runtime")
     };
 
     // If execution panics, exit with a status 2 (but not if RUST_BACKTRACE is
     // set to 1, in which case we want to see the backtrace):
-    if std::env::var("RUST_BACKTRACE").unwrap_or_default() != "1" {
+    if arg.exit_process_on_panic && std::env::var("RUST_BACKTRACE").unwrap_or_default() != "1" {
         std::panic::set_hook(Box::new(|info| {
             eprintln!("{} {}", RED.apply_to(format!("{PANIC}:")), info);
             let _ = io::stdout().flush();
@@ -155,7 +197,6 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
     let future = tokio_rt.spawn(execute_fs_and_shutdown(
         arg,
         cli,
-        true,
         Arc::clone(&feature_stack),
         token,
     ));
@@ -199,6 +240,7 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
                 //    (technically, this is implied by the 2nd step, but
                 //    nonetheless we make it explicit here in case this function
                 //    gets refactored in the future)
+                std::mem::forget(dbt_rt);
                 std::mem::forget(tokio_rt);
                 // 2. Call a platform-specific function to hard terminate the
                 //    current process
@@ -206,12 +248,12 @@ pub fn run_cli(cli: Box<Cli>, arg: SystemArgs, feature_stack: Arc<FeatureStack>)
             }
 
             // Otherwise, allow graceful shutdown and normal exit:
-            ExitCode::from(0)
+            0
         }
         Err(err) => {
             // If any step failed, assume error is already printed, just exit
             // with a corresponding exit code:
-            ExitCode::from(err.exit_status().unwrap_or(1) as u8)
+            err.exit_status().unwrap_or(1) as u8
         }
     }
 }

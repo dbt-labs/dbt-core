@@ -63,6 +63,9 @@
   - [`GET /api/v1/semantic_models/facets`](#get-apiv1semantic_modelsfacets)
   - [ADR-8: Unified `GET /api/v1/search` endpoint as the documented exception to ADR-1](#adr-8-unified-get-apiv1search-endpoint-as-the-documented-exception-to-adr-1)
   - [`GET /api/v1/search`](#get-apiv1search)
+  - [ADR-9: Server-side analytics relay as the documented exception to the read-only GET pattern](#adr-9-server-side-analytics-relay-as-the-documented-exception-to-the-read-only-get-pattern)
+  - [`POST /api/v1/analytics/events`](#post-apiv1analyticsevents)
+  - [ADR-10: Browser-to-Vortex analytics for static sites (supersedes ADR-9)](#adr-10-browser-to-vortex-analytics-for-static-sites-supersedes-adr-9)
 
 ---
 
@@ -6907,3 +6910,281 @@ interface SearchResponse {
 
 12. **Highlight extraction re-scans the matched field — DuckDB ILIKE returns no offsets.** For every row in the page, after the matcher decides which field "won" (priority `name > column > tag > fqn > description`), the handler re-runs a case-insensitive substring search on that field's value to locate the match position(s), then formats `highlight` per the per-field rules. This is two passes over the page's matched rows but only on fields the row already matched — the cost is bounded by `first` (default 50, max 200). Multi-token queries wrap each distinct matched token in its own `<b>...</b>` pair.
 
+---
+
+## ADR-9: Server-side analytics relay as the documented exception to the read-only GET pattern
+
+> **Superseded by [ADR-10](#adr-10-browser-to-vortex-analytics-for-static-sites-supersedes-adr-9), and the endpoint it describes is deleted.** Kept for the
+> reasoning, which ADR-10 answers point by point. `POST /api/v1/analytics/events` no
+> longer exists; nor does any other `/api/v1/*` route.
+
+**Status:** Decided — docs v2 emits product analytics through a server-side relay in this crate; the browser never talks to Vortex directly. (META-7739)
+**Trigger to revisit:** A second write surface is proposed, OR the analytics volume/latency profile outgrows fire-and-forget and needs an ack/queue, OR the `docs.proto` contract moves into generated `proto-rust` types the CLI already links.
+
+### Context
+
+Every endpoint in this document until now is a read-only `GET` over an immutable parquet snapshot. dbt docs v2 needs product analytics (resource views, searches, lineage opens, upsell interactions). The open question was where the browser's events go and who owns consent + the ingest transport.
+
+The events themselves are defined in `docs.proto` (`v1.public.events.docs`): 11 event messages sharing a `context` (anonymised dbt Cloud IDs) and an `is_logged_in` flag. Vortex is the ingest sink. Two in-repo siblings already emit to Vortex — `crates/dbt-index` (`telemetry.rs` + `vortex_sender.rs`) and `wizard/dbt-codex/codex-rs/vortex` — and both **deliberately** avoid `proto-rust` and the shared `vortex-client`, hand-rolling a self-contained sender and their wire structs with `#[derive(prost::Message)]`.
+
+### Options considered
+
+**(A) Browser → Vortex directly.**
+
+The SPA POSTs protobuf/JSON straight to the Vortex ingest endpoint.
+
+- Pro: no new server surface; least server code.
+- **Con:** exposes the ingest URL and client platform header to the browser.
+- **Con:** consent enforcement moves to the client, where it can be bypassed or drift from the server's `analytics_enabled` decision (`GET /api/v1/identity`).
+- **Con:** PII/CORS risk — the browser would assemble the `context`, and cross-origin ingest needs CORS on Vortex.
+
+→ **Rejected.** Consent and PII posture cannot be guaranteed from the browser.
+
+**(B) Server-side relay, hand-rolled sender (dbt-index / codex-vortex precedent). — CHOSEN**
+
+The SPA POSTs a batch to `POST /api/v1/analytics/events`; the handler enforces consent, maps each event to its concrete `docs.proto` wire type, and forwards it to Vortex via a self-contained `vortex_sender` ported from dbt-index.
+
+- Pro: consent is enforced server-side, reusing the exact identity gate (`!do_not_track && send_anonymous_usage_stats`).
+- Pro: the ingest URL and platform header never reach the browser.
+- Pro: the server owns `context` assembly, so no email/PII can be placed on the wire by a client.
+- Pro: matches two existing siblings; all new code is source-available-clean (only existing workspace deps: `prost`, `ureq`, `http`, `uuid`, `rand`).
+- Con: introduces the first write endpoint — a documented exception to the read-only pattern.
+
+→ **Chosen.** The relay is the only honest place to enforce consent and keep PII off the wire.
+
+**(C) Relay via shared `proto-rust` + `vortex-client` codegen.**
+
+Same relay shape as (B) but depends on the generated `proto-rust` types and the shared `vortex-client`.
+
+- Pro: single source of truth for the wire types (generated from `docs.proto`).
+- **Con:** heavier — drags in `cargo xtask protogen`, `protogen.toml`, and a `proto-rust`/`vortex-client` dependency; the `docs.*` types only exist after generating the proto, which is a separate PR's prerequisite (`docs.proto` lands via `dbt-labs/proto`).
+- **Con:** diverges from the two siblings that deliberately hand-roll, for no benefit at this size (11 flat messages).
+
+→ **Rejected for this PR.** Revisit if/when the CLI already links the generated `docs.*` types.
+
+### Decision
+
+`POST /api/v1/analytics/events` is the single write surface for docs v2 analytics and the **only documented exception** to the read-only GET pattern. It:
+
+- Accepts a **batch** POST (`{ events: [...] }`); each event is internally tagged on `event_type`.
+- Is **consent-gated**, reusing the identity `analytics_enabled` rule. When consent is off the handler is a no-op and returns `202 {"accepted":0,"skipped":N}` — never an error, so the client needs no consent branch.
+- Is **fire-and-forget**: events are handed to a background worker (flushes ~every 500ms) and the handler returns `202` immediately. Analytics loss on Ctrl-C is acceptable; shutdown flush is out of scope (see the `TODO(META-7739)` in `server.rs`).
+- Carries **no PII**: `context` holds anonymised dbt Cloud IDs only (no email); the server assembles the wire `context`.
+- Hand-rolls the `docs.proto` wire structs in `src/handlers/analytics.rs` and ships a self-contained `src/vortex_sender.rs` (no `proto-rust`, no `vortex-client`).
+
+The endpoint contract is at [`POST /api/v1/analytics/events`](#post-apiv1analyticsevents) below.
+
+### Trigger conditions for revisiting
+
+- A second write endpoint is proposed — re-examine whether "documented exception" should become a general write pattern.
+- Fire-and-forget is insufficient (events must be acknowledged/durable) — the transport needs a queue or a synchronous ack.
+- The generated `docs.*` types become available to the CLI without the protogen prerequisite — option (C) may then be cheaper than maintaining hand-rolled structs.
+
+---
+
+## `POST /api/v1/analytics/events`
+
+Relays a batch of dbt docs v2 product-analytics events to Vortex. See [ADR-9](#adr-9-server-side-analytics-relay-as-the-documented-exception-to-the-read-only-get-pattern) for why this is a server-side relay and the only write endpoint.
+
+The browser UI is the producer (item #3 of META-7739, separate PR). Events are hand-transcribed from `docs.proto` (`v1.public.events.docs`); enum-ish fields are lowercase dbt domain codes on the wire (`string`, per the proto's WIRE-VALUE CONTRACT).
+
+### Request
+
+`Content-Type: application/json`
+
+```json
+{
+  "events": [
+    {
+      "event_type": "resource_viewed",
+      "is_logged_in": true,
+      "context": {
+        "event_id": "b1c2…",
+        "session_id": "s-abc",
+        "dbt_cloud_account_id": "12345"
+      },
+      "resource_type": "model",
+      "view_level": "detail",
+      "resource_id": "model.jaffle_shop.customers"
+    },
+    {
+      "event_type": "search_performed",
+      "is_logged_in": false,
+      "context": { "event_id": "d4e5…" },
+      "search_query": "orders",
+      "result_count": 7
+    }
+  ]
+}
+```
+
+Each event is an object tagged by `event_type` (snake_case). `is_logged_in` and `context` are common to every event; the remaining fields are event-specific. All fields are optional and default to empty (`""` / `0` / `false`); `context` may be omitted entirely.
+
+### Response
+
+`202 Accepted` in all valid cases (fire-and-forget — a `202` does **not** guarantee delivery to Vortex):
+
+```json
+{ "accepted": 2, "skipped": 0 }
+```
+
+When analytics consent is off (`DO_NOT_TRACK=1` or `send_anonymous_usage_stats=false`), nothing is emitted and the batch is reported as skipped:
+
+```json
+{ "accepted": 0, "skipped": 2 }
+```
+
+`400 Bad Request` with the crate's `{code, message}` shape when the body is malformed or contains an unknown `event_type`:
+
+```json
+{ "code": "invalid_event", "message": "unknown variant `not_a_real_event`, …" }
+```
+
+### Event types & fields
+
+Common to every event: `is_logged_in: bool`, `context: TelemetryContext`.
+
+| `event_type` | Event-specific fields |
+|---|---|
+| `docs_site_opened` | `dbt_version: string`, `project_resource_count: int` |
+| `resource_viewed` | `resource_type: string`, `view_level: string`, `resource_id: string` |
+| `lineage_viewed` | `lineage_type: string`, `resource_type: string`, `resource_id: string` |
+| `search_performed` | `search_query: string`, `result_count: int` |
+| `filter_applied` | `resource_type: string`, `filter_type: string`, `filter_value: string` |
+| `upsell_prompt_displayed` | `upsell_track: string`, `prompt_format: string`, `prompt_location: string` |
+| `upsell_prompt_clicked` | `upsell_track: string`, `cta_label: string`, `referral_code: string` |
+| `upsell_prompt_dismissed` | `upsell_track: string`, `dismiss_method: string` |
+| `referral_link_clicked` | `referral_code: string`, `link_destination: string` |
+| `account_logged_in` | `triggered_by_prompt: bool`, `upsell_track: string` |
+| `error_encountered` | `error_category: string`, `error_message: string`, `field_name: string` |
+
+`TelemetryContext` (all fields optional strings, anonymised — **no PII**): `event_id`, `feature`, `snowplow_domain_session_id`, `snowplow_domain_user_id`, `session_id`, `referrer_url`, `dbt_cloud_account_id`, `dbt_cloud_account_identifier`, `dbt_cloud_project_id`, `dbt_cloud_environment_id`, `dbt_cloud_user_id`.
+
+### Type definition
+
+```ts
+interface TelemetryContext {
+  event_id?: string;
+  feature?: string;
+  snowplow_domain_session_id?: string;
+  snowplow_domain_user_id?: string;
+  session_id?: string;
+  referrer_url?: string;
+  dbt_cloud_account_id?: string;
+  dbt_cloud_account_identifier?: string;
+  dbt_cloud_project_id?: string;
+  dbt_cloud_environment_id?: string;
+  dbt_cloud_user_id?: string;
+}
+
+interface EventBase {
+  is_logged_in: boolean;
+  context?: TelemetryContext;
+}
+
+type AnalyticsEvent =
+  | (EventBase & { event_type: "docs_site_opened"; dbt_version?: string; project_resource_count?: number })
+  | (EventBase & { event_type: "resource_viewed"; resource_type?: string; view_level?: string; resource_id?: string })
+  | (EventBase & { event_type: "lineage_viewed"; lineage_type?: string; resource_type?: string; resource_id?: string })
+  | (EventBase & { event_type: "search_performed"; search_query?: string; result_count?: number })
+  | (EventBase & { event_type: "filter_applied"; resource_type?: string; filter_type?: string; filter_value?: string })
+  | (EventBase & { event_type: "upsell_prompt_displayed"; upsell_track?: string; prompt_format?: string; prompt_location?: string })
+  | (EventBase & { event_type: "upsell_prompt_clicked"; upsell_track?: string; cta_label?: string; referral_code?: string })
+  | (EventBase & { event_type: "upsell_prompt_dismissed"; upsell_track?: string; dismiss_method?: string })
+  | (EventBase & { event_type: "referral_link_clicked"; referral_code?: string; link_destination?: string })
+  | (EventBase & { event_type: "account_logged_in"; triggered_by_prompt?: boolean; upsell_track?: string })
+  | (EventBase & { event_type: "error_encountered"; error_category?: string; error_message?: string; field_name?: string });
+
+interface AnalyticsBatchRequest {
+  events: AnalyticsEvent[];
+}
+
+interface AnalyticsRelayResponse {
+  accepted: number;
+  skipped: number;
+}
+```
+
+### Risk register
+
+1. **A `202` is not a delivery guarantee.** Events are queued to a background worker and the response returns immediately. On process exit before the ~500ms flush, buffered events are lost. This is acceptable for product analytics; if durability is ever required, ADR-9's revisit trigger applies.
+2. **Consent is enforced only server-side.** The client receives `202 {"accepted":0}` when consent is off and cannot tell "emitted" from "skipped" except via the `skipped` count. That is intentional — clients must not branch on consent; the server is the single authority (reuses `GET /api/v1/identity`'s rule).
+3. **Wire types are hand-transcribed from `docs.proto`.** Field numbers/types are duplicated in `src/handlers/analytics.rs`. If `docs.proto` changes, this crate must be updated by hand (same maintenance posture as dbt-index and codex-vortex). The `enrichment` field (tag 1) is intentionally omitted — producers set it None and omitting it encodes identically.
+4. **Unknown `event_type` fails the whole batch.** Deserialization is all-or-nothing: one unknown/malformed event returns `400 invalid_event` and nothing in the batch is emitted. This keeps the contract strict; if partial acceptance is ever wanted, switch to per-event deserialization with a per-event error list.
+
+---
+
+## ADR-10: Browser-to-Vortex analytics for static sites (supersedes ADR-9)
+
+**Status:** Decided. Supersedes [ADR-9](#adr-9-server-side-analytics-relay-as-the-documented-exception-to-the-read-only-get-pattern) for the static-site distribution.
+
+### Context
+
+ADR-9 made `POST /api/v1/analytics/events` the single write surface and explicitly
+rejected browser-to-Vortex on three grounds: consent enforcement, PII containment, and
+CORS. That reasoning held while docs v2 was served by a process.
+
+`dbt docs generate` produces a directory of static files with no server. There is no
+relay to POST to, so ADR-9's mechanism is not available — the choice is browser-direct
+or no analytics at all.
+
+### Decision
+
+The browser posts events to the Vortex collector. Each of ADR-9's three objections, re-examined:
+
+**Consent.** Resolved at export time and inlined into `window.__DBT_DOCS__`. This is
+not a weakening — it is the only place the question *can* be answered, because consent
+lives in the project and profile, which only the machine running `dbt docs generate`
+can read. A visitor's browser has nothing to ask. When consent is denied the producer
+is configured `enabled: false`, which makes it drop every `logProto` and `flush`
+silently, so no call site can leak through by forgetting to check.
+
+**CORS.** Verified against the collector rather than assumed; no infrastructure change
+was required.
+
+**Event contents.** Unchanged, and deliberately so: the same eight events the relay
+forwarded, carrying the same fields. The transport moved; the schema did not. Of ADR-9's
+three objections this is the one that still has force, and it is tracked outside this
+document.
+
+Fields the relay hydrated server-side (`distribution`, `dbt_version`, `is_logged_in`,
+and the `dbt_cloud_*` context ids) are baked into the bootstrap at export time from the
+same `DistInfoProvider::telemetry_hydration()` seam that fed the relay.
+
+### Options considered
+
+1. **Drop analytics from static sites.** Simplest and safest, but leaves us unable to
+   tell whether the feature is used at all and if it is, how we can improve it
+2. **Keep a relay, require a server.** Reintroduces the exact dependency users told us
+   was a blocker, for telemetry alone.
+3. **Browser-direct (chosen).** Costs the properties analysed above; keeps the events
+   the relay already sent.
+
+### What is no longer true
+
+- The ingest URL is now in the shipped bundle. No credential ships with it — there was
+  never one to ship — but ADR-9's "keep the ingest URL off the browser" goal is
+  abandoned rather than met.
+- Field authority is weaker. The relay ignored client-supplied values for the hydrated
+  fields; now they come from a bootstrap that whoever hosts the site can edit. Treat the
+  hydrated fields as self-reported rather than authoritative.
+
+### Risk register
+
+1. **The event schema is carried over unchanged, and is reviewed separately.** This ADR
+   moved the transport only. Whether the current fields are the right ones to send from
+   a published site is a schema question, tracked outside this document and not resolved
+   here.
+2. **Consent is baked at generate time, not read at view time.** A site generated
+   under consent keeps sending until it is regenerated. Revoking consent requires a
+   rebuild. Acceptable for a static artifact; there is no mechanism that could do
+   better without a server. Furthermore, most users will self-host, enabling them to control consent.
+3. **No delivery guarantee.** Batching is off (`maxBatchBytes: -1`) so each event is
+   sent as it is logged, but a tab closing mid-flight still loses it. Same posture as
+   ADR-9's `202`.
+
+### Revisit when
+
+- The event schema review in risk 1 concludes, which may narrow what is sent.
+- A served distribution needs analytics again, in which case `telemetry.ts` grows a
+  second sink alongside this one.

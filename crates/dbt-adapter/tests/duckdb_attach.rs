@@ -32,7 +32,7 @@ fn render(yaml: &str) -> String {
     };
     let catalogs = DbtCatalogs::new(repr, span);
     let view = catalogs.view_v2().expect("valid v2 catalog view");
-    match compose_v2_catalog_attach_stmts(&view) {
+    match compose_v2_catalog_attach_stmts(&view, "duckdb") {
         Ok(stmts) => stmts.join("\n"),
         Err(e) => format!("error: {:?}: {}", e.kind(), e),
     }

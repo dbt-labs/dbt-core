@@ -20,7 +20,7 @@ use dbt_jinja_utils::{
     utils::{inject_and_persist_ephemeral_models, render_sql},
 };
 use dbt_schemas::schemas::{
-    ContextRunResult, InternalDbtNode, InternalDbtNodeAttributes, NodePathKind,
+    ContextRunResult, InternalDbtNode, InternalDbtNodeAttributes, NodePathKind, TimingInfo,
     common::DbtMaterialization, manifest::DbtOperation,
 };
 use dbt_schemas::state::ResolverState;
@@ -32,6 +32,7 @@ use minijinja::{
     constants::{CURRENT_PATH, CURRENT_SPAN, TARGET_PACKAGE_NAME},
     value::Kwargs,
 };
+use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 
 /// Synthetic node name for ad-hoc `dbt run-operation --sql ...` invocations.
 pub const INLINE_SQL_NAME: &str = "inline_query";
@@ -68,11 +69,11 @@ pub async fn run_operation_inline_sql(
     packages.insert(resolver_state.root_project_name.clone());
     ctx.insert(
         "context".to_owned(),
-        MinijinjaValue::from_object(MacroLookupContext {
-            root_project_name: resolver_state.root_project_name.clone(),
-            current_project_name: None,
+        MinijinjaValue::from_object(MacroLookupContext::new(
+            resolver_state.root_project_name.clone(),
+            None,
             packages,
-        }),
+        )),
     );
 
     ctx.insert(CURRENT_PATH.to_string(), Value::from("<inline_sql>"));
@@ -166,7 +167,7 @@ fn precompile_ephemeral_models(
             resolver_state,
             base_context,
             DependencyValidationConfig::new_unvalidated(),
-        );
+        )?;
 
         let original_file_path = model.__common_attr__.original_file_path.clone();
         let absolute_path =
@@ -242,26 +243,30 @@ pub async fn run_operation_on_run(
     let listener_factory = listener_factory.unwrap_or(&default_listener_factory);
 
     // First, wrap the raw_code with reset_span and render it.
-    // Skip reset_span when the span is invalid (e.g. after deserialization from JSON
-    // in partial-parse mode, where the dbt_yaml Spanned wrapper loses its source span).
+    // `name_span` is a plain field on `CommonAttributes` (unlike the outer
+    // `Spanned<DbtOperation>`'s own span, which is lost when the operation is
+    // round-tripped through the `--partial-parse` JSON cache), so it stays
+    // valid across cold and warm runs alike. Skip reset_span only when it was
+    // never populated (e.g. an empty hook body).
     let raw_code = operation
         .__common_attr__
         .raw_code
         .as_ref()
         .expect("raw_code is required in operation");
-    let raw_code_with_reset_span = if operation.span().is_valid() {
+    let name_span = &operation.__common_attr__.name_span;
+    let raw_code_with_reset_span = if name_span.start.line > 0 {
         format!(
             "{{% do reset_span('{}', {}, {}, {}, {}, {}, {}) %}}\n{}",
             operation
                 .__common_attr__
                 .original_file_path
                 .to_string_lossy(),
-            operation.span().start.line as u32,
-            operation.span().start.column as u32,
-            operation.span().start.index as u32,
-            operation.span().end.line as u32,
-            operation.span().end.column as u32,
-            operation.span().end.index as u32,
+            name_span.start.line,
+            name_span.start.col,
+            name_span.start.index,
+            name_span.stop.line,
+            name_span.stop.col,
+            name_span.stop.index,
             raw_code,
         )
     } else {
@@ -287,7 +292,7 @@ pub async fn run_operation_on_run(
         listener_factory,
         &operation.__common_attr__.original_file_path,
     )
-    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.clone()))?;
+    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.to_path_buf()))?;
     // Then wrap the rendered SQL with call statement and render again
     let instruction_plus_wrapper = format!(
         "{{% call statement(None, auto_begin=false, fetch_result=false) %}}\n{}\n{{% endcall %}}",
@@ -302,7 +307,7 @@ pub async fn run_operation_on_run(
         listener_factory,
         &operation.__common_attr__.original_file_path,
     )
-    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.clone()))?;
+    .map_err(|e| e.with_location(operation.__common_attr__.original_file_path.to_path_buf()))?;
 
     // Save the rendered sql to `target/compiled/{project}/dbt_project.yml/hooks/{name}.sql`,
     // mirroring the run path obtained above and dbt-core's nested operation layout.
@@ -313,6 +318,56 @@ pub async fn run_operation_on_run(
     }
     tokiofs::write(compiled_path, rendered_sql.as_bytes()).await?;
     Ok(rendered_sql)
+}
+
+fn context_run_results_to_value(results: &[ContextRunResult]) -> Value {
+    Value::from(
+        results
+            .iter()
+            .map(|result| {
+                let base = Value::from_serialize(result);
+                let timing = result.timing.iter().map(timing_info_to_value);
+
+                // Serialized maps are immutable, so copy the fields to replace timing.
+                let mut map = BTreeMap::new();
+                if let Ok(fields) = base.try_iter() {
+                    for key in fields {
+                        if let Some(key_str) = key.as_str() {
+                            if key_str != "timing" {
+                                if let Some(value) =
+                                    base.get_item(&key).ok().filter(|v| !v.is_undefined())
+                                {
+                                    map.insert(key_str.to_string(), value);
+                                }
+                            }
+                        }
+                    }
+                }
+                map.insert("timing".to_string(), Value::from_iter(timing));
+                Value::from_iter(map)
+            })
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn timing_info_to_value(timing: &TimingInfo) -> Value {
+    let mut map = BTreeMap::new();
+    map.insert("name".to_string(), Value::from(timing.name.clone()));
+    map.insert(
+        "started_at".to_string(),
+        timing
+            .started_at
+            .map(|dt| Value::from_object(PyDateTime::new_naive(dt.naive_utc())))
+            .unwrap_or_else(|| Value::from(())),
+    );
+    map.insert(
+        "completed_at".to_string(),
+        timing
+            .completed_at
+            .map(|dt| Value::from_object(PyDateTime::new_naive(dt.naive_utc())))
+            .unwrap_or_else(|| Value::from(())),
+    );
+    Value::from_iter(map)
 }
 
 /// Runs an operation (on_run_start/on_run_end) with context and returns the rendered SQL.
@@ -329,7 +384,7 @@ pub async fn run_operation_on_run_with_ctx(
         &**operation,
         &ctx.inner.base_context,
         DependencyValidationConfig::new_unvalidated(),
-    );
+    )?;
 
     // Extend with stateful functions
     extend_base_context_stateful_fn(
@@ -350,6 +405,10 @@ pub async fn run_operation_on_run_with_ctx(
     let database_schemas = database_schemas
         .as_ref()
         .map(|s| Value::from_serialize(s.clone()));
+    let results_value = results
+        .as_deref()
+        .map(context_run_results_to_value)
+        .unwrap_or_default();
     run_operation_on_run(
         operation,
         &ctx.inner.arg.io,
@@ -358,7 +417,7 @@ pub async fn run_operation_on_run_with_ctx(
         Some(ctx.rendering_listener_factory.as_ref()),
         &ctx.env,
         &operation_ctx,
-        Value::from_serialize(results),
+        results_value,
     )
     .await
 }
@@ -449,11 +508,11 @@ pub async fn run_operation(
 
     run_operation_context.insert(
         "context".to_owned(),
-        Value::from_object(MacroLookupContext {
-            root_project_name: resolver_state.root_project_name.clone(),
-            current_project_name: None,
+        Value::from_object(MacroLookupContext::new(
+            resolver_state.root_project_name.clone(),
+            None,
             packages,
-        }),
+        )),
     );
 
     let template = jinja_env.get_template(&template_name)?;

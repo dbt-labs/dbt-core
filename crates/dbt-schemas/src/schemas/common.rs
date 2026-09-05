@@ -28,6 +28,7 @@ use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfi
 use super::relations::base::ComponentName;
 use super::serde::{
     StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default, i64_or_string_i64,
+    yaml_11_bool_default,
 };
 
 /// Indicates where schema metadata originates from.
@@ -418,6 +419,8 @@ pub enum DbtMaterialization {
     StreamingTable,
     /// only for snowflake
     DynamicTable,
+    /// only for snowflake
+    InteractiveTable,
     /// for inline SQL compilation
     Inline,
     #[serde(untagged)]
@@ -440,6 +443,7 @@ impl FromStr for DbtMaterialization {
             "function" => Ok(DbtMaterialization::Function),
             "streaming_table" => Ok(DbtMaterialization::StreamingTable),
             "dynamic_table" => Ok(DbtMaterialization::DynamicTable),
+            "interactive_table" => Ok(DbtMaterialization::InteractiveTable),
             "inline" => Ok(DbtMaterialization::Inline),
             other => Ok(DbtMaterialization::Unknown(other.to_string())),
         }
@@ -464,6 +468,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::Unit => "unit",
             DbtMaterialization::StreamingTable => "streaming_table",
             DbtMaterialization::DynamicTable => "dynamic_table",
+            DbtMaterialization::InteractiveTable => "interactive_table",
             DbtMaterialization::Analysis => "analysis",
             DbtMaterialization::Function => "function",
             DbtMaterialization::Inline => "inline",
@@ -494,6 +499,7 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Unit => RelationType::External, // TODO Validate this
             DbtMaterialization::StreamingTable => RelationType::StreamingTable,
             DbtMaterialization::DynamicTable => RelationType::DynamicTable,
+            DbtMaterialization::InteractiveTable => RelationType::InteractiveTable,
             DbtMaterialization::Analysis => RelationType::External, // TODO Validate this
             DbtMaterialization::Inline => RelationType::Ephemeral, // Inline models don't materialize in DB
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
@@ -517,6 +523,7 @@ impl From<&DbtMaterialization> for NodeMaterialization {
             DbtMaterialization::Unit => Self::Unit,
             DbtMaterialization::StreamingTable => Self::StreamingTable,
             DbtMaterialization::DynamicTable => Self::DynamicTable,
+            DbtMaterialization::InteractiveTable => Self::InteractiveTable,
             DbtMaterialization::Analysis => Self::Analysis,
             DbtMaterialization::Inline => Self::Ephemeral, // Inline is similar to ephemeral
             DbtMaterialization::Unknown(_) => Self::Custom,
@@ -667,6 +674,24 @@ impl DbtQuoting {
         self.schema = self.schema.or(other.schema);
     }
 
+    /// A copy of `self` with every field it leaves unset taken from `fallback`.
+    ///
+    /// The layering primitive for quoting precedence: apply it once per layer,
+    /// most specific first, and the first layer to set a field wins. Unlike
+    /// [`Self::default_to`] this carries `snowflake_ignore_case` too, so a layer
+    /// that sets only that field is not silently dropped.
+    #[must_use]
+    pub fn filled_from(&self, fallback: &DbtQuoting) -> DbtQuoting {
+        DbtQuoting {
+            database: self.database.or(fallback.database),
+            schema: self.schema.or(fallback.schema),
+            identifier: self.identifier.or(fallback.identifier),
+            snowflake_ignore_case: self
+                .snowflake_ignore_case
+                .or(fallback.snowflake_ignore_case),
+        }
+    }
+
     /// Shallow last-non-None-wins merge of two user-supplied quoting layers.
     /// Returns `None` only when both inputs are `None` so callers can preserve
     /// "user set nothing" on the manifest (no adapter defaults folded in).
@@ -770,9 +795,12 @@ pub enum DbtBatchSize {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct DbtContract {
-    #[serde(default = "default_alias_types")]
+    #[serde(
+        default = "default_alias_types",
+        deserialize_with = "yaml_11_bool_default"
+    )]
     pub alias_types: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "yaml_11_bool_default")]
     pub enforced: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checksum: Option<YmlValue>,
@@ -907,7 +935,7 @@ pub struct Constraint {
     #[serde(
         default,
         deserialize_with = "crate::schemas::serde::string_or_array",
-        serialize_with = "crate::schemas::serde::serialize_option_as_empty_vec"
+        serialize_with = "crate::schemas::serde::serialize_none_as_empty_vec"
     )]
     pub to_columns: Option<Vec<String>>,
     pub warn_unsupported: Option<bool>,
@@ -931,6 +959,20 @@ pub enum ConstraintType {
     ForeignKey,
     Check,
     Custom,
+}
+
+impl ConstraintType {
+    /// The dbt-core `ConstraintType` enum value, e.g. for use in warning messages.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConstraintType::NotNull => "not_null",
+            ConstraintType::Unique => "unique",
+            ConstraintType::PrimaryKey => "primary_key",
+            ConstraintType::ForeignKey => "foreign_key",
+            ConstraintType::Check => "check",
+            ConstraintType::Custom => "custom",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize)]
@@ -1100,7 +1142,15 @@ impl DbtChecksum {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct IncludeExclude {
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::string_or_number_or_array_to_string_array"
+    )]
     pub exclude: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        deserialize_with = "crate::schemas::serde::string_or_number_or_array_to_string_array"
+    )]
     pub include: Option<StringOrArrayOfStrings>,
 }
 
@@ -1143,7 +1193,7 @@ pub enum Rows {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct DocsConfig {
-    #[serde(default = "default_show")]
+    #[serde(default = "default_show", deserialize_with = "yaml_11_bool_default")]
     pub show: bool,
     pub node_color: Option<String>,
 }
@@ -1164,12 +1214,14 @@ fn default_show() -> bool {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, Default, DbtSchema)]
 pub struct PersistDocsConfig {
+    #[serde(deserialize_with = "bool_or_string_bool", default)]
     pub columns: Option<bool>,
+    #[serde(deserialize_with = "bool_or_string_bool", default)]
     pub relation: Option<bool>,
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema, Default)]
 pub struct ScheduleConfig {
     pub cron: Option<String>,
     pub time_zone_value: Option<String>,
@@ -1197,6 +1249,13 @@ impl Schedule {
             Schedule::ScheduleConfig(config) => config.clone(),
         }
     }
+}
+
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
+pub struct RowFilterConfig {
+    pub function: Option<String>,
+    pub columns: Option<StringOrArrayOfStrings>,
 }
 
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
@@ -1366,6 +1425,30 @@ pub fn hooks_equal(a: &Verbatim<Option<Hooks>>, b: &Verbatim<Option<Hooks>>) -> 
     }
 }
 
+/// Serializes hooks in dbt-core's manifest shape: always a `List[Hook]`, and `[]` rather
+/// than `null` when unset, whatever form the user authored (bare string, list of strings,
+/// or `{sql, transaction}` mapping). For config structs that are serialized straight into
+/// the manifest; the ones with a dedicated `Manifest*Config` normalize in `From` instead.
+pub fn serialize_hooks_as_list<S>(
+    hooks: &Verbatim<Option<Hooks>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let normalized = match &**hooks {
+        Some(hooks) => hooks.to_hook_config_array(),
+        None => Vec::new(),
+    };
+    normalized.serialize(serializer)
+}
+
+// `skip_serializing_none` only rewrites fields whose declared outer type is
+// `Option`, so it cannot elide a field through a `Verbatim` wrapper.
+pub fn verbatim_option_is_none<T>(value: &Verbatim<Option<T>>) -> bool {
+    value.is_none()
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct HookConfig {
@@ -1426,7 +1509,9 @@ pub enum StoreFailuresAs {
     View,
 }
 
-#[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, DbtSchema)]
+#[derive(
+    Debug, Serialize, Default, Deserialize, Clone, PartialEq, Eq, EnumString, Display, DbtSchema,
+)]
 #[serde(rename_all = "UPPERCASE")]
 #[schemars(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -1436,6 +1521,55 @@ pub enum Severity {
     Error,
     #[serde(alias = "warn", alias = "Warn")]
     Warn,
+}
+
+/// Parses a `deprecation_date` string in any of the documented input formats
+/// (bare date, or a full datetime with or without a UTC offset -- see
+/// https://docs.getdbt.com/reference/resource-properties/deprecation_date)
+/// into a timezone-aware timestamp. An already offset-aware input keeps its
+/// original offset; a naive (offset-less) datetime is assumed to be UTC.
+pub fn parse_deprecation_date(raw: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let raw = raw.trim();
+
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(raw) {
+        return Some(dt);
+    }
+    for format in ["%Y-%m-%d %H:%M:%S%.f%z", "%Y-%m-%d %H:%M:%S%z"] {
+        if let Ok(dt) = chrono::DateTime::parse_from_str(raw, format) {
+            return Some(dt);
+        }
+    }
+
+    let naive_utc_to_fixed = |naive: chrono::NaiveDateTime| {
+        chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive, chrono::Utc)
+            .fixed_offset()
+    };
+    for format in [
+        "%Y-%m-%dT%H:%M:%S%.f",
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+    ] {
+        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(raw, format) {
+            return Some(naive_utc_to_fixed(naive));
+        }
+    }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+        let naive = date.and_hms_opt(0, 0, 0).unwrap();
+        return Some(naive_utc_to_fixed(naive));
+    }
+
+    None
+}
+
+/// Normalizes a raw `deprecation_date` string (as authored in YAML) to an
+/// RFC 3339 string with an explicit UTC offset, matching dbt-core's manifest
+/// output. Falls back to the original string if it doesn't match any
+/// documented format.
+pub fn normalize_deprecation_date(raw: &str) -> String {
+    parse_deprecation_date(raw)
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_else(|| raw.to_string())
 }
 
 #[skip_serializing_none]
@@ -1450,17 +1584,18 @@ pub struct Versions {
     pub constraints: Option<Vec<crate::schemas::properties::model_properties::ModelConstraint>>,
     pub data_tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
     pub tests: Option<Vec<crate::schemas::data_tests::DataTests>>,
-    // Schema-only stub: exposes `columns` as a named typed property so the JSON Schema validator
-    // accepts array values. At runtime serde skips this field and `columns` arrives via
-    // __additional_properties__ as a raw YmlValue.
-    // TODO: remove skip_deserializing and delete the __additional_properties__ path for `columns`
-    // once ColumnInheritanceRules::from_version_columns is refactored to accept
-    // &[VersionColumnProperties] instead of &YmlValue.
-    #[serde(skip_deserializing, default)]
+    // NOTE: this doc comment is surfaced as the JSON Schema `description` (editor hover text), so
+    // keep it user-facing. Implementation rationale goes in the plain comment below.
+    /// Columns for this version. Each entry is either a column definition or the single optional
+    /// `include`/`exclude` directive controlling which model-level columns this version inherits.
+    /// When no directive is given, every model-level column is inherited.
+    //
+    // Deliberately a normal field -- neither `skip_deserializing` nor `Verbatim` -- so that
+    // `into_typed_with_jinja` walks it and renders `description: '{{ doc(...) }}'` on a version
+    // column exactly like it does on a model-level column (dbt-labs/fs#13334). Moving it back
+    // into `__additional_properties__` would silently reintroduce that bug.
+    #[serde(default)]
     pub columns: Option<Vec<crate::schemas::dbt_column::VersionColumnProperties>>,
-    // TODO: promote `docs` to a typed field once we settle on the right struct (dbt-core uses
-    // Docs { show: bool, node_color: Optional[str] } but we only have DocsConfig which may
-    // not match exactly).
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
 
@@ -1554,7 +1689,10 @@ pub fn merge_meta(
     }
 }
 
-/// Merge two tag lists, deduplicating and sorting the result.
+/// Merge two string lists, deduplicating and sorting the result.
+///
+/// Prefer this for unordered set-like configs (e.g. classifiers). For tags,
+/// use [`merge_tags`] so inheritance order matches dbt-core.
 pub fn merge_vec(
     base_vec: Option<Vec<String>>,
     update_vec: Option<Vec<String>>,
@@ -1573,6 +1711,38 @@ pub fn merge_vec(
         (Some(base), None) => Some(base),
         (None, Some(update)) => Some(update),
     }
+}
+
+/// Merge inherited tags in dbt-core order: parent (less specific) first, then
+/// child (more specific), with first-seen deduplication and no alphabetical sort.
+///
+/// dbt-core concatenates additive tags along the config hierarchy. Callers that
+/// depend on list position (e.g. custom schema naming from `tags[0]`) require
+/// this order for Core/Fusion parity. See dbt-labs/dbt-core#15590.
+pub fn merge_tags(
+    parent_tags: Option<Vec<String>>,
+    child_tags: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match (parent_tags, child_tags) {
+        (None, None) => None,
+        (Some(mut parent), Some(child)) => {
+            parent.extend(child);
+            dedup_preserve_order(parent)
+        }
+        (Some(parent), None) => dedup_preserve_order(parent),
+        (None, Some(child)) => dedup_preserve_order(child),
+    }
+}
+
+fn dedup_preserve_order(tags: Vec<String>) -> Option<Vec<String>> {
+    let mut seen = std::collections::HashSet::with_capacity(tags.len());
+    let mut out = Vec::with_capacity(tags.len());
+    for tag in tags {
+        if seen.insert(tag.clone()) {
+            out.push(tag);
+        }
+    }
+    Some(out)
 }
 
 pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &str) -> String {
@@ -1608,17 +1778,16 @@ pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &s
     let sql_without_opening = find_opening(normalized_full)
         .and_then(|start_pos| {
             let after_tag_start = &normalized_full[start_pos..];
+            // Scoped to this tag's own boundary: the *nearest* `%}` after
+            // `start_pos` always closes this tag, dashed or not, because a
+            // snapshot name is a bare identifier that can't itself contain
+            // `%}`. Searching for `-%}` first (as before) would skip past
+            // this tag's own plain `%}` and match a later, unrelated inner
+            // tag's dashed close instead (e.g. `{% snapshot foo %} ...
+            // {% for x in y -%}`), stripping real body content.
             after_tag_start
-                .find("-%}")
-                .or_else(|| after_tag_start.find("%}"))
-                .map(|end_offset| {
-                    let tag_end = if after_tag_start[end_offset..].starts_with("-%}") {
-                        end_offset + 3
-                    } else {
-                        end_offset + 2
-                    };
-                    &normalized_full[start_pos + tag_end..]
-                })
+                .find("%}")
+                .map(|end_offset| &normalized_full[start_pos + end_offset + 2..])
         })
         .unwrap_or(normalized_full);
 
@@ -1877,6 +2046,48 @@ mod tests {
     }
 
     #[test]
+    fn interactive_table_materialization_roundtrip() {
+        let m: DbtMaterialization = "interactive_table".parse().unwrap();
+        assert_eq!(m, DbtMaterialization::InteractiveTable);
+        assert_eq!(m.to_string(), "interactive_table");
+        assert_eq!(RelationType::from(m), RelationType::InteractiveTable);
+        assert_eq!(
+            RelationType::InteractiveTable.to_string(),
+            "interactive_table"
+        );
+    }
+
+    #[test]
+    fn interactive_table_maps_to_dedicated_node_materialization() {
+        let node_materialization = NodeMaterialization::from(&DbtMaterialization::InteractiveTable);
+        assert_eq!(node_materialization, NodeMaterialization::InteractiveTable);
+        assert_ne!(node_materialization, NodeMaterialization::Custom);
+    }
+
+    #[test]
+    fn test_include_exclude_deserializes_number_versions() {
+        let config: IncludeExclude = dbt_yaml::from_str(
+            r#"
+include: [1, "2"]
+exclude: 3
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            config.include,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "1".to_string(),
+                "2".to_string(),
+            ]))
+        );
+        assert_eq!(
+            config.exclude,
+            Some(StringOrArrayOfStrings::String("3".to_string()))
+        );
+    }
+
+    #[test]
     fn test_seed_content_checksum_normalizes_crlf() {
         // New text-mode hashing must treat CRLF and LF identically (Windows == Linux).
         let crlf =
@@ -2035,6 +2246,31 @@ mod tests {
             conform_normalized_snapshot_raw_code_to_mantle_format(already),
             already,
             "already-stripped input should be returned unchanged"
+        );
+    }
+
+    #[test]
+    fn test_conform_normalized_snapshot_dashed_inner_tag_does_not_leak_into_opening_strip() {
+        // Regression for dbt-labs/dbt-core#15956 (FUSCSE-58): a plain outer
+        // `{% snapshot %}` tag combined with any inner whitespace-controlled tag
+        // caused the opening-tag boundary search to skip past this tag's own
+        // nearby `%}` and match the inner tag's dashed close instead, silently
+        // dropping real body content before hashing and falsely flagging
+        // unchanged snapshots as `state:modified.body`.
+        let trigger = "{% snapshot repro %} select {% for c in cols -%} {{ c }}{%- if not loop.last %},{%- endif -%} {%- endfor %} from t {% endsnapshot %}";
+        let control = "{%- snapshot repro -%} select {% for c in cols -%} {{ c }}{%- if not loop.last %},{%- endif -%} {%- endfor %} from t {%- endsnapshot -%}";
+
+        let stripped_trigger = conform_normalized_snapshot_raw_code_to_mantle_format(trigger);
+        let stripped_control = conform_normalized_snapshot_raw_code_to_mantle_format(control);
+
+        assert!(
+            stripped_trigger.contains("select") && stripped_trigger.contains("from t"),
+            "body content before/after the inner dashed tag must survive stripping, got: {stripped_trigger:?}"
+        );
+        assert_eq!(
+            stripped_trigger, stripped_control,
+            "plain and dashed outer tags must normalize to the same stripped body; \
+             the previous bug made these diverge, causing a false state:modified.body"
         );
     }
 
@@ -2549,6 +2785,47 @@ period: hour
     }
 
     #[test]
+    fn test_merge_tags_parent_first_preserves_inheritance_order() {
+        // Regression for dbt-labs/dbt-core#15590: nested +tags must keep
+        // parent-then-child order (not alphabetical). Alphabetical would put
+        // DAILY before INTERMEDIATE.
+        let parent = Some(vec!["INTERMEDIATE".to_string()]);
+        let child = Some(vec!["DAILY".to_string()]);
+        assert_eq!(
+            merge_tags(parent, child),
+            Some(vec!["INTERMEDIATE".to_string(), "DAILY".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_merge_tags_dedupes_preserving_first_seen() {
+        let parent = Some(vec!["a".to_string(), "b".to_string()]);
+        let child = Some(vec!["b".to_string(), "c".to_string()]);
+        assert_eq!(
+            merge_tags(parent, child),
+            Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_merge_tags_matches_docs_additive_hierarchy() {
+        // Docs example: contains_pii (project) + hourly (folder) + finance (model)
+        // must stay inheritance order, not alpha (contains_pii, finance, hourly).
+        let project = Some(vec!["contains_pii".to_string()]);
+        let folder = Some(vec!["hourly".to_string()]);
+        let model = Some(vec!["finance".to_string()]);
+        let after_folder = merge_tags(project, folder);
+        assert_eq!(
+            merge_tags(after_folder, model),
+            Some(vec![
+                "contains_pii".to_string(),
+                "hourly".to_string(),
+                "finance".to_string(),
+            ])
+        );
+    }
+
+    #[test]
     fn test_bigquery_partition_config_legacy_deserialize_from_jinja_values() {
         // Test String variant
         let string_value = MinijinjaValue::from("partition_field");
@@ -2631,13 +2908,13 @@ period: hour
         );
     }
 
-    // Regression: `columns:` inside a version block must survive deserialization and land in
-    // `__additional_properties__`, where `process_versioned_columns` reads it. The schema-only
-    // stub field (`#[serde(skip_deserializing)]`) must NOT cause serde to silently consume and
-    // discard the value before dbt_yaml's flatten-dunder mechanism can capture it.
+    // Regression (dbt-labs/fs#13334): `columns:` inside a version block must deserialize into the
+    // typed `Versions::columns` field, NOT into the `Verbatim` `__additional_properties__` bag.
+    // Only the typed field is walked by `into_typed_with_jinja`, which is what renders
+    // `description: '{{ doc(...) }}'` on a version column.
     #[test]
-    fn test_versions_columns_land_in_additional_properties() {
-        let yaml = "v: 2\ncolumns:\n  - name: id\n    description: primary key\n";
+    fn test_versions_columns_deserialize_into_typed_field() {
+        let yaml = "v: 2\ncolumns:\n  - name: id\n    description: primary key\n  - include: all\n    exclude:\n      - dropped\n";
         let value: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
         // Use into_typed (the same path as into_typed_with_jinja) so dbt_yaml's
         // dunder-flatten mechanism is active.
@@ -2652,16 +2929,23 @@ period: hour
             .unwrap();
 
         assert!(
-            versions.__additional_properties__.contains_key("columns"),
-            "`columns` must reach __additional_properties__, but it was dropped. \
-             Check that serde's skip_deserializing does not prevent the value from \
-             falling through to the dbt_yaml flatten-dunder catch-all."
+            !versions.__additional_properties__.contains_key("columns"),
+            "`columns` must not fall through to the Verbatim __additional_properties__ catch-all; \
+             values there are never Jinja-rendered (fs#13334)"
         );
 
-        // Also confirm the schema-only `columns` field itself is always None at runtime.
-        assert!(
-            versions.columns.is_none(),
-            "`columns` schema-stub field must always be None after deserialization"
+        let columns = versions
+            .columns
+            .as_deref()
+            .expect("`columns` must populate the typed Versions::columns field");
+        assert_eq!(columns.len(), 2, "both entries must be preserved");
+        assert_eq!(columns[0].name.as_deref(), Some("id"));
+        assert_eq!(columns[0].description.as_deref(), Some("primary key"));
+        // The include/exclude directive entry has no `name`.
+        assert!(columns[1].name.is_none());
+        assert_eq!(
+            columns[1].exclude.as_deref(),
+            Some(["dropped".to_string()].as_slice())
         );
     }
 
@@ -2697,5 +2981,106 @@ period: hour
             is_array,
             "`columns` property must have type 'array' (got {type_field})"
         );
+    }
+
+    // ---- deprecation_date normalization (dbt-core#14563) ----
+
+    #[test]
+    fn test_normalize_deprecation_date_bare_date() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_naive_t_separator() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31T00:00:00"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_naive_space_separator() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31 00:00:00"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_z_suffix() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31T00:00:00Z"),
+            "2025-10-31T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_with_offset_preserved() {
+        assert_eq!(
+            normalize_deprecation_date("2025-10-31T00:00:00-05:00"),
+            "2025-10-31T00:00:00-05:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_space_separator_with_offset_and_fraction() {
+        // Exact example from the docs page for `deprecation_date`.
+        assert_eq!(
+            normalize_deprecation_date("1999-01-01 00:00:00.00+00:00"),
+            "1999-01-01T00:00:00+00:00"
+        );
+    }
+
+    #[test]
+    fn test_normalize_deprecation_date_unparseable_passes_through() {
+        assert_eq!(normalize_deprecation_date("not-a-date"), "not-a-date");
+    }
+
+    /// PyYAML (and so dbt-core) resolves the YAML 1.1 boolean tokens that Fusion's YAML 1.2
+    /// reader hands to serde as strings. `yes` must resolve to `true`, and a token outside the
+    /// set must still error rather than silently become `false`.
+    #[test]
+    fn test_dbt_contract_resolves_yaml_11_boolean_tokens() {
+        for field in ["enforced", "alias_types"] {
+            for (token, expected) in [
+                ("no", false),
+                ("No", false),
+                ("off", false),
+                ("false", false),
+                ("yes", true),
+                ("on", true),
+                ("true", true),
+            ] {
+                let contract: DbtContract =
+                    dbt_yaml::from_str(&format!("{field}: {token}\n")).unwrap();
+                let resolved = match field {
+                    "enforced" => contract.enforced,
+                    _ => contract.alias_types,
+                };
+                assert_eq!(resolved, expected, "{field}: {token}");
+            }
+
+            for token in ["maybe", "1"] {
+                let result: Result<DbtContract, _> =
+                    dbt_yaml::from_str(&format!("{field}: {token}\n"));
+                assert!(result.is_err(), "{field}: {token}");
+            }
+        }
+    }
+
+    /// `docs: { show: no }` is the same YAML 1.1 boolean divergence as `contract.enforced`;
+    /// `show` defaults to `true`, so a silently wrong value would be invisible.
+    #[test]
+    fn test_docs_config_show_resolves_yaml_11_boolean_tokens() {
+        for (token, expected) in [("no", false), ("off", false), ("yes", true), ("on", true)] {
+            let docs: DocsConfig = dbt_yaml::from_str(&format!("show: {token}\n")).unwrap();
+            assert_eq!(docs.show, expected, "token: {token}");
+        }
+
+        let result: Result<DocsConfig, _> = dbt_yaml::from_str("show: maybe\n");
+        assert!(result.is_err());
     }
 }

@@ -18,14 +18,17 @@ use arrow::{
         Array, ArrayRef, BooleanArray, Decimal128Array, Float64Array, Int32Array, Int64Array,
         RecordBatch, StringArray, TimestampNanosecondArray, TimestampSecondArray,
     },
+    compute::{CastOptions, cast_with_options},
     datatypes::{DataType, Field, Schema, TimeUnit},
     util::pretty::{pretty_format_batches, print_batches},
 };
 use chrono::DateTime;
 use dbt_adapter::Adapter;
+use dbt_adapter::LATEST_VERSION_POINTER_SUFFIX;
 use dbt_adapter::adapter::NodeOverride;
 use dbt_adapter::connection::drop_thread_local_connection;
 use dbt_adapter::relation::{RelationObject, do_create_relation};
+use dbt_adapter::response::AdapterResponse;
 use dbt_adapter_core::AdapterType;
 use dbt_agate::{AgateTable, MappedSequence, Tuple};
 use dbt_common::{
@@ -39,8 +42,7 @@ use dbt_schemas::{
     materialization_resolver::MaterializationResolver,
     schemas::{
         DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
-        NodePathKind, Nodes,
-        common::{DbtMaterialization, Severity},
+        NodePathKind, Nodes, common::DbtMaterialization,
     },
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
@@ -48,7 +50,9 @@ use dbt_tasks_core::test_aggregation::GenericTestRelationships;
 use dbt_telemetry::ExecutionPhase;
 use dbt_yaml::Verbatim;
 use minijinja::Value;
+use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::listener::RenderingEventListener;
+use minijinja::value::mutable_map::MutableMap;
 use tracing::debug;
 
 /// Macro to handle NULL values in Arrow arrays
@@ -83,7 +87,7 @@ fn execute_materialization_macro(
     let macro_string = format!("{macro_name}()");
     let expr = jinja_env.compile_expression(&macro_string)?;
     with_jinja_trace(&run_path, unique_id, |listeners| {
-        expr.eval(context, listeners).map_err(|e| {
+        expr.eval_with_file_only_stack_frame(context, listeners, run_path.as_path()).map_err(|e| {
             if e.code.is_database_error() {
                 // Format like dbt-core: show model name and path first, then the raw
                 // database error message indented.
@@ -119,8 +123,7 @@ fn execute_materialization_macro(
                     "Error executing materialization macro '{macro_name}' for {resource_type} {unique_id}: {}",
                     e.context
                 );
-                let err = e.with_location(run_path.clone());
-                Box::new(err.with_context(message))
+                Box::new(e.with_context(message))
             }
         })
     })
@@ -249,7 +252,7 @@ pub fn model_hook_style(
         (Bigquery | Snowflake | Spark | Databricks, View | Table | Incremental) => {
             NodeHookStyle::Plain
         }
-        (Snowflake, DynamicTable) => NodeHookStyle::Plain,
+        (Snowflake, DynamicTable | InteractiveTable) => NodeHookStyle::Plain,
         _ => NodeHookStyle::SplitTransaction,
     }
 }
@@ -299,7 +302,7 @@ pub fn execute_node_hooks<S: serde::Serialize>(
     error_path_kind: NodePathKind,
     phase: NodeHookPhase,
 ) -> FsResult<()> {
-    let mut context = build_run_node_context(
+    let (mut context, _result_store) = build_run_node_context(
         node,
         deprecated_config,
         adapter_type,
@@ -344,7 +347,9 @@ pub fn execute_node_hooks<S: serde::Serialize>(
 
 #[cfg(test)]
 mod tests {
-    use super::{NodeHookPhase, NodeHookStyle, model_hook_style, node_hook_expression};
+    use super::{
+        NodeHookPhase, NodeHookStyle, cell_as_bool, model_hook_style, node_hook_expression,
+    };
     use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::common::DbtMaterialization;
     use minijinja::Value;
@@ -441,9 +446,35 @@ mod tests {
             NodeHookStyle::SplitTransaction
         );
         assert_eq!(
+            model_hook_style(
+                AdapterType::Snowflake,
+                &DbtMaterialization::InteractiveTable
+            ),
+            NodeHookStyle::Plain
+        );
+        assert_eq!(
             model_hook_style(AdapterType::Bigquery, &DbtMaterialization::MaterializedView),
             NodeHookStyle::SplitTransaction
         );
+    }
+
+    #[test]
+    fn cell_as_bool_reads_adapter_text_booleans() {
+        assert!(cell_as_bool(&Value::from("true")));
+        assert!(cell_as_bool(&Value::from("True")));
+        assert!(cell_as_bool(&Value::from("TRUE")));
+        assert!(!cell_as_bool(&Value::from("false")));
+        assert!(!cell_as_bool(&Value::from("False")));
+        assert!(!cell_as_bool(&Value::from("FALSE")));
+    }
+
+    #[test]
+    fn cell_as_bool_falls_back_to_value_truthiness() {
+        assert!(cell_as_bool(&Value::from(true)));
+        assert!(!cell_as_bool(&Value::from(false)));
+        assert!(cell_as_bool(&Value::from(1i64)));
+        assert!(!cell_as_bool(&Value::from(0i64)));
+        assert!(!cell_as_bool(&Value::from(())));
     }
 }
 
@@ -460,7 +491,7 @@ pub fn materialize_clone<S: serde::Serialize>(
     io_args: &IoArgs,
     custom_warehouse: Option<String>,
 ) -> FsResult<Value> {
-    let mut context = build_run_node_context(
+    let (mut context, _result_store) = build_run_node_context(
         node,
         &deprecated_config,
         adapter_type,
@@ -472,7 +503,11 @@ pub fn materialize_clone<S: serde::Serialize>(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("clone")?;
+    // `dbt clone` takes the target default: this path is typed `&dyn InternalDbtNode`,
+    // which does not expose the node's `+adapter`. Cloning a node on a non-default
+    // adapter is not supported yet.
+    let macro_name =
+        materialization_resolver.find_materialization_macro_by_name("clone", adapter_type)?;
 
     let unique_id = node.common().unique_id.clone();
     let defer_option = defer_nodes
@@ -543,10 +578,11 @@ pub fn materialize_seed(
     base_context: &BTreeMap<String, Value>,
     agate_table: AgateTable,
     io_args: &IoArgs,
-) -> FsResult<Value> {
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("seed")?;
+) -> FsResult<(Value, Option<AdapterResponse>)> {
+    let macro_name =
+        materialization_resolver.find_materialization_macro_by_name("seed", seed.node_adapter())?;
 
-    let mut context = build_run_node_context(
+    let (mut context, result_store) = build_run_node_context(
         seed,
         &seed.deprecated_config,
         adapter_type,
@@ -558,19 +594,45 @@ pub fn materialize_seed(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
+    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
     let run_path = seed
         .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
         .into_owned();
 
-    execute_materialization_macro(
+    let unique_id = seed.__common_attr__.unique_id.clone();
+    let node_alias = seed.__base_attr__.alias.clone();
+    let adapter = jinja_env
+        .get_base_adapter()
+        .ok_or_else(|| unexpected_fs_err!("No adapter found for seed {}", &unique_id))?;
+    let node_overrides = apply_node_overrides(
+        &adapter,
+        adapter_type,
+        seed.deprecated_config
+            .__warehouse_specific_config__
+            .snowflake_warehouse
+            .clone(),
+        &seed.__base_attr__.database,
+        &unique_id,
+    )?;
+
+    let result = execute_materialization_macro(
         jinja_env,
         &macro_name,
         &mut context,
         "seed",
-        &seed.__common_attr__.unique_id,
-        &seed.__base_attr__.alias,
+        &unique_id,
+        &node_alias,
         run_path,
-    )
+    );
+
+    // Surface a failed reset only when the seed itself succeeded: `reset_node_overrides`
+    // already drops the poisoned connection, and a seed error is far more actionable than the
+    // restore error it would otherwise mask. It also keeps the CSV-column hint that
+    // `chain_materialize_seed_error_with_pending_hint` appends attached to a real seed error.
+    let reset = reset_node_overrides(&adapter, &unique_id, &node_overrides);
+    let value = result?;
+    reset?;
+    Ok((value, result_store.main_adapter_response()))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -584,9 +646,9 @@ pub fn materialize_model(
     base_context: &BTreeMap<String, Value>,
     io_args: &IoArgs,
     sql_header: Option<Value>,
-) -> FsResult<Value> {
+) -> FsResult<(Value, Option<AdapterResponse>)> {
     // get materialization
-    let mut context = build_run_node_context(
+    let (mut context, result_store) = build_run_node_context(
         model,
         &model.deprecated_config,
         adapter_type,
@@ -600,16 +662,22 @@ pub fn materialize_model(
     let materialization = model.__base_attr__.materialized.clone();
 
     let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&materialization.to_string())?;
+        .find_materialization_macro_by_name(&materialization.to_string(), model.node_adapter())?;
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
     let unique_id = model.__common_attr__.unique_id.clone();
     let node_alias = model.__base_attr__.alias.clone();
-    // Runtime-phase errors report the run/Executable path per the path-requirements matrix.
-    let run_path = model
-        .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
-        .into_owned();
+    // Python models execute from their source file. SQL models execute from target/run.
+    let run_path = if model.__common_attr__.language.as_deref() == Some("python") {
+        io_args
+            .in_dir
+            .join(&model.__common_attr__.original_file_path)
+    } else {
+        model
+            .get_node_path(NodePathKind::Executable, &io_args.in_dir, &io_args.out_dir)
+            .into_owned()
+    };
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         unexpected_fs_err!(
@@ -643,7 +711,7 @@ pub fn materialize_model(
     );
 
     reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
-    result
+    result.map(|value| (value, result_store.main_adapter_response()))
 }
 
 /// Checks whether the latest version pointer should be created for this model.
@@ -751,7 +819,7 @@ pub fn materialize_latest_version_pointer(
     io_args: &IoArgs,
 ) -> FsResult<Value> {
     // Build a context from the original model first so macros can access `model`
-    let mut resolve_context = build_run_node_context(
+    let (mut resolve_context, _result_store) = build_run_node_context(
         model,
         &model.deprecated_config,
         adapter_type,
@@ -833,7 +901,31 @@ pub fn materialize_latest_version_pointer(
 
     let source_relation_str = source_relation.render_self_as_str();
 
+    // Uppercase, matching dbt-core's own generated SQL for this synthetic pointer (confirmed
+    // against a production recording) and this file's other synthetic pass-through SQL
+    // (`materialize_clone`, above). Time Machine's SQL comparison is a sanitized string-equality
+    // check with no keyword-case folding, so drifting from dbt-core's casing here is a literal
+    // dbt1308 SqlMismatch on every account with a `latest_version_pointer`, not just a style nit.
     let pointer_sql = format!("SELECT * FROM {source_relation_str}");
+
+    // The id the pointer view's own adapter calls target. dbt-core records the pointer view's
+    // create-view/grant statements on the base model's thread, interleaved before the base
+    // model's own trailing grants/persist_docs/column calls, but Fusion runs the base model's
+    // materialization macro (including those trailing calls) to completion before this function
+    // ever runs. Sequential replay would let the trailing calls permanently consume (and discard)
+    // the earlier pointer-view records while skipping past them. A distinct target id lets the
+    // replay adapter route these calls through unordered, content-based matching instead
+    // (`find_key_for_node_id`'s `LATEST_VERSION_POINTER_SUFFIX` handling) rather than the shared
+    // sequential cursor. See fs#13705.
+    //
+    // This is deliberately NOT the pointer model's `unique_id`: the pointer view is not a node,
+    // and overwriting the node's identity leaks the synthetic id into everything keyed on it —
+    // connection pooling, telemetry, and the recording keys of cross-version record/replay,
+    // which then cannot find events any earlier version recorded under the real node id.
+    let target_unique_id = format!(
+        "{}{LATEST_VERSION_POINTER_SUFFIX}",
+        model.__common_attr__.unique_id
+    );
 
     // Build a synthetic model with the pointer's alias and view materialization.
     // Clone the model and override:
@@ -841,6 +933,12 @@ pub fn materialize_latest_version_pointer(
     //   - materialization → "view"
     //   - hooks cleared (pre/post hooks should not run for the pointer)
     //   - persist_docs cleared (avoid duplicating doc persistence)
+    //   - contract cleared: dbt-core never contract-checks the synthetic pointer view (it's a
+    //     plain `create or replace view as select *`, not an independent contracted node), but
+    //     Fusion's `snowflake__create_or_replace_view` reads `config.get('contract')` off this
+    //     same cloned model. Left enforced, it calls `get_assert_columns_equivalent` ->
+    //     `get_column_schema_from_query` for the pointer, a call dbt-core's recording never
+    //     made, producing a genuine ReplayDataMissing. See fs#13705.
     let mut pointer_model = model.clone();
     pointer_model.__base_attr__.alias = pointer_identifier.clone();
     pointer_model.__base_attr__.materialized = DbtMaterialization::View;
@@ -848,13 +946,15 @@ pub fn materialize_latest_version_pointer(
     pointer_model.deprecated_config.pre_hook = Verbatim::from(None);
     pointer_model.deprecated_config.post_hook = Verbatim::from(None);
     pointer_model.deprecated_config.persist_docs = None;
+    pointer_model.deprecated_config.contract = None;
+    pointer_model.__model_attr__.contract = None;
 
     debug!(
         "Creating latest version pointer view '{}' -> '{}' for model '{}'",
         pointer_identifier, model_alias, model.__common_attr__.unique_id
     );
 
-    let mut context = build_run_node_context(
+    let (mut context, _result_store) = build_run_node_context(
         &pointer_model,
         &pointer_model.deprecated_config,
         adapter_type,
@@ -866,16 +966,21 @@ pub fn materialize_latest_version_pointer(
         runtime_config.dependencies.keys().cloned().collect(),
     );
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("view")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("view", model.node_adapter())?;
     context.insert("sql".to_string(), Value::from(pointer_sql.as_str()));
     context.insert(
         "compiled_code".to_string(),
         Value::from(pointer_sql.as_str()),
     );
-
-    let unique_id = format!(
-        "{}__latest_version_pointer",
-        model.__common_attr__.unique_id
+    // `TARGET_UNIQUE_ID` is the single channel carrying the pointer view's distinct identity.
+    // Adapter methods either read it straight out of Jinja state or pick it up from
+    // `QueryCtx::target_unique_id` (which `query_ctx_from_state` fills from this same key), so
+    // every lookup path lands on the same id without the node's own `unique_id` being disturbed.
+    // See fs#13705.
+    context.insert(
+        TARGET_UNIQUE_ID.to_string(),
+        Value::from(target_unique_id.as_str()),
     );
 
     let run_path = model
@@ -887,7 +992,7 @@ pub fn materialize_latest_version_pointer(
         &macro_name,
         &mut context,
         "model",
-        &unique_id,
+        &target_unique_id,
         &pointer_identifier,
         run_path,
     )
@@ -928,13 +1033,27 @@ pub fn materialize_microbatch_model(
         &io_args.out_dir,
     )?;
 
-    // Insert the batch SQL into context
-    run_node_context.insert("sql".to_string(), Value::from(batch_sql.as_str()));
-    run_node_context.insert("compiled_code".to_string(), Value::from(batch_sql.as_str()));
+    let batch_sql = Value::from(batch_sql);
+
+    // Databricks incremental materialization reads `model['compiled_code']`.
+    let batch_model = run_node_context
+        .get("model")
+        .and_then(|model| model.downcast_object_ref::<MutableMap>())
+        .ok_or_else(|| {
+            unexpected_fs_err!(
+                "No batch-local model context for microbatch model {}",
+                batch_ctx.id,
+            )
+        })?;
+    batch_model.insert(Value::from("compiled_code"), batch_sql.clone());
+    run_node_context.insert("sql".to_string(), batch_sql.clone());
+    run_node_context.insert("compiled_code".to_string(), batch_sql);
 
     // Get the incremental materialization macro
-    let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&DbtMaterialization::Incremental.to_string())?;
+    let macro_name = materialization_resolver.find_materialization_macro_by_name(
+        &DbtMaterialization::Incremental.to_string(),
+        model.node_adapter(),
+    )?;
 
     let adapter = jinja_env.get_base_adapter().ok_or_else(|| {
         fs_err!(
@@ -989,13 +1108,13 @@ pub fn materialize_snapshot(
     jinja_env: Arc<JinjaEnv>,
     base_context: &BTreeMap<String, Value>,
     io_args: &IoArgs,
-) -> FsResult<Value> {
+) -> FsResult<(Value, Option<AdapterResponse>)> {
     // get materialization
     let mut snapshot = snapshot.clone();
     snapshot.compiled = Some(true);
     snapshot.compiled_code = Some(sql.to_string());
 
-    let mut context = build_run_node_context(
+    let (mut context, result_store) = build_run_node_context(
         &snapshot,
         &snapshot.serialized_config(),
         adapter_type,
@@ -1010,7 +1129,8 @@ pub fn materialize_snapshot(
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
 
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("snapshot")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("snapshot", snapshot.node_adapter())?;
 
     let unique_id = snapshot.__common_attr__.unique_id.clone();
     let node_alias = snapshot.__base_attr__.alias.clone();
@@ -1051,7 +1171,7 @@ pub fn materialize_snapshot(
     );
 
     reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
-    result
+    result.map(|value| (value, result_store.main_adapter_response()))
 }
 
 pub fn materialize_unit_test(
@@ -1063,8 +1183,12 @@ pub fn materialize_unit_test(
     base_context: &BTreeMap<String, Value>,
     io_args: &IoArgs,
 ) -> FsResult<bool> {
-    let adapter_type = resolver_state.adapter_type;
-    let mut context = build_run_node_context(
+    // The unit test's own adapter, not the target default: `resolve_unit_tests`
+    // gives it the tested model's (`adapter: model_adapter.unwrap_or(default)`),
+    // already excluding lake compute, since a unit test never takes the
+    // compute-platform path.
+    let adapter_type = unit_test.node_adapter();
+    let (mut context, _result_store) = build_run_node_context(
         unit_test,
         &unit_test.deprecated_config,
         adapter_type,
@@ -1081,8 +1205,10 @@ pub fn materialize_unit_test(
             .collect(),
     );
     let materialization = DbtMaterialization::Unit;
-    let macro_name = materialization_resolver
-        .find_materialization_macro_by_name(&materialization.to_string())?;
+    let macro_name = materialization_resolver.find_materialization_macro_by_name(
+        &materialization.to_string(),
+        unit_test.node_adapter(),
+    )?;
 
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));
@@ -1151,7 +1277,7 @@ pub fn materialize_unit_test_fast_pass(
     base_context: &BTreeMap<String, Value>,
     io_args: &IoArgs,
 ) -> FsResult<(bool, usize, String)> {
-    let mut context = build_run_node_context(
+    let (mut context, _result_store) = build_run_node_context(
         unit_test,
         &unit_test.deprecated_config,
         adapter_type,
@@ -1253,6 +1379,16 @@ impl TestResult {
     }
 }
 
+/// Coerce a test-result cell to bool. Some adapters (SQL Server) have no
+/// boolean literal and return the text "true"/"false".
+fn cell_as_bool(v: &Value) -> bool {
+    match v.as_str() {
+        Some(s) if s.eq_ignore_ascii_case("true") => true,
+        Some(s) if s.eq_ignore_ascii_case("false") => false,
+        _ => v.is_true(),
+    }
+}
+
 fn get_test_results(table: &AgateTable) -> FsResult<Vec<TestResult>> {
     let column_names = table.column_names();
     let column_name_idx = column_names
@@ -1297,8 +1433,8 @@ fn get_test_results(table: &AgateTable) -> FsResult<Vec<TestResult>> {
         let should_error = columns.get(2).unwrap().get_item_by_index(0).ok();
 
         let failures_val = failures.and_then(|v| v.as_i64()).unwrap_or(-1);
-        let should_warn_val = should_warn.map(|v| v.is_true()).unwrap_or(false);
-        let should_error_val = should_error.map(|v| v.is_true()).unwrap_or(false);
+        let should_warn_val = should_warn.map(|v| cell_as_bool(&v)).unwrap_or(false);
+        let should_error_val = should_error.map(|v| cell_as_bool(&v)).unwrap_or(false);
 
         Ok(vec![TestResult {
             column_name: None,
@@ -1325,11 +1461,11 @@ fn get_column_test_result(
         .unwrap_or(0);
 
     let should_warn = get_cell_value(values, row, should_warn_idx)
-        .map(|v| v.is_true())
+        .map(|v| cell_as_bool(&v))
         .unwrap_or(false);
 
     let should_error = get_cell_value(values, row, should_error_idx)
-        .map(|v| v.is_true())
+        .map(|v| cell_as_bool(&v))
         .unwrap_or(false);
 
     TestResult {
@@ -1357,9 +1493,13 @@ pub fn materialize_test(
     jinja_env: Arc<JinjaEnv>,
     base_context: &BTreeMap<String, Value>,
     io_args: &IoArgs,
-) -> FsResult<(Vec<TestResult>, Option<RecordBatch>)> {
+) -> FsResult<(
+    Vec<TestResult>,
+    Option<RecordBatch>,
+    Option<AdapterResponse>,
+)> {
     let packages = runtime_config.dependencies.keys().cloned().collect();
-    let mut context = build_run_node_context(
+    let (mut context, result_store) = build_run_node_context(
         test,
         &test.deprecated_config,
         adapter_type,
@@ -1377,8 +1517,8 @@ pub fn materialize_test(
     } else {
         "test"
     };
-    let macro_name =
-        materialization_resolver.find_materialization_macro_by_name(materialization_name)?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name(materialization_name, test.node_adapter())?;
 
     context.insert("sql".to_string(), Value::from(sql));
 
@@ -1434,7 +1574,9 @@ pub fn materialize_test(
                         .map(|line| format!("  {line}"))
                         .collect::<Vec<_>>()
                         .join("\n");
-                    let message = format!("{unique_id} ({run_display_path})\n{indented_body}",);
+                    let message = format!(
+                        "Error materializing test {unique_id} ({run_display_path})\n{indented_body}",
+                    );
                     Box::new(dbt_common::FsError::new(e.code, message))
                 } else {
                     Box::new(
@@ -1450,20 +1592,10 @@ pub fn materialize_test(
 
     reset_node_overrides(&adapter, &unique_id, &node_overrides)?;
 
-    // If render_result is an error but the test is configured with severity warn, return a warning result
-    if render_result.is_err() && matches!(test.deprecated_config.severity, Some(Severity::Warn)) {
-        return Ok((
-            vec![TestResult {
-                column_name: None,
-                failures: 0,
-                should_warn: true,
-                should_error: false,
-            }],
-            None,
-        ));
-    }
-
-    let _ = render_result?; // ensure we don't swallow errors
+    // Any render/execution error (including database errors) is a hard error,
+    // independent of severity. Severity only governs successfully-returned test
+    // results, so it must not downgrade an execution failure to a warning.
+    let _ = render_result?;
 
     let expr = jinja_env.compile_expression("load_result('main').table")?;
     let table = expr
@@ -1473,12 +1605,61 @@ pub fn materialize_test(
         .unwrap();
 
     let test_results = get_test_results(&table)?;
-    Ok((test_results, None))
+    Ok((test_results, None, result_store.main_adapter_response()))
+}
+
+/// `AgateTable`'s underlying batches may carry `Utf8View`/`LargeUtf8` columns
+/// (query results are normalized to view types at the adapter boundary; see
+/// `dbt-adapter`'s `concat_batches::to_view_types`). The comparison logic below
+/// assumes plain `Utf8`/`StringArray`, so downgrade back to that before comparing.
+///
+/// TODO(felipecrv): implement semantic comparison functionality in dbt-agate.
+fn normalize_to_utf8(batch: &RecordBatch) -> arrow::error::Result<RecordBatch> {
+    let schema = batch.schema();
+    if !schema
+        .fields()
+        .iter()
+        .any(|f| matches!(f.data_type(), DataType::Utf8View | DataType::LargeUtf8))
+    {
+        return Ok(batch.clone());
+    }
+
+    let fields: Vec<Field> = schema
+        .fields()
+        .iter()
+        .map(|f| match f.data_type() {
+            DataType::Utf8View | DataType::LargeUtf8 => {
+                f.as_ref().clone().with_data_type(DataType::Utf8)
+            }
+            _ => f.as_ref().clone(),
+        })
+        .collect();
+    let new_schema = Arc::new(Schema::new_with_metadata(fields, schema.metadata().clone()));
+
+    let cast_options = CastOptions {
+        safe: false,
+        format_options: Default::default(),
+    };
+    let columns: Vec<ArrayRef> = batch
+        .columns()
+        .iter()
+        .zip(new_schema.fields())
+        .map(|(col, field)| match field.data_type() {
+            DataType::Utf8 if col.data_type() != &DataType::Utf8 => {
+                cast_with_options(col, &DataType::Utf8, &cast_options)
+            }
+            _ => Ok(col.clone()),
+        })
+        .collect::<Result<_, _>>()?;
+
+    RecordBatch::try_new(new_schema, columns)
 }
 
 pub fn compare_record_batches(
     batch: &RecordBatch,
 ) -> arrow::error::Result<CompareRecordBatchResult> {
+    let batch = normalize_to_utf8(batch)?;
+    let batch = &batch;
     let schema = batch.schema();
 
     let label_col_index = schema
@@ -1496,11 +1677,41 @@ pub fn compare_record_batches(
     let mut actual_rows = vec![];
     let mut expected_rows = vec![];
 
-    let label_array = batch
-        .column(label_col_index)
+    // An empty result has no labels to inspect, regardless of the physical type
+    // inferred for the label column.
+    if batch.num_rows() == 0 {
+        return Ok(CompareRecordBatchResult {
+            actual_rows: 0,
+            expected_rows: 0,
+            diff_batch: batch.clone(),
+            has_differences: false,
+        });
+    }
+
+    let label_column = batch.column(label_col_index);
+    let label_column = match label_column.data_type() {
+        DataType::Utf8 => label_column.clone(),
+        DataType::Binary | DataType::BinaryView | DataType::LargeBinary => {
+            let cast_options = CastOptions {
+                safe: false,
+                format_options: Default::default(),
+            };
+            cast_with_options(label_column, &DataType::Utf8, &cast_options)?
+        }
+        data_type => {
+            return Err(arrow::error::ArrowError::SchemaError(format!(
+                "'actual_or_expected' column must be a string or binary, found {data_type}"
+            )));
+        }
+    };
+    let label_array = label_column
         .as_any()
         .downcast_ref::<StringArray>()
-        .expect("'actual_or_expected' column must be StringArray");
+        .ok_or_else(|| {
+            arrow::error::ArrowError::SchemaError(
+                "Failed to normalize 'actual_or_expected' column to a string".to_string(),
+            )
+        })?;
 
     for i in 0..batch.num_rows() {
         match label_array.value(i) {
@@ -1659,6 +1870,127 @@ fn value_as_string(array: &ArrayRef, index: usize, data_type: &DataType) -> Stri
     }
 }
 
+#[cfg(test)]
+mod compare_record_batches_tests {
+    use super::compare_record_batches;
+    use arrow::array::{BinaryArray, Int32Array, Int64Array, StringViewArray};
+    use arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
+
+    // Query results are normalized to Utf8View/LargeUtf8 at the adapter boundary
+    // (dbt-adapter's concat_batches::to_view_types), so AgateTable's batches carry
+    // Utf8View columns rather than plain Utf8. Regression test for a real mismatch
+    // being masked as a match once that switch happened.
+    #[test]
+    fn detects_mismatch_in_utf8_view_column() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Utf8View, false),
+            Field::new("id", DataType::Int32, false),
+            Field::new("name", DataType::Utf8View, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringViewArray::from(vec!["expected", "actual"])),
+                Arc::new(Int32Array::from(vec![1, 1])),
+                Arc::new(StringViewArray::from(vec!["alice", "bob"])),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(
+            result.has_differences,
+            "expected 'alice' vs 'bob' to be flagged as a mismatch, but Utf8View columns were silently treated as unsupported"
+        );
+    }
+
+    #[test]
+    fn no_differences_when_utf8_view_values_match() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Utf8View, false),
+            Field::new("name", DataType::Utf8View, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(StringViewArray::from(vec!["expected", "actual"])),
+                Arc::new(StringViewArray::from(vec!["alice", "alice"])),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(!result.has_differences);
+    }
+
+    #[test]
+    fn empty_non_string_label_column_has_no_differences() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Int64, false),
+            Field::new("id", DataType::Int64, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(Int64Array::from(Vec::<i64>::new())),
+                Arc::new(Int64Array::from(Vec::<i64>::new())),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(!result.has_differences);
+        assert_eq!(result.actual_rows, 0);
+        assert_eq!(result.expected_rows, 0);
+        assert_eq!(result.diff_batch.schema(), batch.schema());
+    }
+
+    #[test]
+    fn non_empty_invalid_label_type_returns_schema_error() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Int64, false),
+            Field::new("id", DataType::Int64, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(Int64Array::from(vec![1])),
+                Arc::new(Int64Array::from(vec![1])),
+            ],
+        )
+        .unwrap();
+
+        let error = compare_record_batches(&batch).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Schema error: 'actual_or_expected' column must be a string or binary, found Int64"
+        );
+    }
+
+    #[test]
+    fn accepts_binary_label_column() {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("actual_or_expected", DataType::Binary, false),
+            Field::new("id", DataType::Int32, false),
+        ]));
+        let batch = arrow::array::RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(BinaryArray::from(vec![
+                    b"expected".as_slice(),
+                    b"actual".as_slice(),
+                ])),
+                Arc::new(Int32Array::from(vec![1, 1])),
+            ],
+        )
+        .unwrap();
+
+        let result = compare_record_batches(&batch).unwrap();
+        assert!(!result.has_differences);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn materialize_function(
     sql: &str,
@@ -1670,7 +2002,7 @@ pub fn materialize_function(
     base_context: &BTreeMap<String, Value>,
     io_args: &IoArgs,
 ) -> FsResult<Value> {
-    let mut context = build_run_node_context(
+    let (mut context, _result_store) = build_run_node_context(
         function,
         &function.deprecated_config,
         adapter_type,
@@ -1683,7 +2015,8 @@ pub fn materialize_function(
     );
 
     // Find the function materialization macro
-    let macro_name = materialization_resolver.find_materialization_macro_by_name("function")?;
+    let macro_name = materialization_resolver
+        .find_materialization_macro_by_name("function", function.node_adapter())?;
 
     context.insert("sql".to_string(), Value::from(sql));
     context.insert("compiled_code".to_string(), Value::from(sql));

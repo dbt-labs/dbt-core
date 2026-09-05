@@ -16,10 +16,11 @@ use super::color::maybe_apply_color;
 /// * `colorize` - If true, applies red color to the "Test failed:" prefix
 ///
 /// # Returns
-/// A formatted failure message with either the diff table or a `select *` query
-/// to inspect failing rows.
-/// `None` if the test outcome is not `Failed` or if there are insufficient fields
-/// to display a message.
+/// A formatted failure message. When available, includes the pretty-printed
+/// diff table or a `select *` query pointing at the stored failures relation;
+/// otherwise falls back to a single line citing the failing-row count so that
+/// failed tests are never silently dropped from the output.
+/// `None` only if the test outcome is not `Failed`.
 pub fn format_test_failure(node: &NodeProcessed, colorize: bool) -> Option<String> {
     let test_detail = if let Some(NodeOutcomeDetail::NodeTestDetail(test_detail)) =
         &node.node_outcome_detail
@@ -32,6 +33,7 @@ pub fn format_test_failure(node: &NodeProcessed, colorize: bool) -> Option<Strin
 
     let test_name = &node.name;
     let prefix = maybe_apply_color(&RED, "Test failed", colorize);
+    let failing_rows = test_detail.failing_rows;
 
     if let Some(diff_table) = &test_detail.diff_table {
         Some(format!("{prefix}: {test_name}\n{diff_table}"))
@@ -41,11 +43,12 @@ pub fn format_test_failure(node: &NodeProcessed, colorize: bool) -> Option<Strin
         && let Some(ident) = &node.identifier
     {
         let sql = format!("select * from {db}.{schema}.{ident}");
-        let failing_rows = test_detail.failing_rows;
         Some(format!(
             "{prefix} ({failing_rows} failed row(s)): {test_name}\nSee test failures:\n{sql}"
         ))
     } else {
-        None
+        Some(format!(
+            "{prefix} ({failing_rows} failed row(s)): {test_name}"
+        ))
     }
 }

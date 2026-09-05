@@ -1,4 +1,5 @@
 use dbt_common::collections::DashMap;
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{
     DiscreteEventEmitter, FsResult,
     stats::{NodeStatus, Stat},
@@ -9,11 +10,11 @@ use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, ResolvedCloudConfig},
     state::ResolverState,
 };
-pub use proto_rust::v1::public::events::fusion::LoginType;
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, Login, PackageInstall, ResourceCounts,
-    RunModel,
+    RunModel, StaticAnalysisInvocation,
 };
+pub use proto_rust::v1::public::events::fusion::{LoginErrorCode, LoginType};
 use proto_rust::v1::public::fields::core_types::ObservabilityMetric;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -21,7 +22,7 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use vortex_client::client::{log_proto, log_proto_and_shutdown};
+use dbt_vortex::{log_proto, log_proto_and_shutdown};
 
 /// Structure for the .user.yml file format: {id: <uuid>}
 #[derive(Debug, Serialize, Deserialize)]
@@ -36,6 +37,14 @@ pub fn noop_event_emitter() -> Box<dyn DiscreteEventEmitter> {
 struct NoopEventEmitter;
 
 impl DiscreteEventEmitter for NoopEventEmitter {
+    fn configure(&mut self, _send_anonymous_usage_stats: bool) {
+        // No-op implementation
+    }
+
+    fn dbt_distribution(&self) -> &'static str {
+        ""
+    }
+
     fn invocation_start_event(
         &self,
         _invocation_id: &Uuid,
@@ -45,29 +54,33 @@ impl DiscreteEventEmitter for NoopEventEmitter {
     ) {
         // No-op implementation
     }
-
-    fn dbt_distribution(&self) -> &'static str {
-        ""
-    }
 }
 
-pub fn fusion_sa_event_emitter(
-    enabled: bool,
+pub fn default_event_emitter(
+    enabled: Option<bool>,
     dbt_distribution: &'static str,
 ) -> Box<dyn DiscreteEventEmitter> {
-    Box::new(FusionSaEventEmitter {
+    Box::new(DefaultEventEmitter {
         enabled,
         dbt_distribution,
     })
 }
 
 /// Source-available implementation of the DiscreteEventEmitter.
-struct FusionSaEventEmitter {
-    enabled: bool,
+struct DefaultEventEmitter {
+    enabled: Option<bool>,
     dbt_distribution: &'static str,
 }
 
-impl DiscreteEventEmitter for FusionSaEventEmitter {
+impl DiscreteEventEmitter for DefaultEventEmitter {
+    fn configure(&mut self, send_anonymous_usage_stats: bool) {
+        self.enabled = Some(send_anonymous_usage_stats);
+    }
+
+    fn dbt_distribution(&self) -> &'static str {
+        self.dbt_distribution
+    }
+
     fn invocation_start_event(
         &self,
         invocation_id: &Uuid,
@@ -75,8 +88,19 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
         profile_path: Option<&Path>,
         command: String,
     ) {
-        if !self.enabled {
-            return;
+        match self.enabled {
+            Some(explicitly_enabled) => {
+                if !explicitly_enabled {
+                    return; // disabled, do nothing
+                }
+            }
+            None => {
+                debug_assert!(
+                    false,
+                    "DiscreteEventEmitter must be configured with `configure()` before use"
+                );
+                return; // not explicitly configured, do nothing on release builds
+            }
         }
         let env = InternalEnv::global();
         // Some commands don't load dbt_project
@@ -110,6 +134,7 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             distribution: self.dbt_distribution.to_string(),
             //  enrichment - toggle enrichment of message by vortex
             enrichment: None,
+            common_context: None,
         };
 
         let _ = log_proto(message);
@@ -125,13 +150,10 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
             environment,
             // This field is a toggle to enable enrichment of the message by the Vortex service.
             enrichment: None,
+            common_context: None,
         };
 
         let _ = log_proto(message);
-    }
-
-    fn dbt_distribution(&self) -> &'static str {
-        self.dbt_distribution
     }
 }
 
@@ -180,6 +202,7 @@ pub fn invocation_end_event(
         distribution: dbt_distribution.to_string(),
         //  enrichment - toggle enrichment of message by vortex
         enrichment: None,
+        common_context: None,
     };
 
     if shutdown {
@@ -267,6 +290,10 @@ pub fn run_model_event(
             skipped = true;
             skipped_reason = "reused_cloned_from_cache_still_fresh".to_string();
         }
+        NodeStatus::StaticallyCheckedDataTest => {
+            skipped = true;
+            skipped_reason = "statically_checked_data_test".to_string();
+        }
         NodeStatus::NoOp => {
             skipped = true;
             skipped_reason = "no-op".to_string();
@@ -323,6 +350,7 @@ pub fn run_model_event(
         table_format: table_format.unwrap_or_default(),
         catalog_name: catalog_name.unwrap_or_default(),
         catalog_type: catalog_type.unwrap_or_default(),
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -398,6 +426,7 @@ pub fn package_install_event(invocation_id: String, name: String, version: Strin
         version,
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -467,6 +496,7 @@ pub fn resource_counts_event(
         catalogs: catalog_count,
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -487,6 +517,7 @@ pub fn adapter_info_event(invocation_id: String, adapter_type: String, adapter_u
         adapter_unique_id,
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -515,6 +546,7 @@ pub fn adapter_info_v2_event() {
         model_adapter_details: HashMap::new(),
         // This field is a toggle to enable enrichment of the message by the Vortex service.
         enrichment: None,
+        common_context: None,
     };
 
     let _ = log_proto(message);
@@ -611,11 +643,15 @@ fn discover_project_id() -> Option<String> {
 /// on success it comes directly from the new session; on failure it can be
 /// read from the cached session on disk so that expired-JWT identity fields
 /// are still populated.
+///
+/// `error_code`/`error_message` should be populated whenever `success` is `false`.
 pub fn login_event(
     invocation_id: &Uuid,
     success: bool,
     login_type: LoginType,
     access_token: Option<&str>,
+    error_code: Option<LoginErrorCode>,
+    error_message: Option<String>,
 ) {
     let claims = access_token.and_then(extract_login_jwt_claims);
     let c = claims.as_ref();
@@ -637,6 +673,43 @@ pub fn login_event(
         platform_user_id: c.and_then(|x| x.platform_user_id),
         platform_account_id: c.and_then(|x| x.platform_account_id),
         platform_account_identifier: c.and_then(|x| x.platform_account_identifier.clone()),
+        error_code: error_code.map(|c| c as i32),
+        error_message,
+        common_context: None,
+    };
+
+    let _ = log_proto(message);
+}
+
+pub fn static_analysis_propagation_event(
+    invocation_id: String,
+    project_id: String,
+    max_sa_level: Option<StaticAnalysisKind>,
+    source: &str,
+    strict_count: usize,
+    baseline_count: usize,
+    off_count: usize,
+) {
+    let max_static_analysis_level = match max_sa_level {
+        Some(StaticAnalysisKind::Strict | StaticAnalysisKind::On | StaticAnalysisKind::Unsafe) => {
+            "strict".to_string()
+        }
+        Some(StaticAnalysisKind::Baseline) => "baseline".to_string(),
+        Some(StaticAnalysisKind::Off) => "off".to_string(),
+        None => "".to_string(),
+    };
+
+    let message = StaticAnalysisInvocation {
+        enrichment: None,
+        event_id: Uuid::new_v4().to_string(),
+        invocation_id,
+        project_id,
+        max_static_analysis_level,
+        source: source.to_string(),
+        strict_node_count: strict_count as i32,
+        baseline_node_count: baseline_count as i32,
+        off_node_count: off_count as i32,
+        common_context: None,
     };
 
     let _ = log_proto(message);

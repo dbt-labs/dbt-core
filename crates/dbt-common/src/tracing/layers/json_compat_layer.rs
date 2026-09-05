@@ -39,6 +39,7 @@ use super::super::{
         progress::format_progress_message,
         query_log::format_query_log,
     },
+    fs_error_log::get_log_message,
 };
 
 use crate::io_args::FsCommand;
@@ -457,9 +458,14 @@ impl JsonCompatLayer {
             true,
         );
 
+        let code = log_msg
+            .dbt_core_event_code
+            .clone()
+            .or_else(|| log_msg.code.map(|c| c.to_string()));
+
         let info_json = serde_json::to_value(self.build_core_event_info(
-            None,
-            None,
+            code.as_deref(),
+            log_msg.code_name.as_deref(),
             &log_record.severity_text,
             formatted_message,
         ))
@@ -882,10 +888,11 @@ impl JsonCompatLayer {
             .as_ref()
             .map(|d| d.node_freshness_outcome());
 
-        // Check if this is a freshness phase and a source node
-        // (fusion runs freshness as part of SAO also on extended models hence the node type check)
-        let is_freshness =
-            node.last_phase() == ExecutionPhase::FreshnessAnalysis && node_type == NodeType::Source;
+        // Every node measured by the freshness phase reports a freshness result, models with
+        // a freshness SLA included — not just sources. The phase is enough on its own: the
+        // freshness SAO runs during a build create no node spans at all, so an extended model
+        // can never reach here with this phase.
+        let is_freshness = node.last_phase() == ExecutionPhase::FreshnessAnalysis;
 
         // Determine `Log[NODE TYPE]Result` event name and code
         let (event_name, event_code) = if is_freshness {
@@ -924,7 +931,18 @@ impl JsonCompatLayer {
 
         // Format message - for freshness, use special format
         let msg = if is_freshness {
-            format!("Freshness of {}.{}: {}", source_name, table_name, status)
+            // dbt-core qualifies with the source name; a model has none, so fall back to its
+            // schema rather than emitting a bare leading dot.
+            let qualifier = if source_name.is_empty() {
+                node.schema.as_deref().unwrap_or("")
+            } else {
+                source_name
+            };
+            if qualifier.is_empty() {
+                format!("Freshness of {}: {}", table_name, status)
+            } else {
+                format!("Freshness of {}.{}: {}", qualifier, table_name, status)
+            }
         } else {
             format_node_processed_end(node, duration, false)
         };
@@ -1347,7 +1365,7 @@ impl TelemetryConsumer for JsonCompatLayer {
 
     fn on_log_record(&self, log_record: &LogRecordInfo, _data_provider: &mut DataProvider<'_>) {
         // Dispatch to LogMessage handler
-        if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
+        if let Some(log_msg) = get_log_message(&log_record.attributes) {
             self.emit_log_message(log_msg, log_record);
             return;
         }

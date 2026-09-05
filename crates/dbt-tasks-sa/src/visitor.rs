@@ -9,16 +9,17 @@ use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
 };
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tracing::Instrument;
 
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::cancellation::{CancellationToken, CancelledError};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::tracing::dbt_emit::{emit_error_log_from_fs_error, emit_trace_log_message};
 use dbt_common::{ErrorCode, FsError, fs_err, status_reporter::report_completed};
 use dbt_common::{FsResult, io_args::IoArgs, unexpected_err};
-use dbt_schemas::schemas::{InternalDbtNodeAttributes, NodePathKind};
+use dbt_schemas::schemas::common::OnError;
+use dbt_schemas::schemas::{DbtModel, InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::task::TP;
 use dbt_tasks_core::task::Task;
@@ -223,8 +224,16 @@ impl SkipSet {
         task_idx: NodeIndex,
         dependents: &[HashSet<NodeIndex>],
         schedule: &DiGraph<Arc<dyn Task>, ()>,
+        fail_fast_flag: bool,
         reuse_downstream_tests: bool,
     ) -> (SkippedNodes, SkippedNodes) {
+        // `on_error: continue` — skip failure propagation so downstreams
+        // keep running. Handles both `Ok(Errored)` (normal run failure) and
+        // `Err(_)` (e.g. microbatch failures before normalization).
+        let is_failure = matches!(&result, Err(_) | Ok(NodeStatus::Errored));
+        if is_failure && !fail_fast_flag && model_should_continue_on_error(task_idx, schedule) {
+            return (Vec::new(), Vec::new());
+        }
         match result {
             Ok(node_status) => match node_status {
                 NodeStatus::Errored => (
@@ -249,6 +258,7 @@ impl SkipSet {
                 NodeStatus::Succeeded
                 | NodeStatus::SucceededWithWarning
                 | NodeStatus::TestPassed
+                | NodeStatus::StaticallyCheckedDataTest
                 | NodeStatus::TestWarned
                 | NodeStatus::NoOp => (Vec::new(), Vec::new()),
                 NodeStatus::SkippedUpstreamFailed => {
@@ -261,6 +271,37 @@ impl SkipSet {
             ),
         }
     }
+}
+
+// Returns true when the failing task is a model with `on_error: continue`.
+//
+// Phase gating: honored for Render and Run failures, but **not** Analyze.
+// Analyze produces the type/binding facts that `--static-analysis strict`
+// downstreams consume, so upstream Analyze failures must still propagate.
+//
+// TODO: The correct rule is per-downstream — propagate Render/Analyze
+// failure only to downstreams whose `static_analysis` is `strict`. The
+// current phase-level guard is a pragmatic approximation.
+//
+// `--fail-fast` overrides this: callers gate with `!fail_fast_flag`.
+fn model_should_continue_on_error(
+    task_idx: NodeIndex,
+    schedule: &DiGraph<Arc<dyn Task>, ()>,
+) -> bool {
+    let Some(task) = schedule.node_weight(task_idx) else {
+        return false;
+    };
+    if !matches!(task.resource_type(), NodeType::Model) {
+        return false;
+    }
+    if matches!(task.task_phase(), Some(TP::Analyze)) {
+        return false;
+    }
+    task.dbt_nodes().iter().any(|node| {
+        node.as_any()
+            .downcast_ref::<DbtModel>()
+            .is_some_and(|m| matches!(m.deprecated_config.on_error, Some(OnError::Continue)))
+    })
 }
 
 fn record_skipped_stats(
@@ -344,93 +385,14 @@ fn show_skip_summary(io: &IoArgs, skipped_nodes: &[Arc<dyn InternalDbtNodeAttrib
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub async fn visit_sequential(
     io: &IoArgs,
     schedule: &DiGraph<Arc<dyn Task>, ()>,
     ctx: &mut TaskRunnerCtx,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    // Drain connection on this thread left by inline metadata or hook work before this phase.
-    // TODO: This is just a stopgap to reduce the number of unrecycled connections.
-    // This call should be removed and instead all upstream connection bearing work should
-    // explictly clean up after itself.
-    dbt_adapter::connection::recycle_thread_local_connection();
-
-    let mut slot_pool = WorkerSlotPool::new();
-    let mut skip_set = SkipSet::new();
-    let mut dependents = vec![HashSet::<NodeIndex>::new(); schedule.node_count()];
-
-    // Used in span creation
-    let span_manager = ctx.inner.span_manager();
-
-    for edge in schedule.edge_references() {
-        dependents[edge.source().index()].insert(edge.target());
-    }
-
-    let sorted_nodes =
-        toposort(schedule, None).map_err(|cycle| task_graph_cycle_error(cycle, schedule))?;
-
-    for node_idx in sorted_nodes {
-        token.check_cancellation()?;
-        if let Some(node) = schedule.node_weight(node_idx) {
-            let skip_reason = skip_set.skip.get(&node_idx);
-            let task_span = span_manager.get_task_span(node.telemetry_request(
-                &io.in_dir,
-                &io.out_dir,
-                skip_reason,
-            ))?;
-
-            if let Some(skip_reason) = skip_reason {
-                // If node is skipped, record skipped result and close it immediately
-                span_manager.handle_task_skipped(task_span, skip_reason);
-                continue;
-            }
-            ctx.thread_id = slot_pool.acquire();
-
-            let result = node
-                .run_task(ctx)
-                // Instrument the task with the span and assign parent
-                .instrument(task_span.clone())
-                .await;
-
-            slot_pool.release(ctx.thread_id);
-
-            if let Err(ref e) = result {
-                // Ensure log message inherits NodeEvaluated context (e.g., unique_id).
-                task_span.in_scope(|| {
-                    emit_error_log_from_fs_error(e.as_ref(), io.status_reporter.as_ref());
-                });
-            }
-
-            report_node_evaluation(ctx, node.as_ref(), result.as_ref().ok());
-
-            // Record span result
-            span_manager.handle_task_finished(task_span, &result);
-
-            // Invalidate upstream model caches when a test fails
-            if matches!(result.as_ref(), Ok(NodeStatus::Errored)) {
-                ctx.on_test_failure(node).await;
-            }
-
-            let is_error = matches!(result, Err(_) | Ok(NodeStatus::Errored));
-            let (failed_nodes, reused_nodes) = skip_set.handle_task_result(
-                result,
-                node_idx,
-                &dependents,
-                schedule,
-                should_reuse_downstream_tests(ctx),
-            );
-            report_skipped_node_evaluations(ctx, node.as_ref(), &failed_nodes);
-            record_skipped_stats(ctx, &failed_nodes, &SkipReason::FailedPhase);
-            record_skipped_stats(ctx, &reused_nodes, &SkipReason::Reused);
-            show_skip_summary(io, &failed_nodes);
-            if is_error {
-                ctx.inner.arg.fail_fast.trigger();
-            }
-        }
-    }
-
-    Ok(())
+    visit(io, schedule, ctx, VisitStrategy::Sequential, token).await
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -440,20 +402,143 @@ pub async fn visit_parallel(
     ctx: &mut TaskRunnerCtx,
     token: &CancellationToken,
 ) -> FsResult<()> {
+    visit(io, schedule, ctx, VisitStrategy::Parallel, token).await
+}
+
+fn get_indegree_and_dependents(
+    schedule: &DiGraph<Arc<dyn Task>, ()>,
+) -> (Vec<i32>, Vec<HashSet<NodeIndex>>) {
+    let mut indegree = vec![0; schedule.node_count()];
+    let mut dependents = vec![HashSet::<NodeIndex>::new(); schedule.node_count()];
+
+    for edge in schedule.edge_references() {
+        indegree[edge.target().index()] += 1;
+        dependents[edge.source().index()].insert(edge.target());
+    }
+
+    (indegree, dependents)
+}
+
+#[derive(Clone, Copy)]
+enum VisitStrategy {
+    Sequential,
+    Parallel,
+}
+
+impl VisitStrategy {
+    fn new_pending_nodes(self, schedule: &DiGraph<Arc<dyn Task>, ()>) -> FsResult<Vec<NodeIndex>> {
+        // Invariant check - task graph must be a DAG.
+        // We use `toposort` to check for cycles as it uses iterative algorithm,
+        // while pergraph::algo::is_cyclic_directed uses recursive which may cause stack overflow on large graphs.
+        let sorted_nodes =
+            toposort(schedule, None).map_err(|cycle| task_graph_cycle_error(cycle, schedule))?;
+
+        let mut pending = vec![];
+        if matches!(self, VisitStrategy::Parallel) {
+            // Initialize worklist with nodes that have an indegree of 0
+            pending.extend(schedule.externals(Direction::Incoming));
+        } else {
+            pending.extend(sorted_nodes.iter().rev().copied());
+        }
+        Ok(pending)
+    }
+
+    /// If not parallel, returns empty.
+    fn get_incomplete_tasks(
+        self,
+        schedule: &DiGraph<Arc<dyn Task>, ()>,
+        indegree: &[i32],
+    ) -> Vec<(String, String)> {
+        if !matches!(self, VisitStrategy::Parallel) {
+            return vec![];
+        }
+
+        let mut incomplete_tasks = Vec::new();
+        for (i, &degree) in indegree.iter().enumerate() {
+            if degree > 0
+                && let Some(task) = schedule.node_weight(NodeIndex::new(i))
+            {
+                incomplete_tasks.push((
+                    task.work_node_id().to_string(),
+                    task.task_type().to_string(),
+                ));
+            }
+        }
+        incomplete_tasks
+    }
+
+    /// If not parallel, will return [None] if there are nodes waiting.
+    fn try_pop_pending_node(
+        self,
+        waiting: &HashMap<NodeIndex, tracing::Span>,
+        pending: &mut Vec<NodeIndex>,
+    ) -> Option<NodeIndex> {
+        if !matches!(self, VisitStrategy::Parallel) && !waiting.is_empty() {
+            return None;
+        }
+        pending.pop()
+    }
+
+    /// Decrement the indegree of each dependent of `node_index`, pushing any that
+    /// reach zero onto `pending`. Only relevant in parallel mode, where indegree
+    /// gates when a node becomes ready.
+    fn release_dependents(
+        self,
+        node_index: NodeIndex,
+        dependents: &[HashSet<NodeIndex>],
+        indegree: &mut [i32],
+        pending: &mut Vec<NodeIndex>,
+    ) {
+        if matches!(self, VisitStrategy::Parallel) {
+            for &dependent in &dependents[node_index.index()] {
+                indegree[dependent.index()] -= 1;
+                if indegree[dependent.index()] == 0 {
+                    pending.push(dependent);
+                }
+            }
+        }
+    }
+
+    fn spawn_task(
+        self,
+        mut ctx: TaskRunnerCtx,
+        task_span: &tracing::Span,
+        node: Arc<dyn Task>,
+    ) -> JoinHandle<Result<NodeStatus, Box<FsError>>> {
+        tokio::spawn(
+            async move {
+                // Note: this send may fail if the main loop gets terminated
+                // by should_cancel_compilation, in which case we simply
+                // ignore the error
+                if matches!(self, VisitStrategy::Parallel) {
+                    node.run_task_with_backpressure(&mut ctx).await
+                } else {
+                    node.run_task(&mut ctx).await
+                }
+            }
+            // Instrument the task with the span and assign parent
+            .instrument(task_span.clone()),
+        )
+    }
+}
+
+#[allow(clippy::cognitive_complexity)]
+async fn visit(
+    io: &IoArgs,
+    schedule: &DiGraph<Arc<dyn Task>, ()>,
+    ctx: &mut TaskRunnerCtx,
+    strategy: VisitStrategy,
+    token: &CancellationToken,
+) -> FsResult<()> {
     // Drain connection on this thread left by inline metadata or hook work before this phase.
     // TODO: This is just a stopgap to reduce the number of unrecycled connections.
     // This call should be removed and instead all upstream connection bearing work should
     // explictly clean up after itself.
     dbt_adapter::connection::recycle_thread_local_connection();
 
-    // Invariant check - task graph must be a DAG.
-    // We use `toposort` to check for cycles as it uses iterative algorithm,
-    // while pergraph::algo::is_cyclic_directed uses recursive which may cause stack overflow on large graphs.
-    let _ = toposort(schedule, None).map_err(|cycle| task_graph_cycle_error(cycle, schedule))?;
-
     let mut slot_pool = WorkerSlotPool::new();
     // Work items yet to be started:
-    let mut pending = Vec::new();
+    let mut pending = strategy.new_pending_nodes(schedule)?;
     // Work items that are in progress:
     let mut waiting = HashMap::<NodeIndex, tracing::Span>::new();
     // Work items that need to be skipped
@@ -465,18 +550,23 @@ pub async fn visit_parallel(
     // Channel for completion events
     let (sender, mut receiver) = mpsc::unbounded_channel();
 
-    let mut indegree = vec![0; schedule.node_count()];
-    let mut dependents = vec![HashSet::<NodeIndex>::new(); schedule.node_count()];
+    let (mut indegree, dependents) = get_indegree_and_dependents(schedule);
 
-    for edge in schedule.edge_references() {
-        indegree[edge.target().index()] += 1;
-        dependents[edge.source().index()].insert(edge.target());
-    }
-
-    // Initialize worklist with nodes that have an indegree of 0
-    for node_index in schedule.externals(Direction::Incoming) {
-        pending.push(node_index);
-    }
+    let handle_cancellation = |ctx: &mut TaskRunnerCtx,
+                               e: CancelledError,
+                               waiting: HashMap<NodeIndex, _>|
+     -> FsResult<()> {
+        // Any tasks that are running and waiting need to be reported as failed.
+        for (node_idx, task_span) in waiting {
+            let maybe_node = schedule.node_weight(node_idx);
+            if let Some(node) = maybe_node {
+                report_node_evaluation(ctx, node.as_ref(), Some(&NodeStatus::Errored));
+            }
+            // Record span result
+            span_manager.handle_task_finished(task_span, &Ok(NodeStatus::Errored));
+        }
+        return Err(e.into());
+    };
 
     // Termination proof for the loop below
     // ======================================
@@ -513,9 +603,11 @@ pub async fn visit_parallel(
     // hang. This is why `propagate_reuse_to_downstream_tests` must mark ALL phases
     // of a reused test, not just the direct dependent. See #8439.
     loop {
-        token.check_cancellation()?;
+        if let Err(e) = token.check_cancellation() {
+            return handle_cancellation(ctx, e, waiting);
+        }
 
-        while let Some(node_index) = pending.pop() {
+        while let Some(node_index) = strategy.try_pop_pending_node(&waiting, &mut pending) {
             if let Some(node) = schedule.node_weight(node_index) {
                 let skip_reason = skip_set.skip.get(&node_index);
                 let task_span = span_manager.get_task_span(node.telemetry_request(
@@ -526,12 +618,12 @@ pub async fn visit_parallel(
 
                 if let Some(skip_reason) = skip_reason {
                     // If the node is skipped, we need to decrement the indegree of its dependents
-                    for dependent in dependents[node_index.index()].iter() {
-                        indegree[dependent.index()] -= 1;
-                        if indegree[dependent.index()] == 0 {
-                            pending.push(*dependent);
-                        }
-                    }
+                    strategy.release_dependents(
+                        node_index,
+                        &dependents,
+                        &mut indegree,
+                        &mut pending,
+                    );
 
                     // If node is skipped, record skipped result and close it immediately
                     span_manager.handle_task_skipped(task_span, skip_reason);
@@ -551,16 +643,7 @@ pub async fn visit_parallel(
                 // dropping the sender. If the sender were dropped without a send, the main
                 // loop's `receiver.recv().await` would block forever because the original
                 // `sender` kept the channel open.
-                let task_handle = tokio::spawn(
-                    async move {
-                        // Note: this send may fail if the main loop gets terminated
-                        // by should_cancel_compilation, in which case we simply
-                        // ignore the error
-                        node_clone.run_task_with_backpressure(&mut ctx_clone).await
-                    }
-                    // Instrument the task with the span and assign parent
-                    .instrument(task_span.clone()),
-                );
+                let task_handle = strategy.spawn_task(ctx_clone, &task_span, node_clone);
 
                 // Spawn under current visitor span, not task span
                 dbt_common::tracing::spawn_traced(async move {
@@ -587,7 +670,9 @@ pub async fn visit_parallel(
 
         // Process the next completed task
         if !waiting.is_empty() {
-            token.check_cancellation()?;
+            if let Err(e) = token.check_cancellation() {
+                return handle_cancellation(ctx, e, waiting);
+            }
 
             let (result, node_idx, thread_id) = match receiver.recv().await {
                 Some((res, node_idx, thread_id)) => (res, node_idx, thread_id),
@@ -607,9 +692,10 @@ pub async fn visit_parallel(
             if let Err(ref e) = result {
                 // Ensure log message inherits NodeEvaluated context (e.g., unique_id).
                 task_span.in_scope(|| {
-                    emit_error_log_from_fs_error(e.as_ref(), io.status_reporter.as_ref());
+                    emit_error_log_from_fs_error(e.clone_without_backtrace());
                 });
             }
+
             // Record span result
             span_manager.handle_task_finished(task_span, &result);
 
@@ -626,6 +712,7 @@ pub async fn visit_parallel(
                 node_idx,
                 &dependents,
                 schedule,
+                ctx.inner.arg.fail_fast_flag,
                 should_reuse_downstream_tests(ctx),
             );
             if let Some(node) = maybe_node {
@@ -639,12 +726,7 @@ pub async fn visit_parallel(
             }
 
             // Decrement the indegree of its dependents
-            for dependent in dependents[node_idx.index()].iter() {
-                indegree[dependent.index()] -= 1;
-                if indegree[dependent.index()] == 0 {
-                    pending.push(*dependent);
-                }
-            }
+            strategy.release_dependents(node_idx, &dependents, &mut indegree, &mut pending);
         }
 
         // All done if nothing is in the worklist and nothing is waiting
@@ -654,18 +736,7 @@ pub async fn visit_parallel(
     }
 
     // Check if all tasks have been completed
-    let mut incomplete_tasks = Vec::new();
-    for (i, &degree) in indegree.iter().enumerate() {
-        if degree > 0
-            && let Some(task) = schedule.node_weight(NodeIndex::new(i))
-        {
-            incomplete_tasks.push((
-                task.work_node_id().to_string(),
-                task.task_type().to_string(),
-            ));
-        }
-    }
-
+    let incomplete_tasks = strategy.get_incomplete_tasks(schedule, &indegree);
     if !incomplete_tasks.is_empty() {
         let count = incomplete_tasks.len();
 
@@ -860,6 +931,7 @@ mod tests {
             &dependents,
             &schedule,
             false,
+            false,
         );
 
         assert!(reused_nodes.is_empty());
@@ -878,6 +950,7 @@ mod tests {
             model_idx,
             &dependents,
             &schedule,
+            false,
             true,
         );
 

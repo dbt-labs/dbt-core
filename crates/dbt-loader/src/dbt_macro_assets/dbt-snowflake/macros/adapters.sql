@@ -100,7 +100,9 @@
 
 -- funcsign: (relation, string) -> string
 {% macro snowflake__alter_relation_comment(relation, relation_comment) -%}
-    {%- if relation.is_dynamic_table -%}
+    {%- if relation.is_interactive_table -%}
+        {%- set relation_type = 'table' -%}
+    {%- elif relation.is_dynamic_table -%}
         {%- set relation_type = 'dynamic table' -%}
     {%- else -%}
         {%- set relation_type = relation.type -%}
@@ -117,7 +119,7 @@
 -- funcsign: (relation, dict[string, model]) -> string
 {% macro snowflake__alter_column_comment(relation, column_dict) -%}
     {% set existing_columns = adapter.get_columns_in_relation(relation) | map(attribute="name") | list %}
-    {% if relation.is_dynamic_table -%}
+    {% if relation.is_interactive_table or relation.is_dynamic_table -%}
         {% set relation_type = "table" %}
     {% else -%}
         {% set relation_type = relation.type %}
@@ -207,10 +209,20 @@
 -- funcsign: (relation, optional[list[base_column]], optional[list[base_column]]) -> string
 {% macro snowflake__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
 
-    {% if relation.is_dynamic_table -%}
+    {#- Interactive tables ALTER as plain TABLEs; only dynamic tables use ALTER DYNAMIC TABLE. -#}
+    {% if relation.is_interactive_table -%}
+        {% set relation_type = "table" %}
+    {% elif relation.is_dynamic_table -%}
         {% set relation_type = "dynamic table" %}
     {% else -%}
         {% set relation_type = relation.type %}
+    {% endif %}
+
+    {#- Snowflake's ALTER TABLE reference doesn't list ADD/DROP COLUMN as supported for interactive
+        tables. Live-verified: ADD COLUMN works anyway (undocumented); DROP COLUMN is rejected with
+        `010406: Altering interactive tables is not supported.` -#}
+    {% if relation.is_interactive_table and remove_columns %}
+        {% do exceptions.raise_compiler_error("Columns cannot be removed from an interactive table: `" ~ relation ~ "`.") %}
     {% endif %}
 
     {% if add_columns %}

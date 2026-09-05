@@ -5,7 +5,7 @@ use adbc_core::error::{Error as AdbcError, Status};
 use dbt_adbc::driver::Builder as DriverBuilder;
 use dbt_adbc::driver::LoadStrategy;
 use dbt_adbc::{Backend, Connection, Database, database};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::IndexError;
 use crate::format::{cell_to_string, first_nonempty};
@@ -89,7 +89,10 @@ pub fn write_views_sql(dir: &Path) -> Result<(), IndexError> {
         .unwrap();
     }
 
-    // Analytical views
+    // Analytical views. The parse-safe views are deliberately not here: they carry the
+    // information schema's names (`dbt.macros`, `dbt.edges`, ...), which in this file are
+    // already taken by the source tables above. They are registered where they are read,
+    // over `dbt_internal` — see `info_schema::parse_safe`.
     sql.push_str(ANALYTICAL_VIEWS);
 
     std::fs::write(dir.join("views.sql"), sql)?;
@@ -171,8 +174,7 @@ WHERE n.resource_type IN ('test');
 /// connections see a consistent committed snapshot and never block writers.
 pub struct Db {
     /// Shared database handle — multiple connections can be created from it.
-    /// `Arc<Mutex<>>` because `new_connection()` takes `&mut self` on the Box.
-    shared_database: Arc<Mutex<Box<dyn Database>>>,
+    shared_database: Arc<Box<dyn Database>>,
     connection: Box<dyn Connection>,
 }
 
@@ -189,11 +191,11 @@ impl Db {
             .with_named_option("path", ":memory:")
             .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
 
-        let mut database = db_builder.build(&mut driver)?;
+        let database = db_builder.build(&mut driver)?;
         let connection = database.new_connection()?;
 
         let mut db = Self {
-            shared_database: Arc::new(Mutex::new(database)),
+            shared_database: Arc::new(database),
             connection,
         };
         db.disable_checkpoint()?;
@@ -212,11 +214,11 @@ impl Db {
             .with_named_option("path", path.to_string_lossy().as_ref())
             .map_err(|e| AdbcError::with_message_and_status(e.to_string(), Status::Internal))?;
 
-        let mut database = db_builder.build(&mut driver)?;
+        let database = db_builder.build(&mut driver)?;
         let connection = database.new_connection()?;
 
         let mut db = Self {
-            shared_database: Arc::new(Mutex::new(database)),
+            shared_database: Arc::new(database),
             connection,
         };
         db.disable_checkpoint()?;
@@ -228,7 +230,7 @@ impl Db {
     /// Shares the catalog via DuckDB MVCC: sees the last committed snapshot,
     /// never blocks writers, multiple readers can run concurrently.
     pub fn new_reader(&self) -> Result<Self, IndexError> {
-        let connection = self.shared_database.lock().unwrap().new_connection()?;
+        let connection = self.shared_database.new_connection()?;
         Ok(Self {
             shared_database: self.shared_database.clone(),
             connection,

@@ -505,12 +505,85 @@ fn test_log_message() {
         vec![json!({
             "info": {
                 "category": "",
-                "code": "",
+                "code": "1234",
                 "invocation_id": invocation_id.to_string(),
                 "name": "Generic",
                 "level": "error",
                 "extra": {},
                 "msg": "[error]: Test error message"
+            },
+            "data": {}
+        })],
+        &[],
+    );
+}
+
+#[test]
+fn test_log_message_with_code_name() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events_with_msg_fields_to_ignore(
+        "LogMessage",
+        invocation_id,
+        || {
+            emit_error_event(
+                LogMessage {
+                    code: Some(1060),
+                    code_name: Some("UnusedConfigKey".to_string()),
+                    original_severity_number: SeverityNumber::Error as i32,
+                    original_severity_text: "ERROR".to_string(),
+                    ..Default::default()
+                },
+                Some("Test error message"),
+            );
+        },
+        &[],
+        vec![json!({
+            "info": {
+                "category": "",
+                "code": "1060",
+                "invocation_id": invocation_id.to_string(),
+                "name": "UnusedConfigKey",
+                "level": "error",
+                "extra": {},
+                "msg": "[error] [UnusedConfigKey (dbt1060)]: Test error message"
+            },
+            "data": {}
+        })],
+        &[],
+    );
+}
+
+#[test]
+fn test_log_message_with_dbt_core_event_code() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events_with_msg_fields_to_ignore(
+        "LogMessage",
+        invocation_id,
+        || {
+            emit_error_event(
+                LogMessage {
+                    code: Some(1060),
+                    code_name: Some("UnusedConfigKey".to_string()),
+                    dbt_core_event_code: Some("Z048".to_string()),
+                    original_severity_number: SeverityNumber::Error as i32,
+                    original_severity_text: "ERROR".to_string(),
+                    ..Default::default()
+                },
+                Some("Test error message"),
+            );
+        },
+        &[],
+        vec![json!({
+            "info": {
+                "category": "",
+                "code": "Z048",
+                "invocation_id": invocation_id.to_string(),
+                "name": "UnusedConfigKey",
+                "level": "error",
+                "extra": {},
+                "msg": "[error] [UnusedConfigKey (dbt1060)]: Test error message"
             },
             "data": {}
         })],

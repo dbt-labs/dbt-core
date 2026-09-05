@@ -460,19 +460,153 @@ fn re_sub(args: &[Value]) -> Result<Value, Error> {
     let count = args.get(3).and_then(|v| v.as_i64()).unwrap_or(0);
 
     let expander = Expander::python();
-    let replacer = |caps: &Captures| expander.expansion(&repl_text, caps);
+    let mut nonempty_probe = None;
+    let mut result = String::with_capacity(text_arg.len());
+    let mut last_match = 0;
+    let mut search_pos = 0;
+    let mut replacements = 0;
+    let mut force_nonempty_at = None;
 
-    if count == 0 {
-        Ok(Value::from(
-            regex.replace_all(text_arg, replacer).to_string(),
-        ))
-    } else {
-        Ok(Value::from(
+    while search_pos <= text_arg.len() {
+        if count != 0 && replacements >= count as usize {
+            break;
+        }
+
+        let pending_nonempty = force_nonempty_at.take();
+        let Some((captures, start, end)) = (if let Some(pos) = pending_nonempty {
+            let probe = match nonempty_probe.as_ref() {
+                Some(probe) => probe,
+                None => {
+                    nonempty_probe = Some(nonempty_regex(regex.as_str())?);
+                    nonempty_probe.as_ref().unwrap()
+                }
+            };
+            nonempty_captures_from_pos(probe, text_arg, pos)?
+        } else {
             regex
-                .replacen(text_arg, count as usize, replacer)
-                .to_string(),
-        ))
+                .captures_from_pos(text_arg, search_pos)
+                .map_err(|err| Error::new(ErrorKind::RegexError, err.to_string()))?
+                .map(|captures| {
+                    let matched = captures.get(0).unwrap();
+                    (captures, matched.start(), matched.end())
+                })
+        }) else {
+            if let Some(pos) = pending_nonempty {
+                search_pos = next_utf8_boundary(text_arg, pos);
+                continue;
+            }
+            break;
+        };
+
+        result.push_str(&text_arg[last_match..start]);
+        result.push_str(&expander.expansion(&repl_text, &captures));
+        last_match = end;
+        replacements += 1;
+
+        if start == end {
+            force_nonempty_at = Some(end);
+        }
+        search_pos = end;
     }
+
+    result.push_str(&text_arg[last_match..]);
+    Ok(Value::from(result))
+}
+
+/// Builds the same-start non-empty probe for `re.sub` empty-match handling.
+fn nonempty_regex(pattern: &str) -> Result<Regex, Error> {
+    let suffix_sep = if verbose_mode_active_at_end(pattern) {
+        "\n"
+    } else {
+        ""
+    };
+    Regex::new(&format!(r"\G(?:{pattern}{suffix_sep})(?<!\G)"))
+        .map_err(|err| Error::new(ErrorKind::RegexError, err.to_string()))
+}
+
+/// Finds a non-empty match that starts at `pos`.
+fn nonempty_captures_from_pos<'a>(
+    regex: &Regex,
+    text: &'a str,
+    pos: usize,
+) -> Result<Option<(Captures<'a>, usize, usize)>, Error> {
+    let Some(captures) = regex
+        .captures_from_pos(text, pos)
+        .map_err(|err| Error::new(ErrorKind::RegexError, err.to_string()))?
+    else {
+        return Ok(None);
+    };
+    let matched = captures.get(0).unwrap();
+    if matched.start() == pos && matched.end() > pos {
+        return Ok(Some((captures, pos, matched.end())));
+    }
+
+    Ok(None)
+}
+
+/// Returns true when `x`/verbose mode is still active after parsing `pattern`.
+fn verbose_mode_active_at_end(pattern: &str) -> bool {
+    let mut chars = pattern.chars().peekable();
+    let mut escaped = false;
+    let mut in_class = false;
+    let mut verbose = false;
+
+    while let Some(ch) = chars.next() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => escaped = true,
+            '#' if verbose && !in_class => {
+                for ch in chars.by_ref() {
+                    if ch == '\n' {
+                        break;
+                    }
+                }
+            }
+            '[' if !in_class => in_class = true,
+            ']' if in_class => in_class = false,
+            '(' if !in_class && chars.next_if_eq(&'?').is_some() => {
+                let mut flags = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch == ')' || ch == ':' {
+                        break;
+                    }
+                    if !matches!(ch, 'a' | 'i' | 'L' | 'm' | 's' | 'u' | 'x' | '-') {
+                        flags.clear();
+                        break;
+                    }
+                    flags.push(ch);
+                    chars.next();
+                }
+                if chars.next_if_eq(&')').is_some() {
+                    apply_verbose_flag(&mut verbose, &flags);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    verbose
+}
+
+fn apply_verbose_flag(verbose: &mut bool, flags: &str) {
+    let mut removing = false;
+    for ch in flags.chars() {
+        match ch {
+            '-' => removing = true,
+            'x' => *verbose = !removing,
+            _ => {}
+        }
+    }
+}
+
+/// Returns the next valid UTF-8 boundary after `pos`, or one past the end.
+fn next_utf8_boundary(text: &str, pos: usize) -> usize {
+    text.get(pos..)
+        .and_then(|text| text.chars().next())
+        .map_or(text.len() + 1, |ch| pos + ch.len_utf8())
 }
 
 /// Python `re.escape(pattern)`.
@@ -893,6 +1027,95 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(result.to_string(), "_A_BAB $1");
+
+        let result = re_sub(&[
+            Value::from("x*".to_string()),
+            Value::from("-".to_string()),
+            Value::from("abxd".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "-a-b--d-");
+
+        let result = re_sub(&[
+            Value::from("x*".to_string()),
+            Value::from("-".to_string()),
+            Value::from("abxd".to_string()),
+            Value::from(2),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "-a-bxd");
+
+        let result = re_sub(&[
+            Value::from("".to_string()),
+            Value::from("-".to_string()),
+            Value::from("é".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "-é-");
+
+        let result = re_sub(&[
+            Value::from(".*?".to_string()),
+            Value::from("-".to_string()),
+            Value::from("ab".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "-----");
+
+        let result = re_sub(&[
+            Value::from("(.*?)".to_string()),
+            Value::from("<\\1>".to_string()),
+            Value::from("ab".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "<><a><><b><>");
+
+        let result = re_sub(&[
+            Value::from("|^a".to_string()),
+            Value::from("-".to_string()),
+            Value::from("ba".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "-b-a-");
+
+        let result = re_sub(&[
+            Value::from("|a+".to_string()),
+            Value::from("-".to_string()),
+            Value::from("aa".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "---");
+
+        let result = re_sub(&[
+            Value::from("(?x)| a # comment".to_string()),
+            Value::from("-".to_string()),
+            Value::from("a".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "---");
+
+        let result = re_sub(&[
+            Value::from("(?x)| a # (?-x)".to_string()),
+            Value::from("-".to_string()),
+            Value::from("a".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "---");
+
+        let result = re_sub(&[
+            Value::from("|(?x:a)".to_string()),
+            Value::from("-".to_string()),
+            Value::from("a".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "---");
+
+        let result = re_sub(&[
+            Value::from("(?=x)|x".to_string()),
+            Value::from("-".to_string()),
+            Value::from("x".to_string()),
+        ])
+        .unwrap();
+        assert_eq!(result.to_string(), "--");
     }
 
     #[test]

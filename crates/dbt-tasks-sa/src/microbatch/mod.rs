@@ -162,8 +162,19 @@ impl MicrobatchBuilder {
             return Ok(self.truncate_timestamp(self.begin));
         };
 
-        let base_time = self.ceiling_timestamp(base_time);
-        let lookback_time = self.offset_timestamp(base_time, -self.lookback);
+        // Mirror dbt-core's `MicrobatchBuilder.build_start_time`: offset back from
+        // the checkpoint by `lookback` batches. When the checkpoint sits exactly on
+        // a batch boundary the final batch ends at the checkpoint, so we must look
+        // back one extra batch to include the current batch — otherwise we emit
+        // `lookback` batches instead of the expected `lookback + 1`. Since the
+        // checkpoint is `build_end_time`'s ceiling'd end, it is normally on a
+        // boundary and the `+ 1` applies.
+        let lookback = if self.truncate_timestamp(base_time) == base_time {
+            self.lookback + 1
+        } else {
+            self.lookback
+        };
+        let lookback_time = self.offset_timestamp(self.truncate_timestamp(base_time), -lookback);
         let clamped_time = std::cmp::max(self.begin, lookback_time);
 
         Ok(self.truncate_timestamp(clamped_time))
@@ -464,17 +475,41 @@ mod tests {
             2, // lookback of 2 days
         );
 
-        // With a checkpoint at Jan 10, lookback should give us Jan 8
+        // Checkpoint Jan 10 is on a batch boundary (the final batch ends at Jan 10),
+        // so lookback=2 reaches back 3 batches to Jan 7 — yielding batches for
+        // Jan 7, 8, 9 (current batch + 2 previous). Matches dbt-core.
         let start = builder
             .build_start_time(Some(make_datetime(2024, 1, 10, 0)), None, true)
             .expect("successful start time build");
-        assert_eq!(start, make_datetime(2024, 1, 8, 0));
+        assert_eq!(start, make_datetime(2024, 1, 7, 0));
 
         // If lookback would go before begin, use begin instead
         let start = builder
             .build_start_time(Some(make_datetime(2024, 1, 2, 0)), None, true)
             .expect("successful start time build");
         assert_eq!(start, make_datetime(2024, 1, 1, 0));
+    }
+
+    #[test]
+    fn test_lookback_produces_n_plus_one_batches() {
+        // Regression for dbt-core#15477: a `lookback` of N must produce N + 1
+        // day-batches (the current batch plus N previous), matching dbt-core and
+        // the microbatch docs. `end` is `build_end_time`'s ceiling of a mid-day
+        // 2024-10-01 run, i.e. the exclusive window end 2024-10-02.
+        let builder = MicrobatchBuilder::new(DbtBatchSize::Day, make_datetime(2024, 1, 1, 0), 3);
+        let end = make_datetime(2024, 10, 2, 0);
+
+        let start = builder
+            .build_start_time(Some(end), None, true)
+            .expect("successful start time build");
+        assert_eq!(start, make_datetime(2024, 9, 28, 0));
+
+        let ids: Vec<String> = builder
+            .build_batches(start, end)
+            .into_iter()
+            .map(|b| b.id)
+            .collect();
+        assert_eq!(ids, ["20240928", "20240929", "20240930", "20241001"]);
     }
 
     #[test]

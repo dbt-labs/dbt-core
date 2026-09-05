@@ -48,6 +48,9 @@ pub struct ViewTraversalResult {
     /// Keyed by `BaseRelation::semantic_fqn()` — the canonical scheme used
     /// by the run-cache request builder's `parser_seen_relations` map.
     pub leaf_relations: BTreeMap<String, Arc<dyn BaseRelation>>,
+
+    /// A subset of `seen_tables` whose view definitions could not be fetched.
+    pub unresolvable_tables: BTreeSet<String>,
 }
 
 /// Drives recursive, concurrent traversal of view definitions across a
@@ -66,12 +69,18 @@ pub struct ViewDefinitionTraverser {
     sources_extractor: Arc<dyn SourcesExtractor>,
 
     /// Long-lived deduplication cache. Lives for the lifetime of the
-    /// traverser; reused across every `traverse()` call. The value is
-    /// `Option<Arc<ViewDefinition>>` where `None` means "this fqn is not a
-    /// view (or could not be fetched)" — caching the negative answer
-    /// prevents re-querying tables on subsequent calls.
-    cache: Arc<DashMap<String, Option<Arc<ViewDefinition>>>>,
+    /// traverser; reused across every `traverse()` call.
+    cache: Arc<DashMap<String, CachedViewLookup>>,
 }
+
+#[derive(Clone, Debug)]
+enum CachedViewLookup {
+    View(Arc<ViewDefinition>),
+    NotView,
+    Unresolvable,
+}
+
+type FetchTaskResult = (Vec<Arc<ViewDefinition>>, BTreeSet<String>);
 
 impl ViewDefinitionTraverser {
     /// Create a traverser bound to the given adapter, with an empty cache.
@@ -93,8 +102,10 @@ impl ViewDefinitionTraverser {
     /// Intended for selected view models in the current run, whose
     /// compiled SQL is locally available and authoritative.
     pub fn insert_view_definition(&self, view_def: ViewDefinition) {
-        self.cache
-            .insert(view_def.fqn.clone(), Some(Arc::new(view_def)));
+        self.cache.insert(
+            view_def.fqn.clone(),
+            CachedViewLookup::View(Arc::new(view_def)),
+        );
     }
 
     /// Recursively traverse view definitions starting from the given relations.
@@ -115,8 +126,9 @@ impl ViewDefinitionTraverser {
         let mut seen_fqns: BTreeSet<String> = BTreeSet::new();
         let mut seen_relations: BTreeMap<String, Arc<dyn BaseRelation>> = BTreeMap::new();
         let mut view_definitions: BTreeMap<String, Arc<ViewDefinition>> = BTreeMap::new();
+        let mut unresolvable_tables: BTreeSet<String> = BTreeSet::new();
         let mut queue: VecDeque<Arc<dyn BaseRelation>> = relations.iter().cloned().collect();
-        let mut inflight: JoinSet<AdapterResult<Vec<Arc<ViewDefinition>>>> = JoinSet::new();
+        let mut inflight: JoinSet<AdapterResult<FetchTaskResult>> = JoinSet::new();
 
         loop {
             // 1. Drain the queue, classifying each relation against the cache.
@@ -131,7 +143,7 @@ impl ViewDefinitionTraverser {
                     .or_insert_with(|| Arc::clone(&rel));
                 let cached = self.cache.get(&fqn).map(|e| e.value().clone());
                 match cached {
-                    Some(Some(view_def)) => record_and_enqueue(
+                    Some(CachedViewLookup::View(view_def)) => record_and_enqueue(
                         adapter_type,
                         &mut view_definitions,
                         &mut queue,
@@ -139,7 +151,10 @@ impl ViewDefinitionTraverser {
                         &view_def,
                         self.sources_extractor.as_ref(),
                     )?,
-                    Some(None) => { /* leaf: not a view, skip. */ }
+                    Some(CachedViewLookup::NotView) => { /* leaf: not a view, skip. */ }
+                    Some(CachedViewLookup::Unresolvable) => {
+                        unresolvable_tables.insert(fqn);
+                    }
                     None => to_fetch.push(rel),
                 }
             }
@@ -155,19 +170,26 @@ impl ViewDefinitionTraverser {
                         let res = adapter.fetch_view_definitions(&to_fetch, token_clone).await;
                         match res {
                             Ok(view_defs) => {
-                                let mut by_fqn: HashMap<String, ViewDefinition> =
-                                    view_defs.into_iter().map(|v| (v.fqn.clone(), v)).collect();
+                                let mut by_fqn: HashMap<String, ViewDefinition> = view_defs
+                                    .definitions
+                                    .into_iter()
+                                    .map(|v| (v.fqn.clone(), v))
+                                    .collect();
                                 let mut fetched_views: Vec<Arc<ViewDefinition>> = Vec::new();
+                                let mut unresolvable = BTreeSet::new();
                                 for fqn in fqns {
                                     if let Some(view_def) = by_fqn.remove(&fqn) {
                                         let arc = Arc::new(view_def);
-                                        cache.insert(fqn, Some(Arc::clone(&arc)));
+                                        cache.insert(fqn, CachedViewLookup::View(Arc::clone(&arc)));
                                         fetched_views.push(arc);
+                                    } else if view_defs.unresolvable.contains(&fqn) {
+                                        cache.insert(fqn.clone(), CachedViewLookup::Unresolvable);
+                                        unresolvable.insert(fqn);
                                     } else {
-                                        cache.insert(fqn, None);
+                                        cache.insert(fqn, CachedViewLookup::NotView);
                                     }
                                 }
-                                Ok(fetched_views)
+                                Ok((fetched_views, unresolvable))
                             }
                             Err(cancellable) => Err(match cancellable {
                                 Cancellable::Error(e) => e,
@@ -186,7 +208,7 @@ impl ViewDefinitionTraverser {
             if inflight.is_empty() && queue.is_empty() {
                 break;
             }
-            let views = inflight
+            let (views, unresolvable) = inflight
                 .join_next()
                 .await
                 .expect("inflight non-empty due to check above")
@@ -197,6 +219,7 @@ impl ViewDefinitionTraverser {
                     )
                 })??;
 
+            unresolvable_tables.extend(unresolvable);
             for v in views {
                 record_and_enqueue(
                     adapter_type,
@@ -228,6 +251,7 @@ impl ViewDefinitionTraverser {
                 .collect(),
             seen_tables,
             leaf_relations,
+            unresolvable_tables,
         })
     }
 }
@@ -342,10 +366,11 @@ mod tests {
     use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
     use dbt_tasks_sa::sources_extractor::DefaultSourcesExtractor;
     use parking_lot::Mutex as PlMutex;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
 
     struct MockAdapter {
         graph: HashMap<String, Option<String>>,
+        unresolvable: BTreeSet<String>,
         call_counts: Arc<PlMutex<HashMap<String, usize>>>,
         latency_ms: u64,
         errors: HashMap<String, String>,
@@ -355,6 +380,7 @@ mod tests {
         fn new(graph: HashMap<String, Option<String>>) -> Self {
             Self {
                 graph,
+                unresolvable: BTreeSet::new(),
                 call_counts: Arc::new(PlMutex::new(HashMap::new())),
                 latency_ms: 0,
                 errors: HashMap::new(),
@@ -375,6 +401,11 @@ mod tests {
         #[allow(dead_code)]
         fn with_error(mut self, fqn: String, msg: &str) -> Self {
             self.errors.insert(fqn, msg.to_string());
+            self
+        }
+
+        fn with_unresolvable(mut self, fqn: String) -> Self {
+            self.unresolvable.insert(fqn);
             self
         }
     }
@@ -440,11 +471,12 @@ mod tests {
             &'a self,
             relations: &'a [Arc<dyn BaseRelation>],
             _token: CancellationToken,
-        ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+        ) -> AsyncAdapterResult<'a, dbt_adapter::metadata::ViewDefinitionFetchResult> {
             let latency = self.latency_ms;
             let counts = Arc::clone(&self.call_counts);
             let graph = self.graph.clone();
             let errors = self.errors.clone();
+            let unresolvable = self.unresolvable.clone();
             let fqns: Vec<String> = relations.iter().map(|r| r.semantic_fqn()).collect();
 
             Box::pin(async move {
@@ -477,7 +509,14 @@ mod tests {
                         });
                     }
                 }
-                Ok(out)
+                let unresolvable = fqns
+                    .into_iter()
+                    .filter(|fqn| unresolvable.contains(fqn))
+                    .collect();
+                Ok(dbt_adapter::metadata::ViewDefinitionFetchResult {
+                    definitions: out,
+                    unresolvable,
+                })
             })
         }
     }
@@ -691,6 +730,31 @@ mod tests {
 
         // V1 fetched exactly once across both calls.
         assert_eq!(mock.count_for(&v1), 1);
+    }
+
+    #[tokio::test]
+    async fn unresolvable_relation_is_preserved_on_cache_hit() {
+        let secure_view = rel("SECURE_VIEW").semantic_fqn();
+        let graph = HashMap::new();
+
+        let mock = Arc::new(MockAdapter::new(graph).with_unresolvable(secure_view.clone()));
+        let adapter: Arc<dyn MetadataAdapter> = mock.clone();
+        let traverser = ViewDefinitionTraverser::new(adapter, Arc::new(DefaultSourcesExtractor));
+
+        let first = traverser
+            .traverse(&[rel("SECURE_VIEW")], CancellationToken::never_cancels())
+            .await
+            .expect("first traversal");
+        assert!(first.seen_tables.contains(&secure_view));
+        assert!(first.unresolvable_tables.contains(&secure_view));
+
+        let second = traverser
+            .traverse(&[rel("SECURE_VIEW")], CancellationToken::never_cancels())
+            .await
+            .expect("second traversal");
+        assert!(second.seen_tables.contains(&secure_view));
+        assert!(second.unresolvable_tables.contains(&secure_view));
+        assert_eq!(mock.count_for(&secure_view), 1);
     }
 
     #[tokio::test]

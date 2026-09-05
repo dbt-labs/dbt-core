@@ -30,5 +30,5 @@ tokio = { workspace = true, features = ["full"] }
 
 [[bin]]
 doctest = false
-name = "dbt-sa-cli"
+name = "dbt"
 path = "src/main.rs"

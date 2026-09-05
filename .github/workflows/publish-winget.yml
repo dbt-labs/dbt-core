@@ -173,24 +173,23 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Post the winget-pkgs PR link to Slack so on-call can review it. Slack
-      # returns HTTP 200 even on failure, so assert on the `ok` field in the body.
+      # Post the winget-pkgs PR link to Slack so on-call can review it.
+      # A Slack outage shouldn't fail the release workflow, so don't let this step fail the job.
       - name: Post Slack message
+        continue-on-error: true
         env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_WINGET_BOT_TOKEN }}
-          SLACK_CHANNEL: ${{ vars.WINGET_SLACK_CHANNEL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WINGET_WEBHOOK_URL }}
           VERSION: ${{ inputs.version }}
           PR_URL: ${{ needs.publish-winget.outputs.pr_url }}
         run: |
           text=":package: New winget PR opened for \`${PACKAGE_IDENTIFIER}\` \`${VERSION}\`: ${PR_URL}"
-          resp=$(jq -n --arg c "$SLACK_CHANNEL" --arg t "$text" \
-            '{channel: $c, text: $t, unfurl_links: false}' | \
-            curl -sS -X POST https://slack.com/api/chat.postMessage \
-              -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+          resp=$(jq -n --arg t "$text" '{text: $t, unfurl_links: false}' | \
+            curl -sS -X POST "$SLACK_WEBHOOK_URL" \
               -H "Content-type: application/json; charset=utf-8" \
               --data @-)
-          if [ "$(echo "$resp" | jq -r '.ok')" != "true" ]; then
-            echo "::error::Slack chat.postMessage failed: $resp"
+          # Incoming webhooks return "ok" as plain text on success
+          if [ "$resp" != "ok" ]; then
+            echo "::error::Slack webhook failed: $resp"
             exit 1
           fi
           echo "Posted winget PR alert: $PR_URL"

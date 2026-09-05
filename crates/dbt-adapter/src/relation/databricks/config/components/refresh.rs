@@ -38,9 +38,7 @@ impl PartialEq for Config {
     }
 }
 
-/// Component for Databricks refresh schedule
-///
-/// Holds a string representing the SQL query.
+/// Component for Databricks refresh schedule.
 pub type Refresh = SimpleComponentConfigImpl<Config>;
 
 fn diff(desired_state: &Config, current_state: &Config) -> Option<Config> {

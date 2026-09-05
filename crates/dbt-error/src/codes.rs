@@ -150,6 +150,10 @@ pub enum ErrorCode {
     UnusedResourceConfigPath = 1097,
     DepsScrubbedPackageName = 1098,
     DepsDuplicatePackage = 1099,
+    /// A constraint is recognized by the adapter but not enforced at the database level.
+    ConstraintNotEnforced = 1109,
+    /// A constraint type is not supported by the adapter at all and is dropped from the rendered DDL.
+    ConstraintNotSupported = 1110,
 
     // --------------------------------------------------------------------------------------------
     // CLI args/config [1100–1149]
@@ -232,12 +236,55 @@ pub enum ErrorCode {
     ValidateMacroArgs = 1506,
     JinjaTypeCheckFailed = 1507,
     JinjaTopLevelReturn = 1508,
+    /// Emitted when a `{% snapshot %}`/`{% docs %}` block name is followed by
+    /// extra characters that dbt-core's regex-based name extractor silently
+    /// discards (e.g. `{% snapshot foo.sql %}`). Deprecation warning only.
+    MalformedBlockName = 1509,
 
     // --------------------------------------------------------------------------------------------
     // Local execution
     SelectorError = 1600,
     NoNodesSelected = 1601,
     InvalidColumnSelector = 1602,
+    /// An externally supplied node set replaced the computed selection.
+    SelectionOverrideActive = 1603,
+    /// An externally supplied node set was available but not applicable to this command.
+    SelectionOverrideSkipped = 1604,
+    /// The nodes actually reported by the run differ from the externally supplied node set.
+    SelectionOverrideDivergence = 1605,
+
+    // --------------------------------------------------------------------------------------------
+    // Checks
+    //
+    // One code per outcome rather than a shared one: `warn_error_options` targets codes, so
+    // collapsing these onto `Generic` would mean upgrading or silencing a check outcome also
+    // upgrades or silences every unrelated `Generic` warning in the run.
+    /// A check found violations at `error` severity. Logged as an error.
+    CheckFailed = 1650,
+    /// A check found violations at `warn` severity.
+    CheckWarned = 1651,
+    /// A check had nothing in scope to evaluate.
+    CheckSkipped = 1652,
+    /// A check could not be evaluated (e.g. its query errored).
+    CheckEvaluationFailed = 1653,
+    /// The parse-time index could not be written, so checks were skipped and the build proceeded.
+    CheckIndexUnavailable = 1654,
+    /// The index was turned off (`--no-write-index`), so checks were skipped and the build
+    /// proceeded. Distinct from `CheckIndexUnavailable`: that code reports a requested write that
+    /// failed, so promoting it must not also fail every deliberately opted-out build.
+    CheckIndexDisabled = 1655,
+
+    // --------------------------------------------------------------------------------------------
+    // Information schema
+    /// `target/info_schema/` is missing, unreadable, or will not open.
+    ///
+    /// Distinct from `InvalidArgument`, which this case used to report: `--info <view>` is a
+    /// well-formed request against state that has not been produced, so calling it a bad
+    /// argument sent people to check their flags, and made a missing artifact
+    /// indistinguishable from a typo'd option in anything that reads codes rather than prose.
+    /// The query itself keeps `InvalidArgument` -- an unknown view or a syntax error really is
+    /// the argument.
+    InfoSchemaUnavailable = 1656,
 
     // --------------------------------------------------------------------------------------------
     // CLI errors
@@ -246,6 +293,8 @@ pub enum ErrorCode {
     DeprecatedOption = 1702,
     DeprecatedStaticAnalysisValue = 1703,
     NotSupportedWarnErrorOption = 1704,
+    /// No longer emitted. Retained so an existing `warn_error_options` entry naming it
+    /// keeps resolving instead of failing as an unknown code.
     DocsGenerateWarning = 1705,
 
     // --------------------------------------------------------------------------------------------

@@ -6,15 +6,19 @@ pub mod dbt_init;
 pub mod dbt_metrics;
 pub mod event_classifiers;
 pub mod formatters;
+pub mod fs_error_log;
 pub mod invocation;
 pub mod layers;
 pub mod middlewares;
 mod private_events;
 pub mod tracing_feature_handles;
 
-pub use config::FsTraceConfig;
+pub use config::{
+    FsTraceConfig, FsTraceConfigBuilder, build_file_log_consumer, build_jsonl_file_consumer,
+    build_shared_middleware_layers, build_tracing_config_provider,
+};
 pub use dbt_data_layer::{dbt_data_layer_config, dbt_process_span_attributes};
-pub use dbt_init::init_tracing_with_consumer_layer;
+pub use dbt_init::init_tracing_with_data_layer;
 pub use dbt_tracing::async_tracing::{
     spawn_blocking_traced, spawn_traced, spawn_traced_block_in_place,
 };

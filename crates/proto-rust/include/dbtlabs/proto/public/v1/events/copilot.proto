@@ -98,6 +98,7 @@ message CopilotGenerationComplete {
 
   // Time to first token in milliseconds. Unset when not streaming.
   optional int64 first_token_ms = 25;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 26;
 }
 
 
@@ -166,6 +167,72 @@ message CopilotLlmCall {
 
   // Time to first token in milliseconds. Unset when not streaming.
   optional int64 first_token_ms = 18;
+
+  // Purpose of this call within the parent run:
+  //   "generation"  - user-facing agent/generation turn (default when unset)
+  //   "compaction"  - context-compaction summarization call
+  // Unset is treated as "generation", so calls emitted before this field
+  // existed count as generation turns. Lets downstream models keep compaction
+  // out of turn counts while still pricing its token cost.
+  optional string call_purpose = 19;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 20;
+}
+
+
+// Possible values for CompactionApplied.strategy:
+//   "tool_result_clearing"  - dropped stale tool outputs; no LLM call made
+//   "summarization"         - summarized the conversation via an LLM call
+
+// Possible values for CompactionApplied.trigger:
+//   "automatic"    - fired by the context-size threshold
+//   "user_forced"  - explicitly requested by the user
+
+// Fired when context compaction runs within an agent run. Emitted for every
+// compaction, including tool_result_clearing which makes no LLM call, so it
+// captures compaction frequency and effectiveness the summarizer's
+// CopilotLlmCall alone cannot. Each strategy fires at most once per run, so
+// copilot_request_id is the key: it identifies the run and joins a
+// "summarization" event to the priced summarizer CopilotLlmCall (the single
+// row tagged call_purpose="compaction" in that run).
+message CompactionApplied {
+  option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+  option (v1.public.common.vortex_enabled) = true;
+
+  // Server enrichment for this event
+  v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+  // dbt Cloud context (account_id, user_id, project_id, etc.)
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+
+  // Identifies the parent agent run; foreign key to CopilotGenerationComplete.
+  // Also the cost join key: a "summarization" event maps 1:1 to the run's single
+  // CopilotLlmCall tagged call_purpose="compaction".
+  string copilot_request_id = 3;
+
+  // Conversation thread for multi-turn correlation
+  string thread_id = 4;
+
+  // Which compaction strategy ran; see strategy values documented above
+  string strategy = 5;
+
+  // What triggered this compaction; see trigger values documented above
+  string trigger = 6;
+
+  // Approximate context size before compaction, in the middleware's working
+  // token estimate (count_tokens_approximately), the same space as
+  // compaction_threshold_used. Not provider-billed tokens; the summarizer's real cost is
+  // on its CopilotLlmCall.
+  optional int64 tokens_before = 7;
+
+  // Approximate context size after compaction, same estimate space as
+  // tokens_before. tokens_before minus tokens_after is the context reclaimed.
+  optional int64 tokens_after = 8;
+
+  // Working token limit that triggered automatic compaction, same estimate
+  // space as tokens_before/after. Per model (derived from the context window;
+  // conservative fallback for opaque/BYOK models). Unset when user_forced.
+  optional int64 compaction_threshold_used = 9;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 10;
 }
 
 
@@ -196,4 +263,5 @@ message CopilotUserAcceptance {
 
   // Optional free-text feedback comment from the user. Unset when no feedback provided.
   optional string feedback_text = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }

@@ -1,4 +1,5 @@
 
+{# TODO: delete this file in favor of get_latest_version_pointer_alias.sql, or apply the same file name in v1 macro #}
 {#
     Renders the alias for the latest version pointer view.
 

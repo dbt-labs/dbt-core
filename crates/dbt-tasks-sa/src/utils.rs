@@ -18,8 +18,8 @@ use dbt_common::unexpected_err;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_COMPILED_DIR_NAME, fs_err, stdfs};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_loader::internal_macro_package_names;
-use dbt_schema_store::{CanonicalFqn, SchemaStoreTrait};
+use dbt_loader::internal_macro_package_names_for;
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::relations::base::ComponentName;
@@ -105,7 +105,6 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             let columns = update_node_columns(
                 resolved_state.adapter_type,
                 type_ops_factory,
-                io,
                 &model.__common_attr__,
                 &model.__base_attr__.columns,
                 entry.inner(),
@@ -171,7 +170,6 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             let columns = update_node_columns(
                 resolved_state.adapter_type,
                 type_ops_factory,
-                io,
                 &seed.__common_attr__,
                 &seed.__base_attr__.columns,
                 entry.inner(),
@@ -190,7 +188,6 @@ fn update_resolved_states_manifest_with_schemas_and_compiled_sql_core(
             let columns = update_node_columns(
                 resolved_state.adapter_type,
                 type_ops_factory,
-                io,
                 &source.__common_attr__,
                 &source.__base_attr__.columns,
                 entry.inner(),
@@ -366,7 +363,6 @@ pub fn update_resolved_state_node_columns(
 pub fn update_node_columns(
     adapter_type: AdapterType,
     type_ops_factory: &dyn TypeOpsFactory,
-    io: &IoArgs,
     common_attr: &CommonAttributes,
     columns: &[DbtColumnRef],
     schema: &SchemaRef,
@@ -412,7 +408,6 @@ pub fn update_node_columns(
                             "Column '{}' in node '{}' has a type mismatch. Overriding '{}' with '{}'.",
                             column_name, common_attr.unique_id, existing_type, column_type
                         ),
-                        io.status_reporter.as_ref(),
                     );
                 }
             }
@@ -433,6 +428,8 @@ pub fn update_node_columns(
             databricks_tags: existing.and_then(|col| col.databricks_tags.clone()),
             column_mask: existing.and_then(|col| col.column_mask.clone()),
             quote: existing.and_then(|col| col.quote),
+            codec: existing.and_then(|col| col.codec.clone()),
+            ttl: existing.and_then(|col| col.ttl.clone()),
             deprecated_config: existing
                 .map(|col| col.deprecated_config.clone())
                 .unwrap_or_default(),
@@ -503,7 +500,6 @@ pub fn get_catalog_schemas(
 
 /// Registers the schemas in the database.
 pub async fn register_catalog_schemas_remote(
-    io: &IoArgs,
     adapter: &Arc<Adapter>,
     state: &State<'_, '_>,
     catalog_schemas: Vec<(String, String, String)>,
@@ -517,7 +513,6 @@ pub async fn register_catalog_schemas_remote(
                 "Cannot register databases or schemas in the remote. Adapter '{}' does not support metadata operations.",
                 adapter.adapter_type()
             ),
-            io.status_reporter.as_ref(),
         );
         return Ok(());
     };
@@ -529,11 +524,7 @@ pub async fn register_catalog_schemas_remote(
                 "Failed to create schema '{schema}' in database '{catalog}' in remote for {unique_id}: {e}"
             );
 
-            emit_warn_log_message(
-                ErrorCode::FailedToCreateDatabase,
-                err_string,
-                io.status_reporter.as_ref(),
-            );
+            emit_warn_log_message(ErrorCode::FailedToCreateDatabase, err_string);
         }
     }
 
@@ -641,66 +632,6 @@ pub fn filter_missing_schemas(
     Ok(missing_catalog_schemas)
 }
 
-pub fn mirror_schema_to_frontier_cache(
-    io_args_out_dir: &Path,
-    canonical_fqn: &CanonicalFqn,
-    unique_id: &str,
-    schema_store: &dyn SchemaStoreTrait,
-) -> FsResult<()> {
-    // For the ParquetCache store format, promote the Selected entry directly
-    // in the in-memory cache; no per-file copy is needed.
-    schema_store
-        .promote_to_frontier(canonical_fqn)
-        .map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to promote schema to frontier cache: {}",
-                e
-            )
-        })?;
-
-    // For legacy per-file formats (StoreFormat::Parquet), copy the analyzed
-    // parquet file to the sourced_remote path. This is a no-op for ParquetCache
-    // because the analyzed file no longer exists on disk.
-    let schema_root = io_args_out_dir.join("schemas");
-    let analyzed_path = schema_root
-        .join("analyzed")
-        .join(unique_id)
-        .join("output.parquet");
-    if !analyzed_path.exists() {
-        return Ok(());
-    }
-
-    let frontier_path = schema_root
-        .join("sourced_remote")
-        .join("internal")
-        .join(canonical_fqn.catalog().as_str())
-        .join(canonical_fqn.schema().as_str())
-        .join(canonical_fqn.table().as_str())
-        .join("output.parquet");
-    if let Some(parent) = frontier_path.parent() {
-        stdfs::create_dir_all(parent).map_err(|e| {
-            fs_err!(
-                ErrorCode::IoError,
-                "Failed to create schema cache directory {}: {}",
-                parent.display(),
-                e
-            )
-        })?;
-    }
-
-    stdfs::copy(&analyzed_path, &frontier_path).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to mirror seed schema from {} to {}: {}",
-            analyzed_path.display(),
-            frontier_path.display(),
-            e
-        )
-    })?;
-    Ok(())
-}
-
 pub fn typecheck_macros(
     resolver_state: &ResolverState,
     env: Arc<JinjaEnv>,
@@ -713,7 +644,10 @@ pub fn typecheck_macros(
     // mode. Skip them — they're stable and pre-tested. After the manifest parity fix,
     // original_file_path is package-relative and no longer starts with "dbt_internal_packages",
     // so we identify internal macros by package_name instead.
-    let internal_pkgs = internal_macro_package_names(resolver_state.adapter_type);
+    // Union over every adapter the target declares, not just the default one:
+    // otherwise a borrowed package's macros would not be recognised as internal.
+    let internal_pkgs =
+        internal_macro_package_names_for(resolver_state.dbt_profile.adapter_types());
     let is_internal = |m: &&DbtMacro| internal_pkgs.contains(&m.package_name);
 
     let all_files = {
@@ -726,7 +660,7 @@ pub fn typecheck_macros(
             .filter_map(|m| {
                 let path =
                     m.get_node_path_abs(NodePathKind::Definition, &arg.io.in_dir, &arg.io.out_dir);
-                seen.insert(path.clone()).then(|| DbtPath::from_path(path))
+                seen.insert(path.clone()).then(|| DbtPath::from(path))
             })
             .collect::<Vec<_>>()
     };
@@ -740,7 +674,7 @@ pub fn typecheck_macros(
             continue;
         }
         let relative_file_path = m.original_file_path.clone();
-        let absolute_file_path = DbtPath::from_path(m.get_node_path_abs(
+        let absolute_file_path = DbtPath::from(m.get_node_path_abs(
             NodePathKind::Definition,
             &arg.io.in_dir,
             &arg.io.out_dir,
@@ -778,7 +712,7 @@ pub fn typecheck_macros(
                     span.start_line,
                     span.start_col,
                     span.start_offset,
-                    relative_file_path.clone(),
+                    relative_file_path.to_path_buf(),
                 ),
             )
         } else {
@@ -795,7 +729,7 @@ pub fn typecheck_macros(
             jinja_typechecking_listener_factory.clone(),
             Some(m.package_name.clone()),
             &env.env.get_root_package_name(),
-            Value::from_dyn_object(env.env.get_dbt_and_adapters_namespace()),
+            Value::from_dyn_object(env.env.get_dbt_and_adapters_namespaces()),
             &relative_file_path.clone(),
             &content,
             &offset,
@@ -815,7 +749,7 @@ fn collect_noqa_comments(
     let mut noqa_comments = HashMap::new();
 
     for file in files {
-        let absolute_file_path = DbtPath::from_path(io.in_dir.join(file.as_path()));
+        let absolute_file_path = DbtPath::from(io.in_dir.join(file.as_path()));
         let content = if let Some(content) = content_cache.get(&absolute_file_path) {
             content.clone()
         } else {

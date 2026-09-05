@@ -75,7 +75,8 @@ pub struct SemanticEntity {
     pub entity_type: ColumnPropertiesEntityType,
     #[serde(
         default,
-        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+        serialize_with = "crate::schemas::serde::serialize_none_as_default",
+        deserialize_with = "crate::schemas::serde::deserialize_default_as_none"
     )]
     pub description: Option<String>,
     pub label: Option<String>,
@@ -83,7 +84,8 @@ pub struct SemanticEntity {
     pub expr: Option<String>,
     #[serde(
         default,
-        serialize_with = "crate::schemas::serde::serialize_option_as_default"
+        serialize_with = "crate::schemas::serde::serialize_none_as_default",
+        deserialize_with = "crate::schemas::serde::deserialize_default_as_none"
     )]
     pub config: Option<SemanticLayerElementConfig>,
     pub metadata: Option<SourceFileMetadata>,

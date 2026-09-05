@@ -11,7 +11,6 @@ pub(crate) mod constraints;
 pub(crate) use constraints::ConstraintsLoader;
 
 pub(crate) mod liquid_clustering;
-#[expect(unused_imports)]
 pub(crate) use liquid_clustering::LiquidClusteringLoader;
 
 pub(crate) mod partition_by;
@@ -28,6 +27,9 @@ pub(crate) use relation_comment::RelationCommentLoader;
 
 pub(crate) mod relation_tags;
 pub(crate) use relation_tags::RelationTagsLoader;
+
+pub(crate) mod row_filter;
+pub(crate) use row_filter::RowFilterLoader;
 
 pub(crate) mod tbl_properties;
 pub(crate) use tbl_properties::TblPropertiesLoader;

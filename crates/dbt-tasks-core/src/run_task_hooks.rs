@@ -20,7 +20,13 @@ pub trait RunTaskHooks: Send + Sync {
         node: Arc<dyn InternalDbtNodeAttributes>,
         sql: &str,
     ) -> FsResult<RunCacheServiceDecision>;
-    async fn run_alt_compute_sidecar(
+    async fn run_lake_compute_sidecar(
+        &self,
+        ctx: &mut TaskRunnerCtx,
+        node: Arc<dyn InternalDbtNodeAttributes>,
+        task_result: Option<TaskResult>,
+    ) -> FsResult<NodeStatus>;
+    async fn run_on_lake_compute(
         &self,
         ctx: &mut TaskRunnerCtx,
         node: Arc<dyn InternalDbtNodeAttributes>,

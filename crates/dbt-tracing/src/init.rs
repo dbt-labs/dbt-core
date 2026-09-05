@@ -125,7 +125,7 @@ impl TelemetryHandle {
 ///
 /// On success, returns the "process" span, used as a parent span fallback of last resort
 /// in data layer for events (but not for spans!).
-pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync + 'static>(
+pub fn init_tracing<D: Layer<BaseSubscriber> + Send + Sync + 'static>(
     max_log_verbosity: LevelFilter,
     process_attributes: TelemetryAttributes,
     data_layer: D,

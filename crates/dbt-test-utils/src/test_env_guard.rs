@@ -52,11 +52,21 @@ impl TestEnvGuard {
         "SSH_AUTH_SOCK",
         "TMPDIR",
         "USER",
-        // This is to allow locally testing if a driver change breaks any test
+        // These allow locally testing if a driver change breaks any test.
+        // DISABLE_CDN_DRIVER_CACHE flips the driver loader into Bundled mode,
+        // ADBC_REPOSITORY points at the directory holding the .so to dlopen,
+        // and DISABLE_AUTO_DRIVER_REBUILD skips the `make -C <ADBC_REPOSITORY>`
+        // step (used when the local repo doesn't ship a Makefile at that path).
         "DISABLE_CDN_DRIVER_CACHE",
+        "ADBC_REPOSITORY",
+        "DISABLE_AUTO_DRIVER_REBUILD",
         // Used to force vortex client into dev mode for testing
         "VORTEX_DEV_MODE",
         "VORTEX_DEV_MODE_OUTPUT_PATH",
+        // Opt-in capture of test OTEL files + rendered summaries for local
+        // debugging / comparing runs (see CompareConnectionBackpressureSummary).
+        "DBT_TEST_OTEL_CAPTURE_DIR",
+        "DBT_TEST_OTEL_LABEL",
     ];
 
     /// Windows-specific environment variables required for system operations and DNS resolution

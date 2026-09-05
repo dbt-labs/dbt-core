@@ -6,11 +6,8 @@ use std::{
 
 use crate::utils::NoOpConfig;
 use dbt_adapter_core::AdapterType;
-use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
-use dbt_common::{
-    CodeLocationWithFile, ErrorCode, FsResult, fs_err,
-    io_args::{IoArgs, StaticAnalysisKind},
-};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsResult, fs_err, io_args::StaticAnalysisKind};
+use dbt_common::{path::DbtPath, tracing::dbt_emit::emit_warn_log_from_fs_error};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     listener::DefaultRenderingEventListenerFactory,
@@ -36,7 +33,6 @@ pub fn resolve_operations(
     package_base_path: &Path,
     project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
-    io: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
@@ -56,7 +52,6 @@ pub fn resolve_operations(
             package_base_path,
             project_root,
             jinja_env,
-            io,
             global_static_analysis,
             adapter_type,
             database,
@@ -75,7 +70,6 @@ pub fn resolve_operations(
             package_base_path,
             project_root,
             jinja_env,
-            io,
             global_static_analysis,
             adapter_type,
             database,
@@ -96,7 +90,6 @@ fn new_operation(
     _package_base_path: &Path,
     _project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
-    io: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
@@ -131,19 +124,35 @@ fn new_operation(
                 // compiled output writes to `hooks/<name>.sql`. Without it, fusion's
                 // path renders as a directory and the compiled file lands at
                 // `hooks/<name>` with no extension.
-                path: PathBuf::from("hooks").join(format!("{name}.sql")),
-                original_file_path: original_file_path.clone(),
+                path: DbtPath::from("hooks").join(format!("{name}.sql")),
+                original_file_path: DbtPath::from(&original_file_path),
                 unique_id,
                 fqn: vec![project_name.to_string(), "hooks".to_string(), name.clone()],
                 checksum: DbtChecksum::hash(operation_sql.trim().as_bytes()),
                 raw_code: Some(operation_sql.to_string()),
                 language: Some("sql".to_string()),
+                // Stored as a plain field (unlike `Spanned<T>`'s own span) so it
+                // survives the `--partial-parse` cache's JSON round-trip; see
+                // `run_operation_on_run` in dbt-tasks-sa, which relies on this to
+                // attribute hook-execution errors back to their real location.
+                name_span: dbt_common::Span::from_serde_span(
+                    operation_sql_spanned.span().clone(),
+                    original_file_path.clone(),
+                ),
                 ..Default::default()
             },
             __base_attr__: NodeBaseAttributes {
                 alias: name,
                 database: database.to_string(),
                 schema: schema.to_string(),
+                // A hook is not a node the user configures, so it runs on the
+                // target default. This must be set rather than defaulted: the
+                // adapter decides which dialect's internal-macro namespace the
+                // hook resolves `dbt.run_query` and friends through, and a wrong
+                // one yields an empty namespace rather than an error.
+                adapter: adapter_type,
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),
@@ -160,6 +169,7 @@ fn new_operation(
             let mut operation_ctx = BTreeMap::new();
             operation_ctx.extend(build_resolve_model_context(
                 &NoOpConfig {},
+                false,
                 adapter_type,
                 database,
                 schema,
@@ -176,7 +186,7 @@ fn new_operation(
                 sql_resources.clone(),
                 execute_exists,
                 &operation.__common_attr__.original_file_path,
-                io,
+                &PathBuf::new(),
                 global_static_analysis,
             ));
 
@@ -225,7 +235,7 @@ fn new_operation(
                                         location.line,
                                         location.col,
                                         location.index,
-                                        operation.__common_attr__.original_file_path.clone(),
+                                        operation.__common_attr__.original_file_path.to_path_buf(),
                                     )),
                                 });
                             }
@@ -236,7 +246,7 @@ fn new_operation(
                                         location.line,
                                         location.col,
                                         location.index,
-                                        operation.__common_attr__.original_file_path.clone(),
+                                        operation.__common_attr__.original_file_path.to_path_buf(),
                                     )),
                                 });
                             }
@@ -257,8 +267,8 @@ fn new_operation(
                         operation.__common_attr__.name,
                         err.to_string()
                     )
-                    .with_location(operation.__common_attr__.original_file_path.clone());
-                    emit_warn_log_from_fs_error(&err, io.status_reporter.as_ref());
+                    .with_location(operation.__common_attr__.original_file_path.to_path_buf());
+                    emit_warn_log_from_fs_error(err);
                 }
             }
         }

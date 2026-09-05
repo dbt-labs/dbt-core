@@ -8,7 +8,7 @@ use std::{
 
 use crate::config::CompilationConfig;
 use dbt_adapter::{
-    Adapter, AdapterEngine, AdapterImpl, AdapterType,
+    Adapter, AdapterBuilder, AdapterEngine, AdapterImpl, AdapterStore, AdapterType,
     adapter::AdapterFactory,
     cache::RelationCache,
     config::AdapterConfig,
@@ -42,15 +42,24 @@ use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::{
-        ResolvedCloudConfig, common::DbtQuoting, macros::build_macro_units, profiles::Execute,
-        project::DbtProject, relations::DEFAULT_RESOLVED_QUOTING,
+        ResolvedCloudConfig,
+        common::{DbtQuoting, ResolvedQuoting},
+        macros::build_macro_units,
+        profiles::{DbConfig, Execute},
+        project::{DbtProject, QueryComment},
+        relations::DEFAULT_RESOLVED_QUOTING,
     },
     state::{
         CacheState, DbtPackage, DbtState, GetColumnsInRelationCalls, GetRelationCalls,
         PatternedDanglingSources, ResolverState, ResourcePathKind,
     },
 };
+use fs_deps::private_package::PrivatePackageResolver;
 
+/// `Clone` so the adapter-store builder closure can own a handle: every field is
+/// either `Arc` or cheaply cloneable, so this is a handle copy rather than a deep
+/// one.
+#[derive(Clone)]
 pub struct DbtLoadedProject {
     config: CompilationConfig,
     type_ops_factory: Arc<dyn TypeOpsFactory>,
@@ -71,6 +80,7 @@ async fn load_phase(
     tracing_config: Option<&dyn TracingConfigProvider>,
     token: &CancellationToken,
     loader_hooks: Arc<dyn LoaderHooks>,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
     jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<DbtLoadedProject> {
     // Set previous state for incremental compilation if provided
@@ -79,7 +89,6 @@ async fn load_phase(
         .map(|x| x.dbt_state.clone())
     {
         load_args.prev_dbt_state = Some(prev_dbt_state);
-        load_args.install_deps = false;
     }
 
     // Load dbt project
@@ -89,6 +98,7 @@ async fn load_phase(
         tracing_config,
         token,
         loader_hooks,
+        private_package_resolver,
     )
     .await?;
 
@@ -112,8 +122,7 @@ async fn resolve_phase(
     resolver_hooks: Arc<dyn ResolverHooks>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     use dbt_parser::resolver::resolve;
-    use dbt_schemas::schemas::Nodes;
-    use dbt_schemas::state::Macros;
+    use dbt_schemas::state::ResolvedNodes;
 
     let io = &resolve_args.io;
     let dbt_state = loaded_project.dbt_state.clone();
@@ -128,18 +137,16 @@ async fn resolve_phase(
         dbt_state
     };
 
-    // Get cached macros and nodes if available
-    let macros = if let Some(cache) = cache_state {
-        cache.unimpacted_resolved_nodes.macros.clone()
-    } else {
-        Macros::default()
-    };
-
-    let nodes = if let Some(cache) = cache_state {
-        cache.unimpacted_resolved_nodes.nodes.clone()
-    } else {
-        Nodes::default()
-    };
+    // Get cached macros and nodes if available. `operations` is intentionally not seeded
+    // here; `add_all_unchanged_nodes` below owns restoring it after resolution.
+    let ResolvedNodes {
+        nodes,
+        disabled_nodes,
+        macros,
+        operations: _,
+    } = cache_state
+        .map(|c| c.unimpacted_resolved_nodes.clone())
+        .unwrap_or_default();
 
     let get_relation_calls = if let Some(cache) = cache_state {
         cache.unimpacted_get_relation_calls.clone()
@@ -166,6 +173,7 @@ async fn resolve_phase(
         dbt_state.clone(),
         macros,
         nodes,
+        disabled_nodes,
         get_relation_calls,
         get_columns_in_relation_calls,
         patterned_dangling_sources,
@@ -334,7 +342,7 @@ async fn compute_file_changeset(
                     let package_root = &current_dbt_state.packages[0].package_root_path;
                     let relative_path = current
                         .0
-                        .get_relative_path(&DbtPath::from_path(package_root))
+                        .get_relative_path(package_root)
                         .map(|p| p.to_str().unwrap_or_default().to_string())
                         .unwrap_or_else(|| current.0.to_str().unwrap_or_default().to_string());
                     changed.push(relative_path);
@@ -387,6 +395,13 @@ async fn load_cache(
     token: &CancellationToken,
 ) -> FsResult<Option<CacheState>> {
     if let Some((prev_loaded_project, prev_resolved_state)) = prev_resolved_state {
+        if !io.out_dir.exists() {
+            return Err(fs_err!(
+                ErrorCode::CacheError,
+                "Target directory does not exist",
+            ));
+        }
+
         let prev_dbt_state = prev_loaded_project.dbt_state();
         if let Some(cache_state) = try_load_cache_state_and_changeset_by_last_write(
             io,
@@ -417,6 +432,7 @@ impl DbtLoadedProject {
         tracing_config: Option<&dyn TracingConfigProvider>,
         token: &CancellationToken,
         loader_hooks: Arc<dyn LoaderHooks>,
+        private_package_resolver: Arc<dyn PrivatePackageResolver>,
         jinja_factory: Arc<dyn JinjaFactory>,
     ) -> FsResult<DbtLoadedProject> {
         load_phase(
@@ -429,6 +445,7 @@ impl DbtLoadedProject {
             tracing_config,
             token,
             loader_hooks,
+            private_package_resolver,
             jinja_factory,
         )
         .await
@@ -468,7 +485,10 @@ impl DbtLoadedProject {
     }
 
     pub fn adapter_type(&self) -> AdapterType {
-        self.dbt_state.dbt_profile.db_config.adapter_type()
+        self.dbt_state
+            .dbt_profile
+            .default_db_config()
+            .adapter_type()
     }
 
     pub fn root_package(&self) -> &DbtPackage {
@@ -509,7 +529,8 @@ impl DbtLoadedProject {
             &dbt_state.dbt_profile.profile,
             &dbt_state.dbt_profile.target,
             self.adapter_type(),
-            dbt_state.dbt_profile.db_config.clone(),
+            dbt_state.dbt_profile.default_db_config().clone(),
+            dbt_state.dbt_profile.adapter_types(),
             root_project_quoting,
             build_macro_units(&macros.macros, &io.in_dir),
             dbt_state.vars.clone(),
@@ -566,6 +587,124 @@ impl DbtLoadedProject {
         .await
     }
 
+    /// The run's adapters, one per adapter type the target declares, built lazily.
+    ///
+    /// Every caller that used [`Self::init_adapter`] wants the default; a caller
+    /// that knows a node's adapter should ask the store for that one instead. See
+    /// [`AdapterStore`] for why the adapters are held by type rather than the run
+    /// holding a single one.
+    #[allow(clippy::too_many_arguments)]
+    pub fn init_adapter_store(
+        &self,
+        resolved_state: &ResolverState,
+        replay_mode: Option<ReplayMode>,
+        jinja_env: &JinjaEnv,
+        schema_store: Option<Arc<dyn SchemaStoreTrait>>,
+        token: &CancellationToken,
+        sidecar_client: Option<Arc<dyn SidecarClient>>,
+        execute: Execute,
+    ) -> FsResult<Arc<AdapterStore>> {
+        // Each declared adapter's `DbConfig`, cloned because the builder closure has
+        // to be `'static` and so cannot hold `resolved_state`. Cloned rather than
+        // *rendered* to a mapping here: rendering is fallible, and doing it up front
+        // would fail a run over a malformed connection no node ever selects. It
+        // happens inside the builder instead, so such an error arrives only if that
+        // adapter is actually asked for.
+        let configs: Vec<(AdapterType, DbConfig)> = resolved_state
+            .dbt_profile
+            .adapters
+            .iter()
+            .map(|(adapter_type, adapter)| (*adapter_type, adapter.config().clone()))
+            .collect();
+        let declared: Vec<AdapterType> = configs.iter().map(|(t, _)| *t).collect();
+        let default_adapter = resolved_state.dbt_profile.default_adapter;
+
+        let project = self.clone();
+        let flags = Self::flags_from_env(jinja_env)?;
+        // The *authored* `quoting:` block, not `resolved_state.root_project_quoting`.
+        // The latter has already had its unset fields filled from the default
+        // adapter's policy, so handing it to a non-default adapter of another type
+        // silently applies the wrong one -- quote-everything to an adapter that
+        // does not quote renders identifiers it then cannot find. Each adapter
+        // resolves the same authored block against its own defaults instead, which
+        // is what `resolve_package_quoting` is field-wise for.
+        let authored_quoting = *self.dbt_state.root_project().quoting;
+        let query_comment = resolved_state.runtime_config.inner.query_comment.clone();
+        let cloud_config = self.dbt_cloud_config().cloned();
+        // One budget for every adapter for now; per-adapter threads is a follow-up.
+        let threads = resolved_state.dbt_profile.threads;
+        let token = token.clone();
+
+        let build: AdapterBuilder = Box::new(move |adapter_type| {
+            let matched_config = &configs
+                .iter()
+                .find(|(t, _)| *t == adapter_type)
+                .ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::Unexpected,
+                        "the adapter store asked for '{adapter_type}', which it does not hold a config for"
+                    )
+                })?
+                .1;
+            // `lake_compute`, when configured as a secondary (non-default) adapter,
+            // inherits `database`/`schema` from the default adapter instead of
+            // requiring its own. `threads` is already shared across every adapter
+            // via the `threads` parameter passed to `build_adapter` below, so it
+            // needs no handling here. See fs#13653.
+            let resolved_config = if let DbConfig::LakeCompute(lake_compute) = matched_config {
+                let mut lake_compute = lake_compute.clone();
+                if lake_compute.database.is_none() || lake_compute.schema.is_none() {
+                    let default_config = configs
+                        .iter()
+                        .find(|(t, _)| *t == default_adapter)
+                        .map(|(_, c)| c);
+                    if lake_compute.database.is_none() {
+                        lake_compute.database =
+                            default_config.and_then(|c| c.get_database().cloned());
+                    }
+                    if lake_compute.schema.is_none() {
+                        lake_compute.schema = default_config.and_then(|c| c.get_schema().cloned());
+                    }
+                }
+                DbConfig::LakeCompute(lake_compute)
+            } else {
+                matched_config.clone()
+            };
+            let db_config = resolved_config.to_mapping().map_err(|e| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "could not read the '{adapter_type}' connection: {e}"
+                )
+            })?;
+            let quoting = resolve_package_quoting(authored_quoting, adapter_type).try_into()?;
+            project.build_adapter(
+                adapter_type,
+                db_config,
+                replay_mode.clone(),
+                flags.clone(),
+                schema_store.clone(),
+                &token,
+                sidecar_client.clone(),
+                execute,
+                quoting,
+                query_comment.clone(),
+                cloud_config.clone(),
+                threads,
+            )
+        });
+
+        Ok(Arc::new(AdapterStore::new(
+            declared,
+            default_adapter,
+            build,
+        )?))
+    }
+
+    /// The target's default adapter.
+    ///
+    /// Kept as the single entry point it has always been; it now resolves through
+    /// [`Self::init_adapter_store`], so a run that needs another adapter has one
+    /// place to ask.
     #[allow(clippy::too_many_arguments)]
     pub fn init_adapter(
         &self,
@@ -577,16 +716,22 @@ impl DbtLoadedProject {
         sidecar_client: Option<Arc<dyn SidecarClient>>,
         execute: Execute,
     ) -> FsResult<Arc<Adapter>> {
-        let adapter_factory = self.adapter_factory.clone();
-        let type_ops_factory = self.type_ops_factory.clone();
-        let adapter_type = resolved_state.adapter_type;
-        let db_config = resolved_state.dbt_profile.db_config.to_mapping().unwrap();
-        let root_project_quoting = resolved_state.root_project_quoting;
-        let query_comment = resolved_state.runtime_config.inner.query_comment.clone();
-        let cloud_config = self.dbt_cloud_config();
-        let threads = resolved_state.dbt_profile.threads;
+        self.init_adapter_store(
+            resolved_state,
+            replay_mode,
+            jinja_env,
+            schema_store,
+            token,
+            sidecar_client,
+            execute,
+        )?
+        .default_adapter()
+    }
 
-        let flags = jinja_env
+    /// Pull `flags` out of the Jinja environment. Separated so the builder closure
+    /// can own the result rather than the environment.
+    fn flags_from_env(jinja_env: &JinjaEnv) -> FsResult<Arc<Flags>> {
+        jinja_env
             .get_global("flags")
             .ok_or_else(|| {
                 fs_err!(
@@ -595,7 +740,29 @@ impl DbtLoadedProject {
                 )
             })?
             .downcast_object::<Flags>()
-            .ok_or_else(|| fs_err!(ErrorCode::InvalidConfig, "Could not downcast flags"))?;
+            .ok_or_else(|| fs_err!(ErrorCode::InvalidConfig, "Could not downcast flags"))
+    }
+
+    /// Build one adapter. The body is what `init_adapter` used to be, with the
+    /// adapter type and its config passed in rather than read from the default.
+    #[allow(clippy::too_many_arguments)]
+    fn build_adapter(
+        &self,
+        adapter_type: AdapterType,
+        db_config: dbt_yaml::Mapping,
+        replay_mode: Option<ReplayMode>,
+        flags: Arc<Flags>,
+        schema_store: Option<Arc<dyn SchemaStoreTrait>>,
+        token: &CancellationToken,
+        sidecar_client: Option<Arc<dyn SidecarClient>>,
+        execute: Execute,
+        root_project_quoting: ResolvedQuoting,
+        query_comment: Option<QueryComment>,
+        cloud_config: Option<ResolvedCloudConfig>,
+        threads: Option<usize>,
+    ) -> FsResult<Arc<Adapter>> {
+        let adapter_factory = self.adapter_factory.clone();
+        let type_ops_factory = self.type_ops_factory.clone();
 
         let introspect_enabled = flags
             .to_dict()
@@ -608,6 +775,9 @@ impl DbtLoadedProject {
         // This mode also applies to compile with --no-introspect
         // DuckDB is a local database — use the AdapterFactory for proper adapter creation
         // instead of a MockAdapter, so we get real query logging and telemetry.
+        // Lake compute joins it for the same reason from the other direction: it is
+        // an execution engine in its own right, and a node routed to it has no
+        // fallback path, so a mock would silently do nothing rather than degrade.
         //
         // Under `--dbt-replay`, the mock/sidecar adapter below has no metadata
         // adapter, so unit-test `given` upstream schemas cannot resolve from the
@@ -617,7 +787,7 @@ impl DbtLoadedProject {
         let executes_locally =
             !introspect_enabled || matches!(execute, Execute::Sidecar | Execute::Service);
         let use_local_mock_adapter = executes_locally && !is_mantle_replay;
-        let adapter = if adapter_type == AdapterType::DuckDB {
+        let adapter = if matches!(adapter_type, AdapterType::DuckDB | AdapterType::LakeCompute) {
             adapter_factory
                 .create_adapter(
                     adapter_type,
@@ -629,7 +799,7 @@ impl DbtLoadedProject {
                     root_project_quoting,
                     query_comment,
                     token.clone(),
-                    cloud_config,
+                    cloud_config.as_ref(),
                     threads,
                 )
                 .map_err(|e| {
@@ -686,7 +856,7 @@ impl DbtLoadedProject {
                     root_project_quoting,
                     query_comment,
                     token.clone(),
-                    cloud_config,
+                    cloud_config.as_ref(),
                     threads,
                 )
                 .map_err(|e| {
@@ -719,7 +889,7 @@ impl DbtLoadedProject {
             DEFAULT_RESOLVED_QUOTING,
             None,
             token,
-            None, // cloud_config — debug only runs `select 1`, cloud query comments not needed
+            None, // cloud_config — debug only runs `select 1`, no cloud connection needed
             None, // threads
         )
     }

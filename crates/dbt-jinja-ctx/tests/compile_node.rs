@@ -30,6 +30,7 @@ fn fixture_compile_node_ctx() -> CompileNodeCtx {
     builtins_inner.insert("config".to_string(), MinijinjaValue::from("config-stub"));
 
     CompileNodeCtx {
+        base: None,
         this: MinijinjaValue::from("this-stub"),
         database: "analytics".to_string(),
         schema: "public".to_string(),
@@ -45,11 +46,11 @@ fn fixture_compile_node_ctx() -> CompileNodeCtx {
         store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
         target_package_name: "my_project".to_string(),
         target_unique_id: "my_project.dbt_columns".to_string(),
-        context: JinjaObject::new(MacroLookupContext {
-            root_project_name: "my_project".to_string(),
-            current_project_name: None,
-            packages: BTreeSet::new(),
-        }),
+        context: JinjaObject::new(MacroLookupContext::new(
+            "my_project".to_string(),
+            None,
+            BTreeSet::new(),
+        )),
         current_path: "models/dbt_columns.sql".to_string(),
         current_span: MinijinjaValue::from_serialize(Span::default()),
         current_execution_phase: "render".to_string(),

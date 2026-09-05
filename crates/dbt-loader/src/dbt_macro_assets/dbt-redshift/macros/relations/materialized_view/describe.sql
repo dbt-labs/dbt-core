@@ -24,6 +24,11 @@
     {%- endset %}
     {% set _materialized_view = run_query(_materialized_view_sql) %}
 
+    {#-
+        Query the internal MV storage table (mv_tbl__<name>__*) for distkey/sortkey info.
+        Redshift stores MV data in this internal table, so we need to query pg_attribute
+        on this table to get the distribution and sort key configuration.
+    -#}
     {%- set _column_descriptor_sql -%}
         SELECT
             a.attname as column,

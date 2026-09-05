@@ -9,10 +9,10 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::relation::RelationObject;
+use crate::relation::{RelationConfig, RelationObject};
 use crate::{catalog_relation, column, response};
 
-use super::serde::ReplayContext;
+use super::serde::ReplayCallContext;
 
 /// Trait for types that can be serialized/deserialized for time machine recording.
 pub trait TimeMachineSerializable: Send + Sync {
@@ -26,13 +26,13 @@ pub trait TimeMachineSerializable: Send + Sync {
     /// Reconstruct from JSON. The `json` includes the `__type__` field.
     fn from_time_machine_json(
         json: &serde_json::Value,
-        ctx: &ReplayContext,
+        ctx: &ReplayCallContext,
     ) -> Option<minijinja::Value>
     where
         Self: Sized;
 }
 
-pub type DeserializeFn = fn(&serde_json::Value, &ReplayContext) -> Option<minijinja::Value>;
+pub type DeserializeFn = fn(&serde_json::Value, &ReplayCallContext) -> Option<minijinja::Value>;
 
 #[derive(Clone)]
 pub struct TypeEntry {
@@ -53,6 +53,7 @@ fn build_registry() -> HashMap<&'static str, TypeEntry> {
     register::<RelationObject>(&mut registry);
     register::<catalog_relation::CatalogRelation>(&mut registry);
     register::<column::Column>(&mut registry);
+    register::<RelationConfig>(&mut registry);
     registry
 }
 
@@ -89,6 +90,11 @@ pub fn serialize_object(value: &minijinja::Value) -> Option<serde_json::Value> {
     if let Some(obj) = value.downcast_object_ref::<column::Column>() {
         return Some(wrap_with_type::<column::Column>(obj.to_time_machine_json()));
     }
+    if let Some(obj) = value.downcast_object_ref::<RelationConfig>()
+        && obj.adapter_type() == dbt_adapter_core::AdapterType::Databricks
+    {
+        return Some(wrap_with_type::<RelationConfig>(obj.to_time_machine_json()));
+    }
     None
 }
 
@@ -111,7 +117,7 @@ fn wrap_with_type<T: TimeMachineSerializable>(mut json: serde_json::Value) -> se
 pub fn deserialize_object(
     type_id: &str,
     json: &serde_json::Value,
-    ctx: &ReplayContext,
+    ctx: &ReplayCallContext,
 ) -> Option<minijinja::Value> {
     registry()
         .get(type_id)
@@ -129,7 +135,6 @@ impl<'a> JsonExtractor<'a> {
         json.as_object().map(|obj| Self { obj })
     }
 
-    /// Get an optional string field.
     pub fn opt_str(&self, key: &str) -> Option<String> {
         self.obj
             .get(key)
@@ -137,47 +142,38 @@ impl<'a> JsonExtractor<'a> {
             .map(|s| s.to_string())
     }
 
-    /// Get a required string field with a default.
     pub fn str_or(&self, key: &str, default: &str) -> String {
         self.opt_str(key).unwrap_or_else(|| default.to_string())
     }
 
-    /// Get an optional i64 field.
     pub fn opt_i64(&self, key: &str) -> Option<i64> {
         self.obj.get(key).and_then(|v| v.as_i64())
     }
 
-    /// Get a required i64 field with a default.
     pub fn i64_or(&self, key: &str, default: i64) -> i64 {
         self.opt_i64(key).unwrap_or(default)
     }
 
-    /// Get an optional u64 field.
     pub fn opt_u64(&self, key: &str) -> Option<u64> {
         self.obj.get(key).and_then(|v| v.as_u64())
     }
 
-    /// Get an optional u32 field.
     pub fn opt_u32(&self, key: &str) -> Option<u32> {
         self.opt_u64(key).map(|v| v as u32)
     }
 
-    /// Get an optional bool field.
     pub fn opt_bool(&self, key: &str) -> Option<bool> {
         self.obj.get(key).and_then(|v| v.as_bool())
     }
 
-    /// Get a required bool field with a default.
     pub fn bool_or(&self, key: &str, default: bool) -> bool {
         self.opt_bool(key).unwrap_or(default)
     }
 
-    /// Get an optional nested object.
     pub fn opt_object(&self, key: &str) -> Option<&serde_json::Map<String, serde_json::Value>> {
         self.obj.get(key).and_then(|v| v.as_object())
     }
 
-    /// Get the raw JSON value for a key.
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
         self.obj.get(key)
     }
@@ -195,7 +191,7 @@ mod tests {
         }
         fn from_time_machine_json(
             _: &serde_json::Value,
-            _: &ReplayContext,
+            _: &ReplayCallContext,
         ) -> Option<minijinja::Value> {
             None
         }

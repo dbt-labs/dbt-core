@@ -5,7 +5,7 @@ use dbt_common::{FsResult, io_args::EvalArgs};
 use dbt_compilation::config::CompilationConfig;
 use dbt_compilation::core::DbtLoadedProject;
 use dbt_jinja_utils::JinjaFactory;
-use dbt_jinja_utils::node_resolver::NodeResolver;
+use dbt_jinja_utils::node_resolver::{NodeResolver, PackageSearchOrder};
 use dbt_metadata::{
     file_registry::CompleteStateWithKind,
     partial_parse::{
@@ -180,7 +180,7 @@ pub fn try_load_prev_compilation(
         warn_error_options: Default::default(),
     });
 
-    let adapter_type = dbt_state.dbt_profile.db_config.adapter_type();
+    let adapter_type = dbt_state.dbt_profile.default_db_config().adapter_type();
     let dbt_quoting = dbt_schemas::dbt_utils::resolve_package_quoting(
         *dbt_state.root_project().quoting,
         adapter_type,
@@ -201,6 +201,7 @@ pub fn try_load_prev_compilation(
         Default::default(),
         Default::default(),
         compile_or_test,
+        PackageSearchOrder::resolve(dbt_state.root_project().flags.as_ref()),
     ) {
         Ok(r) => Arc::new(r) as Arc<dyn NodeResolverTracker>,
         Err(_) => return (PrevCompilationResult::None, use_lazy_filter),
@@ -214,6 +215,7 @@ pub fn try_load_prev_compilation(
         macros: state.macros,
         operations: state.operations,
         dbt_profile: state.dbt_profile,
+        cloud_config: dbt_state.cloud_config.clone(),
         render_results: Default::default(),
         node_resolver,
         get_relation_calls: reconstruct_relation_calls(
@@ -241,6 +243,9 @@ pub fn try_load_prev_compilation(
             let mut resolved = ResolvedSelector {
                 include: eval.select.clone(),
                 exclude: eval.exclude.clone(),
+                // Empty on the partial-parse path: selectors.yml is not re-parsed here, so
+                // `selector:` references in --select/--exclude cannot be resolved.
+                selector_definitions: Default::default(),
             };
             let default_mode: IndirectSelection = eval.indirect_selection.unwrap_or_default();
             if let Some(ref mut include) = resolved.include {
@@ -274,7 +279,9 @@ pub fn try_load_prev_compilation(
         file_kind_registry: CompleteStateWithKind::new(),
         metricflow_server_client: None,
         catalog_artifact: None,
+        parse_index_publish_failed: false,
         previous_state: None,
+        run_cache_state_selector_args: None,
         invocation_id: uuid::Uuid::new_v4().to_string(),
         partial_load_filter_applied: false,
     });

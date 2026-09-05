@@ -1,25 +1,33 @@
 use std::sync::{Arc, RwLock};
 
 use dbt_error::ErrorCode;
-use dbt_telemetry::LogMessage;
 use dbt_tracing::{LogRecordInfo, SeverityNumber};
 
 use crate::{
-    tracing::{data_provider::DataProvider, layer::TelemetryMiddleware},
-    warn_error_options::{ErrorCtx, WarnErrorDecision, WarnErrorOptions},
+    tracing::{
+        data_provider::DataProvider, fs_error_log::get_log_message, layer::TelemetryMiddleware,
+    },
+    warn_error_options::{ErrorCtx, WarnErrorDecision, WarnErrorOptions, is_fusion_only_warning},
 };
 
 pub struct TelemetryWarnErrorOptionsMiddleware {
     warn_error_options: Arc<RwLock<WarnErrorOptions>>,
+    /// Withholds upgrades of warnings with no dbt-core counterpart. Set once,
+    /// from the replay mode known at tracing init time.
+    skip_fusion_only_upgrades: bool,
 }
 
 impl TelemetryWarnErrorOptionsMiddleware {
-    pub fn new(warn_error_options: WarnErrorOptions) -> (Self, Arc<RwLock<WarnErrorOptions>>) {
+    pub fn new(
+        warn_error_options: WarnErrorOptions,
+        skip_fusion_only_upgrades: bool,
+    ) -> (Self, Arc<RwLock<WarnErrorOptions>>) {
         let warn_error_options = Arc::new(RwLock::new(warn_error_options));
 
         (
             Self {
                 warn_error_options: Arc::clone(&warn_error_options),
+                skip_fusion_only_upgrades,
             },
             warn_error_options,
         )
@@ -32,7 +40,7 @@ impl TelemetryMiddleware for TelemetryWarnErrorOptionsMiddleware {
         mut record: LogRecordInfo,
         _data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
-        let Some(log_message) = record.attributes.downcast_ref::<LogMessage>() else {
+        let Some(log_message) = get_log_message(&record.attributes) else {
             return Some(record);
         };
         if record.severity_number != SeverityNumber::Warn {
@@ -54,6 +62,16 @@ impl TelemetryMiddleware for TelemetryWarnErrorOptionsMiddleware {
                 code,
                 ErrorCtx::from_dependency_package_name(log_message.package_name.as_deref()),
             );
+
+        // Silencing stays intact; only the upgrade is withheld.
+        let decision = if self.skip_fusion_only_upgrades
+            && decision == WarnErrorDecision::UpgradeToError
+            && is_fusion_only_warning(code)
+        {
+            WarnErrorDecision::Retain
+        } else {
+            decision
+        };
 
         match decision {
             WarnErrorDecision::Silence => None,

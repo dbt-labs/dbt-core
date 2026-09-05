@@ -63,7 +63,7 @@ pub struct HubPackage {
     #[serde(rename = "version", skip_serializing_if = "Option::is_none")]
     pub version: Option<PackageVersion>,
     /// Allow installation of pre-release versions when resolving `version`.
-    #[serde(rename = "install-prerelease", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "install_prerelease", skip_serializing_if = "Option::is_none")]
     pub install_prerelease: Option<bool>,
 }
 
@@ -107,18 +107,50 @@ impl From<GitPackageLock> for GitPackage {
     }
 }
 
+/// Git provider hosting a private package.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, DbtSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivatePackageProvider {
+    Github,
+    Gitlab,
+    /// Azure DevOps, also spelled `azure_devops`. Requires an `org/project/repo` path.
+    #[serde(alias = "azure_devops")]
+    Ado,
+    /// Azure DevOps through Azure Active Directory. Hosted only, uses `org/repo`.
+    AzureActiveDirectory,
+}
+
+impl PrivatePackageProvider {
+    /// Every Azure DevOps spelling names the same provider.
+    pub fn is_ado(self) -> bool {
+        matches!(self, Self::Ado | Self::AzureActiveDirectory)
+    }
+
+    /// Azure DevOps spellings are interchangeable; other providers must match exactly.
+    pub fn equivalent(self, other: Self) -> bool {
+        (self.is_ado() && other.is_ado()) || self == other
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Github => "github",
+            Self::Gitlab => "gitlab",
+            Self::Ado => "ado",
+            Self::AzureActiveDirectory => "azure_active_directory",
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, DbtSchema)]
 pub struct PrivatePackage {
-    /// Private package identifier. Two-segment `org/repo` for GitHub or 2-part Azure DevOps
-    /// (`azure_active_directory`); three-or-more-segment `org/group/repo` for GitLab subgroups
-    /// or Azure DevOps `org/project/repo` (`ado` / `azure_devops`).
+    /// Private package identifier. Two-segment `org/repo` for GitHub, legacy Azure DevOps
+    /// (`azure_devops`), or Azure Active Directory (`azure_active_directory`); three-or-more-segment
+    /// `org/group/repo` for GitLab subgroups or Azure DevOps `org/project/repo` (`ado`).
     #[schemars(regex(pattern = r"^[\w\-\.]+(/[\w\-\.]+){1,}$"))]
     pub private: Verbatim<String>,
-    /// Git provider. One of `github` (default), `gitlab`, `ado`, `azure_devops`,
-    /// or `azure_active_directory`. `ado` / `azure_devops` require an `org/project/repo`
-    /// path; `azure_active_directory` is hosted-only and uses `org/repo`.
+    /// Git provider. Defaults to `github` when unset.
     #[serde(rename = "provider", skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
+    pub provider: Option<PrivatePackageProvider>,
     /// Revision to check out: a tag, branch, or commit SHA.
     #[serde(rename = "revision", skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
@@ -313,7 +345,7 @@ pub struct PrivatePackageLock {
     pub name: String,
     pub revision: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
+    pub provider: Option<PrivatePackageProvider>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -365,11 +397,20 @@ pub enum DeprecatedDbtPackageLock {
     Tarball(DeprecatedTarballPackageLock),
 }
 
+// NOTE: Every deprecated lock variant accepts and drops an optional `name` key.
+// A partially-migrated `package-lock.yml` can mix entries that carry `name`
+// with entries that do not; the missing `name` on one entry forces the whole
+// file into this deprecated parser, which then re-infers names from the
+// installed packages directory. Accepting (and ignoring) `name` here keeps such
+// mixed files from failing with `UnusedConfigKey (dbt1060)`, matching dbt Core,
+// which tolerates the key.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedHubPackageLock {
     pub package: String,
     #[serde(rename = "version")]
     pub version: PackageVersion,
+    #[serde(default, skip_serializing)]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -381,12 +422,16 @@ pub struct DeprecatedGitPackageLock {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     #[serde(default, skip_serializing)]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedLocalPackageLock {
     pub local: PathBuf,
+    #[serde(default, skip_serializing)]
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -394,11 +439,13 @@ pub struct DeprecatedPrivatePackageLock {
     pub private: String,
     pub revision: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider: Option<String>,
+    pub provider: Option<PrivatePackageProvider>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[serde(default, skip_serializing)]
+    pub name: Option<String>,
     #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
@@ -406,6 +453,8 @@ pub struct DeprecatedPrivatePackageLock {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedTarballPackageLock {
     pub tarball: String,
+    #[serde(default, skip_serializing)]
+    pub name: Option<String>,
     #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
@@ -427,5 +476,96 @@ mod tests {
         let result: DbtPackagesLock = dbt_yaml::from_str(commented).unwrap();
         assert!(result.packages.is_empty());
         assert!(result.sha1_hash.is_empty());
+    }
+
+    /// A `package-lock.yml` mixing `name`/no-`name` entries fails the new schema
+    /// (the entry without `name` matches no variant), forcing the deprecated
+    /// parser — which must accept the `name` key on the other entries instead of
+    /// rejecting it. https://github.com/dbt-labs/fs/issues/11678
+    #[test]
+    fn test_deprecated_lock_tolerates_mixed_name_forms() {
+        let mixed = "\
+packages:
+  - package: fivetran/fivetran_utils
+    version: [\">=0.4.3\", \"<1.0.0\"]
+  - name: dbt_utils
+    package: dbt-labs/dbt_utils
+    version: \">=1.0.0\"
+sha1_hash: 713df304d4720d43ae7280d2363c5e1b009e7c1b
+";
+        // The new schema requires `name` on hub entries, so the first (nameless)
+        // entry makes the whole file fail to match the untagged enum.
+        assert!(
+            dbt_yaml::from_str::<DbtPackagesLock>(mixed).is_err(),
+            "mixed lock should not match the new (name-required) schema"
+        );
+
+        // The deprecated schema must accept (and drop) the `name` key.
+        let result: DeprecatedDbtPackagesLock = dbt_yaml::from_str(mixed).unwrap();
+        assert_eq!(result.packages.len(), 2);
+        match &result.packages[1] {
+            DeprecatedDbtPackageLock::Hub(hub) => {
+                assert_eq!(hub.package, "dbt-labs/dbt_utils");
+                assert_eq!(hub.name.as_deref(), Some("dbt_utils"));
+            }
+            other => panic!("expected a hub lock entry, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_private_package_provider_spellings() {
+        let package = |provider: &str| {
+            dbt_yaml::from_str::<PrivatePackage>(&format!(
+                "private: dbt-labs/some-repo\nprovider: {provider}\n"
+            ))
+            .map(|package| package.provider)
+        };
+        let lock = |provider: &str| {
+            dbt_yaml::from_str::<PrivatePackageLock>(&format!(
+                "private: dbt-labs/some-repo\nname: some-repo\nrevision: main\nprovider: {provider}\n"
+            ))
+            .map(|lock| lock.provider)
+        };
+        let deprecated_lock = |provider: &str| {
+            dbt_yaml::from_str::<DeprecatedPrivatePackageLock>(&format!(
+                "private: dbt-labs/some-repo\nrevision: main\nprovider: {provider}\n"
+            ))
+            .map(|lock| lock.provider)
+        };
+
+        for (spelling, provider) in [
+            ("github", PrivatePackageProvider::Github),
+            ("gitlab", PrivatePackageProvider::Gitlab),
+            ("ado", PrivatePackageProvider::Ado),
+            (
+                "azure_active_directory",
+                PrivatePackageProvider::AzureActiveDirectory,
+            ),
+        ] {
+            assert_eq!(package(spelling).unwrap(), Some(provider));
+            assert_eq!(lock(spelling).unwrap(), Some(provider));
+            assert_eq!(deprecated_lock(spelling).unwrap(), Some(provider));
+            assert_eq!(provider.as_str(), spelling);
+            assert_eq!(dbt_yaml::to_string(&provider).unwrap().trim(), spelling);
+        }
+
+        // "azure_devops" is an alias for "ado", and normalizes to it on the way out
+        for reader in [package, lock, deprecated_lock] {
+            assert_eq!(
+                reader("azure_devops").unwrap(),
+                Some(PrivatePackageProvider::Ado)
+            );
+        }
+
+        for invalid in ["azure-devops", "githbu", "GitHub"] {
+            assert!(package(invalid).is_err(), "{invalid} should be rejected");
+        }
+    }
+
+    #[test]
+    fn test_private_package_provider_is_omitted_when_unset() {
+        let package: PrivatePackage = dbt_yaml::from_str("private: dbt-labs/some-repo\n").unwrap();
+        assert_eq!(package.provider, None);
+        assert!(!dbt_yaml::to_string(&package).unwrap().contains("provider"));
     }
 }

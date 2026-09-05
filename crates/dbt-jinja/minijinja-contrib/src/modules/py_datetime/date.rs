@@ -4,8 +4,12 @@ use std::sync::Arc;
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, TimeZone, Weekday};
 use minijinja::arg_utils::{ArgParser, ArgsIter};
-use minijinja::{value::Object, Error, ErrorKind, Value};
+use minijinja::{
+    value::{DynObject, Object, ObjectRepr},
+    Error, ErrorKind, Value,
+};
 
+use super::find_microsecond_directive;
 use super::timedelta::PyTimeDelta;
 
 #[derive(Debug)]
@@ -246,7 +250,19 @@ impl PyDate {
         // "Format codes referring to hours, minutes or seconds will see 0 values"
         let datetime: NaiveDateTime = self.date.into();
 
-        Ok(Value::from(datetime.format(fmt).to_string()))
+        // Python's `%f` is six zero-padded microsecond digits (always zero here);
+        // chrono's `%f` is nine nanosecond digits. Format the surrounding pieces
+        // with chrono and write the microseconds ourselves.
+        let mut formatted = String::new();
+        let mut remaining = fmt;
+        while let Some(pos) = find_microsecond_directive(remaining) {
+            formatted.push_str(&datetime.format(&remaining[..pos]).to_string());
+            formatted.push_str("000000");
+            remaining = &remaining[pos + "%f".len()..];
+        }
+        formatted.push_str(&datetime.format(remaining).to_string());
+
+        Ok(Value::from(formatted))
     }
 
     /// Handle date + timedelta or date - timedelta or date - date operations
@@ -390,8 +406,18 @@ impl PyDate {
 }
 
 impl Object for PyDate {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
     fn is_true(self: &Arc<Self>) -> bool {
         true
+    }
+
+    fn custom_cmp(self: &Arc<Self>, other: &DynObject) -> Option<Ordering> {
+        other
+            .downcast_ref::<Self>()
+            .map(|other| self.date.cmp(&other.date))
     }
     // If someone does: {{ some_date.attribute }} in a template,
     // you can provide direct read access:

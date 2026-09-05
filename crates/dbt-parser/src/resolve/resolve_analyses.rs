@@ -5,6 +5,7 @@ use crate::resolve::resolve_utils::err_resource_name_has_spaces;
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -26,7 +27,9 @@ use dbt_schemas::{
 use minijinja::MacroSpans;
 
 use super::resolve_properties::MinimalPropertiesEntry;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::utils::{RelationComponents, update_node_relation_components};
 use crate::{
@@ -46,7 +49,8 @@ pub async fn resolve_analyses(
     analysis_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
+    // The target's default adapter.
+    default_adapter: AdapterType,
     package_name: &str,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
@@ -68,12 +72,14 @@ pub async fn resolve_analyses(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.analyses,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
         },
+        default_adapter,
     )?;
 
     let render_ctx = RenderCtx {
@@ -82,9 +88,11 @@ pub async fn resolve_analyses(
             root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
+            uses_snapshot_fqn: false,
+            defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             resource_paths: package
@@ -129,6 +137,7 @@ pub async fn resolve_analyses(
         macro_spans,
         properties: maybe_properties,
         status,
+        render_error_deferred,
         patch_path,
         ..
     } in analysis_sql_resources_map.into_iter()
@@ -147,6 +156,13 @@ pub async fn resolve_analyses(
         // Each statement should get its own node with suffix: analysis.project.filename.0, analysis.project.filename.1, etc.
         // let statement_index = 0;
         let unique_id = get_unique_id(analysis_name, package_name, None, "analysis");
+        // An analysis is compiled rather than materialized, but it still renders
+        // refs and dispatches macros, so which adapter it renders *as* is a real
+        // choice. Resolved the same way every other node type resolves it.
+        let selected_adapter = arg
+            .adapter_override
+            .or(analysis_config.adapter)
+            .unwrap_or(default_adapter);
         // unique_id.push_str(&format!(".{statement_index}"));
 
         let fqn = get_node_fqn(
@@ -178,10 +194,10 @@ pub async fn resolve_analyses(
         let columns = process_columns(
             properties.columns.as_ref(),
             analysis_config.meta.clone(),
-            analysis_config.tags.clone().map(|tags| tags.into()),
+            analysis_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
 
-        let is_enabled = matches!(status, ModelStatus::Enabled);
+        let is_enabled = status != ModelStatus::Disabled;
         let macro_depends_on = all_depends_on
             .get(&format!("{package_name}.{analysis_name}"))
             .cloned()
@@ -193,18 +209,19 @@ pub async fn resolve_analyses(
             __common_attr__: CommonAttributes {
                 name: analysis_name.to_owned(),
                 package_name: package_name.to_owned(),
-                path: dbt_asset.path.to_owned(),
+                path: DbtPath::from(dbt_asset.path.to_owned()),
                 name_span: dbt_common::Span::default(),
                 original_file_path,
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
-                patch_path,
+                patch_path: patch_path.map(DbtPath::from),
                 checksum: sql_file_info.checksum.clone(),
                 language: Some("sql".to_string()),
                 raw_code: Some(raw_code),
                 tags: analysis_config
                     .tags
+                    .inner()
                     .clone()
                     .map(|tags| tags.into())
                     .unwrap_or_default(),
@@ -212,6 +229,10 @@ pub async fn resolve_analyses(
                 meta: analysis_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
+                // An analysis materializes nothing, so there is no relation to publish:
+                // no `+propagate` config exists for this node type.
+                propagate: Vec::new(),
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
@@ -286,15 +307,17 @@ pub async fn resolve_analyses(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
-        if status == ModelStatus::Enabled {
+        if status == ModelStatus::Enabled || render_error_deferred {
             analyses.insert(unique_id.to_owned(), Arc::new(dbt_analysis));
-            rendering_results.insert(
-                unique_id.to_owned(),
-                (rendered_sql.clone(), macro_spans.clone()),
-            );
+            if status == ModelStatus::Enabled {
+                rendering_results.insert(
+                    unique_id.to_owned(),
+                    (rendered_sql.clone(), macro_spans.clone()),
+                );
+            }
         }
     }
 
@@ -306,7 +329,7 @@ pub async fn resolve_analyses(
                 "Unused schema.yml entry for analysis '{}'",
                 analysis_name,
             );
-            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+            emit_warn_log_from_fs_error(*err);
         }
     }
 

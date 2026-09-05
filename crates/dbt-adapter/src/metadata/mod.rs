@@ -19,6 +19,7 @@ pub(crate) mod bigquery;
 pub(crate) mod clickhouse;
 pub mod databricks;
 pub(crate) mod duckdb;
+pub(crate) mod exasol;
 pub(crate) mod fabric;
 pub(crate) mod freshness_overrides;
 pub(crate) mod metadata_adapter;
@@ -33,7 +34,11 @@ pub(crate) mod view_definition;
 // NOTE: this is temporary until all the metadata-releated code
 // is verticalized and moved to the metadata module.
 pub use metadata_adapter::*;
-pub use view_definition::ViewDefinition;
+pub use view_definition::{ViewDefinition, ViewDefinitionFetchResult};
+
+/// The canonical list of BigQuery pseudocolumns (queryable columns absent from
+/// `INFORMATION_SCHEMA`). Re-exported so other crates can share the source of truth.
+pub use bigquery::BIGQUERY_PSEUDOCOLUMNS;
 
 /// Implementation of the `get_relation` function for all adapters.
 pub(crate) mod get_relation;

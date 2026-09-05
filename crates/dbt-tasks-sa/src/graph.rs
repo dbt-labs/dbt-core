@@ -1,10 +1,9 @@
-use dbt_common::io_args::FsCommand;
+use dbt_common::io_args::{FsCommand, OptimizeTestsOptions};
 use dbt_common::static_analysis::is_strict_static_analysis;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_dag::deps_mgmt::{find_all_upstream_deps, restrict_with_transitive};
 use dbt_dag::schedule::Schedule;
-use dbt_loader::args::IoArgs;
 use dbt_schemas::schemas::InternalDbtNode;
 use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::Nodes;
@@ -45,7 +44,9 @@ fn task_graph_phases_for_command(command: FsCommand) -> Option<&'static [TP]> {
         | FsCommand::Build
         | FsCommand::Seed
         | FsCommand::Snapshot => Some(PHASES_RENDER_ANALYZE_RUN),
-        FsCommand::Compile | FsCommand::Extension("lineage") => Some(PHASES_RENDER_ANALYZE),
+        FsCommand::Compile | FsCommand::Check | FsCommand::Extension("lineage") => {
+            Some(PHASES_RENDER_ANALYZE)
+        }
         FsCommand::Show => Some(PHASES_RENDER_ANALYZE_SHOW),
         _ => None,
     }
@@ -105,8 +106,16 @@ impl GraphBuilder {
         let nodes = &resolver_state.nodes;
 
         // Test aggregation
-        let generic_test_aggregation =
-            create_generic_test_aggregation(&self.arg.io, schedule, nodes, self.execute)?;
+        let generic_test_aggregation = if self
+            .arg
+            .optimize_tests
+            .contains(&OptimizeTestsOptions::TestAggregation)
+            && command_uses_generic_test_aggregation(self.arg.command)
+        {
+            create_generic_test_aggregation(&self.arg.io, schedule, nodes, self.execute)?
+        } else {
+            None
+        };
         let (aggregated_schedule, aggregated_nodes) =
             if let Some(aggregation) = generic_test_aggregation.as_ref() {
                 let (schedule, nodes) =
@@ -123,10 +132,7 @@ impl GraphBuilder {
 
         let (graph, nodes_with_no_tasks) = {
             match self.arg.command {
-                FsCommand::Clone => (
-                    build_clone_task_graph(&self.arg.io, schedule, nodes),
-                    BTreeSet::new(),
-                ),
+                FsCommand::Clone => (build_clone_task_graph(schedule, nodes), BTreeSet::new()),
                 FsCommand::Extension("compare") => (
                     self.compare_task_graph_builder
                         .as_ref()
@@ -161,12 +167,14 @@ impl GraphBuilder {
                             aggregation,
                         )
                     } else {
-                        // Handle unknown commands
-                        if self.arg.command != FsCommand::Extension("jinja-check") {
+                        // Freshness and `jinja-check` legitimately produce an
+                        // empty task graph.
+                        if self.arg.command != FsCommand::Extension("jinja-check")
+                            && !self.arg.command.is_freshness_command()
+                        {
                             emit_warn_log_message(
                                 ErrorCode::Unexpected,
                                 format!("Unhandled command: {:?}", cmd),
-                                self.arg.io.status_reporter.as_ref(),
                             );
                         }
                         (Graph::new(), BTreeSet::new())
@@ -469,7 +477,6 @@ impl GraphBuilder {
             }
         }
 
-        // Assertion: For each (unique_id, task_type) pair, there should be exactly one task
         assert_graph(&graph);
 
         (graph, nodes_with_no_tasks)
@@ -534,7 +541,6 @@ fn create_aggregated_schedule_and_nodes(
 }
 
 fn build_clone_task_graph(
-    io: &IoArgs,
     schedule: &Schedule<String>,
     nodes: &Nodes,
 ) -> DiGraph<Arc<dyn Task>, ()> {
@@ -558,7 +564,6 @@ fn build_clone_task_graph(
             emit_warn_log_message(
                 ErrorCode::Unexpected,
                 format!("Node '{}' is not cloneable. Skipping", unique_id),
-                io.status_reporter.as_ref(),
             );
         }
     }
@@ -620,6 +625,15 @@ fn initialize_graph(
 
     for unique_id in schedule.sorted_nodes.iter() {
         let mut expected_node_phases = phases.to_vec();
+
+        // Checks are not graph nodes: they run before the graph is built (see
+        // `run_parse_time_checks`), so a failing check stops the invocation rather than skipping
+        // scheduled work. Scheduling them here as well would execute every check twice — verified:
+        // a passing check reported both `PASS check x` from the pre-graph gate and `Succeeded check
+        // x` from its task.
+        if nodes.checks.contains_key(unique_id) {
+            continue;
+        }
         // Check if this frontier node is a model dependency of any selected unit test
         let is_model_dep_of_unit_test = if unique_id.starts_with("model.") {
             reverse_deps
@@ -672,8 +686,13 @@ fn initialize_graph(
                 .collect();
         }
 
-        // for all fontier node, remove show phase
-        if schedule.frontier_nodes.contains(unique_id) {
+        // for all frontier nodes, and for ephemeral nodes only pulled in to satisfy rendering
+        // of a downstream selected node (in selected_nodes but not directly selected by the
+        // user, i.e. absent from all_selected_nodes), remove show phase
+        if schedule.frontier_nodes.contains(unique_id)
+            || (schedule.selected_nodes.contains(unique_id)
+                && !schedule.all_selected_nodes.contains(unique_id))
+        {
             expected_node_phases.retain(|&phase| phase != TP::Show);
         }
 
@@ -833,17 +852,20 @@ fn compute_first_upstream_for_phase(
 
 /// Add test-to-model run dependencies if fail_fast is enabled (i.e. fail running models when
 /// upstream tests fail)
+///
+/// The downstream side also includes snapshots and seeds, since `dbt build` can run those
+/// alongside models and they must be blocked by upstream test failures too.
 fn add_test_to_model_dependencies(
     run_nodes: &BTreeMap<String, Arc<dyn Task>>,
     deps: &BTreeMap<String, BTreeSet<String>>,
     runnable_node_index_map: &BTreeMap<String, NodeIndex>,
     graph: &mut DiGraph<Arc<dyn Task>, ()>,
 ) {
-    // Partition run nodes into models and tests
+    // Partition run nodes into blockable nodes (models, snapshots, seeds) and tests
     let mut model_run_nodes = Vec::new();
     let mut test_run_nodes = Vec::new();
     for (unique_id, _) in run_nodes.iter() {
-        if unique_id.starts_with("model.") {
+        if unique_id.starts_with("model.") || unique_id.starts_with("snapshot.") {
             model_run_nodes.push(unique_id.clone());
         } else if unique_id.starts_with("test.") {
             test_run_nodes.push(unique_id.clone());

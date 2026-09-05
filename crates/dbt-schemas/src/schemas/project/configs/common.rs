@@ -1,6 +1,6 @@
+use dbt_adapter_core::AdapterType;
+use dbt_proc_macros::DefaultTo;
 use dbt_yaml::DbtSchema;
-use dbt_yaml::Spanned;
-use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -8,24 +8,23 @@ use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
+use dbt_common::ErrorCode;
+use dbt_common::tracing::dbt_emit::emit_error_log_message;
 use dbt_common::tracing::emit::emit_trace_event;
 use dbt_telemetry::StateModifiedDiff;
 
-use crate::default_to;
-use crate::schemas::common::Hooks;
-use crate::schemas::common::PartitionConfig;
-use crate::schemas::common::merge_meta;
-use crate::schemas::common::merge_vec;
-use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
+use crate::schemas::common::{ClusterConfig, DocsConfig, Schedule};
+use crate::schemas::common::{PartitionConfig, RowFilterConfig};
 use crate::schemas::manifest::GrantAccessToTarget;
+use crate::schemas::project::configs::config_merge::TblProperties;
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::{ResolvableConfig, ResolvedConfig};
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::QueryTag;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, bool_or_string_bool, f64_or_string_f64,
-    u64_or_string_u64,
+    IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool,
+    f64_or_string_f64, hours_to_expiration_or_string_omissible, u64_or_string_u64,
 };
 
 #[track_caller]
@@ -62,91 +61,6 @@ where
     }
 }
 
-/// Helper function to handle default_to logic for hooks (pre_hook/post_hook)
-/// Hooks should be extended, not replaced when merging configs
-pub fn default_hooks(
-    child_hooks: &mut Verbatim<Option<Hooks>>,
-    parent_hooks: &Verbatim<Option<Hooks>>,
-) {
-    if let Some(parent_hooks) = &**parent_hooks {
-        if let Some(child_hooks) = &mut **child_hooks {
-            child_hooks.extend(parent_hooks);
-        } else {
-            *child_hooks = Verbatim::from(Some(parent_hooks.clone()));
-        }
-    }
-}
-
-/// Helper function to handle default_to logic for quoting configs
-/// Quoting has its own default_to method that should be called
-pub fn default_quoting(
-    child_quoting: &mut Option<DbtQuoting>,
-    parent_quoting: &Option<DbtQuoting>,
-) {
-    if let Some(quoting) = child_quoting {
-        if let Some(parent_quoting) = parent_quoting {
-            quoting.default_to(parent_quoting);
-        }
-    } else {
-        *child_quoting = *parent_quoting;
-    }
-}
-
-/// Helper function to handle default_to logic for meta and tags
-/// Uses the existing merge functions for proper merging behavior
-pub fn default_meta_and_tags(
-    child_meta: &mut Option<IndexMap<String, YmlValue>>,
-    parent_meta: &Option<IndexMap<String, YmlValue>>,
-    child_tags: &mut Option<StringOrArrayOfStrings>,
-    parent_tags: &Option<StringOrArrayOfStrings>,
-) {
-    // Handle meta using existing merge function
-    *child_meta = merge_meta(parent_meta.clone(), child_meta.take());
-
-    // Handle tags using existing merge function
-    let child_tags_vec = child_tags.take().map(|tags| tags.into());
-    let parent_tags_vec = parent_tags.clone().map(|tags| tags.into());
-    *child_tags =
-        merge_vec(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
-}
-
-/// Helper function to handle default_to logic for classifiers.
-/// Merges child and parent classifiers into a deduped, sorted union.
-pub fn default_classifiers(
-    child_classifiers: &mut Option<StringOrArrayOfStrings>,
-    parent_classifiers: &Option<StringOrArrayOfStrings>,
-) {
-    let child_vec = child_classifiers.take().map(|c| c.into());
-    let parent_vec = parent_classifiers.clone().map(|c| c.into());
-    *child_classifiers =
-        merge_vec(child_vec, parent_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
-}
-
-/// Helper function to handle default_to logic for packages
-/// Packages should append parent values to child values (parent first, then child)
-/// Note: Unlike tags, packages are NOT deduplicated or sorted, matching dbt-core behavior
-pub fn default_packages(
-    child_packages: &mut Option<StringOrArrayOfStrings>,
-    parent_packages: &Option<StringOrArrayOfStrings>,
-) {
-    // Convert to Vec<String> for merging
-    let child_vec: Option<Vec<String>> = child_packages.take().map(|packages| packages.into());
-    let parent_vec: Option<Vec<String>> = parent_packages.clone().map(|packages| packages.into());
-
-    // Simple append without deduplication or sorting (matches dbt-core)
-    let merged = match (parent_vec, child_vec) {
-        (None, None) => None,
-        (Some(mut parent), Some(child)) => {
-            parent.extend(child);
-            Some(parent)
-        }
-        (Some(parent), None) => Some(parent),
-        (None, Some(child)) => Some(child),
-    };
-
-    *child_packages = merged.map(StringOrArrayOfStrings::ArrayOfStrings);
-}
-
 /// Compare Option<StringOrArrayOfStrings>, treating None and empty array as equal
 pub fn array_of_strings_eq(
     a: &Option<StringOrArrayOfStrings>,
@@ -161,7 +75,7 @@ pub fn array_of_strings_eq(
     }
 }
 
-/// Compare optional tag fields with set semantics.
+/// Compare plain `Vec<String>` tag fields (e.g. `CommonAttributes.tags`) with set semantics.
 ///
 /// dbt-core builds tag lists by *concatenating* inherited tags (project + model +
 /// column + test level), which produces duplicates in the manifest — e.g. a column
@@ -174,140 +88,15 @@ pub fn array_of_strings_eq(
 /// Use this only for tag-shaped fields. For ordered/multiset fields like Python
 /// `packages` (where order or duplicates can be meaningful), use
 /// `array_of_strings_eq` instead.
-pub fn tags_eq(a: &Option<StringOrArrayOfStrings>, b: &Option<StringOrArrayOfStrings>) -> bool {
-    use std::collections::BTreeSet;
-    let to_set = |v: &Option<StringOrArrayOfStrings>| -> BTreeSet<String> {
-        match v {
-            None => BTreeSet::new(),
-            Some(StringOrArrayOfStrings::String(s)) => BTreeSet::from([s.clone()]),
-            Some(StringOrArrayOfStrings::ArrayOfStrings(arr)) => arr.iter().cloned().collect(),
-        }
-    };
-    to_set(a) == to_set(b)
-}
-
-/// Same set semantics as [`tags_eq`], for plain `Vec<String>` tag fields
-/// (e.g. `CommonAttributes.tags`). Same caveat: only use for tag-shaped fields.
 pub fn tags_eq_vec(a: &[String], b: &[String]) -> bool {
     use std::collections::BTreeSet;
     a.iter().cloned().collect::<BTreeSet<_>>() == b.iter().cloned().collect::<BTreeSet<_>>()
 }
 
-/// Helper function to handle default_to logic for column_types
-/// Column types should be merged, with parent values filling in missing keys
-pub fn default_column_types(
-    child_column_types: &mut Option<BTreeMap<Spanned<String>, String>>,
-    parent_column_types: &Option<BTreeMap<Spanned<String>, String>>,
-) {
-    match (child_column_types, parent_column_types) {
-        (Some(inner_column_types), Some(parent_column_types)) => {
-            for (key, value) in parent_column_types {
-                inner_column_types
-                    .entry(key.clone())
-                    .or_insert_with(|| value.clone());
-            }
-        }
-        (column_types, Some(parent_column_types)) => {
-            *column_types = Some(parent_column_types.clone())
-        }
-        (_, None) => {}
-    }
-}
-
-/// helper function to handle default_to for grants
-/// if the key of a grant starts with a + append the child grant to the parents, otherwise replace the parent grant
-pub fn default_to_grants(
-    child_grants: &mut OmissibleGrantConfig,
-    parent_grants: &OmissibleGrantConfig,
-) {
-    use crate::schemas::serde::OmissibleGrantConfig;
-    use dbt_common::serde_utils::Omissible;
-
-    match (child_grants.as_mut(), parent_grants.as_ref()) {
-        (None, Some(parent)) => {
-            // Child not set, inherit from parent
-            *child_grants = OmissibleGrantConfig(Omissible::Present(parent.clone()));
-        }
-        (Some(child), Some(parent)) => {
-            // Both set, merge them following dbt-core DictKeyAppend:
-            // 1. Start with all parent keys
-            // 2. For each child key:
-            //    - +key: extend parent's list with child's values (parent first)
-            //    - key with no prefix: clobber
-            let child_grants_map = &mut child.0;
-            let parent_grants_map = &parent.0;
-
-            // Collect keys that need to be processed to avoid borrow conflicts
-            let child_keys: Vec<String> = child_grants_map.keys().cloned().collect();
-
-            // First, inherit parent keys that child doesn't have
-            for (parent_key, parent_value) in parent_grants_map.iter() {
-                // Check if child has this key (with or without + prefix)
-                let child_has_key = child_grants_map.contains_key(parent_key)
-                    || child_grants_map.contains_key(&format!("+{}", parent_key));
-                if !child_has_key {
-                    child_grants_map.insert(parent_key.clone(), parent_value.clone());
-                }
-            }
-
-            for child_key in child_keys {
-                // + prefix indicates append
-                if child_key.starts_with('+') {
-                    let actual_key = child_key.trim_start_matches('+');
-
-                    if let Some(child_value) = child_grants_map.swap_remove(&child_key) {
-                        let child_array: Vec<String> = child_value.into();
-
-                        if let Some(parent_value) = parent_grants_map.get(actual_key) {
-                            // parent values first, then child values
-                            let mut merged: Vec<String> = parent_value.clone().into();
-                            merged.extend(child_array);
-                            child_grants_map.insert(
-                                actual_key.to_string(),
-                                StringOrArrayOfStrings::ArrayOfStrings(merged),
-                            );
-                        } else {
-                            // Parent doesn't have this key, just use child value
-                            child_grants_map.insert(
-                                actual_key.to_string(),
-                                StringOrArrayOfStrings::ArrayOfStrings(child_array),
-                            );
-                        }
-                    }
-                }
-                // Non prefix keys clobber, so just use what the child has
-            }
-        }
-        (Some(child), None) => {
-            // Child set but parent not set - just strip + prefixes
-            let child_grants_map = &mut child.0;
-            let keys_to_process: Vec<String> = child_grants_map
-                .keys()
-                .filter(|key| key.starts_with('+'))
-                .cloned()
-                .collect();
-
-            for child_key in keys_to_process {
-                // Remove the + prefix to get the actual key
-                let actual_key = child_key.trim_start_matches('+');
-
-                // Get the value and remove the + prefixed key
-                if let Some(value) = child_grants_map.swap_remove(&child_key) {
-                    // No parent to merge with, just insert the child value with stripped prefix
-                    child_grants_map.insert(actual_key.to_string(), value);
-                }
-            }
-        }
-        (None, None) => {
-            // Neither child nor parent exists, nothing to do
-        }
-    }
-}
-
 /// This configuration is a superset of all warehouse specific configurations
 /// that users can set
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema, DefaultTo)]
 pub struct WarehouseSpecificNodeConfig {
     // Shared
     pub partition_by: Option<PartitionConfig>,
@@ -316,8 +105,12 @@ pub struct WarehouseSpecificNodeConfig {
 
     // BigQuery
     pub description: Option<String>,
-    #[serde(default, deserialize_with = "u64_or_string_u64")]
-    pub hours_to_expiration: Option<u64>,
+    #[serde(
+        default,
+        deserialize_with = "hours_to_expiration_or_string_omissible",
+        skip_serializing_if = "Omissible::is_omitted"
+    )]
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub job_execution_timeout_seconds: Option<u64>,
     pub reservation: Option<String>,
@@ -355,17 +148,21 @@ pub struct WarehouseSpecificNodeConfig {
     pub location_root: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_uniform: Option<bool>,
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub include_full_name_in_path: Option<bool>,
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub auto_liquid_cluster: Option<bool>,
+    pub zorder: Option<StringOrArrayOfStrings>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub skip_optimize: Option<bool>,
     pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
+    pub query_tags: Option<String>,
     pub compression: Option<String>,
     pub databricks_compute: Option<String>,
     pub target_alias: Option<String>,
@@ -384,9 +181,14 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub incremental_apply_config_changes: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub persist_constraints: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub use_safer_relation_operations: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub view_update_via_alter: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub unique_tmp_table_suffix: Option<bool>,
+    pub row_filter: Option<RowFilterConfig>,
 
     // Snowflake
     pub table_tag: Option<String>,
@@ -432,7 +234,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub backup: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     pub sort: Option<StringOrArrayOfStrings>,
     pub sort_type: Option<String>,
 
@@ -447,19 +249,93 @@ pub struct WarehouseSpecificNodeConfig {
 
     // Postgres
     // XXX: This is an incomplete set of configs
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "IndexesConfig::is_none")]
     pub indexes: IndexesConfig,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub unlogged: Option<bool>,
 
     // Salesforce
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "PrimaryKeyConfig::is_none")]
     pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
+
+    // ClickHouse
+    // table materialization
+    pub engine: Option<String>,
+    pub order_by: Option<StringOrArrayOfStrings>,
+    pub ttl: Option<String>,
+    pub settings: Option<BTreeMap<String, YmlValue>>,
+    pub query_settings: Option<BTreeMap<String, YmlValue>>,
+    pub projections: Option<Vec<YmlValue>>,
+    // incremental materialization
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub inserts_only: Option<bool>,
+    // dictionary materialization
+    pub connection_overrides: Option<BTreeMap<String, YmlValue>>,
+    pub fields: Option<Vec<YmlValue>>,
+    pub source_type: Option<String>,
+    pub url: Option<String>,
+    pub format: Option<String>,
+    pub layout: Option<String>,
+    pub lifetime: Option<YmlValue>,
+    pub range: Option<YmlValue>,
+    pub table: Option<String>,
+    pub update_field: Option<String>,
+    pub update_lag: Option<YmlValue>,
+    // view materialization
+    pub definer: Option<String>,
+    pub sql_security: Option<String>,
+    // materialized-view materialization
+    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub catchup: Option<bool>,
+    pub mv_on_schema_change: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub repopulate_from_mvs_on_full_refresh: Option<bool>,
+
+    // Exasol
+    // Key names match the Python dbt-exasol adapter so existing projects
+    // migrate without config changes.
+    pub partition_by_config: Option<StringOrArrayOfStrings>,
+    pub distribute_by_config: Option<StringOrArrayOfStrings>,
+    pub primary_key_config: Option<StringOrArrayOfStrings>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
     fn enabled(&self) -> bool {
         true
     }
+}
+
+/// Takes the Databricks `catalog` alias value out of `warehouse_specific`, for the caller to
+/// move into its own `database` field -- mirroring dbt-core's `Credentials._ALIASES`
+/// (`catalog` -> `database`, `dbt/adapters/databricks/credentials.py:69-72`). `None` on every
+/// other adapter (D1) or when `catalog` was not set at this config layer.
+///
+/// Shared by every config type that embeds [`WarehouseSpecificNodeConfig`] and has its own
+/// `database` field, since that field's exact type (`Option<String>` vs
+/// `Omissible<Option<String>>`) differs by config type -- callers pass whether their own
+/// `database` is already set and wrap the returned value themselves.
+pub fn take_databricks_catalog_alias(
+    adapter_type: AdapterType,
+    warehouse_specific: &mut WarehouseSpecificNodeConfig,
+    database_already_set: bool,
+) -> Option<String> {
+    if adapter_type != AdapterType::Databricks {
+        return None;
+    }
+    if database_already_set {
+        if warehouse_specific.catalog.is_some() {
+            emit_error_log_message(
+                ErrorCode::InvalidConfig,
+                "Config keys `catalog` and `database` both resolve to `database` for adapter \
+                 'databricks'; a project cannot set the same underlying config key two different \
+                 ways in the same place.",
+            );
+        }
+        return None;
+    }
+    warehouse_specific.catalog.take()
 }
 
 impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
@@ -479,223 +355,11 @@ impl ResolvableConfig<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConf
         self
     }
 
-    #[allow(clippy::cognitive_complexity)]
     fn default_to(&mut self, parent: &WarehouseSpecificNodeConfig) {
-        // Exhaustive destructuring ensures all fields are handled
-        let WarehouseSpecificNodeConfig {
-            // Shared
-            partition_by,
-
-            // BigQuery
-            description,
-            cluster_by,
-            hours_to_expiration,
-            job_execution_timeout_seconds,
-            reservation,
-            labels,
-            labels_from_meta,
-            kms_key_name,
-            require_partition_filter,
-            partition_expiration_days,
-            grant_access_to,
-            partitions,
-            enable_refresh,
-            refresh_interval_minutes,
-            resource_tags,
-            max_staleness,
-            jar_file_uri,
-            timeout,
-            batch_id,
-            dataproc_cluster_name,
-            notebook_template_id,
-            enable_list_inference,
-            intermediate_format,
-            storage_uri,
-
-            // Databricks
-            file_format,
-            catalog_name,
-            location_root,
-            use_uniform,
-            tblproperties,
-            include_full_name_in_path,
-            liquid_clustered_by,
-            auto_liquid_cluster,
-            clustered_by,
-            buckets,
-            catalog,
-            databricks_tags,
-            compression,
-            databricks_compute,
-            target_alias,
-            source_alias,
-            matched_condition,
-            not_matched_condition,
-            not_matched_by_source_condition,
-            not_matched_by_source_action,
-            merge_with_schema_evolution,
-            skip_matched_step,
-            skip_not_matched_step,
-            schedule,
-            incremental_apply_config_changes,
-            use_safer_relation_operations,
-            view_update_via_alter,
-
-            // Snowflake
-            adapter_properties,
-            table_tag,
-            row_access_policy,
-            external_volume,
-            base_location_root,
-            base_location_subpath,
-            change_tracking,
-            data_retention_time_in_days,
-            max_data_extension_time_in_days,
-            storage_serialization_policy,
-            target_file_size,
-            target_lag,
-            snowflake_initialization_warehouse,
-            snowflake_warehouse,
-            refresh_warehouse,
-            immutable_where,
-            refresh_mode,
-            initialize,
-            scheduler,
-            tmp_relation_type,
-            query_tag,
-            automatic_clustering,
-            copy_grants,
-            copy_tags,
-            secure,
-            transient,
-            iceberg_version,
-
-            // Redshift
-            auto_refresh,
-            backup,
-            bind,
-            dist,
-            sort,
-            sort_type,
-
-            // MsSql
-            as_columnstore,
-
-            // Athena
-            table_type,
-
-            // Postgres
-            indexes,
-
-            // Salesforce
-            primary_key,
-            category,
-        } = self;
-
-        default_to!(
-            parent,
-            [
-                // Shared
-                partition_by,
-                // BigQuery
-                description,
-                cluster_by,
-                hours_to_expiration,
-                job_execution_timeout_seconds,
-                reservation,
-                labels,
-                labels_from_meta,
-                kms_key_name,
-                require_partition_filter,
-                partition_expiration_days,
-                grant_access_to,
-                partitions,
-                enable_refresh,
-                refresh_interval_minutes,
-                resource_tags,
-                max_staleness,
-                // Databricks
-                file_format,
-                catalog_name,
-                location_root,
-                use_uniform,
-                tblproperties,
-                include_full_name_in_path,
-                liquid_clustered_by,
-                auto_liquid_cluster,
-                clustered_by,
-                buckets,
-                catalog,
-                databricks_tags,
-                compression,
-                databricks_compute,
-                target_alias,
-                source_alias,
-                matched_condition,
-                not_matched_condition,
-                not_matched_by_source_condition,
-                not_matched_by_source_action,
-                merge_with_schema_evolution,
-                skip_matched_step,
-                skip_not_matched_step,
-                schedule,
-                jar_file_uri,
-                timeout,
-                batch_id,
-                dataproc_cluster_name,
-                notebook_template_id,
-                enable_list_inference,
-                intermediate_format,
-                storage_uri,
-                incremental_apply_config_changes,
-                use_safer_relation_operations,
-                view_update_via_alter,
-                // Snowflake
-                table_tag,
-                row_access_policy,
-                adapter_properties,
-                external_volume,
-                base_location_root,
-                base_location_subpath,
-                change_tracking,
-                data_retention_time_in_days,
-                max_data_extension_time_in_days,
-                storage_serialization_policy,
-                target_file_size,
-                target_lag,
-                snowflake_initialization_warehouse,
-                snowflake_warehouse,
-                refresh_warehouse,
-                immutable_where,
-                refresh_mode,
-                initialize,
-                scheduler,
-                tmp_relation_type,
-                query_tag,
-                automatic_clustering,
-                copy_grants,
-                copy_tags,
-                secure,
-                transient,
-                iceberg_version,
-                // Redshift
-                auto_refresh,
-                backup,
-                bind,
-                dist,
-                sort,
-                sort_type,
-                // MsSql
-                as_columnstore,
-                // Athena
-                table_type,
-                // Postgres
-                indexes,
-                // Salesforce
-                primary_key,
-                category,
-            ]
-        );
+        // Per-field inheritance is generated by `#[derive(DefaultTo)]`. Omissible
+        // fields (e.g. `hours_to_expiration`) inherit only when omitted, so an
+        // explicit `null` clears the inherited value (dbt-core#15473).
+        self.default_to_fields(parent);
     }
 }
 
@@ -775,51 +439,13 @@ pub fn meta_eq(
 }
 
 /// Helper function to compare grants fields, treating Omitted and empty as equivalent
-pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
+pub fn grants_equal(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
     match (a.as_ref(), b.as_ref()) {
         (None, None) => true,
         (Some(a_val), Some(b_val)) => a_val == b_val,
         (None, Some(b_val)) => b_val.is_empty(),
         (Some(a_val), None) => a_val.is_empty(),
     }
-}
-
-/// Unrendered-aware `grants` comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so environment-aware Jinja `grants` configs in
-/// `dbt_project.yml` (e.g.
-/// `+grants: {select: "{{ ['ANALYTICS_RMP'] if target.name == 'prod' else [] }}"}`) that render
-/// to different grantee lists per target are not treated as modifications. This is the `grants`
-/// sibling of the warehouse-specific fix in dbt-core#15263; see dbt-core#15302.
-///
-/// Semantics: `same = (grants configured && unrendered_same) || rendered_same`.
-///   1. If `grants` is configured (present in `unrendered_config`) on at least one side and the
-///      configured (unrendered) values are equal, the grants are the same.
-///   2. Otherwise fall back to the rendered comparison ([`grants_eq`]).
-///
-/// The "present on at least one side" guard is important: unlike the warehouse-specific config
-/// (which compares a whole bundle of keys at once), `grants` is a single key, so an
-/// absent-on-both unrendered `grants` must fall back to the rendered comparison rather than be
-/// treated as equal — otherwise a genuine rendered change (e.g. from a Mantle/core manifest that
-/// does not populate `unrendered_config.grants`) would be masked.
-///
-/// This is strictly more lenient than [`grants_eq`] alone (it can only turn a rendered
-/// "different" into "same"), preserving backward compatibility.
-pub fn grants_eq_with_unrendered(
-    a: &OmissibleGrantConfig,
-    b: &OmissibleGrantConfig,
-    self_unrendered_config: &BTreeMap<String, YmlValue>,
-    other_unrendered_config: &BTreeMap<String, YmlValue>,
-) -> bool {
-    let self_grants = self_unrendered_config.get("grants");
-    let other_grants = other_unrendered_config.get("grants");
-    if (self_grants.is_some() || other_grants.is_some())
-        && unrendered_value_eq(self_grants, other_grants)
-    {
-        return true;
-    }
-    grants_eq(a, b)
 }
 
 /// Compare warehouse-specific configurations field by field
@@ -854,10 +480,13 @@ pub fn same_warehouse_config(
         self_wh.include_full_name_in_path == other_wh.include_full_name_in_path;
     let liquid_clustered_by_eq = self_wh.liquid_clustered_by == other_wh.liquid_clustered_by;
     let auto_liquid_cluster_eq = self_wh.auto_liquid_cluster == other_wh.auto_liquid_cluster;
+    let zorder_eq = self_wh.zorder == other_wh.zorder;
+    let skip_optimize_eq = self_wh.skip_optimize == other_wh.skip_optimize;
     let clustered_by_eq = self_wh.clustered_by == other_wh.clustered_by;
     let buckets_eq = self_wh.buckets == other_wh.buckets;
     let catalog_eq = self_wh.catalog == other_wh.catalog;
     let databricks_tags_eq = self_wh.databricks_tags == other_wh.databricks_tags;
+    let query_tags_eq = self_wh.query_tags == other_wh.query_tags;
     let compression_eq = self_wh.compression == other_wh.compression;
     let databricks_compute_eq = self_wh.databricks_compute == other_wh.databricks_compute;
     let target_alias_eq = self_wh.target_alias == other_wh.target_alias;
@@ -872,6 +501,9 @@ pub fn same_warehouse_config(
         self_wh.merge_with_schema_evolution == other_wh.merge_with_schema_evolution;
     let skip_matched_step_eq = self_wh.skip_matched_step == other_wh.skip_matched_step;
     let skip_not_matched_step_eq = self_wh.skip_not_matched_step == other_wh.skip_not_matched_step;
+    let persist_constraints_eq = self_wh.persist_constraints == other_wh.persist_constraints;
+    let unique_tmp_table_suffix_eq =
+        self_wh.unique_tmp_table_suffix == other_wh.unique_tmp_table_suffix;
     let schedule_eq = self_wh.schedule == other_wh.schedule;
     let adapter_properties_eq = self_wh.adapter_properties == other_wh.adapter_properties;
     let table_tag_eq = self_wh.table_tag == other_wh.table_tag;
@@ -906,6 +538,31 @@ pub fn same_warehouse_config(
     let indexes_eq = self_wh.indexes == other_wh.indexes;
     let primary_key_eq = self_wh.primary_key == other_wh.primary_key;
     let category_eq = self_wh.category == other_wh.category;
+    let engine_eq = self_wh.engine == other_wh.engine;
+    let order_by_eq = self_wh.order_by == other_wh.order_by;
+    let ttl_eq = self_wh.ttl == other_wh.ttl;
+    let settings_eq = self_wh.settings == other_wh.settings;
+    let query_settings_eq = self_wh.query_settings == other_wh.query_settings;
+    let projections_eq = self_wh.projections == other_wh.projections;
+    let inserts_only_eq = self_wh.inserts_only == other_wh.inserts_only;
+    let connection_overrides_eq = self_wh.connection_overrides == other_wh.connection_overrides;
+    let fields_eq = self_wh.fields == other_wh.fields;
+    let source_type_eq = self_wh.source_type == other_wh.source_type;
+    let url_eq = self_wh.url == other_wh.url;
+    let format_eq = self_wh.format == other_wh.format;
+    let layout_eq = self_wh.layout == other_wh.layout;
+    let lifetime_eq = self_wh.lifetime == other_wh.lifetime;
+    let range_eq = self_wh.range == other_wh.range;
+    let table_eq = self_wh.table == other_wh.table;
+    let update_field_eq = self_wh.update_field == other_wh.update_field;
+    let update_lag_eq = self_wh.update_lag == other_wh.update_lag;
+    let definer_eq = self_wh.definer == other_wh.definer;
+    let sql_security_eq = self_wh.sql_security == other_wh.sql_security;
+    let refreshable_eq = self_wh.refreshable == other_wh.refreshable;
+    let catchup_eq = self_wh.catchup == other_wh.catchup;
+    let mv_on_schema_change_eq = self_wh.mv_on_schema_change == other_wh.mv_on_schema_change;
+    let repopulate_from_mvs_on_full_refresh_eq =
+        self_wh.repopulate_from_mvs_on_full_refresh == other_wh.repopulate_from_mvs_on_full_refresh;
 
     let result = partition_by_eq
         && cluster_by_eq
@@ -929,10 +586,13 @@ pub fn same_warehouse_config(
         && include_full_name_in_path_eq
         && liquid_clustered_by_eq
         && auto_liquid_cluster_eq
+        && zorder_eq
+        && skip_optimize_eq
         && clustered_by_eq
         && buckets_eq
         && catalog_eq
         && databricks_tags_eq
+        && query_tags_eq
         && compression_eq
         && databricks_compute_eq
         && target_alias_eq
@@ -944,6 +604,8 @@ pub fn same_warehouse_config(
         && merge_with_schema_evolution_eq
         && skip_matched_step_eq
         && skip_not_matched_step_eq
+        && persist_constraints_eq
+        && unique_tmp_table_suffix_eq
         && schedule_eq
         && adapter_properties_eq
         && table_tag_eq
@@ -976,7 +638,31 @@ pub fn same_warehouse_config(
         && table_type_eq
         && indexes_eq
         && primary_key_eq
-        && category_eq;
+        && category_eq
+        && engine_eq
+        && order_by_eq
+        && ttl_eq
+        && settings_eq
+        && query_settings_eq
+        && projections_eq
+        && inserts_only_eq
+        && connection_overrides_eq
+        && fields_eq
+        && source_type_eq
+        && url_eq
+        && format_eq
+        && layout_eq
+        && lifetime_eq
+        && range_eq
+        && table_eq
+        && update_field_eq
+        && update_lag_eq
+        && definer_eq
+        && sql_security_eq
+        && refreshable_eq
+        && catchup_eq
+        && mv_on_schema_change_eq
+        && repopulate_from_mvs_on_full_refresh_eq;
 
     if !result {
         log_state_mod_diff(
@@ -1160,6 +846,22 @@ pub fn same_warehouse_config(
                     )),
                 ),
                 (
+                    "zorder",
+                    zorder_eq,
+                    Some((
+                        format!("{:?}", &self_wh.zorder),
+                        format!("{:?}", &other_wh.zorder),
+                    )),
+                ),
+                (
+                    "skip_optimize",
+                    skip_optimize_eq,
+                    Some((
+                        format!("{:?}", &self_wh.skip_optimize),
+                        format!("{:?}", &other_wh.skip_optimize),
+                    )),
+                ),
+                (
                     "clustered_by",
                     clustered_by_eq,
                     Some((
@@ -1280,6 +982,22 @@ pub fn same_warehouse_config(
                     )),
                 ),
                 (
+                    "persist_constraints",
+                    persist_constraints_eq,
+                    Some((
+                        format!("{:?}", &self_wh.persist_constraints),
+                        format!("{:?}", &other_wh.persist_constraints),
+                    )),
+                ),
+                (
+                    "unique_tmp_table_suffix",
+                    unique_tmp_table_suffix_eq,
+                    Some((
+                        format!("{:?}", &self_wh.unique_tmp_table_suffix),
+                        format!("{:?}", &other_wh.unique_tmp_table_suffix),
+                    )),
+                ),
+                (
                     "schedule",
                     schedule_eq,
                     Some((
@@ -1397,6 +1115,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.tmp_relation_type),
                         format!("{:?}", &other_wh.tmp_relation_type),
+                    )),
+                ),
+                (
+                    "query_tags",
+                    query_tags_eq,
+                    Some((
+                        format!("{:?}", &self_wh.query_tags),
+                        format!("{:?}", &other_wh.query_tags),
                     )),
                 ),
                 (
@@ -1543,121 +1269,204 @@ pub fn same_warehouse_config(
                         format!("{:?}", &other_wh.category),
                     )),
                 ),
+                (
+                    "engine",
+                    engine_eq,
+                    Some((
+                        format!("{:?}", &self_wh.engine),
+                        format!("{:?}", &other_wh.engine),
+                    )),
+                ),
+                (
+                    "order_by",
+                    order_by_eq,
+                    Some((
+                        format!("{:?}", &self_wh.order_by),
+                        format!("{:?}", &other_wh.order_by),
+                    )),
+                ),
+                (
+                    "ttl",
+                    ttl_eq,
+                    Some((
+                        format!("{:?}", &self_wh.ttl),
+                        format!("{:?}", &other_wh.ttl),
+                    )),
+                ),
+                (
+                    "settings",
+                    settings_eq,
+                    Some((
+                        format!("{:?}", &self_wh.settings),
+                        format!("{:?}", &other_wh.settings),
+                    )),
+                ),
+                (
+                    "query_settings",
+                    query_settings_eq,
+                    Some((
+                        format!("{:?}", &self_wh.query_settings),
+                        format!("{:?}", &other_wh.query_settings),
+                    )),
+                ),
+                (
+                    "projections",
+                    projections_eq,
+                    Some((
+                        format!("{:?}", &self_wh.projections),
+                        format!("{:?}", &other_wh.projections),
+                    )),
+                ),
+                (
+                    "inserts_only",
+                    inserts_only_eq,
+                    Some((
+                        format!("{:?}", &self_wh.inserts_only),
+                        format!("{:?}", &other_wh.inserts_only),
+                    )),
+                ),
+                (
+                    "connection_overrides",
+                    connection_overrides_eq,
+                    Some((
+                        format!("{:?}", &self_wh.connection_overrides),
+                        format!("{:?}", &other_wh.connection_overrides),
+                    )),
+                ),
+                (
+                    "fields",
+                    fields_eq,
+                    Some((
+                        format!("{:?}", &self_wh.fields),
+                        format!("{:?}", &other_wh.fields),
+                    )),
+                ),
+                (
+                    "source_type",
+                    source_type_eq,
+                    Some((
+                        format!("{:?}", &self_wh.source_type),
+                        format!("{:?}", &other_wh.source_type),
+                    )),
+                ),
+                (
+                    "url",
+                    url_eq,
+                    Some((
+                        format!("{:?}", &self_wh.url),
+                        format!("{:?}", &other_wh.url),
+                    )),
+                ),
+                (
+                    "format",
+                    format_eq,
+                    Some((
+                        format!("{:?}", &self_wh.format),
+                        format!("{:?}", &other_wh.format),
+                    )),
+                ),
+                (
+                    "layout",
+                    layout_eq,
+                    Some((
+                        format!("{:?}", &self_wh.layout),
+                        format!("{:?}", &other_wh.layout),
+                    )),
+                ),
+                (
+                    "lifetime",
+                    lifetime_eq,
+                    Some((
+                        format!("{:?}", &self_wh.lifetime),
+                        format!("{:?}", &other_wh.lifetime),
+                    )),
+                ),
+                (
+                    "range",
+                    range_eq,
+                    Some((
+                        format!("{:?}", &self_wh.range),
+                        format!("{:?}", &other_wh.range),
+                    )),
+                ),
+                (
+                    "table",
+                    table_eq,
+                    Some((
+                        format!("{:?}", &self_wh.table),
+                        format!("{:?}", &other_wh.table),
+                    )),
+                ),
+                (
+                    "update_field",
+                    update_field_eq,
+                    Some((
+                        format!("{:?}", &self_wh.update_field),
+                        format!("{:?}", &other_wh.update_field),
+                    )),
+                ),
+                (
+                    "update_lag",
+                    update_lag_eq,
+                    Some((
+                        format!("{:?}", &self_wh.update_lag),
+                        format!("{:?}", &other_wh.update_lag),
+                    )),
+                ),
+                (
+                    "definer",
+                    definer_eq,
+                    Some((
+                        format!("{:?}", &self_wh.definer),
+                        format!("{:?}", &other_wh.definer),
+                    )),
+                ),
+                (
+                    "sql_security",
+                    sql_security_eq,
+                    Some((
+                        format!("{:?}", &self_wh.sql_security),
+                        format!("{:?}", &other_wh.sql_security),
+                    )),
+                ),
+                (
+                    "refreshable",
+                    refreshable_eq,
+                    Some((
+                        format!("{:?}", &self_wh.refreshable),
+                        format!("{:?}", &other_wh.refreshable),
+                    )),
+                ),
+                (
+                    "catchup",
+                    catchup_eq,
+                    Some((
+                        format!("{:?}", &self_wh.catchup),
+                        format!("{:?}", &other_wh.catchup),
+                    )),
+                ),
+                (
+                    "mv_on_schema_change",
+                    mv_on_schema_change_eq,
+                    Some((
+                        format!("{:?}", &self_wh.mv_on_schema_change),
+                        format!("{:?}", &other_wh.mv_on_schema_change),
+                    )),
+                ),
+                (
+                    "repopulate_from_mvs_on_full_refresh",
+                    repopulate_from_mvs_on_full_refresh_eq,
+                    Some((
+                        format!("{:?}", &self_wh.repopulate_from_mvs_on_full_refresh),
+                        format!("{:?}", &other_wh.repopulate_from_mvs_on_full_refresh),
+                    )),
+                ),
             ],
         );
     }
 
     result
 }
-
-/// `unrendered_config` keys that correspond to [`WarehouseSpecificNodeConfig`] fields.
-///
-/// `WarehouseSpecificNodeConfig` carries no `#[serde(rename)]`, so each field's
-/// `unrendered_config` key is exactly its Rust field identifier. Keep this list in sync
-/// with the struct definition (the `default_to` destructuring above is the source of
-/// truth); the `warehouse_specific_config_keys_cover_struct` test guards against drift.
-pub const WAREHOUSE_SPECIFIC_CONFIG_KEYS: &[&str] = &[
-    // Shared
-    "partition_by",
-    "cluster_by",
-    "adapter_properties",
-    // BigQuery
-    "description",
-    "hours_to_expiration",
-    "job_execution_timeout_seconds",
-    "reservation",
-    "labels",
-    "labels_from_meta",
-    "kms_key_name",
-    "require_partition_filter",
-    "partition_expiration_days",
-    "grant_access_to",
-    "partitions",
-    "enable_refresh",
-    "refresh_interval_minutes",
-    "resource_tags",
-    "max_staleness",
-    "jar_file_uri",
-    "timeout",
-    "batch_id",
-    "dataproc_cluster_name",
-    "notebook_template_id",
-    "intermediate_format",
-    "enable_list_inference",
-    "storage_uri",
-    // Databricks + BigQuery
-    "file_format",
-    // Databricks
-    "catalog_name",
-    "location_root",
-    "use_uniform",
-    "tblproperties",
-    "include_full_name_in_path",
-    "liquid_clustered_by",
-    "auto_liquid_cluster",
-    "clustered_by",
-    "buckets",
-    "catalog",
-    "databricks_tags",
-    "compression",
-    "databricks_compute",
-    "target_alias",
-    "source_alias",
-    "matched_condition",
-    "not_matched_condition",
-    "not_matched_by_source_condition",
-    "not_matched_by_source_action",
-    "merge_with_schema_evolution",
-    "skip_matched_step",
-    "skip_not_matched_step",
-    "schedule",
-    "incremental_apply_config_changes",
-    "use_safer_relation_operations",
-    "view_update_via_alter",
-    // Snowflake
-    "table_tag",
-    "row_access_policy",
-    "external_volume",
-    "base_location_root",
-    "base_location_subpath",
-    "change_tracking",
-    "data_retention_time_in_days",
-    "max_data_extension_time_in_days",
-    "storage_serialization_policy",
-    "target_file_size",
-    "target_lag",
-    "snowflake_initialization_warehouse",
-    "snowflake_warehouse",
-    "refresh_warehouse",
-    "immutable_where",
-    "refresh_mode",
-    "initialize",
-    "scheduler",
-    "tmp_relation_type",
-    "query_tag",
-    "automatic_clustering",
-    "copy_grants",
-    "copy_tags",
-    "secure",
-    "transient",
-    "iceberg_version",
-    // Redshift
-    "auto_refresh",
-    "backup",
-    "bind",
-    "dist",
-    "sort",
-    "sort_type",
-    // MsSql
-    "as_columnstore",
-    // Athena
-    "table_type",
-    // Postgres
-    "indexes",
-    // Salesforce
-    "primary_key",
-    "category",
-];
 
 /// Compare two `unrendered_config` values, treating absent/`null`/empty as equivalent and
 /// canonicalizing trailing newlines on strings. Mirrors the semantics used by
@@ -1688,70 +1497,45 @@ pub(crate) fn unrendered_value_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) ->
     }
 }
 
-/// Compare the warehouse-specific portion of two `unrendered_config` maps.
-///
-/// Only the keys in [`WAREHOUSE_SPECIFIC_CONFIG_KEYS`] are considered; a key missing on a side
-/// reads as absent (absent-vs-absent is equal), intentionally ignoring target-derived rendering
-/// differences. Any differences are reported via `log_state_mod_diff` under the
-/// `warehouse_config_unrendered` category.
-fn same_warehouse_config_unrendered(
-    self_uc: &BTreeMap<String, YmlValue>,
-    other_uc: &BTreeMap<String, YmlValue>,
-) -> bool {
-    // One entry per state-modified check: (check_name, is_equal, Some((self, other))).
-    type StateModCheck = (&'static str, bool, Option<(String, String)>);
-    let mut diffs: Vec<StateModCheck> = Vec::new();
-    for &key in WAREHOUSE_SPECIFIC_CONFIG_KEYS {
-        let a = self_uc.get(key);
-        let b = other_uc.get(key);
-        if !unrendered_value_eq(a, b) {
-            diffs.push((key, false, Some((format!("{:?}", a), format!("{:?}", b)))));
-        }
-    }
-
-    if diffs.is_empty() {
-        true
-    } else {
-        log_state_mod_diff(
-            "unique_id in next warehouse_config_unrendered log",
-            "warehouse_config_unrendered",
-            diffs,
-        );
-        false
-    }
-}
-
-/// Unrendered-aware warehouse-specific config comparison.
-///
-/// dbt-core/Mantle base `state:modified` config comparisons on the *configured* (unrendered)
-/// config rather than the rendered values, so environment-aware Jinja configs in
-/// `dbt_project.yml` (e.g. `+copy_grants: "{{ true if target.name in ('prod') else false }}"`)
-/// that render differently per target are not treated as modifications. See dbt-core#15263.
-///
-/// Semantics: `same = unrendered_same || rendered_same`.
-///   1. Compare the configured (unrendered) warehouse values; if equal, the configs are the same.
-///   2. Otherwise fall back to the rendered field-by-field comparison ([`same_warehouse_config`]).
-///
-/// Both steps report any differences they find via `log_state_mod_diff`. This is strictly more
-/// lenient than [`same_warehouse_config`] alone (it can only turn a rendered "different" into
-/// "same"), preserving backward compatibility.
-pub fn same_warehouse_config_with_unrendered(
-    self_wh: &WarehouseSpecificNodeConfig,
-    other_wh: &WarehouseSpecificNodeConfig,
-    self_uc: &BTreeMap<String, YmlValue>,
-    other_uc: &BTreeMap<String, YmlValue>,
-) -> bool {
-    if same_warehouse_config_unrendered(self_uc, other_uc) {
-        return true;
-    }
-    // The configured (unrendered) values differ (already logged); fall back to the rendered
-    // comparison, which logs its own per-field differences.
-    same_warehouse_config(self_wh, other_wh)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_take_databricks_catalog_alias_moves_catalog_when_database_unset() {
+        let mut wh = WarehouseSpecificNodeConfig {
+            catalog: Some("my_catalog".to_string()),
+            ..Default::default()
+        };
+        let catalog = take_databricks_catalog_alias(AdapterType::Databricks, &mut wh, false);
+        assert_eq!(catalog, Some("my_catalog".to_string()));
+        assert_eq!(
+            wh.catalog, None,
+            "catalog must be cleared once moved into database"
+        );
+    }
+
+    /// An explicit `database` at the *same* config layer takes precedence over the `catalog`
+    /// alias (ordinary same-source-dict alias precedence) -- `catalog` is left untouched rather
+    /// than allowed to clobber the explicit value. This is also the D4 same-layer-duplicate case,
+    /// which now additionally emits a hard parse error (not observable from this test, which
+    /// installs no tracing subscriber); see
+    /// `test_databricks_catalog_alias_duplicate_at_same_layer_errors` (`dbt-parser/src/tests.rs`)
+    /// for that assertion.
+    #[test]
+    fn test_take_databricks_catalog_alias_defers_to_an_explicit_database_at_the_same_layer() {
+        let mut wh = WarehouseSpecificNodeConfig {
+            catalog: Some("my_catalog".to_string()),
+            ..Default::default()
+        };
+        let catalog = take_databricks_catalog_alias(AdapterType::Databricks, &mut wh, true);
+        assert_eq!(catalog, None);
+        assert_eq!(
+            wh.catalog,
+            Some("my_catalog".to_string()),
+            "catalog must be left untouched when database is already explicitly set"
+        );
+    }
 
     #[test]
     fn test_array_of_strings_eq_none_and_empty_array() {
@@ -1801,53 +1585,9 @@ mod tests {
     }
 
     #[test]
-    fn test_tags_eq_ignores_duplicates_and_ordering() {
-        // Regression: dbt-core concatenates inherited tag lists (model + column +
-        // test level), producing duplicates in the manifest like ['weekly', 'weekly'].
-        // Fusion deduplicates. For state:modified parity, equality must be set-based.
-        let with_dupes = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-            "weekly".to_string(),
-        ]));
-        let dedup = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-        ]));
-        let single_string = Some(StringOrArrayOfStrings::String("weekly".to_string()));
-
-        assert!(tags_eq(&with_dupes, &dedup));
-        assert!(tags_eq(&dedup, &with_dupes));
-        assert!(tags_eq(&with_dupes, &single_string));
-        assert!(tags_eq(&single_string, &with_dupes));
-
-        // Order should also be ignored.
-        let abc = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "a".to_string(),
-            "b".to_string(),
-            "c".to_string(),
-        ]));
-        let cab = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "c".to_string(),
-            "a".to_string(),
-            "b".to_string(),
-        ]));
-        assert!(tags_eq(&abc, &cab));
-    }
-
-    #[test]
-    fn test_tags_eq_none_and_empty_array() {
-        // Same none/empty equivalence as array_of_strings_eq.
-        let none_val: Option<StringOrArrayOfStrings> = None;
-        let empty_array = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![]));
-
-        assert!(tags_eq(&none_val, &empty_array));
-        assert!(tags_eq(&empty_array, &none_val));
-        assert!(tags_eq(&none_val, &none_val));
-    }
-
-    #[test]
     fn test_tags_eq_vec_set_semantics() {
-        // Plain Vec<String> tag form (e.g. CommonAttributes.tags) — same set
-        // semantics as tags_eq. Saved queries store tags as Vec<String>.
+        // Plain Vec<String> tag form (e.g. CommonAttributes.tags) — set semantics
+        // (ordering and multiplicity ignored). Saved queries store tags as Vec<String>.
         let with_dupes = vec!["weekly".to_string(), "weekly".to_string()];
         let dedup = vec!["weekly".to_string()];
         assert!(tags_eq_vec(&with_dupes, &dedup));
@@ -1865,317 +1605,23 @@ mod tests {
     }
 
     #[test]
-    fn test_tags_eq_genuinely_different_tags() {
-        // Set semantics must still flag real differences as unequal.
-        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-            "critical".to_string(),
-        ]));
-        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "weekly".to_string(),
-        ]));
+    fn test_tags_default_to_parent_first_order() {
+        // Nested dbt_project.yml +tags: parent folder INTERMEDIATE, child DAILY
+        // must resolve to [INTERMEDIATE, DAILY] like dbt-core (issue #15590).
+        use crate::schemas::project::configs::config_merge::{DefaultTo, Tags};
 
-        assert!(!tags_eq(&left, &right));
-        assert!(!tags_eq(&right, &left));
-    }
-
-    fn uc(entries: &[(&str, YmlValue)]) -> BTreeMap<String, YmlValue> {
-        entries
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.clone()))
-            .collect()
-    }
-
-    /// Build an `OmissibleGrantConfig` with a single `select` privilege granted to `roles`.
-    fn grants(roles: &[&str]) -> OmissibleGrantConfig {
-        use crate::schemas::serde::GrantConfig;
-        use dbt_common::serde_utils::Omissible;
-        let mut map = IndexMap::new();
-        map.insert(
-            "select".to_string(),
-            StringOrArrayOfStrings::ArrayOfStrings(roles.iter().map(|s| s.to_string()).collect()),
-        );
-        OmissibleGrantConfig(Omissible::Present(GrantConfig(map)))
-    }
-
-    /// Parse a YAML fragment into the `unrendered_config` map shape used at the call sites.
-    fn uc_yaml(yaml: &str) -> BTreeMap<String, YmlValue> {
-        let value: YmlValue = dbt_yaml::from_str(yaml).expect("parse unrendered config yaml");
-        match value {
-            YmlValue::Mapping(map, _) => map
-                .into_iter()
-                .filter_map(|(k, v)| k.as_str().map(|s| (s.to_string(), v)))
-                .collect(),
-            other => panic!("expected mapping, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn test_grants_eq_with_unrendered_jinja_equal_ignores_rendered_diff() {
-        // Repro for dbt-core#15302 (grants sibling of #15263): an environment-aware grants
-        // config renders to ["ANALYTICS_RMP"] on prod and [] elsewhere, but the unrendered
-        // jinja string is identical -> not modified, even though the rendered grants differ.
-        let self_unrendered_config = uc_yaml(
-            "grants:\n  select: \"{{ ['ANALYTICS_RMP'] if target.name == 'prod' else [] }}\"",
-        );
-        let other_unrendered_config = self_unrendered_config.clone();
-        // Rendered grants differ across targets.
-        assert!(grants_eq_with_unrendered(
-            &grants(&["ANALYTICS_RMP"]),
-            &grants(&[]),
-            &self_unrendered_config,
-            &other_unrendered_config,
-        ));
-    }
-
-    #[test]
-    fn test_grants_eq_with_unrendered_detects_real_change() {
-        // A genuine change to the configured (unrendered) grants must still be detected when
-        // the rendered values also differ.
-        let self_unrendered_config = uc_yaml("grants:\n  select: [ROLE_A]");
-        let other_unrendered_config = uc_yaml("grants:\n  select: [ROLE_B]");
-        assert!(!grants_eq_with_unrendered(
-            &grants(&["ROLE_A"]),
-            &grants(&["ROLE_B"]),
-            &self_unrendered_config,
-            &other_unrendered_config,
-        ));
-    }
-
-    #[test]
-    fn test_grants_eq_with_unrendered_falls_back_to_rendered() {
-        // When grants are not present in the unrendered config (absent on both sides), the
-        // comparison falls back to the rendered values.
-        let empty_uc: BTreeMap<String, YmlValue> = BTreeMap::new();
-        assert!(grants_eq_with_unrendered(
-            &grants(&["ROLE_A"]),
-            &grants(&["ROLE_A"]),
-            &empty_uc,
-            &empty_uc,
-        ));
-        assert!(!grants_eq_with_unrendered(
-            &grants(&["ROLE_A"]),
-            &grants(&["ROLE_B"]),
-            &empty_uc,
-            &empty_uc,
-        ));
-    }
-
-    #[test]
-    fn test_same_warehouse_config_unrendered_copy_grants_jinja_equal() {
-        // Environment-aware jinja config in dbt_project.yml: identical unrendered strings.
-        let jinja =
-            YmlValue::string("{{ true if target.name in ('prod') else false }}".to_string());
-        let a = uc(&[("copy_grants", jinja.clone())]);
-        let b = uc(&[("copy_grants", jinja)]);
-        assert!(same_warehouse_config_unrendered(&a, &b));
-    }
-
-    #[test]
-    fn test_same_warehouse_config_unrendered_detects_real_change() {
-        // A genuine change to the configured value must be detected.
-        let a = uc(&[("copy_grants", YmlValue::string("{{ true }}".to_string()))]);
-        let b = uc(&[("copy_grants", YmlValue::string("{{ false }}".to_string()))]);
-        assert!(!same_warehouse_config_unrendered(&a, &b));
-    }
-
-    #[test]
-    fn test_same_warehouse_config_unrendered_ignores_non_warehouse_keys() {
-        // Keys that are not warehouse-specific must not affect the comparison.
-        let a = uc(&[("materialized", YmlValue::string("table".to_string()))]);
-        let b = uc(&[("materialized", YmlValue::string("view".to_string()))]);
-        assert!(same_warehouse_config_unrendered(&a, &b));
-    }
-
-    #[test]
-    fn test_with_unrendered_prefers_unrendered_then_falls_back_to_rendered() {
-        // Repro for dbt-core#15263: rendered copy_grants differs (true vs false) but the
-        // unrendered jinja string matches -> not modified.
-        let jinja =
-            YmlValue::string("{{ true if target.name in ('prod') else false }}".to_string());
-        let self_uc = uc(&[("copy_grants", jinja.clone())]);
-        let other_uc = uc(&[("copy_grants", jinja)]);
-        let self_wh = WarehouseSpecificNodeConfig {
-            copy_grants: Some(false),
-            ..Default::default()
-        };
-        let other_wh = WarehouseSpecificNodeConfig {
-            copy_grants: Some(true),
-            ..Default::default()
-        };
-        assert!(same_warehouse_config_with_unrendered(
-            &self_wh, &other_wh, &self_uc, &other_uc
-        ));
-
-        // When neither unrendered nor rendered match, the node is modified.
-        let self_uc2 = uc(&[("copy_grants", YmlValue::string("{{ true }}".to_string()))]);
-        let other_uc2 = uc(&[("copy_grants", YmlValue::string("{{ false }}".to_string()))]);
-        assert!(!same_warehouse_config_with_unrendered(
-            &self_wh, &other_wh, &self_uc2, &other_uc2
-        ));
-
-        // When unrendered differs but rendered matches, fall back to rendered -> same.
-        let same_wh = WarehouseSpecificNodeConfig {
-            copy_grants: Some(true),
-            ..Default::default()
-        };
-        assert!(same_warehouse_config_with_unrendered(
-            &same_wh, &same_wh, &self_uc2, &other_uc2
-        ));
-    }
-
-    #[test]
-    fn warehouse_specific_config_keys_cover_struct() {
-        // Guard against drift: every serialized field of WarehouseSpecificNodeConfig (with all
-        // fields populated) must appear in WAREHOUSE_SPECIFIC_CONFIG_KEYS, and vice versa. If a
-        // new warehouse field is added, this test fails until the key list is updated.
-        use std::collections::BTreeSet;
-
-        // Populate every field so `skip_serializing_none` does not drop any key.
-        let cfg = WarehouseSpecificNodeConfig {
-            partition_by: Some(PartitionConfig::String("p".to_string())),
-            cluster_by: Some(ClusterConfig::String("c".to_string())),
-            adapter_properties: Some(Default::default()),
-            description: Some("d".to_string()),
-            hours_to_expiration: Some(1),
-            job_execution_timeout_seconds: Some(1),
-            reservation: Some("r".to_string()),
-            labels: Some(Default::default()),
-            labels_from_meta: Some(false),
-            kms_key_name: Some("k".to_string()),
-            require_partition_filter: Some(false),
-            partition_expiration_days: Some(1),
-            grant_access_to: Some(Default::default()),
-            partitions: Some(PartitionsConfig::Strings(vec!["p".to_string()])),
-            enable_refresh: Some(false),
-            refresh_interval_minutes: Some(1.0),
-            resource_tags: Some(Default::default()),
-            max_staleness: Some("m".to_string()),
-            jar_file_uri: Some("j".to_string()),
-            timeout: Some(1),
-            batch_id: Some("b".to_string()),
-            dataproc_cluster_name: Some("c".to_string()),
-            notebook_template_id: Some(1),
-            intermediate_format: Some("i".to_string()),
-            enable_list_inference: Some(false),
-            storage_uri: Some("s".to_string()),
-            file_format: Some("f".to_string()),
-            catalog_name: Some("c".to_string()),
-            location_root: Some("l".to_string()),
-            use_uniform: Some(false),
-            tblproperties: Some(Default::default()),
-            include_full_name_in_path: Some(false),
-            liquid_clustered_by: Some(StringOrArrayOfStrings::String("l".to_string())),
-            auto_liquid_cluster: Some(false),
-            clustered_by: Some(StringOrArrayOfStrings::String("c".to_string())),
-            buckets: Some(1),
-            catalog: Some("c".to_string()),
-            databricks_tags: Some(Default::default()),
-            compression: Some("c".to_string()),
-            databricks_compute: Some("c".to_string()),
-            target_alias: Some("t".to_string()),
-            source_alias: Some("s".to_string()),
-            matched_condition: Some("m".to_string()),
-            not_matched_condition: Some("n".to_string()),
-            not_matched_by_source_condition: Some("n".to_string()),
-            not_matched_by_source_action: Some("n".to_string()),
-            merge_with_schema_evolution: Some(false),
-            skip_matched_step: Some(false),
-            skip_not_matched_step: Some(false),
-            schedule: Some(Schedule::String("s".to_string())),
-            incremental_apply_config_changes: Some(false),
-            use_safer_relation_operations: Some(false),
-            view_update_via_alter: Some(false),
-            table_tag: Some("t".to_string()),
-            row_access_policy: Some("r".to_string()),
-            external_volume: Some("e".to_string()),
-            base_location_root: Some("b".to_string()),
-            base_location_subpath: Some("b".to_string()),
-            change_tracking: Some(false),
-            data_retention_time_in_days: Some(1),
-            max_data_extension_time_in_days: Some(1),
-            storage_serialization_policy: Some("s".to_string()),
-            target_file_size: Some("t".to_string()),
-            target_lag: Some("t".to_string()),
-            snowflake_initialization_warehouse: Some("s".to_string()),
-            snowflake_warehouse: Some("s".to_string()),
-            refresh_warehouse: Some("r".to_string()),
-            immutable_where: Some("i".to_string()),
-            refresh_mode: Some("r".to_string()),
-            initialize: Some("i".to_string()),
-            scheduler: Some("s".to_string()),
-            tmp_relation_type: Some("t".to_string()),
-            query_tag: Some(QueryTag("q".to_string())),
-            automatic_clustering: Some(false),
-            copy_grants: Some(false),
-            copy_tags: Some(false),
-            secure: Some(false),
-            transient: Some(false),
-            iceberg_version: Some(1),
-            auto_refresh: Some(false),
-            backup: Some(false),
-            bind: Some(false),
-            dist: Some("d".to_string()),
-            sort: Some(StringOrArrayOfStrings::String("s".to_string())),
-            sort_type: Some("s".to_string()),
-            as_columnstore: Some(false),
-            table_type: Some("t".to_string()),
-            indexes: Default::default(),
-            primary_key: Default::default(),
-            category: Some(DataLakeObjectCategory::Other),
-        };
-
-        let value = dbt_yaml::to_value(&cfg).expect("serialize warehouse config");
-        let serialized_keys: BTreeSet<String> = match value {
-            YmlValue::Mapping(map, _) => map
-                .keys()
-                .filter_map(|k| k.as_str().map(|s| s.to_string()))
-                .collect(),
-            other => panic!("expected mapping, got {other:?}"),
-        };
-        let listed_keys: BTreeSet<String> = WAREHOUSE_SPECIFIC_CONFIG_KEYS
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-
-        let missing: Vec<&String> = serialized_keys.difference(&listed_keys).collect();
-        let extra: Vec<&String> = listed_keys.difference(&serialized_keys).collect();
-        assert!(
-            missing.is_empty() && extra.is_empty(),
-            "WAREHOUSE_SPECIFIC_CONFIG_KEYS out of sync with WarehouseSpecificNodeConfig.\n  \
-             missing (in struct, not list): {missing:?}\n  extra (in list, not struct): {extra:?}",
-        );
-    }
-
-    #[test]
-    fn test_default_classifiers_merges_child_and_parent() {
-        let mut child = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "gdpr".to_string(),
-        ]));
-        let parent = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "pii".to_string(),
-        ]));
-        default_classifiers(&mut child, &parent);
+        let mut child_tags = Tags(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "DAILY".to_string(),
+        ])));
+        let parent_tags = Tags(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "INTERMEDIATE".to_string(),
+        ])));
+        child_tags.inherit_from(&parent_tags);
         assert_eq!(
-            child,
+            child_tags.into_inner(),
             Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-                "gdpr".to_string(),
-                "pii".to_string(),
-            ]))
-        );
-    }
-
-    #[test]
-    fn test_default_classifiers_none_child_inherits_parent() {
-        let mut child: Option<StringOrArrayOfStrings> = None;
-        let parent = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-            "pii".to_string(),
-        ]));
-        default_classifiers(&mut child, &parent);
-        assert_eq!(
-            child,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
-                "pii".to_string(),
+                "INTERMEDIATE".to_string(),
+                "DAILY".to_string(),
             ]))
         );
     }

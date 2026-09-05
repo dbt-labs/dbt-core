@@ -278,7 +278,6 @@ pub async fn download_git_like_package(
                  Consider pinning to a specific commit SHA instead.",
                 sanitize_git_url(repo_url)
             ),
-            context.io.status_reporter.as_ref(),
         );
     }
 

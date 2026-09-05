@@ -15,6 +15,12 @@ pub mod v1 {
         }
     }
     pub mod public {
+        pub mod common {
+            include!("gen/v1.public.common.rs");
+            pub mod vortex_telemetry_contexts {
+                include!("gen/v1.public.common.vortex_telemetry_contexts.rs");
+            }
+        }
         pub mod events {
             pub mod fusion {
                 include!("gen/v1.public.events.fusion.rs");

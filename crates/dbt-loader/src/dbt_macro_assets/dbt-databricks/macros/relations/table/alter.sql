@@ -9,6 +9,7 @@
       {% set liquid_clustering = configuration_changes.changes.get("liquid_clustering")%}
       {% set constraints = configuration_changes.changes.get("constraints") %}
       {% set column_masks = configuration_changes.changes.get("column_masks") %}
+      {% set row_filter = configuration_changes.changes.get("row_filter") %}
       {% if tags is not none %}
         {% do apply_tags(target_relation, tags.set_tags) %}
       {%- endif -%}
@@ -27,11 +28,16 @@
       {% if column_tags %}
         {{ apply_column_tags(target_relation, column_tags) }}
       {% endif %}
-      {% if constraints %}
+      {#-- Reconcile constraints only when the contract is enforced. --#}
+      {% set contract_config = config.get('contract') %}
+      {% if constraints and contract_config and contract_config.enforced %}
         {{ apply_constraints(target_relation, constraints) }}
       {% endif %}
       {% if column_masks %}
         {{ apply_column_masks(target_relation, column_masks) }}
+      {% endif %}
+      {% if row_filter %}
+        {{ apply_row_filter(target_relation, row_filter) }}
       {% endif %}
     {%- endif -%}
 {% endmacro %}

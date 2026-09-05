@@ -49,7 +49,9 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::Cancellable;
 
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
-use crate::metadata::{CatalogAndSchema, MetadataFreshness, RelationSchemaPair, RelationVec, UDF};
+use crate::metadata::{
+    CatalogAndSchema, FreshnessOverride, MetadataFreshness, RelationSchemaPair, RelationVec, UDF,
+};
 
 use super::event::{CatalogSchema, CatalogSchemas, MetadataCallArgs};
 use super::{global_recorder, global_replayer};
@@ -60,31 +62,8 @@ use super::{global_recorder, global_replayer};
 
 /// Wrap an async MetadataAdapter call with automatic recording and replay.
 ///
-/// This function handles both recording and replay modes:
-///
-/// **Replay mode** (when `global_replayer()` returns Some):
-/// 1. Looks up the recorded result for this call
-/// 2. Deserializes and returns it without executing the actual implementation
-///
-/// **Recording mode** (when `global_recorder()` returns Some):
-/// 1. Executes the provided future
-/// 2. Records the call with its result
-/// 3. Returns the result
-///
-/// **Normal mode** (neither recording nor replay):
-/// 1. Executes the provided future and returns the result
-///
-/// # Type Parameters
-///
-/// - `T`: The success type that must implement both serialization and deserialization
-/// - `F`: The future type
-///
-/// # Arguments
-///
-/// - `caller_id`: Identifier for the caller (usually unique_id or "global")
-/// - `method`: Name of the MetadataAdapter method being called
-/// - `args`: Structured arguments for recording
-/// - `fut`: The actual async operation to execute
+/// Looks up and returns a recorded result during replay, records the call during
+/// recording, and otherwise just runs `fut` directly.
 pub fn with_time_machine_metadata_wrapper<'a, T, F>(
     caller_id: impl Into<String> + Send + 'a,
     method: &'static str,
@@ -103,7 +82,6 @@ where
             // In replay mode - look up the recorded result
             match replayer.get_metadata_result(&caller_id, method, &args) {
                 Some(Ok(json)) => {
-                    // Found a recorded result - deserialize and return it
                     return T::from_recording_json(&json).map_err(|e| {
                         Cancellable::Error(AdapterError::new(
                             AdapterErrorKind::Internal,
@@ -112,8 +90,7 @@ where
                     });
                 }
                 Some(Err(e)) => {
-                    // Recorded call failed - return the original error message so
-                    // replay output matches the recording exactly.
+                    // Use the original error message so replay output matches the recording exactly.
                     let original_msg = e.recorded_error.unwrap_or(e.message);
                     return Err(Cancellable::Error(AdapterError::new(
                         AdapterErrorKind::Driver,
@@ -559,6 +536,42 @@ impl MetadataResultDeserialize for Vec<crate::metadata::ViewDefinition> {
     }
 }
 
+impl MetadataResultSerialize for crate::metadata::ViewDefinitionFetchResult {
+    fn to_recording_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "definitions": self.definitions.to_recording_json(),
+            "unresolvable": self.unresolvable.iter().collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl MetadataResultDeserialize for crate::metadata::ViewDefinitionFetchResult {
+    fn from_recording_json(json: &serde_json::Value) -> Result<Self, String> {
+        if json.is_array() {
+            return Ok(Self {
+                definitions: <Vec<crate::metadata::ViewDefinition>>::from_recording_json(json)?,
+                ..Default::default()
+            });
+        }
+
+        let definitions = json.get("definitions").ok_or("Missing 'definitions'")?;
+        let definitions = <Vec<crate::metadata::ViewDefinition>>::from_recording_json(definitions)?;
+        let unresolvable = json
+            .get("unresolvable")
+            .map(|v| {
+                serde_json::from_value(v.clone())
+                    .map_err(|e| format!("Invalid 'unresolvable': {e}"))
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        Ok(Self {
+            definitions,
+            unresolvable,
+        })
+    }
+}
+
 impl MetadataResultSerialize for Vec<(String, String, AdapterResult<()>)> {
     fn to_recording_json(&self) -> serde_json::Value {
         let entries: Vec<serde_json::Value> = self
@@ -658,6 +671,49 @@ pub fn args_freshness(relations: impl IntoIterator<Item = impl AsRef<str>>) -> M
             .into_iter()
             .map(|r| r.as_ref().to_string())
             .collect(),
+    }
+}
+
+/// Create MetadataCallArgs for freshness checks with source overrides.
+pub fn args_freshness_with_overrides(
+    relations: impl IntoIterator<Item = impl AsRef<str>>,
+    overrides: &BTreeMap<String, FreshnessOverride>,
+    warehouse: Option<String>,
+) -> MetadataCallArgs {
+    MetadataCallArgs::FreshnessWithOverrides {
+        relations: relations
+            .into_iter()
+            .map(|r| r.as_ref().to_string())
+            .collect(),
+        overrides: overrides
+            .iter()
+            .map(|(relation, override_)| {
+                let kind = match override_ {
+                    FreshnessOverride::Query(_) => "query",
+                    FreshnessOverride::Field(_) => "field",
+                };
+                (relation.clone(), kind.to_string())
+            })
+            .collect(),
+        warehouse,
+    }
+}
+
+/// Create MetadataCallArgs for schema-wide freshness.
+pub fn args_freshness_all_in_schema(
+    database: impl Into<String>,
+    schema: impl Into<String>,
+    relations: impl IntoIterator<Item = impl AsRef<str>>,
+    warehouse: Option<String>,
+) -> MetadataCallArgs {
+    MetadataCallArgs::FreshnessAllInSchema {
+        database: database.into(),
+        schema: schema.into(),
+        relations: relations
+            .into_iter()
+            .map(|r| r.as_ref().to_string())
+            .collect(),
+        warehouse,
     }
 }
 
@@ -866,5 +922,27 @@ mod tests {
         assert_eq!(restored[0].dialect, original[0].dialect);
         assert_eq!(restored[0].default_catalog, original[0].default_catalog);
         assert_eq!(restored[0].default_schema, original[0].default_schema);
+    }
+
+    #[test]
+    fn test_view_definition_fetch_result_round_trips_unresolvable() {
+        use crate::metadata::{ViewDefinition, ViewDefinitionFetchResult};
+        let original = ViewDefinitionFetchResult {
+            definitions: vec![ViewDefinition {
+                fqn: r#""DB"."S"."V""#.to_string(),
+                definition: "SELECT 1".to_string(),
+                dialect: AdapterType::Snowflake,
+                default_catalog: "DB".to_string(),
+                default_schema: "S".to_string(),
+            }],
+            unresolvable: BTreeSet::from([r#""DB"."S"."SECURE_VIEW""#.to_string()]),
+        };
+
+        let json = original.to_recording_json();
+        let restored = ViewDefinitionFetchResult::from_recording_json(&json).expect("ok");
+
+        assert_eq!(restored.definitions.len(), 1);
+        assert_eq!(restored.definitions[0].fqn, original.definitions[0].fqn);
+        assert_eq!(restored.unresolvable, original.unresolvable);
     }
 }

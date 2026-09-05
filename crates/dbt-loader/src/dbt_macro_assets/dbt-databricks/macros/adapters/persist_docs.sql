@@ -48,7 +48,9 @@
   {% endif %}
   {% if for_columns and config.persist_column_docs() and model.columns %}
     {%- set existing_columns = adapter.get_columns_in_relation(relation) -%}
-    {%- set columns_to_persist_docs = adapter.get_persist_doc_columns(existing_columns, model.columns) -%}
+    {%- set existing_column_names = existing_columns | map(attribute='name') | list -%}
+    {%- set valid_columns = validate_doc_columns(relation, model.columns, existing_column_names, case_insensitive=true) -%}
+    {%- set columns_to_persist_docs = adapter.get_persist_doc_columns(existing_columns, valid_columns) -%}
     {{ alter_column_comment(relation, columns_to_persist_docs) }}
   {% endif %}
 {% endmacro %}

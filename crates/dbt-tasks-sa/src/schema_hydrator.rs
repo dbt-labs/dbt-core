@@ -3,9 +3,12 @@ use std::sync::Arc;
 
 use dbt_adapter::Adapter;
 use dbt_adapter::engine::SidecarClient;
-use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, StaticAnalysisKind};
+use dbt_common::pretty_string::CYAN;
+use dbt_common::static_analysis::is_strict_static_analysis;
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
+use dbt_common::{ErrorCode, FsResult};
 use dbt_compilation::config::CompilationConfig;
 use dbt_compilation::schema_hydration::{
     SchemaHydrationState, SchemaHydrator, SchemaHydratorFactory,
@@ -119,22 +122,55 @@ impl StaticAnalysisBuckets for NoopStaticAnalysisBuckets {
 }
 
 /// A `SchemaHydrator` that runs the defer pipeline (synthesize + load state +
-/// defer_common + fixup) without performing schema hydration or static analysis.
-/// This gives the SA binary the same ref-resolution behaviour as Fusion for
-/// run-cache auto-deferral and explicit `--defer`/`--state` flags.
-pub struct DefaultSchemaHydrator;
+/// defer_common + defer_sa_upstreams + fixup) without performing schema
+/// hydration or static analysis. This gives the SA binary the same
+/// ref-resolution behaviour as Fusion for run-cache auto-deferral and
+/// explicit `--defer`/`--state` flags, including SA-dependent upstream
+/// deferral for introspective (Execute/Unknown) nodes.
+pub struct DefaultSchemaHydrator {
+    adapter: Arc<Adapter>,
+}
 
 #[async_trait::async_trait]
 impl SchemaHydrator for DefaultSchemaHydrator {
     async fn hydrate_schemas(
         self: Box<Self>,
-        _arg: &EvalArgs,
-        _schedule: &Schedule<String>,
-        _resolved_state: &mut ResolverState,
+        arg: &EvalArgs,
+        schedule: &Schedule<String>,
+        resolved_state: &mut ResolverState,
         _schema_hydration_state: &mut SchemaHydrationState,
         defer_state: &mut DeferState,
-        _token: CancellationToken,
+        token: CancellationToken,
     ) -> FsResult<Box<dyn StaticAnalysisBuckets>> {
+        if arg.static_analysis.is_some_and(is_strict_static_analysis) {
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!(
+                    "static analysis was requested with `--static-analysis strict` but did not run: \
+                     this distribution of dbt OSS does not include the static analysis engine. \
+                     Install the full dbt distribution to enable it: {}",
+                    CYAN.apply_to("dbt system upgrade-distribution")
+                ),
+            );
+        }
+
+        if let Some(defer_nodes) = defer_state.defer_nodes.as_mut() {
+            let relation_remap = dbt_defer::defer_sa_upstreams(
+                arg,
+                resolved_state,
+                defer_nodes,
+                &mut defer_state.deferred_unique_ids,
+                schedule,
+                &self.adapter,
+            )
+            .await?;
+            token.check_cancellation()?;
+            dbt_defer::rewrite_recorded_relation_calls_with_deferral(
+                resolved_state,
+                &relation_remap,
+            );
+        }
+
         Ok(Box::new(DefaultStaticAnalysisBuckets::new(
             defer_state.deferred_unique_ids.clone(),
         )))
@@ -148,13 +184,13 @@ pub struct DefaultSchemaHydratorFactory;
 impl SchemaHydratorFactory for DefaultSchemaHydratorFactory {
     fn create(
         &self,
-        _adapter: Arc<Adapter>,
+        adapter: Arc<Adapter>,
         _execute_mode: dbt_schemas::schemas::profiles::Execute,
         _compilation_config: CompilationConfig,
         _schema_store: Arc<SchemaStore>,
         _sidecar_client: Option<Arc<dyn SidecarClient>>,
         _metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
     ) -> Box<dyn SchemaHydrator> {
-        Box::new(DefaultSchemaHydrator)
+        Box::new(DefaultSchemaHydrator { adapter })
     }
 }

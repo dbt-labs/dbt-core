@@ -90,7 +90,11 @@
 
 -- funcsign: (relation, string, list[string]) -> string
 {%- macro default__get_revoke_sql(relation, privilege, grantees) -%}
-    revoke {{ privilege }} on {{ relation.render() }} from {{ grantees | join(', ') }}
+    {%- set quoted_grantees = [] -%}
+    {%- for grantee in grantees -%}
+        {%- do quoted_grantees.append(adapter.quote(grantee)) -%}
+    {%- endfor -%}
+    revoke {{ privilege }} on {{ relation.render() }} from {{ quoted_grantees | join(', ') }}
 {%- endmacro -%}
 
 

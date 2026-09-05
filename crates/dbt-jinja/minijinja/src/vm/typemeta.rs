@@ -5,7 +5,10 @@ use crate::compiler::codegen::{TypeConstraintOperation, Variable};
 use crate::compiler::instructions::Instruction;
 use crate::compiler::tokens::Span;
 use crate::compiler::typecheck::FunctionRegistry;
-use crate::constants::{DBT_AND_ADAPTERS_NAMESPACE, ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME};
+use crate::constants::{
+    DBT_AND_ADAPTERS_NAMESPACE, DIALECT, ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME,
+};
+use crate::dispatch_object::dbt_and_adapters_namespace_for;
 use crate::types::function::{LambdaType, UserDefinedFunctionType};
 use crate::types::list::ListType;
 use crate::types::struct_::StructType;
@@ -24,6 +27,41 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{fmt, vec};
+
+/// Adapter methods whose `Parse`-mode implementation independently fabricates
+/// relation/table/column/schema-shaped data (rather than returning a trivial
+/// `bool`/`none` placeholder). Used both at runtime (`dbt-adapter`'s
+/// `Adapter::call_method`, which owns the canonical copy of this exact list)
+/// to taint the returned value, and statically here (`Instruction::CallMethod`
+/// handling, via `on_introspective_call`) to flag which macros transitively
+/// reach an introspective call, so a whole macro call can be treated as an
+/// opaque taint boundary regardless of which internal branch a given render
+/// actually takes. Keep in sync with `dbt_adapter::adapter::INTROSPECTIVE_METHODS`.
+///
+/// TODO: fs#12847 -- this list is matched by method name only, regardless of
+/// receiver (the `adapter` global has no static type today, so there's
+/// nothing to check the receiver against). Most of these names are
+/// dbt/adapter-specific enough that a collision with an unrelated object's
+/// method is very unlikely, but `execute` is generic enough to be a real, if
+/// low-probability, false-positive risk. Revisit scoping this to the actual
+/// `adapter` receiver.
+pub const INTROSPECTIVE_METHOD_NAMES: &[&str] = &[
+    "execute",
+    "get_relation",
+    "get_columns_in_relation",
+    "get_missing_columns",
+    "get_relations_by_pattern",
+    "list_schemas",
+    "get_column_schema_from_query",
+    "get_columns_in_select_sql",
+    "build_catalog_from_show_tables_and_svv_columns",
+    "get_relation_config",
+    "get_relations_without_caching",
+    "list_relations_without_caching",
+    "get_bq_table",
+    "describe_relation",
+    "get_partitions_metadata",
+];
 
 #[derive(Clone, Debug)]
 struct TypeWithConstraint {
@@ -1678,9 +1716,17 @@ impl<'src> TypeChecker<'src> {
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
-                Instruction::CallMethod(name, arg_count, identifier_span, span) => {
+                Instruction::CallMethod(name, arg_count, identifier_span, span, _) => {
                     // TYPECHECK: NO? (Maybe add method check later)
                     listener.set_span(span);
+
+                    // See `on_introspective_call`'s doc comment: this is a
+                    // name-only, receiver-type-independent check (the
+                    // `adapter` global has no static type today), which is
+                    // intentionally conservative.
+                    if INTROSPECTIVE_METHOD_NAMES.contains(name) {
+                        listener.on_introspective_call(name);
+                    }
 
                     let count = arg_count.unwrap_or(0);
                     if count > 0 {
@@ -1917,7 +1963,7 @@ impl<'src> TypeChecker<'src> {
                     }
                 }
                 #[cfg(feature = "macros")]
-                Instruction::Return { explicit } => {
+                Instruction::Return { explicit, .. } => {
                     // TYPECHECK: NO
                     // do nothing instead of break because we want to cover all instructions
                     if *explicit {
@@ -2219,15 +2265,23 @@ pub fn macro_namespace_template_resolver(
         .cloned()
         .unwrap_or_else(|| Value::from("dbt"));
     let root_package = root_package.as_str().unwrap();
-    let dbt_and_adapters = typecheck_resolved_context
+    // The published namespace is `dialect -> (macro_name -> package)`; select this
+    // context's dialect so an unprefixed internal macro defined by more than one
+    // loaded adapter resolves to the right package, matching dispatch.
+    let dialect = typecheck_resolved_context
+        .get(DIALECT)
+        .and_then(|v| v.as_str())
+        .unwrap_or("postgres")
+        .to_string();
+    let namespaces = typecheck_resolved_context
         .get(DBT_AND_ADAPTERS_NAMESPACE)
         .cloned()
         .unwrap_or_default();
-    let dbt_and_adapters = dbt_and_adapters
+    let namespaces = namespaces
         .as_object()
-        .unwrap()
-        .downcast_ref::<ValueMap>()
-        .unwrap();
+        .and_then(|o| o.downcast_ref::<ValueMap>().cloned())
+        .unwrap_or_default();
+    let dbt_and_adapters = dbt_and_adapters_namespace_for(&namespaces, &dialect);
 
     // 1. Local namespace (current package)
     let template_name = format!("{current_package_name}.{search_name}");

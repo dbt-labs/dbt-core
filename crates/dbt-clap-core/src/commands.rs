@@ -7,9 +7,10 @@ use dbt_common::io_args::{EvalArgs, FsCommand, Phases, StaticAnalysisKind, Syste
 use strum_macros::Display;
 
 use crate::{
-    BuildArgs, CleanArgs, CloneArgs, CommonArgs, CompileArgs, CompletionsArgs, DebugArgs, DepsArgs,
-    DocsArgs, InitArgs, ListArgs, LoginArgs, ManArgs, ParseArgs, RetryArgs, RunArgs,
-    RunOperationArgs, SeedArgs, ShowArgs, SnapshotArgs, SourceArgs, TestArgs,
+    BuildArgs, CheckArgs, CleanArgs, CloneArgs, CommonArgs, CompileArgs, CompletionsArgs,
+    DebugArgs, DepsArgs, DocsArgs, FreshnessArgs, InitArgs, InternalArgs, ListArgs, LoginArgs,
+    ManArgs, ParseArgs, RetryArgs, RunArgs, RunOperationArgs, SeedArgs, ShowArgs, SnapshotArgs,
+    SourceArgs, StateArgs, TestArgs,
 };
 
 #[derive(clap::Subcommand, Debug, Clone, Display)]
@@ -26,6 +27,8 @@ pub enum CoreCommand {
     Ls(ListArgs),
     /// Compile models
     Compile(CompileArgs),
+    /// Run project quality checks against the dbt metadata index
+    Check(CheckArgs),
     /// Run models
     Run(RunArgs),
     /// Run the named macro with any supplied arguments
@@ -44,6 +47,8 @@ pub enum CoreCommand {
     Clean(CleanArgs),
     /// Run sources subcommands
     Source(SourceArgs),
+    /// Check freshness of resources
+    Freshness(FreshnessArgs),
     /// Create clones of selected nodes
     Clone(CloneArgs),
     /// Create reference documentation
@@ -52,13 +57,18 @@ pub enum CoreCommand {
     Debug(DebugArgs),
     /// Retry failed nodes from the previous run
     Retry(RetryArgs),
-    /// Generate and serve documentation (deprecated in Fusion - use `dbt compile --write-catalog`)
+    /// Generate and serve documentation
     Docs(DocsArgs),
     /// Authenticate with dbt platform
     Login(LoginArgs),
+    /// dbt State utilities
+    State(StateArgs),
     /// Generate shell completion scripts
     #[clap(hide = true)]
     Completions(CompletionsArgs),
+    /// Undocumented plumbing commands
+    #[clap(hide = true)]
+    Internal(InternalArgs),
 }
 
 impl CoreCommand {
@@ -71,6 +81,7 @@ impl CoreCommand {
             List(..) => FsCommand::List,
             Ls(..) => FsCommand::List,
             Compile(..) => FsCommand::Compile,
+            Check(..) => FsCommand::Check,
             Run(..) => FsCommand::Run,
             RunOperation(..) => FsCommand::RunOperation,
             Seed(..) => FsCommand::Seed,
@@ -80,13 +91,16 @@ impl CoreCommand {
             Clone(..) => FsCommand::Clone,
             Clean(..) => FsCommand::Clean,
             Source(..) => FsCommand::Source,
+            Freshness(..) => FsCommand::Freshness,
             Show(..) => FsCommand::Show,
             Man(..) => FsCommand::Man,
             Debug(..) => FsCommand::Debug,
             Retry(..) => FsCommand::Retry,
             Docs(..) => FsCommand::Docs,
             Login(..) => FsCommand::Login,
+            State(..) => FsCommand::State,
             Completions(..) => FsCommand::Completions,
+            Internal(..) => FsCommand::Internal,
         }
     }
 
@@ -103,6 +117,7 @@ impl CoreCommand {
             Ls(args) => &args.common_args,
             Parse(args) => &args.common_args,
             Compile(args) => &args.common_args,
+            Check(args) => &args.common_args,
             Run(args) => &args.common_args,
             RunOperation(args) => &args.common_args,
             Seed(args) => &args.common_args,
@@ -112,13 +127,16 @@ impl CoreCommand {
             Clone(args) => &args.common_args,
             Clean(args) => &args.common_args,
             Source(args) => args.common_args(),
+            Freshness(args) => &args.common_args,
             Show(args) => &args.common_args,
             Man(args) => &args.common_args,
             Debug(args) => &args.common_args,
             Retry(args) => &args.common_args,
             Docs(args) => &args.common_args,
             Login(args) => &args.common_args,
+            State(args) => &args.common_args,
             Completions(args) => &args.common_args,
+            Internal(args) => args.common_args(),
         }
     }
 
@@ -131,6 +149,7 @@ impl CoreCommand {
             List(_) => None,
             Ls(_) => None,
             Compile(compile_args) => compile_args.static_analysis,
+            Check(check_args) => check_args.static_analysis,
             Run(run_args) => run_args.static_analysis,
             RunOperation(_) => None,
             Test(test_args) => test_args.static_analysis,
@@ -140,13 +159,30 @@ impl CoreCommand {
             Build(build_args) => build_args.static_analysis,
             Clean(_) => None,
             Source(_) => None,
+            Freshness(_) => None,
             Clone(_) => None,
             Man(_) => None,
             Debug(_) => None,
             Retry(retry_args) => retry_args.static_analysis,
             Docs(_) => None,
             Login(_) => None,
+            State(_) => None,
             Completions(_) => None,
+            Internal(_) => None,
+        }
+    }
+
+    /// Returns whether the command was invoked with `--full-refresh`, for the
+    /// commands that support the flag; `false` for all others.
+    pub fn full_refresh(&self) -> bool {
+        use CoreCommand::*;
+        match self {
+            Compile(compile_args) => compile_args.full_refresh,
+            Run(run_args) => run_args.full_refresh,
+            Seed(seed_args) => seed_args.full_refresh,
+            Build(build_args) => build_args.full_refresh,
+            Clone(clone_args) => clone_args.full_refresh,
+            _ => false,
         }
     }
 }

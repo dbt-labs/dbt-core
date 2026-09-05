@@ -18,6 +18,7 @@ use serde_json::{Map, Value};
 
 use crate::IndexError;
 use crate::db::{DBT_RT_TABLES, DBT_TABLES, write_views_sql};
+use crate::ingest::timings;
 
 // ── Generic helpers ─────────────────────────────────────────────────────────
 
@@ -38,6 +39,16 @@ const CHUNK_SIZE_TYPED: usize = 65536;
 /// to the `ArrowWriter` before the next chunk is built, so only one
 /// chunk's worth of Arrow arrays is live at a time.
 fn write_table_items<T: serde::Serialize>(
+    path: &Path,
+    schema: SchemaRef,
+    items: &[T],
+) -> Result<(), IndexError> {
+    timings::time(timings::Stage::StagingWrite, || {
+        write_table_items_at(path, schema, items)
+    })
+}
+
+fn write_table_items_at<T: serde::Serialize>(
     path: &Path,
     schema: SchemaRef,
     items: &[T],
@@ -74,6 +85,16 @@ fn write_table_items<T: serde::Serialize>(
 /// Like `write_table_items` but uses `CHUNK_SIZE_TYPED` (64k rows/batch).
 /// Use only with typed structs where serde_arrow is fast.
 fn write_table_items_typed<T: serde::Serialize>(
+    path: &Path,
+    schema: SchemaRef,
+    items: &[T],
+) -> Result<(), IndexError> {
+    timings::time(timings::Stage::StagingWrite, || {
+        write_table_items_typed_at(path, schema, items)
+    })
+}
+
+fn write_table_items_typed_at<T: serde::Serialize>(
     path: &Path,
     schema: SchemaRef,
     items: &[T],
@@ -165,6 +186,18 @@ pub enum WriteMode<'a> {
 ///
 /// Returns the total rows written. No-op (writes only `new_batch`) if file absent.
 pub fn merge_prune_arrow(
+    path: &Path,
+    schema: SchemaRef,
+    new_batch: arrow_array::RecordBatch,
+    key_col: &str,
+    drop_keys: &HashSet<String>,
+) -> Result<usize, IndexError> {
+    timings::time(timings::Stage::StagingWrite, || {
+        merge_prune_arrow_at(path, schema, new_batch, key_col, drop_keys)
+    })
+}
+
+fn merge_prune_arrow_at(
     path: &Path,
     schema: SchemaRef,
     new_batch: arrow_array::RecordBatch,
@@ -357,6 +390,16 @@ fn composite_key(row: &Map<String, Value>, key_cols: &[&str]) -> Option<String> 
         key.push_str(row.get(col)?.as_str()?);
     }
     Some(key)
+}
+
+fn opt_str(v: &Option<String>) -> Value {
+    v.as_ref()
+        .map(|s| Value::String(s.clone()))
+        .unwrap_or(Value::Null)
+}
+
+fn str_array(v: &[String]) -> Value {
+    Value::Array(v.iter().map(|s| Value::String(s.clone())).collect())
 }
 
 /// Apply `CarryForward` merge: for rows in `new_rows` where a carry column is NULL,
@@ -796,6 +839,16 @@ impl IndexWriter {
         table: &str,
         batches: Vec<arrow_array::RecordBatch>,
     ) -> Result<(), IndexError> {
+        timings::time(timings::Stage::StagingWrite, || {
+            self.write_arrow_batches_at(table, batches)
+        })
+    }
+
+    fn write_arrow_batches_at(
+        &mut self,
+        table: &str,
+        batches: Vec<arrow_array::RecordBatch>,
+    ) -> Result<(), IndexError> {
         let schema = schema_for(table);
         let path = self.index_dir.join(format!("dbt.{table}.parquet"));
         if let Some(parent) = path.parent() {
@@ -823,6 +876,18 @@ impl IndexWriter {
 
     /// Merge-prune a `dbt.*` table using pre-built Arrow RecordBatches.
     pub fn write_arrow_batches_merge_prune(
+        &mut self,
+        table: &str,
+        new_batches: Vec<arrow_array::RecordBatch>,
+        key_col: &str,
+        drop_keys: &HashSet<String>,
+    ) -> Result<(), IndexError> {
+        timings::time(timings::Stage::StagingWrite, || {
+            self.write_arrow_batches_merge_prune_at(table, new_batches, key_col, drop_keys)
+        })
+    }
+
+    fn write_arrow_batches_merge_prune_at(
         &mut self,
         table: &str,
         new_batches: Vec<arrow_array::RecordBatch>,
@@ -886,6 +951,86 @@ impl IndexWriter {
         std::fs::rename(&tmp, &path)?;
         self.count += 1;
         Ok(())
+    }
+
+    /// Update the compile-filled columns on an existing `dbt.nodes` parquet, keyed by `unique_id`.
+    ///
+    /// The counterpart of the join `write_parse_nodes` performs when it builds node rows: same
+    /// eight fields, same source, but applied to rows that already exist rather than to rows being
+    /// constructed. That distinction is the point — it makes the compile layer applicable whenever
+    /// it happens to land, instead of only while the parse epochs are still unconsumed.
+    ///
+    /// Mirrors the DuckDB path's `UPDATE dbt.nodes SET compiled_code = src.compiled_code, … FROM
+    /// read_parquet(…) WHERE dbt.nodes.unique_id = src.unique_id`, including its `WHERE`: a node
+    /// absent from `compile_map` is left exactly as it is, so a partial compile extends the index
+    /// rather than truncating it. `classifiers` is updated here but not in the DuckDB statement,
+    /// because on this path it is the compile epoch that populates it.
+    ///
+    /// Rows whose compile columns already hold these values are left alone, and a call that changes
+    /// nothing writes no file. That makes it safe to call unconditionally after `write_parse_nodes`,
+    /// which has usually applied the same map to the subset of nodes it rebuilt.
+    ///
+    /// Returns the number of rows changed.
+    pub fn merge_compiled_nodes_into_nodes(
+        &mut self,
+        compile_map: &crate::ingest::metadata_to_parquet::CompileMap,
+    ) -> Result<usize, IndexError> {
+        fn set_if_changed(row: &mut Map<String, Value>, col: &str, val: Value, changed: &mut bool) {
+            if row.get(col) != Some(&val) {
+                row.insert(col.to_string(), val);
+                *changed = true;
+            }
+        }
+
+        let table = "nodes";
+        let path = self.index_dir.join(format!("dbt.{table}.parquet"));
+        let Some(existing) = read_parquet_rows(&path)? else {
+            return Ok(0);
+        };
+
+        let mut updated = 0usize;
+        let mut rows: Vec<Value> = Vec::with_capacity(existing.len());
+        for mut row in existing {
+            let uid = row
+                .get("unique_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            if let Some(c) = compile_map.get(&uid) {
+                let mut changed = false;
+                let r = &mut row;
+                set_if_changed(r, "compiled_code", opt_str(&c.compiled_code), &mut changed);
+                set_if_changed(
+                    r,
+                    "compiled_code_hash",
+                    opt_str(&c.compiled_code_hash),
+                    &mut changed,
+                );
+                set_if_changed(r, "compiled_path", opt_str(&c.compiled_path), &mut changed);
+                set_if_changed(r, "grain", str_array(&c.grain), &mut changed);
+                set_if_changed(
+                    r,
+                    "grain_declared",
+                    str_array(&c.grain_declared),
+                    &mut changed,
+                );
+                set_if_changed(r, "grain_tested", str_array(&c.grain_tested), &mut changed);
+                set_if_changed(r, "classifiers", str_array(&c.classifiers), &mut changed);
+                set_if_changed(r, "table_role", opt_str(&c.table_role), &mut changed);
+                if changed {
+                    row.insert("ingested_at".to_string(), Value::String(self.now.clone()));
+                    updated += 1;
+                }
+            }
+            rows.push(Value::Object(row));
+        }
+
+        if updated == 0 {
+            return Ok(0);
+        }
+        write_table(&path, schema_for(table), &rows)?;
+        self.count += 1;
+        Ok(updated)
     }
 
     /// Merge compile-column data into an existing `node_columns` parquet file.
@@ -1083,7 +1228,14 @@ impl IndexWriter {
         let table = "node_columns";
         let path = self.index_dir.join(format!("dbt.{table}.parquet"));
 
+        // Key by (unique_id, LOWERCASED column_name) so catalog rows match the
+        // existing parse/compile rows case-insensitively. Snowflake uppercases
+        // unquoted identifiers in the catalog (`EMAIL`) while the merged rows use
+        // the manifest casing (`email`); a case-sensitive key would miss the
+        // match and append a duplicate row, splitting a column's classifiers and
+        // types across two rows.
         struct CatalogInfo {
+            column_name: String,
             column_index: Option<i64>,
             catalog_type: Option<String>,
             catalog_comment: Option<String>,
@@ -1113,8 +1265,9 @@ impl IndexWriter {
                     continue;
                 };
                 catalog_map.insert(
-                    (uid.to_string(), cname.to_string()),
+                    (uid.to_string(), cname.to_ascii_lowercase()),
                     CatalogInfo {
+                        column_name: cname.to_string(),
                         column_index: idx_col.filter(|c| !c.is_null(i)).map(|c| c.value(i)),
                         catalog_type: ctype_col
                             .filter(|c| !c.is_null(i))
@@ -1142,7 +1295,7 @@ impl IndexWriter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let key = (uid, cname);
+                let key = (uid, cname.to_ascii_lowercase());
                 if let Some(ci) = catalog_map.get(&key) {
                     if let Some(idx) = ci.column_index {
                         map.insert("column_index".to_string(), Value::Number(idx.into()));
@@ -1170,14 +1323,19 @@ impl IndexWriter {
             }
         }
 
-        // Append catalog rows that had no existing match
+        // Append catalog rows that had no existing match. `cname` here is the
+        // lowercased match key; use `ci.column_name` for the stored name to
+        // preserve the original (warehouse) casing.
         for ((uid, cname), ci) in &catalog_map {
             if seen_keys.contains(&(uid.clone(), cname.clone())) {
                 continue;
             }
             let mut obj = Map::new();
             obj.insert("unique_id".to_string(), Value::String(uid.clone()));
-            obj.insert("column_name".to_string(), Value::String(cname.clone()));
+            obj.insert(
+                "column_name".to_string(),
+                Value::String(ci.column_name.clone()),
+            );
             if let Some(idx) = ci.column_index {
                 obj.insert("column_index".to_string(), Value::Number(idx.into()));
             }
@@ -1252,23 +1410,25 @@ impl IndexWriter {
     /// write `views.sql`, and return total files written.
     /// Standard finish: writes empty schema-placeholder parquet files for any
     /// tables not yet written (for standalone DuckDB / views.sql compatibility),
-    /// then writes views.sql. Use this for export and CLI ingest paths.
+    /// then writes views.sql. Placeholders are only written for files that
+    /// don't exist yet, so repeated ingests into the same index dir pay a
+    /// stat per table, not a rewrite.
     pub fn finish(mut self) -> Result<usize, IndexError> {
         self.ensure_dbt_tables()?;
         self.ensure_rt_tables()?;
         write_views_sql(&self.index_dir)?;
         Ok(self.count)
     }
+}
 
-    /// Ingest-optimized finish: skips writing empty placeholder parquet files.
-    /// import_parquet already skips missing files, so this saves ~29ms per reload
-    /// (43% of import cost) by not writing 0-row parquet files for unused tables.
-    /// Use this when the index will be loaded via import_parquet, not queried
-    /// directly by standalone DuckDB.
-    pub fn finish_for_ingest(self) -> Result<usize, IndexError> {
-        write_views_sql(&self.index_dir)?;
-        Ok(self.count)
-    }
+/// Very simple hash for raw_code (not cryptographic). Every writer of
+/// `dbt.nodes.raw_code_hash` must use this so the two ingest paths stamp
+/// identical values for identical code
+pub fn raw_code_hash(s: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 // ── Schema definitions ──────────────────────────────────────────────────────
@@ -1429,6 +1589,7 @@ define_row! {
 define_row! {
     /// dbt.project_vars row.
     pub struct ProjectVarRow<'a> => schema_project_vars {
+        [utf8!] pub project_name: &'a str,
         [utf8!] pub var_name: &'a str,
         [utf8]  pub var_value: String,
         [timestamp !] pub ingested_at: &'a str,
@@ -1449,19 +1610,19 @@ define_row! {
     /// Path fields are `String` (owned) because `PathBuf::to_string_lossy()` returns `Cow`.
     pub struct NodeRow<'a> => schema_nodes {
         [utf8!] pub unique_id: &'a str,
-        [utf8]  pub name: &'a str,
+        [utf8]  pub name: Option<&'a str>,
         [utf8]  pub resource_type: &'a str,
-        [utf8]  pub package_name: &'a str,
-        [utf8]  pub file_path: String,
-        [utf8]  pub original_file_path: String,
+        [utf8]  pub package_name: Option<&'a str>,
+        [utf8]  pub file_path: Option<String>,
+        [utf8]  pub original_file_path: Option<String>,
         [list_utf8!] pub fqn: Vec<String>,
         [utf8]  pub alias: Option<&'a str>,
         [utf8]  pub checksum: Option<&'a str>,
         [utf8]  pub description: Option<&'a str>,
         [utf8]  pub node_language: Option<&'a str>,
         [utf8]  pub raw_code: Option<&'a str>,
-        [utf8]  pub database_name: &'a str,
-        [utf8]  pub schema_name: &'a str,
+        [utf8]  pub database_name: Option<&'a str>,
+        [utf8]  pub schema_name: Option<&'a str>,
         [utf8]  pub relation_name: Option<&'a str>,
         [utf8]  pub identifier: Option<&'a str>,
         [bool]  pub enabled: Option<bool>,
@@ -1624,6 +1785,9 @@ define_row! {
         [list_utf8!] pub tags: Vec<String>,
         [utf8]  pub meta: Option<String>,
         [utf8]  pub config: Option<String>,
+        // From the epoch relation's inverted `is_disabled`; NULL when the row
+        // came from a source that does not carry it (manifest extraction).
+        [bool]  pub enabled: Option<bool>,
         [float] pub created_at: Option<f64>,
         [timestamp !] pub ingested_at: &'a str,
     }
@@ -1656,6 +1820,8 @@ define_row! {
         [utf8]  pub meta: Option<String>,
         [utf8]  pub ai_context: Option<String>,
         [utf8]  pub config: Option<String>,
+        // See `ExposureRow::enabled`.
+        [bool]  pub enabled: Option<bool>,
         [float] pub created_at: Option<f64>,
         [timestamp !] pub ingested_at: &'a str,
     }
@@ -1845,6 +2011,8 @@ define_row! {
         [list_utf8!] pub depends_on_macros: Vec<String>,
         [utf8]  pub checksum: Option<&'a str>,
         [utf8]  pub config: Option<String>,
+        // See `ExposureRow::enabled`.
+        [bool]  pub enabled: Option<bool>,
         [float] pub created_at: Option<f64>,
         [timestamp !] pub ingested_at: &'a str,
     }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use dbt_common::collections::DashMap;
 use dbt_common::constants::DBT_EPHEMERAL_DIR_NAME;
-use dbt_common::constants::{RENDERED, RENDERING};
+use dbt_common::constants::RENDERING;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::emit::emit_debug_event;
@@ -34,7 +34,7 @@ pub async fn run_default_render(
     result_sender: Option<std::sync::mpsc::SyncSender<TaskResult>>,
     local_exec_unit_test_overrides: Option<UnitTestOverrides>,
 ) -> FsResult<NodeStatus> {
-    let adapter_type = ctx.adapter_type();
+    let adapter_type = node.node_adapter();
     let max_threads = ctx.dbt_profile().threads;
     let bypass = bypass_backpressure(node.introspection(), *node.static_analysis_enabled());
     let render_step = Box::new(move || {
@@ -74,7 +74,7 @@ fn render_default(
         .try_get_compiled_sql(&ctx.inner.arg.io, node.common())
     {
         let config_map = Arc::new(convert_yml_to_dash_map(node.serialized_config()));
-        show_rendered_progress(node, ctx, &rendered_sql_maybe_with_cte);
+        emit_compiled_code(node, ctx, &rendered_sql_maybe_with_cte);
         // The cache returns the raw span components; the rendering listener
         // factory rebuilds the `CompiledSpans`.
         let spans = ctx
@@ -88,7 +88,7 @@ fn render_default(
                     node.base().alias.clone(),
                 ],
                 sql: rendered_sql_maybe_with_cte,
-                original_path: node.common().original_file_path.clone(),
+                original_path: node.common().original_file_path.to_path_buf(),
                 spans,
             },
             config_map,
@@ -122,7 +122,7 @@ fn render_default(
         node.as_ref(),
         &base_context,
         DependencyValidationConfig::new_validated(),
-    );
+    )?;
 
     if let Some(overrides) = local_exec_unit_test_overrides {
         unit_test::apply_unit_test_overrides(&mut compile_context, overrides, ctx);
@@ -170,13 +170,13 @@ fn render_default(
         spans.as_ref(),
     )?;
 
-    show_rendered_progress(node, ctx, &rendered_sql_maybe_with_cte);
+    emit_compiled_code(node, ctx, &rendered_sql_maybe_with_cte);
 
     Ok((
         SqlInstruction {
             fqn: vec![node.database(), node.schema(), node.alias()],
             sql: rendered_sql_maybe_with_cte,
-            original_path: node.common().original_file_path.clone(),
+            original_path: node.common().original_file_path.to_path_buf(),
             spans,
         },
         config_map,
@@ -203,33 +203,12 @@ fn report_rendering_progress(node: &Arc<dyn InternalDbtNodeAttributes>, ctx: &Ta
     }
 }
 
-fn show_rendered_progress(
+fn emit_compiled_code(
     node: &Arc<dyn InternalDbtNodeAttributes>,
     ctx: &TaskRunnerCtx,
     rendered_sql_maybe_with_cte: &str,
 ) {
     let io = &ctx.inner.arg.io;
-
-    // Keep existing status reporter behavior for models and snapshots.
-    if node.common().unique_id.starts_with("model")
-        || node.common().unique_id.starts_with("snapshot")
-    {
-        if let Some(reporter) = io.status_reporter.as_ref() {
-            let display_path = node
-                .get_node_path(
-                    NodePathKind::Definition,
-                    io.in_dir.as_path(),
-                    io.out_dir.as_path(),
-                )
-                .display()
-                .to_string();
-            reporter.show_progress(
-                RENDERED,
-                display_path.as_ref(),
-                Some(rendered_sql_maybe_with_cte),
-            );
-        }
-    }
 
     // Emit compiled SQL events for all node types. Downstream layers decide filtering.
     let compiled_absolute_path = ctx
@@ -274,7 +253,7 @@ fn render_python_model(
         node.as_ref(),
         base_context,
         DependencyValidationConfig::new_validated(),
-    );
+    )?;
 
     let postfix_template = "{{ py_script_postfix(model) }}";
     let rendered_postfix = render_sql(
@@ -286,9 +265,9 @@ fn render_python_model(
     )
     .map_err(|e| *e)?;
 
-    let compiled_python = format!("{}\n{}", raw_python, rendered_postfix);
+    let compiled_python = format!("{}\n\n{}", raw_python.trim_end(), rendered_postfix);
 
-    show_rendered_progress(node, ctx, &compiled_python);
+    emit_compiled_code(node, ctx, &compiled_python);
 
     ctx.inner.compiled_sql_cache.set_compiled_sql(
         &ctx.inner.arg.io,
@@ -305,7 +284,7 @@ fn render_python_model(
                 node.base().alias.clone(),
             ],
             sql: compiled_python,
-            original_path: node.common().original_file_path.clone(),
+            original_path: node.common().original_file_path.to_path_buf(),
             spans: Box::<MacroSpansOnly>::default(),
         },
         config_map,

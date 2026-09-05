@@ -22,6 +22,16 @@ pub struct VortexMessage {
     /// the time that the vortex backend fully processed the message.
     #[prost(message, optional, tag = "5")]
     pub vortex_backend_processed_at: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// a unique identifier for this event, generated as a UUID by the
+    /// vortex client library automatically.
+    #[prost(string, tag = "6")]
+    pub vortex_event_id: ::prost::alloc::string::String,
+    /// a stable identifier for the wrapped event's protobuf type, set by
+    /// the vortex client library automatically. format:
+    /// "dbt-labs/proto/<package-path>/<Message>", e.g.
+    /// "dbt-labs/proto/v1/events/fusion/CloudInvocation".
+    #[prost(string, tag = "7")]
+    pub vortex_event_url: ::prost::alloc::string::String,
 }
 impl ::prost::Name for VortexMessage {
     const NAME: &'static str = "VortexMessage";

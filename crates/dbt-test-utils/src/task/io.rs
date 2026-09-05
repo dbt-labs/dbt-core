@@ -9,7 +9,8 @@ use std::{
 };
 
 use arrow::array::{
-    Array, DictionaryArray, LargeStringArray, StringArray, StringViewArray, StructArray,
+    Array, AsArray, DictionaryArray, GenericListArray, LargeStringArray, StringArray,
+    StringViewArray, StructArray,
 };
 use arrow::datatypes::{
     DataType, Int8Type, Int16Type, Int32Type, Int64Type, UInt8Type, UInt16Type, UInt32Type,
@@ -33,6 +34,28 @@ use std::io::Cursor;
 
 use crate::task::utils::iter_files_recursively;
 use crate::task::{ProjectEnv, Task, TestEnv, TestResult};
+
+/// Canonicalize non-deterministic dbt temp-table identifiers to stable forms,
+/// so recorded SQL is byte-stable across re-record runs.
+///
+/// Mirrors `dbt_adapter::sql::normalize::normalize_dbt_tmp_name` — keep the two
+/// patterns in sync (this crate cannot depend on `dbt-adapter`). Two producers:
+/// - `adapter.generate_unique_temporary_table_suffix` (base) →
+///   `dbt_tmp_<UUIDv4-with-underscores>` → collapse to `dbt_tmp_`.
+/// - `postgres__make_relation_with_suffix` (Postgres/Redshift) and
+///   `bigquery__make_relation_with_suffix` (BigQuery) →
+///   `<base>__dbt_tmp<digits>` from `strftime("%H%M%S%f")` → collapse to
+///   `<base>__dbt_tmp`.
+pub(crate) fn canonicalize_dbt_tmp_identifiers(content: &str) -> String {
+    use std::sync::LazyLock;
+    static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
+    });
+    static TIMESTAMP_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__dbt_tmp\d+").unwrap());
+
+    let step1 = UUID_RE.replace_all(content, "dbt_tmp_");
+    TIMESTAMP_RE.replace_all(&step1, "__dbt_tmp").to_string()
+}
 
 pub struct FileWriteTask {
     file_path: String,
@@ -64,33 +87,9 @@ impl Task for FileWriteTask {
     }
 }
 
-/// Task to touch a file.
-pub struct TouchTask {
-    path: String,
-}
-
-impl TouchTask {
-    pub fn new(path: impl Into<String>) -> TouchTask {
-        TouchTask { path: path.into() }
-    }
-}
-
-#[async_trait]
-impl Task for TouchTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        touch(PathBuf::from(&self.path))?;
-        Ok(())
-    }
-}
-
 // Touch is here simulate by read followed by write -- the basic touch
 // is only available via its nightly
-fn touch(file: PathBuf) -> FsResult<()> {
+pub(crate) fn touch(file: PathBuf) -> FsResult<()> {
     let res = stdfs::read(&file).expect("read to succeed");
     stdfs::remove_file(&file)?;
     let mut file = File::create(&file)?;
@@ -156,30 +155,6 @@ impl Task for CpFromTargetTask {
     }
 }
 
-/// Task to remove a file.
-pub struct RmTask {
-    path: String,
-}
-
-impl RmTask {
-    pub fn new(path: impl Into<String>) -> RmTask {
-        RmTask { path: path.into() }
-    }
-}
-
-#[async_trait]
-impl Task for RmTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        stdfs::remove_file(&self.path).expect("could not remove a file");
-        Ok(())
-    }
-}
-
 /// Task to remove (and recreate) a directory. It does nothing if the
 /// directory does not exist.
 pub struct RmDirTask {
@@ -208,10 +183,12 @@ impl Task for RmDirTask {
     }
 }
 
-/// A row in the SQLite recordings.db
+/// A row in the SQLite recordings.db:
+/// `(unique_id, record_type, sql, data_base64, error, options_json)`
 type RecordingRow = (
     String,
     String,
+    Option<String>,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -298,6 +275,36 @@ pub fn rebuild_string_like_arrays(
                 _ => array.clone(),
             }
         }
+        DataType::List(field) => {
+            let list = array.as_list::<i32>();
+            let values = list.values();
+            let new_values = rebuild_string_like_arrays(values, replace_fn);
+            if Arc::ptr_eq(values, &new_values) {
+                array.clone()
+            } else {
+                Arc::new(GenericListArray::<i32>::new(
+                    field.clone(),
+                    list.offsets().clone(),
+                    new_values,
+                    list.nulls().cloned(),
+                ))
+            }
+        }
+        DataType::LargeList(field) => {
+            let list = array.as_list::<i64>();
+            let values = list.values();
+            let new_values = rebuild_string_like_arrays(values, replace_fn);
+            if Arc::ptr_eq(values, &new_values) {
+                array.clone()
+            } else {
+                Arc::new(GenericListArray::<i64>::new(
+                    field.clone(),
+                    list.offsets().clone(),
+                    new_values,
+                    list.nulls().cloned(),
+                ))
+            }
+        }
         // non-string-like type columns, keep as is
         _ => array.clone(),
     }
@@ -308,6 +315,18 @@ pub fn rebuild_string_like_arrays(
 /// leaving Arrow data (data_base64) untouched. Use this for warehouse-name
 /// masking: replacing warehouse names in Arrow data would corrupt replay
 /// behaviour by making configuration-change detection see phantom diffs.
+/// `options_json` if this recordings.db has the column, else a NULL
+/// placeholder. Recordings committed before statement options were captured
+/// don't have it, and neither the dump nor the rewrite below may add it on a
+/// read: an `ALTER TABLE` would modify a committed fixture just by running the
+/// test suite against it.
+fn options_column_expr(conn: &Connection) -> TestResult<&'static str> {
+    let present = conn
+        .prepare("SELECT 1 FROM pragma_table_info('recordings') WHERE name = 'options_json'")?
+        .exists([])?;
+    Ok(if present { "options_json" } else { "NULL" })
+}
+
 fn update_sqlite_recordings_sql_only(
     db_path: &Path,
     replace_fn: &dyn Fn(&str) -> String,
@@ -363,8 +382,10 @@ fn update_sqlite_recordings(db_path: &Path, replace_fn: &dyn Fn(&str) -> String)
     }
 
     // Get all recordings
-    let mut stmt =
-        conn.prepare("SELECT unique_id, record_type, sql, data_base64, error FROM recordings")?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT unique_id, record_type, sql, data_base64, error, {options} FROM recordings",
+        options = options_column_expr(&conn)?
+    ))?;
     let recordings: Vec<RecordingRow> = stmt
         .query_map([], |row| {
             let unique_id: String = row.get(0)?;
@@ -372,12 +393,20 @@ fn update_sqlite_recordings(db_path: &Path, replace_fn: &dyn Fn(&str) -> String)
             let sql: Option<String> = row.get(2)?;
             let data_base64: Option<String> = row.get(3)?;
             let error: Option<String> = row.get(4)?;
-            Ok((unique_id, record_type, sql, data_base64, error))
+            let options_json: Option<String> = row.get(5)?;
+            Ok((
+                unique_id,
+                record_type,
+                sql,
+                data_base64,
+                error,
+                options_json,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
     // Update unique_id, SQL, error, and data fields
-    for (unique_id, record_type, sql, data_base64, error) in recordings {
+    for (unique_id, record_type, sql, data_base64, error, options_json) in recordings {
         let mut new_unique_id = replace_fn(&unique_id);
         // `random_schema` is `prefix___<micros>___`; sources named `{schema}_sources`
         // leave `____` between the stable prefix and `_sources` once the micros
@@ -444,19 +473,26 @@ fn update_sqlite_recordings(db_path: &Path, replace_fn: &dyn Fn(&str) -> String)
 
         // Primary key includes unique_id; rewrite via delete+insert when it changes.
         if new_unique_id != unique_id {
+            // The insert below names `options_json`, so this recordings.db needs
+            // the column. Safe here: this branch is already rewriting the file.
+            if options_column_expr(&conn)? == "NULL" {
+                conn.execute("ALTER TABLE recordings ADD COLUMN options_json TEXT", [])?;
+            }
             conn.execute(
                 "DELETE FROM recordings WHERE unique_id = ?1 AND record_type = ?2",
                 params![unique_id, record_type],
             )?;
             conn.execute(
-                "INSERT INTO recordings (unique_id, record_type, sql, data_base64, error)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO recordings
+                    (unique_id, record_type, sql, data_base64, error, options_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     new_unique_id,
                     record_type,
                     new_sql,
                     new_data_base64,
-                    new_error
+                    new_error,
+                    options_json
                 ],
             )?;
         } else {
@@ -537,6 +573,10 @@ impl Task for SedTask {
                 };
                 update_sqlite_recordings_sql_only(path, &warehouse_replace)?;
 
+                let tmp_name_replace =
+                    |content: &str| -> String { canonicalize_dbt_tmp_identifiers(content) };
+                update_sqlite_recordings_sql_only(path, &tmp_name_replace)?;
+
                 // Apply Time Elapsed regex removal
                 let re_time_elapsed = Regex::new(r"Time Elapsed:.*").unwrap();
                 let time_elapsed_replace = |content: &str| -> String {
@@ -591,6 +631,12 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
             sql: String,
             #[serde(skip_serializing_if = "Option::is_none")]
             error: Option<String>,
+            /// Statement options the driver reported for this execute (e.g.
+            /// dbt-compute's `adbc.dbt.last_warnings`). Dumped so a re-recorded
+            /// fixture's captured options are reviewable in the diff, not just
+            /// buried in the binary `recordings.db`.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            options: Option<BTreeMap<String, String>>,
         },
         GetTableSchema {
             table_name: String,
@@ -621,9 +667,11 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
     }
 
     // Query all recordings, ordered by unique_id for consistency
-    let mut stmt = conn.prepare(
-        "SELECT unique_id, record_type, sql, data_base64, error FROM recordings ORDER BY unique_id",
-    )?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT unique_id, record_type, sql, data_base64, error, {options}
+         FROM recordings ORDER BY unique_id",
+        options = options_column_expr(&conn)?
+    ))?;
 
     let recordings: Vec<RecordingRow> = stmt
         .query_map([], |row| {
@@ -633,6 +681,7 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
                 row.get(2)?,
                 row.get(3)?,
                 row.get(4)?,
+                row.get(5)?,
             ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -643,7 +692,7 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
     // Group operations by base unique_id (using BTreeMap for sorted output)
     let mut operations_by_model = BTreeMap::new();
 
-    for (unique_id, record_type, sql, _, error) in recordings {
+    for (unique_id, record_type, sql, _, error, options_json) in recordings {
         // Extract base unique_id by removing sequence suffix (e.g., "model.hello_world.hello-0" -> "model.hello_world.hello")
         let base_unique_id = if let Some(pos) = unique_id.rfind('-') {
             // Check if what follows the last '-' is a digit (sequence number)
@@ -659,10 +708,17 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
         let operation = match record_type.as_str() {
             "execute" => {
                 let sql = sql.unwrap_or_default();
+                let options = options_json
+                    .as_deref()
+                    .and_then(|json| serde_json::from_str(json).ok());
 
                 YamlOperation {
                     sequence,
-                    operation: OperationType::Execute { sql, error },
+                    operation: OperationType::Execute {
+                        sql,
+                        error,
+                        options,
+                    },
                 }
             }
             "get_table_schema" => {
@@ -845,4 +901,51 @@ fn normalize_blank_lines(lines: &[&str]) -> Vec<String> {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::array::{ArrayRef, GenericListArray, StringArray, StructArray};
+    use arrow::buffer::OffsetBuffer;
+    use arrow::datatypes::{Field, Fields};
+    use std::sync::Arc;
+
+    #[test]
+    fn rebuild_rewrites_strings_nested_in_list() {
+        let inner = StringArray::from(vec![Some("REPLACE_ME")]);
+        let struct_fields: Fields = vec![Field::new("cool_struct", DataType::Utf8, true)].into();
+        let struct_arr = StructArray::new(
+            struct_fields.clone(),
+            vec![Arc::new(inner) as ArrayRef],
+            None,
+        );
+        let list_field = Arc::new(Field::new("item", DataType::Struct(struct_fields), true));
+        let offsets = OffsetBuffer::new(vec![0, 1].into());
+        let list = GenericListArray::<i32>::new(
+            list_field,
+            offsets,
+            Arc::new(struct_arr) as ArrayRef,
+            None,
+        );
+        let array: ArrayRef = Arc::new(list);
+
+        let out = rebuild_string_like_arrays(&array, &|s: &str| s.replace("REPLACE_ME", "DONE"));
+
+        let out_list = out
+            .as_any()
+            .downcast_ref::<GenericListArray<i32>>()
+            .unwrap();
+        let out_struct = out_list
+            .values()
+            .as_any()
+            .downcast_ref::<StructArray>()
+            .unwrap();
+        let out_str = out_struct
+            .column(0)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(out_str.value(0), "DONE");
+    }
 }

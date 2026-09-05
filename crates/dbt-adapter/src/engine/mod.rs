@@ -13,15 +13,20 @@ use std::sync::Arc;
 use std::{thread, time::Duration};
 
 mod adapter_engine;
+mod databricks_query_tags;
 pub use adapter_engine::AdapterEngine;
 pub use adapter_engine::Options;
+
+mod concat_batches;
 
 pub mod query_comment;
 pub mod retry;
 
 mod adbc;
+mod databricks;
 pub mod duckdb_attach;
 pub use adbc::AdbcEngine;
+pub(crate) use adbc::resolve_connection_config;
 
 mod noop_connection;
 pub use noop_connection::NoopConnection;
@@ -52,7 +57,6 @@ const REMOVED_IN_FUSION: &[&str] = &[
     "require_nested_cumulative_type_params",
     "require_generic_test_arguments_property",
     "require_unique_project_resource_names",
-    "require_ref_searches_node_package_before_root",
     "require_valid_schema_from_generate_schema_name",
     "require_sql_header_in_test_configs",
     "require_batched_execution_for_custom_microbatch_strategy",
@@ -60,8 +64,6 @@ const REMOVED_IN_FUSION: &[&str] = &[
     // ---
     // metadata adapter already uses SVV views
     "restrict_direct_pg_catalog_access",
-    // transactions handled at driver level
-    "redshift_skip_autocommit_transaction_statements",
     // dbt-bigquery flags
     // ---
     // metadata adapter already uses batched __TABLES__ queries for freshness.

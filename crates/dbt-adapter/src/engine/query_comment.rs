@@ -31,6 +31,28 @@ const DEFAULT_QUERY_COMMENT: &str = "
 {{ return(tojson(comment_dict)) }}
 ";
 
+// Databricks includes the command invocation ID in its default query comment.
+// Keep this adapter-specific so the default comments of other adapters remain unchanged.
+const DATABRICKS_QUERY_COMMENT: &str = "
+{%- set comment_dict = {} -%}
+{%- do comment_dict.update(
+    app='dbt',
+    dbt_version=dbt_version,
+    profile_name=target.get('profile_name'),
+    target_name=target.get('target_name'),
+    invocation_id=invocation_id,
+) -%}
+{%- if node is not none -%}
+  {%- do comment_dict.update(
+    node_id=node.unique_id,
+  ) -%}
+{% else %}
+  {# in the node context, the connection name is the node_id #}
+  {%- do comment_dict.update(connection_name=connection_name) -%}
+{%- endif -%}
+{{ return(tojson(comment_dict)) }}
+";
+
 // Extended default query comment that includes dbt Cloud environment variables when present.
 // Used automatically when any DBT_CLOUD_* environment variable is set.
 const DEFAULT_QUERY_COMMENT_WITH_CLOUD: &str = "
@@ -127,7 +149,11 @@ impl QueryCommentConfig {
                     if has_cloud_config(cloud_config) {
                         DEFAULT_QUERY_COMMENT_WITH_CLOUD.to_string()
                     } else {
-                        DEFAULT_QUERY_COMMENT.to_string()
+                        match adapter_type {
+                            AdapterType::Databricks => DATABRICKS_QUERY_COMMENT,
+                            _ => DEFAULT_QUERY_COMMENT,
+                        }
+                        .to_string()
                     }
                 } else {
                     "".to_string()
@@ -161,7 +187,6 @@ impl QueryCommentConfig {
     }
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L629
-    /// Return job labels from query comment
     pub fn get_job_labels_from_query_comment(
         &self,
         resolved_comment: &str,
@@ -177,7 +202,7 @@ impl QueryCommentConfig {
                 .map(|(key, value)| {
                     let value_str = match value.as_str() {
                         Some(s) => s.to_string(),
-                        None => value.to_string(), // Convert non-string values to string
+                        None => value.to_string(),
                     };
                     (sanitize_label(&key), sanitize_label(&value_str))
                 })
@@ -197,7 +222,6 @@ const _SANITIZE_LABEL_PATTERN: &str = r"[^a-z0-9_-]";
 const _VALIDATE_LABEL_LENGTH_LIMIT: usize = 63;
 
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L640
-/// Return a legal value for a BigQuery label.
 fn sanitize_label(label: &str) -> String {
     let value = label.to_lowercase();
 
@@ -212,6 +236,10 @@ fn sanitize_label(label: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "query_comment/databricks_invocation_id_tests.rs"]
+mod databricks_invocation_id_tests;
+
+#[cfg(test)]
 mod tests {
     use dbt_adapter_core::AdapterType;
     use dbt_schemas::schemas::ResolvedCloudConfig;
@@ -219,7 +247,8 @@ mod tests {
     use serde::Deserialize;
 
     use crate::engine::query_comment::{
-        DEFAULT_QUERY_COMMENT, DEFAULT_QUERY_COMMENT_WITH_CLOUD, QueryCommentConfig,
+        DATABRICKS_QUERY_COMMENT, DEFAULT_QUERY_COMMENT, DEFAULT_QUERY_COMMENT_WITH_CLOUD,
+        QueryCommentConfig,
     };
 
     // Env var tests mutate process-wide state, so they must not run in parallel.
@@ -233,11 +262,7 @@ mod tests {
     #[test]
     fn test_empty_query_comment() {
         // Test empty query comment with `use_default`
-        for adapter_type in [
-            AdapterType::Bigquery,
-            AdapterType::Databricks,
-            AdapterType::Redshift,
-        ] {
+        for adapter_type in [AdapterType::Bigquery, AdapterType::Redshift] {
             let config = QueryCommentConfig::from_query_comment(None, adapter_type, true, None);
             let expected_config = QueryCommentConfig {
                 comment: DEFAULT_QUERY_COMMENT.to_string(),
@@ -246,6 +271,15 @@ mod tests {
             };
             assert_configs_equal(&config, &expected_config);
         }
+
+        let config =
+            QueryCommentConfig::from_query_comment(None, AdapterType::Databricks, true, None);
+        let expected_config = QueryCommentConfig {
+            comment: DATABRICKS_QUERY_COMMENT.to_string(),
+            append: false,
+            job_label: false,
+        };
+        assert_configs_equal(&config, &expected_config);
 
         let config =
             QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, true, None);
@@ -397,7 +431,6 @@ mod tests {
 
         for adapter_type in [
             AdapterType::Bigquery,
-            AdapterType::Databricks,
             AdapterType::Redshift,
             AdapterType::Snowflake,
         ] {
@@ -414,6 +447,19 @@ mod tests {
             };
             assert_configs_equal(&config, &expected_config);
         }
+
+        let config = QueryCommentConfig::from_query_comment(
+            query_comment,
+            AdapterType::Databricks,
+            true,
+            None,
+        );
+        let expected_config = QueryCommentConfig {
+            comment: DATABRICKS_QUERY_COMMENT.to_string(),
+            append: true,
+            job_label: false,
+        };
+        assert_configs_equal(&config, &expected_config);
 
         let config_str = "append: false";
         let query_comment =
@@ -447,11 +493,7 @@ mod tests {
             QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
 
         // This should only work for BigQuery
-        for adapter_type in [
-            AdapterType::Databricks,
-            AdapterType::Redshift,
-            AdapterType::Snowflake,
-        ] {
+        for adapter_type in [AdapterType::Redshift, AdapterType::Snowflake] {
             let config = QueryCommentConfig::from_query_comment(
                 query_comment.clone(),
                 adapter_type,
@@ -465,6 +507,19 @@ mod tests {
             };
             assert_configs_equal(&config, &expected_config);
         }
+
+        let config = QueryCommentConfig::from_query_comment(
+            query_comment.clone(),
+            AdapterType::Databricks,
+            true,
+            None,
+        );
+        let expected_config = QueryCommentConfig {
+            comment: DATABRICKS_QUERY_COMMENT.to_string(),
+            append: false,
+            job_label: false,
+        };
+        assert_configs_equal(&config, &expected_config);
 
         let config = QueryCommentConfig::from_query_comment(
             query_comment,
@@ -567,6 +622,7 @@ mod tests {
             ..Default::default()
         };
         for adapter_type in [
+            AdapterType::Databricks,
             AdapterType::Redshift,
             AdapterType::Snowflake,
             AdapterType::Bigquery,

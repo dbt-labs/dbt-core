@@ -3,32 +3,25 @@ use std::{any::Any, collections::BTreeMap, fmt, sync::Arc};
 
 /// Represents a changeset composed of [ComponentConfig] structs
 pub trait RelationChangeSet: Send + Sync + fmt::Debug {
-    /// Get all changes that need to be applied
     fn changes(&self) -> &BTreeMap<String, Arc<dyn ComponentConfig>>;
 
-    /// Whether this change set requires a full refresh of the relation
     fn requires_full_refresh(&self) -> bool;
 
-    /// Check if there are any changes to apply
     fn has_changes(&self) -> bool {
         !self.changes().is_empty()
     }
 
-    /// Get a specific change by component name
     fn get_change(&self, component_name: &str) -> Option<&dyn ComponentConfig>;
 }
 
 /// A trait for components that can be part of a relation configuration
 /// [BaseRelationConfig] follows an aggregate pattern with [ComponentConfig] objects
 pub trait ComponentConfig: Send + Sync + fmt::Debug + Any {
-    /// Get the difference between this component and another
-    /// Returns None if no changes are needed, or Some with the changes if needed
     fn get_diff(&self, other: &dyn ComponentConfig) -> Option<Arc<dyn ComponentConfig>>;
 
     /// Convert the component to a value that can be used in templates
     fn as_value(&self) -> Value;
 
-    /// Get a reference to the Any trait
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -84,7 +77,6 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    // Mock ComponentConfig for testing
     #[derive(Debug)]
     struct MockComponent {
         value: String,

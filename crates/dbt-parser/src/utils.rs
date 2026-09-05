@@ -2,11 +2,13 @@
 use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_adapter_core::AdapterType;
+use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::io_args::IoArgs;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::malformed_block_name::MalformedBlockNameListener;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -18,12 +20,14 @@ use dbt_schemas::state::DbtPackage;
 use minijinja::ArgSpec;
 use minijinja::compiler::ast::{CallArg, Expr, MacroKind, Stmt};
 use minijinja::compiler::parser::Parser;
+use minijinja::listener::TokenizerEventListener;
 use minijinja::machinery::{Span, WhitespaceConfig};
 use minijinja::syntax::SyntaxConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 /// A raw (unrendered) project config tree built from a `dbt_project.yml` models hierarchy.
@@ -59,32 +63,51 @@ impl RawProjectConfig {
     }
 }
 
-/// Merges a parent raw config map with config keys from a child raw YAML mapping.
+/// Merges a parent raw config map (already canonical) with config keys from a child raw YAML
+/// mapping, i.e. one `dbt_project.yml` hierarchy level.
 /// Keys prefixed with `+` are config keys (prefix stripped before inserting).
 /// Non-`+` keys are hierarchy keys (package/folder names) and are ignored.
-/// Child values overwrite parent values.
+///
+/// The child level's own keys are canonicalized against `adapter_type`'s alias map *before*
+/// merging, mirroring dbt-mantle's `fqn_search`/`_update_from_config`
+/// (`core/dbt/context/context_config.py:120-127,222,302`): each hierarchy level is translated on
+/// its own, then folded into the accumulating result one level at a time. Canonicalizing only
+/// the child level here -- not the already-merged `parent` -- is what makes that possible: a
+/// parent-level alias (e.g. `+catalog:`) and a child-level canonical spelling (`+database:`) are
+/// two different levels' dicts, never one dict with two colliding keys, so this cannot spuriously
+/// raise `DuplicateAliasKey` the way canonicalizing the pre-merged result of both levels at once
+/// would. A single level authoring both an alias and its canonical spelling still errors, via
+/// `canonicalize_source_config_keys`. Child values overwrite parent values.
 pub fn merge_raw_config_mappings(
     parent: &BTreeMap<String, dbt_yaml::Value>,
     child_mapping: &dbt_yaml::Mapping,
-) -> BTreeMap<String, dbt_yaml::Value> {
-    let mut merged = parent.clone();
+    adapter_type: AdapterType,
+) -> FsResult<BTreeMap<String, dbt_yaml::Value>> {
+    let mut own_level = BTreeMap::new();
     for (k, v) in child_mapping.iter() {
         if let Some(key_str) = k.as_str() {
             if let Some(stripped) = key_str.strip_prefix('+') {
-                merged.insert(stripped.to_string(), v.clone());
+                own_level.insert(stripped.to_string(), v.clone());
             }
         }
     }
-    merged
+    let own_level =
+        crate::resolve::resolve_utils::canonicalize_source_config_keys(adapter_type, own_level)?;
+    let mut merged = parent.clone();
+    merged.extend(own_level);
+    Ok(merged)
 }
 
 /// Recursively builds a `RawProjectConfig` tree from a raw YAML mapping.
-/// At each level, `+`-prefixed keys are merged into the config; non-`+` keys with mapping values are recursed into as children.
+/// At each level, `+`-prefixed keys are canonicalized and merged into the config; non-`+` keys
+/// with mapping values are recursed into as children. See [`merge_raw_config_mappings`] for why
+/// canonicalization happens per level rather than once on the fully-merged tree.
 pub fn recur_raw_project_config(
     mapping: &dbt_yaml::Mapping,
     parent_config: &BTreeMap<String, dbt_yaml::Value>,
-) -> RawProjectConfig {
-    let current_config = merge_raw_config_mappings(parent_config, mapping);
+    adapter_type: AdapterType,
+) -> FsResult<RawProjectConfig> {
+    let current_config = merge_raw_config_mappings(parent_config, mapping, adapter_type)?;
     let mut children = BTreeMap::new();
     for (k, v) in mapping.iter() {
         if let Some(key_str) = k.as_str() {
@@ -92,16 +115,16 @@ pub fn recur_raw_project_config(
                 if let Some(child_mapping) = v.as_mapping() {
                     children.insert(
                         key_str.to_string(),
-                        recur_raw_project_config(child_mapping, &current_config),
+                        recur_raw_project_config(child_mapping, &current_config, adapter_type)?,
                     );
                 }
             }
         }
     }
-    RawProjectConfig {
+    Ok(RawProjectConfig {
         config: current_config,
         children,
-    }
+    })
 }
 
 /// Coalesce a list of optional values into a single value
@@ -158,6 +181,61 @@ pub fn get_node_fqn(
     fqn
 }
 
+/// generate the fqn for a snapshot
+///
+/// dbt-core builds snapshot fqns differently for the two definition styles, and
+/// that fqn drives both node selection and `dbt_project.yml` config application:
+///
+///   * Block-style (`{% snapshot %}` in a .sql file): `SnapshotParser.get_fqn`
+///     keeps the original filename stem -> `[pkg, ..dirs, file_stem, block_name]`.
+///   * YAML-defined: the generic `get_fqn_prefix` drops the filename entirely ->
+///     `[pkg, ..dirs, snapshot_name]`.
+///
+/// For block-style we must consult the original file path, since fs rewrites the
+/// stub file to `{snapshot_name}.sql` and the source filename stem can differ from
+/// the block name. For YAML-defined snapshots the rewritten stub path (`path`)
+/// already encodes the correct directory structure under the snapshots dir and
+/// carries no source filename to leak, so use it as-is.
+///
+/// Both the renderer (which resolves the project config) and the snapshot resolver
+/// (which stores the fqn on the node) must call this, or the two disagree about
+/// which `snapshots:` config paths apply.
+pub fn get_snapshot_fqn(
+    package_name: &str,
+    path: &Path,
+    original_path: &Path,
+    snapshot_name: &str,
+    snapshot_paths: &[String],
+) -> Vec<String> {
+    let is_yaml_defined = original_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("yml") || ext.eq_ignore_ascii_case("yaml"));
+
+    if is_yaml_defined {
+        // We've already normalized the yaml snapshots here under snapshots/,
+        // so we strip the normalized snapshots path instead of the original.
+        get_node_fqn(
+            package_name,
+            path.to_path_buf(),
+            vec![snapshot_name.to_string()],
+            &[DBT_SNAPSHOTS_DIR_NAME.into()],
+        )
+    } else {
+        let original_file_stem = strip_resource_paths_from_ref_path(original_path, snapshot_paths)
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .unwrap_or(snapshot_name)
+            .to_string();
+        get_node_fqn(
+            package_name,
+            original_path.to_path_buf(),
+            vec![original_file_stem, snapshot_name.to_string()],
+            snapshot_paths,
+        )
+    }
+}
+
 // TODO: Versions need to have explicit params (not just additional_properties)
 // TODO: We need to propgate column test logic correctly for versions
 /// Split schema model object to multiple versions if provided
@@ -187,17 +265,19 @@ pub fn split_versions(models: Vec<&ModelProperties>) -> Vec<ModelProperties> {
 /// If `base_path` differs from `in_dir`, attempts to compute a relative path
 /// from `base_path.join(sub_path)` to `in_dir`. If that fails, returns `sub_path`.
 /// Otherwise, if `base_path` equals `in_dir`, returns `sub_path` directly.
-pub fn get_original_file_path(base_path: &Path, in_dir: &Path, sub_path: &Path) -> PathBuf {
+pub fn get_original_file_path(base_path: &Path, in_dir: &Path, sub_path: &Path) -> DbtPath {
     if base_path != in_dir {
-        pathdiff::diff_paths(base_path.join(sub_path), in_dir)
-            .unwrap_or_else(|| sub_path.to_owned())
+        DbtPath::from(
+            pathdiff::diff_paths(base_path.join(sub_path), in_dir)
+                .unwrap_or_else(|| sub_path.to_owned()),
+        )
     } else {
-        sub_path.to_owned()
+        DbtPath::from(sub_path.to_owned())
     }
 }
 
 /// Returns the contents of a file given an original_file_path and in_dir,
-pub fn get_original_file_contents(in_dir: &Path, original_file_path: &PathBuf) -> Option<String> {
+pub fn get_original_file_contents(in_dir: &Path, original_file_path: &Path) -> Option<String> {
     let absolute_path = in_dir.join(original_file_path);
     // Match dbt-core's `load_file_contents(strip=True)`: trim leading/trailing
     // whitespace so raw_code parity holds for state:modified / same_body.
@@ -273,13 +353,13 @@ pub fn register_duplicate_resource(
 }
 
 /// Trigger duplicate errors
-pub fn trigger_duplicate_errors(io: &IoArgs, duplicate_errors: &mut Vec<FsError>) -> FsResult<()> {
+pub fn trigger_duplicate_errors(duplicate_errors: &mut Vec<FsError>) -> FsResult<()> {
     if !duplicate_errors.is_empty() {
         while let Some(err) = duplicate_errors.pop() {
             if duplicate_errors.is_empty() {
                 return Err(Box::new(err));
             } else {
-                emit_error_log_from_fs_error(&err, io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(err);
             }
         }
     }
@@ -405,8 +485,7 @@ fn generate_database_and_schema(
             base_ctx,
             components.database.clone(),
             Some(node),
-        )
-        .unwrap_or_else(|_| default_database.to_owned())
+        )?
     };
 
     // Generate schema name
@@ -421,8 +500,7 @@ fn generate_database_and_schema(
             base_ctx,
             components.schema.clone(),
             Some(node),
-        )
-        .unwrap_or_else(|_| default_schema.to_owned())
+        )?
     };
 
     // Normalize quoting for database and schema (use empty alias for now, will be updated later)
@@ -447,8 +525,6 @@ fn generate_alias_and_relation_name(
     schema: &str,
     quoting: ResolvedQuoting,
 ) -> FsResult<(String, String)> {
-    let default_alias = node.base().alias.clone();
-
     // Generate alias - node.schema is now set to the computed schema
     let alias = generate_component_name(
         env,
@@ -458,14 +534,7 @@ fn generate_alias_and_relation_name(
         base_ctx,
         components.alias.clone(),
         Some(node),
-    )
-    .unwrap_or_else(|_| {
-        if default_alias.is_empty() {
-            node.common().name.clone()
-        } else {
-            default_alias.to_owned()
-        }
-    });
+    )?;
 
     // Ensure alias is never empty
     let alias = if alias.is_empty() {
@@ -602,7 +671,8 @@ pub fn update_node_relation_components(
 pub fn extract_resource_config_from_raw_project(
     raw_yml: &dbt_yaml::Value,
     resource_type: &str,
-) -> RawProjectConfig {
+    adapter_type: AdapterType,
+) -> FsResult<RawProjectConfig> {
     if let Some(raw_subtree) = raw_yml.get(resource_type).cloned().and_then(|v| {
         if let dbt_yaml::Value::Mapping(m, _) = v {
             Some(m)
@@ -610,9 +680,9 @@ pub fn extract_resource_config_from_raw_project(
             None
         }
     }) {
-        recur_raw_project_config(&raw_subtree, &BTreeMap::new())
+        recur_raw_project_config(&raw_subtree, &BTreeMap::new(), adapter_type)
     } else {
-        RawProjectConfig::empty()
+        Ok(RawProjectConfig::empty())
     }
 }
 
@@ -658,69 +728,118 @@ pub fn parse_unrendered_config(
     );
     let ast = parser.parse().ok()?;
 
-    fn find_config_call<'a>(stmt: &'a Stmt<'a>, snapshot: bool) -> Option<&'a Vec<CallArg<'a>>> {
+    // A SQL file may contain more than one `{{ config(...) }}` call (e.g. one for
+    // `materialized`, a separate later one for `post_hook`). dbt-core's manifest
+    // `unrendered_config` reflects every config() call actually executed during the model's
+    // Jinja render, which accumulates across all of them (later calls override earlier ones for
+    // the same key) — not just the first, so collect every call here rather than stopping at the
+    // first match.
+    fn find_config_calls<'a>(
+        stmt: &'a Stmt<'a>,
+        snapshot: bool,
+        calls: &mut Vec<&'a Vec<CallArg<'a>>>,
+    ) {
         match stmt {
-            Stmt::Template(t) => t
-                .children
-                .iter()
-                .find_map(|s| find_config_call(s, snapshot)),
+            Stmt::Template(t) => {
+                for s in &t.children {
+                    find_config_calls(s, snapshot, calls);
+                }
+            }
             Stmt::EmitExpr(e) => {
                 if let Expr::Call(call) = &e.expr {
                     if let Expr::Var(var) = &call.expr {
                         if var.id == "config" {
-                            return Some(&call.args);
+                            calls.push(&call.args);
                         }
                     }
                 }
-                None
             }
-            Stmt::Macro((macro_node, MacroKind::Snapshot, _)) if snapshot => macro_node
-                .body
-                .iter()
-                .find_map(|s| find_config_call(s, snapshot)),
+            Stmt::Macro((macro_node, MacroKind::Snapshot, _)) if snapshot => {
+                for s in &macro_node.body {
+                    find_config_calls(s, snapshot, calls);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Extracts the raw (unrendered) value of a kwarg/list-item expression. `Expr::Const` yields
+    // the parsed literal so the correct type is preserved; `Expr::List` recurses into its items
+    // (e.g. `post_hook=['a', 'b']` becomes a real two-entry sequence, matching dbt-core's
+    // behavior of fully resolving list literals rather than treating them as opaque text); any
+    // other expression preserves its raw Jinja source text as a string.
+    fn extract_value(expr: &Expr<'_>, sql_bytes: &[u8]) -> Option<dbt_yaml::Value> {
+        match expr {
+            Expr::Const(c) => match c.value.kind() {
+                ValueKind::String => c
+                    .value
+                    .as_str()
+                    .map(|s| dbt_yaml::Value::string(s.to_string())),
+                ValueKind::Bool => Some(dbt_yaml::Value::bool(c.value.is_true())),
+                ValueKind::Number => c
+                    .value
+                    .as_i64()
+                    .map(|n| dbt_yaml::Value::number(n.into()))
+                    .or_else(|| {
+                        f64::try_from(c.value.clone())
+                            .ok()
+                            .map(|f| dbt_yaml::Value::number(f.into()))
+                    }),
+                ValueKind::None => Some(dbt_yaml::Value::null()),
+                _ => None,
+            },
+            Expr::List(l) => Some(dbt_yaml::Value::Sequence(
+                l.items
+                    .iter()
+                    .map(|item| {
+                        extract_value(item, sql_bytes).unwrap_or_else(|| {
+                            expr_span(item)
+                                .and_then(|span| {
+                                    let start = span.start_offset as usize;
+                                    let end = span.end_offset as usize;
+                                    std::str::from_utf8(&sql_bytes[start..end]).ok().map(|raw| {
+                                        dbt_yaml::Value::String(
+                                            raw.trim().to_string(),
+                                            Default::default(),
+                                        )
+                                    })
+                                })
+                                .unwrap_or_else(dbt_yaml::Value::null)
+                        })
+                    })
+                    .collect(),
+                Default::default(),
+            )),
             _ => None,
         }
     }
 
-    let args = find_config_call(&ast, snapshot)?;
+    let mut calls = Vec::new();
+    find_config_calls(&ast, snapshot, &mut calls);
+    if calls.is_empty() {
+        return None;
+    }
     let sql_bytes = sql.as_bytes();
 
     let mut map = BTreeMap::new();
-    for arg in args {
-        if let CallArg::Kwarg(name, expr) = arg {
-            // For Expr::Const, use the parsed literal value so the correct type is
-            // preserved.
-            // For all other expressions, preserve the raw Jinja source text as a string.
-            let yml_val: Option<dbt_yaml::Value> = if let Expr::Const(c) = expr {
-                match c.value.kind() {
-                    ValueKind::String => c
-                        .value
-                        .as_str()
-                        .map(|s| dbt_yaml::Value::string(s.to_string())),
-                    ValueKind::Bool => Some(dbt_yaml::Value::bool(c.value.is_true())),
-                    ValueKind::Number => c
-                        .value
-                        .as_i64()
-                        .map(|n| dbt_yaml::Value::number(n.into()))
-                        .or_else(|| {
-                            f64::try_from(c.value.clone())
-                                .ok()
-                                .map(|f| dbt_yaml::Value::number(f.into()))
-                        }),
-                    ValueKind::None => Some(dbt_yaml::Value::null()),
-                    _ => None,
+    for args in calls {
+        for arg in args {
+            if let CallArg::Kwarg(name, expr) = arg {
+                let yml_val: Option<dbt_yaml::Value> =
+                    extract_value(expr, sql_bytes).or_else(|| {
+                        // Fall back to the raw Jinja source text for any expression
+                        // `extract_value` doesn't handle structurally (e.g. a function call).
+                        expr_span(expr).and_then(|span| {
+                            let start = span.start_offset as usize;
+                            let end = span.end_offset as usize;
+                            std::str::from_utf8(&sql_bytes[start..end]).ok().map(|raw| {
+                                dbt_yaml::Value::String(raw.trim().to_string(), Default::default())
+                            })
+                        })
+                    });
+                if let Some(val) = yml_val {
+                    map.insert((*name).to_string(), val);
                 }
-            } else {
-                expr_span(expr).and_then(|span| {
-                    let start = span.start_offset as usize;
-                    let end = span.end_offset as usize;
-                    std::str::from_utf8(&sql_bytes[start..end]).ok().map(|raw| {
-                        dbt_yaml::Value::String(raw.trim().to_string(), Default::default())
-                    })
-                })
-            };
-            if let Some(val) = yml_val {
-                map.insert((*name).to_string(), val);
             }
         }
     }
@@ -767,13 +886,16 @@ pub fn parse_macro_statements(
     statement_types: &[&str],
 ) -> FsResult<Vec<SqlResource<NoOpConfig>>> {
     let file_name = path.display().to_string();
-    let mut parser = Parser::new(
+    let listener: Rc<dyn TokenizerEventListener> =
+        Rc::new(MalformedBlockNameListener::new(path.to_path_buf()));
+    let mut parser = Parser::new_with_tokenizer_listeners(
         sql,
         &file_name,
         false,
         #[allow(clippy::default_constructed_unit_structs)]
         SyntaxConfig::builder().build().unwrap(),
         WhitespaceConfig::default(),
+        &[listener],
     );
     // We should throw an error here if we can't process the macro because we shouldn't see any non macro's here
     let ast = parser
@@ -847,9 +969,17 @@ fn extract_sql_resources_from_ast<T: ResolvableConfig<T>>(
                 }
                 MacroKind::Materialization => {
                     let adapter_type = meta.get("adapter").expect("adapter is required");
+                    let supported_languages = meta.get("supported_languages").map(|value| {
+                        value
+                            .try_iter()
+                            .expect("supported_languages must be iterable")
+                            .filter_map(|language| language.as_str().map(ToString::to_string))
+                            .collect()
+                    });
                     sql_resources.push(SqlResource::Materialization(
                         macro_name.to_string(),
                         adapter_type.as_str().unwrap().to_string(),
+                        supported_languages,
                         span,
                         macro_node.name_span,
                     ));
@@ -896,7 +1026,7 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
         if project_file_path.exists() {
             // Get the relative path to the workspace root (arg.io.in_dir)
             if let Ok(workspace_path) = stdfs::diff_paths(&project_file_path, &io.in_dir) {
-                file_paths.push(DbtPath::from_path(io.in_dir.join(workspace_path)));
+                file_paths.push(DbtPath::from(io.in_dir.join(workspace_path)));
             }
         }
 
@@ -908,12 +1038,86 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
             .chain(&package.docs_files)
         {
             let file_path = io.in_dir.join(&asset.path);
-            file_paths.push(DbtPath::from_path(file_path));
+            file_paths.push(DbtPath::from(file_path));
         }
 
         // Use bulk operation for better performance
         if !file_paths.is_empty() {
             status_reporter.bulk_publish_empty(file_paths);
         }
+    }
+}
+
+#[cfg(test)]
+mod parse_unrendered_config_tests {
+    use super::parse_unrendered_config;
+
+    fn as_str_entries(value: &dbt_yaml::Value) -> Vec<String> {
+        value
+            .as_sequence()
+            .expect("expected a sequence")
+            .iter()
+            .map(|v| v.as_str().expect("expected a string entry").to_string())
+            .collect()
+    }
+
+    #[test]
+    fn captures_every_config_call_in_a_model() {
+        // A model with two separate `{{ config(...) }}` calls (one for materialized, one for
+        // post_hook) -- a real-world pattern (e.g. datavault4dbt-style models). Before the fix,
+        // only the first call's kwargs were captured; `post_hook` was silently dropped.
+        let sql = r#"
+{{ config(materialized="incremental") }}
+
+{{ config(post_hook="DELETE FROM {{ this }}") }}
+
+select 1
+"#;
+        let cfg = parse_unrendered_config(sql, false).expect("expected a config map");
+        assert_eq!(
+            cfg.get("materialized").and_then(|v| v.as_str()),
+            Some("incremental")
+        );
+        assert_eq!(
+            cfg.get("post_hook").and_then(|v| v.as_str()),
+            Some("DELETE FROM {{ this }}")
+        );
+    }
+
+    #[test]
+    fn later_config_call_overrides_earlier_one_for_the_same_key() {
+        let sql = r#"
+{{ config(materialized="view") }}
+{{ config(materialized="table") }}
+select 1
+"#;
+        let cfg = parse_unrendered_config(sql, false).expect("expected a config map");
+        assert_eq!(
+            cfg.get("materialized").and_then(|v| v.as_str()),
+            Some("table")
+        );
+    }
+
+    #[test]
+    fn captures_a_list_literal_hook_as_a_real_sequence() {
+        // `post_hook=[...]` is a Jinja list literal, not a single string constant. Before the
+        // fix, any non-`Expr::Const` kwarg value (including a list) was captured as the raw,
+        // opaque Jinja source text of the whole expression -- losing its list structure, so it
+        // compared as ONE entry instead of two against dbt-core's genuinely two-item list.
+        let sql = r#"
+{{ config(post_hook=["DELETE FROM a", "DELETE FROM b"]) }}
+select 1
+"#;
+        let cfg = parse_unrendered_config(sql, false).expect("expected a config map");
+        let post_hook = cfg.get("post_hook").expect("expected post_hook key");
+        assert_eq!(
+            as_str_entries(post_hook),
+            vec!["DELETE FROM a".to_string(), "DELETE FROM b".to_string()]
+        );
+    }
+
+    #[test]
+    fn no_config_call_returns_none() {
+        assert!(parse_unrendered_config("select 1", false).is_none());
     }
 }

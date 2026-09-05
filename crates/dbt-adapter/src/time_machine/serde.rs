@@ -1,6 +1,7 @@
 //! Conversion between minijinja::Value and serde_json::Value for time-machine recordings.
 
 use dbt_adapter_core::AdapterType;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 
 use super::serializable::{deserialize_object, serialize_object};
@@ -70,6 +71,41 @@ pub struct ReplayContext {
     pub quoting: ResolvedQuoting,
 }
 
+/// Context that applies only while reconstructing one recorded adapter call.
+#[derive(Clone)]
+pub struct ReplayCallContext {
+    replay: ReplayContext,
+    relation_type: Option<RelationType>,
+}
+
+impl ReplayCallContext {
+    fn new(replay: ReplayContext) -> Self {
+        Self {
+            replay,
+            relation_type: None,
+        }
+    }
+
+    pub(crate) fn with_relation_type(mut self, relation_type: Option<RelationType>) -> Self {
+        self.relation_type = relation_type;
+        self
+    }
+
+    pub(crate) fn replay_context(&self) -> &ReplayContext {
+        &self.replay
+    }
+
+    pub(crate) fn relation_type(&self) -> Option<RelationType> {
+        self.relation_type
+    }
+}
+
+impl From<ReplayContext> for ReplayCallContext {
+    fn from(replay: ReplayContext) -> Self {
+        Self::new(replay)
+    }
+}
+
 impl Default for ReplayContext {
     fn default() -> Self {
         Self {
@@ -84,7 +120,7 @@ impl Default for ReplayContext {
 /// This allows proper reconstruction of RelationObjects.
 pub fn json_to_value_with_context(
     json: &serde_json::Value,
-    ctx: &ReplayContext,
+    ctx: &ReplayCallContext,
 ) -> minijinja::Value {
     match json {
         serde_json::Value::Null => minijinja::Value::from(()),
@@ -103,7 +139,6 @@ pub fn json_to_value_with_context(
             minijinja::Value::from_iter(arr.iter().map(|v| json_to_value_with_context(v, ctx)))
         }
         serde_json::Value::Object(obj) => {
-            // Check for typed objects
             if let Some(type_name) = obj.get("__type__").and_then(|v| v.as_str())
                 && let Some(value) = reconstruct_typed_object(type_name, json, ctx)
             {
@@ -129,17 +164,9 @@ pub fn json_to_value_with_context(
 fn reconstruct_typed_object(
     type_name: &str,
     json: &serde_json::Value,
-    ctx: &ReplayContext,
+    ctx: &ReplayCallContext,
 ) -> Option<minijinja::Value> {
     deserialize_object(type_name, json, ctx)
-}
-
-/// Convenience function to deserialize JSON to a minijinja::Value using default context.
-///
-/// This is useful when you don't need adapter-specific reconstruction (i.e., when
-/// all serialized objects include their own adapter_type and don't need the fallback).
-pub fn json_to_value(json: &serde_json::Value) -> minijinja::Value {
-    json_to_value_with_context(json, &ReplayContext::default())
 }
 
 /// Check if a JSON value is a "zero value" (false, null, 0, "", [], {}).
@@ -163,6 +190,14 @@ fn is_json_zero_value(v: &serde_json::Value) -> bool {
 /// forward compatibility when new fields with default values are added to
 /// serialization — old recordings without those fields still match.
 pub fn values_match(expected: &serde_json::Value, actual: &serde_json::Value) -> bool {
+    values_match_inner(expected, actual, false)
+}
+
+fn values_match_inner(
+    expected: &serde_json::Value,
+    actual: &serde_json::Value,
+    ignore_internal_model_fields: bool,
+) -> bool {
     match (expected, actual) {
         (serde_json::Value::Null, serde_json::Value::Null) => true,
         (serde_json::Value::Bool(a), serde_json::Value::Bool(b)) => a == b,
@@ -173,18 +208,44 @@ pub fn values_match(expected: &serde_json::Value, actual: &serde_json::Value) ->
             a == b || dbt_common::path::path_separator_eq(a, b)
         }
         (serde_json::Value::Array(a), serde_json::Value::Array(b)) => {
-            a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| values_match(x, y))
+            a.len() == b.len()
+                && a.iter()
+                    .zip(b.iter())
+                    .all(|(x, y)| values_match_inner(x, y, false))
         }
         (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
-            // Collect keys from both sides, ignoring __type__
-            let a_keys: std::collections::HashSet<_> =
-                a.keys().filter(|k| *k != "__type__").collect();
-            let b_keys: std::collections::HashSet<_> =
-                b.keys().filter(|k| *k != "__type__").collect();
+            // LazyModelWrapper and graph node maps carry the resolved adapter for internal
+            // consumers. It is not stable public model data, so tolerate its presence or absence
+            // during replay. Graph nodes are plain serialized maps and have no __type__ marker.
+            let is_lazy_model = [a, b].iter().any(|value| {
+                value
+                    .get("__type__")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|type_name| type_name.ends_with("LazyModelWrapper"))
+            });
+            let is_graph_node = [a, b].iter().any(|value| {
+                value.get("resource_type").is_some() && value.get("unique_id").is_some()
+            });
+            let ignore_adapter = ignore_internal_model_fields || is_lazy_model || is_graph_node;
+            // Collect keys from both sides, ignoring __type__ and internal model fields.
+            let a_keys: std::collections::HashSet<_> = a
+                .keys()
+                .filter(|k| *k != "__type__" && (!ignore_adapter || *k != "adapter"))
+                .collect();
+            let b_keys: std::collections::HashSet<_> = b
+                .keys()
+                .filter(|k| *k != "__type__" && (!ignore_adapter || *k != "adapter"))
+                .collect();
 
             // Keys present in both must match
             for k in a_keys.intersection(&b_keys) {
-                if !values_match(a.get(*k).unwrap(), b.get(*k).unwrap()) {
+                let ignore_nested_adapter =
+                    (is_lazy_model || is_graph_node) && *k == "__base_attr__";
+                if !values_match_inner(
+                    a.get(*k).unwrap(),
+                    b.get(*k).unwrap(),
+                    ignore_nested_adapter,
+                ) {
                     return false;
                 }
             }
@@ -216,6 +277,10 @@ pub fn values_match(expected: &serde_json::Value, actual: &serde_json::Value) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn json_to_value(json: &serde_json::Value) -> minijinja::Value {
+        json_to_value_with_context(json, &ReplayContext::default().into())
+    }
 
     #[test]
     fn test_serialize_args() {
@@ -262,6 +327,56 @@ mod tests {
         let value = json_to_value(&json);
         assert_eq!(value.get_attr("a").unwrap().as_i64(), Some(1));
         assert_eq!(value.get_attr("b").unwrap().as_str(), Some("two"));
+    }
+
+    #[test]
+    fn test_values_match_ignores_lazy_model_adapter() {
+        let expected = serde_json::json!({
+            "__type__": "LazyModelWrapper",
+            "adapter": "snowflake",
+            "__base_attr__": {"adapter": "snowflake"},
+            "config": {"adapter": "snowflake"},
+            "name": "model"
+        });
+        let actual = serde_json::json!({
+            "__type__": "LazyModelWrapper",
+            "adapter": "bigquery",
+            "__base_attr__": {"adapter": "bigquery"},
+            "config": {"adapter": "snowflake"},
+            "name": "model"
+        });
+
+        assert!(values_match(&expected, &actual));
+
+        let mut nested_adapter_change = actual;
+        nested_adapter_change["config"]["adapter"] = serde_json::json!("databricks");
+        assert!(!values_match(&expected, &nested_adapter_change));
+    }
+
+    #[test]
+    fn test_values_match_ignores_graph_node_adapter() {
+        assert!(values_match(
+            &serde_json::json!({
+                "resource_type": "model",
+                "unique_id": "model.pkg.example",
+                "adapter": "snowflake",
+                "__base_attr__": {"adapter": "snowflake"}
+            }),
+            &serde_json::json!({
+                "resource_type": "model",
+                "unique_id": "model.pkg.example",
+                "adapter": "bigquery",
+                "__base_attr__": {"adapter": "bigquery"}
+            }),
+        ));
+    }
+
+    #[test]
+    fn test_values_match_does_not_ignore_adapter_for_other_objects() {
+        assert!(!values_match(
+            &serde_json::json!({"adapter": "snowflake"}),
+            &serde_json::json!({"adapter": "bigquery"}),
+        ));
     }
 
     #[test]

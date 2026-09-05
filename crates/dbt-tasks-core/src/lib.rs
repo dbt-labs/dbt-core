@@ -4,6 +4,9 @@
 
 pub mod context;
 pub mod context_factory;
+mod generate_run_results;
+pub mod lake_compute_catalog_attach;
+pub mod lake_compute_propagation;
 pub mod local_schema_builder;
 pub mod metricflow;
 pub mod pretty_table;
@@ -15,24 +18,25 @@ mod run_tasks_args;
 pub mod show_task_hooks;
 pub mod span_manager;
 pub mod static_analysis_buckets;
-mod stats_to_results;
 pub mod task;
 pub mod task_runner_hooks;
 pub mod task_spans;
 pub mod test_aggregation;
+pub mod unit_test_schema;
 pub mod utils;
 pub mod visitor;
 
 use std::any::Any;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::{fmt, io};
 
+pub use generate_run_results::generate_run_results;
 pub use run_tasks_args::RunTasksArgs;
-pub use stats_to_results::stats_to_results;
 
+use dbt_adapter::response::AdapterResponse;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, IoArgs};
 use dbt_common::stats::NodeStatus;
@@ -127,19 +131,14 @@ pub struct TaskRunnerStats {
 }
 
 impl TaskRunnerStats {
-    pub fn collect_as_results(&self) -> Vec<ContextRunResult> {
+    pub fn collect_as_results(
+        &self,
+        adapter_responses: &HashMap<String, AdapterResponse>,
+    ) -> Vec<ContextRunResult> {
         self.run
             .stats
             .iter()
-            .map(|stat| {
-                stats_to_results(
-                    stat,
-                    self.run
-                        .nodes
-                        .as_ref()
-                        .expect("run_stats should have nodes"),
-                )
-            })
+            .map(|stat| generate_run_results(stat, &self.run, adapter_responses))
             .collect()
     }
 
@@ -172,6 +171,7 @@ impl TaskRunnerStats {
 
 pub struct RunTaskResults {
     pub stats: TaskRunnerStats,
+    pub adapter_responses: HashMap<String, AdapterResponse>,
     pub storeables: Vec<Box<dyn StoreableResults>>,
     pub showables: Vec<Box<dyn ShowableResults>>,
     pub jinja_env: Arc<JinjaEnv>,

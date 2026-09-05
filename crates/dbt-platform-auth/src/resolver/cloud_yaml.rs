@@ -72,11 +72,7 @@ impl CloudYamlResolver {
         let project_block = self.read_project_block();
 
         let active_project_id = env("DBT_CLOUD_PROJECT_ID")
-            .or_else(|| {
-                project_block
-                    .as_ref()
-                    .and_then(|b| b.project_id.as_ref().map(|v| v.to_string()))
-            })
+            .or_else(|| project_block.as_ref().and_then(|b| b.project_id_str()))
             .unwrap_or_else(|| config.context.active_project.clone());
 
         let active_host = env("DBT_CLOUD_ACCOUNT_HOST")

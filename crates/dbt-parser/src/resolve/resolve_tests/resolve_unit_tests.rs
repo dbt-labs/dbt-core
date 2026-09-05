@@ -1,6 +1,7 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::ProjectConfigResolver;
 use crate::dbt_project_config::RootProjectConfigs;
+use crate::dbt_project_config::disallow_plus_prefix_from_flags;
 use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_utils::validate_unit_test_compute;
@@ -18,6 +19,7 @@ use dbt_common::io_args::ComputeArg;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 
+use dbt_common::path::DbtPath;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -26,6 +28,7 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::utils::render_extract_ref_or_source_expr;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtUnitTestAttr;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::DbtQuoting;
@@ -33,6 +36,7 @@ use dbt_schemas::schemas::common::Expect;
 use dbt_schemas::schemas::common::Formats;
 use dbt_schemas::schemas::common::Given;
 use dbt_schemas::schemas::common::NodeDependsOn;
+use dbt_schemas::schemas::common::Rows;
 use dbt_schemas::schemas::packages::DeprecatedDbtPackageLock;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::ResolvableConfig;
@@ -44,8 +48,10 @@ use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
 use dbt_schemas::schemas::{CommonAttributes, DbtUnitTest, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
+use dbt_schemas::state::NodeResolverTracker;
 use dbt_schemas::state::ResourcePathKind;
 use dbt_yaml::Spanned;
+use dbt_yaml::Value as YmlValue;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -59,6 +65,7 @@ pub fn resolve_unit_tests(
     arg: &ResolveArgs,
     unit_test_properties: BTreeMap<String, MinimalPropertiesEntry>,
     package: &DbtPackage,
+    root_package: &DbtPackage,
     package_quoting: DbtQuoting,
     root_project_configs: &RootProjectConfigs,
     package_name: &str,
@@ -66,6 +73,9 @@ pub fn resolve_unit_tests(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     models: &BTreeMap<String, Arc<DbtModel>>,
+    packages: &[DbtPackage],
+    adapter_type: AdapterType,
+    node_resolver: &dyn NodeResolverTracker,
 ) -> FsResult<(
     BTreeMap<String, Arc<DbtUnitTest>>,
     BTreeMap<String, Arc<DbtUnitTest>>,
@@ -78,12 +88,14 @@ pub fn resolve_unit_tests(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.unit_tests,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?
     .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
@@ -101,7 +113,6 @@ pub fn resolve_unit_tests(
         });
 
         let unit_test = into_typed_with_jinja::<UnitTestProperties, _>(
-            &arg.io,
             mpe.schema_value,
             false,
             jinja_env,
@@ -116,18 +127,43 @@ pub fn resolve_unit_tests(
         // - but we should not serialize it
         // - for now just use the global ones
 
-        let location = CodeLocationWithFile::default(); // TODO
+        let location = if unit_test.model.has_valid_span() {
+            {
+                CodeLocationWithFile::new(
+                    unit_test.model.span().start.line as u32,
+                    unit_test.model.span().start.column as u32,
+                    unit_test.model.span().start.index as u32,
+                    mpe.relative_path.clone(),
+                )
+            }
+        } else {
+            Default::default()
+        };
+
         let model_name = format!("model.{}.{}", package_name, unit_test.model);
         // `tested_node_unique_id` is the unversioned model's unique id when resolvable.
         // Versioned cases below override it with the version-specific id.
-        let (database, schema, _, tested_node_unique_id) = match models.get(&model_name) {
+        // A unit test runs against one model, so it takes that model's adapter --
+        // it has no `+adapter` of its own. `lake_compute` is not inherited: unit tests never
+        // take the compute-platform path (see `tasks_for_node`), so an `lake_compute` dialect
+        // here would only mis-resolve the `unit` materialization.
+        let (database, schema, _, tested_node_unique_id, model_adapter) = match models
+            .get(&model_name)
+        {
             Some(model) => (
                 model.__base_attr__.database.clone(),
                 model.__base_attr__.schema.clone(),
                 model.__base_attr__.alias.clone(),
                 Some(model_name.clone()),
+                Some(model.node_adapter()).filter(|adapter| *adapter != AdapterType::LakeCompute),
             ),
-            None => (String::new(), String::new(), unit_test.model.clone(), None),
+            None => (
+                String::new(),
+                String::new(),
+                unit_test.model.to_string(),
+                None,
+                None,
+            ),
         };
 
         // Create base unit test node
@@ -139,7 +175,7 @@ pub fn resolve_unit_tests(
         let fqn = get_node_fqn(
             package_name,
             mpe.relative_path.to_owned(),
-            vec![unit_test.model.to_owned(), unit_test_name.to_owned()],
+            vec![unit_test.model.to_string(), unit_test_name.to_owned()],
             &package.dbt_project.all_source_paths(),
         );
 
@@ -150,7 +186,6 @@ pub fn resolve_unit_tests(
             arg.static_analysis,
             &base_unique_id,
             dependency_package_name,
-            arg.io.status_reporter.as_ref(),
         );
         validate_unit_test_compute(properties_config.compute, &mpe.relative_path)?;
         // Sidecar needs a bound LP. Upgrade baseline to strict like the CLI
@@ -166,10 +201,10 @@ pub fn resolve_unit_tests(
         // todo: generalize given input format, according to https://docs.getdbt.com/docs/build/unit-tests
 
         let dependent_refs = vec![DbtRef {
-            name: unit_test.model.to_owned(),
+            name: unit_test.model.to_string(),
             package: Some(package_name.to_owned()),
             version: None,
-            location: Some(CodeLocationWithFile::default()),
+            location: Some(location.clone()),
         }];
 
         // Process unit test given inputs to extract ref nodes
@@ -199,28 +234,56 @@ pub fn resolve_unit_tests(
             });
         }
 
-        let given = unit_test.given.as_ref().map_or(vec![], |vec| {
-            vec.iter()
-                .map(|given| {
-                    let full_path: Option<String> = match given.fixture {
-                        Some(ref fixture) if given.format == Formats::Csv => {
-                            file_map.get(&(fixture.clone() + ".csv")).cloned()
-                        }
-                        Some(ref fixture) if given.format == Formats::Sql => {
-                            file_map.get(&(fixture.clone() + ".sql")).cloned()
-                        }
-                        _ => given.fixture.clone(),
-                    };
-
-                    Given {
-                        fixture: full_path,
-                        input: given.input.clone(),
-                        rows: given.rows.clone(),
-                        format: given.format.clone(),
+        let mut given = Vec::new();
+        if let Some(given_entries) = unit_test.given.as_ref() {
+            for given_entry in given_entries {
+                let full_path: Option<String> = match given_entry.fixture {
+                    Some(ref fixture) if given_entry.format == Formats::Csv => {
+                        file_map.get(&(fixture.clone() + ".csv")).cloned()
                     }
-                })
-                .collect::<Vec<_>>()
-        });
+                    Some(ref fixture) if given_entry.format == Formats::Sql => {
+                        file_map.get(&(fixture.clone() + ".sql")).cloned()
+                    }
+                    _ => given_entry.fixture.clone(),
+                };
+
+                let rows = if given_entry.format == Formats::Dict
+                    && given_entry.rows.is_none()
+                    && given_entry.fixture.is_none()
+                {
+                    let seed_unique_id = resolve_given_seed(
+                        jinja_env,
+                        base_ctx,
+                        &given_entry.input,
+                        adapter_type,
+                        &database,
+                        &schema,
+                        &unit_test.model,
+                        &fqn,
+                        package_name,
+                        &root_package.dbt_project.name,
+                        package_quoting,
+                        &mpe.relative_path,
+                        arg.static_analysis,
+                        node_resolver,
+                    )?;
+                    Some(Rows::List(load_implicit_seed_rows(
+                        packages,
+                        &seed_unique_id,
+                        &given_entry.input,
+                    )?))
+                } else {
+                    given_entry.rows.clone()
+                };
+
+                given.push(Given {
+                    fixture: full_path,
+                    input: given_entry.input.clone(),
+                    rows,
+                    format: given_entry.format.clone(),
+                });
+            }
+        }
 
         let expect = {
             let full_path: Option<String> = match unit_test.expect.fixture {
@@ -246,8 +309,8 @@ pub fn resolve_unit_tests(
             __common_attr__: CommonAttributes {
                 name: unit_test_name.to_owned(),
                 package_name: package_name.to_owned(),
-                original_file_path: mpe.relative_path.clone(),
-                path: mpe.relative_path.clone(),
+                original_file_path: DbtPath::from(&mpe.relative_path),
+                path: DbtPath::from(&mpe.relative_path),
                 name_span: dbt_common::Span::default(),
                 unique_id: base_unique_id.clone(),
                 fqn,
@@ -259,13 +322,17 @@ pub fn resolve_unit_tests(
                 language: Some("sql".to_string()),
                 tags: properties_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: Default::default(),
                 meta: properties_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: model_adapter.unwrap_or(adapter_type),
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 // match dbt-core semantics for unit test alias
@@ -287,13 +354,15 @@ pub fn resolve_unit_tests(
                 compute: properties_config.compute,
                 columns: vec![],
                 metrics: vec![],
-                // TODO: populate unrendered_config for unit tests. dbt-core never does this
-                // (unit_tests.py has no reference to unrendered_config), so empty matches
-                // Core parity today, but it is an omission there too.
+                // In future: populate unrendered_config for unit tests -- after dbt-core starts
+                // comparing unit-test config.
+                // For now, it is intentionally left empty to match dbt-core's current behavior:
+                // unit_tests.py never populates it, unit tests are compared Structurally/by
+                // checksum, and check_configs_modified treats NodeType::UnitTest as a non-trigger.
                 unrendered_config: Default::default(),
             },
             __unit_test_attr__: DbtUnitTestAttr {
-                model: unit_test.model.to_owned(),
+                model: unit_test.model.to_string(),
                 given,
                 expect,
                 versions: None,
@@ -307,7 +376,7 @@ pub fn resolve_unit_tests(
         };
         // Check if this model has versions
         if let Some(version_info) = model_properties
-            .get(&unit_test.model)
+            .get(unit_test.model.as_ref())
             .and_then(|mpe| mpe.version_info.as_ref())
         {
             // Parse version configuration to get the include and exclude lists
@@ -354,12 +423,14 @@ pub fn resolve_unit_tests(
                 );
 
                 // Look up database/schema from the versioned model
-                let (ver_database, ver_schema) = models
+                let (ver_database, ver_schema, ver_adapter) = models
                     .get(&versioned_model_unique_id)
                     .map(|m| {
                         (
                             m.__base_attr__.database.clone(),
                             m.__base_attr__.schema.clone(),
+                            Some(m.node_adapter())
+                                .filter(|adapter| *adapter != AdapterType::LakeCompute),
                         )
                     })
                     .unwrap_or_default();
@@ -377,6 +448,7 @@ pub fn resolve_unit_tests(
                     .nodes_with_ref_location =
                     vec![(versioned_model_unique_id.clone(), location.clone())];
                 versioned_test.tested_node_unique_id = Some(versioned_model_unique_id.clone());
+                versioned_test.__base_attr__.adapter = ver_adapter.unwrap_or(adapter_type);
 
                 unit_tests.insert(
                     versioned_test.__common_attr__.unique_id.clone(),
@@ -393,6 +465,182 @@ pub fn resolve_unit_tests(
         }
     }
     Ok((unit_tests, disabled_unit_tests))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_given_seed(
+    jinja_env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, minijinja::Value>,
+    input: &Spanned<String>,
+    adapter_type: AdapterType,
+    database: &str,
+    schema: &str,
+    model_name: &str,
+    fqn: &[String],
+    package_name: &str,
+    root_project_name: &str,
+    package_quoting: DbtQuoting,
+    relative_path: &std::path::Path,
+    global_static_analysis: Option<StaticAnalysisKind>,
+    node_resolver: &dyn NodeResolverTracker,
+) -> FsResult<String> {
+    let sql_resources: Arc<Mutex<Vec<SqlResource<UnitTestConfig>>>> =
+        Arc::new(Mutex::new(Vec::new()));
+    let mut resolve_model_context = base_ctx.clone();
+    resolve_model_context.extend(build_resolve_model_context(
+        &UnitTestConfig::default(),
+        false,
+        adapter_type,
+        database,
+        schema,
+        model_name,
+        fqn.to_vec(),
+        package_name,
+        root_project_name,
+        package_quoting,
+        Arc::new(DbtRuntimeConfig::default()),
+        sql_resources.clone(),
+        Arc::new(AtomicBool::new(false)),
+        relative_path,
+        &PathBuf::new(),
+        global_static_analysis,
+    ));
+
+    match render_extract_ref_or_source_expr(
+        jinja_env,
+        &resolve_model_context,
+        sql_resources,
+        input,
+    )? {
+        SqlResource::Ref((name, package, version, _)) => {
+            let (unique_id, _, _, _) = node_resolver.lookup_ref(
+                &package,
+                &name,
+                &version.as_ref().map(ToString::to_string),
+                &Some(package_name.to_string()),
+            )?;
+            if unique_id.starts_with("seed.") {
+                Ok(unique_id)
+            } else {
+                err!(
+                    ErrorCode::InvalidConfig,
+                    "Unit test input '{}' must reference a seed when rows and fixture are omitted",
+                    input.as_str()
+                )
+            }
+        }
+        _ => err!(
+            ErrorCode::InvalidConfig,
+            "Unit test input '{}' must reference a seed when rows and fixture are omitted",
+            input.as_str()
+        ),
+    }
+}
+
+fn load_implicit_seed_rows(
+    packages: &[DbtPackage],
+    seed_unique_id: &str,
+    input: &Spanned<String>,
+) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
+    let (package, seed_asset) = packages
+        .iter()
+        .find_map(|package| {
+            package.seed_files.iter().find_map(|asset| {
+                let seed_name = asset.path.file_stem()?.to_str()?;
+                (asset
+                    .path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("csv"))
+                    && seed_unique_id == format!("seed.{}.{}", package.dbt_project.name, seed_name))
+                .then_some((package, asset))
+            })
+        })
+        .ok_or_else(|| {
+            fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => input.span().clone(),
+                "Unable to find seed '{}' for unit tests",
+                seed_unique_id
+            )
+        })?;
+
+    let data = match package
+        .embedded_file_contents
+        .as_ref()
+        .and_then(|contents| contents.get(&DbtPath::from(&seed_asset.path)))
+    {
+        Some(content) => content.as_bytes().to_vec(),
+        None => {
+            let path = seed_asset.base_path.join(&seed_asset.path);
+            std::fs::read(&path).map_err(|error| {
+                fs_err!(
+                    code => ErrorCode::IoError,
+                    loc => path,
+                    "Failed to read implicit unit test seed: {}",
+                    error
+                )
+            })?
+        }
+    };
+
+    parse_implicit_seed_rows(&data).map_err(|error| {
+        fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => input.span().clone(),
+            "Failed to read seed '{}' for unit tests: {}",
+            seed_unique_id,
+            error
+        )
+    })
+}
+
+fn parse_implicit_seed_rows(data: &[u8]) -> FsResult<Vec<BTreeMap<String, YmlValue>>> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .flexible(true)
+        .from_reader(data);
+    let headers = reader
+        .headers()
+        .map_err(|error| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Failed to read headers: {}",
+                error
+            )
+        })?
+        .clone();
+    let mut rows = Vec::new();
+
+    for result in reader.records() {
+        let record = result.map_err(|error| {
+            fs_err!(ErrorCode::InvalidConfig, "Failed to read record: {}", error)
+        })?;
+        if record.len() > headers.len() {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "CSV row has {} fields, but the header has {}",
+                record.len(),
+                headers.len()
+            );
+        }
+
+        rows.push(
+            headers
+                .iter()
+                .enumerate()
+                .map(|(index, header)| {
+                    let value = match record.get(index) {
+                        Some(value) => YmlValue::string(value.to_string()),
+                        None => YmlValue::null(),
+                    };
+                    (header.to_string(), value)
+                })
+                .collect(),
+        );
+    }
+
+    Ok(rows)
 }
 
 fn parse_version_numbers_yml(value: &dbt_yaml::Value) -> Option<Vec<String>> {
@@ -429,4 +677,21 @@ fn should_include_version_for_unit_test(
         .unwrap_or(false); // No exclude list means exclude none
 
     meets_include && meets_exclude
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_implicit_seed_rows_preserves_strings_and_trailing_nulls() {
+        let rows = parse_implicit_seed_rows(b"id,name,note\n1,alpha,\n2,beta\n")
+            .expect("implicit seed rows should use DictReader-compatible parsing");
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].get("id"), Some(&YmlValue::string("1".into())));
+        assert_eq!(rows[0].get("name"), Some(&YmlValue::string("alpha".into())));
+        assert_eq!(rows[0].get("note"), Some(&YmlValue::string("".into())));
+        assert_eq!(rows[1].get("note"), Some(&YmlValue::null()));
+    }
 }

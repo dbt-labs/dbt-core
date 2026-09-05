@@ -1,7 +1,9 @@
-use dbt_telemetry::{LogMessage, NodeEvaluated, set_node_warning_outcome_warned};
+use dbt_telemetry::{NodeEvaluated, set_node_warning_outcome_warned};
 use dbt_tracing::{LogRecordInfo, SeverityNumber};
 
-use super::super::{data_provider::DataProvider, layer::TelemetryMiddleware};
+use super::super::{
+    data_provider::DataProvider, fs_error_log::get_log_message, layer::TelemetryMiddleware,
+};
 
 /// Middleware that automatically marks the current node span as having produced
 /// warnings whenever a `Warn`-severity log record passes through the pipeline.
@@ -18,7 +20,7 @@ impl TelemetryMiddleware for TelemetryNodeWarnOutcome {
         log_record: LogRecordInfo,
         data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
-        if log_record.attributes.is::<LogMessage>()
+        if get_log_message(&log_record.attributes).is_some()
             && log_record.severity_number == SeverityNumber::Warn
         {
             data_provider.with_ancestor_attrs_mut::<NodeEvaluated>(|attrs| {

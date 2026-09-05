@@ -6,22 +6,29 @@
     {#-- Compute a left-outer join in memory. Some Redshift queries are
       -- leader-only, and cannot be joined to other compute-based queries
       -- TODO: https://github.com/dbt-labs/fs/issues/6859#issue-3648357670 #}
+    {% if redshift__use_show_apis() %}
+        {% set catalog = _redshift__get_base_catalog_by_relation_show(dbschema.database, relations) %}
+    {% else %}
+        {#-- Compute a left-outer join in memory. Some Redshift queries are
+          -- leader-only, and cannot be joined to other compute-based queries #}
+        {% set catalog = _redshift__get_base_catalog_by_relation(dbschema.database, relations) %}
+    {% endif %}
 
-    {% set catalog = _redshift__get_base_catalog_by_relation(dbschema.database, relations) %}
-
-    {#% set select_extended = redshift__can_select_from('svv_table_info') %#}
-    {#% if select_extended %#}
-        {#% set extended_catalog = _redshift__get_extended_catalog_by_relation(relations) %#}
-        {#% set catalog = catalog.join(extended_catalog, ['table_schema', 'table_name']) %#}
-    {#% else %#}
-        {#{ redshift__no_svv_table_info_warning() }#}
-    {#% endif %#}
+    {% set select_extended = redshift__can_select_from('svv_table_info') %}
+    {% if select_extended %}
+        {% set extended_catalog = _redshift__get_extended_catalog_by_relation(relations) %}
+        {% set catalog = catalog.join(extended_catalog, ['table_schema', 'table_name']) %}
+    {% else %}
+        {{ redshift__no_svv_table_info_warning() }}
+    {% endif %}
 
     {{ return(catalog) }}
 
 {% endmacro %}
 
 
+{# Standard Redshift catalog path: uses system catalog queries, which do not cover
+   datashared objects across databases. #}
 {% macro _redshift__get_base_catalog_by_relation(database, relations) -%}
     {%- call statement('base_catalog', fetch_result=True) -%}
         with
@@ -64,6 +71,25 @@
         {%- endfor -%}
     )
 {% endmacro %}
+
+
+{% macro _redshift__get_base_catalog_by_relation_show(database, relations) -%}
+    {% set schemas = [] %}
+    {% for relation in relations %}
+        {% if relation.schema not in schemas %}
+            {% do schemas.append(relation.schema) %}
+        {% endif %}
+    {% endfor %}
+
+    {% set columns_filter %}
+        {%- for relation in relations -%}
+            (schema_name = lower('{{ relation.schema }}') and table_name = lower('{{ relation.identifier }}'))
+            {%- if not loop.last %} or {% endif -%}
+        {%- endfor -%}
+    {% endset %}
+
+    {{ return(_redshift__get_base_catalog_show(database, schemas, columns_filter)) }}
+{%- endmacro %}
 
 
 {% macro _redshift__get_extended_catalog_by_relation(relations) %}

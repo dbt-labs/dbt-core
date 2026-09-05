@@ -1,12 +1,16 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+use std::time::SystemTime;
 
-use dbt_adapter::Adapter;
+use dbt_adapter::response::AdapterResponse;
+use dbt_adapter::{Adapter, AdapterStore};
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_info_span;
 use dbt_common::io_args::FsCommand;
+use dbt_common::stats::{NodeStatus, Stat};
+use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::span_info::{SpanStatusRecorder, record_span_status_with_attrs};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -22,6 +26,7 @@ use dbt_tasks_core::RunTasksArgs;
 use dbt_tasks_core::TaskRunnerStats;
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::context_factory::TaskRunnerCtxFactory;
+use dbt_tasks_core::run_cache_lifecycle::RunCacheLifecycle;
 use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
 use dbt_tasks_core::task::Task;
 use dbt_tasks_core::task_runner_hooks::TaskRunnerHooks;
@@ -36,6 +41,7 @@ use tracing::instrument;
 
 use crate::register_seeds;
 use crate::run_operation::run_operation_on_run_with_ctx;
+use crate::task::effective_unit_test_execute;
 use crate::utils::filter_missing_schemas;
 use crate::utils::get_catalog_schemas_and_ids;
 use crate::utils::register_catalog_schemas_remote;
@@ -50,10 +56,26 @@ pub fn summarize_task_runner_stats(
     let compile = Stats {
         stats: summarize_stats(schedule, &ctx.inner.analyze_stats),
         nodes: None,
+        batch_results: Default::default(),
+        compiled_code: Default::default(),
     };
+    let batch_results = ctx
+        .inner
+        .batch_results_map
+        .iter()
+        .map(|entry| (entry.key().clone(), entry.value().clone()))
+        .collect();
+    let compiled_code = ctx
+        .inner
+        .rendered_sql
+        .iter()
+        .map(|entry| (entry.key().clone(), entry.value().sql.clone()))
+        .collect();
     let run = Stats {
         stats: summarize_stats(schedule, &ctx.inner.run_stats),
         nodes: Some(resolved_state.nodes.clone()),
+        batch_results,
+        compiled_code,
     };
     TaskRunnerStats { compile, run }
 }
@@ -61,6 +83,7 @@ pub fn summarize_task_runner_stats(
 pub struct TaskRunner {
     hooks: Box<dyn TaskRunnerHooks>,
     adapter: Arc<Adapter>,
+    adapter_store: Arc<AdapterStore>,
     pub resolved_state: Arc<ResolverState>,
     jinja_env: Arc<JinjaEnv>,
     schema_store: Arc<SchemaStore>,
@@ -68,12 +91,14 @@ pub struct TaskRunner {
     compiled_sql_cache: Arc<dyn CompiledSqlCache>,
     ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
     static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+    run_cache: Arc<RunCacheLifecycle>,
 }
 
 impl TaskRunner {
     pub fn new(
         hooks: Box<dyn TaskRunnerHooks>,
         adapter: Arc<Adapter>,
+        adapter_store: Arc<AdapterStore>,
         resolved_state: Arc<ResolverState>,
         jinja_env: Arc<JinjaEnv>,
         schema_store: Arc<SchemaStore>,
@@ -81,10 +106,12 @@ impl TaskRunner {
         compiled_sql_cache: Arc<dyn CompiledSqlCache>,
         ctx_factory: Arc<dyn TaskRunnerCtxFactory>,
         static_analysis_buckets: Arc<dyn StaticAnalysisBuckets>,
+        run_cache: Arc<RunCacheLifecycle>,
     ) -> Self {
         Self {
             hooks,
             adapter,
+            adapter_store,
             resolved_state,
             jinja_env,
             schema_store,
@@ -92,6 +119,7 @@ impl TaskRunner {
             compiled_sql_cache,
             ctx_factory,
             static_analysis_buckets,
+            run_cache,
         }
     }
 
@@ -101,6 +129,7 @@ impl TaskRunner {
                 compile: Stats::default(),
                 run: Stats::default(),
             },
+            adapter_responses: HashMap::new(),
             storeables: Vec::new(),
             showables: Vec::new(),
             jinja_env: self.jinja_env,
@@ -115,7 +144,6 @@ impl TaskRunner {
         run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
     ) -> FsResult<()> {
-        let adapter_type = self.resolved_state.dbt_profile.db_config.adapter_type();
         // Pre-register only *selected* seeds (not frontier dependencies) so that
         // frontier seeds don't mask "missing in remote" static analysis errors.
         let selected_seed_ids: Vec<&String> = schedule
@@ -129,7 +157,6 @@ impl TaskRunner {
         register_seeds::pre_register_seeds(
             &selected_seed_ids,
             &self.resolved_state.nodes.seeds,
-            adapter_type,
             Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
             Arc::clone(&self.data_store),
             Arc::clone(self.adapter.engine().type_ops()),
@@ -180,19 +207,38 @@ impl TaskRunner {
                 freshness_results,
                 Arc::clone(&self.static_analysis_buckets),
                 Arc::clone(&self.adapter),
+                Arc::clone(&self.adapter_store),
+                self.run_cache.clone(),
             )
             .await
     }
 
-    fn should_register_schemas(&self, run_task_args: &RunTasksArgs) -> bool {
+    fn should_register_schemas(
+        &self,
+        run_task_args: &RunTasksArgs,
+        schedule: &Schedule<String>,
+    ) -> bool {
         let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
-        (run_task_args.is_runnable() && execute == Execute::Remote)
-            || run_task_args.command == FsCommand::Clone
+        // Do not pre-register warehouse schemas when every selected runnable is
+        // a unit test whose resolved compute override is local.
+        let selected_nodes_need_remote = schedule.selected_nodes.iter().any(|unique_id| {
+            self.resolved_state
+                .nodes
+                .unit_tests
+                .get(unique_id)
+                .is_none_or(|unit_test| {
+                    effective_unit_test_execute(unit_test, execute) == Execute::Remote
+                })
+        });
+
+        run_task_args.command == FsCommand::Clone
+            || (run_task_args.is_runnable()
+                && execute == Execute::Remote
+                && selected_nodes_need_remote)
     }
 
     async fn register_schemas(
         &self,
-        run_task_args: &RunTasksArgs,
         schedule: &Schedule<String>,
         base_context: BTreeMap<String, minijinja::Value>,
     ) -> FsResult<()> {
@@ -204,13 +250,7 @@ impl TaskRunner {
         let catalog_schemas_to_register =
             filter_missing_schemas(&self.adapter, &state, &selected_catalog_schemas)?;
 
-        register_catalog_schemas_remote(
-            &run_task_args.io,
-            &self.adapter,
-            &state,
-            catalog_schemas_to_register,
-        )
-        .await
+        register_catalog_schemas_remote(&self.adapter, &state, catalog_schemas_to_register).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -227,9 +267,9 @@ impl TaskRunner {
     ) -> Result<RunTaskResults, Box<FsError>> {
         self.hooks.will_run(&run_task_args, &schedule);
 
-        let registered_schemas = if self.should_register_schemas(run_task_args.as_ref()) {
-            self.register_schemas(run_task_args.as_ref(), &schedule, base_context)
-                .await?;
+        let registered_schemas = if self.should_register_schemas(run_task_args.as_ref(), &schedule)
+        {
+            self.register_schemas(&schedule, base_context).await?;
             true
         } else {
             false
@@ -331,8 +371,14 @@ impl TaskRunner {
             .did_visit_taskgraph(&run_task_args, &schedule, &graph, &mut ctx, &token)
             .await?;
 
-        let stats = summarize_task_runner_stats(&ctx, &schedule, self.resolved_state.as_ref());
-        let results = stats.collect_as_results();
+        let mut stats = summarize_task_runner_stats(&ctx, &schedule, self.resolved_state.as_ref());
+        let adapter_responses: HashMap<String, AdapterResponse> = ctx
+            .inner
+            .main_adapter_responses
+            .iter()
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
+            .collect();
+        let results = stats.collect_as_results(&adapter_responses);
         let successful_relational_nodes =
             stats.collect_successful_relational_nodes(&self.resolved_state);
 
@@ -350,6 +396,10 @@ impl TaskRunner {
         let database_schemas_option = Some(database_schemas);
         let results_option = Some(results.clone());
 
+        // on-run-end hook results, recorded as `operation.<project>.<name>` nodes and
+        // merged into the run stats below.
+        let mut hook_stats: Vec<Stat> = Vec::new();
+
         let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
         if execute == Execute::Remote && !run_task_args.skip_post_hooks {
             // Create span for on-run-end phase if there are any hooks
@@ -362,19 +412,48 @@ impl TaskRunner {
                 None
             };
 
-            // Execute all on-run-end hooks and record status on phase span
+            // Execute all on-run-end hooks and record status on phase span.
+            //
+            // Hooks are attached to the *command*, not to individual models, so a failing
+            // on-run-end hook must NOT turn already-materialized models into `error`. We
+            // record each hook as its own `operation.<project>.<name>` result (matching
+            // dbt-core) and keep the real per-model stats, rather than unwinding out of
+            // `run()` — which discarded `stats` and let the caller stamp every selected
+            // node as a phantom "Compilation Error". The hook error is still recorded on
+            // its span, so it is surfaced and counted toward the exit code.
+            // dbt-labs/fs#12418.
             if let Some(ref span) = on_run_end_span {
-                let result: FsResult<()> = async {
+                let mut hook_failed = false;
+                async {
                     for (idx, operation) in
                         self.resolved_state.operations.on_run_end.iter().enumerate()
                     {
+                        let unique_id = operation.__common_attr__.unique_id.clone();
+                        let start_time = SystemTime::now();
+
+                        // dbt-core stops running hooks once one fails and records the
+                        // remainder as skipped.
+                        if hook_failed {
+                            hook_stats.push(Stat {
+                                unique_id,
+                                num_rows: None,
+                                rows_affected: None,
+                                start_time,
+                                end_time: SystemTime::now(),
+                                status: NodeStatus::SkippedUpstreamFailed,
+                                thread_id: "main".to_string(),
+                                message: None,
+                            });
+                            continue;
+                        }
+
                         // Create span for individual hook with HookProcessed event
                         let hook_span = create_info_span(HookProcessed::start_on_run(
                             operation.__common_attr__.package_name.as_str(),
                             operation.__common_attr__.name.as_str(),
                             HookType::OnRunEnd,
                             (idx + 1) as u32,
-                            operation.__common_attr__.unique_id.as_str(),
+                            unique_id.as_str(),
                         ));
 
                         let result = run_operation_on_run_with_ctx(
@@ -386,10 +465,23 @@ impl TaskRunner {
                         )
                         .instrument(hook_span.clone())
                         .await;
+                        let _ = result.as_ref().record_status(span);
 
                         let (hook_outcome, error_message) = match &result {
                             Ok(_) => (HookOutcome::Success, None),
-                            Err(e) => (HookOutcome::Error, Some(e.message().to_string())),
+                            Err(e) => {
+                                let prefix = if stats
+                                    .run
+                                    .stats
+                                    .iter()
+                                    .any(|stat| stat.status == NodeStatus::Errored)
+                                {
+                                    "Secondary error after an earlier node failure: "
+                                } else {
+                                    ""
+                                };
+                                (HookOutcome::Error, Some(format!("{prefix}{}", e.message())))
+                            }
                         };
 
                         record_span_status_with_attrs(
@@ -402,16 +494,44 @@ impl TaskRunner {
                             error_message.as_deref(),
                         );
 
-                        result?;
+                        let status = match &result {
+                            Ok(_) => NodeStatus::Succeeded,
+                            Err(_) => NodeStatus::Errored,
+                        };
+                        hook_stats.push(Stat {
+                            unique_id,
+                            num_rows: None,
+                            rows_affected: None,
+                            start_time,
+                            end_time: SystemTime::now(),
+                            status,
+                            thread_id: "main".to_string(),
+                            message: error_message,
+                        });
+
+                        if let Err(e) = result {
+                            // Surface and count the hook error the same way a model
+                            // execution failure is handled (see visitor.rs): emit it so it
+                            // prints and drives a non-zero exit code, without unwinding out
+                            // of `run()` and discarding the per-model stats.
+                            emit_error_log_from_fs_error(*e);
+                            hook_failed = true;
+                        }
                     }
-                    Ok(())
                 }
                 .instrument(span.clone())
-                .await
-                .record_status(span);
-
-                result?;
+                .await;
             }
+        }
+
+        // When an on-run-end hook fails, record the hook results as `operation.` nodes
+        // in run_results.json (alongside the unmodified model results) so the failure is
+        // represented and not mis-attributed to models — matching dbt-core's failure
+        // output. All-success hook runs are intentionally left unrecorded here to avoid
+        // changing every existing artifact; recording successful hooks as operation nodes
+        // is a follow-up. dbt-labs/fs#12418.
+        if hook_stats.iter().any(|s| s.status == NodeStatus::Errored) {
+            stats.run.stats.extend(hook_stats);
         }
 
         let showables = self.hooks.collect_showables(&mut ctx);
@@ -419,11 +539,12 @@ impl TaskRunner {
         let storeables = self.hooks.collect_storeables(&run_task_args, &mut ctx);
 
         self.hooks
-            .did_collect_all_run_task_results(&run_task_args, &mut ctx)
+            .did_collect_all_run_task_results(&run_task_args, &mut ctx, &token)
             .await;
 
         Ok(RunTaskResults {
             stats,
+            adapter_responses,
             storeables,
             showables,
             jinja_env: self.jinja_env,

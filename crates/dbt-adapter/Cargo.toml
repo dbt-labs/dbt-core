@@ -15,31 +15,32 @@ workspace = true
 [dependencies]
 adbc-record-replay = { workspace = true }
 dbt-adapter-core = { workspace = true }
+dbt-adapter-engine = { workspace = true }
 dbt-adapter-sql = { workspace = true }
 dbt-adbc = { workspace = true }
 dbt-agate = { workspace = true }
 dbt-auth = { workspace = true }
-dbt-cloud-config = { workspace = true }
 dbt-common = { workspace = true }
 dbt-env = { workspace = true }
 dbt-frontend-common = { workspace = true }
 dbt-handles = { workspace = true }
+dbt-platform-auth = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
+dbt-sql-keywords = { workspace = true }
 dbt-sql-utils = { workspace = true }
 dbt-telemetry = { workspace = true }
 dbt-tracing = { workspace = true }
+dbt-tracked-stmt = { workspace = true }
 dbt-yaml = { workspace = true }
 
+adbc-core = { workspace = true }
 arrow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-json = { workspace = true }
 arrow-schema = { workspace = true }
 base64 = { workspace = true }
-parquet = { workspace = true }
-
-adbc-core = { workspace = true }
 chrono = { workspace = true }
 crossbeam-skiplist = { workspace = true }
 crossbeam-utils = { workspace = true }
@@ -47,6 +48,7 @@ dashmap = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 fancy-regex = { workspace = true }
 flate2 = { workspace = true }
+futures = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 md5 = { workspace = true }
 minijinja = { workspace = true, features = ["loader", "deserialization"] }

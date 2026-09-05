@@ -3,15 +3,18 @@ use std::fmt;
 use std::sync::Arc;
 
 use chrono::{
-    offset::Offset, DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone,
-    Timelike, Utc, Weekday,
+    format::{Fixed, Item, StrftimeItems},
+    offset::Offset,
+    DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc,
+    Weekday,
 };
 use chrono_tz::Tz;
 use minijinja::arg_utils::ArgsIter;
-use minijinja::{arg_utils::ArgParser, value::Object, Error, ErrorKind, Value};
+use minijinja::{arg_utils::ArgParser, value::Object, value::ObjectRepr, Error, ErrorKind, Value};
 
 use crate::modules::py_datetime::bound_method::BoundMethod;
 use crate::modules::py_datetime::date::PyDate;
+use crate::modules::py_datetime::find_microsecond_directive;
 use crate::modules::py_datetime::strptime;
 use crate::modules::py_datetime::time::PyTime;
 use crate::modules::py_datetime::timedelta::PyTimeDelta;
@@ -594,6 +597,21 @@ impl Object for PyDateTimeClass {
 //
 // Implementation of PyDateTime object
 //
+fn is_timezone_item(item: &Item<'_>) -> bool {
+    matches!(
+        item,
+        Item::Fixed(
+            Fixed::TimezoneName
+                | Fixed::TimezoneOffsetColon
+                | Fixed::TimezoneOffsetDoubleColon
+                | Fixed::TimezoneOffsetTripleColon
+                | Fixed::TimezoneOffsetColonZ
+                | Fixed::TimezoneOffset
+                | Fixed::TimezoneOffsetZ
+        )
+    )
+}
+
 impl PyDateTime {
     // convenience "naive" constructor
     pub fn new_naive(dt: NaiveDateTime) -> Self {
@@ -668,12 +686,41 @@ impl PyDateTime {
                 "strftime requires one string argument",
             )
         })?;
-        let s = match &self.state {
-            DateTimeState::Naive(ndt) => ndt.format(fmt).to_string(),
-            DateTimeState::Aware(adt) => adt.format(fmt).to_string(),
-            DateTimeState::FixedOffset(fdt) => fdt.format(fmt).to_string(),
+
+        // Python's `%f` is six zero-padded microsecond digits; chrono's `%f` is
+        // nine nanosecond digits. Format the surrounding pieces with chrono and
+        // write the microseconds ourselves.
+        let mut formatted = String::new();
+        let mut remaining = fmt;
+        while let Some(pos) = find_microsecond_directive(remaining) {
+            self.format_into(&remaining[..pos], &mut formatted)?;
+            let microseconds = self.chrono_dt().nanosecond() / 1_000;
+            formatted.push_str(&format!("{microseconds:06}"));
+            remaining = &remaining[pos + "%f".len()..];
+        }
+        self.format_into(remaining, &mut formatted)?;
+
+        Ok(Value::from(formatted))
+    }
+
+    /// Append `fmt` formatted against this datetime to `out`. `fmt` is a slice of
+    /// a `strftime` format string with no `%f` conversion left in it.
+    fn format_into(&self, fmt: &str, out: &mut String) -> Result<(), Error> {
+        if fmt.is_empty() {
+            return Ok(());
+        }
+        let result = match &self.state {
+            DateTimeState::Naive(ndt) => {
+                // Python renders timezone directives as empty strings for naive datetimes.
+                let items = StrftimeItems::new(fmt)
+                    .filter(|item| !is_timezone_item(item))
+                    .collect::<Vec<_>>();
+                ndt.format_with_items(items.iter()).write_to(out)
+            }
+            DateTimeState::Aware(adt) => adt.format(fmt).write_to(out),
+            DateTimeState::FixedOffset(fdt) => fdt.format(fmt).write_to(out),
         };
-        Ok(Value::from(s))
+        result.map_err(|_| Error::new(ErrorKind::InvalidArgument, "invalid strftime format"))
     }
 
     /// Format with a custom date/time separator. `sep == 'T'` produces the
@@ -1128,6 +1175,15 @@ impl PyDateTime {
 // Implement the `Object` trait for PyDateTime so Jinja can call methods
 //
 impl Object for PyDateTime {
+    // Without this, the default `ObjectRepr::Map` (with no enumerable fields,
+    // since `enumerate` is not overridden either) makes `tojson`/`|string`
+    // render this as the literal "{}" and `is mapping` report true. `Plain`
+    // makes stringification/serialization go through `render()` below, and
+    // matches the sibling `PyDate` object.
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
     fn is_true(self: &Arc<Self>) -> bool {
         true
     }
@@ -1621,6 +1677,15 @@ mod tests {
     fn test_str_naive_with_microseconds_uses_space() {
         let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T12:30:45.123456")).unwrap();
         assert_eq!(render_dt(dt), "2024-01-01 12:30:45.123456");
+    }
+
+    #[test]
+    fn test_strftime_naive_omits_timezone_directives() {
+        let dt = PyDateTimeClass::fromisoformat(args!("2024-01-01T12:30:45.123456")).unwrap();
+        let formatted = dt
+            .strftime(&[Value::from("%Y-%m-%d %H:%M:%S %z %Z")])
+            .unwrap();
+        assert_eq!(formatted.as_str(), Some("2024-01-01 12:30:45  "));
     }
 
     #[test]

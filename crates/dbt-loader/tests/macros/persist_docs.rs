@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
+use dbt_adapter::relation::RelationObject;
 use dbt_adapter_core::AdapterType;
+use dbt_schemas::dbt_types::RelationType;
 use minijinja::Value;
 
 use crate::macro_test_harness::MacroTestHarness;
@@ -63,5 +65,72 @@ mod databricks {
             rendered.trim(),
             "ALTER TABLE `dbt`.`dbt_entities`.`ent_shopify_inventory_quantity` ALTER COLUMN `id` COMMENT 'Primary key for the inventory quantity record.'"
         );
+    }
+
+    #[test]
+    fn get_persist_docs_column_list_skips_column_missing_from_query() {
+        let view_create_sql = include_str!(
+            "../../src/dbt_macro_assets/dbt-databricks/macros/relations/view/create.sql"
+        );
+        let generic_persist_docs_sql = include_str!(
+            "../../src/dbt_macro_assets/dbt-adapters/macros/adapters/persist_docs.sql"
+        );
+
+        let combined = format!("{view_create_sql}\n{generic_persist_docs_sql}");
+
+        let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
+            .with_root_package("test_package".to_string())
+            .with_macro_at_path(
+                "dbt_databricks",
+                "get_persist_docs_column_list",
+                &combined,
+                "dbt_macro_assets/dbt-databricks/macros/relations/view/create.sql",
+            )
+            .build()
+            .expect("harness should build");
+
+        harness.mock().on("quote", |args| {
+            let name = args.first().and_then(|v| v.as_str()).unwrap_or_default();
+            Ok(Value::from(format!("`{name}`")))
+        });
+
+        let relation = harness.relation(
+            "test_db",
+            "test_schema",
+            "customers",
+            Some(RelationType::View),
+        );
+        let ctx = BTreeMap::from([
+            (
+                "relation".to_string(),
+                RelationObject::new(relation).into_value(),
+            ),
+            (
+                "model_columns".to_string(),
+                Value::from_serialize(BTreeMap::from([
+                    (
+                        "id",
+                        BTreeMap::from([("description", Value::from("Primary key"))]),
+                    ),
+                    (
+                        "email",
+                        BTreeMap::from([("description", Value::from("Email address"))]),
+                    ),
+                ])),
+            ),
+            (
+                "query_columns".to_string(),
+                Value::from(vec![Value::from("id")]),
+            ),
+        ]);
+
+        let rendered = harness
+            .render(
+                "{{ get_persist_docs_column_list(relation, model_columns, query_columns) }}",
+                ctx,
+            )
+            .expect("render should succeed");
+
+        assert_eq!(rendered.trim(), "`id` comment 'Primary key'");
     }
 }

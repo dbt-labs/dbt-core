@@ -35,8 +35,10 @@ dbt-yaml = { workspace = true }
 
 arrow = { workspace = true }
 arrow-schema = { workspace = true }
+blake3 = { workspace = true }
 chrono = { workspace = true }
 datafusion-expr = { workspace = true }
+futures = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }
 parking_lot = { workspace = true }
@@ -45,6 +47,7 @@ regex = { workspace = true }
 scc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
@@ -52,5 +55,5 @@ chrono-tz = { workspace = true }
 dbt-test-primitives = { workspace = true }
 indexmap = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true }
+tonic = { workspace = true }
 tracing-subscriber = { workspace = true }

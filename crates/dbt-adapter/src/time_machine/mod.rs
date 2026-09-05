@@ -7,11 +7,11 @@
 //!
 //! The system captures events at two levels:
 //!
-//! 1. **Adapter** (sync): Jinja `adapter.xxx()` calls via `Object::call_method`
-//! 2. **MetadataAdapter** (async): Schema discovery, freshness, and relation listing
+//! 1. `Adapter` (sync): Jinja `adapter.xxx()` calls via `Object::call_method`
+//! 2. `MetadataAdapter` (async): Schema discovery, freshness, and relation listing
 //!
-//! Events are emitted via an MPSC channel to a background writer task, ensuring
-//! minimal overhead on the hot path.
+//! Events are emitted via an MPSC channel to a background writer task, keeping overhead
+//! on the hot path minimal.
 //!
 //! # Recording Format
 //!
@@ -55,10 +55,10 @@
 //!
 //! Events are classified by their side effects for dependency analysis:
 //!
-//! - **MetadataRead**: Query database state without mutation (SELECT/SHOW)
-//! - **Write**: Mutate database state (DDL/DML)
-//! - **Cache**: Internal bookkeeping (no DB I/O)
-//! - **Pure**: Local computation (no I/O at all)
+//! - `MetadataRead`: query database state without mutation (SELECT/SHOW)
+//! - `Write`: mutate database state (DDL/DML)
+//! - `Cache`: internal bookkeeping (no DB I/O)
+//! - `Pure`: local computation (no I/O at all)
 
 use std::{io, sync::Arc};
 
@@ -82,8 +82,9 @@ pub mod writer;
 pub use engine::{EventReplayer, ReplayCallError, ReplayerStats, TimeMachine};
 pub use event::{
     AdapterCallEvent, CacheInvalidationEvent, CatalogSchema, CatalogSchemas, MetadataCallArgs,
-    MetadataCallEvent, NodeIndex, RecordedEvent, RecordingHeader, RunRemoteAdhocEvent, SaoEvent,
-    SaoStatus,
+    MetadataCallEvent, NodeIndex, RecordedCachedTestResult, RecordedEvent,
+    RecordedRunCacheCloneDecision, RecordingHeader, RunCacheCloneEvent, RunRemoteAdhocEvent,
+    SaoEvent, SaoStatus,
 };
 pub use event_recorder::EventRecorder;
 pub use event_replay::{
@@ -104,14 +105,13 @@ impl From<TimeMachineReplayOrdering> for ReplayMode {
 }
 pub use metadata::{
     MetadataResultDeserialize, MetadataResultSerialize, args_create_schemas_if_not_exists,
-    args_fetch_view_definitions, args_freshness, args_list_relations_in_parallel,
-    args_list_relations_schemas, args_list_relations_schemas_by_patterns, args_list_udfs,
-    with_time_machine_metadata_wrapper,
+    args_fetch_view_definitions, args_freshness, args_freshness_all_in_schema,
+    args_freshness_with_overrides, args_list_relations_in_parallel, args_list_relations_schemas,
+    args_list_relations_schemas_by_patterns, args_list_udfs, with_time_machine_metadata_wrapper,
 };
 pub use semantic::SemanticCategory;
 pub use serde::{
-    ReplayContext, json_to_value, json_to_value_with_context, serialize_args, serialize_value,
-    values_match,
+    ReplayContext, json_to_value_with_context, serialize_args, serialize_value, values_match,
 };
 pub use serializable::{
     DeserializeFn, JsonExtractor, TimeMachineSerializable, TypeEntry, deserialize_object, registry,
@@ -132,23 +132,9 @@ static GLOBAL_SESSION: Mutex<Option<RecordingSession>> = Mutex::new(None);
 /// Global replayer — resettable for multi-invocation test support.
 static GLOBAL_REPLAYER: Mutex<Option<Arc<EventReplayer>>> = Mutex::new(None);
 
-/// Initialize the global recording session.
-///
-/// This should be called at the start of a Fusion run. If recording is already
-/// initialized (e.g., by another adapter), this is a no-op — the existing session
-/// is used and the provided config is ignored.
-///
-/// # Arguments
-///
-/// * `output_path` - Directory to write recording files
-/// * `adapter_type` - Type of adapter being recorded (e.g., "snowflake")
-/// * `invocation_id` - Unique identifier for this run
-/// * `invocation_command` - The command that was executed (e.g., "dbt build --select ...")
-/// * `token` - Cancellation token for graceful shutdown on CTRL+C
-///
-/// # Returns
-///
-/// A `RecordingHandle` that can be used to shut down the recording session.
+/// Call at the start of a Fusion run. If recording is already initialized (e.g., by
+/// another adapter), this is a no-op — the existing session is used and the provided
+/// config is ignored.
 pub fn get_or_init_recording(
     output_path: impl Into<std::path::PathBuf>,
     adapter_type: impl Into<String>,
@@ -179,12 +165,7 @@ pub fn get_or_init_recording(
     RecordingHandle { _private: () }
 }
 
-/// Get the global recorder, if initialized.
-///
-/// This is the primary way to access the recorder from anywhere in the codebase.
-/// Returns `None` if recording has not been initialized.
-///
-/// # Example
+/// The primary way to access the recorder from anywhere in the codebase.
 ///
 /// ```ignore
 /// if let Some(recorder) = global_recorder() {
@@ -205,18 +186,12 @@ pub fn global_recorder() -> Option<Arc<EventRecorder>> {
         .map(|s| Arc::clone(&s.recorder))
 }
 
-/// Check if recording is currently active.
 pub fn is_recording() -> bool {
     GLOBAL_SESSION.lock().is_some()
 }
 
-/// Get or initialize the global replayer.
-///
-/// If a replayer is already set, returns a clone of it.
-/// Otherwise, calls the closure to create one, stores it globally, and returns it.
-///
-/// This enables sharing the same replayer between `Adapter` (which holds
-/// `TimeMachine` directly) and `MetadataAdapter` (which accesses via `global_replayer()`).
+/// Lets `Adapter` (which holds `TimeMachine` directly) and `MetadataAdapter` (which
+/// accesses via `global_replayer()`) share the same replayer instance.
 ///
 /// ```ignore
 /// let replayer = get_or_init_replayer(|| {
@@ -254,7 +229,6 @@ pub fn global_replayer() -> Option<Arc<EventReplayer>> {
     GLOBAL_REPLAYER.lock().as_ref().map(Arc::clone)
 }
 
-/// Check if replay is currently active.
 pub fn is_replaying() -> bool {
     GLOBAL_REPLAYER.lock().is_some()
 }
@@ -282,12 +256,7 @@ impl ReplayHandle {
 ///
 /// This handle controls the lifetime of the recording session. When dropped
 /// without calling `shutdown()`, it will log a warning but recording will
-/// continue until the process exits.
-///
-/// For proper cleanup, call `shutdown()` which:
-/// 1. Signals the recorder that no more events will be emitted
-/// 2. Waits for the writer to finish flushing all events
-/// 3. Returns the recording result with statistics
+/// continue until the process exits. Call `shutdown()` for proper cleanup.
 pub struct RecordingHandle {
     _private: (),
 }
@@ -295,22 +264,17 @@ pub struct RecordingHandle {
 impl RecordingHandle {
     /// Shutdown the recording session and wait for all events to be written.
     ///
-    /// This is the proper way to finalize a recording:
-    /// 1. Close the recorder channel (signals writer to finish)
-    /// 2. Wait for the writer to flush all buffered events to disk
-    /// 3. Return the recording result with statistics
-    ///
-    /// After shutdown, the global recorder is still accessible but events
+    /// After shutdown, the global recording session is cleared and events
     /// will be silently dropped.
-    ///
-    /// # Returns
-    ///
-    /// The `RecordingResult` containing statistics and file paths.
     pub async fn shutdown(self) -> Result<RecordingResult, RecordingError> {
-        // Extract needed data synchronously (don't hold MutexGuard across await)
+        // Extract needed data synchronously (don't hold MutexGuard across await).
+        // Must `take()` (not `as_ref()`): the writer's mpsc channel only closes
+        // once the sole `Arc<EventRecorder>` is dropped, so leaving it in
+        // `GLOBAL_SESSION` means the writer's `receiver.recv()` never sees
+        // `None` and the `handle.await` below never resolves.
         let handle = {
-            let guard = GLOBAL_SESSION.lock();
-            let session = guard.as_ref().ok_or(RecordingError::NotInitialized)?;
+            let mut guard = GLOBAL_SESSION.lock();
+            let session = guard.take().ok_or(RecordingError::NotInitialized)?;
             session.recorder.close();
             session
                 .writer_handle

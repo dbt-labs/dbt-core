@@ -58,26 +58,27 @@ fn t(label: &str, start: Instant) {
 }
 
 use arrow::datatypes::{DataType, Field, FieldRef, TimeUnit};
+use dbt_common::path::DbtPath;
 use parquet::arrow::{ProjectionMask, arrow_reader::ParquetRecordBatchReaderBuilder};
 use serde::{Deserialize, Serialize};
 
 use dbt_schemas::{
     schemas::{
-        DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
-        DbtUnitTest, Nodes,
+        DbtAnalysis, DbtCheck, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource,
+        DbtTest, DbtUnitTest, Nodes,
         common::ConstraintType,
         macros::{DbtDocsMacro, DbtMacro, MacroArgument},
-        manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
-        nodes::DbtGroup,
+        manifest::{DbtMetric, DbtOperation, DbtSavedQuery, DbtSemanticModel},
+        nodes::{DbtGroup, InternalDbtNodeAttributes},
     },
-    state::{DbtPackage, Macros, ManifestPathConfig, ResourcePathKind},
+    state::{DbtPackage, Macros, ManifestPathConfig, Operations, ResourcePathKind},
 };
 
 use crate::partial_parse::PackageSnapshot;
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-pub const CACHE_DIR_NAME: &str = "metadata/parse";
+pub const CACHE_DIR_NAME: &str = "private/metadata/parse";
 
 const SCHEMA_VERSION: u32 = 1;
 
@@ -381,7 +382,7 @@ fn node_fields() -> Vec<FieldRef> {
 
 fn node_row_from_trait<N>(uid: &str, node: &N, kind: &str, is_disabled: i32) -> NodeRow
 where
-    N: dbt_schemas::schemas::nodes::InternalDbtNode + Serialize,
+    N: dbt_schemas::schemas::nodes::InternalDbtNode + InternalDbtNodeAttributes + Serialize,
 {
     let c = node.common();
     let b = node.base();
@@ -412,6 +413,12 @@ where
         Some(b.alias.clone())
     };
     let group_name = node.get_group();
+    let access = node.get_access().map(|a| a.to_string());
+    let source = node.as_any().downcast_ref::<DbtSource>();
+    let identifier = source
+        .map(|s| s.__source_attr__.identifier.clone())
+        .or_else(|| alias.clone());
+    let source_name = source.map(|s| s.__source_attr__.source_name.clone());
     NodeRow {
         unique_id: uid.to_string(),
         is_disabled,
@@ -431,8 +438,44 @@ where
         schema,
         alias,
         relation_name: b.relation_name.clone(),
+        access,
         group_name,
+        source_name,
+        identifier,
         ..Default::default()
+    }
+}
+
+fn append_operation_rows(rows: &mut Vec<NodeRow>, operations_json: &str) {
+    let Ok(ops) = serde_json::from_str::<Operations>(operations_json) else {
+        return;
+    };
+    for op in ops.on_run_start.iter().chain(ops.on_run_end.iter()) {
+        let node: &DbtOperation = op;
+        rows.push(node_row_from_trait(
+            &node.__common_attr__.unique_id,
+            node,
+            "operation",
+            0,
+        ));
+    }
+}
+
+fn append_operation_alive(
+    rows: &mut Vec<dbt_metadata_parquet::parse_alive::AliveRow>,
+    operations_json: &str,
+    ingested_at: i64,
+) {
+    let Ok(ops) = serde_json::from_str::<Operations>(operations_json) else {
+        return;
+    };
+    for op in ops.on_run_start.iter().chain(ops.on_run_end.iter()) {
+        let node: &DbtOperation = op;
+        rows.push(dbt_metadata_parquet::parse_alive::AliveRow {
+            unique_id: node.__common_attr__.unique_id.clone(),
+            resource_type: "operation".to_string(),
+            ingested_at,
+        });
     }
 }
 
@@ -522,7 +565,12 @@ fn node_row_from_docs_macro(uid: &str, node: &DbtDocsMacro, is_disabled: i32) ->
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> Vec<NodeRow> {
+fn collect_all_rows(
+    nodes: &Nodes,
+    disabled_nodes: &Nodes,
+    macros: &Macros,
+    operations_json: &str,
+) -> Vec<NodeRow> {
     let mut rows = Vec::new();
     macro_rules! push_trait {
         ($map:expr, $kind:literal, $dis:expr) => {
@@ -538,6 +586,7 @@ fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> V
     push_trait!(&nodes.sources, "source", 0);
     push_trait!(&nodes.snapshots, "snapshot", 0);
     push_trait!(&nodes.analyses, "analysis", 0);
+    push_trait!(&nodes.checks, "check", 0);
     push_trait!(&nodes.exposures, "exposure", 0);
     push_trait!(&nodes.semantic_models, "semantic_model", 0);
     push_trait!(&nodes.metrics, "metric", 0);
@@ -556,6 +605,7 @@ fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> V
     push_trait!(&disabled_nodes.sources, "source", 1);
     push_trait!(&disabled_nodes.snapshots, "snapshot", 1);
     push_trait!(&disabled_nodes.analyses, "analysis", 1);
+    push_trait!(&disabled_nodes.checks, "check", 1);
     push_trait!(&disabled_nodes.exposures, "exposure", 1);
     push_trait!(&disabled_nodes.semantic_models, "semantic_model", 1);
     push_trait!(&disabled_nodes.metrics, "metric", 1);
@@ -570,6 +620,7 @@ fn collect_all_rows(nodes: &Nodes, disabled_nodes: &Nodes, macros: &Macros) -> V
     for (uid, node) in macros.docs_macros.iter() {
         rows.push(node_row_from_docs_macro(uid, node, 0));
     }
+    append_operation_rows(&mut rows, operations_json);
     rows
 }
 
@@ -597,6 +648,7 @@ fn collect_delta_rows(
     push_if_changed!(&nodes.sources, "source", 0);
     push_if_changed!(&nodes.snapshots, "snapshot", 0);
     push_if_changed!(&nodes.analyses, "analysis", 0);
+    push_if_changed!(&nodes.checks, "check", 0);
     push_if_changed!(&nodes.exposures, "exposure", 0);
     push_if_changed!(&nodes.semantic_models, "semantic_model", 0);
     push_if_changed!(&nodes.metrics, "metric", 0);
@@ -619,6 +671,7 @@ fn collect_delta_rows(
     push_if_changed!(&disabled_nodes.sources, "source", 1);
     push_if_changed!(&disabled_nodes.snapshots, "snapshot", 1);
     push_if_changed!(&disabled_nodes.analyses, "analysis", 1);
+    push_if_changed!(&disabled_nodes.checks, "check", 1);
     push_if_changed!(&disabled_nodes.exposures, "exposure", 1);
     push_if_changed!(&disabled_nodes.semantic_models, "semantic_model", 1);
     push_if_changed!(&disabled_nodes.metrics, "metric", 1);
@@ -649,6 +702,7 @@ fn collect_alive_rows(
     nodes: &Nodes,
     disabled_nodes: &Nodes,
     macros: &Macros,
+    operations_json: &str,
     ingested_at: i64,
 ) -> Vec<dbt_metadata_parquet::parse_alive::AliveRow> {
     use dbt_metadata_parquet::parse_alive::AliveRow;
@@ -671,6 +725,7 @@ fn collect_alive_rows(
     push_alive!(&nodes.sources, "source");
     push_alive!(&nodes.snapshots, "snapshot");
     push_alive!(&nodes.analyses, "analysis");
+    push_alive!(&nodes.checks, "check");
     push_alive!(&nodes.exposures, "exposure");
     push_alive!(&nodes.semantic_models, "semantic_model");
     push_alive!(&nodes.metrics, "metric");
@@ -685,6 +740,7 @@ fn collect_alive_rows(
     push_alive!(&disabled_nodes.sources, "source");
     push_alive!(&disabled_nodes.snapshots, "snapshot");
     push_alive!(&disabled_nodes.analyses, "analysis");
+    push_alive!(&disabled_nodes.checks, "check");
     push_alive!(&disabled_nodes.exposures, "exposure");
     push_alive!(&disabled_nodes.semantic_models, "semantic_model");
     push_alive!(&disabled_nodes.metrics, "metric");
@@ -699,6 +755,7 @@ fn collect_alive_rows(
             ingested_at,
         });
     }
+    append_operation_alive(&mut rows, operations_json, ingested_at);
     rows
 }
 
@@ -1034,7 +1091,12 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
         None => {
             // Cold start: write epoch 0, remove any delta epochs.
             let tc = Instant::now();
-            let mut all_rows = collect_all_rows(args.nodes, args.disabled_nodes, args.macros);
+            let mut all_rows = collect_all_rows(
+                args.nodes,
+                args.disabled_nodes,
+                args.macros,
+                args.operations_json,
+            );
             for r in &mut all_rows {
                 r.ingested_at = args.ingested_at;
             }
@@ -1093,7 +1155,12 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
                 // `changed` get the current invocation timestamp.
                 let prior_ingested = read_ingested_at(&dir);
                 let tc = Instant::now();
-                let mut all_rows = collect_all_rows(args.nodes, args.disabled_nodes, args.macros);
+                let mut all_rows = collect_all_rows(
+                    args.nodes,
+                    args.disabled_nodes,
+                    args.macros,
+                    args.operations_json,
+                );
                 for r in &mut all_rows {
                     r.ingested_at = if changed.contains(&r.unique_id) {
                         args.ingested_at
@@ -1180,6 +1247,7 @@ pub fn save(args: &SaveArgs<'_>) -> Result<(), String> {
         args.nodes,
         args.disabled_nodes,
         args.macros,
+        args.operations_json,
         args.ingested_at,
     );
     let alive_path = dir.join("alive.parquet");
@@ -1564,7 +1632,7 @@ fn deserialize_into(
                     v.macro_name_span = serde_json::from_str(macro_name_span_json).ok();
                 }
                 if !macro_absolute_path.is_empty() {
-                    v.absolute_path = PathBuf::from(macro_absolute_path);
+                    v.absolute_path = DbtPath::from(macro_absolute_path);
                 }
                 nodes.macros.insert(uid.to_string(), Arc::new(v));
             }
@@ -1575,6 +1643,7 @@ fn deserialize_into(
         "source" => deser!(nodes.sources, DbtSource),
         "snapshot" => deser!(nodes.snapshots, DbtSnapshot),
         "analysis" => deser!(nodes.analyses, DbtAnalysis),
+        "check" => deser!(nodes.checks, DbtCheck),
         "exposure" => deser!(nodes.exposures, DbtExposure),
         "semantic_model" => deser!(nodes.semantic_models, DbtSemanticModel),
         "metric" => deser!(nodes.metrics, DbtMetric),
@@ -1602,6 +1671,12 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
             !pkg.package_root_path
                 .components()
                 .any(|c| c.as_os_str() == "dbt_internal_packages")
+                // The inline ("") package holds the transient --inline SQL asset. It is
+                // reconstructed fresh by `prepare_inline_sql` on every run (its temp file is
+                // regenerated with a new uuid), so it must not be persisted to the cache —
+                // otherwise the incremental path would restore a stale, empty "" stub and the
+                // fresh injection would create a duplicate "" package.
+                && !pkg.dbt_project.name.is_empty()
         })
         .map(|(i, pkg)| {
             let all_paths: HashMap<ResourcePathKind, Vec<(String, u64)>> = pkg
@@ -1641,6 +1716,7 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
 mod tests {
     use super::*;
     use crate::index_resolution::resolve_dirty_unique_ids_from_index;
+    use dbt_schemas::state::DbtAsset;
     use minijinja::machinery::Span;
     use tempfile::TempDir;
 
@@ -2173,6 +2249,7 @@ mod tests {
             package_root_path: root.join(name),
             dbt_properties: vec![],
             analysis_files: vec![],
+            check_files: vec![],
             model_sql_files: vec![],
             function_sql_files: vec![],
             macro_files: vec![],
@@ -2181,7 +2258,6 @@ mod tests {
             seed_files: vec![],
             docs_files: vec![],
             snapshot_files: vec![],
-            inline_file: None,
             dependencies: BTreeSet::new(),
             all_paths: HashMap::new(),
             embedded_file_contents: None,
@@ -2196,6 +2272,7 @@ mod tests {
             package_root_path: internal_root,
             dbt_properties: vec![],
             analysis_files: vec![],
+            check_files: vec![],
             model_sql_files: vec![],
             function_sql_files: vec![],
             macro_files: vec![],
@@ -2204,11 +2281,24 @@ mod tests {
             seed_files: vec![],
             docs_files: vec![],
             snapshot_files: vec![],
-            inline_file: None,
             dependencies: BTreeSet::new(),
             all_paths: HashMap::new(),
             embedded_file_contents: Some(HashMap::new()),
             raw_project_yml: dbt_yaml::Value::default(),
+        }
+    }
+
+    fn make_inline_package(out_dir: &Path) -> DbtPackage {
+        let asset = DbtAsset {
+            base_path: out_dir.to_path_buf(),
+            path: PathBuf::from("inline_00000000.sql"),
+            original_path: PathBuf::from("inline_00000000.sql"),
+            package_name: String::new(),
+        };
+        DbtPackage {
+            package_root_path: out_dir.to_path_buf(),
+            model_sql_files: vec![asset],
+            ..DbtPackage::default()
         }
     }
 
@@ -2245,6 +2335,29 @@ mod tests {
             snaps.iter().all(|s| s.package_name != "dbt_utils"),
             "internal package must be excluded"
         );
+    }
+
+    /// snapshot_packages must exclude the inline ("") package. It holds the
+    /// transient --inline SQL asset which is regenerated (with a fresh uuid) on
+    /// every run, so persisting it would cause a stale, empty "" stub to be
+    /// restored on the incremental path while `prepare_inline_sql` injects a
+    /// fresh one — producing a duplicate "" package.
+    #[test]
+    fn snapshot_packages_excludes_inline_package() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+
+        let user = make_user_package(root, "my_project");
+        let inline = make_inline_package(root);
+
+        let snaps = snapshot_packages(&[user, inline]);
+
+        assert_eq!(
+            snaps.len(),
+            1,
+            "the inline package must be excluded from the parquet snapshot"
+        );
+        assert_eq!(snaps[0].package_name, "my_project");
     }
 
     /// After a round-trip through snapshot_packages + reconstruct_package_metadata,

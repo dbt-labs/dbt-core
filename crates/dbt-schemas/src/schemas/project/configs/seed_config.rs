@@ -1,6 +1,8 @@
 use crate::schemas::common::ClusterConfig;
+use crate::schemas::serde::AdapterTypeOrArray;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_proc_macros::Resolvable;
 use dbt_yaml::DbtSchema;
@@ -13,10 +15,10 @@ type YmlValue = dbt_yaml::Value;
 use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
@@ -27,23 +29,29 @@ use crate::schemas::common::Schedule;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::ResolvableConfig;
 use crate::schemas::project::TypedRecursiveConfig;
-use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::default_column_types;
-use crate::schemas::project::configs::common::default_hooks;
-use crate::schemas::project::configs::common::default_meta_and_tags;
-use crate::schemas::project::configs::common::default_quoting;
-use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::project::configs::common::{
+    WarehouseSpecificNodeConfig, take_databricks_catalog_alias,
+};
+use crate::schemas::project::configs::config_merge::{Tags, TblProperties};
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, StringOrInteger, column_types_map,
+    event_time_or_map_to_string, f64_or_string_f64, hours_to_expiration_or_string_omissible,
+    u64_or_string_u64,
 };
+use dbt_common::serde_utils::Omissible;
+use dbt_proc_macros::DefaultTo;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectSeedConfig {
-    #[serde(rename = "+column_types")]
+    #[serde(
+        default,
+        rename = "+column_types",
+        deserialize_with = "column_types_map"
+    )]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(rename = "+copy_grants")]
     pub copy_grants: Option<bool>,
@@ -57,7 +65,11 @@ pub struct ProjectSeedConfig {
     pub docs: Option<DocsConfig>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(rename = "+event_time")]
+    #[serde(
+        default,
+        rename = "+event_time",
+        deserialize_with = "event_time_or_map_to_string"
+    )]
     pub event_time: Option<String>,
     #[serde(rename = "+full_refresh")]
     pub full_refresh: Option<bool>,
@@ -69,9 +81,9 @@ pub struct ProjectSeedConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(rename = "+post-hook")]
+    #[serde(rename = "+post-hook", alias = "+post_hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
-    #[serde(rename = "+pre-hook")]
+    #[serde(rename = "+pre-hook", alias = "+pre_hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(
         default,
@@ -119,6 +131,8 @@ pub struct ProjectSeedConfig {
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
+    #[serde(rename = "+query_tags")]
+    pub query_tags: Option<String>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]
@@ -138,9 +152,9 @@ pub struct ProjectSeedConfig {
     #[serde(
         default,
         rename = "+hours_to_expiration",
-        deserialize_with = "u64_or_string_u64"
+        deserialize_with = "hours_to_expiration_or_string_omissible"
     )]
-    pub hours_to_expiration: Option<u64>,
+    pub hours_to_expiration: Omissible<Option<StringOrInteger>>,
     #[serde(
         default,
         rename = "+job_execution_timeout_seconds",
@@ -187,16 +201,24 @@ pub struct ProjectSeedConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
+    #[serde(rename = "+resource_tags")]
+    pub resource_tags: Option<IndexMap<String, String>>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
     #[serde(rename = "+file_format")]
     pub file_format: Option<String>,
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
+    #[serde(rename = "+adapter")]
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
+    #[serde(rename = "+propagate")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     #[serde(rename = "+location_root")]
     pub location_root: Option<String>,
     #[serde(rename = "+tblproperties")]
-    pub tblproperties: Option<BTreeMap<String, YmlValue>>,
+    pub tblproperties: Option<TblProperties>,
     #[serde(
         default,
         rename = "+include_full_name_in_path",
@@ -218,7 +240,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+catalog")]
     pub catalog: Option<String>,
     #[serde(rename = "+databricks_tags")]
-    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]
@@ -264,7 +286,7 @@ pub struct ProjectSeedConfig {
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
     #[serde(rename = "+dist")]
-    pub dist: Option<String>,
+    pub dist: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort")]
     pub sort: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+sort_type")]
@@ -283,6 +305,12 @@ pub struct ProjectSeedConfig {
     // Postgres specific fields
     #[serde(default, rename = "+indexes")]
     pub indexes: IndexesConfig,
+    #[serde(
+        default,
+        rename = "+unlogged",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub unlogged: Option<bool>,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
@@ -299,11 +327,108 @@ impl TypedRecursiveConfig for ProjectSeedConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.column_types.is_some()
+            || self.copy_grants.is_some()
+            || self.copy_tags.is_some()
+            || self.database.is_some()
+            || self.alias.is_some()
+            || self.docs.is_some()
+            || self.enabled.is_some()
+            || self.event_time.is_some()
+            || self.full_refresh.is_some()
+            || self.grants.0.is_present()
+            || self.group.is_some()
+            || self.meta.is_some()
+            || self.persist_docs.is_some()
+            || self.post_hook.is_some()
+            || self.pre_hook.is_some()
+            || self.quote_columns.is_some()
+            || self.schema.is_some()
+            || self.snowflake_initialization_warehouse.is_some()
+            || self.immutable_where.is_some()
+            || self.snowflake_warehouse.is_some()
+            || self.refresh_warehouse.is_some()
+            || self.static_analysis.is_some()
+            || self.tags.is_some()
+            || self.transient.is_some()
+            || self.quoting.is_some()
+            || self.delimiter.is_some()
+            || self.external_volume.is_some()
+            || self.adapter_properties.is_some()
+            || self.base_location_root.is_some()
+            || self.base_location_subpath.is_some()
+            || self.target_lag.is_some()
+            || self.refresh_mode.is_some()
+            || self.initialize.is_some()
+            || self.scheduler.is_some()
+            || self.tmp_relation_type.is_some()
+            || self.query_tag.is_some()
+            || self.table_tag.is_some()
+            || self.row_access_policy.is_some()
+            || self.automatic_clustering.is_some()
+            || self.secure.is_some()
+            || self.partition_by.is_some()
+            || self.cluster_by.is_some()
+            || self.hours_to_expiration.is_present()
+            || self.job_execution_timeout_seconds.is_some()
+            || self.reservation.is_some()
+            || self.labels.is_some()
+            || self.labels_from_meta.is_some()
+            || self.kms_key_name.is_some()
+            || self.require_partition_filter.is_some()
+            || self.partition_expiration_days.is_some()
+            || self.grant_access_to.is_some()
+            || self.partitions.is_some()
+            || self.enable_refresh.is_some()
+            || self.refresh_interval_minutes.is_some()
+            || self.resource_tags.is_some()
+            || self.max_staleness.is_some()
+            || self.file_format.is_some()
+            || self.catalog_name.is_some()
+            || self.adapter.is_some()
+            || self.propagate.is_some()
+            || self.location_root.is_some()
+            || self.tblproperties.is_some()
+            || self.include_full_name_in_path.is_some()
+            || self.liquid_clustered_by.is_some()
+            || self.auto_liquid_cluster.is_some()
+            || self.clustered_by.is_some()
+            || self.buckets.is_some()
+            || self.catalog.is_some()
+            || self.databricks_tags.is_some()
+            || self.compression.is_some()
+            || self.databricks_compute.is_some()
+            || self.target_alias.is_some()
+            || self.source_alias.is_some()
+            || self.matched_condition.is_some()
+            || self.not_matched_condition.is_some()
+            || self.not_matched_by_source_condition.is_some()
+            || self.not_matched_by_source_action.is_some()
+            || self.merge_with_schema_evolution.is_some()
+            || self.skip_matched_step.is_some()
+            || self.skip_not_matched_step.is_some()
+            || self.auto_refresh.is_some()
+            || self.backup.is_some()
+            || self.bind.is_some()
+            || self.dist.is_some()
+            || self.sort.is_some()
+            || self.sort_type.is_some()
+            || self.as_columnstore.is_some()
+            || self.table_type.is_some()
+            || self.indexes.is_some()
+            || self.unlogged.is_some()
+            || self.schedule.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema,
+)]
 pub struct SeedConfig {
+    #[serde(default, deserialize_with = "column_types_map")]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
@@ -311,6 +436,14 @@ pub struct SeedConfig {
     pub schema: Option<String>,
     pub alias: Option<String>,
     pub catalog_name: Option<String>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<StringOrArrayOfStrings>")]
+    pub propagate: Option<AdapterTypeOrArray>,
     pub docs: Option<DocsConfig>,
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -320,6 +453,7 @@ pub struct SeedConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,
     pub delimiter: Option<Spanned<String>>,
+    #[serde(default, deserialize_with = "event_time_or_map_to_string")]
     pub event_time: Option<String>,
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
@@ -331,11 +465,8 @@ pub struct SeedConfig {
     pub post_hook: Verbatim<Option<Hooks>>,
     #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
     pub materialized: Option<DbtMaterialization>,
@@ -351,6 +482,8 @@ impl From<ProjectSeedConfig> for SeedConfig {
             schema: config.schema,
             alias: config.alias,
             catalog_name: config.catalog_name.clone(),
+            adapter: config.adapter,
+            propagate: config.propagate,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -364,7 +497,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
-            tags: config.tags,
+            tags: Tags(config.tags),
             quoting: config.quoting,
             materialized: Some(DbtMaterialization::Seed),
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
@@ -388,6 +521,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 scheduler: config.scheduler,
                 tmp_relation_type: config.tmp_relation_type,
                 query_tag: config.query_tag,
+                query_tags: config.query_tags,
                 table_tag: config.table_tag,
                 row_access_policy: config.row_access_policy,
                 automatic_clustering: config.automatic_clustering,
@@ -398,6 +532,12 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 iceberg_version: None,
 
                 partition_by: config.partition_by,
+
+                partition_by_config: None,
+
+                distribute_by_config: None,
+
+                primary_key_config: None,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
                 job_execution_timeout_seconds: config.job_execution_timeout_seconds,
@@ -411,7 +551,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 partitions: config.partitions,
                 enable_refresh: config.enable_refresh,
                 refresh_interval_minutes: config.refresh_interval_minutes,
-                resource_tags: None,
+                resource_tags: config.resource_tags,
                 max_staleness: config.max_staleness,
                 jar_file_uri: None,
                 timeout: None,
@@ -429,6 +569,8 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
+                zorder: None,
+                skip_optimize: None,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -444,8 +586,11 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 merge_with_schema_evolution: config.merge_with_schema_evolution,
                 skip_matched_step: config.skip_matched_step,
                 skip_not_matched_step: config.skip_not_matched_step,
+                unique_tmp_table_suffix: None,
                 schedule: config.schedule,
+                row_filter: None,
                 incremental_apply_config_changes: None,
+                persist_constraints: None,
                 use_safer_relation_operations: None,
                 view_update_via_alter: None,
 
@@ -461,10 +606,36 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 table_type: config.table_type,
 
                 indexes: config.indexes,
+                unlogged: config.unlogged,
 
                 // seed is unsupported for Salesforce yet
                 primary_key: PrimaryKeyConfig::default(),
                 category: None,
+
+                engine: None,
+                order_by: None,
+                ttl: None,
+                settings: None,
+                query_settings: None,
+                projections: None,
+                inserts_only: None,
+                connection_overrides: None,
+                fields: None,
+                source_type: None,
+                url: None,
+                format: None,
+                layout: None,
+                lifetime: None,
+                range: None,
+                table: None,
+                update_field: None,
+                update_lag: None,
+                definer: None,
+                sql_security: None,
+                refreshable: None,
+                catchup: None,
+                mv_on_schema_change: None,
+                repopulate_from_mvs_on_full_refresh: None,
             },
         }
     }
@@ -477,6 +648,8 @@ impl From<SeedConfig> for ProjectSeedConfig {
             database: config.database,
             schema: config.schema,
             alias: config.alias,
+            adapter: config.adapter,
+            propagate: config.propagate,
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -490,7 +663,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
             static_analysis: config.static_analysis,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             quoting: config.quoting,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
@@ -512,6 +685,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             scheduler: config.__warehouse_specific_config__.scheduler,
             tmp_relation_type: config.__warehouse_specific_config__.tmp_relation_type,
             query_tag: config.__warehouse_specific_config__.query_tag,
+            query_tags: config.__warehouse_specific_config__.query_tags,
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
@@ -539,6 +713,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             refresh_interval_minutes: config
                 .__warehouse_specific_config__
                 .refresh_interval_minutes,
+            resource_tags: config.__warehouse_specific_config__.resource_tags,
             max_staleness: config.__warehouse_specific_config__.max_staleness,
             // Databricks fields
             file_format: config.__warehouse_specific_config__.file_format,
@@ -582,6 +757,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
 
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
+            unlogged: config.__warehouse_specific_config__.unlogged,
             schedule: config.__warehouse_specific_config__.schedule,
             __additional_properties__: BTreeMap::new(),
         }
@@ -618,74 +794,162 @@ impl ResolvableConfig<SeedConfig> for SeedConfig {
     }
 
     fn default_to(&mut self, parent: &SeedConfig) {
-        // Handle simple fields - using a pattern that ensures all fields are covered
-        let SeedConfig {
-            post_hook,
-            pre_hook,
-            meta,
-            tags,
-            quoting,
-            column_types,
-            database,
-            schema,
-            alias,
-            catalog_name,
-            docs,
-            enabled,
-            grants,
-            quote_columns,
-            delimiter,
-            event_time,
-            full_refresh,
-            group,
-            persist_docs,
-            materialized,
-            static_analysis,
-            // Adapter specific configs
-            __warehouse_specific_config__: warehouse_specific_config,
-        } = self;
+        self.default_to_fields(parent);
+    }
 
-        // Handle adapter-specific configs
-        #[allow(unused, clippy::let_unit_value)]
-        let warehouse_specific_config =
-            warehouse_specific_config.default_to(&parent.__warehouse_specific_config__);
-
-        #[allow(unused, clippy::let_unit_value)]
-        let pre_hook = default_hooks(pre_hook, &parent.pre_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let post_hook = default_hooks(post_hook, &parent.post_hook);
-        #[allow(unused, clippy::let_unit_value)]
-        let quoting = default_quoting(quoting, &parent.quoting);
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused, clippy::let_unit_value)]
-        let column_types = default_column_types(column_types, &parent.column_types);
-        #[allow(unused, clippy::let_unit_value)]
-        let grants = default_to_grants(grants, &parent.grants);
-
-        default_to!(
-            parent,
-            [
-                database,
-                schema,
-                alias,
-                catalog_name,
-                docs,
-                enabled,
-                quote_columns,
-                delimiter,
-                event_time,
-                full_refresh,
-                group,
-                persist_docs,
-                static_analysis,
-                materialized,
-            ]
-        );
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            self.database.is_some(),
+        ) {
+            self.database = Some(catalog);
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
     }
 }
 
 impl ConfigKeys for SeedConfig {
-    // The default implementation from the trait will handle
-    // extracting field names via serialization automatically
+    fn valid_field_names() -> HashSet<String> {
+        let default_instance = Self::default();
+        let serialized = dbt_yaml::to_value(&default_instance)
+            .expect("Failed to serialize SeedConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, _) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    field_names.insert(key_str);
+                }
+            }
+        }
+
+        // Add known aliases that might not show up in serialization
+        field_names.insert("project".to_string()); // alias for database
+        field_names.insert("data_space".to_string()); // alias for database
+        field_names.insert("dataset".to_string()); // alias for schema
+        field_names.insert("post-hook".to_string()); // might be serialized as post_hook
+        field_names.insert("pre-hook".to_string()); // might be serialized as pre_hook
+
+        field_names
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ProjectSeedConfig, SeedConfig};
+    use dbt_adapter_core::AdapterType;
+
+    #[test]
+    fn test_seed_query_tags_propagate_through_resolved_config() {
+        let project: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++query_tags: '{"team":"seed"}'
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resolved: SeedConfig = project.into();
+        assert_eq!(
+            resolved.__warehouse_specific_config__.query_tags.as_deref(),
+            Some(r#"{"team":"seed"}"#)
+        );
+    }
+
+    #[test]
+    fn test_project_seed_config_resource_tags_parses() {
+        let config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+  "123456789012/cost-center": "analytics"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let resource_tags = config
+            .resource_tags
+            .expect("+resource_tags should parse on ProjectSeedConfig");
+        assert_eq!(resource_tags.len(), 2);
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+        assert_eq!(resource_tags["123456789012/cost-center"], "analytics");
+    }
+
+    #[test]
+    fn test_project_seed_config_resource_tags_propagates_to_seed_config() {
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let seed_config: SeedConfig = project_config.into();
+        let resource_tags = seed_config
+            .__warehouse_specific_config__
+            .resource_tags
+            .expect("resource_tags should propagate from ProjectSeedConfig to SeedConfig");
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
+
+    #[test]
+    fn test_seed_config_resource_tags_propagates_to_project_seed_config() {
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++resource_tags:
+  "123456789012/dbt-access": "managed"
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+
+        let seed_config: SeedConfig = project_config.into();
+        let round_tripped: ProjectSeedConfig = seed_config.into();
+        let resource_tags = round_tripped
+            .resource_tags
+            .expect("resource_tags should propagate from SeedConfig back to ProjectSeedConfig");
+        assert_eq!(resource_tags["123456789012/dbt-access"], "managed");
+    }
+
+    /// `+adapter` names an adapter *type*, so the value is typed rather than a
+    /// free string -- anything that is not a supported adapter fails here, at
+    /// deserialization.
+    #[test]
+    fn test_project_seed_config_adapter_parses_and_round_trips() {
+        let project_config: ProjectSeedConfig = dbt_yaml::from_str(
+            r#"
++adapter: snowflake
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.adapter, Some(AdapterType::Snowflake));
+
+        let seed_config: SeedConfig = project_config.into();
+        assert_eq!(seed_config.adapter, Some(AdapterType::Snowflake));
+
+        let round_tripped: ProjectSeedConfig = seed_config.into();
+        assert_eq!(round_tripped.adapter, Some(AdapterType::Snowflake));
+    }
+
+    #[test]
+    fn test_project_seed_config_rejects_a_value_that_is_not_an_adapter() {
+        let err = dbt_yaml::from_str::<ProjectSeedConfig>(
+            r#"
++adapter: compute
+__additional_properties__: {}
+"#,
+        )
+        .expect_err("`compute` is not an adapter type");
+        assert!(
+            format!("{err}").contains("compute"),
+            "error should name the offending value: {err}"
+        );
+    }
 }

@@ -1,40 +1,38 @@
 use crate::schemas::serde::OmissibleGrantConfig;
+use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
 use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
-use super::omissible_utils::handle_omissible_override;
 
-use dbt_proc_macros::Resolvable;
+use dbt_proc_macros::{DefaultTo, Resolvable};
 
-use crate::default_to;
 use crate::schemas::common::DocsConfig;
-use crate::schemas::common::{Access, DbtQuoting};
+use crate::schemas::common::{Access, DbtQuoting, Hooks, hooks_equal, serialize_hooks_as_list};
 use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
-    access_eq, array_of_strings_eq, docs_eq, grants_eq_with_unrendered, meta_eq,
-    omissible_option_eq, same_warehouse_config_with_unrendered,
+    access_eq, array_of_strings_eq, docs_eq, grants_equal, meta_eq, omissible_option_eq,
+    same_warehouse_config, take_databricks_catalog_alias,
 };
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
-use crate::schemas::project::configs::common::{
-    default_meta_and_tags, default_packages, default_quoting, default_to_grants,
-};
+use crate::schemas::project::configs::config_merge::{Packages, Tags};
 use crate::schemas::project::dbt_project::{
     ResolvableConfig, ResolvedConfig, TypedRecursiveConfig,
 };
 use crate::schemas::properties::{FunctionKind, Volatility};
-use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, default_type};
 
 fn default_function_kind() -> Option<FunctionKind> {
@@ -52,10 +50,13 @@ pub struct FunctionSnowflakeConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
+#[derive(DefaultTo, Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectFunctionConfig {
     #[serde(rename = "+access")]
     pub access: Option<Access>,
+    #[serde(rename = "+adapter")]
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
     #[serde(rename = "+database", alias = "+project")]
@@ -74,6 +75,12 @@ pub struct ProjectFunctionConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+on_configuration_change")]
     pub on_configuration_change: Option<String>,
+    // dbt-core's `FunctionConfig` extends `NodeConfig`, so functions carry hooks like any
+    // other node; both spellings are accepted (see `translate_hook_names`).
+    #[serde(rename = "+post-hook", alias = "+post_hook")]
+    pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(rename = "+pre-hook", alias = "+pre_hook")]
+    pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+schema")]
@@ -81,7 +88,7 @@ pub struct ProjectFunctionConfig {
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+tags")]
-    pub tags: Option<StringOrArrayOfStrings>,
+    pub tags: Tags,
     #[serde(rename = "+type")]
     pub function_kind: Option<FunctionKind>,
     #[serde(rename = "+volatility")]
@@ -91,11 +98,12 @@ pub struct ProjectFunctionConfig {
     #[serde(rename = "+entry_point")]
     pub entry_point: Option<String>,
     #[serde(rename = "+packages")]
-    pub packages: Option<StringOrArrayOfStrings>,
+    pub packages: Packages,
     #[serde(rename = "+snowflake")]
     pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Additional properties for directory structure
+    #[default_to(skip)]
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectFunctionConfig>>,
 }
 
@@ -103,6 +111,7 @@ impl Default for ProjectFunctionConfig {
     fn default() -> Self {
         Self {
             access: None,
+            adapter: None,
             alias: None,
             database: Omissible::Omitted,
             description: None,
@@ -112,15 +121,17 @@ impl Default for ProjectFunctionConfig {
             group: None,
             meta: None,
             on_configuration_change: None,
+            post_hook: Verbatim::from(None),
+            pre_hook: Verbatim::from(None),
             quoting: None,
             schema: Omissible::Omitted,
             static_analysis: None,
-            tags: None,
+            tags: Tags::default(),
             function_kind: None,
             volatility: None,
             runtime_version: None,
             entry_point: None,
-            packages: None,
+            packages: Packages::default(),
             snowflake: None,
             __additional_properties__: BTreeMap::new(),
         }
@@ -151,57 +162,7 @@ impl ResolvableConfig<ProjectFunctionConfig> for ProjectFunctionConfig {
     }
 
     fn default_to(&mut self, parent: &ProjectFunctionConfig) {
-        let ProjectFunctionConfig {
-            access,
-            alias,
-            database,
-            description,
-            docs,
-            enabled,
-            grants,
-            group,
-            meta,
-            on_configuration_change,
-            quoting,
-            schema,
-            static_analysis,
-            tags,
-            function_kind,
-            volatility,
-            runtime_version,
-            entry_point,
-            packages,
-            snowflake,
-            __additional_properties__: _,
-        } = self;
-
-        // Handle special cases
-        default_quoting(quoting, &parent.quoting);
-        default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        default_to_grants(grants, &parent.grants);
-        handle_omissible_override(database, &parent.database);
-        handle_omissible_override(schema, &parent.schema);
-        #[allow(unused, clippy::let_unit_value)]
-        let packages = default_packages(packages, &parent.packages);
-
-        default_to!(
-            parent,
-            [
-                access,
-                alias,
-                description,
-                docs,
-                enabled,
-                group,
-                on_configuration_change,
-                static_analysis,
-                function_kind,
-                volatility,
-                runtime_version,
-                entry_point,
-                snowflake,
-            ]
-        );
+        self.default_to_fields(parent);
     }
 }
 
@@ -213,30 +174,77 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.access.is_some()
+            || self.adapter.is_some()
+            || self.alias.is_some()
+            || self.database.is_present()
+            || self.description.is_some()
+            || self.docs.is_some()
+            || self.enabled.is_some()
+            || self.grants.0.is_present()
+            || self.group.is_some()
+            || self.meta.is_some()
+            || self.on_configuration_change.is_some()
+            || self.post_hook.is_some()
+            || self.pre_hook.is_some()
+            || self.quoting.is_some()
+            || self.schema.is_present()
+            || self.static_analysis.is_some()
+            || self.tags.is_some()
+            || self.function_kind.is_some()
+            || self.volatility.is_some()
+            || self.runtime_version.is_some()
+            || self.entry_point.is_some()
+            || self.packages.is_some()
+            || self.snowflake.is_some()
+    }
 }
 
 #[skip_serializing_none]
-#[derive(Resolvable, Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
+#[derive(
+    Resolvable, DefaultTo, Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub struct FunctionConfig {
     pub access: Option<Access>,
+    // Internal placement hint; kept out of serialized config/telemetry output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<String>")]
+    pub adapter: Option<AdapterType>,
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub alias: Option<String>,
     pub database: Omissible<Option<String>>,
     pub schema: Omissible<Option<String>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     pub docs: Option<DocsConfig>,
     pub grants: OmissibleGrantConfig,
+    // Unlike models/seeds/snapshots, functions have no separate `Manifest*Config`: this
+    // struct is what `ManifestFunction` serializes. So the field carries the manifest key
+    // (`pre-hook`) with the authored spelling as an alias, and normalizes to `List[Hook]`
+    // on the way out — `Verbatim` keeps the flexible authored input shapes.
+    #[serde(
+        rename = "post-hook",
+        alias = "post_hook",
+        default,
+        serialize_with = "serialize_hooks_as_list"
+    )]
+    pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(
+        rename = "pre-hook",
+        alias = "pre_hook",
+        default,
+        serialize_with = "serialize_hooks_as_list"
+    )]
+    pub pre_hook: Verbatim<Option<Hooks>>,
     #[resolved(promote, expect = "quoting set by apply_package_defaults")]
     pub quoting: Option<DbtQuoting>,
     pub on_configuration_change: Option<String>,
@@ -247,7 +255,7 @@ pub struct FunctionConfig {
     pub volatility: Option<Volatility>,
     pub runtime_version: Option<String>,
     pub entry_point: Option<String>,
-    pub packages: Option<StringOrArrayOfStrings>,
+    pub packages: Packages,
     pub snowflake: Option<FunctionSnowflakeConfig>,
 
     // Warehouse-specific configurations
@@ -261,6 +269,10 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
 
     fn get_enabled_with_default(&self) -> bool {
         self.enabled.unwrap_or(true)
+    }
+
+    fn get_enabled(&self) -> Option<bool> {
+        self.enabled
     }
 
     fn disable(&mut self) {
@@ -284,61 +296,19 @@ impl ResolvableConfig<FunctionConfig> for FunctionConfig {
     }
 
     fn default_to(&mut self, parent: &FunctionConfig) {
-        let FunctionConfig {
-            access,
-            enabled,
-            alias,
-            database,
-            schema,
-            tags,
-            meta,
-            group,
-            docs,
-            grants,
-            quoting,
-            on_configuration_change,
-            static_analysis,
-            function_kind,
-            volatility,
-            runtime_version,
-            entry_point,
-            packages,
-            snowflake,
-            __warehouse_specific_config__: warehouse_config,
-        } = self;
+        self.default_to_fields(parent);
+    }
 
-        // Handle warehouse config
-        warehouse_config.default_to(&parent.__warehouse_specific_config__);
-
-        // Handle omissible database and schema fields separately
-        handle_omissible_override(database, &parent.database);
-        handle_omissible_override(schema, &parent.schema);
-
-        // Handle grants with custom merge logic
-        default_to_grants(grants, &parent.grants);
-        #[allow(unused, clippy::let_unit_value)]
-        let packages = default_packages(packages, &parent.packages);
-
-        default_to!(
-            parent,
-            [
-                access,
-                enabled,
-                alias,
-                tags,
-                meta,
-                group,
-                docs,
-                quoting,
-                on_configuration_change,
-                static_analysis,
-                function_kind,
-                volatility,
-                runtime_version,
-                entry_point,
-                snowflake,
-            ]
-        );
+    fn canonicalize_adapter_aliases(&mut self, default_adapter: AdapterType) {
+        if let Some(catalog) = take_databricks_catalog_alias(
+            default_adapter,
+            &mut self.__warehouse_specific_config__,
+            !self.database.is_omitted(),
+        ) {
+            self.database = Omissible::Present(Some(catalog));
+        }
+        // BigQuery's `project`/`dataset` aliases are already routed to `database`/`schema` by
+        // the pre-existing, ungated serde `alias`es on those fields (D1); nothing to do here.
     }
 }
 
@@ -346,6 +316,7 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
     fn from(config: ProjectFunctionConfig) -> Self {
         Self {
             access: config.access,
+            adapter: config.adapter,
             enabled: config.enabled,
             alias: config.alias,
             database: config.database,
@@ -355,6 +326,8 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             group: config.group,
             docs: config.docs,
             grants: config.grants,
+            post_hook: config.post_hook,
+            pre_hook: config.pre_hook,
             quoting: config.quoting,
             on_configuration_change: config.on_configuration_change,
             static_analysis: config.static_analysis,
@@ -371,53 +344,49 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
 
 impl FunctionConfig {
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
-    pub fn same_config(
-        &self,
-        other: &FunctionConfig,
-        self_unrendered_config: &BTreeMap<String, YmlValue>,
-        other_unrendered_config: &BTreeMap<String, YmlValue>,
-    ) -> bool {
+    ///
+    pub fn same_config(&self, other: &FunctionConfig) -> bool {
         // Compare all fields individually
         let enabled_eq = self.enabled == other.enabled;
+        let adapter_eq = self.adapter == other.adapter;
         let alias_eq = self.alias == other.alias;
         let schema_eq = omissible_option_eq(&self.schema, &other.schema); // Custom comparison for Omissible
-        let tags_eq = self.tags == other.tags;
         let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
-        let group_eq = self.group == other.group;
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
-        let grants_eq_result = grants_eq_with_unrendered(
-            &self.grants,
-            &other.grants,
-            self_unrendered_config,
-            other_unrendered_config,
-        ); // Custom comparison for grants
+        let grants_eq = grants_equal(&self.grants, &other.grants); // Custom comparison for grants
         let quoting_eq = self.quoting == other.quoting;
         let on_configuration_change_eq =
             self.on_configuration_change == other.on_configuration_change;
-        let static_analysis_eq = self.static_analysis == other.static_analysis;
+        let post_hook_eq = hooks_equal(&self.post_hook, &other.post_hook);
+        let pre_hook_eq = hooks_equal(&self.pre_hook, &other.pre_hook);
+        // `static_analysis` is a Fusion-only, invocation-driven value (e.g. set by
+        // `--static-analysis`) with no dbt-core equivalent, so it can never be a
+        // legitimate dbt-core `state:modified` trigger and is deliberately excluded
+        // from this comparison (see `base_config_excluded_keys`, parity-exclude).
         let function_kind_eq = self.function_kind == other.function_kind;
         let volatility_eq = self.volatility == other.volatility;
         let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
-        let packages_eq = array_of_strings_eq(&self.packages, &other.packages);
+        let packages_eq = array_of_strings_eq(self.packages.inner(), other.packages.inner());
         let snowflake_eq = self.snowflake == other.snowflake;
-        let warehouse_config_eq = same_warehouse_config_with_unrendered(
+        let warehouse_config_eq = same_warehouse_config(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
-            self_unrendered_config,
-            other_unrendered_config,
         );
+        // `tags` and `group` are intentionally NOT compared here: they are dbt-core `CompareBehavior.Exclude`
+        // fields (see `base_config_excluded_keys` in prev_state/mod.rs) and dbt-core does not treat them
+        // as a config modification anywhere, so this rendered fallback comparator must not either.
 
         let result = enabled_eq
+            && adapter_eq
             && alias_eq
             && schema_eq
-            && tags_eq
             && meta_eq_result
-            && group_eq
             && docs_eq_result
-            && grants_eq_result
+            && grants_eq
             && quoting_eq
             && on_configuration_change_eq
-            && static_analysis_eq
+            && post_hook_eq
+            && pre_hook_eq
             && function_kind_eq
             && volatility_eq
             && access_eq_result
@@ -439,6 +408,14 @@ impl FunctionConfig {
                         )),
                     ),
                     (
+                        "adapter",
+                        adapter_eq,
+                        Some((
+                            format!("{:?}", &self.adapter),
+                            format!("{:?}", &other.adapter),
+                        )),
+                    ),
+                    (
                         "alias",
                         alias_eq,
                         Some((format!("{:?}", &self.alias), format!("{:?}", &other.alias))),
@@ -452,24 +429,14 @@ impl FunctionConfig {
                         )),
                     ),
                     (
-                        "tags",
-                        tags_eq,
-                        Some((format!("{:?}", &self.tags), format!("{:?}", &other.tags))),
-                    ),
-                    (
                         "meta",
                         meta_eq_result,
                         Some((format!("{:?}", &self.meta), format!("{:?}", &other.meta))),
                     ),
-                    (
-                        "group",
-                        group_eq,
-                        Some((format!("{:?}", &self.group), format!("{:?}", &other.group))),
-                    ),
                     ("docs", docs_eq_result, None),
                     (
                         "grants",
-                        grants_eq_result,
+                        grants_eq,
                         Some((
                             format!("{:?}", &self.grants),
                             format!("{:?}", &other.grants),
@@ -492,11 +459,19 @@ impl FunctionConfig {
                         )),
                     ),
                     (
-                        "static_analysis",
-                        static_analysis_eq,
+                        "post_hook",
+                        post_hook_eq,
                         Some((
-                            format!("{:?}", &self.static_analysis),
-                            format!("{:?}", &other.static_analysis),
+                            format!("{:?}", &self.post_hook),
+                            format!("{:?}", &other.post_hook),
+                        )),
+                    ),
+                    (
+                        "pre_hook",
+                        pre_hook_eq,
+                        Some((
+                            format!("{:?}", &self.pre_hook),
+                            format!("{:?}", &other.pre_hook),
                         )),
                     ),
                     (
@@ -549,30 +524,49 @@ impl FunctionConfig {
 }
 
 impl ConfigKeys for FunctionConfig {
-    // The default implementation from the trait will handle
-    // extracting field names via serialization automatically
+    fn valid_field_names() -> HashSet<String> {
+        let serialized = dbt_yaml::to_value(Self::default())
+            .expect("Failed to serialize FunctionConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, _) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    field_names.insert(key_str);
+                }
+            }
+        }
+
+        // Serializing a default instance only yields the canonical spellings
+        // (`pre-hook`/`post-hook`); the aliases have to be listed explicitly.
+        field_names.insert("pre_hook".to_string());
+        field_names.insert("post_hook".to_string());
+
+        field_names
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::schemas::project::configs::config_merge::Packages;
     use crate::schemas::project::dbt_project::ResolvableConfig;
     use crate::schemas::serde::StringOrArrayOfStrings;
 
     #[test]
     fn test_function_config_packages_append() {
         let parent = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "matplotlib".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
@@ -580,25 +574,25 @@ mod tests {
 
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
                 "pandas".to_string(),
                 "matplotlib".to_string(),
-            ]))
+            ])))
         );
     }
 
     #[test]
     fn test_function_config_packages_none_child_inherits_parent() {
         let parent = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let mut child = FunctionConfig {
-            packages: None,
+            packages: Packages::default(),
             ..Default::default()
         };
 
@@ -606,38 +600,70 @@ mod tests {
 
         assert_eq!(
             child.packages,
-            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ]))
+            ])))
         );
     }
 
     #[test]
     fn test_function_config_packages_same_config() {
         let a = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
         let b = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "numpy".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
-        let empty_uc = BTreeMap::new();
-        assert!(a.same_config(&b, &empty_uc, &empty_uc));
+        assert!(a.same_config(&b));
 
         let c = FunctionConfig {
-            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            packages: Packages(Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                 "pandas".to_string(),
-            ])),
+            ]))),
             ..Default::default()
         };
 
-        assert!(!a.same_config(&c, &empty_uc, &empty_uc));
+        assert!(!a.same_config(&c));
+    }
+
+    /// `+adapter` names an adapter *type*, so the value is typed rather than a
+    /// free string -- anything that is not a supported adapter fails here, at
+    /// deserialization. Mirrors the seed and model cases.
+    #[test]
+    fn test_project_function_config_adapter_parses_and_round_trips() {
+        let project_config: ProjectFunctionConfig = dbt_yaml::from_str(
+            r#"
++adapter: bigquery
+__additional_properties__: {}
+"#,
+        )
+        .unwrap();
+        assert_eq!(project_config.adapter, Some(AdapterType::Bigquery));
+
+        let config: FunctionConfig = project_config.into();
+        assert_eq!(config.adapter, Some(AdapterType::Bigquery));
+    }
+
+    #[test]
+    fn test_project_function_config_rejects_a_value_that_is_not_an_adapter() {
+        let err = dbt_yaml::from_str::<ProjectFunctionConfig>(
+            r#"
++adapter: compute
+__additional_properties__: {}
+"#,
+        )
+        .expect_err("`compute` is not an adapter type");
+        assert!(
+            format!("{err}").contains("compute"),
+            "error should name the offending value: {err}"
+        );
     }
 }

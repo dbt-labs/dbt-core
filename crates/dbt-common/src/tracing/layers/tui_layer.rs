@@ -13,7 +13,8 @@ use dbt_telemetry::{
     DepsAllPackagesInstalled, DepsPackageInstalled, ExecutionPhase, GenericOpExecuted,
     GenericOpItemProcessed, HookProcessed, Invocation, ListItemOutput, LogMessage, NodeEvaluated,
     NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage,
-    QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, UserLogMessage,
+    QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, TestOutcome, UserLogMessage,
+    get_test_outcome,
 };
 use dbt_tracing::{
     AnyTelemetryEvent, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, SpanStatus,
@@ -54,6 +55,7 @@ use crate::{
             layout::{format_delimiter, right_align_action},
             log_message::format_log_message,
             node::{
+                format_aggregated_test_group_header, format_aggregated_test_group_member,
                 format_compiled_code, format_compiled_inline_code, format_node_evaluated_end,
                 format_node_evaluated_start, format_node_processed_end, format_skipped_test_group,
             },
@@ -62,6 +64,7 @@ use crate::{
             state_mod_diff::format_state_modified_diff_lines,
             test_result::format_test_failure,
         },
+        fs_error_log::get_log_message,
         layer::{ConsumerLayer, TelemetryConsumer},
         private_events::print_event::{StderrMessage, StdoutMessage},
     },
@@ -151,11 +154,79 @@ impl AnyTelemetryEvent for TuiAllProcessingNodesGroup {
     }
 }
 
+/// A special non-exported event type grouping the `NodeProcessed` spans of one aggregated
+/// generic-test query, so the console can report them as a single block. Its close is the
+/// signal that every member of the group has finished.
+#[derive(Debug, Clone)]
+pub struct TuiAggregatedTestGroup {
+    /// Generic test macro shared by every member of the group, e.g. `not_null`.
+    pub macro_name: String,
+    /// unique_id of the node the group's tests are attached to.
+    pub attached_node: String,
+}
+
+impl AnyTelemetryEvent for TuiAggregatedTestGroup {
+    fn event_type(&self) -> &'static str {
+        "v1.internal.events.fusion.node.TuiAggregatedTestGroup"
+    }
+
+    fn event_display_name(&self) -> String {
+        format!(
+            "Aggregated test group ({} on {})",
+            self.macro_name, self.attached_node
+        )
+    }
+
+    fn record_category(&self) -> TelemetryEventRecType {
+        TelemetryEventRecType::Span
+    }
+
+    fn output_flags(&self) -> TelemetryOutputFlags {
+        TelemetryOutputFlags::OUTPUT_CONSOLE
+    }
+
+    fn event_eq(&self, _: &dyn AnyTelemetryEvent) -> bool {
+        false
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn clone_box(&self) -> Box<dyn AnyTelemetryEvent> {
+        Box::new(self.clone())
+    }
+
+    fn to_json(&self) -> Result<serde_json::Value, String> {
+        Ok(serde_json::json!({
+            "macro_name": self.macro_name,
+            "attached_node": self.attached_node,
+        }))
+    }
+}
+
 /// Holds a vector of skipped test node names and flags indicating which types were seen
 struct SkippedTestNodes {
     pending_names: Vec<String>,
     seen_test: bool,
     seen_unit_test: bool,
+}
+
+/// Members of one aggregated generic-test group, buffered on the group's span until it
+/// closes. Each entry is the member's event plus the duration its flat line would show.
+///
+/// The events are buffered rather than formatted lines because the tree connectors depend
+/// on how many members there turn out to be, which is only known once the group closes.
+struct PendingAggregatedTestGroup {
+    members: Vec<(NodeProcessed, std::time::Duration)>,
 }
 
 fn emit_pending_skips(tui: &TuiLayer, data_provider: &mut DataProvider<'_>) {
@@ -188,6 +259,39 @@ fn emit_pending_skips(tui: &TuiLayer, data_provider: &mut DataProvider<'_>) {
                 .write_all(format!("{}\n", output).as_bytes())
                 .expect("failed to write to stdout");
         });
+    }
+}
+
+fn node_evaluated_progress_status(
+    span_status: Option<&SpanStatus>,
+    ne: &NodeEvaluated,
+) -> Option<&'static str> {
+    match ne.node_outcome() {
+        NodeOutcome::Success if get_test_outcome(ne.into()) == Some(TestOutcome::Failed) => {
+            Some("failed")
+        }
+        NodeOutcome::Success => Some("succeeded"),
+        NodeOutcome::Error => Some("failed"),
+        NodeOutcome::Canceled => Some("cancelled"),
+        NodeOutcome::Skipped => match ne.node_skip_reason() {
+            NodeSkipReason::Cached => Some("reused"),
+            NodeSkipReason::NoOp => Some("no-op"),
+            NodeSkipReason::Upstream
+            | NodeSkipReason::PhaseSkipped
+            | NodeSkipReason::PhaseDisabled
+            | NodeSkipReason::Unspecified => Some("skipped"),
+        },
+        NodeOutcome::Unspecified => {
+            if let Some(SpanStatus {
+                code: StatusCode::Error,
+                ..
+            }) = span_status
+            {
+                Some("failed")
+            } else {
+                Some("succeeded")
+            }
+        }
     }
 }
 
@@ -393,6 +497,13 @@ impl TelemetryConsumer for TuiLayer {
             });
         }
 
+        // Init member storage for an aggregated test group
+        if span.attributes.is::<TuiAggregatedTestGroup>() {
+            data_provider.init_cur::<PendingAggregatedTestGroup>(PendingAggregatedTestGroup {
+                members: Vec::new(),
+            });
+        }
+
         if let Some(asset_parsed) = span.attributes.downcast_ref::<AssetParsed>() {
             self.handle_asset_parsed_start(span, asset_parsed);
             return;
@@ -470,6 +581,11 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
+        if let Some(asset_parsed) = span.attributes.downcast_ref::<AssetParsed>() {
+            self.handle_asset_parsed_end(span, asset_parsed);
+            return;
+        }
+
         if let Some(ne) = span.attributes.downcast_ref::<PhaseExecuted>() {
             self.handle_phase_executed_end(span, ne);
             return;
@@ -507,8 +623,17 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
-        // Handle close of TuiAllProcessingNodesGroup in case we have pending skipped tests to emit
-        // after all nodes have been processed
+        // An aggregated test group has finished, so its buffered members can be emitted
+        // as one block
+        if let Some(group) = span.attributes.downcast_ref::<TuiAggregatedTestGroup>() {
+            if self.show_options.contains(&ShowOptions::Completed) {
+                self.handle_aggregated_test_group_end(group, data_provider);
+            }
+            return;
+        }
+
+        // Handle close of TuiAllProcessingNodesGroup in case we have pending skipped tests
+        // to emit after all nodes have been processed
         if span.attributes.is::<TuiAllProcessingNodesGroup>()
             && self.show_options.contains(&ShowOptions::Completed)
         {
@@ -523,7 +648,7 @@ impl TelemetryConsumer for TuiLayer {
 
     fn on_log_record(&self, log_record: &LogRecordInfo, data_provider: &mut DataProvider<'_>) {
         // Check if this is a LogMessage (error/warning)
-        if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
+        if let Some(log_msg) = get_log_message(&log_record.attributes) {
             self.handle_log_message(log_msg, log_record, data_provider);
             return;
         }
@@ -961,31 +1086,7 @@ impl TuiLayer {
                 phase,
                 ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
             ) {
-                let status = match ne.node_outcome() {
-                    NodeOutcome::Success => Some("succeeded"),
-                    NodeOutcome::Error => Some("failed"),
-                    NodeOutcome::Canceled => Some("cancelled"),
-                    NodeOutcome::Skipped => match ne.node_skip_reason() {
-                        NodeSkipReason::Cached => Some("reused"),
-                        NodeSkipReason::NoOp => Some("no-op"),
-                        NodeSkipReason::Upstream
-                        | NodeSkipReason::PhaseSkipped
-                        | NodeSkipReason::PhaseDisabled
-                        | NodeSkipReason::Unspecified => Some("skipped"),
-                    },
-                    NodeOutcome::Unspecified => {
-                        if let Some(SpanStatus {
-                            code: StatusCode::Error,
-                            ..
-                        }) = &span.status
-                        {
-                            Some("failed")
-                        } else {
-                            Some("succeeded")
-                        }
-                    }
-                };
-
+                let status = node_evaluated_progress_status(span.status.as_ref(), ne);
                 let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
                 progress.finish_bar_context(&ProgressId::Phase(phase), &formatted_item, status);
             }
@@ -1128,6 +1229,27 @@ impl TuiLayer {
                     .unwrap_or_default()
             });
 
+        // Members of an aggregated generic-test query are buffered on their group span and
+        // printed as one block when it closes. Whether this node is a member is answered
+        // structurally, by the presence of that ancestor span.
+        //
+        // The outcome guard keeps members that finished without a reported result (the
+        // aggregated run task's error path) on their own flat line, as today: the group
+        // header can only render a test verdict, not a node error.
+        let mut buffered = false;
+        if get_test_outcome(node.into()).is_some() {
+            data_provider
+                .with_ancestor_ext_mut::<TuiAggregatedTestGroup, PendingAggregatedTestGroup>(
+                    |group| {
+                        group.members.push((node.clone(), duration));
+                        buffered = true;
+                    },
+                );
+        }
+        if buffered {
+            return;
+        }
+
         // Format the output line using the formatter with color enabled
         let output = format_node_processed_end(node, duration, true);
 
@@ -1136,6 +1258,70 @@ impl TuiLayer {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", output).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    /// Emits an aggregated test group's buffered members as one block, headed by the
+    /// group's worst verdict and the query's duration.
+    fn handle_aggregated_test_group_end(
+        &self,
+        group: &TuiAggregatedTestGroup,
+        data_provider: &mut DataProvider<'_>,
+    ) {
+        // The closing span is included in the ancestor search, so this reads the members
+        // off the group span itself
+        let mut members = Vec::new();
+        data_provider.with_ancestor_ext_mut::<TuiAggregatedTestGroup, PendingAggregatedTestGroup>(
+            |pending| {
+                members = std::mem::take(&mut pending.members);
+            },
+        );
+
+        if members.is_empty() {
+            return;
+        }
+
+        // The header's duration is the worst member's accumulated processing time, not the
+        // group span's wall time, which also covers waiting on upstream nodes.
+        let worst_outcome = members
+            .iter()
+            .map(|(node, _)| get_test_outcome(node.into()).unwrap_or(TestOutcome::Passed))
+            .max()
+            .unwrap_or(TestOutcome::Passed);
+        let max_duration = members
+            .iter()
+            .map(|(_, duration)| *duration)
+            .max()
+            .unwrap_or_default();
+
+        // Written as one atomic stdout write, so concurrently completing nodes cannot
+        // interleave lines into the block.
+        let mut block = format!(
+            "{}\n",
+            format_aggregated_test_group_header(
+                &group.macro_name,
+                &group.attached_node,
+                members.len(),
+                worst_outcome,
+                max_duration,
+                true,
+            )
+        );
+        for (index, (node, _)) in members.iter().enumerate() {
+            block.push_str(&format_aggregated_test_group_member(
+                node,
+                index + 1 == members.len(),
+                true,
+            ));
+            block.push('\n');
+        }
+
+        // Emit after the span lock has been released to avoid possible deadlocks
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(block.as_bytes())
                 .expect("failed to write to stdout");
         });
     }
@@ -1339,14 +1525,23 @@ impl TuiLayer {
     }
 
     fn handle_asset_parsed_start(&self, _span: &SpanStartInfo, asset: &AssetParsed) {
+        // Legacy filter exclusion for generic tests, which are generated rather than
+        // authored and so are noise in both the progress indicator and the log line.
+        if asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME) {
+            return;
+        }
+
+        // Show the file on the phase's progress indicator. Keyed on the asset's own
+        // phase so this is a no-op for phases that register no spinner.
+        if let Some(ref progress) = self.progress {
+            progress.add_spinner_context(&ProgressId::Phase(asset.phase()), &asset.display_path);
+        }
+
         // TODO: This is temporary legacy rendering for parse progress and should
         // be replaced with the new end-span rendering (matching file log) once fully migrated.
         // We ignore this span severity level and only check show options for progress.
 
-        if !should_show_progress_message(asset.phase(), &self.show_options)
-            // Legacy filter exclusion for generic tests
-            || asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME)
-        {
+        if !should_show_progress_message(asset.phase(), &self.show_options) {
             return;
         }
 
@@ -1357,6 +1552,24 @@ impl TuiLayer {
                 .write_all(format!("{}\n", formatted).as_bytes())
                 .expect("failed to write to stdout");
         });
+    }
+
+    fn handle_asset_parsed_end(&self, _span: &SpanEndInfo, asset: &AssetParsed) {
+        let Some(ref progress) = self.progress else {
+            return;
+        };
+
+        // Must mirror the exclusion in `handle_asset_parsed_start`, or the excluded
+        // assets would decrement a counter they never incremented.
+        if asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME) {
+            return;
+        }
+
+        progress.finish_spinner_context(
+            &ProgressId::Phase(asset.phase()),
+            &asset.display_path,
+            Some("parsed"),
+        );
     }
 
     fn handle_deps_all_packages_installing_start(&self, ev: &DepsAllPackagesInstalled) {
@@ -1831,5 +2044,59 @@ impl TuiLayer {
                 .write_all(format!("{}\n", formatted_message).as_bytes())
                 .expect("failed to write to stdout");
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_telemetry::{NodeOutcomeDetail, TestEvaluationDetail};
+
+    fn unit_test_evaluated_with_outcome(test_outcome: TestOutcome) -> NodeEvaluated {
+        let mut node = NodeEvaluated::start(
+            "unit_test.jaffle_shop.stg_locations.test_opened_at".to_string(),
+            "test_opened_at".to_string(),
+            None,
+            Some("dbt_test__audit".to_string()),
+            None,
+            None,
+            None,
+            NodeType::UnitTest,
+            ExecutionPhase::Run,
+            "models/staging/stg_locations.yml".to_string(),
+            Some(10),
+            Some(5),
+            "checksum".to_string(),
+        );
+        node.set_node_outcome(NodeOutcome::Success);
+        node.node_outcome_detail = Some(NodeOutcomeDetail::NodeTestDetail(
+            TestEvaluationDetail::new(test_outcome, 1, None, None, None, None),
+        ));
+        node
+    }
+
+    #[test]
+    fn failed_unit_test_counts_as_failed_for_progress() {
+        let node = unit_test_evaluated_with_outcome(TestOutcome::Failed);
+
+        assert_eq!(node_evaluated_progress_status(None, &node), Some("failed"));
+    }
+
+    #[test]
+    fn passed_unit_test_counts_as_succeeded_for_progress() {
+        let node = unit_test_evaluated_with_outcome(TestOutcome::Passed);
+
+        assert_eq!(
+            node_evaluated_progress_status(None, &node),
+            Some("succeeded")
+        );
+    }
+
+    #[test]
+    fn test_outcome_ordering_ranks_severity() {
+        // An aggregated group header takes its verdict from `max`, so a new variant added
+        // out of severity order would silently outrank `Failed`.
+        assert!(TestOutcome::Passed < TestOutcome::Warned);
+        assert!(TestOutcome::Warned < TestOutcome::Failed);
     }
 }

@@ -1,5 +1,9 @@
+{# adapter.drop_without_cascade is only available in v1. v2 uses the more generic adapter.has_feature instead #}
 {%- macro redshift__drop_table(relation) -%}
-    {#- DIVERGENCE: Fusion gates the cascade clause on adapter.has_feature, which is
-        Fusion-only. v1 dbt-redshift always cascades; mirror that under dbt-core (1.x). -#}
-    drop table if exists {{ relation }}{% if not dbt_version.startswith('2.') or not adapter.has_feature('drop_without_cascade') %} cascade{% endif %}
+    drop table if exists {{ relation }}
+    {%- if dbt_version.startswith('2.') -%}
+        {% if not adapter.has_feature('drop_without_cascade') %} cascade{% endif %}
+    {%- else -%}
+        {% if not redshift__drop_without_cascade() %} cascade{% endif %}
+    {%- endif %}
 {%- endmacro -%}

@@ -8,6 +8,7 @@ use minijinja::listener::RenderingEventListener;
 use regex::Regex;
 use serde::Serialize;
 
+use crate::adapters::{AdapterConnections, parse_target_connections};
 use crate::error::{ProfileError, Result};
 use crate::jinja::{ProfileContext, profile_environment};
 
@@ -74,7 +75,18 @@ pub struct ResolvedProfile {
     pub adapter_type: String,
     /// The rendered target output as a YAML mapping — the source of truth for
     /// connection configuration. Flows directly to `AdapterConfig` / `dbt-auth`.
+    ///
+    /// This is the *default* adapter's config. When the target declares several
+    /// adapters, read [`Self::adapters`] to reach the others.
     pub credentials: dbt_yaml::Mapping,
+    /// Every adapter the target declares, in declaration order, keyed by adapter
+    /// type, each with its connections. A target using the legacy
+    /// single-adapter shape yields one entry with one connection, so callers
+    /// never branch on the `profiles.yml` shape.
+    ///
+    /// This is where non-default adapters — including an alternate compute
+    /// target — are reached. There is no separate field for them.
+    pub adapters: Vec<AdapterConnections>,
     /// Path to the `profiles.yml` file that was loaded.
     pub profile_path: PathBuf,
 }
@@ -82,6 +94,33 @@ pub struct ResolvedProfile {
 impl ResolvedProfile {
     pub fn get_str(&self, key: &str) -> Option<&str> {
         self.credentials.get(key).and_then(|v| v.as_str())
+    }
+
+    /// The adapter a node's `+adapter` config selects, if the target declares it.
+    pub fn adapter_by_type(&self, adapter_type: &str) -> Option<&AdapterConnections> {
+        self.adapters
+            .iter()
+            .find(|a| a.adapter_type.eq_ignore_ascii_case(adapter_type))
+    }
+
+    /// The target's default adapter — the one used by nodes that select none.
+    ///
+    /// The adapter holding the connection marked `default: true`, which is why the
+    /// marker is resolved target-wide rather than per adapter.
+    pub fn default_adapter(&self) -> &AdapterConnections {
+        self.adapters
+            .iter()
+            .find(|a| a.connections.iter().any(|c| c.is_default))
+            .expect("a resolved profile always has exactly one default connection")
+    }
+
+    /// The adapters a node may select *other* than the default, in declaration
+    /// order.
+    pub fn non_default_adapters(&self) -> impl Iterator<Item = &AdapterConnections> {
+        let default = self.default_adapter().adapter_type.clone();
+        self.adapters
+            .iter()
+            .filter(move |a| a.adapter_type != default)
     }
 
     pub fn database(&self) -> Option<&str> {
@@ -176,19 +215,26 @@ pub fn resolve_with_env(
             target: target_name.clone(),
         })?;
 
-    let credentials = render_target(target_raw, penv)?;
+    // Both `profiles.yml` shapes collapse to the same structure here; the legacy
+    // single-adapter mapping yields one adapter with one connection, so
+    // `credentials` and `adapter_type` below keep their existing meaning for every
+    // caller.
+    let adapters = parse_target_connections(profile_name, &target_name, target_raw, penv)?;
 
-    let adapter_type = credentials
-        .get("type")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_owned())
-        .ok_or(ProfileError::NoAdapterType)?;
+    let default_adapter = adapters
+        .iter()
+        .find(|a| a.connections.iter().any(|c| c.is_default))
+        .expect("parse_target_connections guarantees exactly one default connection");
+
+    let credentials = default_adapter.default_connection().credentials.clone();
+    let adapter_type = default_adapter.adapter_type.clone();
 
     Ok(ResolvedProfile {
         profile_name: profile_name.to_owned(),
         target_name,
         adapter_type,
         credentials,
+        adapters,
         profile_path: profile_path.to_path_buf(),
     })
 }

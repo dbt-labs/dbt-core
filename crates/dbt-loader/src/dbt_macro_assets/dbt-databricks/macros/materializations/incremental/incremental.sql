@@ -113,12 +113,10 @@
       {%- endcall -%}
       {% do persist_constraints(target_relation, model) %}
       {% do apply_tags(target_relation, tags) %}
-      {#-- DIVERGENCE START: Core does not set column tags for incremental #}
       {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
-      {% if column_tags and column_tags.tags %}
-        {% do apply_column_tags(target_relation, column_tags) %}
+      {% if column_tags and column_tags.set_column_tags %}
+        {{ apply_column_tags(target_relation, column_tags) }}
       {% endif %}
-      {#-- DIVERGENCE END #}
       {%- if language == 'python' -%}
         {%- do apply_tblproperties(target_relation, tblproperties) %}
       {%- endif -%}
@@ -138,8 +136,8 @@
       {% endif %}
       {% do apply_tags(target_relation, tags) %}
       {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
-      {% if column_tags and column_tags.tags %}
-        {% do apply_column_tags(target_relation, column_tags) %}
+      {% if column_tags and column_tags.set_column_tags %}
+        {{ apply_column_tags(target_relation, column_tags) }}
       {% endif %}
       {% do persist_docs(target_relation, model, for_relation=language=='python') %}
     {%- else -%}
@@ -148,9 +146,12 @@
         {{ set_overwrite_mode('DYNAMIC') }}
       {%- endif -%}
       {#-- Relation must be merged --#}
-      {%- set _existing_config = adapter.get_relation_config(existing_relation) -%}
-      {%- set model_config = adapter.get_config_from_model(config.model) -%}
-      {%- set _configuration_changes = model_config.get_changeset(_existing_config) -%}
+      {%- set _configuration_changes = none -%}
+      {%- if config.get('incremental_apply_config_changes', True) | as_bool -%}
+        {%- set model_config = adapter.get_config_from_model(config.model) -%}
+        {%- set _existing_config = adapter.get_relation_config(existing_relation, model_config) -%}
+        {%- set _configuration_changes = model_config.get_changeset(_existing_config) -%}
+      {%- endif -%}
       {%- call statement('create_temp_relation', language=language) -%}
         {{ create_table_as(True, temp_relation, compiled_code, language) }}
       {%- endcall -%}
@@ -190,26 +191,29 @@
       {%- endif -%}
       {% if _configuration_changes is not none %}
         {% set tags = _configuration_changes.changes.get("tags", None) %}
-        {% set column_tags = _configuration_changes.changes.get("column_tags", None) %}
         {% set tblproperties = _configuration_changes.changes.get("tblproperties", None) %}
         {% set liquid_clustering = _configuration_changes.changes.get("liquid_clustering") %}
+        {% set row_filter = _configuration_changes.changes.get("row_filter") %}
         {% set constraints = _configuration_changes.changes.get("constraints") %}
+        {% set column_tags = _configuration_changes.changes.get("column_tags", None) %}
         {% if tags is not none %}
           {% do apply_tags(target_relation, tags.set_tags) %}
         {%- endif -%}
-        {#-- DIVERGENCE START: Core does not set column tags for incremental #} 
-        {% if column_tags is not none %}
-          {% do apply_column_tags(target_relation, column_tags) %}
-        {%- endif -%}
-        {#-- DIVERGENCE END #}
         {% if tblproperties is not none %}
           {% do apply_tblproperties(target_relation, tblproperties.tblproperties) %}
         {%- endif -%}
         {% if liquid_clustering is not none %}
           {% do apply_liquid_clustered_cols(target_relation, liquid_clustering) %}
         {% endif %}
+        {% if row_filter is not none %}
+          {{ apply_row_filter(target_relation, row_filter) }}
+        {% endif %}
+        {% if column_tags %}
+          {{ apply_column_tags(target_relation, column_tags) }}
+        {% endif %}
         {#- Incremental constraint application requires information_schema access (see fetch_*_constraints macros) -#}
-        {% if constraints and not target_relation.is_hive_metastore() %}
+        {% set contract_config = config.get('contract') %}
+        {% if constraints and contract_config and contract_config.enforced and not target_relation.is_hive_metastore() %}
           {{ apply_constraints(target_relation, constraints) }}
         {% endif %}
       {%- endif -%}
@@ -257,8 +261,8 @@
 {% macro process_config_changes(target_relation) %}
   {% set apply_config_changes = config.get('incremental_apply_config_changes', True) | as_bool %}
   {% if apply_config_changes %}
-    {%- set existing_config = adapter.get_relation_config(target_relation) -%}
     {%- set model_config = adapter.get_config_from_model(config.model) -%}
+    {%- set existing_config = adapter.get_relation_config(target_relation, model_config) -%}
     {%- set configuration_changes = model_config.get_changeset(existing_config) -%}
     {{ apply_config_changeset(target_relation, model, configuration_changes) }}
   {% endif %}

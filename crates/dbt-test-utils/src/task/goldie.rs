@@ -320,6 +320,20 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
         "last updated",
         "=================== Errors and Warnings ====================",
         "' has been renamed to '", // TODO: remove when IA is updated with latest package names
+        // Debug-build notice emitted when DISABLE_CDN_DRIVER_CACHE makes the
+        // loader dlopen a locally-built driver instead of the CDN one. It names
+        // an absolute path on the developer's machine, so it can never match
+        // across environments and must not reach a goldie.
+        "ADBC driver is being loaded from",
+        // Machine-readable diagnostic line whose content is derived from the
+        // build's own feature registry. Every entry added to that registry can
+        // change the line for any project, so it can never match stably across
+        // versions and would otherwise regolden every fixture that emits it.
+        // Asserted directly in the feature-fingerprint test instead.
+        "dbt_feature_fingerprint",
+        // Parallel CI tests can contend on the process-wide `dbt_packages`
+        // (or `target/`) directory lease. The wait line is timing-dependent.
+        "Waiting for lease on '",
     ];
 
     let mut res = content
@@ -340,7 +354,7 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
         .collect::<Vec<_>>()
         .join("\n");
 
-    if content.ends_with('\n') {
+    if !res.is_empty() && content.ends_with('\n') {
         res.push('\n');
     }
     res
@@ -372,6 +386,18 @@ mod tests {
     fn test_filter_lines() {
         let lines = filter_lines("abc \n has been running for over \n 123".to_string());
         assert_eq!("abc\n 123", lines);
+    }
+
+    #[test]
+    fn test_filter_lease_wait() {
+        let lines = filter_lines(
+            "   Loading profiles.yml\nWaiting for lease on 'dbt_packages' directory\n   Parsing models/mat_view.sql\n"
+                .to_string(),
+        );
+        assert_eq!(
+            "   Loading profiles.yml\n   Parsing models/mat_view.sql\n",
+            lines
+        );
     }
 
     #[test]
@@ -415,6 +441,19 @@ mod tests {
         let line = "32ms 101us 694ns";
         let postprocess_actual = postprocess_actual(line.to_string(), false);
         assert_eq!("duration", postprocess_actual);
+    }
+
+    #[test]
+    fn test_normalize_version_banner_for_every_brand() {
+        // The banner's brand comes from the binary's `CliFeature::command_name`,
+        // and the action column is right-aligned, hence the leading padding.
+        for (brand, padding) in [("dbt-fusion", ""), ("dbt-core", "  "), ("dbt-repl", "  ")] {
+            let line = format!("{padding}{brand} {}", env!("CARGO_PKG_VERSION"));
+            assert_eq!(
+                format!("{padding}{brand} "),
+                postprocess_actual(line, false)
+            );
+        }
     }
 
     #[test]

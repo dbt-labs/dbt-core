@@ -3,9 +3,12 @@
 use indexmap::IndexMap;
 use std::{
     collections::{BTreeMap, HashSet},
+    path::PathBuf,
     rc::Rc,
     sync::Arc,
 };
+
+use dbt_jinja_ctx::{LazyModelWrapper, ModelContextMap};
 
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, fs_err, tracing::dbt_emit::emit_warn_log_from_fs_error,
@@ -23,8 +26,12 @@ use minijinja::{
 pub struct RunConfig {
     /// The `config` entry from `model` (converted from a ManifestModelConfig value)
     pub model_config: IndexMap<String, Value>,
-    /// A model's attributes/config values (converted from a DbtModel value)
-    pub model: IndexMap<String, Value>,
+    /// A model's attributes/config values (converted from a DbtModel value). Shares its map with
+    /// the `model` / `node` wrappers so `model.update(...)` is visible here too.
+    pub model: ModelContextMap,
+    /// Where the node's compiled SQL lives, so `config.model` can serve `compiled_code` the way
+    /// the top-level `model` object does.
+    pub model_compiled_path: PathBuf,
     /// Set of valid config field names for this config type
     pub valid_keys: HashSet<String>,
 }
@@ -44,7 +51,10 @@ impl Object for RunConfig {
     /// Get the value of a key from the config
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         if key.as_str().unwrap() == "model" {
-            return Some(Value::from_serialize(self.model.clone()));
+            return Some(Value::from_object(LazyModelWrapper::new(
+                self.model.clone(),
+                self.model_compiled_path.clone(),
+            )));
         }
         self.model_config.get(key.as_str().unwrap()).cloned()
     }
@@ -91,7 +101,7 @@ impl Object for RunConfig {
                                             to access the custom config value if intended.",
                                             name, name, name, name, name
                                         ).with_location(location);
-                                        emit_warn_log_from_fs_error(&error, None);
+                                        emit_warn_log_from_fs_error(error);
                                     }
                                 }
                             }
@@ -139,7 +149,7 @@ impl Object for RunConfig {
                                             to access the custom config value if intended.",
                                             name, name, name, name, name
                                         ).with_location(location);
-                                        emit_warn_log_from_fs_error(&error, None);
+                                        emit_warn_log_from_fs_error(error);
                                     }
                                 }
                             }

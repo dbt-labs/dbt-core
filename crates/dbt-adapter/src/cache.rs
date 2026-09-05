@@ -1,11 +1,13 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use dashmap::DashMap;
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{FsResult, create_debug_span};
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_telemetry::GenericOpExecuted;
+use parking_lot::RwLock;
 use tracing::Instrument as _;
 
 use crate::Adapter;
@@ -15,8 +17,10 @@ use crate::{
 };
 
 type RelationCacheKey = String;
-/// Represents a [BaseRelation] and any associated [BaseRelationConfig] if available
-/// This struct represents any value inside a [RelationCache]
+
+/// Fully qualified key for an entry in the cache: `(schema_key, relation_key)`.
+pub(crate) type DepKey = (String, String);
+
 #[derive(Debug, Clone)]
 pub struct RelationCacheEntry {
     relation: Arc<dyn BaseRelation>,
@@ -24,7 +28,6 @@ pub struct RelationCacheEntry {
 }
 
 impl RelationCacheEntry {
-    /// Used to create a new [RelationCacheEntry] with the given [Arc<dyn BaseRelation>] and [Arc<dyn BaseRelationConfig>]
     pub fn new(
         relation: Arc<dyn BaseRelation>,
         relation_config: Option<Arc<dyn BaseRelationConfig>>,
@@ -35,12 +38,10 @@ impl RelationCacheEntry {
         }
     }
 
-    /// Gets a reference to the [BaseRelation]
     pub fn relation(&self) -> Arc<dyn BaseRelation> {
         self.relation.clone()
     }
 
-    /// Gets a reference to the [BaseRelationConfig], if available
     pub fn relation_config(&self) -> Option<Arc<dyn BaseRelationConfig>> {
         self.relation_config.clone()
     }
@@ -75,14 +76,35 @@ pub struct RelationCache {
     // This structure loosely represents remote warehouse state
     // Outer key represents a database schema
     //
-    // Schema Key -> SchemaeEntry
+    // Schema Key -> SchemaEntry
     //               Relation Key -> Cache Entry (Relation + Relation Config)
     // The inner key is a unique key generated from a relation's fully qualified name
     // We also differentiate using [SchemaEntry] to see what information we actually know about that schema
     schemas_and_relations: DashMap<String, SchemaEntry>,
+    /// Per-node set of dependents: `parent_to_children[k]` is the set of relations
+    /// that would be cascade-dropped if `k` were dropped. Lifted out of
+    /// `RelationCacheEntry` so the cache entry stays Clone-via-derive and
+    /// graph state lives in one place. All mutation goes through `graph_lock`.
+    graph: Arc<RwLock<RelationGraph>>,
+    /// Whether the project defines any function (UDF) nodes. Set once, before
+    /// the run starts.
+    project_has_functions: Arc<AtomicBool>,
+}
+
+#[derive(Debug, Default)]
+struct RelationGraph {
+    parent_to_children: HashMap<DepKey, HashSet<DepKey>>,
 }
 
 impl RelationCache {
+    pub fn set_project_has_functions(&self, value: bool) {
+        self.project_has_functions.store(value, Ordering::Relaxed);
+    }
+
+    pub fn project_has_functions(&self) -> bool {
+        self.project_has_functions.load(Ordering::Relaxed)
+    }
+
     /// Retrieves a cached entry by relation
     pub fn get_relation(&self, relation: &dyn BaseRelation) -> Option<RelationCacheEntry> {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
@@ -161,7 +183,18 @@ impl RelationCache {
             .for_each(|(schema, relations)| self.insert_schema(schema, relations));
     }
 
-    /// Drops an entire schema
+    /// Apply a batch of `(referenced, dependent)` dependency edges. Pairs whose
+    /// referenced schema is uncached or whose referenced relation isn't in the
+    /// cache are silently skipped — see [`add_link`].
+    pub fn add_links<I>(&self, links: I)
+    where
+        I: IntoIterator<Item = (Arc<dyn BaseRelation>, Arc<dyn BaseRelation>)>,
+    {
+        for (referenced, dependent) in links {
+            self.add_link(referenced.as_ref(), dependent.as_ref());
+        }
+    }
+
     pub fn evict_schema_for_relation(&self, relation: &dyn BaseRelation) {
         let schema_key = Self::get_schema_cache_key_from_relation(relation);
         self.schemas_and_relations.remove(&schema_key);
@@ -178,7 +211,6 @@ impl RelationCache {
             .unwrap_or(false)
     }
 
-    /// Checks if the entire schema was cached
     pub fn contains_full_schema(&self, schema: &CatalogAndSchema) -> bool {
         self.schemas_and_relations
             .get(&schema.to_string())
@@ -186,7 +218,6 @@ impl RelationCache {
             .unwrap_or(false)
     }
 
-    /// Checks if a relation exists in the cache
     pub fn contains_relation(&self, relation: &dyn BaseRelation) -> bool {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
         if let Some(relation_cache) = self.schemas_and_relations.get(&schema_key) {
@@ -196,18 +227,121 @@ impl RelationCache {
         }
     }
 
-    /// Renames a relation by updating its key while preserving its configuration
-    /// Returns the new entry that was inserted
+    /// Rename, preserving the renamed entry's incoming-dependency set and
+    /// rewriting `old_key → new_key` in every other entry's set so cascade
+    /// traversal still sees the renamed node. Mirrors Python
+    /// `RelationsCache.rename`.
     pub fn rename_relation(
         &self,
         old: &dyn BaseRelation,
         new: Arc<dyn BaseRelation>,
     ) -> Option<RelationCacheEntry> {
-        if let Some(original_entry) = self.evict_relation(old) {
-            self.insert_relation(new, original_entry.relation_config)
-        } else {
-            None
+        let mut graph = self.graph.write();
+
+        let (old_schema_key, old_relation_key) = Self::get_relation_cache_keys(old);
+        let (new_schema_key, new_relation_key) = Self::get_relation_cache_keys(new.as_ref());
+
+        let old_dep_key: DepKey = (old_schema_key.clone(), old_relation_key.clone());
+        let new_dep_key: DepKey = (new_schema_key, new_relation_key);
+
+        if old_dep_key == new_dep_key {
+            return self.get_entry_by_dep_key(&old_dep_key);
         }
+
+        let original_entry = self.evict(&old_schema_key, &old_relation_key)?;
+        let new_entry = RelationCacheEntry::new(new, original_entry.relation_config.clone());
+
+        // Move the renamed node's incoming-edge set to its new key.
+        if let Some(refs) = graph.parent_to_children.remove(&old_dep_key) {
+            graph.parent_to_children.insert(new_dep_key.clone(), refs);
+        }
+        // Rewrite old → new in every other node's dependents.
+        for refs in graph.parent_to_children.values_mut() {
+            if refs.remove(&old_dep_key) {
+                refs.insert(new_dep_key.clone());
+            }
+        }
+
+        self.schemas_and_relations
+            .entry(new_dep_key.0)
+            .or_default()
+            .relations
+            .insert(new_dep_key.1, new_entry.clone());
+
+        Some(new_entry)
+    }
+
+    /// Record that `dependent` depends on `referenced`. No-op if
+    /// `referenced`'s schema isn't cached (external relation) or if
+    /// `referenced` itself isn't in the cache.
+    pub fn add_link(&self, referenced: &dyn BaseRelation, dependent: &dyn BaseRelation) {
+        let (ref_schema_key, ref_relation_key) = Self::get_relation_cache_keys(referenced);
+
+        if !self.schemas_and_relations.contains_key(&ref_schema_key) {
+            return;
+        }
+
+        let ref_key = (ref_schema_key, ref_relation_key);
+        if !self.contains_dep_key(&ref_key) {
+            return;
+        }
+
+        let (dep_schema_key, dep_relation_key) = Self::get_relation_cache_keys(dependent);
+
+        self.graph
+            .write()
+            .parent_to_children
+            .entry(ref_key)
+            .or_default()
+            .insert((dep_schema_key, dep_relation_key));
+    }
+
+    /// Cascade-drop `relation` and every transitive dependent. Returns the
+    /// set of entries removed (including `relation` itself).
+    pub fn drop_relation_cascade(&self, relation: &dyn BaseRelation) -> HashSet<DepKey> {
+        let mut graph = self.graph.write();
+
+        let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
+        let start: DepKey = (schema_key, relation_key);
+
+        if self.get_entry_by_dep_key(&start).is_none() {
+            return HashSet::new();
+        }
+
+        let consequences = collect_consequences(&graph.parent_to_children, start);
+        for key in &consequences {
+            self.evict(&key.0, &key.1);
+            graph.parent_to_children.remove(key);
+        }
+        for refs in graph.parent_to_children.values_mut() {
+            for key in &consequences {
+                refs.remove(key);
+            }
+        }
+
+        consequences
+    }
+
+    fn get_entry_by_dep_key(&self, key: &DepKey) -> Option<RelationCacheEntry> {
+        let schema_entry = self.schemas_and_relations.get(&key.0)?;
+        Some(schema_entry.relations.get(&key.1)?.value().clone())
+    }
+
+    fn contains_dep_key(&self, key: &DepKey) -> bool {
+        self.schemas_and_relations
+            .get(&key.0)
+            .is_some_and(|s| s.relations.contains_key(&key.1))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn get_children(&self, relation: &dyn BaseRelation) -> Vec<DepKey> {
+        let (s, r) = Self::get_relation_cache_keys(relation);
+        self.graph
+            .read()
+            .parent_to_children
+            .get(&(s, r))
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Removes all entries from the cache
@@ -318,6 +452,25 @@ pub async fn hydrate_relation_cache_if_not_already_cached(
         .record_status(&span)
 }
 
+#[inline]
+fn collect_consequences(
+    parent_to_children: &HashMap<DepKey, HashSet<DepKey>>,
+    start: DepKey,
+) -> HashSet<DepKey> {
+    let mut visited = HashSet::from([start.clone()]);
+    let mut queue = VecDeque::from([start]);
+    while let Some(key) = queue.pop_front() {
+        if let Some(children) = parent_to_children.get(&key) {
+            for child in children {
+                if visited.insert(child.clone()) {
+                    queue.push_back(child.clone());
+                }
+            }
+        }
+    }
+    visited
+}
+
 #[cfg(test)]
 mod tests {
     use crate::AdapterType;
@@ -425,7 +578,6 @@ mod tests {
 
         let cache = RelationCache::default();
 
-        // With DEFAULT_RESOLVED_QUOT: Arc<dyn BaseRelation> =
         let relation_quoted: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "MyDB".to_string(),
@@ -684,5 +836,199 @@ mod tests {
             "issue #943: uppercase schema 'NOTLIKETHIS' should find the relation that \
              Databricks returned with lowercase schema 'notlikethis'"
         );
+    }
+
+    #[test]
+    fn test_project_has_functions_defaults_false_and_is_settable() {
+        let cache = RelationCache::default();
+        assert!(!cache.project_has_functions());
+        cache.set_project_has_functions(true);
+        assert!(cache.project_has_functions());
+    }
+
+    #[test]
+    fn test_insert_relation_into_complete_schema() {
+        use crate::metadata::CatalogAndSchema;
+        use crate::relation::do_create_relation;
+
+        let bq_relation = |identifier: &str| -> Arc<dyn BaseRelation> {
+            do_create_relation(
+                AdapterType::Bigquery,
+                "my_project".to_string(),
+                "my_dataset".to_string(),
+                Some(identifier.to_string()),
+                None,
+                DEFAULT_RESOLVED_QUOTING,
+            )
+            .unwrap()
+            .into()
+        };
+
+        let cache = RelationCache::default();
+
+        let table = bq_relation("my_table");
+        cache.insert_schema(CatalogAndSchema::from(table.as_ref()), vec![table.clone()]);
+
+        let udf = bq_relation("add_one");
+        assert!(cache.contains_full_schema_for_relation(udf.as_ref()));
+        assert!(!cache.contains_relation(udf.as_ref()));
+
+        // Listing routines afterwards makes the UDF findable...
+        cache.insert_relation(udf.clone(), None);
+        assert!(cache.contains_relation(udf.as_ref()));
+        assert!(cache.get_relation(udf.as_ref()).is_some());
+
+        // ...without evicting the listed relations or clearing completeness.
+        assert!(cache.contains_relation(table.as_ref()));
+        assert!(cache.contains_full_schema_for_relation(udf.as_ref()));
+    }
+
+    /// Helpers + tests ported from
+    /// `dbt-adapters/dbt-adapters/tests/unit/test_cache.py`.
+    ///
+    /// Graph layout: b→a, c→b, d→b, e→a, f→d. Used to validate cascade-drop
+    /// and reference-aware rename semantics in the Rust port.
+    mod v1_test_cache {
+        use super::*;
+        use crate::relation::do_create_relation;
+        use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+        fn make_rel(ident: &str) -> Arc<dyn BaseRelation> {
+            do_create_relation(
+                AdapterType::Postgres,
+                "dbt".to_string(),
+                "schema".to_string(),
+                Some(ident.to_string()),
+                None,
+                DEFAULT_RESOLVED_QUOTING,
+            )
+            .unwrap()
+            .into()
+        }
+
+        /// Build the standard test graph: relations a..f with links
+        /// b→a, c→b, d→b, e→a, f→d.
+        fn build_cache() -> RelationCache {
+            let cache = RelationCache::default();
+            for ident in ["a", "b", "c", "d", "e", "f"] {
+                cache.insert_relation(make_rel(ident), None);
+            }
+            cache.add_link(make_rel("a").as_ref(), make_rel("b").as_ref());
+            cache.add_link(make_rel("b").as_ref(), make_rel("c").as_ref());
+            cache.add_link(make_rel("b").as_ref(), make_rel("d").as_ref());
+            cache.add_link(make_rel("a").as_ref(), make_rel("e").as_ref());
+            cache.add_link(make_rel("d").as_ref(), make_rel("f").as_ref());
+            cache
+        }
+
+        fn present_idents(cache: &RelationCache) -> BTreeSet<String> {
+            ["a", "b", "c", "d", "e", "f", "b__tmp", "b__backup"]
+                .into_iter()
+                .filter(|ident| cache.contains_relation(make_rel(ident).as_ref()))
+                .map(|s| s.to_string())
+                .collect()
+        }
+
+        /// Mirrors Python `test_drop_inner`: dropping `b` cascades through
+        /// b→{c,d}→f, leaving only `{a, e}`.
+        #[test]
+        fn test_drop_inner() {
+            let cache = build_cache();
+            assert_eq!(
+                present_idents(&cache),
+                ["a", "b", "c", "d", "e", "f"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect()
+            );
+
+            cache.drop_relation_cascade(make_rel("b").as_ref());
+
+            assert_eq!(
+                present_idents(&cache),
+                ["a", "e"].into_iter().map(String::from).collect()
+            );
+        }
+
+        /// Mirrors Python `test_rename_and_drop`: simulates the view
+        /// materialization rename-swap sequence.
+        ///
+        /// 1. drop nonexistent b__backup / b__tmp (no-ops)
+        /// 2. add b__tmp
+        /// 3. rename b -> b__backup (preserves its referenced_by set)
+        /// 4. rename b__tmp -> b (fresh, no dependents)
+        /// 5. drop b__backup cascade → c, d, f gone; new b survives
+        ///
+        /// Final cache contains {a, b, e} and `a` is now referenced only by `e`.
+        #[test]
+        fn test_rename_and_drop() {
+            let cache = build_cache();
+            cache.drop_relation_cascade(make_rel("b__backup").as_ref());
+            cache.drop_relation_cascade(make_rel("b__tmp").as_ref());
+
+            cache.insert_relation(make_rel("b__tmp"), None);
+            assert!(cache.contains_relation(make_rel("b__tmp").as_ref()));
+
+            // Rename b -> b__backup (its referenced_by set {c, d} moves with it).
+            cache.rename_relation(make_rel("b").as_ref(), make_rel("b__backup"));
+            assert!(!cache.contains_relation(make_rel("b").as_ref()));
+            assert!(cache.contains_relation(make_rel("b__backup").as_ref()));
+
+            // Rename b__tmp -> b (fresh entry, no incoming refs).
+            cache.rename_relation(make_rel("b__tmp").as_ref(), make_rel("b"));
+            assert!(cache.contains_relation(make_rel("b").as_ref()));
+            assert!(!cache.contains_relation(make_rel("b__tmp").as_ref()));
+
+            // Drop b__backup cascade — c, d, f should follow it out.
+            cache.drop_relation_cascade(make_rel("b__backup").as_ref());
+
+            assert_eq!(
+                present_idents(&cache),
+                ["a", "b", "e"].into_iter().map(String::from).collect()
+            );
+
+            // Verify a's referenced_by now only contains e (b's link was severed).
+            let refs = cache.get_children(make_rel("a").as_ref());
+            assert_eq!(refs.len(), 1);
+            let e_schema_key =
+                RelationCache::get_schema_cache_key_from_relation(make_rel("e").as_ref());
+            let e_relation_key =
+                RelationCache::get_relation_cache_key_from_relation(make_rel("e").as_ref());
+            assert_eq!(refs[0], (e_schema_key, e_relation_key));
+        }
+
+        /// Regression for the Redshift view materialization bug fixed by this
+        /// patch: after model `a` runs (rename-swap + drop a__backup cascade),
+        /// the cached entry for downstream view `b` must be gone — otherwise
+        /// the materialization for model `b` thinks `b` exists and emits a
+        /// bogus `alter table b rename to b__dbt_backup`.
+        #[test]
+        fn test_redshift_view_repro_a_cascade_evicts_b() {
+            // Initial state: hydration cached both a and b; b refs a.
+            let cache = RelationCache::default();
+            cache.insert_relation(make_rel("a"), None);
+            cache.insert_relation(make_rel("b"), None);
+            cache.add_link(make_rel("a").as_ref(), make_rel("b").as_ref());
+
+            // Materializer creates a__dbt_tmp.
+            cache.insert_relation(make_rel("a__dbt_tmp"), None);
+            // Renames a -> a__dbt_backup (carries b in its referenced_by).
+            cache.rename_relation(make_rel("a").as_ref(), make_rel("a__dbt_backup"));
+            // Renames a__dbt_tmp -> a (fresh entry).
+            cache.rename_relation(make_rel("a__dbt_tmp").as_ref(), make_rel("a"));
+
+            // Drop a__dbt_backup cascade — should evict the dependent view b
+            // since the warehouse will also drop it via CASCADE.
+            cache.drop_relation_cascade(make_rel("a__dbt_backup").as_ref());
+
+            assert!(
+                !cache.contains_relation(make_rel("b").as_ref()),
+                "after drop a__dbt_backup cascade, view b must be evicted from cache"
+            );
+            assert!(
+                cache.contains_relation(make_rel("a").as_ref()),
+                "the freshly renamed a must remain in cache"
+            );
+        }
     }
 }
