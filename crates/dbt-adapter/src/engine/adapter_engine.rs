@@ -5,8 +5,11 @@ use std::sync::Arc;
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
-use dbt_adapter_sql::statements::is_update_statement;
+use dbt_adapter_sql::statements::{
+    bigquery_statement_type_returns_rows, is_update_statement, statement_returns_result_rows,
+};
 use dbt_adbc::bigquery::QUERY_LABELS;
+use dbt_adbc::bigquery::schema_metadata as bq_schema_metadata;
 use dbt_adbc::{Backend, Connection, QueryCtx, Statement};
 use dbt_auth::AdapterConfig;
 use dbt_common::behavior_flags::Behavior;
@@ -237,6 +240,34 @@ pub trait AdapterEngine: Send + Sync {
 /// Logs a perf-debugging step duration at DEBUG level (`RUST_LOG=debug`).
 fn log_step_duration(label: &str, elapsed: std::time::Duration) {
     tracing::debug!("{label} took {elapsed:?}");
+}
+
+/// Skip draining the Arrow reader. BigQuery DML/DDL readers can Storage-Read
+/// the destination table (`dbt.run_query` on `INSERT` into a large table).
+/// Snowflake DML still needs the metadata row.
+pub(crate) fn skip_result_batch_consume(
+    adapter_type: AdapterType,
+    sql: &str,
+    schema: &Schema,
+    fetch: bool,
+) -> bool {
+    if schema.has_dml_columns(adapter_type) {
+        return false;
+    }
+    if !fetch {
+        return true;
+    }
+    match adapter_type {
+        AdapterType::Bigquery => {
+            if let Some(statement_type) = schema.metadata().get(bq_schema_metadata::STATEMENT_TYPE)
+            {
+                !bigquery_statement_type_returns_rows(statement_type)
+            } else {
+                !statement_returns_result_rows(sql, adapter_type)
+            }
+        }
+        _ => false,
+    }
 }
 
 /// Default ADBC-based execute_with_options implementation.
@@ -508,7 +539,9 @@ pub(crate) fn adbc_execute_with_options(
         // Snowflake DML (MERGE/INSERT/UPDATE/DELETE) returns a one-row metadata batch
         // with columns like "number of rows inserted". AdapterResponse needs that batch
         // to compute rows_affected correctly, so we must drain even when fetch=false.
-        if !fetch && !schema.has_dml_columns(engine.adapter_type()) {
+        // BigQuery DML/DDL readers can Storage-Read the destination table; skip that
+        // drain even when fetch=true (e.g. `dbt.run_query` on `INSERT`).
+        if skip_result_batch_consume(engine.adapter_type(), sql.as_ref(), &schema, fetch) {
             drop(reader);
             let schema = attach_lake_compute_metadata(&stmt, schema);
             return Ok((schema, batches, None));
@@ -787,5 +820,71 @@ mod tests {
             uppercase_constraint_batch(),
         );
         assert_eq!(batch.schema().field(0).name(), "COLUMN_NAME");
+    }
+
+    fn schema_with_bq_statement_type(statement_type: &str) -> Schema {
+        Schema::new_with_metadata(
+            vec![Field::new("compiled_code", DataType::Utf8, true)],
+            std::collections::HashMap::from([(
+                bq_schema_metadata::STATEMENT_TYPE.to_string(),
+                statement_type.to_string(),
+            )]),
+        )
+    }
+
+    #[test]
+    fn skip_result_batch_consume_skips_bigquery_insert_even_when_fetch_true() {
+        let schema = Schema::empty();
+        let sql = "/* metadata */\nINSERT INTO t VALUES (1)";
+        assert!(skip_result_batch_consume(
+            AdapterType::Bigquery,
+            sql,
+            &schema,
+            true,
+        ));
+    }
+
+    #[test]
+    fn skip_result_batch_consume_uses_bigquery_statement_type_metadata() {
+        let insert_schema = schema_with_bq_statement_type("INSERT");
+        assert!(skip_result_batch_consume(
+            AdapterType::Bigquery,
+            "SELECT 1",
+            &insert_schema,
+            true,
+        ));
+        let select_schema = schema_with_bq_statement_type("SELECT");
+        assert!(!skip_result_batch_consume(
+            AdapterType::Bigquery,
+            "INSERT INTO t VALUES (1)",
+            &select_schema,
+            true,
+        ));
+    }
+
+    #[test]
+    fn skip_result_batch_consume_still_fetches_bigquery_select() {
+        let schema = Schema::empty();
+        assert!(!skip_result_batch_consume(
+            AdapterType::Bigquery,
+            "SELECT 1",
+            &schema,
+            true,
+        ));
+    }
+
+    #[test]
+    fn skip_result_batch_consume_does_not_skip_snowflake_dml_metadata() {
+        let schema = Schema::new(vec![Field::new(
+            "number of rows inserted",
+            DataType::Int64,
+            false,
+        )]);
+        assert!(!skip_result_batch_consume(
+            AdapterType::Snowflake,
+            "INSERT INTO t VALUES (1)",
+            &schema,
+            false,
+        ));
     }
 }
