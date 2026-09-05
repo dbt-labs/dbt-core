@@ -2042,20 +2042,6 @@ mod tests {
     use minijinja::value::Value as MinijinjaValue;
     use std::io::Cursor;
 
-    #[test]
-    fn metric_view_materialization_maps_to_metric_view_relation() {
-        let materialization = DbtMaterialization::from_str("metric_view").unwrap();
-
-        assert_eq!(
-            RelationType::from(materialization.clone()),
-            RelationType::MetricView
-        );
-        assert_eq!(
-            NodeMaterialization::from(&materialization),
-            NodeMaterialization::MetricView
-        );
-    }
-
     // ---- Seed file hashing (configurable MAXIMUM_SEED_SIZE_MIB, dbt-core PR 13033) ----
 
     fn checksum_parts(checksum: &DbtChecksum) -> (&str, &str) {

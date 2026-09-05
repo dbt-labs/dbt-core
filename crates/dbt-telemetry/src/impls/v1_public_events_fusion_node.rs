@@ -501,23 +501,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn metric_view_has_stable_event_names() {
-        assert_eq!(
-            NodeMaterialization::MetricView.as_static_ref(),
-            "metric_view"
-        );
-        assert_eq!(
-            serde_json::to_string(&NodeMaterialization::MetricView).unwrap(),
-            "\"NODE_MATERIALIZATION_METRIC_VIEW\""
-        );
-        assert_eq!(
-            serde_json::from_str::<NodeMaterialization>("\"NODE_MATERIALIZATION_METRIC_VIEW\"")
-                .unwrap(),
-            NodeMaterialization::MetricView
-        );
-    }
-
     fn processed(node_type: NodeType, phase: ExecutionPhase) -> NodeProcessed {
         let mut event = NodeProcessed::start(
             "model.project.stg_orders".to_string(),

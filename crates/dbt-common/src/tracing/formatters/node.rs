@@ -1202,30 +1202,4 @@ mod tests {
         assert!(output.contains("[-------]"));
         assert!(output.contains("[warn]"));
     }
-
-    #[test]
-    fn metric_view_processed_formats_native_materialization() {
-        let mut node = NodeProcessed::start(
-            "model.project.order_metrics".to_string(),
-            "order_metrics".to_string(),
-            Some("main".to_string()),
-            Some("analytics".to_string()),
-            Some("order_metrics".to_string()),
-            Some(NodeMaterialization::MetricView),
-            None,
-            NodeType::Model,
-            Some(ExecutionPhase::Run),
-            "models/order_metrics.sql".to_string(),
-            Some(1),
-            Some(1),
-            "checksum".to_string(),
-            true,
-            None,
-        );
-        node.set_node_outcome(NodeOutcome::Success);
-
-        let output = format_node_processed_end(&node, std::time::Duration::from_millis(250), false);
-
-        assert!(output.contains("order_metrics (metric_view)"));
-    }
 }

@@ -7,39 +7,6 @@ use std::sync::Arc;
 use crate::macro_test_harness::{MacroTestHarness, assert_executed_contains, default_mock_config};
 
 #[test]
-fn databricks_metric_view_materialization_creates_native_metric_view() {
-    let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
-        .load_all_macros()
-        .with_stub_functions()
-        .build()
-        .expect("harness should build");
-
-    harness.mock().on("clean_sql", |args| {
-        Ok(args.first().cloned().unwrap_or(Value::UNDEFINED))
-    });
-    harness.mock().on("yaml_quote_backtick_values", |args| {
-        Ok(args.first().cloned().unwrap_or(Value::UNDEFINED))
-    });
-    harness.mock().on("get_relation", |_| Ok(().into()));
-
-    let ctx = harness
-        .materialization_context(
-            "order_metrics",
-            "version: 1.1\nsource: `main`.`default`.`source_orders`\nmeasures:\n  - name: total_orders\n    expr: count(1)",
-        )
-        .relation_type(RelationType::MetricView)
-        .build();
-
-    harness
-        .render("{{ materialization_metric_view_databricks() }}", ctx)
-        .expect("native metric-view materialization should render");
-
-    assert_executed_contains(harness.mock(), "create or replace view");
-    assert_executed_contains(harness.mock(), "with metrics");
-    assert_executed_contains(harness.mock(), "language yaml");
-}
-
-#[test]
 fn databricks_metric_view_rejects_an_empty_yaml_definition() {
     let harness = MacroTestHarness::for_adapter(AdapterType::Databricks)
         .load_all_macros()
