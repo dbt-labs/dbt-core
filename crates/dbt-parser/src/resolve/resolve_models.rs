@@ -275,7 +275,6 @@ pub async fn resolve_models(
             // show in resolve_inner's parsing of model yaml properties
             m.remove("metrics");
         }
-
         models_properties_sans_semantics.insert(model_key.clone(), v);
     });
 
@@ -406,6 +405,18 @@ pub async fn resolve_models(
         let maybe_latest_version = models_properties_sans_semantics
             .get(ref_name)
             .and_then(|mpe| mpe.version_info.as_ref().map(|v| v.latest_version.clone()));
+
+        let name_span = models_properties_sans_semantics
+            .get(ref_name)
+            .and_then(|mpe| {
+                mpe.name_span.is_valid().then(|| {
+                    dbt_common::Span::from_serde_span(
+                        mpe.name_span.clone(),
+                        mpe.relative_path.clone(),
+                    )
+                })
+            })
+            .unwrap_or_default();
 
         let unique_id = get_unique_id(&model_name, package_name, maybe_version.clone(), "model");
 
@@ -717,7 +728,7 @@ pub async fn resolve_models(
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: DbtPath::from(dbt_asset.path.to_owned()),
-                name_span: dbt_common::Span::default(),
+                name_span,
                 original_file_path,
                 patch_path: patch_path.as_ref().map(DbtPath::from),
                 unique_id: unique_id.clone(),

@@ -84,6 +84,10 @@ impl MinimalProperties {
                     dependency_package_name_from_ctx(jinja_env, base_ctx),
                     true,
                 )?;
+                let name_span = match model_value.get("name") {
+                    Some(name) => name.span(),
+                    None => &Span::default(),
+                };
                 for (key, maybe_version_info) in collect_model_version_info(&model).into_iter() {
                     if let Some(existing_model) = self.models.get_mut(&key) {
                         existing_model
@@ -102,7 +106,7 @@ impl MinimalProperties {
                             key,
                             MinimalPropertiesEntry {
                                 name: validate_resource_name(&model.name)?,
-                                name_span: Span::default(),
+                                name_span: name_span.clone(),
                                 relative_path: properties_path.to_path_buf(),
                                 version_info: maybe_version_info,
                                 schema_value,

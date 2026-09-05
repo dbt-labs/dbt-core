@@ -10,7 +10,7 @@ use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::{DbtPath, get_snapshot_write_path, get_target_write_path};
 use dbt_common::tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message};
-use dbt_common::{ErrorCode, FsResult, err};
+use dbt_common::{ErrorCode, FsResult, Span, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -649,6 +649,10 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
 
     fn name(&self) -> String {
         self.common().name.clone()
+    }
+
+    fn name_span(&self) -> Span {
+        self.common().name_span.clone()
     }
 
     fn description(&self) -> Option<String> {
@@ -4951,7 +4955,7 @@ pub struct CommonAttributes {
     )]
     pub raw_code: Option<String>,
     pub patch_path: Option<DbtPath>,
-    pub name_span: dbt_common::Span,
+    pub name_span: Span,
 
     // Checksum
     pub checksum: DbtChecksum,
