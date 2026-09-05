@@ -4,7 +4,7 @@ use crate::column::Column;
 use crate::connection::AdapterConnectionFactory;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::record_batch::RecordBatchExt;
-use crate::relation::do_create_relation;
+use crate::relation::Relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{AdapterResult, errors::AsyncAdapterResult, metadata::*};
 use arrow_schema::Schema;
@@ -39,15 +39,89 @@ pub(crate) fn escape_clickhouse_string_literal(value: &str) -> String {
     value.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
+/// Mirrors dbt-clickhouse util.py `engine_can_atomic_exchange`.
+pub(crate) fn engine_can_atomic_exchange(engine: &str) -> bool {
+    matches!(engine, "Atomic" | "Replicated" | "Shared")
+}
+
+/// MV target `db.table` regex from the upstream `clickhouse__list_relations_without_caching`
+/// macro. The `?` quantifiers are `\x3F` hex escapes: the ADBC driver treats a literal `?`
+/// anywhere in the SQL, even inside string literals, as a bind parameter.
+const MV_TARGET_FQN_REGEX_SQL: &str =
+    r"'.*TO\\s+`\x3F([^`\\s(]+)`\x3F\\.`\x3F([^`\\s(]+)`\x3F.*', '\\1.\\2'";
+
+/// The `is_refreshable`/`refreshable_append` columns of the upstream
+/// `clickhouse__list_relations_without_caching` macro: the REFRESH clause sits between
+/// the view name and TO (`CREATE MATERIALIZED VIEW db.mv REFRESH EVERY 2 MINUTE [APPEND] TO …`).
+fn refreshable_marker_columns(col: &str, agg: &str) -> String {
+    let clause = |marker: &str| {
+        format!("{agg}(position(substring({col}, 1, position({col}, ' TO ')), '{marker}')) > 0")
+    };
+    format!(
+        "if({}, 'true', 'false') AS is_refreshable, \
+         if({}, 'true', 'false') AS refreshable_append",
+        clause(" REFRESH "),
+        clause(" APPEND")
+    )
+}
+
 pub(crate) fn build_get_relation_sql(schema: &str, identifier: &str) -> String {
     let escaped_database = escape_clickhouse_string_literal(schema);
     let escaped_identifier = escape_clickhouse_string_literal(identifier);
+    let refreshable_columns = refreshable_marker_columns("create_table_query", "");
     format!(
-        "SELECT engine, name \
+        "SELECT engine, name, \
+                (SELECT engine FROM system.databases WHERE name = '{escaped_database}') AS database_engine, \
+                (SELECT toJSONString(groupArray(map('schema', database, 'name', name, 'sql', as_select))) \
+                 FROM system.tables \
+                 WHERE engine = 'MaterializedView' AND create_table_query LIKE '%TO %' \
+                   AND replaceRegexpOne(create_table_query, {MV_TARGET_FQN_REGEX_SQL}) = '{escaped_database}.{escaped_identifier}') AS mvs_pointing_to_it, \
+                {refreshable_columns} \
          FROM system.tables \
          WHERE database = '{escaped_database}' \
            AND name = '{escaped_identifier}'",
     )
+}
+
+/// impl.py `list_relations_without_caching`:
+/// `can_exchange = conn_supports_exchange and rel_type == Table and engine_can_atomic_exchange(db_engine)`.
+pub(crate) fn relation_can_exchange(
+    caps: &ClickHouseCapabilities,
+    relation_type: RelationType,
+    database_engine: &str,
+) -> bool {
+    caps.atomic_exchange
+        && relation_type == RelationType::Table
+        && engine_can_atomic_exchange(database_engine)
+}
+
+/// Mirrors impl.py `json.loads(mvs_pointing_to_it) or []`.
+pub(crate) fn parse_mvs_pointing_to_it(json: &str) -> Vec<BTreeMap<String, String>> {
+    serde_json::from_str::<Vec<BTreeMap<String, String>>>(json).unwrap_or_default()
+}
+
+/// Stamps the state columns shared by [`build_get_relation_sql`] and [`list_relations`]
+/// (impl.py `list_relations_without_caching`).
+pub(crate) fn with_catalog_state(
+    relation: Relation,
+    caps: &ClickHouseCapabilities,
+    batch: &RecordBatch,
+    row: usize,
+) -> AdapterResult<Relation> {
+    let column = |name: &str| batch.column_values::<StringArray>(name);
+    let database_engines = column("database_engine")?;
+    let can_exchange = relation.relation_type.is_some_and(|relation_type| {
+        relation_can_exchange(caps, relation_type, database_engines.value(row))
+    });
+    relation
+        .with_can_exchange(can_exchange)
+        .with_mvs_pointing_to_it(parse_mvs_pointing_to_it(
+            column("mvs_pointing_to_it")?.value(row),
+        ))
+        .with_is_refreshable(column("is_refreshable")?.value(row) == "true")
+        .with_refreshable_append(column("refreshable_append")?.value(row) == "true")
+        .validate()
+        .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))
 }
 
 pub struct ClickHouseMetadataAdapter {
@@ -350,13 +424,34 @@ pub fn list_relations(
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
     // ClickHouse only has databases, no schemas — we map dbt `schema` to CH `database`.
     let escaped_database = escape_clickhouse_string_literal(&db_schema.resolved_schema);
+    let refreshable_columns = refreshable_marker_columns("t.create_table_query", "max");
     let sql = format!(
-        "SELECT database AS table_database, \
-                name AS table_name, \
-                engine AS table_type \
-         FROM system.tables \
-         WHERE database = '{escaped_database}'"
+        "WITH mv_sources AS ( \
+            SELECT name AS mv_name, \
+                   database AS mv_database, \
+                   any(as_select) AS mv_sql, \
+                   any(replaceRegexpOne(create_table_query, {MV_TARGET_FQN_REGEX_SQL})) AS target_fqn \
+            FROM system.tables \
+            WHERE engine = 'MaterializedView' AND create_table_query LIKE '%TO %' \
+            GROUP BY mv_name, mv_database \
+         ) \
+         SELECT t.database AS table_database, \
+                t.name AS table_name, \
+                t.engine AS table_type, \
+                db.engine AS database_engine, \
+                toJSONString(groupArrayIf( \
+                    map('schema', mv_sources.mv_database, 'name', mv_sources.mv_name, 'sql', mv_sources.mv_sql), \
+                    mv_sources.mv_name != '' \
+                )) AS mvs_pointing_to_it, \
+                {refreshable_columns} \
+         FROM system.tables AS t \
+         JOIN system.databases AS db ON t.database = db.name \
+         LEFT JOIN mv_sources ON mv_sources.target_fqn = concat(t.database, '.', t.name) \
+         WHERE t.database = '{escaped_database}' \
+         GROUP BY table_database, table_name, table_type, database_engine"
     );
+
+    let caps = server_capabilities_over_connection(engine, ctx, conn, token.clone());
 
     let batch = engine.execute(None, conn, ctx, &sql, token)?;
 
@@ -370,22 +465,17 @@ pub fn list_relations(
 
     let mut relations = Vec::with_capacity(batch.num_rows());
     for i in 0..batch.num_rows() {
-        let database = table_databases.value(i);
-        let name = table_names.value(i);
-        let engine_name = table_types.value(i);
-        let relation_type = relation_type_from_engine(engine_name);
-
-        let relation = do_create_relation(
+        let relation = Relation::new(
             engine.adapter_type(),
-            db_schema.resolved_catalog.clone(),
-            database.to_string(),
-            Some(name.to_string()),
-            Some(relation_type),
-            engine.quoting(),
+            Some(db_schema.resolved_catalog.clone()),
+            Some(table_databases.value(i).to_string()),
+            Some(table_names.value(i).to_string()),
         )
-        .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?;
+        .with_relation_type(relation_type_from_engine(table_types.value(i)))
+        .with_quoting(engine.quoting());
+        let relation = with_catalog_state(relation, caps, &batch, i)?;
 
-        relations.push(Arc::from(relation));
+        relations.push(Arc::new(relation) as Arc<dyn BaseRelation>);
     }
 
     Ok(relations)
@@ -464,13 +554,16 @@ fn build_schema_from_clickhouse_describe(
 }
 
 /// ClickHouse server capabilities, probed once per process and reused for every
-/// model/thread afterwards (as the Python client does at connection init).
-/// Later capability probes (atomic exchange) extend this struct.
+/// model/thread afterwards (as the Python client does at connection init, and
+/// for `atomic_exchange` behind a process-global lock).
 #[derive(Debug, Clone)]
 pub struct ClickHouseCapabilities {
     /// `SELECT version()` result; empty when the probe failed (callers treat
     /// unknown as "modern server").
     pub server_version: String,
+    /// Whether atomic `EXCHANGE TABLES` works on this server/database
+    /// (dbclient.py `_check_atomic_exchange`).
+    pub atomic_exchange: bool,
     /// Whether lightweight deletes are usable. Mirrors dbclient.py
     /// `_check_lightweight_deletes`.
     pub has_lw_deletes: bool,
@@ -766,17 +859,45 @@ pub fn server_capabilities(
     token: CancellationToken,
 ) -> &'static ClickHouseCapabilities {
     CLICKHOUSE_CAPABILITIES.get_or_init(|| {
-        let has_lw_deletes = probe_lightweight_deletes(adapter, state, token.clone());
-        let use_lw_deletes_requested = adapter
-            .get_db_config_value("use_lw_deletes")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(false);
-        ClickHouseCapabilities {
-            server_version: probe_server_version(adapter, state, token).unwrap_or_default(),
-            has_lw_deletes,
-            use_lw_deletes: has_lw_deletes && use_lw_deletes_requested,
-        }
+        probe_capabilities(adapter.engine().as_ref(), |sql| {
+            probe_query(adapter, state, sql, token.clone())
+        })
     })
+}
+
+/// [`server_capabilities`] for the catalog paths, which already hold a connection and
+/// have no Jinja `State`.
+pub fn server_capabilities_over_connection(
+    engine: &dyn AdapterEngine,
+    ctx: &QueryCtx,
+    conn: &mut dyn Connection,
+    token: CancellationToken,
+) -> &'static ClickHouseCapabilities {
+    CLICKHOUSE_CAPABILITIES.get_or_init(|| {
+        probe_capabilities(engine, |sql| {
+            engine.execute(None, conn, ctx, sql, token.clone()).ok()
+        })
+    })
+}
+
+fn probe_capabilities(
+    engine: &dyn AdapterEngine,
+    mut run: impl FnMut(&str) -> Option<RecordBatch>,
+) -> ClickHouseCapabilities {
+    let flag = |key: &str| {
+        engine
+            .get_config()
+            .get(key)
+            .and_then(|value| value.as_bool())
+    };
+    let has_lw_deletes = probe_lightweight_deletes(&mut run);
+    ClickHouseCapabilities {
+        server_version: probe_server_version(&mut run).unwrap_or_default(),
+        // dbclient.py: `not check_exchange or _check_atomic_exchange()`
+        atomic_exchange: !flag("check_exchange").unwrap_or(true) || probe_atomic_exchange(&mut run),
+        has_lw_deletes,
+        use_lw_deletes: has_lw_deletes && flag("use_lw_deletes").unwrap_or(false),
+    }
 }
 
 /// Run a capability-probe query; None when the probe cannot run (replay has no
@@ -800,18 +921,63 @@ fn probe_query(
     engine.execute(None, conn.as_mut(), &ctx, sql, token).ok()
 }
 
-/// `SELECT version()`; None leaves the version unknown -> "assume modern server".
-fn probe_server_version(
-    adapter: &AdapterImpl,
-    state: &State,
-    token: CancellationToken,
-) -> Option<String> {
-    let batch = probe_query(adapter, state, "SELECT version() AS v", token)?;
+fn scalar_probe(run: &mut impl FnMut(&str) -> Option<RecordBatch>, sql: &str) -> Option<String> {
+    let batch = run(sql)?;
     if batch.num_rows() == 0 {
         return None;
     }
     let values = batch.column_values::<StringArray>("v").ok()?;
     Some(values.value(0).to_string())
+}
+
+/// `SELECT version()`; None leaves the version unknown -> "assume modern server".
+fn probe_server_version(run: &mut impl FnMut(&str) -> Option<RecordBatch>) -> Option<String> {
+    scalar_probe(run, "SELECT version() AS v")
+}
+
+/// Mirrors dbclient.py `_run_exchange_test` (`Shared` = ClickHouse Cloud, exchange
+/// guaranteed without probing).
+fn probe_atomic_exchange(run: &mut impl FnMut(&str) -> Option<RecordBatch>) -> bool {
+    let db_engine = scalar_probe(
+        run,
+        "SELECT engine AS v FROM system.databases WHERE name = database()",
+    )
+    .unwrap_or_default();
+    if !engine_can_atomic_exchange(&db_engine) {
+        return false;
+    }
+    if db_engine == "Shared" {
+        return true;
+    }
+
+    let table_id = format!(
+        "{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    );
+    let swap_tables = [
+        format!("__dbt_exchange_test_0_{table_id}"),
+        format!("__dbt_exchange_test_1_{table_id}"),
+    ];
+    let created = swap_tables.iter().all(|table| {
+        run(&format!(
+            "CREATE TABLE IF NOT EXISTS `{table}` (test String) ENGINE MergeTree() ORDER BY tuple()"
+        ))
+        .is_some()
+    });
+    let exchanged = created
+        && run(&format!(
+            "EXCHANGE TABLES `{}` AND `{}`",
+            swap_tables[0], swap_tables[1]
+        ))
+        .is_some();
+    for table in &swap_tables {
+        let _ = run(&format!("DROP TABLE IF EXISTS `{table}`"));
+    }
+    exchanged
 }
 
 /// dbclient.py `ND_MUTATION_SETTING`.
@@ -827,16 +993,12 @@ const ND_MUTATION_SETTING: &str = "allow_nondeterministic_mutations";
 /// disabled-but-changeable case with a per-session `SET` — the v2 equivalent
 /// (a per-connection driver setting) arrives with the new adbc_clickhouse
 /// driver (issue #70).
-fn probe_lightweight_deletes(
-    adapter: &AdapterImpl,
-    state: &State,
-    token: CancellationToken,
-) -> bool {
+fn probe_lightweight_deletes(run: &mut impl FnMut(&str) -> Option<RecordBatch>) -> bool {
     let sql = format!(
         "SELECT value, toString(readonly) AS readonly FROM system.settings \
          WHERE name = '{ND_MUTATION_SETTING}'"
     );
-    let Some(batch) = probe_query(adapter, state, &sql, token.clone()) else {
+    let Some(batch) = run(&sql) else {
         return false;
     };
     if batch.num_rows() == 0 {
@@ -862,7 +1024,7 @@ fn probe_lightweight_deletes(
     // Python's `SET {setting} = 1` try/except: verify the user may override
     // the setting.
     let probe = format!("SELECT 1 SETTINGS {ND_MUTATION_SETTING} = 1");
-    probe_query(adapter, state, &probe, token).is_some()
+    run(&probe).is_some()
 }
 
 /// Mirrors impl.py `calculate_incremental_strategy`.
@@ -1577,10 +1739,30 @@ mod tests {
     /// ClickHouse's `system.tables` is case-sensitive on `database` and `name`
     #[test]
     fn build_get_relation_sql_passes_names_through_verbatim() {
-        assert_eq!(
-            build_get_relation_sql("Mixed_Case", "Stg_Customers"),
-            "SELECT engine, name FROM system.tables \
-             WHERE database = 'Mixed_Case' AND name = 'Stg_Customers'",
+        let sql = build_get_relation_sql("Mixed_Case", "Stg_Customers");
+        assert!(
+            sql.ends_with(
+                "FROM system.tables WHERE database = 'Mixed_Case' AND name = 'Stg_Customers'"
+            ),
+            "got: {sql}"
+        );
+        assert!(
+            sql.contains(
+                "(SELECT engine FROM system.databases WHERE name = 'Mixed_Case') AS database_engine"
+            ),
+            "got: {sql}"
+        );
+        assert!(
+            sql.contains("= 'Mixed_Case.Stg_Customers') AS mvs_pointing_to_it"),
+            "got: {sql}"
+        );
+        assert!(
+            sql.contains("' REFRESH ')) > 0, 'true', 'false') AS is_refreshable"),
+            "got: {sql}"
+        );
+        assert!(
+            sql.contains("' APPEND')) > 0, 'true', 'false') AS refreshable_append"),
+            "got: {sql}"
         );
     }
 
@@ -1589,9 +1771,74 @@ mod tests {
     /// the literal terminates early or trails an unbalanced backslash.
     #[test]
     fn build_get_relation_sql_escapes_quotes_and_backslashes() {
-        assert_eq!(
-            build_get_relation_sql("a'b", r"c\d"),
-            r"SELECT engine, name FROM system.tables WHERE database = 'a\'b' AND name = 'c\\d'",
+        let sql = build_get_relation_sql("a'b", r"c\d");
+        assert!(
+            sql.ends_with(r"FROM system.tables WHERE database = 'a\'b' AND name = 'c\\d'"),
+            "got: {sql}"
         );
+        assert!(
+            sql.contains(r"= 'a\'b.c\\d') AS mvs_pointing_to_it"),
+            "got: {sql}"
+        );
+    }
+
+    #[test]
+    fn mv_target_regex_has_no_literal_question_mark() {
+        assert!(!MV_TARGET_FQN_REGEX_SQL.contains('?'));
+        assert!(!build_get_relation_sql("db", "t").contains('?'));
+    }
+
+    #[test]
+    fn can_exchange_mirrors_python() {
+        assert!(engine_can_atomic_exchange("Atomic"));
+        assert!(engine_can_atomic_exchange("Replicated"));
+        assert!(engine_can_atomic_exchange("Shared"));
+        assert!(!engine_can_atomic_exchange("Ordinary"));
+        assert!(!engine_can_atomic_exchange("Lazy"));
+
+        let caps = |atomic_exchange| ClickHouseCapabilities {
+            server_version: String::new(),
+            atomic_exchange,
+            has_lw_deletes: false,
+            use_lw_deletes: false,
+        };
+        assert!(relation_can_exchange(
+            &caps(true),
+            RelationType::Table,
+            "Atomic"
+        ));
+        assert!(!relation_can_exchange(
+            &caps(true),
+            RelationType::View,
+            "Atomic"
+        ));
+        assert!(!relation_can_exchange(
+            &caps(true),
+            RelationType::MaterializedView,
+            "Atomic"
+        ));
+        assert!(!relation_can_exchange(
+            &caps(false),
+            RelationType::Table,
+            "Atomic"
+        ));
+        assert!(!relation_can_exchange(
+            &caps(true),
+            RelationType::Table,
+            "Ordinary"
+        ));
+    }
+
+    #[test]
+    fn parse_mvs_pointing_to_it_handles_json_and_garbage() {
+        let parsed =
+            parse_mvs_pointing_to_it(r#"[{"schema":"db1","name":"mv1","sql":"select 1"}]"#);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0]["schema"], "db1");
+        assert_eq!(parsed[0]["name"], "mv1");
+        assert_eq!(parsed[0]["sql"], "select 1");
+        assert!(parse_mvs_pointing_to_it("[]").is_empty());
+        assert!(parse_mvs_pointing_to_it("").is_empty());
+        assert!(parse_mvs_pointing_to_it("not json").is_empty());
     }
 }

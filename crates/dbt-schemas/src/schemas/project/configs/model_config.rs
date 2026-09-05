@@ -43,8 +43,8 @@ use crate::schemas::properties::model_properties::ModelConstraint;
 use crate::schemas::properties::{ModelFreshness, ModelState};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool, column_types_map,
-    default_type, event_time_or_map_to_string, f64_or_string_f64,
+    IndexesConfig, PrimaryKeyConfig, RefreshableConfig, StringOrInteger, bool_or_string_bool,
+    column_types_map, default_type, event_time_or_map_to_string, f64_or_string_f64,
     hours_to_expiration_or_string_omissible, model_constraints_or_map, string_or_number_to_string,
     u64_or_string_u64,
 };
@@ -635,7 +635,7 @@ pub struct ProjectModelConfig {
     pub sql_security: Option<String>,
     // materialized-view materialization
     #[serde(rename = "+refreshable")]
-    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    pub refreshable: Option<RefreshableConfig>,
     #[serde(default, rename = "+catchup", deserialize_with = "bool_or_string_bool")]
     pub catchup: Option<bool>,
     #[serde(rename = "+mv_on_schema_change")]
@@ -2059,7 +2059,7 @@ mod tests {
     use crate::schemas::project::configs::model_config::ProjectModelConfig;
     use crate::schemas::project::dbt_project::ResolvableConfig;
     use crate::schemas::properties::StatePreClone;
-    use crate::schemas::serde::{AdapterTypeOrArray, StringOrArrayOfStrings};
+    use crate::schemas::serde::{AdapterTypeOrArray, RefreshableConfig, StringOrArrayOfStrings};
     use dbt_adapter_core::AdapterType;
 
     /// `+propagate` rides the same project -> node -> project path `+adapter`
@@ -2903,14 +2903,28 @@ __additional_properties__: {}
         )
         .unwrap();
 
-        let refreshable = config
-            .refreshable
-            .as_ref()
-            .expect("+refreshable should parse");
+        let Some(RefreshableConfig::Config(refreshable)) = config.refreshable.as_ref() else {
+            panic!("+refreshable map should parse as RefreshableConfig::Config");
+        };
         assert_eq!(
             refreshable.get("interval").and_then(|v| v.as_str()),
             Some("EVERY 1 MINUTE")
         );
+
+        for (yml, expected) in [
+            ("+refreshable: false", RefreshableConfig::Bool(false)),
+            ("+refreshable: true", RefreshableConfig::Bool(true)),
+        ] {
+            let config: ProjectModelConfig =
+                dbt_yaml::from_str(&format!("{yml}\n__additional_properties__: {{}}\n")).unwrap();
+            assert_eq!(config.refreshable, Some(expected));
+            let model_config: ModelConfig = config.into();
+            let serialized = dbt_yaml::to_string(&model_config).unwrap();
+            assert!(
+                serialized.contains(&format!("refreshable: {}", yml.rsplit(' ').next().unwrap())),
+                "bool refreshable must serialize as a bare bool for Jinja, got:\n{serialized}"
+            );
+        }
         assert_eq!(config.catchup, Some(false));
         assert_eq!(
             config.mv_on_schema_change.as_deref(),
