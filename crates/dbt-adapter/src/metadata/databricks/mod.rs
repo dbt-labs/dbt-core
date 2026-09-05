@@ -457,11 +457,44 @@ impl DatabricksMetadataAdapter {
 
         // IMPORTANT (Mantle replay): query ordering is observable in replay.
         // Match dbt-databricks v1 `_describe_relation` query order:
-        //   MV:    DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
-        //   ST:    DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
-        //   View:  optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
-        //   Table: UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   MV:          DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
+        //   ST:          DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
+        //   View:        optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   MetricView:  TBLPROPERTIES → optional tags → DESCRIBE EXTENDED
+        //   Table:       UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
         match relation_type {
+            RelationType::MetricView => {
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ShowTblProperties,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
+                );
+
+                if fetch_relation_tags {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+
+                metadata.insert(
+                    DatabricksRelationMetadataKey::DescribeExtended,
+                    self.describe_extended(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token,
+                    )?,
+                );
+            }
             RelationType::MaterializedView => {
                 metadata.insert(
                     DatabricksRelationMetadataKey::DescribeExtended,
@@ -765,7 +798,6 @@ impl DatabricksMetadataAdapter {
             | RelationType::PointerTable
             | RelationType::DynamicTable
             | RelationType::InteractiveTable
-            | RelationType::MetricView
             | RelationType::Function
             | RelationType::Dictionary => {
                 return Err(AdapterError::new(

@@ -454,6 +454,17 @@ mod tests {
                     "partitioned_by": {"partition_by": ["event_date"]}
                 }),
             ),
+            (
+                RelationType::MetricView,
+                serde_json::json!({
+                    "tags": {"set_tags": {"team": "analytics"}},
+                    "tblproperties": {
+                        "tblproperties": {"quality": "gold"},
+                        "pipeline_id": null
+                    },
+                    "query": {"query": "version: 1.1\nsource: orders"}
+                }),
+            ),
         ];
 
         for (relation_type, payload) in cases {

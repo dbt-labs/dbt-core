@@ -4579,6 +4579,7 @@ impl AdapterImpl {
         let config_loader = match relation_type {
             RelationType::Table => relation_types::incremental_table::new_loader(),
             RelationType::MaterializedView => relation_types::materialized_view::new_loader(),
+            RelationType::MetricView => relation_types::metric_view::new_loader(),
             RelationType::StreamingTable => relation_types::streaming_table::new_loader(),
             RelationType::View => relation_types::view::new_loader(),
             _ => {
@@ -4605,6 +4606,7 @@ impl AdapterImpl {
         let config_loader = match model.materialized() {
             DbtMaterialization::Incremental => relation_types::incremental_table::new_loader(),
             DbtMaterialization::MaterializedView => relation_types::materialized_view::new_loader(),
+            DbtMaterialization::MetricView => relation_types::metric_view::new_loader(),
             DbtMaterialization::StreamingTable => relation_types::streaming_table::new_loader(),
             DbtMaterialization::View => relation_types::view::new_loader(),
             _ => {
@@ -4778,7 +4780,18 @@ impl AdapterImpl {
             self.adapter_type() == Databricks,
             "clean_sql is a Databricks-specific adapter operation"
         );
-        Ok(crate::relation::databricks::config::components::query::clean_sql(sql))
+        Ok(dbt_adapter_sql::statements::clean_sql(
+            sql,
+            self.adapter_type(),
+        ))
+    }
+
+    pub fn yaml_quote_backtick_values(&self, yaml_body: &str) -> AdapterResult<String> {
+        debug_assert!(
+            self.adapter_type() == Databricks,
+            "yaml_quote_backtick_values is a Databricks-specific adapter operation"
+        );
+        Ok(crate::relation::databricks::metric_view::quote_metric_view_sources(yaml_body))
     }
 
     /// relation_max_name_length
