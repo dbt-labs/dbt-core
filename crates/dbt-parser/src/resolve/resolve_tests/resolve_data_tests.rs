@@ -613,20 +613,17 @@ pub async fn resolve_data_tests(
 
         // A test runs where its subject runs, so an unset `+adapter` is inherited
         // from `attached_node` -- the same lookup the `group` inheritance below
-        // does. `lake_compute` is deliberately not inherited: the compute-platform path
-        // materializes models and seeds only, so a test routed there would fail at
-        // run time. A test on an `lake_compute` node therefore stays on the target default,
-        // which is what it did before `+adapter` existed.
-        let inherited_adapter = attached_node
-            .as_deref()
-            .and_then(|id| {
-                models
-                    .get(id)
-                    .map(|m| m.node_adapter())
-                    .or_else(|| seeds.get(id).map(|s| s.node_adapter()))
-                    .or_else(|| snapshots.get(id).map(|s| s.node_adapter()))
-            })
-            .filter(|adapter| *adapter != AdapterType::LakeCompute);
+        // does. `lake_compute` inherits like any other adapter: a test has no
+        // materialization to bypass Jinja for, so it executes as a plain read
+        // through the LakeCompute adapter (see `execute_test_on_compute_platform`
+        // in `compute_platform.rs`), the same way it would on any other adapter.
+        let inherited_adapter = attached_node.as_deref().and_then(|id| {
+            models
+                .get(id)
+                .map(|m| m.node_adapter())
+                .or_else(|| seeds.get(id).map(|s| s.node_adapter()))
+                .or_else(|| snapshots.get(id).map(|s| s.node_adapter()))
+        });
         // See `resolve_models`: the flag overrides the config, and nothing is
         // validated at parse. `None` from both leaves inheritance to fill the gap.
         let resolved_node_adapter = arg

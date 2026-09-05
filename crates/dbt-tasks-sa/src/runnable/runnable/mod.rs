@@ -155,19 +155,25 @@ impl Task for RunTask {
                     .then_some(test),
                 None => None,
             };
-            // `LakeCompute` only has a bypass-Jinja-materialization hook
-            // (`run_on_lake_compute`) for models and seeds -- the two node
-            // types that actually materialize something. Every other node
-            // type that resolves onto `lakecompute` (a generic/singular test
-            // inheriting `+adapter: lakecompute` from the model/seed it
-            // tests, a snapshot, ...) has no such bypass to offer and no
-            // need for one: its compiled SQL is a plain read, so it executes
-            // exactly like it would on `RunExecutionPath::Remote`, generically,
-            // through the adapter store's `LakeCompute` entry. Without this
-            // downgrade, a test would reach `run_on_lake_compute`, which only
-            // downcasts to `DbtModel`, and error.
+            // `LakeCompute` has a bypass-Jinja-materialization hook
+            // (`run_on_lake_compute`) for models, seeds, and tests -- tests
+            // need it too, not because they materialize anything, but because
+            // only that hook builds and attaches the per-statement
+            // `CATALOG_BUNDLE` option (`resolve_compute_write_target` /
+            // `catalog_bundle_json`) that tells a fresh LakeCompute worker
+            // connection which catalogs to attach. The generic `Remote` path's
+            // `adapter.execute()` always passes empty options
+            // (`adapter_engine.rs`'s `execute()` convenience wrapper), so a
+            // test downgraded to `Remote` would silently run with nothing
+            // attached beyond the connection's own baseline -- fine by
+            // accident for objects in the default MDLS namespace, wrong for
+            // anything needing a declared catalog. Every other node type that
+            // resolves onto `lakecompute` (a snapshot, ...) still has no
+            // bypass to offer and is downgraded as before.
             let effective_execution_path = if self.execution_path == RunExecutionPath::LakeCompute
-                && !(self.node.as_any().is::<DbtModel>() || self.node.as_any().is::<DbtSeed>())
+                && !(self.node.as_any().is::<DbtModel>()
+                    || self.node.as_any().is::<DbtSeed>()
+                    || self.node.as_any().is::<DbtTest>())
             {
                 RunExecutionPath::Remote
             } else {
