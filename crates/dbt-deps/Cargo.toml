@@ -42,6 +42,7 @@ url = { workspace = true }
 vortex-events = { workspace = true }
 
 [dev-dependencies]
+dbt-runtime = { workspace = true }
 dbt-telemetry = { workspace = true }
 tokio = { workspace = true }
 wiremock = "0.6"

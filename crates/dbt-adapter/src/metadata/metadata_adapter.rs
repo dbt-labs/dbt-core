@@ -816,7 +816,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn schema_wide_freshness_records_and_replays_without_calling_inner() {
         let _guard = TIME_MACHINE_TEST_LOCK.lock().await;
         reset_time_machine_globals().await.unwrap();

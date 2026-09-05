@@ -188,7 +188,7 @@ projects:
 "#
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn chain_returns_first_successful_credential() {
         let f = write_yaml(valid_yaml());
         let chain = AuthChain::new(vec![AuthResolver::CloudYaml(CloudYamlResolver {
@@ -201,7 +201,7 @@ projects:
         assert_eq!(cred.account_id(), 42);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn chain_returns_not_authenticated_when_all_fail() {
         let chain = AuthChain::new(vec![AuthResolver::CloudYaml(CloudYamlResolver {
             dbt_project_path: None,
@@ -212,7 +212,7 @@ projects:
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn chain_continues_past_errors_and_returns_first_error_if_no_credentials() {
         let bad = write_yaml("not: valid: yaml: [[[");
 
@@ -231,7 +231,7 @@ projects:
         assert!(matches!(err, AuthError::Malformed(_)));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn chain_continues_past_error_and_succeeds_on_next_resolver() {
         let bad = write_yaml("not: valid: yaml: [[[");
         let good = write_yaml(valid_yaml());

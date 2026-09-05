@@ -831,7 +831,7 @@ mod tests {
             }
         }
 
-        #[tokio::test]
+        #[dbt_runtime::test]
         async fn hydrate_dbt_packages_batches_private_resolution_into_one_call() {
             let resolver = Arc::new(FakeResolver::new());
             let io_args = IoArgs::default();
@@ -857,7 +857,7 @@ mod tests {
             assert_resolved_via_resolver(&package_listing);
         }
 
-        #[tokio::test]
+        #[dbt_runtime::test]
         async fn hydrate_dbt_packages_lock_batches_private_resolution_into_one_call() {
             // Regression test: private packages must be resolved on both the
             // lock-regen path (`hydrate_dbt_packages`) and the
@@ -904,7 +904,7 @@ mod tests {
             assert_resolved_via_resolver(&package_listing);
         }
 
-        #[tokio::test]
+        #[dbt_runtime::test]
         async fn hydrate_dbt_packages_skips_resolution_when_skip_private_deps() {
             // Regression test: batch resolution must respect `skip_private_deps`
             // the same way the per-entry path in `incorporate` does. Before this

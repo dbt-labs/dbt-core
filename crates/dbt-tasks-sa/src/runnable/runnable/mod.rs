@@ -1336,7 +1336,7 @@ mod tests {
     // (`GLOBAL_SESSION`/`GLOBAL_REPLAYER` in `dbt_adapter::time_machine`).
     static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn run_cache_clone_decision_records_and_replays() {
         use dbt_adapter::time_machine::{
             EventReplayer, RecordedRunCacheCloneDecision, get_or_init_recording,
@@ -1394,7 +1394,7 @@ mod tests {
         reset_time_machine_globals().await.unwrap();
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn cached_data_test_result_records_and_replays() {
         use dbt_adapter::time_machine::{
             EventReplayer, get_or_init_recording, get_or_init_replayer, reset_time_machine_globals,

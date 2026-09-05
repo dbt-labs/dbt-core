@@ -17,6 +17,13 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
+    if cfg!(debug_assertions) {
+        assert!(
+            tokio::runtime::Handle::try_current().is_ok(),
+            "spawn_traced called outside of a tokio runtime:\n{:?}",
+            std::backtrace::Backtrace::force_capture()
+        );
+    }
     tokio::spawn(future.in_current_span())
 }
 

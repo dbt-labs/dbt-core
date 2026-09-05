@@ -814,7 +814,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn validation_rpc_error_fails_open_to_skipped() {
         let client = ValidationClient(RunCacheServiceError::Rpc(tonic::Status::unavailable(
             "service unavailable",
@@ -826,7 +826,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn validation_auth_error_fails_closed() {
         let client = ValidationClient(RunCacheServiceError::Auth("bad credentials".to_string()));
 
@@ -836,7 +836,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn validation_unexpected_rpc_error_fails_open_to_skipped() {
         let client = ValidationClient(RunCacheServiceError::Rpc(tonic::Status::internal(
             "service error",
@@ -848,7 +848,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn validation_disabled_error_fails_open_to_skipped() {
         let client = ValidationClient(RunCacheServiceError::Disabled);
 
@@ -858,7 +858,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn speculative_submit_defaults_to_disabled() {
         let client = ValidationClient(RunCacheServiceError::Disabled);
 
@@ -870,7 +870,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn disabled_config_does_not_connect() {
         let err = GrpcRunCacheServiceClient::connect(RunCacheServiceConfig::disabled())
             .await
@@ -956,7 +956,7 @@ mod tests {
         assert!(!RunCacheServiceError::Auth("bad credentials".to_string()).disables_service());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn initial_transport_error_does_not_disable_service() {
         let err = GrpcRunCacheServiceClient::connect(RunCacheServiceConfig {
             enabled: true,
@@ -993,7 +993,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn unavailable_rpc_does_not_disable_service() {
         let client = lazy_test_client(1);
 
@@ -1038,7 +1038,7 @@ mod tests {
         assert!(!RunCacheServiceError::Disabled.is_retryable_transport());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn with_retry_retries_transient_transport_until_success() {
         let client = lazy_test_client(3);
         let calls = AtomicU32::new(0);
@@ -1059,7 +1059,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 3);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn with_retry_exhausts_attempts_and_returns_last_error() {
         let client = lazy_test_client(3);
         let calls = AtomicU32::new(0);
@@ -1080,7 +1080,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 3);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn with_retry_does_not_retry_non_transient_errors() {
         let client = lazy_test_client(3);
         let calls = AtomicU32::new(0);
@@ -1098,7 +1098,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn with_retry_single_attempt_disables_retries() {
         let client = lazy_test_client(1);
         let calls = AtomicU32::new(0);
@@ -1126,7 +1126,7 @@ mod tests {
         assert_eq!(0_u32.clamp(1, GRPC_MAX_ATTEMPTS_CAP), 1);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn grpc_client_disables_after_first_service_disabling_error() {
         let client = lazy_test_client(1);
 

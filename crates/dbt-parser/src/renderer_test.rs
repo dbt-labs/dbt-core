@@ -24,7 +24,7 @@ mod tests {
     ///
     /// Parser parallelism is gated solely by `no_parallel`; `num_threads`
     /// carries the connection-pool size and must not affect render concurrency.
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_unresolved_sql_files_config_override() {
         // Set up a temporary directory and create a test SQL file
         let temp_dir = tempfile::TempDir::new().unwrap();
@@ -211,7 +211,7 @@ mod tests {
     /// branch that evaluates to false during the `execute=false` parse render
     /// must still be discovered (via static AST analysis) so that its schema
     /// is fetched into `sourced_remote` and the model can compile.
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_source_in_false_branch_is_statically_discovered() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let base_path = temp_dir.path().to_path_buf();

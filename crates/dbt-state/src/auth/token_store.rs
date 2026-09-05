@@ -204,14 +204,14 @@ mod tests {
         TokenStore::discover_from(Some(auth_home.to_string_lossy().into_owned()), None).unwrap()
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn load_returns_none_when_missing() {
         let dir = TempDir::new().unwrap();
         let store = store_in(&dir);
         assert_eq!(store.load().await.unwrap(), None);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn save_then_load_round_trips() {
         let dir = TempDir::new().unwrap();
         let store = store_in(&dir);
@@ -219,7 +219,7 @@ mod tests {
         assert_eq!(store.load().await.unwrap(), Some(sample_token()));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn malformed_json_returns_none_and_deletes_file() {
         let dir = TempDir::new().unwrap();
         let store = store_in(&dir);
@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn saved_file_has_0600_permissions() {
         use std::os::unix::fs::PermissionsExt;
         let dir = TempDir::new().unwrap();
@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(mode & 0o777, 0o600, "expected 0600, got {:o}", mode & 0o777);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn delete_removes_file() {
         let dir = TempDir::new().unwrap();
         let store = store_in(&dir);

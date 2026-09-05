@@ -30,7 +30,7 @@ fn test_state() -> Arc<AppState> {
     ))
 }
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn shuts_down_cleanly_on_signal() {
     let (tx, rx) = oneshot::channel::<()>();
     let handle = tokio::spawn(serve_with_shutdown(test_args(), test_state(), async {
@@ -47,7 +47,7 @@ async fn shuts_down_cleanly_on_signal() {
     assert!(result.is_ok(), "expected clean shutdown, got {result:?}");
 }
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn stays_up_until_signal() {
     let (_tx, rx) = oneshot::channel::<()>();
     let mut handle = tokio::spawn(serve_with_shutdown(test_args(), test_state(), async {

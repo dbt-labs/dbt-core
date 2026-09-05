@@ -371,7 +371,7 @@ pub fn args_list_udfs(
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_recorder_basic() {
         let (recorder, mut receiver) = EventRecorder::new();
 
@@ -391,7 +391,7 @@ mod tests {
         assert_eq!(event.seq(), 0);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_record_sao_skip() {
         let (recorder, mut receiver) = EventRecorder::new();
 
@@ -417,7 +417,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_record_sao_skip_with_freshness() {
         let (recorder, mut receiver) = EventRecorder::new();
 
@@ -449,7 +449,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_sequence_numbers() {
         let (recorder, mut receiver) = EventRecorder::new();
 
@@ -472,7 +472,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_multiple_nodes() {
         let (recorder, mut receiver) = EventRecorder::new();
 
