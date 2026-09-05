@@ -17,6 +17,10 @@ enum LakeComputeAuthIR<'a> {
         token_url: Option<&'a str>,
         client_id: Option<&'a str>,
     },
+    Fivetran {
+        credential: &'a str,
+        api_url: Option<&'a str>,
+    },
 }
 
 impl<'a> LakeComputeAuthIR<'a> {
@@ -55,6 +59,20 @@ impl<'a> LakeComputeAuthIR<'a> {
                     builder.with_named_option(lake_compute::OKTA_CLIENT_ID, v)?;
                 }
             }
+            Self::Fivetran {
+                credential,
+                api_url,
+            } => {
+                builder.with_named_option(
+                    lake_compute::AUTH_TYPE,
+                    lake_compute::auth_type::FIVETRAN,
+                )?;
+                builder.with_named_option(lake_compute::FIVETRAN_CREDENTIAL, credential)?;
+                // Absent, the driver exchanges against production Fivetran.
+                if let Some(v) = api_url {
+                    builder.with_named_option(lake_compute::FIVETRAN_API_URL, v)?;
+                }
+            }
         }
         Ok(builder)
     }
@@ -82,11 +100,16 @@ fn parse_auth<'a>(
             token_url: config.get_str("okta_token_url"),
             client_id: config.get_str("okta_client_id"),
         }),
+        lake_compute::auth_type::FIVETRAN => Ok(LakeComputeAuthIR::Fivetran {
+            credential: config.require_str("fivetran_credential")?,
+            api_url: config.get_str("fivetran_api_url"),
+        }),
         other => Err(AuthError::config(format!(
-            "unknown ALT auth method '{other}'; expected one of: '{}', '{}', '{}'",
+            "unknown ALT auth method '{other}'; expected one of: '{}', '{}', '{}', '{}'",
             lake_compute::auth_type::API_KEY,
             lake_compute::auth_type::TOKEN,
-            lake_compute::auth_type::OKTA_BROWSER
+            lake_compute::auth_type::OKTA_BROWSER,
+            lake_compute::auth_type::FIVETRAN
         ))),
     }
 }
@@ -202,6 +225,41 @@ mod tests {
         assert_eq!(
             other_option_value(&builder, lake_compute::OKTA_CLIENT_ID),
             Some("client-123")
+        );
+    }
+
+    #[test]
+    fn fivetran_method() {
+        let builder = configure(Mapping::from_iter([
+            ("base_url".into(), "https://compute.example".into()),
+            ("method".into(), "fivetran".into()),
+            ("fivetran_credential".into(), "dct_secret".into()),
+        ]));
+        assert_eq!(
+            other_option_value(&builder, lake_compute::AUTH_TYPE),
+            Some("fivetran")
+        );
+        assert_eq!(
+            other_option_value(&builder, lake_compute::FIVETRAN_CREDENTIAL),
+            Some("dct_secret")
+        );
+        assert_eq!(
+            other_option_value(&builder, lake_compute::FIVETRAN_API_URL),
+            None
+        );
+    }
+
+    #[test]
+    fn fivetran_method_requires_a_credential() {
+        let err = LakeComputeAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&AdapterConfig::new(Mapping::from_iter([(
+                "method".into(),
+                "fivetran".into(),
+            )])))
+            .expect_err("missing credential");
+        assert!(
+            format!("{err:?}").contains("fivetran_credential"),
+            "{err:?}"
         );
     }
 }
