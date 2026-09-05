@@ -44,6 +44,7 @@ pub mod install;
 // Constants for different backends
 pub mod athena;
 pub mod bigquery;
+pub mod clickhouse;
 pub mod databricks;
 pub mod lake_compute;
 pub mod redshift;

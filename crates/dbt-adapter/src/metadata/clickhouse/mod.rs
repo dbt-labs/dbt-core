@@ -13,6 +13,7 @@ use arrow_array::{Array, RecordBatch, StringArray, UInt64Array};
 
 use dbt_adapter_core::ExecutionPhase;
 use dbt_adapter_engine::MapReduce;
+use dbt_adapter_sql::ident::quote_identifier;
 use dbt_adbc::{Connection, QueryCtx};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::cancellation::CancellationToken;
@@ -477,6 +478,9 @@ pub struct ClickHouseCapabilities {
     /// `has_lw_deletes` gated by the profile `use_lw_deletes` flag; picks the
     /// default incremental strategy.
     pub use_lw_deletes: bool,
+    /// The ND-mutation setting is disabled server-side but overridable; see
+    /// [`statement_options`].
+    pub nd_mutation_override: bool,
 }
 
 impl ClickHouseCapabilities {
@@ -766,17 +770,38 @@ pub fn server_capabilities(
     token: CancellationToken,
 ) -> &'static ClickHouseCapabilities {
     CLICKHOUSE_CAPABILITIES.get_or_init(|| {
-        let has_lw_deletes = probe_lightweight_deletes(adapter, state, token.clone());
+        let probe = probe_lightweight_deletes(adapter, state, token.clone());
         let use_lw_deletes_requested = adapter
             .get_db_config_value("use_lw_deletes")
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
         ClickHouseCapabilities {
             server_version: probe_server_version(adapter, state, token).unwrap_or_default(),
-            has_lw_deletes,
-            use_lw_deletes: has_lw_deletes && use_lw_deletes_requested,
+            has_lw_deletes: probe.has_lw_deletes,
+            use_lw_deletes: probe.has_lw_deletes && use_lw_deletes_requested,
+            nd_mutation_override: probe.nd_mutation_override,
         }
     })
+}
+
+/// The probed capabilities, or None — for callers that must not trigger the
+/// probe themselves.
+fn capabilities_if_probed() -> Option<&'static ClickHouseCapabilities> {
+    CLICKHOUSE_CAPABILITIES.get()
+}
+
+/// dbclient.py parity: after the lightweight-deletes probe finds
+/// `ND_MUTATION_SETTING` disabled but overridable, every statement carries it
+/// as a driver setting (Python adds it to the per-request `_conn_settings`).
+pub(crate) fn statement_options() -> Option<(String, adbc_core::options::OptionValue)> {
+    capabilities_if_probed()
+        .filter(|caps| caps.nd_mutation_override)
+        .map(|_| {
+            (
+                dbt_adbc::clickhouse::setting_key(ND_MUTATION_SETTING),
+                adbc_core::options::OptionValue::String("1".to_string()),
+            )
+        })
 }
 
 /// Run a capability-probe query; None when the probe cannot run (replay has no
@@ -817,36 +842,76 @@ fn probe_server_version(
 /// dbclient.py `ND_MUTATION_SETTING`.
 const ND_MUTATION_SETTING: &str = "allow_nondeterministic_mutations";
 
+/// dbclient.py `_ensure_database` parity (incl. its clause spacing).
+/// Divergence: identifiers are double-quoted via the shared ident helper
+/// instead of query.py's backtick quoting — equivalent for ClickHouse.
+pub(crate) fn exists_database_sql(database: &str) -> String {
+    format!(
+        "EXISTS DATABASE {}",
+        quote_identifier(database, AdapterType::ClickHouse)
+    )
+}
+
+/// See [`exists_database_sql`].
+pub(crate) fn create_database_sql(
+    database: &str,
+    database_engine: Option<&str>,
+    cluster: Option<&str>,
+) -> String {
+    let engine_clause = match database_engine {
+        Some(engine) if !engine.is_empty() => format!(" ENGINE {engine} "),
+        _ => String::new(),
+    };
+    let cluster_clause = match cluster {
+        Some(cluster) if !cluster.trim().is_empty() => format!(" ON CLUSTER \"{cluster}\" "),
+        _ => String::new(),
+    };
+    format!(
+        "CREATE DATABASE IF NOT EXISTS {}{cluster_clause}{engine_clause}",
+        quote_identifier(database, AdapterType::ClickHouse)
+    )
+}
+
+/// See [`probe_lightweight_deletes`].
+struct LwDeletesProbe {
+    has_lw_deletes: bool,
+    nd_mutation_override: bool,
+}
+
+impl LwDeletesProbe {
+    const UNAVAILABLE: Self = Self {
+        has_lw_deletes: false,
+        nd_mutation_override: false,
+    };
+}
+
 /// Mirrors dbclient.py `_check_lightweight_deletes` (only
 /// `allow_nondeterministic_mutations` needs checking — lightweight deletes
-/// themselves are GA since ClickHouse 23.3). Divergences: Python raises a
+/// themselves are GA since ClickHouse 23.3). Divergence: Python raises a
 /// config error at connection time when the setting is readonly and the
 /// profile requested `use_lw_deletes` — here the probe just reports
 /// "unavailable" and `validate_incremental_strategy` errors when a
-/// lightweight-delete strategy is actually used; and Python enables the
-/// disabled-but-changeable case with a per-session `SET` — the v2 equivalent
-/// (a per-connection driver setting) arrives with the new adbc_clickhouse
-/// driver (issue #70).
+/// lightweight-delete strategy is actually used.
 fn probe_lightweight_deletes(
     adapter: &AdapterImpl,
     state: &State,
     token: CancellationToken,
-) -> bool {
+) -> LwDeletesProbe {
     let sql = format!(
         "SELECT value, toString(readonly) AS readonly FROM system.settings \
          WHERE name = '{ND_MUTATION_SETTING}'"
     );
     let Some(batch) = probe_query(adapter, state, &sql, token.clone()) else {
-        return false;
+        return LwDeletesProbe::UNAVAILABLE;
     };
     if batch.num_rows() == 0 {
-        return false;
+        return LwDeletesProbe::UNAVAILABLE;
     }
     let (Ok(values), Ok(readonlys)) = (
         batch.column_values::<StringArray>("value"),
         batch.column_values::<StringArray>("readonly"),
     ) else {
-        return false;
+        return LwDeletesProbe::UNAVAILABLE;
     };
     let enabled = values
         .value(0)
@@ -854,15 +919,22 @@ fn probe_lightweight_deletes(
         .map(|v| v > 0)
         .unwrap_or(false);
     if enabled {
-        return true;
+        return LwDeletesProbe {
+            has_lw_deletes: true,
+            nd_mutation_override: false,
+        };
     }
     if readonlys.value(0) != "0" {
-        return false;
+        return LwDeletesProbe::UNAVAILABLE;
     }
     // Python's `SET {setting} = 1` try/except: verify the user may override
     // the setting.
     let probe = format!("SELECT 1 SETTINGS {ND_MUTATION_SETTING} = 1");
-    probe_query(adapter, state, &probe, token).is_some()
+    let may_override = probe_query(adapter, state, &probe, token).is_some();
+    LwDeletesProbe {
+        has_lw_deletes: may_override,
+        nd_mutation_override: may_override,
+    }
 }
 
 /// Mirrors impl.py `calculate_incremental_strategy`.
@@ -1244,6 +1316,28 @@ mod tests {
         assert!(
             err.message()
                 .contains("S3 external_id specified without role_arn")
+        );
+    }
+
+    #[test]
+    fn test_ensure_database_sql_mirrors_python() {
+        assert_eq!(exists_database_sql("my_db"), "EXISTS DATABASE \"my_db\"");
+        // '"' doubling in quoted identifiers verified against ClickHouse 26.3
+        assert_eq!(
+            exists_database_sql("we\"ird"),
+            "EXISTS DATABASE \"we\"\"ird\""
+        );
+        assert_eq!(
+            create_database_sql("my_db", None, None),
+            "CREATE DATABASE IF NOT EXISTS \"my_db\""
+        );
+        assert_eq!(
+            create_database_sql("my_db", Some(""), Some("  ")),
+            "CREATE DATABASE IF NOT EXISTS \"my_db\""
+        );
+        assert_eq!(
+            create_database_sql("my_db", Some("Replicated"), Some("test_shard")),
+            "CREATE DATABASE IF NOT EXISTS \"my_db\" ON CLUSTER \"test_shard\"  ENGINE Replicated "
         );
     }
 

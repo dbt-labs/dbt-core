@@ -23,6 +23,7 @@ pub mod query_comment;
 pub mod retry;
 
 mod adbc;
+pub(crate) mod clickhouse;
 mod databricks;
 pub mod duckdb_attach;
 pub use adbc::AdbcEngine;

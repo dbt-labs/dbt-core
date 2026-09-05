@@ -274,6 +274,9 @@ pub(crate) fn adbc_execute_with_options(
         (_, AdapterType::Databricks) => {
             options.extend(query_tags_from_state(state)?.into_statement_options())
         }
+        (_, AdapterType::ClickHouse) => {
+            options.extend(crate::metadata::clickhouse::statement_options())
+        }
         (Some(state), AdapterType::Bigquery) => {
             let mut job_labels =
                 maybe_query_comment

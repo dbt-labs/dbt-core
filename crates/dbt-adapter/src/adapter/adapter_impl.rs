@@ -1266,8 +1266,20 @@ impl AdapterImpl {
             .relation_cache()
             .evict_schema_for_relation(relation.as_ref());
         let relation = relation.without_identifier()?;
+        let dropped_schema = relation.schema().map(str::to_string);
         let args = [RelationObject::new(relation).into_value()];
         execute_macro(state, &args, "drop_schema")?;
+        if self.adapter_type() == ClickHouse
+            && !self.engine().is_mock()
+            && let Some(dropped_schema) = dropped_schema
+        {
+            let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+            crate::engine::clickhouse::database_dropped(
+                conn.as_mut(),
+                self.engine().get_config(),
+                &dropped_schema,
+            )?;
+        }
         Ok(none_value())
     }
 
