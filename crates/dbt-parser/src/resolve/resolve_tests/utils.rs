@@ -13,6 +13,12 @@ pub fn base_tests_inner(
     tests: Option<&[DataTests]>,
     data_tests: Option<&[DataTests]>,
 ) -> FsResult<Option<ModelDataTestVec>> {
+    // dbt-core renames `tests` -> `data_tests` behind `if data.get("tests"):`
+    // (`core/dbt/parser/schemas.py`), so an *empty* `tests:` list is falsy and behaves as if the
+    // key were absent: it is not renamed, it does not conflict with a real `data_tests:`, and --
+    // where inheritance applies, as on a model version -- it does not override the inherited
+    // value. An empty `data_tests:` list is a real value and does override.
+    let tests = tests.filter(|tests| !tests.is_empty());
     if tests.is_some() && data_tests.is_some() {
         return err!(
             ErrorCode::InvalidSchema,
