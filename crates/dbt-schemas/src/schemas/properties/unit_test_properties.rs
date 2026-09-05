@@ -9,6 +9,7 @@ use crate::schemas::{
 };
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_yaml::DbtSchema;
+use dbt_yaml::Spanned;
 use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -20,7 +21,7 @@ pub struct UnitTestProperties {
     pub description: Option<String>,
     pub expect: Expect,
     pub given: Option<Vec<Given>>,
-    pub model: String,
+    pub model: Spanned<String>,
     pub name: String,
     pub overrides: Option<UnitTestOverrides>,
     #[serde(skip_deserializing, default)]
