@@ -594,7 +594,7 @@ async fn dependency_installed(dependency: &str) -> FsResult<bool> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_dependency_not_installed() {
         let result = dependency_installed("not_installed").await.unwrap();
         assert!(!result);

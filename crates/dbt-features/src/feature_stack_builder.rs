@@ -29,6 +29,7 @@ use crate::cli::CliFeatureBuilder;
 use crate::feature_stack::{FeatureStack, InstrumentationFeature};
 use crate::index::{IndexFeature, NoOpIndexHooks};
 use crate::loader::LoaderFeature;
+use crate::login::LoginFeature;
 use crate::metricflow::MetricflowFeature;
 use crate::resolver::ResolverFeature;
 use crate::sidecar::SidecarFeature;
@@ -76,23 +77,28 @@ impl TaskRunnerCtxFactory for DefaultTaskRunnerCtxFactory {
 }
 
 pub struct FeatureStackBuilder {
+    name: &'static str,
+    distribution: &'static str,
     tracing: TracingFeature,
 }
 
 impl FeatureStackBuilder {
     pub fn new(tracing: TracingFeature) -> Self {
-        Self { tracing }
+        Self {
+            name: "dbt-core",
+            distribution: "dbt-oss",
+            tracing,
+        }
     }
 
     pub fn build(self) -> Box<FeatureStack> {
-        let dbt_distribution = "dbt-oss";
-        let version_check_enabled = false;
-
         let instrumentation = InstrumentationFeature {
-            event_emitter: vortex_events::default_event_emitter(None, dbt_distribution),
+            event_emitter: vortex_events::default_event_emitter(None, self.distribution),
         };
 
-        let cli = CliFeatureBuilder::new("dbt-core").build();
+        let cli = CliFeatureBuilder::new(self.name)
+            .version_check_enabled(false)
+            .build();
 
         let index = IndexFeature {
             hooks: Box::new(NoOpIndexHooks),
@@ -142,7 +148,9 @@ impl FeatureStackBuilder {
 
         let loader = LoaderFeature::default();
 
-        let login_hooks = Arc::new(DefaultLoginHooks);
+        let login = LoginFeature {
+            hooks: Arc::new(DefaultLoginHooks),
+        };
 
         let jinja = crate::jinja::JinjaFeature {
             factory: Arc::new(dbt_jinja_utils::DefaultJinjaFactory),
@@ -167,8 +175,7 @@ impl FeatureStackBuilder {
             loader,
             jinja,
             lake_compute,
-            login_hooks,
-            version_check_enabled,
+            login,
         };
         Box::new(stack)
     }

@@ -94,7 +94,13 @@ impl Handle {
     pub fn current() -> Handle {
         match Handle::try_current() {
             Ok(handle) => handle,
-            Err(e) => panic!("{e}"),
+            Err(e) => {
+                if cfg!(debug_assertions) {
+                    panic!("{e}\n{:?}", std::backtrace::Backtrace::force_capture());
+                } else {
+                    panic!("{e}");
+                }
+            }
         }
     }
 

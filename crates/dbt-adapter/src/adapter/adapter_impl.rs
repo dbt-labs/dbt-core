@@ -576,6 +576,16 @@ impl AdapterImpl {
     /// Mirrors the Python reference implementation in dbt-duckdb:
     /// https://github.com/duckdb/dbt-duckdb/blob/main/dbt/adapters/duckdb/credentials.py
     pub fn table_format_for_database(&self, database: &str) -> &'static str {
+        // DIVERGENCE: the lake compute arm has no Python counterpart -- lake compute
+        // is Fusion-only, and it shares the DuckDB macros this feeds.
+        //
+        // Lake compute reads and writes open Iceberg tables, and it attaches the
+        // catalogs holding them server-side -- so there is no profile `attach:`
+        // entry and, in the Lake Compute + MDLS setup, no catalogs.yml entry for
+        // the DuckDB lookups below to find.
+        if self.adapter_type() == LakeCompute {
+            return duckdb_table_format_for_database(database).unwrap_or("iceberg");
+        }
         if self.adapter_type() != DuckDB {
             return "default";
         }
@@ -6327,6 +6337,24 @@ mod tests {
         assert_eq!(adapter.table_format_for_database("other"), "default");
     }
 
+    /// Lake compute attaches its catalogs server-side, so no `attach:` entry or
+    /// catalogs.yml entry names them -- but every relation it can see is still an
+    /// Iceberg table, and the DuckDB macros branch on this to avoid
+    /// `information_schema.columns` (which reports Iceberg REST columns as `__`).
+    #[test]
+    fn test_table_format_lake_compute_is_iceberg_without_any_attach_entry() {
+        let adapter = AdapterImpl::new(build_engine(LakeCompute, Mapping::new()), None);
+
+        assert_eq!(
+            adapter.table_format_for_database("wrapped_refutation"),
+            "iceberg"
+        );
+        assert_eq!(
+            adapter.table_format_for_database("anything_else"),
+            "iceberg"
+        );
+    }
+
     #[test]
     fn test_table_format_unaliased_motherduck_attachment() {
         let adapter = AdapterImpl::new(engine(DuckDB), None);
@@ -7511,6 +7539,48 @@ mod tests {
             vec![
                 "`id` Int32",
                 "`payload` String CODEC(ZSTD) TTL created_at + INTERVAL 1 DAY",
+            ]
+        );
+    }
+
+    /// BigQuery constraints on dotted columns must render inside their STRUCT types.
+    #[test]
+    fn test_render_raw_columns_constraints_bigquery_nested() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let not_null = Constraint {
+            type_: ConstraintType::NotNull,
+            expression: None,
+            name: None,
+            to: None,
+            to_columns: None,
+            warn_unsupported: None,
+            warn_unenforced: None,
+        };
+        let column = |name: &str, data_type: &str, constraints| {
+            (
+                name.to_string(),
+                DbtColumn {
+                    name: name.to_string(),
+                    data_type: Some(data_type.to_string()),
+                    constraints,
+                    ..Default::default()
+                },
+            )
+        };
+        let columns = IndexMap::from([
+            column("id", "int64", vec![]),
+            column("my_array", "array", vec![]),
+            column("my_array.sub_id", "string", vec![not_null.clone()]),
+            column("my_array.my_struct", "struct", vec![]),
+            column("my_array.my_struct.first_field", "string", vec![not_null]),
+            column("my_array.my_struct.second_field", "string", vec![]),
+        ]);
+
+        assert_eq!(
+            adapter.render_raw_columns_constraints(columns).unwrap(),
+            vec![
+                "id int64",
+                "my_array array<struct<sub_id string not null, my_struct struct<first_field string not null, second_field string>>>",
             ]
         );
     }

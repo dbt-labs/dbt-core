@@ -9,13 +9,13 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use dbt_adapter::Column;
 use dbt_adapter::errors::into_fs_error;
 use dbt_adapter::formatter::SqlLiteralFormatter;
 use dbt_adapter::metadata::BIGQUERY_PSEUDOCOLUMNS;
 use dbt_adapter::relation::{RelationObject, create_relation_from_node};
 use dbt_adapter::sql_types::DefaultTypeOps;
 use dbt_adapter::sql_types::{TypeOps, make_arrow_field};
+use dbt_adapter::{Adapter, Column};
 use dbt_adapter_core::{AdapterType, ExecutionPhase, quote_char};
 use dbt_common::cancellation::Cancellable;
 use dbt_common::collections::DashMap;
@@ -41,11 +41,15 @@ use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{DbtUnitTest, InternalDbtNodeAttributes, NodePathKind};
 use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::render_task_hooks::RenderTaskHooks;
+use dbt_tasks_core::task::TaskResult;
+use dbt_tasks_core::unit_test_schema::{UnitTestExpectedSchemaKey, UnitTestExpectedSchemaKeyInput};
 use dbt_telemetry::{ExecutionPhase as TelemetryExecutionPhase, NodeType};
 
 use crate::renderable::unit_test_typing::{BigqueryTyping, DatabricksTyping, SnowflakeTyping};
-use dbt_tasks_core::task::TaskResult;
+use crate::task::effective_unit_test_execute;
 
+use super::common::handle_render_result;
+use crate::sql::dialect::sqlparser_dialect_for;
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use csv::ReaderBuilder;
 use itertools::Itertools;
@@ -54,9 +58,6 @@ use minijinja::value::Object;
 use minijinja::{CodeLocation, State, Value, Value as MinijinjaValue};
 use regex::Regex;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
-
-use super::common::handle_render_result;
-use crate::sql::dialect::sqlparser_dialect_for;
 
 type YmlValue = dbt_yaml::Value;
 
@@ -79,6 +80,27 @@ impl UnitTestSchemaTarget {
             } => "incremental unit test model-under-test relation from `expect`",
         }
     }
+}
+
+struct UnitTestSchemaProbe {
+    schema_sql: String,
+    ctes: String,
+    query_sql: String,
+}
+
+#[derive(Clone, Copy)]
+struct ExpectedSchemaInferenceOptions {
+    use_query_schema_fallback: bool,
+    try_structural_inference: bool,
+    cache_result: bool,
+}
+
+fn should_use_query_schema_fallback(
+    is_tested_model_ephemeral: bool,
+    effective_execute: schemas::profiles::Execute,
+    is_replaying: bool,
+) -> bool {
+    is_tested_model_ephemeral || (!effective_execute.is_default() && !is_replaying)
 }
 
 /// Small utility for merging objects
@@ -245,14 +267,15 @@ fn try_get_schema_from_cache(
     Ok(None)
 }
 
-/// Fetch schema for a relation from the warehouse without consulting the schema cache.
-async fn fetch_schema_for_unit_test_relation(
+/// Resolve a missing relation schema through the render hook or warehouse fallback.
+async fn hydrate_unit_test_relation_schema(
     ctx: &TaskRunnerCtx,
     relation: Arc<dyn BaseRelation>,
     unit_test_unique_id: &str,
     fetched: &mut HashSet<String>,
     schema_target: UnitTestSchemaTarget,
     task_hooks: Arc<dyn RenderTaskHooks>,
+    adapter: &Adapter,
 ) -> FsResult<SchemaRef> {
     let canonical_fqn = relation.get_canonical_fqn()?;
     let semantic_fqn = relation.semantic_fqn();
@@ -263,14 +286,6 @@ async fn fetch_schema_for_unit_test_relation(
             relation.render_self_as_str()
         )
     };
-
-    let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
-        fs_err!(
-            ErrorCode::Generic,
-            "Failed to fetch schema for {}: adapter unavailable",
-            err_subject()
-        )
-    })?;
 
     task_hooks
         .will_fetch_schema_for_unit_test_relation(
@@ -362,6 +377,71 @@ async fn fetch_schema_for_unit_test_relation(
     }
 }
 
+async fn fetch_schema_for_unit_test_relation(
+    ctx: &TaskRunnerCtx,
+    relation: Arc<dyn BaseRelation>,
+    unit_test_unique_id: &str,
+    fetched: &mut HashSet<String>,
+    schema_target: UnitTestSchemaTarget,
+    task_hooks: Arc<dyn RenderTaskHooks>,
+) -> FsResult<SchemaRef> {
+    let canonical_fqn = relation.get_canonical_fqn()?;
+    let semantic_fqn = relation.semantic_fqn();
+    let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
+        fs_err!(
+            ErrorCode::Generic,
+            "Failed to fetch schema for {} '{}': adapter unavailable",
+            schema_target.subject(),
+            relation.render_self_as_str()
+        )
+    })?;
+
+    let is_local_unit_test =
+        ctx.nodes()
+            .unit_tests
+            .get(unit_test_unique_id)
+            .is_some_and(|unit_test| {
+                effective_unit_test_execute(unit_test, ctx.inner.execute)
+                    == schemas::profiles::Execute::Sidecar
+            });
+    let coordinate_fetch = is_local_unit_test
+        && matches!(schema_target, UnitTestSchemaTarget::GivenUpstream)
+        && adapter.as_replay().is_none()
+        && !adapter.engine().is_mock();
+    if !coordinate_fetch {
+        return hydrate_unit_test_relation_schema(
+            ctx,
+            relation,
+            unit_test_unique_id,
+            fetched,
+            schema_target,
+            task_hooks,
+            &adapter,
+        )
+        .await;
+    }
+
+    let fetched_for_fetch = &mut *fetched;
+    let schema = ctx
+        .inner
+        .unit_test_schema
+        .get_or_try_fetch_fixture_schema(canonical_fqn, ctx.schema_cache.as_ref(), || async move {
+            hydrate_unit_test_relation_schema(
+                ctx,
+                relation,
+                unit_test_unique_id,
+                fetched_for_fetch,
+                schema_target,
+                task_hooks,
+                &adapter,
+            )
+            .await
+        })
+        .await?;
+    fetched.insert(semantic_fqn);
+    Ok(schema)
+}
+
 fn columns_to_schema(
     type_ops: &dyn TypeOps,
     columns: Vec<Column>,
@@ -397,13 +477,47 @@ fn columns_to_schema(
     Ok(Arc::new(Schema::new(fields)))
 }
 
-/// Infer schema by creating an empty relation and reading its metadata schema.
-fn populate_schema_from_empty_relation(
+fn build_unit_test_schema_probe(
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    compiled_model_sql: &str,
+    rewrite_targets: &[(String, String)],
+) -> UnitTestSchemaProbe {
+    let schema_sql = replace_subquery_refs_with_cte_names(
+        adapter_type,
+        type_ops,
+        compiled_model_sql.to_string(),
+        rewrite_targets,
+    );
+    let ctes = rewrite_targets
+        .iter()
+        .filter_map(|(id, query)| {
+            let cte_name = create_cte_name_from_fqn(adapter_type, type_ops, id);
+            schema_sql
+                .contains(&cte_name)
+                .then(|| format!("{cte_name} as ({query})"))
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let query_sql = if ctes.is_empty() {
+        schema_sql.clone()
+    } else {
+        format!("WITH {ctes} {schema_sql}")
+    };
+    UnitTestSchemaProbe {
+        schema_sql,
+        ctes,
+        query_sql,
+    }
+}
+
+fn infer_unit_test_expected_schema(
     ctx: &TaskRunnerCtx,
     unit_test: &DbtUnitTest,
     compiled_model_sql: &str,
     subqueries: &[(String, String)],
-    infer_with_query_schema: bool,
+    fixture_shape_subqueries: &[(String, String)],
+    options: ExpectedSchemaInferenceOptions,
     task_hooks: &dyn RenderTaskHooks,
 ) -> FsResult<SchemaRef> {
     let adapter = ctx.env.get_base_adapter().ok_or_else(|| {
@@ -455,7 +569,7 @@ fn populate_schema_from_empty_relation(
     // (`resolve_unit_tests`), so a test on a non-default model must not be
     // rendered for the default's dialect.
     let materialization = if unit_test.node_adapter() == AdapterType::DuckDB
-        || infer_with_query_schema
+        || options.use_query_schema_fallback
     {
         r#"
   {% macro get_expected_columns(sql, select_sql_header) -%}
@@ -483,12 +597,12 @@ fn populate_schema_from_empty_relation(
     // Compile and run a one-off macro without registering it in the shared environment.
     let unique_id = &unit_test.__common_attr__.unique_id;
 
-    // Schema-probe SQL: when the probe runs outside of default mode,
+    // Schema-probe SQL: when the fallback runs outside of default mode,
     // rewrite every mocked subquery into a CTE because we have no warehouse to
     // query. When it runs against the real warehouse, only rewrite ephemerals —
     // non-ephemeral upstreams must remain real relation refs so the warehouse
     // provides their schemas (e.g. for type-checking expect-row literals).
-    let rewrite_targets: Vec<(String, String)> = if infer_with_query_schema {
+    let fallback_rewrite_targets: Vec<(String, String)> = if options.use_query_schema_fallback {
         subqueries.to_vec()
     } else {
         subqueries
@@ -497,97 +611,163 @@ fn populate_schema_from_empty_relation(
             .cloned()
             .collect()
     };
-
     let type_ops = adapter.engine().type_ops();
-    let schema_sql = replace_subquery_refs_with_cte_names(
+    let fallback_probe = build_unit_test_schema_probe(
         unit_test.node_adapter(),
         type_ops.as_ref(),
-        compiled_model_sql.to_string(),
-        &rewrite_targets,
+        compiled_model_sql,
+        &fallback_rewrite_targets,
     );
-
-    let ctes = rewrite_targets
-        .iter()
-        .filter_map(|(id, q)| {
-            let cte_name =
-                create_cte_name_from_fqn(unit_test.node_adapter(), type_ops.as_ref(), id);
-            if schema_sql.contains(&cte_name) {
-                Some(format!("{cte_name} as ({q})"))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-
-    if infer_with_query_schema {
-        let sql = if ctes.is_empty() {
-            Cow::Borrowed(schema_sql.as_str())
+    let local_probe_sql = if options.try_structural_inference {
+        if options.use_query_schema_fallback {
+            Some(fallback_probe.query_sql.clone())
         } else {
-            Cow::Owned(format!("WITH {ctes} {schema_sql}"))
-        };
-        // Let distribution-specific hooks handle schemas that the adapter query path cannot bind.
-        if let Some(schema) = task_hooks.try_infer_unit_test_schema(ctx, unit_test, &sql)? {
+            Some(
+                build_unit_test_schema_probe(
+                    unit_test.node_adapter(),
+                    type_ops.as_ref(),
+                    compiled_model_sql,
+                    subqueries,
+                )
+                .query_sql,
+            )
+        }
+    } else {
+        None
+    };
+
+    let cache_key = if options.cache_result {
+        let fallback_shape_rewrite_targets: Vec<(String, String)> =
+            if options.use_query_schema_fallback {
+                fixture_shape_subqueries.to_vec()
+            } else {
+                fixture_shape_subqueries
+                    .iter()
+                    .filter(|(id, _)| id.starts_with(DBT_CTE_PREFIX))
+                    .cloned()
+                    .collect()
+            };
+        let fallback_probe_shape_sql = build_unit_test_schema_probe(
+            unit_test.node_adapter(),
+            type_ops.as_ref(),
+            compiled_model_sql,
+            &fallback_shape_rewrite_targets,
+        )
+        .query_sql;
+        let distinct_local_probe_shape_sql =
+            (options.try_structural_inference && !options.use_query_schema_fallback).then(|| {
+                build_unit_test_schema_probe(
+                    unit_test.node_adapter(),
+                    type_ops.as_ref(),
+                    compiled_model_sql,
+                    fixture_shape_subqueries,
+                )
+                .query_sql
+            });
+        let local_probe_shape_sql = distinct_local_probe_shape_sql
+            .as_deref()
+            .unwrap_or(&fallback_probe_shape_sql);
+        let overrides =
+            serde_json::to_string(&unit_test.__unit_test_attr__.overrides).map_err(|error| {
+                fs_err!(
+                    ErrorCode::SerializationError,
+                    "Failed to serialize overrides for unit test '{}': {error}",
+                    unique_id
+                )
+            })?;
+        Some(UnitTestExpectedSchemaKey::new(
+            UnitTestExpectedSchemaKeyInput {
+                adapter_type: unit_test.node_adapter(),
+                model_unique_id: unit_test
+                    .tested_node_unique_id
+                    .as_deref()
+                    .unwrap_or(unique_id.as_str()),
+                local_probe_shape_sql,
+                fallback_probe_shape_sql: &fallback_probe_shape_sql,
+                fallback_with_query_schema: options.use_query_schema_fallback,
+                serialized_overrides: &overrides,
+            },
+        ))
+    } else {
+        None
+    };
+
+    let UnitTestSchemaProbe {
+        schema_sql, ctes, ..
+    } = fallback_probe;
+
+    let infer_schema = || {
+        if let Some(local_probe_sql) = local_probe_sql.as_deref()
+            && let Some(schema) =
+                task_hooks.try_infer_unit_test_schema(ctx, unit_test, local_probe_sql)?
+        {
             return Ok(schema);
         }
-    }
 
-    let template = ctx.env.template_from_str(materialization).map_err(|e| {
-        fs_err!(
-            ErrorCode::JinjaError,
-            "Internal error while compiling macro to infer schema for unit test {}: {}",
-            unique_id,
-            e
-        )
-    })?;
-    let state = template.eval_to_state(run_context, &[]).map_err(|e| {
-        fs_err!(
-            ErrorCode::JinjaError,
-            "Internal error while preparing macro context to infer schema for unit test {}: {}",
-            unique_id,
-            e
-        )
-    })?;
-    let func = state.lookup("get_expected_columns", &[]).ok_or_else(|| {
-        fs_err!(
-            ErrorCode::Unexpected,
-            "Internal error: macro lookup failed while inferring schema for unit test {}",
-            unique_id
-        )
-    })?;
-
-    let mut args = vec![Value::from(schema_sql)];
-    if ctes.is_empty() {
-        args.push(Value::from(()));
-    } else {
-        args.push(Value::from(format!("WITH {ctes} ")));
-    }
-
-    let columns_as_value = func.call(&state, &args, &[]).map_err(|e| {
-        fs_err!(
-            ErrorCode::JinjaError,
-            "Internal error while evaluating macro to infer schema for unit test {}: {}",
-            unique_id,
-            e
-        )
-    })?;
-
-    let columns = Column::vec_from_jinja_value(unit_test.node_adapter(), columns_as_value)
-        .map_err(|e| {
+        let template = ctx.env.template_from_str(materialization).map_err(|e| {
             fs_err!(
-                ErrorCode::Generic,
-                "Internal error while extracting columns from inferred schema for unit test {}: {}",
-                unit_test.__common_attr__.unique_id,
+                ErrorCode::JinjaError,
+                "Internal error while compiling macro to infer schema for unit test {}: {}",
+                unique_id,
+                e
+            )
+        })?;
+        let state = template.eval_to_state(run_context, &[]).map_err(|e| {
+            fs_err!(
+                ErrorCode::JinjaError,
+                "Internal error while preparing macro context to infer schema for unit test {}: {}",
+                unique_id,
+                e
+            )
+        })?;
+        let func = state.lookup("get_expected_columns", &[]).ok_or_else(|| {
+            fs_err!(
+                ErrorCode::Unexpected,
+                "Internal error: macro lookup failed while inferring schema for unit test {}",
+                unique_id
+            )
+        })?;
+
+        let mut args = vec![Value::from(schema_sql)];
+        if ctes.is_empty() {
+            args.push(Value::from(()));
+        } else {
+            args.push(Value::from(format!("WITH {ctes} ")));
+        }
+
+        let columns_as_value = func.call(&state, &args, &[]).map_err(|e| {
+            fs_err!(
+                ErrorCode::JinjaError,
+                "Internal error while evaluating macro to infer schema for unit test {}: {}",
+                unique_id,
                 e
             )
         })?;
 
-    // TODO: we may want to register this schema in the cache as well
-    columns_to_schema(
-        adapter.engine().type_ops().as_ref(),
-        columns,
-        &unit_test.__common_attr__.unique_id,
-    )
+        let columns = Column::vec_from_jinja_value(unit_test.node_adapter(), columns_as_value)
+            .map_err(|e| {
+                fs_err!(
+                    ErrorCode::Generic,
+                    "Internal error while extracting columns from inferred schema for unit test {}: {}",
+                    unit_test.__common_attr__.unique_id,
+                    e
+                )
+            })?;
+
+        columns_to_schema(
+            adapter.engine().type_ops().as_ref(),
+            columns,
+            &unit_test.__common_attr__.unique_id,
+        )
+    };
+
+    if let Some(key) = cache_key {
+        ctx.inner
+            .unit_test_schema
+            .get_or_try_infer_expected_schema(key, infer_schema)
+    } else {
+        infer_schema()
+    }
 }
 
 /// `run_started_at` is a plain datetime global, not a macro invoked with
@@ -1071,12 +1251,21 @@ fn render_unit_test(
         .unwrap_or_else(|_| absolute_path_unit_test.clone());
 
     let adapter_type = node.node_adapter();
-    let type_ops_arc = ctx
-        .env
-        .get_base_adapter()
+    let base_adapter = ctx.env.get_base_adapter();
+    let type_ops_arc = base_adapter
+        .as_ref()
         .map(|a| a.engine().type_ops().clone())
         .unwrap_or_else(|| Arc::new(DefaultTypeOps::new(adapter_type)) as Arc<dyn TypeOps>);
     let type_ops = type_ops_arc.as_ref();
+    let is_replaying = base_adapter
+        .as_ref()
+        .is_some_and(|adapter| adapter.as_replay().is_some());
+    let is_mock = base_adapter
+        .as_ref()
+        .is_some_and(|adapter| adapter.engine().is_mock());
+    let effective_execute = effective_unit_test_execute(node, ctx.inner.execute);
+    let cache_expected_schema =
+        effective_execute == schemas::profiles::Execute::Sidecar && !is_replaying && !is_mock;
 
     let model_unique_id = get_unique_id(
         &node.__unit_test_attr__.model,
@@ -1130,17 +1319,19 @@ fn render_unit_test(
 
     let resolver_state = ctx.resolver_state();
 
-    // Build subqueries from pre-discovered relations (Discover phase) + their schemas (now cached from Fetch phase).
+    // Build subqueries from pre-discovered relations (Discover phase) and their
+    // schemas (now cached from Fetch phase).
     let mut subqueries = Vec::new();
+    let mut fixture_shape_subqueries = Vec::new();
     for (given_idx, ((fqn_string, relation), given)) in given_relations
         .iter()
         .zip(&node.__unit_test_attr__.given)
         .enumerate()
     {
-        let given_values = match given.format {
+        let (given_values, fixture_shape_values) = match given.format {
             // SQL uses the string value verbatim
             schemas::common::Formats::Sql => {
-                if let Some(fixture) = &given.fixture {
+                let sql = if let Some(fixture) = &given.fixture {
                     let filename = ctx.inner.arg.io.in_dir.join(fixture.clone());
                     stdfs::read_to_string(filename)?
                 } else if let Some(Rows::String(sql)) = &given.rows {
@@ -1151,7 +1342,9 @@ fn render_unit_test(
                         "The unit test {} with sql format has no fixture",
                         node.__common_attr__.name
                     ));
-                }
+                };
+                let fixture_shape = cache_expected_schema.then(|| sql.clone());
+                (sql, fixture_shape)
             }
             // dict: inline YAML rows only
             schemas::common::Formats::Dict => {
@@ -1164,14 +1357,13 @@ fn render_unit_test(
                     node.node_adapter(),
                 );
                 if let Some(Rows::List(rows)) = &given.rows {
-                    create_values(
+                    create_values_and_shape_sql(
                         &given_schema,
                         rows,
                         node.node_adapter(),
                         type_ops,
-                        None,
                         given.input.as_str(),
-                        true,
+                        cache_expected_schema,
                     )?
                 } else {
                     return Err(fs_err!(
@@ -1203,25 +1395,23 @@ fn render_unit_test(
                             e
                         )
                     })?;
-                    create_values(
+                    create_values_and_shape_sql(
                         &given_schema,
                         &rows,
                         node.node_adapter(),
                         type_ops,
-                        None,
                         given.input.as_str(),
-                        true,
+                        cache_expected_schema,
                     )?
                 } else if let Some(fixture) = &given.fixture {
                     let rows = get_fixture_rows(fixture, &given.format, ctx)?;
-                    create_values(
+                    create_values_and_shape_sql(
                         &given_schema,
                         &rows,
                         node.node_adapter(),
                         type_ops,
-                        None,
                         given.input.as_str(),
-                        true,
+                        cache_expected_schema,
                     )?
                 } else {
                     return Err(fs_err!(
@@ -1234,6 +1424,9 @@ fn render_unit_test(
         };
 
         subqueries.push((fqn_string.clone(), given_values));
+        if let Some(fixture_shape_values) = fixture_shape_values {
+            fixture_shape_subqueries.push((fqn_string.clone(), fixture_shape_values));
+        }
     }
     // create a subquery for expect...
     // todo: updating the model with a unique id should be done already in parse?
@@ -1284,8 +1477,8 @@ fn render_unit_test(
         .map(|node| node.materialized() == DbtMaterialization::Incremental)
         .unwrap_or(false);
 
-    // Ephemeral models have no registered dataset, so the temp-table probe in
-    // `populate_schema_from_empty_relation` fails with "Dataset not found".
+    // Ephemeral models have no registered dataset, so the temp-table fallback in
+    // `infer_unit_test_expected_schema` fails with "Dataset not found".
     // Force the self-contained query-schema path instead.
     let is_tested_model_ephemeral = resolver_state
         .nodes
@@ -1367,18 +1560,22 @@ fn render_unit_test(
                 // active adapter is a replayer, fall back to the probe path.
                 // Ephemeral models keep the query-schema path regardless (the
                 // probe has no dataset for them — see `is_tested_model_ephemeral`).
-                let is_replaying = ctx
-                    .env
-                    .get_base_adapter()
-                    .is_some_and(|adapter| adapter.as_replay().is_some());
-                let infer_with_query_schema =
-                    is_tested_model_ephemeral || (!ctx.inner.execute.is_default() && !is_replaying);
-                populate_schema_from_empty_relation(
+                let fallback_with_query_schema = should_use_query_schema_fallback(
+                    is_tested_model_ephemeral,
+                    effective_execute,
+                    is_replaying,
+                );
+                infer_unit_test_expected_schema(
                     ctx,
                     node,
                     compiled_model_sql.as_str(),
                     &subqueries,
-                    infer_with_query_schema,
+                    &fixture_shape_subqueries,
+                    ExpectedSchemaInferenceOptions {
+                        use_query_schema_fallback: fallback_with_query_schema,
+                        try_structural_inference: fallback_with_query_schema,
+                        cache_result: cache_expected_schema,
+                    },
                     task_hooks,
                 )?
             }
@@ -1907,6 +2104,42 @@ fn append_referenced_pseudocolumns(
     Arc::new(Schema::new(fields))
 }
 
+fn create_values_and_shape_sql(
+    ref_schema: &SchemaRef,
+    rows: &[BTreeMap<String, YmlValue>],
+    adapter_type: AdapterType,
+    type_ops: &dyn TypeOps,
+    relation_name: &str,
+    include_shape: bool,
+) -> FsResult<(String, Option<String>)> {
+    let values_sql = create_values(
+        ref_schema,
+        rows,
+        adapter_type,
+        type_ops,
+        None,
+        relation_name,
+        true,
+    )?;
+    let shape_sql = if include_shape {
+        let schema = append_referenced_pseudocolumns(ref_schema, rows, adapter_type);
+        // Dict and CSV values are explicitly cast to this schema. A typed empty
+        // query therefore preserves their output shape without keying on literals.
+        Some(create_values(
+            &schema,
+            &[],
+            adapter_type,
+            type_ops,
+            None,
+            relation_name,
+            false,
+        )?)
+    } else {
+        None
+    };
+    Ok((values_sql, shape_sql))
+}
+
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/60fc903f705f447a7b58d0df6b33d7be7cd00690/dbt-adapters/src/dbt/include/global_project/macros/unit_test_sql/get_fixture_sql.sql#L51
 fn create_values(
     ref_schema: &SchemaRef,
@@ -2337,9 +2570,24 @@ fn get_fixture_rows(
 mod tests {
     use super::*;
     use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+    use dbt_common::io_args::ComputeArg;
+    use dbt_schemas::schemas::profiles::Execute;
     use dbt_test_primitives::assert_contains;
 
     type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn configured_local_unit_test_uses_query_schema_fallback() {
+        let mut unit_test = DbtUnitTest::default();
+        unit_test.deprecated_config.compute = Some(ComputeArg::Sidecar);
+        let effective_execute = effective_unit_test_execute(&unit_test, Execute::Remote);
+
+        assert!(should_use_query_schema_fallback(
+            false,
+            effective_execute,
+            false
+        ));
+    }
 
     #[test]
     fn test_parse_csv_rows_fills_missing_trailing_fields_with_null() {
@@ -3516,6 +3764,73 @@ mod tests {
             Field::new("id", DataType::Int64, false),
             Field::new("name", DataType::Utf8, true),
         ]))
+    }
+
+    #[test]
+    fn different_fixture_rows_share_expected_schema_inference() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        use dbt_tasks_core::unit_test_schema::UnitTestSchemaState;
+
+        let schema = schema_id_name();
+        let type_ops = DefaultTypeOps::new(AdapterType::Snowflake);
+        let (first_values, first_shape) = create_values_and_shape_sql(
+            &schema,
+            &[row(&[("id", 1)])],
+            AdapterType::Snowflake,
+            &type_ops,
+            "orders",
+            true,
+        )
+        .unwrap();
+        let (second_values, second_shape) = create_values_and_shape_sql(
+            &schema,
+            &[row(&[("id", 2)])],
+            AdapterType::Snowflake,
+            &type_ops,
+            "orders",
+            true,
+        )
+        .unwrap();
+
+        assert_ne!(first_values, second_values);
+        assert_eq!(first_shape, second_shape);
+
+        let (_, omitted_shape) = create_values_and_shape_sql(
+            &schema,
+            &[row(&[("id", 1)])],
+            AdapterType::Snowflake,
+            &type_ops,
+            "orders",
+            false,
+        )
+        .unwrap();
+        assert!(omitted_shape.is_none());
+
+        let state = UnitTestSchemaState::default();
+        let inference_count = AtomicUsize::new(0);
+        for fixture_shape in [first_shape.unwrap(), second_shape.unwrap()] {
+            let probe_shape = format!("WITH orders AS ({fixture_shape}) SELECT * FROM orders");
+            let key = UnitTestExpectedSchemaKey::new(UnitTestExpectedSchemaKeyInput {
+                adapter_type: AdapterType::Snowflake,
+                model_unique_id: "model.pkg.orders",
+                local_probe_shape_sql: &probe_shape,
+                fallback_probe_shape_sql: &probe_shape,
+                fallback_with_query_schema: true,
+                serialized_overrides: "null",
+            });
+            state
+                .get_or_try_infer_expected_schema(key, || {
+                    inference_count.fetch_add(1, Ordering::Relaxed);
+                    Ok(Arc::clone(&schema))
+                })
+                .unwrap();
+        }
+
+        let stats = state.stats_snapshot();
+        assert_eq!(inference_count.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.expected_misses, 1);
+        assert_eq!(stats.expected_hits, 1);
     }
 
     #[test]

@@ -311,7 +311,10 @@ impl AdbcEngine {
         }
 
         builder.with_named_option("dbt_cloud.token", credential.token())?;
-        builder.with_named_option("dbt_cloud.host", credential.account_host())?;
+        builder.with_named_option(
+            "dbt_cloud.host",
+            flock_driver_host(credential.account_host())?,
+        )?;
         builder.with_named_option("dbt_cloud.account_id", credential.account_id().to_string())?;
         if let Some(project_id) = project_id {
             builder.with_named_option("dbt_cloud.project_id", project_id)?;
@@ -380,6 +383,18 @@ impl AdbcEngine {
         };
         super::duckdb_attach::compose_v2_catalog_attach_stmts(&view, platform)
     }
+}
+
+/// The flock-adbc driver connects through a dedicated `dwg.` (data warehouse
+/// gateway) subdomain that only exists for flock traffic — every other
+/// consumer of `credential.account_host()` (Cloud Config gRPC, the identify
+/// service, `dbt_cloud.yml` matching, OAuth) must keep using the bare host.
+fn flock_driver_host(account_host: &str) -> Result<String, AuthError> {
+    if account_host.split('.').any(|label| label == "dwg") {
+        return Ok(account_host.to_string());
+    }
+    dbt_common::url::insert_gateway_label(account_host, "dwg")
+        .map_err(|e| AuthError::config(format!("invalid dbt Cloud host {account_host:?}: {e}")))
 }
 
 /// Ignored under dbt-platform brokered credentials — per-model routing
@@ -742,7 +757,7 @@ mod cloud_credential_tests {
         );
         assert_eq!(
             opt_string(&opts, "dbt_cloud.host"),
-            Some("ab123.us1.dbt.com".to_string())
+            Some("ab123.dwg.us1.dbt.com".to_string())
         );
         assert_eq!(
             opt_string(&opts, "dbt_cloud.account_id"),
@@ -769,6 +784,51 @@ mod cloud_credential_tests {
             Some("dbtu_pat_token".to_string())
         );
         assert_eq!(opt_string(&opts, "dbt_cloud.project_id"), None);
+    }
+
+    #[test]
+    fn pat_credential_dbt_cloud_host_gets_dwg_label_without_mutating_account_host() {
+        let credential = Credential::Pat {
+            token: "dbtu_pat_token".to_string(),
+            account_host: "ab123.us1.dbt.com".to_string(),
+            account_id: 99,
+        };
+        // Confirm the credential's own account_host is left bare — only the
+        // driver option gets the flock-specific "dwg" gateway label inserted.
+        assert_eq!(credential.account_host(), "ab123.us1.dbt.com");
+        let builder = AdbcEngine::apply_cloud_credential(Backend::Snowflake, Ok(credential), None)
+            .expect("should succeed");
+        let opts: Vec<_> = builder.into_iter().collect();
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.host"),
+            Some("ab123.dwg.us1.dbt.com".to_string())
+        );
+    }
+
+    #[test]
+    fn pat_credential_dbt_cloud_host_is_not_double_prefixed() {
+        let credential = Credential::Pat {
+            token: "dbtu_pat_token".to_string(),
+            account_host: "ab123.dwg.us1.dbt.com".to_string(),
+            account_id: 99,
+        };
+        let builder = AdbcEngine::apply_cloud_credential(Backend::Snowflake, Ok(credential), None)
+            .expect("should succeed");
+        let opts: Vec<_> = builder.into_iter().collect();
+        assert_eq!(
+            opt_string(&opts, "dbt_cloud.host"),
+            Some("ab123.dwg.us1.dbt.com".to_string())
+        );
+    }
+
+    #[test]
+    fn flock_driver_host_mc() {
+        // Representative account-prefixed case; exhaustive host-shape coverage
+        // for `insert_gateway_label` lives in `dbt_common::url`.
+        assert_eq!(
+            super::flock_driver_host("acme.dbt.com").unwrap(),
+            "acme.dwg.dbt.com"
+        );
     }
 
     #[test]
@@ -849,7 +909,7 @@ mod cloud_credential_tests {
         );
         assert_eq!(
             opt_string(&opts, "dbt_cloud.host"),
-            Some("seeded.us1.dbt.com".to_string())
+            Some("seeded.dwg.us1.dbt.com".to_string())
         );
         assert_eq!(
             opt_string(&opts, "dbt_cloud.account_id"),

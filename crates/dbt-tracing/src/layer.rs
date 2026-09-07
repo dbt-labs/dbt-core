@@ -102,7 +102,7 @@ pub type LogPreprocessorHook = for<'a> fn(&'a LogRecordInfo) -> Cow<'a, LogRecor
 /// All middleware's operate before any consumers see the data and have a global
 /// effect on all consumers. So be mindful that changes you make will be
 /// visible to all consumers.
-pub trait TelemetryMiddleware {
+pub trait TelemetryMiddleware: Send + Sync {
     /// Callback invoked when a span starts. Return None to drop the span for all consumers.
     ///
     /// Note that if you return None, the span end callback will not be called,
@@ -139,4 +139,4 @@ pub trait TelemetryMiddleware {
     }
 }
 
-pub type MiddlewareLayer = Box<dyn TelemetryMiddleware + Send + Sync + 'static>;
+pub type MiddlewareLayer = Box<dyn TelemetryMiddleware + 'static>;

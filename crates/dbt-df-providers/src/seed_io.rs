@@ -272,7 +272,7 @@ mod tests {
         (target_schema, batches)
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn read_parquet_seed_view_matches_physical_read_gold() {
         let physical_schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int32, false),
@@ -309,7 +309,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn read_parquet_seed_view_listing_schema_matches_full_read_and_footer_gold() {
         let physical_schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int32, false),

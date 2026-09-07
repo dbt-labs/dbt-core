@@ -22,7 +22,7 @@ use crate::context::TaskRunnerCtx;
 use crate::task::{TaskOp, TaskResult};
 use dbt_adapter::AdapterResult;
 use dbt_adapter::errors::{AdapterErrorKind, Cancellable, into_fs_error};
-use dbt_adapter::metadata::{FreshnessOverride, MetadataQueryOptions};
+use dbt_adapter::metadata::{CatalogAndSchema, FreshnessOverride, MetadataQueryOptions};
 use dbt_adapter::record_batch::RecordBatchExt;
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_adapter::sql_types::TypeOps;
@@ -40,6 +40,7 @@ use dbt_frontend_common::ident::FullyQualifiedName;
 use dbt_frontend_common::named_reference::NamedReference;
 use dbt_frontend_common::sources_extractor::SourcesExtractor;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::common::{DbtMaterialization, ModelFreshnessRules, ResolvedQuoting};
 use dbt_schemas::schemas::macros::DbtMacro;
@@ -1876,7 +1877,19 @@ pub async fn execute_run_cache_service_clone(
         )));
     }
 
-    let clone_sqls = clone.clone_sqls.clone();
+    let target_relation = create_relation_from_node(node.node_adapter(), node, None)
+        .map_err(RunCacheCloneError::Fatal)?;
+    let target_relation: Arc<dyn BaseRelation> = target_relation.into();
+
+    let mut clone_sqls = clone.clone_sqls.clone();
+    let target_is_view = target_relation_is_view(ctx, &target_relation).await;
+    if let Some(drop_sql) = drop_stale_view_sql(
+        node.materialized(),
+        target_is_view,
+        &target_relation.semantic_fqn(),
+    ) {
+        clone_sqls.insert(0, drop_sql);
+    }
     let node_unique_id = node.unique_id();
     let ctx_inner = ctx.clone();
     let clone_result = TaskOp::BlockingWithConnection {
@@ -1910,15 +1923,55 @@ pub async fn execute_run_cache_service_clone(
     .map_err(RunCacheCloneError::Recoverable)?;
     clone_result?;
 
-    let target_relation = create_relation_from_node(node.node_adapter(), node, None)
-        .map_err(RunCacheCloneError::Fatal)?;
-    let target_relation: Arc<dyn BaseRelation> = target_relation.into();
     ctx.inner
         .run_cache_ctx
         .run_cache_metadata
         .invalidate_relation_metadata(&target_relation.semantic_fqn());
     cache_cloned_relation(ctx, node).map_err(RunCacheCloneError::Fatal)?;
     Ok(clone.success_status())
+}
+
+/// Clone DDL can't replace a relation of a different object kind, so a stale VIEW left at
+/// the target by a prior materialization must be dropped first.
+fn drop_stale_view_sql(
+    materialized: DbtMaterialization,
+    target_is_view: bool,
+    target_relation: &str,
+) -> Option<String> {
+    (target_is_view && materialized != DbtMaterialization::View)
+        .then(|| format!("drop view if exists {target_relation}"))
+}
+
+/// Fail-open on lookup errors. Uses `list_relations_in_parallel` (same primitive as
+/// `relations_exist`) rather than `freshness`, which some adapters (e.g. Redshift) can't
+/// reliably report for views since it depends on a last-altered timestamp.
+async fn target_relation_is_view(
+    ctx: &TaskRunnerCtx,
+    target_relation: &Arc<dyn BaseRelation>,
+) -> bool {
+    let Some(adapter) = ctx.env.get_adapter_ref() else {
+        return false;
+    };
+    let Some(metadata_adapter) = adapter.metadata_adapter() else {
+        return false;
+    };
+    let semantic_fqn = target_relation.semantic_fqn();
+    let catalog_schema = CatalogAndSchema::from(target_relation);
+    let db_schemas = [catalog_schema.clone()];
+    let Ok(listed) = metadata_adapter
+        .list_relations_in_parallel(&db_schemas, adapter.cancellation_token())
+        .await
+    else {
+        return false;
+    };
+    let Some(Ok(schema_relations)) = listed.get(&catalog_schema) else {
+        return false;
+    };
+    schema_relations
+        .iter()
+        .find(|candidate| candidate.semantic_fqn() == semantic_fqn)
+        .and_then(|relation| relation.relation_type())
+        == Some(RelationType::View)
 }
 
 pub enum RunCacheCloneError {
@@ -5011,7 +5064,7 @@ mod tests {
         assert!(!is_no_op_model_materialization(DbtMaterialization::Table));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_submits_compiled_sql_as_custom_execution_type() {
         let client = Arc::new(RecordingRunCacheClient::default());
         let ctx = test_task_runner_ctx(Some(
@@ -5052,7 +5105,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_submits_compiled_sql_during_full_refresh() {
         let client = Arc::new(RecordingRunCacheClient::default());
         let ctx = test_task_runner_ctx_with_mode_and_full_refresh(
@@ -5086,7 +5139,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn full_refresh_microbatch_without_window_invalidates_instead_of_recording() {
         let client = Arc::new(RecordingRunCacheClient::default());
         let ctx = test_task_runner_ctx_with_mode_and_full_refresh(
@@ -5128,7 +5181,7 @@ mod tests {
         assert_eq!(client.submitted_count(), 0);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn full_refresh_incremental_model_records_execution_without_a_decision() {
         let client = Arc::new(RecordingRunCacheClient::default());
         let ctx = test_task_runner_ctx_with_mode_and_full_refresh(
@@ -5170,7 +5223,7 @@ mod tests {
         assert_eq!(client.speculative_submitted_count(), 0);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn unresolved_microbatch_window_invalidates_freshness_after_execution() {
         let client = Arc::new(RecordingRunCacheClient::default());
         let ctx = test_task_runner_ctx(Some(
@@ -5210,7 +5263,7 @@ mod tests {
         assert_eq!(client.submitted_count(), 0);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_parse_failure_without_manifest_deps_is_incomplete() {
         let ctx = test_task_runner_ctx_with_mode_and_sources_extractor(
             None,
@@ -5241,7 +5294,7 @@ mod tests {
         assert!(deps.parser_seen_relations.is_empty());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_standalone_expression_parse_failure_is_complete() {
         let ctx = test_task_runner_ctx_with_mode_and_sources_extractor(
             None,
@@ -5289,7 +5342,7 @@ mod tests {
         assert!(relations.contains_key(&fqn_of("db", "raw", "users")));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_standalone_expression_with_no_upstreams_is_complete() {
         let ctx = test_task_runner_ctx_with_mode_and_sources_extractor(
             None,
@@ -5320,7 +5373,7 @@ mod tests {
         assert!(deps.parser_seen_relations.is_empty());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_bare_relation_reference_falls_back_to_manifest_deps() {
         let mut model = make_model(
             "model.test.copy_target",
@@ -5403,7 +5456,7 @@ mod tests {
         assert!(relations.contains_key(&fqn_of("db", "analytics", "copy_source")));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_parse_error_expression_empty_falls_back_to_manifest_deps() {
         let mut model = make_model(
             "model.test.copy_target",
@@ -5449,7 +5502,7 @@ mod tests {
         assert!(deps.dependencies.is_empty());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_parse_failure_with_manifest_deps_is_incomplete() {
         let mut model = make_model(
             "model.test.user_name_model",
@@ -5490,7 +5543,7 @@ mod tests {
         assert!(deps.parser_seen_relations.is_empty());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn built_in_materialization_parse_failure_returns_error() {
         let ctx = test_task_runner_ctx(None);
         let model = make_model(
@@ -5513,7 +5566,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_compiled_sql_honors_dbt_state_skip() {
         let client = Arc::new(RecordingRunCacheClient::with_response(
             skip_execution_response(),
@@ -5547,7 +5600,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn custom_materialization_compiled_sql_records_in_write_only_mode() {
         let client = Arc::new(RecordingRunCacheClient::default());
         let ctx = test_task_runner_ctx_with_mode(
@@ -5584,7 +5637,7 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn confirm_without_confirmation_does_not_refresh_final_metadata() {
         let ctx = test_task_runner_ctx(None);
         let model = make_model(
@@ -5790,7 +5843,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn table_materialization_submits_rendered_sql_before_materialization() {
         let client = Arc::new(RecordingRunCacheClient::default());
         let ctx = test_task_runner_ctx(Some(
@@ -5823,7 +5876,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn unresolved_upstream_last_modified_keeps_metadata_complete() {
         let mut model = make_model(
             "model.test.fact_orders",
@@ -5916,7 +5969,7 @@ mod tests {
         (ctx, model, upstream_fqn)
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn speculative_build_leaves_unresolved_upstream_unrefreshed() {
         let (ctx, model, upstream_fqn) = ctx_model_with_unresolved_upstream();
 
@@ -5948,7 +6001,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn non_speculative_build_refreshes_unresolved_upstream() {
         let (ctx, model, upstream_fqn) = ctx_model_with_unresolved_upstream();
 
@@ -5991,7 +6044,7 @@ mod tests {
         )
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn speculative_skip_verdict_returns_skip_without_regular_submit() {
         let client = Arc::new(RecordingRunCacheClient::with_speculative_response(
             speculative_skip_response(),
@@ -6024,7 +6077,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn speculative_clone_verdict_returns_clone_without_regular_submit() {
         let client = Arc::new(RecordingRunCacheClient::with_speculative_response(
             speculative_clone_response(),
@@ -6054,7 +6107,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn speculative_untracked_verdict_executes_and_records_speculatively() {
         let client = Arc::new(RecordingRunCacheClient::with_speculative_response(
             speculative_untracked_response(),
@@ -6097,7 +6150,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn speculative_undecided_verdict_falls_back_to_regular_submit() {
         let client = Arc::new(RecordingRunCacheClient::with_speculative_response(
             speculative_undecided_response(),
@@ -6134,7 +6187,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn speculative_rpc_error_falls_back_to_regular_submit() {
         // A default client answers the speculative RPC with `Disabled`.
         let client = Arc::new(RecordingRunCacheClient::default());
@@ -6166,7 +6219,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn prefetch_ready_skips_speculation_and_uses_regular_submit() {
         // Canned speculative skip verdict that must never be consulted because
         // the prefetch is already complete.
@@ -6203,7 +6256,7 @@ mod tests {
         assert_eq!(client.submitted_count(), 1);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn prefetch_completing_during_request_build_skips_speculation() {
         // Regression test for the last-responsible-moment re-check. The
         // speculative-vs-regular decision is taken at entry, before
@@ -6266,7 +6319,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn write_only_mode_skips_speculation_and_produces_record() {
         let client = Arc::new(RecordingRunCacheClient::with_speculative_response(
             speculative_skip_response(),
@@ -6324,7 +6377,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn finalize_speculative_request_fills_real_epochs_and_marks_flag() {
         let ctx = test_task_runner_ctx(None);
         let model = speculative_test_model();
@@ -7215,7 +7268,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn flush_buffer_delivers_and_clears_buffer_on_success() {
         let client: dbt_state::service_client::SharedRunCacheServiceClient =
             Arc::new(TelemetryTestClient::default());
@@ -7227,7 +7280,7 @@ mod tests {
         assert!(buffer.is_empty(), "successful flush must drain the buffer");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn flush_buffer_caps_each_rpc_at_max_batch_size() {
         let client_arc = Arc::new(TelemetryTestClient::default());
         let client: dbt_state::service_client::SharedRunCacheServiceClient = client_arc.clone();
@@ -7249,7 +7302,7 @@ mod tests {
         assert_eq!(batches.iter().map(Vec::len).sum::<usize>(), total);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn flush_buffer_requeues_retriable_failures_with_incremented_retry_count() {
         let client: dbt_state::service_client::SharedRunCacheServiceClient = Arc::new(
             TelemetryTestClient::failing(usize::MAX, TestFailure::Retriable),
@@ -7274,7 +7327,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn flush_buffer_drops_batch_on_non_retriable_error() {
         let client: dbt_state::service_client::SharedRunCacheServiceClient = Arc::new(
             TelemetryTestClient::failing(usize::MAX, TestFailure::NonRetriable),
@@ -7289,7 +7342,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn dispatcher_flush_terminates_instead_of_hanging() {
         // Regression test: `flush()` closes the dispatcher's `Sender` and
         // awaits the worker task, which only exits once
@@ -8426,6 +8479,37 @@ mod tests {
         assert_eq!(
             clone_chain_depth_limit_for_adapter(AdapterType::Snowflake, false, false),
             Some(0)
+        );
+    }
+
+    #[test]
+    fn drop_stale_view_sql_drops_when_target_is_a_view_and_materialization_is_not() {
+        // Regression test: a target left over as a VIEW by a prior materialization
+        // must be dropped before `CREATE OR REPLACE TABLE ... CLONE ...` can succeed.
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::Table, true, "dev.model_a"),
+            Some("drop view if exists dev.model_a".to_string())
+        );
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::Incremental, true, "dev.model_a"),
+            Some("drop view if exists dev.model_a".to_string())
+        );
+    }
+
+    #[test]
+    fn drop_stale_view_sql_is_none_when_target_is_not_a_view() {
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::Table, false, "dev.model_a"),
+            None
+        );
+    }
+
+    #[test]
+    fn drop_stale_view_sql_is_none_when_materialization_is_itself_a_view() {
+        // Cloning a view target as a view is not the mismatch this guards against.
+        assert_eq!(
+            drop_stale_view_sql(DbtMaterialization::View, true, "dev.model_a"),
+            None
         );
     }
 

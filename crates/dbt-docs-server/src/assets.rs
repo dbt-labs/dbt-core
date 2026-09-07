@@ -243,7 +243,7 @@ mod tests {
         assert!(!is_navigation_path("/models/model.jaffle_shop.customers"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn missing_artifact_is_a_404_not_the_spa() {
         let site = tempfile::tempdir().expect("tempdir");
         std::fs::write(site.path().join("index.html"), "<!doctype html>").expect("write index");

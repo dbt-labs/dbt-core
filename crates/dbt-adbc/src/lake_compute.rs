@@ -73,6 +73,11 @@ pub const OKTA_TOKEN_URL: &str = "adbc.dbt.auth.okta.token_url";
 /// Okta OAuth client id.
 pub const OKTA_CLIENT_ID: &str = "adbc.dbt.auth.okta.client_id";
 
+/// Long-lived Fivetran personal access token (`dct_…`).
+pub const FIVETRAN_CREDENTIAL: &str = "adbc.dbt.auth.fivetran.credential";
+/// Fivetran public API base URL the credential is exchanged against.
+pub const FIVETRAN_API_URL: &str = "adbc.dbt.auth.fivetran.api_url";
+
 /// Accepted values for [`AUTH_TYPE`].
 pub mod auth_type {
     /// Send an `X-API-Key` header.
@@ -81,4 +86,6 @@ pub mod auth_type {
     pub const TOKEN: &str = "token";
     /// Run the interactive Okta PKCE browser flow.
     pub const OKTA_BROWSER: &str = "okta_browser";
+    /// Exchange a Fivetran PAT for a short-lived bearer token.
+    pub const FIVETRAN: &str = "fivetran";
 }

@@ -941,8 +941,29 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[dbt_runtime::test]
+    async fn test_resolve_target_version_via_mock() {
+        let manifest = serde_json::to_string(&test_versions_json()).unwrap();
+        let client =
+            MockHttpClient::new().with_text(format!("{}/versions.json", cdn_base_url()), &manifest);
+
+        let version = resolve_target_version(None, &client).await.unwrap();
+        assert_eq!(version, "2.0.0-preview.154");
+    }
+
+    #[dbt_runtime::test]
+    async fn test_resolve_target_version_with_alias() {
+        let manifest = serde_json::to_string(&test_versions_json()).unwrap();
+        let client =
+            MockHttpClient::new().with_text(format!("{}/versions.json", cdn_base_url()), &manifest);
+
+        let version = Some("canary");
+        let version = resolve_target_version(version, &client).await.unwrap();
+        assert_eq!(version, "2.0.0-preview.157");
+    }
+
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_installs_binary() {
         let version = "2.0.0-preview.154";
         let binary_content = b"#!/bin/sh\necho fake-dbt";
@@ -973,7 +994,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_all_installs_dbt() {
         let version = "2.0.0-preview.157";
 
@@ -1003,7 +1024,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_allows_literal_version_without_runner() {
         let version = "2.0.0-preview.100";
         let target = current_target_triple().unwrap();
@@ -1033,7 +1054,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_allows_alias_without_runner() {
         let version = "2.0.0-preview.194";
         let target = current_target_triple().unwrap();
@@ -1065,7 +1086,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_propagates_non_404_runner_failure() {
         let version = "2.0.0-preview.194";
         let target = current_target_triple().unwrap();
@@ -1165,7 +1186,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_unknown_package_errors() {
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let client =
@@ -1177,7 +1198,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_missing_binary_in_archive_errors() {
         let version = "2.0.0-preview.154";
         let client = native_update_client(
@@ -1197,7 +1218,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_overwrites_existing_binary() {
         let version = "2.0.0-preview.154";
 
@@ -1220,7 +1241,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_manifest_fetch_failure_propagates() {
         let client = MockHttpClient::new();
         let error = resolve_target_version(None, &client).await.unwrap_err();
@@ -1231,7 +1252,7 @@ mod tests {
     // to actually exercise the timeout path unless explicitly testing it.
     const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_succeeds_after_transient_failure() {
         let mut attempts: u32 = 0;
         let result: FsResult<&'static str> = fetch_with_retries(
@@ -1260,7 +1281,7 @@ mod tests {
         assert_eq!(attempts, 3);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_gives_up_after_max_attempts() {
         let mut attempts: u32 = 0;
         let result: FsResult<()> = fetch_with_retries(
@@ -1283,7 +1304,7 @@ mod tests {
         assert_eq!(attempts, 3);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_does_not_retry_on_non_retryable_error() {
         let mut attempts: u32 = 0;
         let result: FsResult<()> = fetch_with_retries(
@@ -1305,7 +1326,7 @@ mod tests {
         assert_eq!(attempts, 1, "non-retryable error should not retry");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_treats_per_attempt_timeout_as_transient() {
         // A hung fetch is bounded by request_timeout per attempt and counts as
         // a retryable failure. The inner sleep is canceled when the per-attempt
@@ -1357,7 +1378,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_records_correct_urls() {
         let version = "2.0.0-preview.154";
         let target = current_target_triple().unwrap();
