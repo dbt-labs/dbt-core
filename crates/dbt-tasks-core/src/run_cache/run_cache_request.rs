@@ -361,6 +361,15 @@ pub fn target_table_for_node(
     Ok(create_relation_from_node(adapter_type, node, None)?.semantic_fqn())
 }
 
+/// True when the model's compiled body is view-like (SQL view DDL or metric-view
+/// YAML), not warehouse query SQL whose upstreams can be extracted by parsing.
+pub fn is_view_like_materialization(materialized: &DbtMaterialization) -> bool {
+    matches!(
+        materialized,
+        DbtMaterialization::View | DbtMaterialization::MetricView
+    )
+}
+
 pub fn model_execution_type_input(
     model: &DbtModel,
     full_refresh: bool,
@@ -369,7 +378,7 @@ pub fn model_execution_type_input(
     let materialized = &model.base().materialized;
     ExecutionTypeInput {
         resource_type: NodeType::Model,
-        is_view: materialized == &DbtMaterialization::View,
+        is_view: is_view_like_materialization(materialized),
         // A model uses a custom materialization when the macro dbt would
         // dispatch for its materialization is user-defined — a novel name or a
         // user macro that shadows a built-in name (e.g. `table`/`incremental`).
@@ -1223,6 +1232,28 @@ mod tests {
         .unwrap();
 
         assert_eq!(request.execution_type, ModelExecutionType::View as i32);
+    }
+
+    #[test]
+    fn metric_view_uses_view_like_run_cache_path() {
+        assert!(is_view_like_materialization(
+            &DbtMaterialization::MetricView
+        ));
+        assert!(!is_view_like_materialization(&DbtMaterialization::Table));
+
+        let model = make_model(DbtMaterialization::MetricView);
+        let request = build_model_sql_request(
+            &model,
+            sql_context(false),
+            &test_materialization_resolver(),
+            |_| None,
+        )
+        .unwrap();
+
+        assert_eq!(request.execution_type, ModelExecutionType::View as i32);
+        assert!(
+            model_execution_type_input(&model, false, &test_materialization_resolver()).is_view
+        );
     }
 
     #[test]

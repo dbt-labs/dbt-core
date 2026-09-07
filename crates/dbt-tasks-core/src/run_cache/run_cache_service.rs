@@ -71,7 +71,7 @@ use dbt_telemetry::{NodeEvaluated, NodeType};
 use crate::run_cache::run_cache_request::{
     DbtProjectInfo, SeedRunCacheRequestContext, SqlRunCacheRequestContext, build_model_sql_request,
     build_seed_values_request, build_snapshot_sql_request, build_test_sql_request,
-    is_microbatch_model, node_identity,
+    is_microbatch_model, is_view_like_materialization, node_identity,
 };
 use chrono::{DateTime, Utc};
 
@@ -1658,7 +1658,7 @@ fn state_explain_node_info_for_parts(
     StateExplainNodeInfo {
         fqn,
         node_resource_type: node.resource_type().as_static_ref().to_string(),
-        is_view: materialized == DbtMaterialization::View,
+        is_view: is_view_like_materialization(&materialized),
         is_table: matches!(
             materialized,
             DbtMaterialization::Table
@@ -2367,7 +2367,7 @@ async fn submit_model(
         ctx,
         model,
         task_result.sql_instruction.sql.clone(),
-        model.materialized() == DbtMaterialization::View,
+        is_view_like_materialization(&model.materialized()),
         full_refresh,
         microbatch_window,
         client,
@@ -2725,7 +2725,7 @@ async fn prepare_write_only_execution_record(
             ctx,
             model,
             task_result.sql_instruction.sql.clone(),
-            model.materialized() == DbtMaterialization::View,
+            is_view_like_materialization(&model.materialized()),
             full_refresh,
             false,
         )
