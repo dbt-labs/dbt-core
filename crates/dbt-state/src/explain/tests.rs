@@ -870,7 +870,7 @@ fn render_service_explain_response_preserves_unknown_enum_values() {
     );
 }
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn service_explain_response_with_client_fetches_decision_ids() {
     let mut records = sample_records();
     records[0].execution_decision_id = Some("decision-1".to_string());
@@ -900,7 +900,7 @@ async fn service_explain_response_with_client_fetches_decision_ids() {
     assert_eq!(response.messages[0].execution_decision_id, "decision-1");
 }
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn state_explain_service_path_fetches_selected_records_and_renders_response() {
     let mut records = sample_records();
     records[0].execution_decision_id = Some("decision-1".to_string());
@@ -955,7 +955,7 @@ fn state_explain_service_path_ignores_invalid_service_config() {
     assert!(service_config.is_none());
 }
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn service_explain_response_with_client_skips_empty_decision_ids() {
     let records = sample_records();
     let client = MockExplainClient {
@@ -973,7 +973,7 @@ async fn service_explain_response_with_client_skips_empty_decision_ids() {
     assert!(client.requests.into_inner().unwrap().is_empty());
 }
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn service_explain_response_with_client_batches_decision_ids() {
     let records: Vec<_> = (0..=EXPLAIN_MAX_BATCH_SIZE)
         .map(|idx| StateExplainRecord {

@@ -32,6 +32,7 @@ toml_edit = { workspace = true }
 
 [dev-dependencies]
 console = { workspace = true }
+dbt-runtime = { workspace = true }
 tokio = { workspace = true }
 
 [lib]

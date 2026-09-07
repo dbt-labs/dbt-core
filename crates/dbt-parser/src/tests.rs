@@ -252,7 +252,7 @@ mod tests {
         assert_eq!(warn.period, Some(FreshnessPeriod::day));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_ref_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -287,7 +287,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_source_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -321,7 +321,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_metric_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -354,7 +354,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_config_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -435,7 +435,7 @@ mod tests {
         panic!("test code disabled below");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_fromjson() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -457,7 +457,7 @@ mod tests {
         assert_eq!(rendered.trim(), "123");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_tojson() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -480,7 +480,7 @@ mod tests {
         assert_eq!(rendered, r#"{"abc":123,"def":456}"#);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_tojson_with_sort_keys() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -503,7 +503,7 @@ mod tests {
         assert_eq!(rendered, r#"{"abc":123,"def":456}"#);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_tojson_with_default() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -525,7 +525,7 @@ mod tests {
         assert_eq!(rendered.trim(), r#"{"default": true}"#);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_fromyaml() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -551,7 +551,7 @@ mod tests {
         assert_eq!(rendered.trim(), "good, bad");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_toyaml_basic() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -576,7 +576,7 @@ mod tests {
         assert_contains!(trimmed, "def: 456");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_set_strict_function() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -622,7 +622,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_local_md5() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -1044,7 +1044,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_dict_update() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);

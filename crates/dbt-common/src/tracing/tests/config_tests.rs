@@ -1,5 +1,6 @@
+use crate::constants::DBT_FUSION;
 use crate::io_args::{FsCommand, IoArgs, LogFormat};
-use crate::tracing::FsTraceConfig;
+use crate::tracing::{FsTraceConfig, FsTraceConfigBuilder};
 use std::path::PathBuf;
 
 fn config_from_formats(log_format: LogFormat, log_format_file: Option<LogFormat>) -> FsTraceConfig {
@@ -11,18 +12,13 @@ fn config_from_formats(log_format: LogFormat, log_format_file: Option<LogFormat>
         ..Default::default()
     };
 
-    FsTraceConfig::new_from_io_args(
-        FsCommand::Unset,
-        Some(&project_dir),
-        None,
-        &io_args,
-        None,
-        false,
-        "dbt-test",
-    )
+    FsTraceConfigBuilder::from_io_args("dbt-test", DBT_FUSION, &io_args)
+        .with_command(FsCommand::Unset)
+        .with_project_dir(Some(&project_dir))
+        .build()
 }
 
-/// Regression test for dbt-core#15685: `new_from_io_args` copies
+/// Regression test for dbt-core#15685: the builder copies
 /// `IoArgs::log_format_file` onto the config.
 #[test]
 fn new_from_io_args_carries_log_format_file() {

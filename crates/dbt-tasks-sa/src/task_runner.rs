@@ -41,6 +41,7 @@ use tracing::instrument;
 
 use crate::register_seeds;
 use crate::run_operation::run_operation_on_run_with_ctx;
+use crate::task::effective_unit_test_execute;
 use crate::utils::filter_missing_schemas;
 use crate::utils::get_catalog_schemas_and_ids;
 use crate::utils::register_catalog_schemas_remote;
@@ -212,10 +213,28 @@ impl TaskRunner {
             .await
     }
 
-    fn should_register_schemas(&self, run_task_args: &RunTasksArgs) -> bool {
+    fn should_register_schemas(
+        &self,
+        run_task_args: &RunTasksArgs,
+        schedule: &Schedule<String>,
+    ) -> bool {
         let execute = Execute::from_compute_flag(run_task_args.local_execution_backend);
-        (run_task_args.is_runnable() && execute == Execute::Remote)
-            || run_task_args.command == FsCommand::Clone
+        // Do not pre-register warehouse schemas when every selected runnable is
+        // a unit test whose resolved compute override is local.
+        let selected_nodes_need_remote = schedule.selected_nodes.iter().any(|unique_id| {
+            self.resolved_state
+                .nodes
+                .unit_tests
+                .get(unique_id)
+                .is_none_or(|unit_test| {
+                    effective_unit_test_execute(unit_test, execute) == Execute::Remote
+                })
+        });
+
+        run_task_args.command == FsCommand::Clone
+            || (run_task_args.is_runnable()
+                && execute == Execute::Remote
+                && selected_nodes_need_remote)
     }
 
     async fn register_schemas(
@@ -248,7 +267,8 @@ impl TaskRunner {
     ) -> Result<RunTaskResults, Box<FsError>> {
         self.hooks.will_run(&run_task_args, &schedule);
 
-        let registered_schemas = if self.should_register_schemas(run_task_args.as_ref()) {
+        let registered_schemas = if self.should_register_schemas(run_task_args.as_ref(), &schedule)
+        {
             self.register_schemas(&schedule, base_context).await?;
             true
         } else {

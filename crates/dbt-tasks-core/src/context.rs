@@ -44,6 +44,7 @@ use crate::RunTasksArgs;
 use crate::span_manager::SpanManager;
 use crate::task::Task;
 use crate::test_aggregation::{GenericTestRelationships, is_data_test_static_analysis_eligible};
+use crate::unit_test_schema::UnitTestSchemaState;
 use crate::visitor::SkipReason;
 
 use dbt_schemas::schemas::common::DbtMaterialization;
@@ -191,6 +192,8 @@ pub struct TaskRunnerCtxInner {
     pub preview_results: parking_lot::Mutex<Option<(Vec<RecordBatch>, SchemaRef)>>,
     /// Error from a failed show query; set by run_show when execution fails, collected after the task loop.
     pub preview_error: parking_lot::Mutex<Option<String>>,
+    /// Coordinates unit-test schema hydration and memoization for this invocation.
+    pub unit_test_schema: UnitTestSchemaState,
     // <Start> RunCache-related fields. These are only populated when the RunCache is enabled for the current execution.
     pub run_cache_ctx: RunCacheCtx,
     // <End> RunCache-related fields.
@@ -270,6 +273,7 @@ impl TaskRunnerCtxInner {
             span_manager,
             preview_results: parking_lot::Mutex::new(None),
             preview_error: parking_lot::Mutex::new(None),
+            unit_test_schema: UnitTestSchemaState::default(),
             run_cache_ctx,
         }
     }

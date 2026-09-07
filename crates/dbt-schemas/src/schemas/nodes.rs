@@ -10,7 +10,7 @@ use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
 use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::{DbtPath, get_snapshot_write_path, get_target_write_path};
 use dbt_common::tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message};
-use dbt_common::{ErrorCode, FsResult, err};
+use dbt_common::{ErrorCode, FsResult, Span, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -649,6 +649,10 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
 
     fn name(&self) -> String {
         self.common().name.clone()
+    }
+
+    fn name_span(&self) -> Span {
+        self.common().name_span.clone()
     }
 
     fn description(&self) -> Option<String> {
@@ -3184,8 +3188,15 @@ impl InternalDbtNode for DbtCheck {
                 &self.__common_attr__.tags,
                 &other_check.__common_attr__.tags,
             );
+            // `meta` is compared for the same reason models compare it: a user editing `meta:`
+            // expects the node to be selected, and this was the one key where a check behaved
+            // differently from a model. Read from common_attr, like tags: that field holds the
+            // resolved value and is not an `Option`, so plain equality is enough --
+            // `indexmap_yml_value_equal` exists to treat `None` and an empty map as equal, which
+            // only arises for the `Option` config wrappers.
+            let meta_eq = self.__common_attr__.meta == other_check.__common_attr__.meta;
 
-            let result = enabled_eq && severity_eq && selection_filter_on_eq && tags_eq;
+            let result = enabled_eq && severity_eq && selection_filter_on_eq && tags_eq && meta_eq;
 
             if !result {
                 log_state_mod_diff(
@@ -3222,6 +3233,14 @@ impl InternalDbtNode for DbtCheck {
                             Some((
                                 format!("{:?}", &self.__common_attr__.tags),
                                 format!("{:?}", &other_check.__common_attr__.tags),
+                            )),
+                        ),
+                        (
+                            "meta",
+                            meta_eq,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.meta),
+                                format!("{:?}", &other_check.__common_attr__.meta),
                             )),
                         ),
                     ],
@@ -4936,7 +4955,7 @@ pub struct CommonAttributes {
     )]
     pub raw_code: Option<String>,
     pub patch_path: Option<DbtPath>,
-    pub name_span: dbt_common::Span,
+    pub name_span: Span,
 
     // Checksum
     pub checksum: DbtChecksum,

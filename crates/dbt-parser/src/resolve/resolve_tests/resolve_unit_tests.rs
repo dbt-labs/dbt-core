@@ -127,7 +127,19 @@ pub fn resolve_unit_tests(
         // - but we should not serialize it
         // - for now just use the global ones
 
-        let location = CodeLocationWithFile::default(); // TODO
+        let location = if unit_test.model.has_valid_span() {
+            {
+                CodeLocationWithFile::new(
+                    unit_test.model.span().start.line as u32,
+                    unit_test.model.span().start.column as u32,
+                    unit_test.model.span().start.index as u32,
+                    mpe.relative_path.clone(),
+                )
+            }
+        } else {
+            Default::default()
+        };
+
         let model_name = format!("model.{}.{}", package_name, unit_test.model);
         // `tested_node_unique_id` is the unversioned model's unique id when resolvable.
         // Versioned cases below override it with the version-specific id.
@@ -148,7 +160,7 @@ pub fn resolve_unit_tests(
             None => (
                 String::new(),
                 String::new(),
-                unit_test.model.clone(),
+                unit_test.model.to_string(),
                 None,
                 None,
             ),
@@ -163,7 +175,7 @@ pub fn resolve_unit_tests(
         let fqn = get_node_fqn(
             package_name,
             mpe.relative_path.to_owned(),
-            vec![unit_test.model.to_owned(), unit_test_name.to_owned()],
+            vec![unit_test.model.to_string(), unit_test_name.to_owned()],
             &package.dbt_project.all_source_paths(),
         );
 
@@ -189,10 +201,10 @@ pub fn resolve_unit_tests(
         // todo: generalize given input format, according to https://docs.getdbt.com/docs/build/unit-tests
 
         let dependent_refs = vec![DbtRef {
-            name: unit_test.model.to_owned(),
+            name: unit_test.model.to_string(),
             package: Some(package_name.to_owned()),
             version: None,
-            location: Some(CodeLocationWithFile::default()),
+            location: Some(location.clone()),
         }];
 
         // Process unit test given inputs to extract ref nodes
@@ -350,7 +362,7 @@ pub fn resolve_unit_tests(
                 unrendered_config: Default::default(),
             },
             __unit_test_attr__: DbtUnitTestAttr {
-                model: unit_test.model.to_owned(),
+                model: unit_test.model.to_string(),
                 given,
                 expect,
                 versions: None,
@@ -364,7 +376,7 @@ pub fn resolve_unit_tests(
         };
         // Check if this model has versions
         if let Some(version_info) = model_properties
-            .get(&unit_test.model)
+            .get(unit_test.model.as_ref())
             .and_then(|mpe| mpe.version_info.as_ref())
         {
             // Parse version configuration to get the include and exclude lists

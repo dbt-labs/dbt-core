@@ -1314,7 +1314,7 @@ mod tests {
         (manifest, replacements)
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn exec_managed_project_upgrade_aborts_before_editing_when_not_confirmed() {
         // Not a TTY under `cargo test`, so `confirm(..., false)` errors
         // before the manifest is touched -- this exercises the diff-preview
@@ -1345,7 +1345,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn exec_managed_project_upgrade_errors_before_editing_when_manager_unknown() {
         // `yes: true` skips the edit confirmation, but with no
         // `py_package_manager` on `dist_info` and no local lockfile signal,
@@ -1380,7 +1380,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn exec_managed_project_upgrade_rejects_incompatible_manager_hint_before_editing() {
         // `dist_info.py_package_manager` is resolved independently of the
         // manifest (`manager_from_manifest_signals` walks ancestor
@@ -1592,7 +1592,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn global_install_dispatches_to_in_place_upgrade_for_standalone_and_unclaimed() {
         // Not a TTY under `cargo test`, so `confirm(..., false)` errors
         // before any network call -- this exercises the channel-dispatch

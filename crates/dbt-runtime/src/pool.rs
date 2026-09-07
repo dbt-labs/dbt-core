@@ -462,11 +462,25 @@ impl Spawner {
         }
 
         let rt = rt.clone();
+        let tokio_rt = tokio::runtime::Handle::try_current().ok();
 
         builder.spawn(move || {
             // Only the reference should be moved into the closure
             let _enter = rt.enter();
             crate::context::set_pool_worker(true);
+            // IMPORTANT(felipecrv): it's common, but deadlock-prone, to spawn
+            // fire-and-forget async tasks from blocking threads using the
+            // [tokio::spawn] function. For these to work, we must enter the tokio
+            // runtime context in blocking threads.
+            //
+            // `tokio::spawn` from blocking threads is a *bad idea* because the
+            // blocking thread may be holding a lock that the async task needs to
+            // acquire either directly or indirectly (e.g. by awaiting on a task
+            // spawned in the blocking pool that, in turn, needs the lock).
+            //
+            // Unfortunately, we have to support this use case until code is
+            // refactored to avoid computation cycles that can lead to deadlocks.
+            let _tokio_enter = tokio_rt.as_ref().map(|h| h.enter());
             rt.inner.blocking_spawner.inner.run(id);
             drop(shutdown_tx);
         })

@@ -102,7 +102,7 @@ use dbt_vortex::vortex_producer_is_running;
 use git_version::git_version;
 use minijinja::Value;
 use serde_json::{json, to_string_pretty};
-use tracing::{Instrument, Span};
+use tracing::Instrument;
 use vortex_events::{build_result_string, invocation_end_event};
 
 use crate::{
@@ -411,7 +411,7 @@ async fn do_execute_fs(
             Some(LoginSubcommand::Status) => execute_login_status().await,
             None => {
                 execute_login(
-                    Arc::clone(&feature_stack.login_hooks),
+                    Arc::clone(&feature_stack.login.hooks),
                     token,
                     &eval_arg.io.invocation_id,
                 )
@@ -507,7 +507,7 @@ async fn do_execute_fs(
             }
         }
     } else if let Command::Core(Deps(deps_args)) = &cli.command {
-        let command_name = feature_stack.tracing.config_provider.get_command_name();
+        let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
@@ -531,7 +531,7 @@ async fn do_execute_fs(
             }
         };
     } else if let Command::Core(Clean(clean_args)) = &cli.command {
-        let command_name = feature_stack.tracing.config_provider.get_command_name();
+        let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
@@ -561,10 +561,7 @@ pub async fn execute_setup_and_all_phases(
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    emit_version_info(
-        eval_arg,
-        feature_stack.tracing.config_provider.get_command_name(),
-    )?;
+    emit_version_info(eval_arg, feature_stack.cli.command_name)?;
 
     check_options(cli);
     if let Err(e) = validate_engine_env_vars() {
@@ -2868,11 +2865,18 @@ async fn fetch_catalog_data(
         let shared_errors_clone = shared_errors.clone();
         let progress_tracker_clone = progress_tracker.clone();
 
-        let cur_span = Span::current();
+        // Deliberately NOT `Span::current().enter()`ed inside the worker. The poll loop below
+        // abandons workers that blow past `WORKER_TIMEOUT` without joining them, so a worker can
+        // outlive this function. A live thread holding a handle to the invocation span (or any of
+        // its descendants) keeps that span's refcount above zero, so the subscriber never fires
+        // `on_close` for it -- and the end-of-invocation Execution Summary, which is emitted from
+        // `handle_invocation_end`, is silently dropped. Users saw a `--write-index`/`--write-catalog`
+        // build print "Fetched partial catalog.json results" and then simply stop, with no summary
+        // and no result counts (dbt-labs/fs#14424). Abandonment has to be total: these threads must
+        // not participate in the invocation's span lifetime.
         let handle = std::thread::Builder::new()
             .stack_size(8 * 1024 * 1024)
             .spawn(move || -> FsResult<()> {
-                let _sp = cur_span.enter();
                 // Worker loop: process tasks until queue is empty
                 loop {
                     let task = task_queue_clone.lock().unwrap().pop();

@@ -257,7 +257,8 @@ impl DbConfig {
                 "settings",
                 "attach",
             ],
-            // `token` is deliberately absent, for the same reason.
+            // `token` and `fivetran_credential` are deliberately absent, for the
+            // same reason.
             AdapterType::LakeCompute => &[
                 "path",
                 "database",
@@ -265,6 +266,7 @@ impl DbConfig {
                 "base_url",
                 "method",
                 "organization",
+                "fivetran_api_url",
             ],
             // Adapter types with no `DbConfig` variant, so nothing to display.
             AdapterType::Athena
@@ -1061,6 +1063,12 @@ pub struct LakeComputeConfig {
     pub method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    /// Long-lived Fivetran personal access token, for `method: fivetran`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fivetran_credential: Option<String>,
+    /// Fivetran public API base URL; only needed to reach a non-production one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fivetran_api_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -1107,7 +1107,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn returns_valid_session() {
         let cache = OAuthSessionCache {
             version: 1,
@@ -1120,14 +1120,14 @@ mod tests {
         assert_eq!(cred.account_id(), 42);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn missing_cache_file_returns_not_authenticated() {
         let r = resolver_at(PathBuf::from("/nonexistent/oauth_sessions.json"));
         let err = r.resolve().await.unwrap_err();
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn malformed_cache_returns_malformed() {
         let mut f = NamedTempFile::new().unwrap();
         f.write_all(b"not json {{{{").unwrap();
@@ -1138,7 +1138,7 @@ mod tests {
         assert!(matches!(err, AuthError::Malformed(_)));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn empty_sessions_returns_not_authenticated() {
         let cache = OAuthSessionCache {
             version: 1,
@@ -1152,7 +1152,7 @@ mod tests {
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn expired_session_no_refresh_returns_authentication_expired() {
         let cache = OAuthSessionCache {
             version: 1,
@@ -1166,7 +1166,7 @@ mod tests {
         assert!(matches!(err, AuthError::AuthenticationExpired));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn expired_session_with_refresh_token_network_error_returns_refresh_failed() {
         // Point token_endpoint_override at a port that immediately closes the connection
         // so the HTTP call fails with a network error → RefreshFailed (not AuthenticationExpired,
@@ -1192,7 +1192,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn expired_session_refresh_token_revoked_returns_authentication_expired() {
         let addr = mock_token_server(401, r#"{"error":"invalid_grant"}"#.into()).await;
 
@@ -1210,7 +1210,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn expired_session_refresh_succeeds_returns_new_credential_and_updates_cache() {
         let new_access_token = make_fake_jwt(7, 42, "ab123.us1.dbt.com");
         let token_response = serde_json::json!({
@@ -1245,7 +1245,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn expired_session_refresh_succeeds_but_inadequate_scopes_returns_inadequate_scopes() {
         let new_access_token = make_fake_jwt(7, 42, "ab123.us1.dbt.com");
         // Server grants only account:read, but caller requires offline_access too.
@@ -1275,7 +1275,7 @@ mod tests {
 
     // ── Scope tests ───────────────────────────────────────────────────────────
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn session_with_superset_scopes_is_returned() {
         let mut session = make_session(future_time(), None);
         session.scopes = vec![
@@ -1294,7 +1294,7 @@ mod tests {
         assert_eq!(cred.token(), "tok_abc");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn session_with_insufficient_scopes_returns_inadequate_scopes() {
         let mut session = make_session(future_time(), None);
         session.scopes = vec!["account:read".into()];
@@ -1309,7 +1309,7 @@ mod tests {
         assert!(matches!(err, AuthError::InadequateScopes { .. }));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn first_session_with_adequate_scopes_is_preferred() {
         // Session A: valid, missing offline_access
         // Session B: valid, has all required scopes
@@ -1333,7 +1333,7 @@ mod tests {
         assert_eq!(cred.token(), "tok_b");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn no_session_for_client_id_returns_not_authenticated() {
         let cache = OAuthSessionCache {
             version: 1,
@@ -1573,7 +1573,7 @@ mod tests {
         stream.shutdown().await.unwrap();
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn parses_code_state_and_account_url() {
         let (listener, addr) = bind_local().await;
         let handle = tokio::spawn(async move {
@@ -1589,7 +1589,7 @@ mod tests {
         assert_eq!(result.account_url, "https://ab123.us1.dbt.com");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn rejects_mismatched_state() {
         let (listener, addr) = bind_local().await;
         let handle = tokio::spawn(async move {
@@ -1604,7 +1604,7 @@ mod tests {
         assert!(err.to_string().contains("invalid OAuth state parameter"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn surfaces_error_query_param() {
         let (listener, addr) = bind_local().await;
         let handle = tokio::spawn(async move {
@@ -1620,7 +1620,7 @@ mod tests {
         assert!(err.to_string().contains("User canceled"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn times_out_when_no_request_arrives() {
         let (listener, _addr) = bind_local().await;
         let result = accept_one_redirect(&listener, "any", Duration::from_millis(100), None).await;
@@ -1628,7 +1628,7 @@ mod tests {
         assert!(err.to_string().contains("timed out"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn abort_signal_returns_aborted() {
         let (listener, _addr) = bind_local().await;
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
@@ -1642,7 +1642,7 @@ mod tests {
         assert!(matches!(err, AuthError::Aborted));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn upsert_replaces_existing_session() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("oauth_sessions.json");
@@ -1660,7 +1660,7 @@ mod tests {
         assert_eq!(cache.sessions[0].access_token, "tok_updated");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn upsert_appends_different_account() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("oauth_sessions.json");

@@ -636,7 +636,7 @@ projects:
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn m2m_happy_path_sends_basic_auth() {
         let server = MockServer::start().await;
         let scope = "runcache:scope:org:dev:admin";
@@ -677,7 +677,7 @@ projects:
         assert!(auth_header.starts_with("Basic "));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn token_endpoint_retries_transient_failures() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -701,7 +701,7 @@ projects:
         assert_eq!(server.received_requests().await.unwrap().len(), 3);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn token_endpoint_does_not_retry_auth_failures() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -725,7 +725,7 @@ projects:
         assert_eq!(server.received_requests().await.unwrap().len(), 1);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn browser_happy_path_includes_client_id_in_form() {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
@@ -746,7 +746,7 @@ projects:
         assert_eq!(token.refresh_token.as_deref(), Some("refresh-xyz"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn unavailable_interactive_flow_fails_fast_instead_of_running() {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
@@ -770,7 +770,7 @@ projects:
         assert!(!err.is_user_actionable_auth());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn refresh_path_replaces_stored_token() {
         let server = MockServer::start().await;
         let scope = "runcache:scope:org:dev:admin";
@@ -817,7 +817,7 @@ projects:
         assert_eq!(token.refresh_token.as_deref(), Some("refresh-new"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn org_disabled_returns_dedicated_error() {
         let server = MockServer::start().await;
         let scope = "runcache:scope:app:dev:developer"; // only app, no org
@@ -850,7 +850,7 @@ projects:
         assert!(matches!(err, RunCacheServiceError::OrgDisabled { ref org_id } if org_id == "dev"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn disk_token_with_mismatched_org_is_refreshed() {
         // A configured org_id that isn't in the cached scope forces a refresh so a
         // permissions change is picked up without deleting the cache or re-opening the
@@ -900,7 +900,7 @@ projects:
         assert_eq!(source.resolve_org_id(&token).unwrap(), "primary");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn fresh_disk_token_is_used_without_network_call() {
         let server = MockServer::start().await;
         let dir = TempDir::new().unwrap();
@@ -933,7 +933,7 @@ projects:
         // No mock was set up; the FakeFlow would have errored. Implicit assertion.
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn ambiguous_fresh_cached_token_raises_when_no_org_configured() {
         // A previous run used a configured org_id, so a valid multi-org token was cached.
         // A subsequent run without a configured org_id must fail rather than silently
@@ -968,7 +968,7 @@ projects:
         assert!(err.to_string().contains("state-org-id"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn ambiguity_during_refresh_raises_without_browser_flow() {
         // A near-expiry token is refreshed and the refresh returns a multi-org scope.
         // With no configured org_id the ambiguity must surface from resolve_org_id, not
@@ -1027,7 +1027,7 @@ projects:
         assert_eq!(saved.refresh_token.as_deref(), Some("new-refresh"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn disabled_org_disk_token_surfaces_error_without_reauth() {
         // When the cached token grants no active access to the configured org (the user
         // was disabled), the cache must be kept and the disabled error surfaced from
@@ -1067,7 +1067,7 @@ projects:
         assert!(token_store_in(&dir).load().await.unwrap().is_some());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn platform_token_exchange_succeeds_when_no_client_secret() {
         let server = MockServer::start().await;
         let scope = "runcache:scope:org:dev:admin";
@@ -1105,7 +1105,7 @@ projects:
         assert_eq!(source.resolve_org_id(&token).unwrap(), "dev");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn cached_token_from_other_platform_account_is_discarded_and_reminted() {
         let server = MockServer::start().await;
         // Distinct scopes let the returned token identify its origin: only a
@@ -1166,7 +1166,7 @@ projects:
         assert_eq!(token.platform_account_id.as_deref(), Some("2"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn credential_for_another_platform_account_is_rejected() {
         // The only resolvable credential belongs to account 111 while the
         // project configures account 42. Exchanging it would authenticate as
@@ -1202,7 +1202,7 @@ projects:
         assert!(token_store_in(&dir).load().await.unwrap().is_none());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn configured_account_without_any_credential_skips_standalone_login() {
         // With an account configured, the standalone dbt State browser login
         // cannot produce a credential for it, so it must not run.
@@ -1232,7 +1232,7 @@ projects:
         assert!(token_store_in(&dir).load().await.unwrap().is_none());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn cached_token_for_configured_platform_account_is_reused() {
         let dir = TempDir::new().unwrap();
         let store = token_store_in(&dir);
@@ -1266,7 +1266,7 @@ projects:
         assert_eq!(token.id_token, id_token);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn cached_token_without_platform_account_is_kept() {
         // Tokens of unknown provenance (standalone dbt State login, or a file
         // written before the account was recorded) are not invalidated.
@@ -1302,7 +1302,7 @@ projects:
         assert!(token_store_in(&dir).load().await.unwrap().is_some());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn platform_token_exchange_skipped_when_client_secret_set() {
         let server = MockServer::start().await;
         let scope = "runcache:scope:org:dev:admin";
@@ -1339,7 +1339,7 @@ projects:
         assert!(!body.contains("token-exchange"));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn platform_token_exchange_propagates_error() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -1366,7 +1366,7 @@ projects:
         assert!(matches!(err, RunCacheServiceError::AuthRequest(_)));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn headless_mint_does_not_cache_token_to_disk() {
         // Tokens minted from re-derivable client credentials are usable in memory but are
         // never written to disk in a headless environment (no interactive user present, e.g.
@@ -1405,7 +1405,7 @@ projects:
         assert!(!dir.path().join(".dbt").exists());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn headless_refresh_from_disk_persists_rotated_token() {
         // A token provisioned on disk (no client credentials) is the only auth path in a
         // headless environment once the browser flow is disabled. Refresh tokens rotate on

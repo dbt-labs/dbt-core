@@ -47,7 +47,8 @@
 # `--environment prod`, authenticating with the repo-level `PYPI_API_TOKEN`
 # secret (passed to the tool as `DBT_PYPI_PROD_TOKEN`). Three distributions
 # are published — `dbt-core`, `dbt-core-experimental-parser`, and `dbt-oss`
-# — selected by the `release_target` input.
+# — selected by the `release_target` input. Homebrew and winget publish
+# `dbt-core` specifically, so they're gated on the same input too.
 #
 # `dbt-core`'s wheels are built by `maturin build` in the `build` job
 # (abi3-py311, one cp311-abi3 wheel per platform) — not `cargo ci pypi pack`,
@@ -72,7 +73,8 @@
 # dbt-labs/homebrew-dbt tap. Tap commits are GPG-signed by the build bot
 # (via FISHTOWN_BOT_GPG_*). Skipped for SemVer pre-releases and any tag
 # that isn't GitHub's current "Latest" release — protects against
-# downgrades from re-runs or hotfixes on older minors.
+# downgrades from re-runs or hotfixes on older minors. Also skipped unless
+# `release_target` is `all` or `core`.
 #
 # Dry-run (`inputs.dry_run = true`) skips tag push, PyPI publish, the
 # GitHub Release, and the Homebrew publish — build + pack still run so
@@ -133,7 +135,7 @@ on:
         type: string
         default: "main"
       release_target:
-        description: "Which package(s) to publish to PyPI. Pack always builds all three; no effect on dry runs or Homebrew publish."
+        description: "Which package(s) to publish. Pack always builds all three. Also gates Homebrew and winget publish (dbt-core-specific), skipped unless 'all' or 'core'. No effect on dry runs."
         required: false
         type: choice
         options:
@@ -1013,7 +1015,7 @@ jobs:
   publish-homebrew:
     needs: [prepare-release, github-release]
     # if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi && !contains(needs.prepare-release.outputs.version, '-') }}
-    if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi }}
+    if: ${{ !inputs.dry_run && !inputs.dry_run_with_test_pypi && (inputs.release_target == 'all' || inputs.release_target == 'core') }}
     uses: ./.github/workflows/publish-homebrew.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}
@@ -1029,9 +1031,8 @@ jobs:
       contents: read
     secrets: inherit
 
-  # Open a PR back to main with only the release commit's changelog delta
-  # (new `.changes/<version>.md`, regenerated CHANGELOG.md, deleted
-  # unreleased entries) — the version bump stays on the release branch.
+  # Open a PR back to main with the release commit's changelog delta and
+  # Cargo.toml version bump (Cargo.lock excluded — see below).
   changelog-backport:
     name: Backport changelog to main
     needs: [prepare-release, publish-pypi, github-release]
@@ -1064,37 +1065,40 @@ jobs:
 
           REL="origin/${RELEASE_BRANCH}"
 
-          # Handle each part of the changelog delta with the right tool rather
-          # than one patch — main may be a different lineage than the release
-          # branch's parent, so the version bump never comes along and the
-          # batched-away entries may not even exist here.
+          # Handle each part of the delta with the right tool rather than one
+          # patch — main may be a different lineage than the release branch's
+          # parent, so the batched-away entries may not even exist here.
 
           # 1. The new release-notes file changie generated for this version.
           git checkout "$REL" -- ".changes/${VERSION}.md"
 
-          # 2. Remove the unreleased entries the release batched away, but only
-          #    those still present — main may never have had them, or a prior
-          #    backport already removed them (--ignore-unmatch, not an error).
-          #    Stay NUL-delimited end to end: changie names each entry after its
-          #    kind, so multi-word kinds ("Under the Hood", "Breaking Changes",
-          #    ...) yield paths with spaces that word-split under plain xargs and
-          #    would then be silently skipped by --ignore-unmatch.
+          # 2. The Cargo.toml version bump, patched like CHANGELOG.md below.
+          #    Cargo.lock is left alone; it regenerates on main's next build.
+          CARGO_PATCH="$(mktemp)"
+          git diff "${REL}~1" "$REL" -- Cargo.toml > "$CARGO_PATCH"
+          if [ -s "$CARGO_PATCH" ] && ! git apply --reverse --check "$CARGO_PATCH" 2>/dev/null; then
+            git apply --index --3way "$CARGO_PATCH"
+          fi
+
+          # 3. Remove the unreleased entries the release batched away, if still
+          #    present (--ignore-unmatch). NUL-delimited since changie's kind
+          #    names ("Under the Hood", ...) can contain spaces.
           DELETED_LIST="$(mktemp)"
           git diff -z --diff-filter=D --name-only "${REL}~1" "$REL" -- .changes/unreleased > "$DELETED_LIST"
           if [ -s "$DELETED_LIST" ]; then
             git rm -q --ignore-unmatch --pathspec-from-file="$DELETED_LIST" --pathspec-file-nul
           fi
 
-          # 3. Regenerated CHANGELOG.md, applied as a patch (not a copy) so
-          #    sections added to main concurrently survive — `--3way` merges,
-          #    and `--reverse --check` lets a re-run after merge skip cleanly.
+          # 4. Regenerated CHANGELOG.md, applied as a patch (not a copy) so
+          #    concurrent edits on main survive; --3way merges, and
+          #    --reverse --check skips cleanly on a re-run after merge.
           PATCH="$(mktemp)"
           git diff "${REL}~1" "$REL" -- CHANGELOG.md > "$PATCH"
           if [ -s "$PATCH" ] && ! git apply --reverse --check "$PATCH" 2>/dev/null; then
             git apply --index --3way "$PATCH"
           fi
 
-          git add -A .changes CHANGELOG.md
+          git add -A .changes CHANGELOG.md Cargo.toml
 
           # Nothing new relative to main (e.g. a prior backport PR already
           # merged before this re-run) — skip cleanly to stay idempotent.
@@ -1142,12 +1146,11 @@ jobs:
             --body "$(cat <<EOF
           Backports the changelog generated by the \`v${VERSION}\` release back to main.
 
-          Contains only the changelog delta from the release commit:
+          Contains only the changelog delta and version bump from the release commit:
           - new \`.changes/${VERSION}.md\`
           - regenerated \`CHANGELOG.md\`
           - deletion of the \`.changes/unreleased/*.yaml\` entries \`changie batch\` consumed
-
-          The Cargo version bump is intentionally excluded — main keeps its own version.
+          - \`Cargo.toml\` version bump to \`${VERSION}\`
 
           Release workflow: ${RUN_URL}
           EOF
@@ -1184,7 +1187,8 @@ jobs:
   # Submits an updated dbtLabs.dbt-core manifest to microsoft/winget-pkgs
   # via `wingetcreate update` using the Windows installer archive from the
   # `github-release` job. Runs in parallel with `publish-homebrew`; both
-  # fan out from `github-release`.
+  # fan out from `github-release`. Also skipped unless `release_target`
+  # is `all` or `core`.
   #
   # PRE-STABLE PREVIEW WINDOW: pre-release versions are published too. Note
   # each preview opens a new upstream winget-pkgs PR and a permanent
@@ -1195,7 +1199,7 @@ jobs:
     # if: ${{ !contains(needs.prepare-release.outputs.version, '-') }}
     # dry_run cascades via github-release being skipped; dry_run_with_test_pypi
     # needs an explicit guard since github-release now runs in that mode too.
-    if: ${{ !inputs.dry_run_with_test_pypi }}
+    if: ${{ !inputs.dry_run_with_test_pypi && (inputs.release_target == 'all' || inputs.release_target == 'core') }}
     uses: ./.github/workflows/publish-winget.yml
     with:
       version: ${{ needs.prepare-release.outputs.version }}

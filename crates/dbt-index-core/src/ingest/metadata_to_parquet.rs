@@ -3214,7 +3214,7 @@ fn write_run_results(
 }
 
 // ---------------------------------------------------------------------------
-// Run freshness → dbt.source_freshness
+// Run freshness → dbt.source_freshness (published as dbt_rt.freshness)
 // ---------------------------------------------------------------------------
 
 fn write_run_freshness(
@@ -3251,6 +3251,9 @@ fn write_run_freshness(
             let uid_col = str_col(batch, "unique_id");
             let inv_col = str_col(batch, "invocation_id");
             let stat_col = str_col(batch, "status");
+            // `source` or `model`. The epoch has carried it since model freshness shipped;
+            // dropping it here is what left the published table unable to tell them apart.
+            let rt_col = str_col(batch, "resource_type");
             let mla_col = str_col(batch, "max_loaded_at");
             let snap_col = str_col(batch, "snapshotted_at");
             let ago_col = f64_col(batch, "max_loaded_at_time_ago");
@@ -3269,6 +3272,7 @@ fn write_run_freshness(
                     .unwrap_or_else(|| now.to_string());
                 rows.push(json!({
                     "unique_id": uid,
+                    "resource_type": get_str(rt_col, i),
                     "invocation_id": get_str(inv_col, i),
                     "status": get_str(stat_col, i),
                     "max_loaded_at": get_str(mla_col, i),
