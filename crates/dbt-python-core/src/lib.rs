@@ -326,9 +326,9 @@ where
 
     // As of today we serialize all invocations to simplify tracing setup and teardown.
     // Each invocation reloads tracing, even if config hasn't changed and fully
-    // shuts it down at the end, flushing all sinks. Sine free-threaded python
+    // shuts it down at the end, flushing all sinks. Since free-threaded python
     // is not widely used yet, that should not be a major issue, but may be
-    // imporved to support genuine homogenous concurrent invocations.
+    // improved to support genuine homogenous concurrent invocations.
     let _invocation = INVOCATION
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
