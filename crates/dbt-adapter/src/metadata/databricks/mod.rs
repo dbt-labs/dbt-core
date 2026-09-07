@@ -1021,6 +1021,8 @@ impl DatabricksMetadataAdapter {
     }
 
     // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/relations/tags.sql#L11
+    // Databricks information_schema stores catalog, schema, and table identifiers in lowercase.
+    // https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-information-schema
     fn fetch_tags(
         &self,
         database: &str,
