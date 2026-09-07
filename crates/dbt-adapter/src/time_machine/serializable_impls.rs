@@ -145,6 +145,7 @@ impl TimeMachineSerializable for RelationObject {
             "is_dynamic_table": self.is_dynamic_table(),
             "is_interactive_table": self.is_interactive_table(),
             "is_streaming_table": self.is_streaming_table(),
+            "is_metric_view": self.is_metric_view(),
             "is_delta": self.is_delta(),
             "quote_policy": {
                 "database": quote_policy.database,
@@ -210,6 +211,8 @@ impl TimeMachineSerializable for RelationObject {
             Some(RelationType::InteractiveTable)
         } else if ext.bool_or("is_streaming_table", false) {
             Some(RelationType::StreamingTable)
+        } else if ext.bool_or("is_metric_view", false) {
+            Some(RelationType::MetricView)
         } else {
             None
         };
@@ -714,6 +717,7 @@ mod tests {
             RelationType::DynamicTable,
             RelationType::InteractiveTable,
             RelationType::StreamingTable,
+            RelationType::MetricView,
         ] {
             let relation = do_create_relation(
                 AdapterType::Snowflake,

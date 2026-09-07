@@ -372,10 +372,7 @@ impl Object for RelationObject {
             }
             Some("is_view") => Some(Value::from(self.is_view())),
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
-            Some("is_metric_view") => Some(Value::from(matches!(
-                self.relation_type(),
-                Some(RelationType::MetricView)
-            ))),
+            Some("is_metric_view") => Some(Value::from(self.is_metric_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
             Some("is_dynamic_table") => Some(Value::from(self.is_dynamic_table())),
             Some("is_interactive_table") => Some(Value::from(self.is_interactive_table())),
