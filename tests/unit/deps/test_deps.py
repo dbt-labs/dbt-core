@@ -2,6 +2,7 @@ import os
 import unittest
 from argparse import Namespace
 from copy import deepcopy
+from types import SimpleNamespace
 from unittest import mock
 
 import dbt.deps
@@ -16,6 +17,7 @@ from dbt.contracts.project import (
     RegistryPackage,
     TarballPackage,
 )
+from dbt.deps.base import PinnedPackage
 from dbt.deps.git import GitUnpinnedPackage
 from dbt.deps.local import LocalPinnedPackage, LocalUnpinnedPackage
 from dbt.deps.registry import RegistryUnpinnedPackage
@@ -1241,3 +1243,69 @@ class TestCheckForDuplicatePackagesWithBooleans(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result["packages"]), 1)
         self.assertIn("dbt-utils-extra", result["packages"][0]["git"])
+
+
+class TestGetInstallationPathTraversal(unittest.TestCase):
+    """Regression: a malicious tarball/git package can set its `name` (parsed
+    unsanitized from the dependency's own dbt_project.yml or packages.yml) to
+    an absolute path or a path containing `..`. Since os.path.join discards
+    the first argument when the second is absolute, get_installation_path
+    must reject any resolved name that escapes packages_install_path instead
+    of silently returning an attacker-controlled destination."""
+
+    class FakePinnedPackage(PinnedPackage):
+        def __init__(self, project_name):
+            super().__init__()
+            self._project_name = project_name
+
+        @property
+        def name(self):
+            return self._project_name
+
+        def source_type(self):
+            return "fake"
+
+        def get_version(self):
+            return None
+
+        def _fetch_metadata(self, project, renderer):
+            return SimpleNamespace(name=self._project_name)
+
+        def install(self, project, renderer):
+            raise NotImplementedError
+
+        def nice_version_name(self):
+            return "1.0"
+
+        def to_dict(self):
+            return {}
+
+    def _project(self):
+        project = mock.Mock()
+        project.packages_install_path = "/tmp/proj/dbt_packages"
+        return project
+
+    def test_normal_package_name_resolves_inside_install_path(self):
+        pkg = self.FakePinnedPackage("my_package")
+        path = pkg.get_installation_path(self._project(), None)
+        self.assertEqual(path, "/tmp/proj/dbt_packages/my_package")
+
+    def test_absolute_path_name_is_rejected(self):
+        pkg = self.FakePinnedPackage("/etc/cron.d/evil")
+        with self.assertRaises(dbt.exceptions.DependencyError):
+            pkg.get_installation_path(self._project(), None)
+
+    def test_parent_traversal_name_is_rejected(self):
+        pkg = self.FakePinnedPackage("../../../../etc/cron.d/evil")
+        with self.assertRaises(dbt.exceptions.DependencyError):
+            pkg.get_installation_path(self._project(), None)
+
+    def test_relative_traversal_within_bounds_is_allowed(self):
+        # "./my_package" still resolves inside packages_install_path and
+        # should not be rejected.
+        pkg = self.FakePinnedPackage("./my_package")
+        path = pkg.get_installation_path(self._project(), None)
+        self.assertEqual(
+            os.path.realpath(path),
+            os.path.realpath("/tmp/proj/dbt_packages/my_package"),
+        )
