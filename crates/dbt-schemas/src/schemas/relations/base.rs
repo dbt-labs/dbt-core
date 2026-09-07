@@ -299,6 +299,13 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     fn set_is_delta(&mut self, is_delta: Option<bool>);
 
+    /// Helper: check if the relation is a Databricks shallow clone
+    fn is_shallow_clone(&self) -> bool {
+        false
+    }
+
+    fn set_is_shallow_clone(&mut self, is_shallow_clone: Option<bool>);
+
     /// Set the relation's table format, when the adapter tracks one.
     fn set_table_format(&mut self, table_format: Option<TableFormat>);
 

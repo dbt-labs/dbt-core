@@ -352,6 +352,7 @@ impl Object for RelationObject {
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
+            Some("is_shallow_clone") => Some(Value::from(self.is_shallow_clone())),
             Some("alter_constraints") => {
                 let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
                 Some(Value::from_iter(

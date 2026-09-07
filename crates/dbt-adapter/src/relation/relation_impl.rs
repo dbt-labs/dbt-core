@@ -195,6 +195,8 @@ pub struct Relation {
     pub metadata: Option<BTreeMap<String, String>>,
     /// Whether the relation is a delta table
     pub is_delta: bool,
+    /// Whether the relation is a Databricks shallow clone
+    pub is_shallow_clone: bool,
     /// Constraints to be created with the table
     pub create_constraints: Vec<databricks::typed_constraint::TypedConstraint>,
     /// Constraints to be applied during ALTER operations
@@ -360,6 +362,7 @@ impl Relation {
             native_schema: None,
             metadata: None,
             is_delta: false,
+            is_shallow_clone: false,
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
             temporary: false,
@@ -399,6 +402,11 @@ impl Relation {
 
     pub fn with_is_delta(mut self, is_delta: bool) -> Self {
         self.is_delta = is_delta;
+        self
+    }
+
+    pub fn with_is_shallow_clone(mut self, is_shallow_clone: bool) -> Self {
+        self.is_shallow_clone = is_shallow_clone;
         self
     }
 
@@ -481,6 +489,7 @@ impl Relation {
             native_schema: None,
             metadata: None,
             is_delta: false,
+            is_shallow_clone: false,
             create_constraints: Vec::default(),
             alter_constraints: Vec::default(),
             temporary: false,
@@ -736,6 +745,7 @@ impl BaseRelation for Relation {
         .with_quoting(self.quote_policy)
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
+        .with_is_shallow_clone(self.is_shallow_clone)
         .with_temporary(self.temporary)
         .with_can_exchange(self.can_exchange)
         .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
@@ -765,6 +775,7 @@ impl BaseRelation for Relation {
         .with_quoting(policy)
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
+        .with_is_shallow_clone(self.is_shallow_clone)
         .with_temporary(self.temporary)
         .with_can_exchange(self.can_exchange)
         .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
@@ -836,6 +847,20 @@ impl BaseRelation for Relation {
         match self.adapter_type {
             AdapterType::Databricks | AdapterType::Spark => {
                 self.is_delta = is_delta.unwrap_or(self.is_delta);
+            }
+            _ => {}
+        }
+    }
+
+    fn is_shallow_clone(&self) -> bool {
+        self.is_shallow_clone
+    }
+
+    #[allow(clippy::single_match)]
+    fn set_is_shallow_clone(&mut self, is_shallow_clone: Option<bool>) {
+        match self.adapter_type {
+            AdapterType::Databricks => {
+                self.is_shallow_clone = is_shallow_clone.unwrap_or(self.is_shallow_clone);
             }
             _ => {}
         }
@@ -1256,6 +1281,7 @@ impl BaseRelation for Relation {
             .with_quoting(custom_quoting)
             .with_metadata(self.metadata.clone())
             .with_is_delta(self.is_delta)
+            .with_is_shallow_clone(self.is_shallow_clone)
             .with_temporary(self.temporary)
             .with_table_format(self.table_format)
             .with_can_exchange(self.can_exchange)
