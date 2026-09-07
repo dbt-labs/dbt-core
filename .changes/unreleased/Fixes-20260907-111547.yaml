@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow account id for OauthResolver for filtering oauth sessions
+time: 2026-09-07T11:15:47.911186+05:30
+custom:
+    Author: ash2shukla
+    Issue: N/A

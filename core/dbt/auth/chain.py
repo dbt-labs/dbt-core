@@ -26,23 +26,23 @@ class AuthChain:
         self._resolvers = resolvers
 
     @classmethod
-    def default(cls) -> AuthChain:
+    def default(cls, account_id: Optional[str] = None) -> AuthChain:
         """Non-interactive chain: EnvVar -> OAuthPassive -> CloudYaml."""
         return cls(
             resolvers=[
                 EnvVarResolver(),
-                OAuthPassiveResolver(),
+                OAuthPassiveResolver(account_id=account_id),
                 CloudYamlResolver(),
             ]
         )
 
     @classmethod
-    def interactive(cls) -> AuthChain:
+    def interactive(cls, account_id: Optional[str] = None) -> AuthChain:
         """Interactive chain: EnvVar -> OAuthPassive -> CloudYaml -> OAuthInteractive."""
         return cls(
             resolvers=[
                 EnvVarResolver(),
-                OAuthPassiveResolver(),
+                OAuthPassiveResolver(account_id=account_id),
                 CloudYamlResolver(),
                 OAuthInteractiveResolver(),
             ]

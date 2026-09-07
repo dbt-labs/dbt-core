@@ -228,6 +228,39 @@ class TestOAuthPassiveResolver:
             with pytest.raises(RefreshFailed):
                 OAuthPassiveResolver("test_client", cache_path=p).resolve()
 
+    def test_configured_account_id_selects_matching_session(self, tmp_path):
+        p = tmp_path / "oauth_sessions.json"
+        upsert_session(_make_session(account_id=1, access_token="tok_a"), p)
+        upsert_session(_make_session(account_id=2, access_token="tok_b"), p)
+
+        cred = OAuthPassiveResolver("test_client", cache_path=p, account_id="2").resolve()
+        assert cred.token == "tok_b"
+        assert cred.account_id == 2
+
+    def test_configured_account_id_without_session_raises_not_authenticated(self, tmp_path):
+        p = tmp_path / "oauth_sessions.json"
+        upsert_session(_make_session(account_id=1), p)
+
+        with pytest.raises(NotAuthenticated):
+            OAuthPassiveResolver("test_client", cache_path=p, account_id="999").resolve()
+
+    def test_configured_account_id_ignores_refresh_token_of_other_account(self, tmp_path):
+        # The other account's session is expired but refreshable; without an
+        # account filter it would be refreshed and returned.
+        p = tmp_path / "oauth_sessions.json"
+        upsert_session(
+            _make_session(
+                account_id=1,
+                expires_at=time.time() - 3600,
+                refresh_token="refresh_tok",
+            ),
+            p,
+        )
+        upsert_session(_make_session(account_id=2, access_token="tok_wanted"), p)
+
+        cred = OAuthPassiveResolver("test_client", cache_path=p, account_id="2").resolve()
+        assert cred.token == "tok_wanted"
+
 
 class TestCloudYamlResolver:
     def test_happy_path_service_token(self, tmp_path):

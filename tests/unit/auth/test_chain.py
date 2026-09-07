@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 
 from dbt.auth.chain import AuthChain
-from dbt.auth.resolvers import CloudYamlResolver, EnvVarResolver
+from dbt.auth.resolvers import CloudYamlResolver, EnvVarResolver, OAuthPassiveResolver
 from dbt.exceptions import MalformedAuthConfig, NotAuthenticated
 
 
@@ -101,3 +101,25 @@ projects:
         chain = AuthChain([])
         with pytest.raises(NotAuthenticated):
             chain.resolve()
+
+
+class TestAuthChainDefaultAndInteractive:
+    @staticmethod
+    def _passive_resolver(chain: AuthChain) -> OAuthPassiveResolver:
+        return next(r for r in chain._resolvers if isinstance(r, OAuthPassiveResolver))
+
+    def test_default_account_id_is_applied_to_passive_resolver(self):
+        chain = AuthChain.default(account_id="7")
+        assert self._passive_resolver(chain).account_id == "7"
+
+    def test_default_without_account_id_leaves_passive_resolver_unrestricted(self):
+        chain = AuthChain.default()
+        assert self._passive_resolver(chain).account_id is None
+
+    def test_interactive_account_id_is_applied_to_passive_resolver(self):
+        chain = AuthChain.interactive(account_id="7")
+        assert self._passive_resolver(chain).account_id == "7"
+
+    def test_interactive_without_account_id_leaves_passive_resolver_unrestricted(self):
+        chain = AuthChain.interactive()
+        assert self._passive_resolver(chain).account_id is None
