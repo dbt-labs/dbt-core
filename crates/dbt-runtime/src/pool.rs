@@ -6,7 +6,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::io;
-use std::sync::atomic::Ordering;
+use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -96,8 +97,10 @@ struct Inner {
     /// Call before a thread stops.
     before_stop: Option<Callback>,
 
-    // Maximum number of threads.
-    thread_cap: usize,
+    // Maximum number of threads. Can be changed while the pool is running (see
+    // [Spawner::set_max_parallelism]), so it's only ever read through
+    // [Inner::thread_cap].
+    thread_cap: AtomicUsize,
 
     // Customizable wait timeout.
     keep_alive: Duration,
@@ -192,7 +195,11 @@ where
     R: Send + 'static,
 {
     let rt = Handle::current();
-    rt.spawn_blocking(func)
+    let span = tracing::Span::current();
+    rt.spawn_blocking(move || {
+        let _guard = span.enter();
+        func()
+    })
 }
 
 /// Runs the provided function on the dedicated dbt blocking pool.
@@ -207,7 +214,11 @@ where
     R: Send + 'static,
 {
     let rt = Handle::current();
-    rt.blocking_spawner().spawn_mandatory_blocking(&rt, func)
+    let span = tracing::Span::current();
+    rt.spawn_mandatory_blocking(move || {
+        let _guard = span.enter();
+        func()
+    })
 }
 
 // ===== impl BlockingPool =====
@@ -234,7 +245,7 @@ impl BlockingPool {
                     stack_size: builder.thread_stack_size,
                     after_start: builder.after_start.clone(),
                     before_stop: builder.before_stop.clone(),
-                    thread_cap,
+                    thread_cap: AtomicUsize::new(thread_cap),
                     keep_alive,
                     metrics: SpawnerMetrics::default(),
                 }),
@@ -404,7 +415,7 @@ impl Spawner {
         if self.inner.metrics.num_idle_threads() == 0 {
             // No threads are able to process the task.
 
-            if self.inner.metrics.num_threads() == self.inner.thread_cap {
+            if self.inner.metrics.num_threads() >= self.inner.thread_cap() {
                 // At max number of threads
             } else {
                 assert!(shared.shutdown_tx.is_some());
@@ -488,6 +499,20 @@ impl Spawner {
 }
 
 impl Spawner {
+    pub fn max_parallelism(&self) -> usize {
+        self.inner.thread_cap()
+    }
+
+    /// Change the maximum number of threads of a running pool.
+    ///
+    /// Threads that are already running are not stopped: lowering the cap only
+    /// prevents new threads from being spawned, so the pool converges to the
+    /// new cap as idle threads exit after [`Builder::keep_alive`]. Raising it
+    /// takes effect on the next task that finds no idle thread.
+    pub fn set_max_parallelism(&self, val: NonZeroUsize) {
+        self.inner.thread_cap.store(val.get(), Ordering::Relaxed);
+    }
+
     pub(crate) fn num_threads(&self) -> usize {
         self.inner.metrics.num_threads()
     }
@@ -508,6 +533,10 @@ fn is_temporary_os_thread_error(error: &io::Error) -> bool {
 }
 
 impl Inner {
+    fn thread_cap(&self) -> usize {
+        self.thread_cap.load(Ordering::Relaxed)
+    }
+
     fn run(&self, worker_thread_id: usize) {
         if let Some(f) = &self.after_start {
             f();
