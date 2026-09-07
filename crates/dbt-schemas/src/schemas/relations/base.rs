@@ -880,6 +880,28 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         false
     }
 
+    /// ClickHouse relation state, stamped from the catalog (dbt-clickhouse
+    /// `ClickHouseRelation.can_exchange`).
+    fn can_exchange(&self) -> bool {
+        false
+    }
+
+    /// dbt-managed MVs writing into this relation, `{schema, name, sql}` entries
+    /// (`ClickHouseRelation.mvs_pointing_to_it`).
+    fn mvs_pointing_to_it(&self) -> &[BTreeMap<String, String>] {
+        &[]
+    }
+
+    /// `ClickHouseRelation.is_refreshable`
+    fn is_refreshable(&self) -> bool {
+        false
+    }
+
+    /// `ClickHouseRelation.refreshable_append`
+    fn refreshable_append(&self) -> bool {
+        false
+    }
+
     /// materialized_view_config_changeset
     fn materialized_view_config_changeset(
         &self,

@@ -201,6 +201,11 @@ pub struct Relation {
     pub alter_constraints: Vec<databricks::typed_constraint::TypedConstraint>,
     /// Whether the relation is a temporary view (session-scoped).
     pub temporary: bool,
+    /// ClickHouse catalog state; see [`BaseRelation::can_exchange`] and siblings.
+    pub can_exchange: bool,
+    pub mvs_pointing_to_it: Vec<BTreeMap<String, String>>,
+    pub is_refreshable: bool,
+    pub refreshable_append: bool,
     /// The location/region for this relation (BigQuery only, e.g., "US", "EU").
     pub location: Option<String>,
     /// DuckDB external source location, rendered in place of schema/table.
@@ -358,6 +363,10 @@ impl Relation {
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
             temporary: false,
+            can_exchange: false,
+            mvs_pointing_to_it: Vec::new(),
+            is_refreshable: false,
+            refreshable_append: false,
             external: None,
             table_format: TableFormat::Default,
         }
@@ -395,6 +404,26 @@ impl Relation {
 
     pub fn with_temporary(mut self, temporary: bool) -> Self {
         self.temporary = temporary;
+        self
+    }
+
+    pub fn with_can_exchange(mut self, can_exchange: bool) -> Self {
+        self.can_exchange = can_exchange;
+        self
+    }
+
+    pub fn with_mvs_pointing_to_it(mut self, mvs: Vec<BTreeMap<String, String>>) -> Self {
+        self.mvs_pointing_to_it = mvs;
+        self
+    }
+
+    pub fn with_is_refreshable(mut self, is_refreshable: bool) -> Self {
+        self.is_refreshable = is_refreshable;
+        self
+    }
+
+    pub fn with_refreshable_append(mut self, refreshable_append: bool) -> Self {
+        self.refreshable_append = refreshable_append;
         self
     }
 
@@ -455,6 +484,10 @@ impl Relation {
             create_constraints: Vec::default(),
             alter_constraints: Vec::default(),
             temporary: false,
+            can_exchange: false,
+            mvs_pointing_to_it: Vec::new(),
+            is_refreshable: false,
+            refreshable_append: false,
             location: Some("".to_string()),
             external: None,
             table_format: TableFormat::Default,
@@ -704,6 +737,10 @@ impl BaseRelation for Relation {
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
         .with_temporary(self.temporary)
+        .with_can_exchange(self.can_exchange)
+        .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
+        .with_is_refreshable(self.is_refreshable)
+        .with_refreshable_append(self.refreshable_append)
         // FIXME: no need to validate here since the parent relation is already valid.
         .validate()?;
 
@@ -729,6 +766,10 @@ impl BaseRelation for Relation {
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
         .with_temporary(self.temporary)
+        .with_can_exchange(self.can_exchange)
+        .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
+        .with_is_refreshable(self.is_refreshable)
+        .with_refreshable_append(self.refreshable_append)
         // FIXME: no need to validate here since the parent relation is already valid.
         .validate()?;
         relation.create_constraints = self.create_constraints.clone();
@@ -769,6 +810,22 @@ impl BaseRelation for Relation {
 
     fn is_temporary(&self) -> bool {
         self.temporary
+    }
+
+    fn can_exchange(&self) -> bool {
+        self.can_exchange
+    }
+
+    fn mvs_pointing_to_it(&self) -> &[BTreeMap<String, String>] {
+        &self.mvs_pointing_to_it
+    }
+
+    fn is_refreshable(&self) -> bool {
+        self.is_refreshable
+    }
+
+    fn refreshable_append(&self) -> bool {
+        self.refreshable_append
     }
 
     fn is_delta(&self) -> bool {
@@ -1201,6 +1258,10 @@ impl BaseRelation for Relation {
             .with_is_delta(self.is_delta)
             .with_temporary(self.temporary)
             .with_table_format(self.table_format)
+            .with_can_exchange(self.can_exchange)
+            .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
+            .with_is_refreshable(self.is_refreshable)
+            .with_refreshable_append(self.refreshable_append)
             .validate()?;
         Ok(Arc::new(relation))
     }

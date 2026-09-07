@@ -1067,12 +1067,20 @@ fn clickhouse_get_relation(
     identifier: &str,
     token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
-    use crate::metadata::clickhouse::{build_get_relation_sql, relation_type_from_engine};
+    use crate::metadata::clickhouse::{
+        build_get_relation_sql, relation_type_from_engine, server_capabilities_over_connection,
+        with_catalog_state,
+    };
     use crate::record_batch::RecordBatchExt;
 
     // ClickHouse only has databases, not schemas — dbt `schema` maps to CH `database`.
     // dbt `database` is unused here.
     let sql = build_get_relation_sql(schema, identifier);
+
+    // Probe over the connection we already hold: the State-based entry would
+    // borrow a second thread-local connection and trip the nested-guard check.
+    let caps =
+        server_capabilities_over_connection(adapter.engine().as_ref(), ctx, conn, token.clone());
 
     let batch = adapter
         .engine()
@@ -1088,18 +1096,16 @@ fn clickhouse_get_relation(
             "Expected exactly one row for ClickHouse get_relation",
         ));
     }
-
-    let relation_type = Some(relation_type_from_engine(engines.value(0)));
-
-    let relation = do_create_relation(
+    let relation = Relation::new(
         adapter.adapter_type(),
-        database.to_string(),
-        schema.to_string(),
+        Some(database.to_string()),
+        Some(schema.to_string()),
         Some(identifier.to_string()),
-        relation_type,
-        adapter.quoting(),
-    )?;
-    Ok(Some(relation))
+    )
+    .with_relation_type(relation_type_from_engine(engines.value(0)))
+    .with_quoting(adapter.quoting());
+    let relation = with_catalog_state(relation, caps, &batch, 0)?;
+    Ok(Some(Box::new(relation) as Box<dyn BaseRelation>))
 }
 
 #[cfg(test)]
