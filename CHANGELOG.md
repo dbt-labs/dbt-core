@@ -61,6 +61,19 @@ Released September 02, 2026
 - [@tauhid621](https://github.com/tauhid621)
 - [@wizardxz](https://github.com/wizardxz) ([#16080](https://github.com/dbt-labs/dbt-core/issues/16080))
 
+## 2.0.0-dev.36
+
+Released September 07, 2026
+
+### Fixes
+
+- Respect full refresh when view_update_via_alter is enabled for Databricks views. ([#14359](https://github.com/dbt-labs/dbt-core/issues/14359))
+- Detect Databricks materialized view query changes and require full refresh when compiled SQL changes ([#16123](https://github.com/dbt-labs/dbt-core/issues/16123))
+- Skip Databricks get_relation_config tag and column-tag metadata queries when the model does not configure tags ([#16057](https://github.com/dbt-labs/dbt-core/issues/16057))
+
+### Contributors
+- [@sd-db](https://github.com/sd-db) ([#14359](https://github.com/dbt-labs/dbt-core/issues/14359), [#16123](https://github.com/dbt-labs/dbt-core/issues/16123), [#16057](https://github.com/dbt-labs/dbt-core/issues/16057))
+
 ## 2.0.0-beta.2
 
 Released August 18, 2026
