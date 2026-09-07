@@ -33,6 +33,7 @@
 //! [`spawn_blocking`]: crate::pool::spawn_blocking
 
 use std::marker::PhantomData;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use crate::context::current;
@@ -134,6 +135,19 @@ impl Handle {
     /// The runtime's blocking pool.
     pub(crate) fn blocking_spawner(&self) -> &Spawner {
         &self.inner.blocking_spawner
+    }
+
+    pub fn max_parallelism(&self) -> usize {
+        self.blocking_spawner().max_parallelism()
+    }
+
+    /// Change the maximum number of threads of the running pool.
+    ///
+    /// Threads that are already running are not stopped: lowering the cap only
+    /// prevents new threads from being spawned, so the pool converges to the
+    /// new cap as idle threads exit after the keep-alive timeout.
+    pub fn set_max_parallelism(&self, val: NonZeroUsize) {
+        self.blocking_spawner().set_max_parallelism(val);
     }
 
     /// Runs `func` on the blocking pool.
