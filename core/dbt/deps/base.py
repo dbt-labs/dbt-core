@@ -121,6 +121,9 @@ class PinnedPackage(BasePackage):
     def _install(self, project, renderer):
         metadata = self.fetch_metadata(project, renderer)
 
+        # Raises DependencyError if package_name resolves outside packages_install_path
+        self.get_installation_path(project, renderer)
+
         tar_name = f"{self.package}.{self.version}.tar.gz"
         tar_path = (Path(get_downloads_path()) / tar_name).resolve(strict=False)
         system.make_directory(str(tar_path.parent))

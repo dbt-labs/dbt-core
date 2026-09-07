@@ -1309,3 +1309,61 @@ class TestGetInstallationPathTraversal(unittest.TestCase):
             os.path.realpath(path),
             os.path.realpath("/tmp/proj/dbt_packages/my_package"),
         )
+
+
+class TestInstallPathTraversalHubPackage(unittest.TestCase):
+    """Regression: hub packages install via PinnedPackage._install, which builds
+    its untar destination from get_project_name directly instead of going
+    through get_installation_path. Assert _install also rejects a package
+    name that resolves outside packages_install_path, before it ever
+    downloads or untars anything."""
+
+    class FakeRegistryPinnedPackage(PinnedPackage):
+        def __init__(self, project_name):
+            super().__init__()
+            self._project_name = project_name
+            self.package = project_name
+            self.version = "1.0.0"
+
+        @property
+        def name(self):
+            return self._project_name
+
+        def source_type(self):
+            return "hub"
+
+        def get_version(self):
+            return self.version
+
+        def _fetch_metadata(self, project, renderer):
+            return SimpleNamespace(
+                name=self._project_name,
+                downloads=SimpleNamespace(tarball="http://example.com/package.tar.gz"),
+            )
+
+        def install(self, project, renderer):
+            self._install(project, renderer)
+
+        def nice_version_name(self):
+            return "1.0.0"
+
+        def to_dict(self):
+            return {}
+
+    def _project(self):
+        project = mock.Mock()
+        project.packages_install_path = "/tmp/proj/dbt_packages"
+        return project
+
+    @mock.patch("dbt.deps.base.get_downloads_path", return_value="/tmp/downloads")
+    @mock.patch("dbt_common.clients.system.make_directory")
+    @mock.patch("dbt_common.clients.system.download")
+    @mock.patch("dbt_common.clients.system.untar_package")
+    def test_traversal_name_is_rejected_before_download(
+        self, untar_package, download, make_directory, get_downloads_path
+    ):
+        pkg = self.FakeRegistryPinnedPackage("../../../../etc/cron.d/evil")
+        with self.assertRaises(dbt.exceptions.DependencyError):
+            pkg.install(self._project(), None)
+        download.assert_not_called()
+        untar_package.assert_not_called()
