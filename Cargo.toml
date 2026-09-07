@@ -105,12 +105,12 @@ resolver = "2"
 
 [workspace.package]
 authors = ["dbt Labs <info@getdbt.com>"]
-description = "Fusion: A fast dbt engine, SQL compiler, local development framework, and in-memory analytical database"
+description = "dbt OSS: A fast dbt engine, SQL compiler, local development framework, and in-memory analytical database"
 edition = "2024"
 homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "Apache-2.0"
-repository = "https://github.com/dbt-labs/dbt-core"
+repository = "https://github.com/dbt-labs/dbt-oss"
 version = "2.0.0-rc.1"
 
 [patch.crates-io]

@@ -364,8 +364,8 @@ jobs:
           echo "::notice title="New branch created": $title::$message"
 
       - name: "Bump dependencies via script"
-        # This bumps the dependency on dbt-core in the adapters
-        if: ${{ !contains(github.repository, 'dbt-core') }}
+        # This bumps the dependency on dbt-oss in the adapters
+        if: ${{ !contains(github.repository, 'dbt-oss') }}
         run: |
           echo ${{ github.repository }}
           echo "running update_dependencies script"
@@ -378,7 +378,7 @@ jobs:
 
       - name: "Bump env variable via script"
         # bumps the RELEASE_BRANCH variable in nightly-release.yml in adapters
-        if: ${{ !contains(github.repository, 'dbt-core') }}
+        if: ${{ !contains(github.repository, 'dbt-oss') }}
         run: |
           file="./.github/scripts/update_release_branch.sh"
           if test -f "$file"; then

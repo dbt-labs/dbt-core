@@ -8,7 +8,7 @@
 # a different release cadence and is not tracked by this automation.
 
 # **when?**
-# Whenever a v2 issue in dbt-labs/dbt-core is closed as completed.
+# Whenever a v2 issue in dbt-labs/dbt-oss is closed as completed.
 
 name: "Release Tracker: Awaiting Release"
 
