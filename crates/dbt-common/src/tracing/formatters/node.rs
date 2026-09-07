@@ -298,13 +298,64 @@ pub fn format_node_action(
         has_warn,
     );
 
-    // Right align action
+    // Right align action, so it shares a column with every other progress message.
     let action = right_align_static_action(action);
 
     if colorize {
         color.apply_to(action).to_string()
     } else {
         action
+    }
+}
+
+/// Builds the trailing progress field: dbt core's `N of M` execution counter and the
+/// elapsed time, e.g. `[5 of 56 in 14.15s]`.
+///
+/// This sits at the end of the line, so nothing downstream depends on its width and the
+/// parts are rendered at their natural size rather than padded. Returns `None` when there
+/// is nothing worth showing, so the caller can drop the brackets entirely instead of
+/// emitting an empty pair.
+///
+/// `elapsed` is `None` only for work that never ran, which the caller decides from the
+/// outcome. It deliberately is not inferred from a zero duration here: `duration_ms` has
+/// millisecond resolution, so a node that really did run can measure zero, and reading
+/// that as "never ran" would make the line change shape between runs.
+fn format_progress_field(
+    index: Option<u32>,
+    total: Option<u32>,
+    elapsed: Option<std::time::Duration>,
+) -> Option<String> {
+    // Grouped lines stand in for several nodes at once, and nodes outside the selection
+    // carry no counter, so both render the duration alone.
+    let counter = index
+        .zip(total)
+        .map(|(index, total)| format!("{index} of {total}"));
+
+    // Trimmed: the fixed width existed to align a mid-line column, which this no longer is.
+    // A measured zero is still a measurement, so it renders as a duration rather than the
+    // `-------` placeholder that stands for "nothing to time".
+    let elapsed = elapsed.map(|duration| {
+        if duration.is_zero() {
+            "0.00s".to_string()
+        } else {
+            format_duration_fixed_width(duration).trim().to_string()
+        }
+    });
+
+    match (counter, elapsed) {
+        (Some(counter), Some(elapsed)) => Some(format!("{counter} in {elapsed}")),
+        (Some(counter), None) => Some(counter),
+        (None, Some(elapsed)) => Some(elapsed),
+        (None, None) => None,
+    }
+}
+
+/// Appends the progress field to a rendered line, bracketed, or leaves the line untouched
+/// when there is no progress to report.
+fn with_progress_field(line: String, progress: Option<String>) -> String {
+    match progress {
+        Some(progress) => format!("{line} [{progress}]"),
+        None => line,
     }
 }
 
@@ -354,15 +405,17 @@ pub fn format_node_processed_end(
         return format_freshness_result(node, duration, colorize);
     }
 
-    // Force duration to 0 if skipped or if a cached test preserved a warning/error verdict.
-    let duration = if node_outcome == NodeOutcome::Skipped
+    // Skips, cache reuse, and cached tests that preserved a verdict never executed, so
+    // there is no elapsed time to report. Every other node reports one, including the ones
+    // whose work rounds down to zero milliseconds.
+    let elapsed = if node_outcome == NodeOutcome::Skipped
         || (node_outcome == NodeOutcome::Success
             && node.node_skip_reason() == NodeSkipReason::Cached)
         || (node_outcome == NodeOutcome::Success && is_statically_checked_test(node.into()))
     {
-        std::time::Duration::ZERO
+        None
     } else {
-        duration
+        Some(duration)
     };
 
     // Prepare qualifier (schema for all nodes except sources) and alias
@@ -422,7 +475,7 @@ pub fn format_node_processed_end(
     let node_type_formatted = format_node_type_fixed_width(node_type.as_static_ref(), colorize);
     let materialization_suffix =
         format_materialization_suffix(materialization_str.as_deref(), desc.as_deref());
-    let duration_formatted = format_duration_fixed_width(duration);
+    let progress_formatted = format_progress_field(node.node_index, node.node_count_total, elapsed);
     let action_formatted = format_node_action(
         node_outcome,
         node.node_skip_reason.map(|_| node.node_skip_reason()),
@@ -432,13 +485,12 @@ pub fn format_node_processed_end(
         colorize,
     );
 
-    format!(
-        "{} [{}] {} {}{}",
-        action_formatted,
-        duration_formatted,
-        node_type_formatted,
-        qualifier_alias,
-        materialization_suffix
+    with_progress_field(
+        format!(
+            "{} {} {}{}",
+            action_formatted, node_type_formatted, qualifier_alias, materialization_suffix
+        ),
+        progress_formatted,
     )
 }
 
@@ -574,6 +626,7 @@ pub fn format_skipped_test_group(
     node_names: &[String],
     seen_test: bool,
     seen_unit_test: bool,
+    node_count_total: Option<u32>,
     colorize: bool,
 ) -> String {
     // Format the message
@@ -618,7 +671,9 @@ pub fn format_skipped_test_group(
 
     // Format components - skipped nodes have 0 duration
     let resource_type_formatted = format_node_type_fixed_width(resource_type, colorize);
-    let duration_formatted = format_duration_fixed_width(std::time::Duration::ZERO);
+    // One line standing in for several skipped nodes, so there is no single index to show,
+    // and no execution to time either: this resolves to no trailing field at all.
+    let duration_formatted = format_progress_field(None, node_count_total, None);
     let action_formatted = format_node_action(
         NodeOutcome::Skipped,
         Some(NodeSkipReason::Upstream),
@@ -628,9 +683,12 @@ pub fn format_skipped_test_group(
         colorize,
     );
 
-    format!(
-        "{} [{}] {} {}",
-        action_formatted, duration_formatted, resource_type_formatted, message
+    with_progress_field(
+        format!(
+            "{} {} {}",
+            action_formatted, resource_type_formatted, message
+        ),
+        duration_formatted,
     )
 }
 
@@ -644,6 +702,7 @@ pub fn format_aggregated_test_group_header(
     member_count: usize,
     worst_outcome: TestOutcome,
     duration: std::time::Duration,
+    node_count_total: Option<u32>,
     colorize: bool,
 ) -> String {
     // unique_id is `<type>.<package>.<name>[.v<version>]`; keep the version suffix.
@@ -658,20 +717,24 @@ pub fn format_aggregated_test_group_header(
         false, // has_warn - the group's verdict comes from its members
         colorize,
     );
-    let duration_formatted = format_duration_fixed_width(duration);
+    // The header covers every member of the group, so it has no single index of its own;
+    // it still reports the query's elapsed time.
+    let duration_formatted = format_progress_field(None, node_count_total, Some(duration));
     debug_assert_eq!(
-        duration_formatted.len(),
+        format_duration_fixed_width(duration).len(),
         DURATION_WIDTH,
         "duration must render at its declared fixed width"
     );
 
-    format!(
-        "{} [{}] {} {}{}",
-        action_formatted,
+    with_progress_field(
+        format!(
+            "{} {} {}{}",
+            action_formatted,
+            format_node_type_fixed_width(NodeType::Test.as_static_ref(), colorize),
+            format_qualifier_alias("", &label, colorize),
+            format_materialization_suffix(None, Some(&format!("{member_count} batched")))
+        ),
         duration_formatted,
-        format_node_type_fixed_width(NodeType::Test.as_static_ref(), colorize),
-        format_qualifier_alias("", &label, colorize),
-        format_materialization_suffix(None, Some(&format!("{member_count} batched")))
     )
 }
 
@@ -795,13 +858,12 @@ pub fn format_freshness_result(
         colorize,
     );
 
-    format!(
-        "{} [{}] {} {}{}",
-        action_formatted,
-        format_duration_fixed_width(duration),
-        node_type_formatted,
-        qualifier_alias,
-        description
+    with_progress_field(
+        format!(
+            "{} {} {}{}",
+            action_formatted, node_type_formatted, qualifier_alias, description
+        ),
+        format_progress_field(node.node_index, node.node_count_total, Some(duration)),
     )
 }
 
@@ -974,7 +1036,8 @@ mod tests {
         );
 
         assert!(output.contains("Warned"));
-        assert!(output.contains("[-------]"));
+        // Cache reuse has nothing to time, so no trailing field is emitted.
+        assert!(!output.contains('['), "{output}");
         assert!(output.contains("accepted_values_orders_is_today_order__True"));
     }
 
@@ -987,7 +1050,7 @@ mod tests {
         );
 
         assert!(output.contains("Passed"));
-        assert!(output.contains("[-------]"));
+        assert!(!output.contains('['), "{output}");
         assert!(output.contains("Statically checked"));
     }
 
@@ -1000,9 +1063,36 @@ mod tests {
         );
 
         assert!(output.contains("Passed"));
-        assert!(!output.contains("[-------]"));
+        assert!(output.contains("[0.25s]"), "{output}");
         assert!(!output.contains("Statically checked"));
         assert!(!output.contains("Batched"));
+    }
+
+    /// `duration_ms` counts whole milliseconds, so a node that really did run can measure
+    /// zero. Treating that as "nothing to time" dropped the elapsed part, and a node
+    /// sitting on the 0/1ms boundary rendered a different line from one run to the next.
+    #[test]
+    fn executed_node_measuring_zero_still_reports_elapsed() {
+        let mut node = test_processed(TestOutcome::Passed, 0, None, None);
+        node.node_index = Some(7);
+        node.node_count_total = Some(10);
+
+        let output = format_node_processed_end(&node, std::time::Duration::ZERO, false);
+
+        assert!(output.ends_with("[7 of 10 in 0.00s]"), "{output}");
+    }
+
+    /// The counterpart: work that never ran reports the counter alone, however long the
+    /// span it hung off happened to be.
+    #[test]
+    fn cache_reused_node_reports_the_counter_alone() {
+        let mut node = cached_warned_test_processed();
+        node.node_index = Some(7);
+        node.node_count_total = Some(10);
+
+        let output = format_node_processed_end(&node, std::time::Duration::from_millis(250), false);
+
+        assert!(output.ends_with("[7 of 10]"), "{output}");
     }
 
     // `format_node_processed_end` feeds `logs/dbt.log` and `--log-format json`, which stay
@@ -1018,7 +1108,7 @@ mod tests {
         assert!(output.contains("Passed"));
         assert!(output.contains("(Batched)"));
         // An aggregated group does issue a query, so the duration must survive.
-        assert!(!output.contains("[-------]"));
+        assert!(output.contains("[0.25s]"), "{output}");
     }
 
     #[test]
@@ -1046,6 +1136,133 @@ mod tests {
         assert!(!output.contains("Batched"));
     }
 
+    fn indexed_test_processed(index: Option<u32>, total: Option<u32>) -> NodeProcessed {
+        let mut node = test_processed(TestOutcome::Passed, 0, None, None);
+        node.node_index = index;
+        node.node_count_total = total;
+        node
+    }
+
+    /// Display column of `pat` within `line`, counting characters rather than bytes.
+    fn column_of(line: &str, pat: &str) -> usize {
+        let byte = line.find(pat).unwrap_or_else(|| panic!("{pat} in {line}"));
+        line[..byte].chars().count()
+    }
+
+    #[test]
+    fn execution_index_renders_as_a_trailing_field() {
+        let output = format_node_processed_end(
+            &indexed_test_processed(Some(1), Some(9)),
+            std::time::Duration::from_millis(340),
+            false,
+        );
+
+        assert!(output.ends_with("[1 of 9 in 0.34s]"), "{output}");
+    }
+
+    #[test]
+    fn execution_index_does_not_disturb_the_left_columns() {
+        // The field trails the line, so the index's width cannot push the columns before it
+        // around, and the counter needs no padding of its own.
+        let narrow = format_node_processed_end(
+            &indexed_test_processed(Some(1), Some(53)),
+            std::time::Duration::from_millis(340),
+            false,
+        );
+        let wide = format_node_processed_end(
+            &indexed_test_processed(Some(53), Some(53)),
+            std::time::Duration::from_millis(340),
+            false,
+        );
+
+        assert!(narrow.ends_with("[1 of 53 in 0.34s]"), "{narrow}");
+        assert!(wide.ends_with("[53 of 53 in 0.34s]"), "{wide}");
+        assert_eq!(column_of(&narrow, "test "), column_of(&wide, "test "));
+    }
+
+    #[test]
+    fn action_is_right_aligned_to_a_fixed_column() {
+        // The action shares its column with every other progress message ("Loading",
+        // "Parsing", ...), so it is right aligned and the node type column stays put
+        // whatever the length of the action label.
+        let passed = format_node_processed_end(
+            &indexed_test_processed(Some(1), Some(9)),
+            std::time::Duration::from_millis(340),
+            false,
+        );
+        let mut skipped_node = indexed_test_processed(Some(2), Some(9));
+        skipped_node.set_node_outcome(NodeOutcome::Skipped);
+        skipped_node.set_node_skip_reason(NodeSkipReason::Upstream);
+        let skipped =
+            format_node_processed_end(&skipped_node, std::time::Duration::from_millis(340), false);
+
+        assert!(passed.starts_with("    Passed "), "{passed}");
+        assert!(skipped.starts_with("   Skipped "), "{skipped}");
+        assert_eq!(column_of(&passed, "test "), column_of(&skipped, "test "));
+    }
+
+    #[test]
+    fn execution_index_drops_the_elapsed_time_when_there_was_none() {
+        // Skips and cache reuse have nothing to time, so the counter stands alone rather
+        // than being paired with a placeholder duration. The span they hang off still has
+        // a length, so the decision comes from the outcome, never from the measurement.
+        let mut node = indexed_test_processed(Some(4), Some(53));
+        node.set_node_outcome(NodeOutcome::Skipped);
+        node.set_node_skip_reason(NodeSkipReason::Upstream);
+
+        let output = format_node_processed_end(&node, std::time::Duration::from_millis(340), false);
+
+        assert!(output.ends_with("[4 of 53]"), "{output}");
+        assert!(!output.contains(" in "), "{output}");
+    }
+
+    #[test]
+    fn missing_execution_index_falls_back_to_the_elapsed_time_alone() {
+        let output = format_node_processed_end(
+            &indexed_test_processed(None, None),
+            std::time::Duration::from_millis(340),
+            false,
+        );
+
+        assert!(output.ends_with("[0.34s]"), "{output}");
+        assert!(!output.contains(" of "), "{output}");
+    }
+
+    #[test]
+    fn no_index_and_no_elapsed_time_drops_the_field_entirely() {
+        let mut node = indexed_test_processed(None, None);
+        node.set_node_outcome(NodeOutcome::Skipped);
+        node.set_node_skip_reason(NodeSkipReason::Upstream);
+
+        let output = format_node_processed_end(&node, std::time::Duration::from_millis(340), false);
+
+        assert!(!output.contains('['), "{output}");
+    }
+
+    #[test]
+    fn grouped_lines_report_elapsed_time_without_an_index() {
+        // A grouped line covers several nodes, so it has no single index, but it still
+        // shares the left columns with the indexed lines around it.
+        let grouped = format_aggregated_test_group_header(
+            "unique",
+            "model.my_pkg.unproven_unique",
+            2,
+            TestOutcome::Passed,
+            std::time::Duration::from_millis(340),
+            Some(53),
+            false,
+        );
+        let indexed = format_node_processed_end(
+            &indexed_test_processed(Some(7), Some(53)),
+            std::time::Duration::from_millis(340),
+            false,
+        );
+
+        assert!(grouped.ends_with("[0.34s]"), "{grouped}");
+        assert!(!grouped.contains(" of "), "{grouped}");
+        assert_eq!(column_of(&grouped, "test "), column_of(&indexed, "test "));
+    }
+
     #[test]
     fn aggregated_group_header_formats_worst_outcome_and_label() {
         let output = format_aggregated_test_group_header(
@@ -1054,6 +1271,7 @@ mod tests {
             2,
             TestOutcome::Failed,
             std::time::Duration::from_millis(250),
+            None,
             false,
         );
 
@@ -1070,6 +1288,7 @@ mod tests {
             2,
             TestOutcome::Passed,
             std::time::Duration::from_millis(250),
+            None,
             false,
         );
 
@@ -1085,6 +1304,7 @@ mod tests {
             2,
             TestOutcome::Passed,
             std::time::Duration::from_millis(250),
+            None,
             false,
         );
 
@@ -1100,6 +1320,7 @@ mod tests {
             2,
             TestOutcome::Warned,
             std::time::Duration::from_millis(250),
+            None,
             false,
         );
 
@@ -1137,12 +1358,6 @@ mod tests {
 
     #[test]
     fn aggregated_group_member_branches_from_a_fixed_column() {
-        // Display columns, not byte offsets: the connector glyphs are 3 bytes per column.
-        let column_of = |line: &str, pat: &str| {
-            let byte = line.find(pat).unwrap_or_else(|| panic!("{pat} in {line}"));
-            line[..byte].chars().count()
-        };
-
         let passed = test_processed(TestOutcome::Passed, 0, None, Some(BATCH_UNIQUE_ID));
         // A cancelled member renders the longest reachable action label ("Cancelled"),
         // the case that legitimately shifts its own node type column.
@@ -1160,6 +1375,7 @@ mod tests {
             2,
             TestOutcome::Failed,
             std::time::Duration::from_millis(250),
+            None,
             false,
         );
         for node in [&passed, &cancelled] {

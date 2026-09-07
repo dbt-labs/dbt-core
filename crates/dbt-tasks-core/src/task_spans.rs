@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicU8, AtomicU64, Ordering},
+        atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering},
     },
 };
 
@@ -18,6 +18,7 @@ use dbt_common::{
     },
 };
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_telemetry::{
     ExecutionPhase, NodeCacheDetail, NodeCacheReason, NodeErrorType, NodeEvaluated, NodeOutcome,
     NodeOutcomeDetail, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
@@ -35,6 +36,47 @@ use crate::{
     task::{AggregatedNodeGroup, TP, Task},
     visitor::SkipReason,
 };
+
+/// Hands out dbt core style `[N of M]` execution indices for `NodeProcessed` spans.
+///
+/// `next_index` is bumped once per node, when that node's span is built. The span manager
+/// builds each parent span lazily and exactly once, as the node's first task opens, so the
+/// index ends up reflecting the order in which nodes *begin* processing -- the same thing
+/// dbt core's dequeue counter measures.
+///
+/// `total` is accumulated while spans are registered and read back lazily by the builders.
+/// Registration completes before any task runs, so builders always observe the final value.
+#[derive(Default)]
+pub struct NodeIndexAllocator {
+    next_index: AtomicU32,
+    total: AtomicU32,
+}
+
+impl NodeIndexAllocator {
+    /// Counts one more node that will be handed an index.
+    fn add_node(&self) {
+        self.total.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Claims the next 1-based index, paired with the total it should be shown against.
+    fn claim(&self) -> (u32, u32) {
+        (
+            self.next_index.fetch_add(1, Ordering::AcqRel) + 1,
+            self.total.load(Ordering::Acquire),
+        )
+    }
+}
+
+/// Whether a node takes part in the `[N of M]` numbering.
+///
+/// dbt core numbers every selected node except ephemeral models: those print no progress
+/// line and are left out of the `M` denominator (`num_nodes` in `GraphRunnableTask`). Fusion
+/// pulls ephemeral upstreams into the selection to build them, and reports them as no-op
+/// skips that the TUI suppresses, so they have to be excluded here for the largest index to
+/// match the total.
+fn takes_execution_index(node: &dyn InternalDbtNodeAttributes, in_selection: bool) -> bool {
+    in_selection && node.materialized() != DbtMaterialization::Ephemeral
+}
 
 /// Helper functions for generating span keys used in registration and task requests
 /// Returns the span key for a PhaseExecuted span
@@ -537,19 +579,30 @@ fn create_node_processed_builder_fn(
     initial_phase: ExecutionPhase,
     task_count_total: u8,
     in_selection: bool,
+    index_allocator: Arc<NodeIndexAllocator>,
+    takes_index: bool,
 ) -> impl FnOnce() -> ParentSpanBuilder<FsResult<NodeStatus>, SkipReason> {
     let node_processed_finished_counter = Arc::new(AtomicU8::new(0));
     let node_processed_finished_counter_clone = node_processed_finished_counter.clone();
 
     move || {
+        let mut event = node.get_node_processed_event(
+            Some(initial_phase),
+            in_dir.as_path(),
+            out_dir.as_path(),
+            in_selection,
+        );
+
+        // Claimed here, rather than at registration, so the number reflects the order nodes
+        // start processing instead of the order they happen to sit in the schedule.
+        if takes_index {
+            let (index, total) = index_allocator.claim();
+            event.node_index = Some(index);
+            event.node_count_total = Some(total);
+        }
+
         ParentSpanBuilder::new(
-            node.get_node_processed_event(
-                Some(initial_phase),
-                in_dir.as_path(),
-                out_dir.as_path(),
-                in_selection,
-            )
-            .into(),
+            event.into(),
             // Update dbt core code, status should auto-infer from attributes
             Some(Box::new(|this_span| {
                 update_span_attrs(this_span, |ev: &mut NodeProcessed| {
@@ -686,6 +739,10 @@ pub fn populate_span_manager(
     // closes on can never disagree with the tree that actually gets built.
     let mut all_processing_nodes_child_count = 0u64;
 
+    // Shared by every NodeProcessed builder: the loop below tallies the denominator while
+    // registering, and each builder claims its own index once execution reaches that node.
+    let index_allocator = Arc::new(NodeIndexAllocator::default());
+
     // Register TuiAggregatedTestGroup spans (one per aggregated node group)
     for (group_unique_id, (group, member_ids)) in aggregated_node_groups {
         all_processing_nodes_child_count += 1;
@@ -717,6 +774,11 @@ pub fn populate_span_manager(
 
                 let in_selection = selected_nodes.contains(&unique_id);
 
+                let takes_index = takes_execution_index(node.as_ref(), in_selection);
+                if takes_index {
+                    index_allocator.add_node();
+                }
+
                 // Members of an aggregated group hang off their group span; every other
                 // node hangs off TuiAllProcessingNodesGroup directly.
                 let parent_span_key = match node_id_to_group.get(&unique_id) {
@@ -737,6 +799,8 @@ pub fn populate_span_manager(
                         ExecutionPhase::Unspecified,
                         task_count_total,
                         in_selection,
+                        index_allocator.clone(),
+                        takes_index,
                     )),
                 )?;
             }
