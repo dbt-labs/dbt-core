@@ -1,0 +1,7 @@
+kind: Breaking Changes
+body: 'The OSS CLI now brands itself dbt-oss: ''dbt --version'' prints ''dbt-oss <version>'' instead of ''dbt-core <version>''. The machine-readable ''dbt --format json --version'' output now uses the ''oss'' key instead of ''core''.'
+time: 2026-09-07T16:42:50.605943+05:30
+custom:
+    author: ""
+    issue: ""
+    project: dbt-core

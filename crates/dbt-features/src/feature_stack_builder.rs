@@ -85,7 +85,7 @@ pub struct FeatureStackBuilder {
 impl FeatureStackBuilder {
     pub fn new(tracing: TracingFeature) -> Self {
         Self {
-            name: "dbt-core",
+            name: "dbt-oss",
             distribution: "dbt-oss",
             tracing,
         }

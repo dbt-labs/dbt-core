@@ -6,7 +6,7 @@
   </p>
   <p>
     <a href="./API-CONTRACTS.md">Contracts &amp; decisions</a> ·
-    <a href="https://github.com/dbt-labs/dbt-core">dbt Core repo</a> ·
+    <a href="https://github.com/dbt-labs/dbt-oss">dbt OSS repo</a> ·
     <a href="https://docs.getdbt.com/docs/fusion/about-fusion">About Fusion</a> ·
     <a href="https://docs.getdbt.com">Official dbt docs</a>
   </p>
@@ -154,7 +154,7 @@ DBT_VERSION=2.0.0-beta.2 DBT_TARGET_PATH=/abs/path/to/project/target docker comp
 
 ### 🐋 Option C: Docker
 
-A `Dockerfile` is included. It downloads a released dbt binary from this repo's [GitHub Releases](https://github.com/dbt-labs/dbt-core/releases) and verifies it against the release's published `SHA256SUMS`, so the build is quick and needs no cargo toolchain. It is a multi-stage BuildKit build, produces `linux/amd64` and `linux/arm64`, and runs as an unprivileged user.
+A `Dockerfile` is included. It downloads a released dbt binary from this repo's [GitHub Releases](https://github.com/dbt-labs/dbt-oss/releases) and verifies it against the release's published `SHA256SUMS`, so the build is quick and needs no cargo toolchain. It is a multi-stage BuildKit build, produces `linux/amd64` and `linux/arm64`, and runs as an unprivileged user.
 
 Nothing is copied out of the build context, so the context is this crate's directory and the command is the same whether you run it from the repo root or from `crates/dbt-docs-server/`:
 
@@ -243,7 +243,7 @@ side: `cargo build` uses the committed bundle and never invokes `pnpm`.
 
 ## 🤝 Contributing
 
-Development happens in the [`dbt-labs/dbt-core`](https://github.com/dbt-labs/dbt-core) monorepo, under `crates/dbt-docs-server`.
+Development happens in the [`dbt-labs/dbt-oss`](https://github.com/dbt-labs/dbt-oss) monorepo, under `crates/dbt-docs-server`.
 
 ## 📄 License
 

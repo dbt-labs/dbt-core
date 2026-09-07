@@ -63,7 +63,7 @@ esac
 if [ "$DBT_VERSION" = latest ]; then
   version=$(
     curl -fsSL -H 'Accept: application/vnd.github+json' \
-      'https://api.github.com/repos/dbt-labs/dbt-core/releases?per_page=100' \
+      'https://api.github.com/repos/dbt-labs/dbt-oss/releases?per_page=100' \
       | jq -r --arg triple "$triple" '
           [ .[]
             | select(.draft == false)
@@ -84,12 +84,12 @@ else
 fi
 
 base="dbt-core-${version}-${triple}"
-url="https://github.com/dbt-labs/dbt-core/releases/download/v${version}"
+url="https://github.com/dbt-labs/dbt-oss/releases/download/v${version}"
 
 if ! curl -fsSL -o "${base}.tar.gz" "${url}/${base}.tar.gz"; then
   echo "could not download ${base}.tar.gz from ${url}" >&2
   echo "check that this version exists and ships a ${triple} binary:" >&2
-  echo "  https://github.com/dbt-labs/dbt-core/releases" >&2
+  echo "  https://github.com/dbt-labs/dbt-oss/releases" >&2
   exit 1
 fi
 curl -fsSL -o SHA256SUMS "${url}/SHA256SUMS"
@@ -118,7 +118,7 @@ FROM debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="dbt-docs-server" \
       org.opencontainers.image.description="Self-hosted dbt docs v2 server (dbt docs serve)." \
-      org.opencontainers.image.source="https://github.com/dbt-labs/dbt-core" \
+      org.opencontainers.image.source="https://github.com/dbt-labs/dbt-oss" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 # ca-certificates and libstdc++6 are both for the ADBC DuckDB driver: it is

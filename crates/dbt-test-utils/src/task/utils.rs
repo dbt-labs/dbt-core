@@ -285,9 +285,9 @@ pub fn maybe_normalize_time(output: String) -> String {
 }
 
 /// Strip the version number out of the startup version banner, whose brand name
-/// varies per binary (`dbt-fusion`, `dbt-core`, `dbt-repl`).
+/// varies per binary (`dbt-fusion`, `dbt-oss`, `dbt-core`, `dbt-repl`).
 pub fn normalize_version(output: String) -> String {
-    const BRANDS: [&str; 3] = ["dbt-fusion", "dbt-core", "dbt-repl"];
+    const BRANDS: [&str; 4] = ["dbt-fusion", "dbt-oss", "dbt-core", "dbt-repl"];
 
     BRANDS.iter().fold(output, |acc, brand| {
         acc.replace(

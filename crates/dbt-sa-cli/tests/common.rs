@@ -23,7 +23,7 @@ fn make_fs_command_fn() -> Arc<CommandFn> {
     });
 
     let version = env!("CARGO_PKG_VERSION");
-    let parser = DefaultCliParserFactory.create("dbt-core", version);
+    let parser = DefaultCliParserFactory.create("dbt-oss", version);
     Arc::new(
         move |cmd_vec, project_dir, target_dir, stdout, stderr, tracing_handle| {
             exec_fs(

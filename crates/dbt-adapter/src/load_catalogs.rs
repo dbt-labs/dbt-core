@@ -10,7 +10,7 @@ use dbt_yaml as yml;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-const CATALOGS_V2_DISCUSSION_URL: &str = "https://github.com/dbt-labs/dbt-core/discussions/12723";
+const CATALOGS_V2_DISCUSSION_URL: &str = "https://github.com/dbt-labs/dbt-oss/discussions/12723";
 
 static CATALOGS: RwLock<Option<Arc<DbtCatalogs>>> = RwLock::new(None);
 static USE_CATALOGS_V2: RwLock<bool> = RwLock::new(false);

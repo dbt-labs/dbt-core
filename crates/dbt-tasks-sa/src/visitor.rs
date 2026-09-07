@@ -352,7 +352,7 @@ fn task_graph_cycle_error(
     Box::new(FsError::new(
         ErrorCode::Unexpected,
         format!(
-            "Internal error: task graph has cycles. Node participating in the cycle: {cycle_node_unique_id}.\nPlease report a bug at: https://github.com/dbt-labs/dbt-fusion/issues"
+            "Internal error: task graph has cycles. Node participating in the cycle: {cycle_node_unique_id}.\nPlease report a bug at: https://github.com/dbt-labs/dbt-oss/issues"
         ),
     ))
 }
@@ -755,7 +755,7 @@ async fn visit(
         // Hard fail if there are unprocessed tasks
         return Err(fs_err!(
             ErrorCode::Unexpected,
-            "Internal error: {count} tasks were not processed.\nPlease report a bug at: https://github.com/dbt-labs/dbt-fusion/issues"
+            "Internal error: {count} tasks were not processed.\nPlease report a bug at: https://github.com/dbt-labs/dbt-oss/issues"
         ));
     }
 

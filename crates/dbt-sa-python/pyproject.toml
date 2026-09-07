@@ -3,13 +3,13 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "dbt-core"
+name = "dbt-oss"
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = ["mashumaro[msgpack]>=3.14"]
 
 # The `dbt` CLI is served from this wheel's compiled extension (dbt._core), so
-# `pip install dbt-core` provides both the command line and the programmatic API.
+# `pip install dbt-oss` provides both the command line and the programmatic API.
 [project.scripts]
 dbt = "dbt.cli.main:cli"
 

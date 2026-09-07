@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Renamed the repository to dbt-labs/dbt-oss and promoted dbt-oss to the primary PyPI distribution; dbt-core continues to be published as a legacy alias at the same version.
+time: 2026-09-07T16:42:50.630595+05:30
+custom:
+    author: ""
+    issue: ""
+    project: dbt-core

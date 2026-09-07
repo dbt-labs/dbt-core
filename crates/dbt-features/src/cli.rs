@@ -663,7 +663,7 @@ mod tests {
     #[test]
     fn hidden_self_management_commands_are_absent_from_help_but_parseable() {
         let version = "2.x";
-        let parser = CliParser::new("dbt-core", version, Box::new(OSSExtensionCommandParser));
+        let parser = CliParser::new("dbt-oss", version, Box::new(OSSExtensionCommandParser));
 
         // Hidden from help, but unaffected commands remain.
         let help = system_help(&parser);
@@ -685,7 +685,7 @@ mod tests {
 
     #[test]
     fn system_is_not_a_project_command() {
-        let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
+        let parser = CliParser::new("dbt-oss", "2.x", Box::new(OSSExtensionCommandParser));
         let cli = parser.try_parse_from(["dbt", "system", "update"]).unwrap();
 
         let oss_ext_cmd = cli.extension_command::<OSSExtensionCommand>().unwrap();
@@ -704,7 +704,7 @@ mod tests {
 
     #[test]
     fn distribution_stub_commands_are_visible_in_help_and_parseable() {
-        let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
+        let parser = CliParser::new("dbt-oss", "2.x", Box::new(OSSExtensionCommandParser));
 
         let help = root_help(&parser);
         assert!(help.contains("lint"), "got:\n{help}");
@@ -721,7 +721,7 @@ mod tests {
 
     #[test]
     fn distribution_stub_commands_are_not_project_commands() {
-        let parser = CliParser::new("dbt-core", "2.x", Box::new(OSSExtensionCommandParser));
+        let parser = CliParser::new("dbt-oss", "2.x", Box::new(OSSExtensionCommandParser));
 
         let cli = parser.try_parse_from(["dbt", "lint"]).unwrap();
         assert!(
