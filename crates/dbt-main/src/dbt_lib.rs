@@ -2038,13 +2038,13 @@ impl<'a> AllPhasesExecutor<'a> {
                             None,
                         ) {
                             emit_warn_log_message(
-                                ErrorCode::Generic,
+                                ErrorCode::IndexWriteFailed,
                                 format!("dbt-index: save_artifact_meta: {e}"),
                             );
                         }
                     }
                     Err(e) => emit_warn_log_message(
-                        ErrorCode::Generic,
+                        ErrorCode::IndexWriteFailed,
                         format!("dbt-index: write-index: {e}"),
                     ),
                 }
@@ -2089,7 +2089,7 @@ impl<'a> AllPhasesExecutor<'a> {
                 };
                 if let Err(e) = write_info_schema(&metadata_dir, &info_schema_dir, &staging_dir) {
                     emit_warn_log_message(
-                        ErrorCode::Generic,
+                        ErrorCode::InfoSchemaWriteFailed,
                         format!("dbt: generate-info-schema: {e}"),
                     );
                 }
