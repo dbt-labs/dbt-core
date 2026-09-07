@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 326] = [
+); 330] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -325,6 +325,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "7ba6156458599b35f6a1c5a2ddbc4cd62036c1d2e46abad702bb950478697472",
     ),
     (
+        ("clickhouse", "apple-darwin", "aarch64", "0.1.1"),
+        "f32488649f24e01dc5b1cb5a724ea50950b4e0b59520b3071ebd6439153e2610",
+    ),
+    (
         ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.0"),
         "66050b3e1e945cdc9a8c6980e99396aea0592daf37d7e3d28f0ae4eeec2c8f2d",
     ),
@@ -335,6 +339,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.0-alpha.2"),
         "81cc15fea37bdf211f97be1eafd09d364d1772396a067f314ffbf01a943afec7",
+    ),
+    (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "aarch64", "0.1.1"),
+        "509cf895f7ae0c87e70118417798dcb2ef2568eb37293ad7a271aa503bd86b30",
     ),
     (
         ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.0"),
@@ -349,6 +357,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "d548d9e1e3511553f2e89fe66614e8cb4d69012f194491b869d31cbdbf19343f",
     ),
     (
+        ("clickhouse", "manylinux_2_17-linux-gnu", "x86_64", "0.1.1"),
+        "4d0d8fb910fd0b792b179b307ab53e3ede3bc051dcf97ecf8c51c04ff8f31bf7",
+    ),
+    (
         ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.0"),
         "1f92179cc7f154de97edace0c5f1bad016f3dbd4b4b0c4a037401f84114309a7",
     ),
@@ -359,6 +371,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.0-alpha.2"),
         "80a8eeabbb1a2913efc423c1bfddcd99bc5acffc19422181a9f7e8ddec54ed9b",
+    ),
+    (
+        ("clickhouse", "pc-windows-msvc", "x86_64", "0.1.1"),
+        "d47397683f6eb486d809d6f29df47e3d3fbbd58d3a377dfba32665bedc353bb1",
     ),
     (
         ("databricks", "apple-darwin", "aarch64", "0.21.0+dbt0.21.6"),
