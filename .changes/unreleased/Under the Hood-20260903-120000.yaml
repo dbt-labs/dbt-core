@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: Allow pinning the passive OAuth resolver to a dbt platform account so a session
+  cache holding several accounts resolves the configured one
+time: 2026-09-03T12:00:00.000000-07:00
+custom:
+    Author: izeigerman
+    Issue: ""

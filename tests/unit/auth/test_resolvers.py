@@ -228,6 +228,57 @@ class TestOAuthPassiveResolver:
             with pytest.raises(RefreshFailed):
                 OAuthPassiveResolver("test_client", cache_path=p).resolve()
 
+    def test_account_id_selects_matching_session(self, tmp_path):
+        p = tmp_path / "oauth_sessions.json"
+        upsert_session(_make_session(account_id=1), p)
+        upsert_session(_make_session(account_id=2, access_token="tok_b"), p)
+
+        cred = OAuthPassiveResolver("test_client", cache_path=p, account_id=2).resolve()
+        assert cred.token == "tok_b"
+        assert cred.account_id == 2
+
+    def test_account_id_without_matching_session_raises_not_authenticated(self, tmp_path):
+        p = tmp_path / "oauth_sessions.json"
+        upsert_session(_make_session(), p)
+
+        with pytest.raises(NotAuthenticated):
+            OAuthPassiveResolver("test_client", cache_path=p, account_id=999).resolve()
+
+    def test_account_id_refreshes_only_the_matching_accounts_session(self, tmp_path):
+        # Both sessions are expired and refreshable. Unpinned, the first one wins
+        # and the other account's one-time-use refresh token gets spent.
+        p = tmp_path / "oauth_sessions.json"
+        upsert_session(
+            _make_session(
+                account_id=1, expires_at=time.time() - 3600, refresh_token="other_refresh"
+            ),
+            p,
+        )
+        upsert_session(
+            _make_session(
+                account_id=2, expires_at=time.time() - 3600, refresh_token="wanted_refresh"
+            ),
+            p,
+        )
+
+        new_jwt = _make_fake_jwt(account_id=2)
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.ok = True
+        mock_response.json.return_value = {
+            "access_token": new_jwt,
+            "scope": "account:read",
+            "expires_in": 3600,
+        }
+
+        with mock.patch(
+            "dbt.auth.resolvers.requests.post", return_value=mock_response
+        ) as mock_post:
+            cred = OAuthPassiveResolver("test_client", cache_path=p, account_id=2).resolve()
+
+        assert cred.account_id == 2
+        assert mock_post.call_args[1]["data"]["refresh_token"] == "wanted_refresh"
+
 
 class TestCloudYamlResolver:
     def test_happy_path_service_token(self, tmp_path):
