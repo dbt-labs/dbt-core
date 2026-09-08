@@ -1,21 +1,16 @@
-ARG py_version=3.11.2
+ARG py_version=3.11.16
 
-FROM python:$py_version-slim-bullseye AS base
+FROM python:$py_version-slim-bookworm AS base
 
 RUN apt-get update \
-  # bullseye-security is past standard support and its InRelease metadata
-  # periodically ages out past its Valid-Until window without being refreshed,
-  # intermittently hard-failing apt-get update; tolerate that staleness here
-  # (signature verification is unaffected)
-  -o Acquire::Check-Valid-Until=false \
   # Install version-pinned packages for reproducible builds
   && apt-get install -y --no-install-recommends \
     build-essential=12.9 \
-    ca-certificates=20250419~deb12u1~deb11u1 \
-    libpq-dev=13.23-0+deb11u4 \
+    ca-certificates=20250419~deb12u1 \
+    libpq-dev=15.19-0+deb12u1 \
     make=4.3-4.1 \
-    openssh-client=1:8.4p1-5+deb11u7 \
-    software-properties-common=0.96.20.2-2.1 \
+    openssh-client=1:9.2p1-2+deb12u10 \
+    software-properties-common=0.99.30-4.1~deb12u1 \
   # Prevent dist-upgrade from changing pinned package versions
   && apt-mark hold \
     build-essential \
@@ -26,14 +21,17 @@ RUN apt-get update \
     software-properties-common \
   # Apply security updates to non-pinned base image packages
   && apt-get dist-upgrade -y \
-  # Install temporary dependencies for building git from source (removed later)
+  # Install temporary dependencies for building git from source (removed later).
+  # libssl-dev is intentionally excluded from removal below: libpq-dev (held,
+  # above) has a hard Depends on it in bookworm, so removing it would leave
+  # libpq-dev's dependency unsatisfied and break dpkg's resolver.
   && apt-get install -y --no-install-recommends \
     wget \
     libcurl4-gnutls-dev \
     libexpat1-dev \
     libssl-dev \
     zlib1g-dev \
-  # Build and install git from source to get 2.50.1 since debian only ships with 2.47 for now
+  # Build and install git from source to get 2.50.1 since debian only ships with 2.39 for now
   && wget https://github.com/git/git/archive/refs/tags/v2.50.1.tar.gz \
   && tar -xf v2.50.1.tar.gz \
   && cd git-2.50.1 \
@@ -41,11 +39,10 @@ RUN apt-get update \
   && make prefix=/usr/local NO_TCLTK=1 NO_GETTEXT=1 install \
   && cd .. \
   && rm -rf git-2.50.1 v2.50.1.tar.gz \
-  # Remove build dependencies to keep image slim
+  # Remove build dependencies to keep image slim (libssl-dev kept, see above)
   && apt-get remove -y \
     libcurl4-gnutls-dev \
     libexpat1-dev \
-    libssl-dev \
     wget \
     zlib1g-dev \
   && apt-get autoremove -y \
