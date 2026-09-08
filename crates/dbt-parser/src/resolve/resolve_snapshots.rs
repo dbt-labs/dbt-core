@@ -234,6 +234,7 @@ pub async fn resolve_snapshots(
             }
 
             if let Some(relation) = &snapshot.relation {
+                let relation = relation.to_string();
                 // check if the relation matches the pattern of ref(...)
                 let relation = if relation.starts_with("ref(") || relation.starts_with("source(") {
                     format!("{{{{ {relation} }}}}")
@@ -614,7 +615,21 @@ pub async fn resolve_snapshots(
                 deprecated_config: snapshot_config.clone().into(),
                 compiled: None,
                 compiled_code: None,
-                __other__: BTreeMap::new(),
+                __other__: properties
+                    .relation
+                    .as_ref()
+                    .map(|relation| {
+                        let mut other = BTreeMap::new();
+                        other.insert(
+                            "raw_relation".to_string(),
+                            dbt_yaml::Value::String(
+                                relation.clone().into_inner(),
+                                relation.span().clone(),
+                            ),
+                        );
+                        other
+                    })
+                    .unwrap_or_default(),
             };
 
             let components = RelationComponents {
