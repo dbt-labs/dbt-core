@@ -10,6 +10,7 @@ const DEFAULT_HOST: &str = "localhost";
 const DEFAULT_HTTP_PORT: &str = "8123";
 const DEFAULT_HTTPS_PORT: &str = "8443";
 const DEFAULT_USER: &str = "default";
+const APP_NAME: &str = "dbt";
 
 #[derive(Debug)]
 enum ClickHouseAuthIR<'a> {
@@ -119,6 +120,10 @@ fn apply_connection_args(
     for (name, value) in settings {
         builder.with_named_option(clickhouse::setting_key(&name), value)?;
     }
+    builder.with_named_option(
+        clickhouse::PRODUCT_INFO,
+        format!("{APP_NAME}/{}", env!("CARGO_PKG_VERSION")),
+    )?;
     Ok(builder)
 }
 
@@ -244,6 +249,18 @@ secure: true
 
     fn setting_value<'a>(builder: &'a database::Builder, name: &str) -> Option<&'a str> {
         other_option_value(builder, &clickhouse::setting_key(name))
+    }
+
+    #[test]
+    fn test_product_info_identifies_dbt() {
+        let builder = ClickHouseAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&AdapterConfig::new(Mapping::new()))
+            .expect("configure");
+
+        assert_eq!(
+            other_option_value(&builder, clickhouse::PRODUCT_INFO),
+            Some(format!("dbt/{}", env!("CARGO_PKG_VERSION")).as_str())
+        );
     }
 
     #[test]

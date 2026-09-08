@@ -10,3 +10,8 @@ pub const SETTING_PREFIX: &str = "clickhouse.setting.";
 pub fn setting_key(setting_name: &str) -> String {
     format!("{SETTING_PREFIX}{setting_name}")
 }
+
+/// Space-separated `<name>/<version>` pairs the driver prepends to the HTTP
+/// `User-Agent` (visible as `http_user_agent` in `system.query_log`), ahead
+/// of its own `adbc_clickhouse/<ver> clickhouse-rs/<ver>` identification.
+pub const PRODUCT_INFO: &str = "clickhouse.client.product_info";
