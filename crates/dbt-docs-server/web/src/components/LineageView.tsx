@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Expand } from 'lucide-react';
 
-import { Dag } from '@dbt-labs/dbt-dag';
+import { Dag, type DbtDagNode, type ToolbarItem } from '@dbt-labs/dbt-dag';
 
 import { useLineageData } from '../hooks/useLineageData';
 import { asToolbarItems, type LabelOnlyToolbarItem } from '../lib/dagToolbar';
@@ -90,12 +90,15 @@ export function LineageView({ rootUniqueId, modelName, onSelect }: Props) {
     <div className="lineage-frame">
       <div className="absolute inset-0">
         <Dag
-          nodes={dagNodes}
+          // `dagNodes` is typed locally in `useLineageData` (see its comment) rather
+          // than importing `DbtDagNode` there -- this is dbt-dag's own component, so
+          // the cast belongs at this boundary instead.
+          nodes={dagNodes as DbtDagNode[]}
           activeDbtCloudProject="local"
           grain="project"
           primaryNodeIds={[rootUniqueId]}
           status="success"
-          toolbarItems={asToolbarItems(toolbarItems)}
+          toolbarItems={asToolbarItems(toolbarItems) as ToolbarItem[]}
           onNodeInteraction={(event) => {
             if (
               event.interactionType === 'single_click' ||

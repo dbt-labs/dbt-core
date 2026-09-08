@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Crosshair, ExternalLink, X } from 'lucide-react';
 
-import { Dag } from '@dbt-labs/dbt-dag';
+import { Dag, type DbtDagNode, type ToolbarItem } from '@dbt-labs/dbt-dag';
 
 import { useLineageData } from '../hooks/useLineageData';
 import { asToolbarItems, type LabelOnlyToolbarItem } from '../lib/dagToolbar';
@@ -166,12 +166,15 @@ export default function FullLineagePage() {
             className={`absolute bottom-0 left-0 top-0 transition-[right] duration-300 motion-reduce:duration-0 ${panelId ? 'right-[450px]' : 'right-0'}`}
           >
             <Dag
-              nodes={dagNodes}
+              // `dagNodes` is typed locally in `useLineageData` (see its comment)
+              // rather than importing `DbtDagNode` there -- this is dbt-dag's own
+              // component, so the cast belongs at this boundary instead.
+              nodes={dagNodes as DbtDagNode[]}
               activeDbtCloudProject="local"
               grain="project"
               primaryNodeIds={[rootUniqueId]}
               status="success"
-              toolbarItems={asToolbarItems(toolbarItems)}
+              toolbarItems={asToolbarItems(toolbarItems) as ToolbarItem[]}
               getContextMenuOptions={getContextMenuOptions}
               onNodeInteraction={(event) => {
                 if (!event.targetNode) return;
