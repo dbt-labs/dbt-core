@@ -1,5 +1,9 @@
+use std::sync::Arc;
+
 use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
+use crate::tracing::tracing_feature_handles::FsTracingConfigProvider;
 use crate::tracing::{
+    TracingConfigProvider,
     dbt_emit::emit_warn_log_message,
     dbt_metrics::{FusionMetricKey, InvocationMetricKey},
     layer::{ConsumerLayer, MiddlewareLayer},
@@ -21,8 +25,10 @@ use tracing::level_filters::LevelFilter;
 fn warn_error_options_middleware_updates_runtime_decisions() {
     let trace_id = rand::random::<u128>();
     let (test_layer, _span_starts, _span_ends, log_records) = TestLayer::new();
-    let (warn_error_options_middleware, options_handle) =
-        TelemetryWarnErrorOptionsMiddleware::new(WarnErrorOptions::default(), false);
+    let config_provider =
+        Arc::new(FsTracingConfigProvider::default()) as Arc<dyn TracingConfigProvider>;
+    let warn_error_options_middleware =
+        TelemetryWarnErrorOptionsMiddleware::new(Arc::clone(&config_provider), false);
 
     let middlewares: Vec<MiddlewareLayer> = vec![
         Box::new(warn_error_options_middleware),
@@ -51,24 +57,20 @@ fn warn_error_options_middleware_updates_runtime_decisions() {
 
         emit_warn_log_message(ErrorCode::NoNodesSelected, "warn");
 
-        *options_handle
-            .write()
-            .expect("warn_error_options lock should not be poisoned") = WarnErrorOptions {
+        config_provider.set_warn_error_options(WarnErrorOptions {
             error: vec![WarnErrorOptionValue::FusionCode(
                 ErrorCode::NoNodesSelected as u16,
             )],
             ..Default::default()
-        };
+        });
         emit_warn_log_message(ErrorCode::NoNodesSelected, "error");
 
-        *options_handle
-            .write()
-            .expect("warn_error_options lock should not be poisoned") = WarnErrorOptions {
+        config_provider.set_warn_error_options(WarnErrorOptions {
             silence: vec![WarnErrorOptionValue::SupportedLegacy(
                 SupportedLegacyWarnError::NothingToDo,
             )],
             ..Default::default()
-        };
+        });
         emit_warn_log_message(ErrorCode::NoNodesSelected, "silence");
 
         (
@@ -104,13 +106,14 @@ fn warn_error_options_middleware_updates_runtime_decisions() {
 fn skip_fusion_only_upgrades_withholds_upgrade_only_for_fusion_only_codes() {
     let trace_id = rand::random::<u128>();
     let (test_layer, _span_starts, _span_ends, log_records) = TestLayer::new();
-    let (warn_error_options_middleware, options_handle) = TelemetryWarnErrorOptionsMiddleware::new(
+    let config_provider = Arc::new(FsTracingConfigProvider::from_warn_error_options(
         WarnErrorOptions {
             error: vec![WarnErrorOptionValue::all()],
             ..Default::default()
         },
-        true,
-    );
+    )) as Arc<dyn TracingConfigProvider>;
+    let warn_error_options_middleware =
+        TelemetryWarnErrorOptionsMiddleware::new(Arc::clone(&config_provider), true);
 
     let middlewares: Vec<MiddlewareLayer> = vec![Box::new(warn_error_options_middleware)];
     let consumers: Vec<ConsumerLayer> = vec![Box::new(test_layer)];
@@ -138,15 +141,13 @@ fn skip_fusion_only_upgrades_withholds_upgrade_only_for_fusion_only_codes() {
         emit_warn_log_message(ErrorCode::DeprecatedModel, "has dbt-core counterpart");
 
         // Silencing must still take effect for a fusion-only code.
-        *options_handle
-            .write()
-            .expect("warn_error_options lock should not be poisoned") = WarnErrorOptions {
+        config_provider.set_warn_error_options(WarnErrorOptions {
             error: vec![WarnErrorOptionValue::all()],
             silence: vec![WarnErrorOptionValue::FusionCode(
                 ErrorCode::UnusedConfigKey as u16,
             )],
             ..Default::default()
-        };
+        });
         emit_warn_log_message(ErrorCode::UnusedConfigKey, "silenced");
     });
 

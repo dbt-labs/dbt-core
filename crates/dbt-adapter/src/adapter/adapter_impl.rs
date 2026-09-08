@@ -16,7 +16,8 @@ use crate::macro_exec::{
 };
 use crate::metadata::bigquery::nested_projection::render_struct_projection;
 use crate::metadata::bigquery::{
-    BIGQUERY_PSEUDOCOLUMNS, BigqueryMetadataAdapter, nest_column_data_types,
+    BIGQUERY_PSEUDOCOLUMNS, BigqueryMetadataAdapter, is_bigquery_not_found_error,
+    nest_column_data_types,
 };
 use crate::metadata::clickhouse::ClickHouseMetadataAdapter;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
@@ -575,6 +576,16 @@ impl AdapterImpl {
     /// Mirrors the Python reference implementation in dbt-duckdb:
     /// https://github.com/duckdb/dbt-duckdb/blob/main/dbt/adapters/duckdb/credentials.py
     pub fn table_format_for_database(&self, database: &str) -> &'static str {
+        // DIVERGENCE: the lake compute arm has no Python counterpart -- lake compute
+        // is Fusion-only, and it shares the DuckDB macros this feeds.
+        //
+        // Lake compute reads and writes open Iceberg tables, and it attaches the
+        // catalogs holding them server-side -- so there is no profile `attach:`
+        // entry and, in the Lake Compute + MDLS setup, no catalogs.yml entry for
+        // the DuckDB lookups below to find.
+        if self.adapter_type() == LakeCompute {
+            return duckdb_table_format_for_database(database).unwrap_or("iceberg");
+        }
         if self.adapter_type() != DuckDB {
             return "default";
         }
@@ -732,7 +743,7 @@ impl AdapterImpl {
             // execute() call avoids the need for cross-call connection caching.
             //
             // Lake compute: also supports batching
-            Bigquery | DuckDB | LakeCompute => vec![sql.to_string()],
+            Bigquery | DuckDB | LakeCompute => vec![sql],
             _ => splitter.split(sql, adapter_type),
         };
         // Filter out empty and comment-only statements.
@@ -776,7 +787,7 @@ impl AdapterImpl {
                 state,
                 conn,
                 ctx,
-                &sql,
+                sql,
                 1,
                 &options,
                 fetch,
@@ -1807,47 +1818,62 @@ impl AdapterImpl {
         name: &str,
         token: CancellationToken,
     ) -> AdapterResult<Option<bool>> {
-        // PRE-CONDITION: adapter_type is DuckDB
-        let is_motherduck = |engine: &dyn AdapterEngine| {
-            engine
-                .config("path")
-                .map(|p| dbt_auth::is_motherduck_path(&p))
-                .unwrap_or(false)
-        };
+        fn duckdb_is_motherduck(config: &AdapterConfig) -> bool {
+            matches!(
+                dbt_auth::DuckDbTarget::from_config(config),
+                Ok(dbt_auth::DuckDbTarget::MotherDuck { .. })
+                    | Ok(dbt_auth::DuckDbTarget::MotherDuckWithToken { .. })
+            )
+        }
 
-        match (self.adapter_type(), name) {
-            (DuckDB, "motherduck") => Ok(Some(is_motherduck(self.engine().as_ref()))),
-            (DuckDB, "transactions") => {
-                // MotherDuck does not support explicit transactions
-                Ok(Some(!is_motherduck(self.engine().as_ref())))
+        // All-platform features.
+        if name == "transactions" {
+            if self.adapter_type() == DuckDB && duckdb_is_motherduck(self.engine().get_config()) {
+                return Ok(Some(false));
             }
-            // Assume that all other adapters support transactions for now.
-            (_, "transactions") => Ok(Some(true)),
-            (Redshift, "datasharing") => Ok(Some(get_bool_config(
-                self.engine().as_ref(),
-                "datasharing",
-            )?)),
-            (Redshift, "drop_without_cascade") => Ok(Some(get_bool_config(
-                self.engine().as_ref(),
-                "drop_without_cascade",
-            )?)),
-            (Databricks, _) => {
+            return Ok(Some(true));
+        }
+
+        // platform-specific features.
+        match self.adapter_type() {
+            DuckDB => match name {
+                "motherduck" => Ok(Some(duckdb_is_motherduck(self.engine().get_config()))),
+                _ => {
+                    emit_warn_log_message(
+                        ErrorCode::InvalidArgument,
+                        format!("Unrecognized feature: {name} for {} adapter", DuckDB),
+                    );
+                    Ok(None)
+                }
+            },
+            Redshift => match name {
+                "datasharing" => Ok(Some(get_bool_config(
+                    self.engine().as_ref(),
+                    "datasharing",
+                )?)),
+                "drop_without_cascade" => Ok(Some(get_bool_config(
+                    self.engine().as_ref(),
+                    "drop_without_cascade",
+                )?)),
+                _ => {
+                    emit_warn_log_message(
+                        ErrorCode::InvalidArgument,
+                        format!("Unrecognized feature: {name} for {} adapter", Redshift),
+                    );
+                    Ok(None)
+                }
+            },
+            Databricks => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let has_capability = self.has_dbr_capability(state, conn.as_mut(), name, token)?;
                 Ok(Some(has_capability))
             }
-            _ => {
+            adapter_type => {
                 emit_warn_log_message(
                     ErrorCode::InvalidArgument,
-                    format!(
-                        "Unrecognized feature: {} for {} adapter",
-                        name,
-                        self.adapter_type()
-                    ),
+                    format!("Unrecognized feature: {name} for {adapter_type} adapter"),
                 );
-                // None is falsy, so features should be named in such a way that
-                // `false` is the most reasonable assumption.
                 Ok(None)
             }
         }
@@ -1931,26 +1957,33 @@ impl AdapterImpl {
         }
     }
 
-    /// get_columns_in_relation for adapters whose ADBC driver implements
-    /// a good enough `AdbcConnectionGetTableSchema()`
-    fn get_columns_in_relation_via_adbc(
+    /// BigQuery get_columns_in_relation using `AdbcConnectionGetTableSchema()`
+    fn bigquery_get_columns_in_relation_via_adbc(
         &self,
         state: &State,
         relation: &dyn BaseRelation,
     ) -> AdapterResult<Vec<Column>> {
         let conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-        let schema = conn
-            .get_table_schema(
-                relation.database(),
-                relation.schema(),
-                relation.identifier().ok_or_else(|| {
-                    AdapterError::new(
-                        AdapterErrorKind::UnexpectedResult,
-                        "relation does not have identifier",
-                    )
-                })?,
-            )
-            .map_err(adbc_error_to_adapter_error)?;
+        let schema = match conn.get_table_schema(
+            relation.database(),
+            relation.schema(),
+            relation.identifier().ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    "relation does not have identifier",
+                )
+            })?,
+        ) {
+            Ok(schema) => schema,
+            Err(err) => {
+                let err = adbc_error_to_adapter_error(err);
+                if is_bigquery_not_found_error(&err) {
+                    // A missing relation has no columns.
+                    return Ok(Vec::new());
+                }
+                return Err(err);
+            }
+        };
         // NOTE: it's okay to skip conversion to an SDF-frontend since
         // `schema_to_columns()` will first try to parse the type from the
         // `PLATFORM:type` metadata key returned by the driver.
@@ -2145,7 +2178,7 @@ impl AdapterImpl {
         match self.adapter_type() {
             // TODO: Should we add the schema that was fetched here to the schema cache
             // to avoid further remote lookups?
-            Bigquery => self.get_columns_in_relation_via_adbc(state, relation),
+            Bigquery => self.bigquery_get_columns_in_relation_via_adbc(state, relation),
             _ => self.get_columns_in_relation_via_macro(state, relation),
         }
     }
@@ -4527,12 +4560,13 @@ impl AdapterImpl {
 
     /// Given a relation, fetch its configurations from the remote data warehouse
     ///
-    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L931
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1088
     pub fn get_relation_config(
         &self,
         state: &State,
         conn: &mut dyn Connection,
         relation: &Arc<dyn BaseRelation>,
+        model_config: Option<&RelationConfig>,
         token: CancellationToken,
     ) -> AdapterResult<RelationConfig> {
         use crate::relation::databricks::config::relation_types;
@@ -4560,7 +4594,13 @@ impl AdapterImpl {
             // In replay mode, adapter calls must go through the replay adapter so they consume
             // the recording stream.
             let metadata_adapter = DatabricksMetadataAdapter::new_from_adapter(self.clone());
-            metadata_adapter.fetch_relation_config_from_remote(state, conn, relation, token)?
+            metadata_adapter.fetch_relation_config_from_remote(
+                state,
+                conn,
+                relation,
+                model_config,
+                token,
+            )?
         };
 
         let config_loader = match relation_type {
@@ -4583,7 +4623,7 @@ impl AdapterImpl {
 
     /// Given a model, parse and build its configurations
     ///
-    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/2f11abb306a400cde32b27891b766bf41a11fb1f/dbt/adapters/databricks/impl.py#L944
+    /// DatabricksAdapter https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1107
     pub fn get_config_from_model(&self, model: &InternalDbtNodeWrapper) -> AdapterResult<Value> {
         use crate::relation::databricks::config::relation_types;
 
@@ -6324,6 +6364,24 @@ mod tests {
         assert_eq!(adapter.table_format_for_database("other"), "default");
     }
 
+    /// Lake compute attaches its catalogs server-side, so no `attach:` entry or
+    /// catalogs.yml entry names them -- but every relation it can see is still an
+    /// Iceberg table, and the DuckDB macros branch on this to avoid
+    /// `information_schema.columns` (which reports Iceberg REST columns as `__`).
+    #[test]
+    fn test_table_format_lake_compute_is_iceberg_without_any_attach_entry() {
+        let adapter = AdapterImpl::new(build_engine(LakeCompute, Mapping::new()), None);
+
+        assert_eq!(
+            adapter.table_format_for_database("wrapped_refutation"),
+            "iceberg"
+        );
+        assert_eq!(
+            adapter.table_format_for_database("anything_else"),
+            "iceberg"
+        );
+    }
+
     #[test]
     fn test_table_format_unaliased_motherduck_attachment() {
         let adapter = AdapterImpl::new(engine(DuckDB), None);
@@ -7508,6 +7566,48 @@ mod tests {
             vec![
                 "`id` Int32",
                 "`payload` String CODEC(ZSTD) TTL created_at + INTERVAL 1 DAY",
+            ]
+        );
+    }
+
+    /// BigQuery constraints on dotted columns must render inside their STRUCT types.
+    #[test]
+    fn test_render_raw_columns_constraints_bigquery_nested() {
+        let adapter = AdapterImpl::new(engine(Bigquery), None);
+        let not_null = Constraint {
+            type_: ConstraintType::NotNull,
+            expression: None,
+            name: None,
+            to: None,
+            to_columns: None,
+            warn_unsupported: None,
+            warn_unenforced: None,
+        };
+        let column = |name: &str, data_type: &str, constraints| {
+            (
+                name.to_string(),
+                DbtColumn {
+                    name: name.to_string(),
+                    data_type: Some(data_type.to_string()),
+                    constraints,
+                    ..Default::default()
+                },
+            )
+        };
+        let columns = IndexMap::from([
+            column("id", "int64", vec![]),
+            column("my_array", "array", vec![]),
+            column("my_array.sub_id", "string", vec![not_null.clone()]),
+            column("my_array.my_struct", "struct", vec![]),
+            column("my_array.my_struct.first_field", "string", vec![not_null]),
+            column("my_array.my_struct.second_field", "string", vec![]),
+        ]);
+
+        assert_eq!(
+            adapter.render_raw_columns_constraints(columns).unwrap(),
+            vec![
+                "id int64",
+                "my_array array<struct<sub_id string not null, my_struct struct<first_field string not null, second_field string>>>",
             ]
         );
     }

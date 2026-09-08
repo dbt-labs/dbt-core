@@ -6,12 +6,12 @@ import {
   ResourceViewedSchema,
   SearchPerformedSchema,
 } from '@dbt-labs/proto/public/events/docs_pb';
-import producer from '@dbt-labs/vortex';
 
 import {
   type SiteBootstrap,
   SUPPORTED_BOOTSTRAP_SCHEMA_VERSION,
 } from './siteBootstrap';
+import producer from './vortexProducer';
 import { configureVortex, logEvent, resetVortexForTests } from './vortexSink';
 
 function bootstrap(overrides: Partial<SiteBootstrap['telemetry']> = {}): SiteBootstrap {

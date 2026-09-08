@@ -483,6 +483,8 @@ impl NodeProcessed {
             None, // rows_affected
             group,
             None, // idle_time_ms
+            None, // node_index assigned by the span builder at start of processing
+            None, // node_count_total assigned by the span builder at start of processing
             None, // node_outcome_detail
         )
     }

@@ -155,7 +155,31 @@ impl Task for RunTask {
                     .then_some(test),
                 None => None,
             };
-            let result = match (statically_checked_test, self.execution_path) {
+            // `LakeCompute` has a bypass-Jinja-materialization hook
+            // (`run_on_lake_compute`) for models, seeds, and tests -- tests
+            // need it too, not because they materialize anything, but because
+            // only that hook builds and attaches the per-statement
+            // `CATALOG_BUNDLE` option (`resolve_compute_write_target` /
+            // `catalog_bundle_json`) that tells a fresh LakeCompute worker
+            // connection which catalogs to attach. The generic `Remote` path's
+            // `adapter.execute()` always passes empty options
+            // (`adapter_engine.rs`'s `execute()` convenience wrapper), so a
+            // test downgraded to `Remote` would silently run with nothing
+            // attached beyond the connection's own baseline -- fine by
+            // accident for objects in the default MDLS namespace, wrong for
+            // anything needing a declared catalog. Every other node type that
+            // resolves onto `lakecompute` (a snapshot, ...) still has no
+            // bypass to offer and is downgraded as before.
+            let effective_execution_path = if self.execution_path == RunExecutionPath::LakeCompute
+                && !(self.node.as_any().is::<DbtModel>()
+                    || self.node.as_any().is::<DbtSeed>()
+                    || self.node.as_any().is::<DbtTest>())
+            {
+                RunExecutionPath::Remote
+            } else {
+                self.execution_path
+            };
+            let result = match (statically_checked_test, effective_execution_path) {
                 (Some(test), _) => {
                     let node_status =
                         process_statically_checked_test_result(test, ctx, start_time.into());
@@ -1312,7 +1336,7 @@ mod tests {
     // (`GLOBAL_SESSION`/`GLOBAL_REPLAYER` in `dbt_adapter::time_machine`).
     static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn run_cache_clone_decision_records_and_replays() {
         use dbt_adapter::time_machine::{
             EventReplayer, RecordedRunCacheCloneDecision, get_or_init_recording,
@@ -1370,7 +1394,7 @@ mod tests {
         reset_time_machine_globals().await.unwrap();
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn cached_data_test_result_records_and_replays() {
         use dbt_adapter::time_machine::{
             EventReplayer, get_or_init_recording, get_or_init_replayer, reset_time_machine_globals,

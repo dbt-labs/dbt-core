@@ -119,9 +119,17 @@ mod tests {
     }
 
     #[test]
-    fn test_meta_field_renders_at_parse_time() {
-        // +meta Jinja is rendered eagerly at parse time (matching dbt-core behavior),
-        // just like other string config fields such as +description.
+    fn test_meta_field_is_verbatim_at_parse_time() {
+        // +description (a plain string field) still renders eagerly as part of the single
+        // combined `into_typed` pass over the whole document.
+        //
+        // +meta does not: it's `Verbatim<...>` (fs#14217) precisely so that a render failure
+        // nested inside a customer's `+meta` value can't fail this whole node -- and by
+        // extension the whole enclosing directory-path node -- the way a plain field's failure
+        // would. `dbt_project_yml_loader::render_meta_tolerantly` re-renders +meta on its own,
+        // afterward, tolerating a failure instead of propagating it; see
+        // `dbt-loader::dbt_project_yml_loader::tests::test_meta_render_failure_does_not_drop_sibling_config`
+        // for that success/failure-tolerance behavior end to end.
         let yaml = r#"
         +meta:
           demo: "{{ 1 + 2 }}"
@@ -138,12 +146,12 @@ mod tests {
         )
         .unwrap();
 
-        let meta = cfg.meta.as_ref().expect("+meta should be present");
+        let meta = cfg.meta.0.as_ref().expect("+meta should be present");
         let demo_val = meta.get("demo").expect("demo key in +meta");
-        // `{{ 1 + 2 }}` renders to the integer 3; the YAML value reflects the evaluated type.
+        // Still the raw, unrendered Jinja text -- `into_typed_with_jinja` alone never touches it.
         match demo_val {
-            dbt_yaml::Value::Number(n, _) => assert_eq!(n.as_i64(), Some(3)),
-            other => panic!("expected number in +meta.demo, got {other:?}"),
+            dbt_yaml::Value::String(s, _) => assert_eq!(s, "{{ 1 + 2 }}"),
+            other => panic!("expected raw string in +meta.demo, got {other:?}"),
         }
 
         assert_eq!(cfg.description.as_deref(), Some("prefix 3"));
@@ -244,7 +252,7 @@ mod tests {
         assert_eq!(warn.period, Some(FreshnessPeriod::day));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_ref_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -279,7 +287,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_source_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -313,7 +321,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_metric_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -346,7 +354,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_render_sql_with_config_macro() {
         let (env, sql_resources, init_config) = setup_test_env();
         // Set the package name for the current context
@@ -427,7 +435,7 @@ mod tests {
         panic!("test code disabled below");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_fromjson() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -449,7 +457,7 @@ mod tests {
         assert_eq!(rendered.trim(), "123");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_tojson() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -472,7 +480,7 @@ mod tests {
         assert_eq!(rendered, r#"{"abc":123,"def":456}"#);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_tojson_with_sort_keys() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -495,7 +503,7 @@ mod tests {
         assert_eq!(rendered, r#"{"abc":123,"def":456}"#);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_tojson_with_default() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -517,7 +525,7 @@ mod tests {
         assert_eq!(rendered.trim(), r#"{"default": true}"#);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_fromyaml() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -543,7 +551,7 @@ mod tests {
         assert_eq!(rendered.trim(), "good, bad");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_toyaml_basic() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -568,7 +576,7 @@ mod tests {
         assert_contains!(trimmed, "def: 456");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_set_strict_function() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -614,7 +622,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_local_md5() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);
@@ -1036,7 +1044,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_dict_update() {
         let (env, _, _) = setup_test_env();
         let env = Arc::new(env);

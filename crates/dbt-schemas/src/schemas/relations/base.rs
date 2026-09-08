@@ -299,6 +299,13 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     fn set_is_delta(&mut self, is_delta: Option<bool>);
 
+    /// Helper: check if the relation is a Databricks shallow clone
+    fn is_shallow_clone(&self) -> bool {
+        false
+    }
+
+    fn set_is_shallow_clone(&mut self, is_shallow_clone: Option<bool>);
+
     /// Set the relation's table format, when the adapter tracks one.
     fn set_table_format(&mut self, table_format: Option<TableFormat>);
 
@@ -877,6 +884,28 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// Whether the relation is a temporary view (session-scoped).
     fn is_temporary(&self) -> bool {
+        false
+    }
+
+    /// ClickHouse relation state, stamped from the catalog (dbt-clickhouse
+    /// `ClickHouseRelation.can_exchange`).
+    fn can_exchange(&self) -> bool {
+        false
+    }
+
+    /// dbt-managed MVs writing into this relation, `{schema, name, sql}` entries
+    /// (`ClickHouseRelation.mvs_pointing_to_it`).
+    fn mvs_pointing_to_it(&self) -> &[BTreeMap<String, String>] {
+        &[]
+    }
+
+    /// `ClickHouseRelation.is_refreshable`
+    fn is_refreshable(&self) -> bool {
+        false
+    }
+
+    /// `ClickHouseRelation.refreshable_append`
+    fn refreshable_append(&self) -> bool {
         false
     }
 

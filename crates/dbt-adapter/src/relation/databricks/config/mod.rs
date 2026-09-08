@@ -23,7 +23,7 @@ pub(crate) enum DatabricksRelationMetadataKey {
 }
 
 // string conversions based on string keys from:
-// https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/adapters/databricks/impl.py#L914-L1021
+// https://github.com/databricks/dbt-databricks/blob/7c282cabb518a5e1173222e7901896d31de8401f/dbt/adapters/databricks/impl.py#L1287-L1470
 impl From<DatabricksRelationMetadataKey> for String {
     fn from(key: DatabricksRelationMetadataKey) -> Self {
         match key {

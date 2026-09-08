@@ -49,30 +49,7 @@ pub enum DbConfig {
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
     DuckDB(Box<DuckDbConfig>),
-    // Doc comments on these variants are published verbatim as the JSON
-    // schema's `description`, so the implementation note lives here instead.
-    //
-    // The rename is `schemars`-only on purpose. `UntaggedEnumDeserialize`
-    // rejects *any* `#[serde(..)]` attribute on a variant, so the tag comes from
-    // this enum's `rename_all = "lowercase"` applied to the variant identifier:
-    // `lakecompute`, with no underscore. Authors write `lake_compute`, which
-    // `dbt_profile::adapters::canonicalize_adapter_type` maps onto the tag
-    // before the mapping reaches this enum. Asserted by
-    // `lake_compute_is_tagged_by_its_lowercased_identifier` below, so a future
-    // rename of this variant cannot silently change the tag.
-    //
-    // That the tag is `lakecompute` does *not* make it an accepted
-    // profiles.yml spelling; `canonicalize_adapter_type` only ever writes it.
-    //
-    // What the `schemars` rename fixes is the generated schema, which is
-    // published to dbt-jsonschema and drives editor validation and autocomplete
-    // for profiles.yml: authors are shown the name they should write.
-    //
-    // Once `dbt-yaml`'s derive honours variant renames this collapses into a
-    // plain `#[serde(rename = "lake_compute")]`, matching
-    // `AdapterType::LakeCompute`, and the mapping in `dbt-profile` goes away.
     /// The dbt lake compute engine.
-    #[schemars(rename = "lake_compute")]
     LakeCompute(Box<LakeComputeConfig>),
     // Hive,
     Exasol(Box<ExasolDbConfig>),
@@ -280,7 +257,8 @@ impl DbConfig {
                 "settings",
                 "attach",
             ],
-            // `token` is deliberately absent, for the same reason.
+            // `token` and `fivetran_credential` are deliberately absent, for the
+            // same reason.
             AdapterType::LakeCompute => &[
                 "path",
                 "database",
@@ -288,6 +266,7 @@ impl DbConfig {
                 "base_url",
                 "method",
                 "organization",
+                "fivetran_api_url",
             ],
             // Adapter types with no `DbConfig` variant, so nothing to display.
             AdapterType::Athena
@@ -434,7 +413,7 @@ impl DbConfig {
 
     /// Returns the database name with adapter-specific defaults when not explicitly configured.
     /// - DuckDB: derived from file path stem (e.g., "jaffle_shop.duckdb" → "jaffle_shop"),
-    ///   or "main" for in-memory (":memory:") or when no path is specified
+    ///   or "memory" for in-memory (":memory:") or when no path is specified
     /// - Databricks: uses hive_metastore as default catalog
     /// - Others: "dbt" as generic fallback
     pub fn get_database_or_default(&self) -> String {
@@ -1084,6 +1063,17 @@ pub struct LakeComputeConfig {
     pub method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    /// Long-lived Fivetran personal access token, for `method: fivetran`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fivetran_credential: Option<String>,
+    /// Fivetran public API base URL; only needed to reach a non-production one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fivetran_api_url: Option<String>,
+    /// Days a minted Snowflake PAT stays valid before it needs re-minting.
+    /// Only applies when lake compute mints a PAT for Horizon catalog access
+    /// (i.e. non-keypair auth on the native Snowflake target). Default: 30.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snowflake_pat_duration_days: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1102,7 +1092,7 @@ pub struct DuckDbConfig {
     /// Path to the DuckDB database file. Defaults to in-memory (:memory:)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    /// Database name (defaults to "main")
+    /// Database name (defaults to the name DuckDB derives from `path`)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
     /// Schema name (defaults to "main")
@@ -1838,7 +1828,7 @@ impl<'a> DuckDBPathInfo<'a> {
         let Some(effective) = path else {
             return Self {
                 location: DuckDBLocation::Memory,
-                database: "main",
+                database: "memory",
                 is_ducklake: false,
             };
         };
@@ -1852,7 +1842,7 @@ impl<'a> DuckDBPathInfo<'a> {
         if effective == ":memory:" || effective.is_empty() {
             return Self {
                 location: DuckDBLocation::Memory,
-                database: "main",
+                database: "memory",
                 is_ducklake,
             };
         }
@@ -2255,10 +2245,9 @@ mod tests {
 
     /// `DbConfig` is `#[serde(tag = "type", rename_all = "lowercase")]`, so the
     /// tag is the variant identifier lowercased. `dbt-profile` hard-codes the
-    /// resulting string (`LAKE_COMPUTE_INTERNAL_TAG`) because it deliberately
-    /// does not depend on this crate, and `compute_platform.rs` writes it back
-    /// after `to_mapping()` drops it. Neither can notice a rename of the
-    /// variant, so pin the tag here and round trip through it.
+    /// resulting string (`LAKE_COMPUTE_TYPE`) because it deliberately does not
+    /// depend on this crate. Neither can notice a rename of the variant, so pin
+    /// the tag here and round trip through it.
     #[test]
     fn lake_compute_is_tagged_by_its_lowercased_identifier() {
         let value = dbt_yaml::to_value(DbConfig::LakeCompute(Box::default()))
@@ -2268,24 +2257,20 @@ mod tests {
                 .get(dbt_yaml::Value::from("type"))
                 .and_then(|v| v.as_str()),
             Some("lakecompute"),
-            "`dbt_profile::adapters::LAKE_COMPUTE_INTERNAL_TAG` and \
-             `compute_platform::build_lake_compute_adapter` both hard-code this string"
+            "`dbt_profile::adapters::LAKE_COMPUTE_TYPE` hard-codes this string"
         );
 
         let round_tripped: DbConfig =
             dbt_yaml::from_value(value).expect("the tag it emits must be the tag it accepts");
         assert!(matches!(round_tripped, DbConfig::LakeCompute(_)));
 
-        // And the reason the mapping in `dbt-profile` has to exist at all: the
-        // name authors write is not a tag this enum accepts. `dbt-yaml`'s
-        // `UntaggedEnumDeserialize` rejects per-variant `#[serde(..)]`
-        // attributes, so the tag cannot be renamed to match.
+        // The adapter's retired external name is not a tag this enum accepts
+        // either, same as any other unrecognized `type:`.
         assert!(
             dbt_yaml::from_str::<DbConfig>(
                 "type: lake_compute\nbase_url: https://example.invalid\n"
             )
             .is_err(),
-            "if this starts passing, `canonicalize_adapter_type` can go away"
         );
     }
 
@@ -2542,12 +2527,12 @@ query_tags:
         // Memory
         let info = DuckDBPathInfo::parse_path(None);
         assert_eq!(info.location, DuckDBLocation::Memory);
-        assert_eq!(info.database, "main");
+        assert_eq!(info.database, "memory");
         assert!(!info.is_ducklake);
 
         let info = DuckDBPathInfo::parse_path(Some(":memory:"));
         assert_eq!(info.location, DuckDBLocation::Memory);
-        assert_eq!(info.database, "main");
+        assert_eq!(info.database, "memory");
 
         // MotherDuck
         let info = DuckDBPathInfo::parse_path(Some("md:my_db"));

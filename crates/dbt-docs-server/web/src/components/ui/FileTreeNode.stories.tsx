@@ -2,17 +2,8 @@ import { type ComponentProps, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
-import { iconForResourceType } from '../../lib/fileTree';
 import { FileTreeNode } from './FileTreeNode';
 import type { FileTreeItemType } from './PaginatedFileTree';
-
-/** `iconForResourceType` hands back the icon *component*, while `iconOverride.icon`
- *  wants a rendered node — `size-3 shrink-0` is what `buildFileTreeItems` uses, so
- *  these rows match the ones the locate pane builds. */
-function resourceIcon(resourceType: string) {
-  const Icon = iconForResourceType(resourceType);
-  return <Icon className="size-3 shrink-0" />;
-}
 
 /** One row of the file tree. Ids are full paths — the component derives the label from
  *  the last segment (or `data.name`) and takes its indentation from `depth`, so these
@@ -22,13 +13,13 @@ const MARTS = 'jaffle_shop/models/marts';
 const customers: FileTreeItemType = {
   id: `${MARTS}/customers.sql`,
   parent: MARTS,
-  data: { pathType: 'file', iconOverride: { icon: resourceIcon('model') } },
+  data: { pathType: 'file' },
 };
 
 const orders: FileTreeItemType = {
   id: `${MARTS}/orders.sql`,
   parent: MARTS,
-  data: { pathType: 'file', iconOverride: { icon: resourceIcon('model') } },
+  data: { pathType: 'file' },
 };
 
 const marts: FileTreeItemType = {
@@ -105,7 +96,6 @@ export const ExplicitDisplayName: Story = {
       data: {
         pathType: 'file',
         name: 'raw_customers',
-        iconOverride: { icon: resourceIcon('source'), label: 'source' },
       },
     },
   },

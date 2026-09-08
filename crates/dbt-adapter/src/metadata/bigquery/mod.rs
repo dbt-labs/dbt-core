@@ -301,16 +301,30 @@ struct NestedColumnDataTypes {
 struct TrieNode {
     pub children: IndexMap<String, TrieNode>,
     pub data_type: Option<String>,
+    pub rendered_constraints: Option<String>,
 }
 
 impl NestedColumnDataTypes {
-    pub fn insert(&mut self, column_name: &str, column_type: Option<&String>) {
+    pub fn insert(
+        &mut self,
+        column_name: &str,
+        column_type: Option<&str>,
+        rendered_constraints: Option<&str>,
+    ) {
         let names = column_name.split(".");
         let mut node = &mut self.root;
         for name in names {
             node = node.children.entry(name.to_owned()).or_default();
         }
-        node.data_type = column_type.map(String::from);
+        node.data_type = column_type.map(str::to_owned);
+        node.rendered_constraints = match (column_type, rendered_constraints) {
+            (Some(data_type), Some(constraints))
+                if !data_type.is_empty() && !constraints.is_empty() =>
+            {
+                Some(constraints.to_owned())
+            }
+            _ => None,
+        };
     }
 
     pub fn format_top_level_columns_data_types(&self) -> IndexMap<String, String> {
@@ -345,7 +359,10 @@ impl NestedColumnDataTypes {
                     }
                 },
             };
-            result.insert(column_name.to_owned(), data_type);
+            result.insert(
+                column_name.to_owned(),
+                node.append_rendered_constraints(data_type),
+            );
         }
         result
     }
@@ -384,9 +401,16 @@ impl TrieNode {
                     }
                 },
             };
-            result.push(data_type);
+            result.push(node.append_rendered_constraints(data_type));
         }
         result.join(", ")
+    }
+
+    fn append_rendered_constraints(&self, data_type: String) -> String {
+        match &self.rendered_constraints {
+            Some(constraints) => format!("{data_type} {constraints}"),
+            None => data_type,
+        }
     }
 }
 
@@ -396,31 +420,29 @@ impl TrieNode {
 /// (https://github.com/dbt-labs/dbt-core/blob/main/env/lib/python3.12/site-packages/dbt/adapters/bigquery/column.py#L131-L132),
 /// not a full spec, so corner cases may not be handled.
 ///
-/// When `constraints` is supplied (keyed by top-level column name), the rendered constraint
-/// clause is appended to the column's data type so that the resulting DDL emits e.g.
-/// `id INT64 NOT NULL`. BigQuery treats `NOT NULL` in the column spec as `mode: REQUIRED`.
+/// Constraints on nested fields are preserved when dotted column names are collapsed.
 pub fn nest_column_data_types(
     columns: IndexMap<String, DbtColumn>,
     constraints: Option<BTreeMap<String, String>>,
 ) -> AdapterResult<IndexMap<String, DbtColumn>> {
+    let constraints = constraints.unwrap_or_default();
     let mut result = NestedColumnDataTypes::default();
     for (column_name, column) in &columns {
-        result.insert(column_name, column.data_type.as_ref())
+        result.insert(
+            column_name,
+            column.data_type.as_deref(),
+            constraints.get(column_name).map(String::as_str),
+        )
     }
     let column_to_data_type = result.format_top_level_columns_data_types();
-    let constraints = constraints.unwrap_or_default();
     let mut result = IndexMap::new();
     for (column_name, data_type) in &column_to_data_type {
-        let data_type_with_constraints = match constraints.get(column_name) {
-            Some(c) if !c.is_empty() => format!("{data_type} {c}"),
-            _ => data_type.clone(),
-        };
         match columns.get(column_name) {
             Some(column) => result.insert(
                 column_name.clone(),
                 DbtColumn {
                     name: column.name.clone(),
-                    data_type: Some(data_type_with_constraints),
+                    data_type: Some(data_type.clone()),
                     description: column.description.clone(),
                     constraints: column.constraints.clone(),
                     meta: column.meta.clone(),
@@ -442,7 +464,7 @@ pub fn nest_column_data_types(
                 column_name.clone(),
                 DbtColumn {
                     name: column_name.to_owned(),
-                    data_type: Some(data_type_with_constraints),
+                    data_type: Some(data_type.clone()),
                     description: None,
                     constraints: vec![],
                     meta: IndexMap::new(),
@@ -1913,8 +1935,8 @@ mod tests {
         // Test case 1: Simple primitive types
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("id", Some(&"integer".to_string()));
-            nested.insert("name", Some(&"string".to_string()));
+            nested.insert("id", Some("integer"), None);
+            nested.insert("name", Some("string"), None);
 
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(result.get("id").unwrap(), "integer");
@@ -1924,8 +1946,8 @@ mod tests {
         // Test case 2: Nested struct
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("user.id", Some(&"integer".to_string()));
-            nested.insert("user.name", Some(&"string".to_string()));
+            nested.insert("user.id", Some("integer"), None);
+            nested.insert("user.name", Some("string"), None);
 
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(
@@ -1937,9 +1959,9 @@ mod tests {
         // Test case 3: Array of structs
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("addresses", Some(&"array".to_string()));
-            nested.insert("addresses.street", Some(&"string".to_string()));
-            nested.insert("addresses.city", Some(&"string".to_string()));
+            nested.insert("addresses", Some("array"), None);
+            nested.insert("addresses.street", Some("string"), None);
+            nested.insert("addresses.city", Some("string"), None);
 
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(
@@ -1951,10 +1973,10 @@ mod tests {
         // Test case 4: Mixed types with deep nesting
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("id", Some(&"integer".to_string()));
-            nested.insert("user.name", Some(&"string".to_string()));
-            nested.insert("user.contact.email", Some(&"string".to_string()));
-            nested.insert("user.contact.phone", Some(&"string".to_string()));
+            nested.insert("id", Some("integer"), None);
+            nested.insert("user.name", Some("string"), None);
+            nested.insert("user.contact.email", Some("string"), None);
+            nested.insert("user.contact.phone", Some("string"), None);
 
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(result.get("id").unwrap(), "integer");
@@ -1967,19 +1989,23 @@ mod tests {
         // Test case 5: Empty struct (no data type)
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("empty_struct", None);
-            nested.insert("empty_struct.field1", Some(&"string".to_string()));
+            nested.insert("empty_struct", None, None);
+            nested.insert("empty_struct.field1", Some("string"), None);
+            nested.insert("empty_struct.untyped", None, Some("not null"));
 
             let result = nested.format_top_level_columns_data_types();
-            assert_eq!(result.get("empty_struct").unwrap(), "struct<field1 string>");
+            assert_eq!(
+                result.get("empty_struct").unwrap(),
+                "struct<field1 string, untyped>"
+            );
         }
 
         // Test case 6: Struct marked as primitive but has children
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("metadata", Some(&"json".to_string()));
-            nested.insert("metadata.key1", Some(&"string".to_string()));
-            nested.insert("metadata.key2", Some(&"integer".to_string()));
+            nested.insert("metadata", Some("json"), None);
+            nested.insert("metadata.key1", Some("string"), None);
+            nested.insert("metadata.key2", Some("integer"), None);
 
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(
@@ -1994,12 +2020,12 @@ mod tests {
         // Test case 7: Type strings are preserved verbatim
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("float_col", Some(&"FLOAT".to_string()));
-            nested.insert("integer_col", Some(&"INTEGER".to_string()));
-            nested.insert("text_col", Some(&"TEXT".to_string()));
-            nested.insert("string_col", Some(&"STRING".to_string()));
-            nested.insert("int64_col", Some(&"INT64".to_string()));
-            nested.insert("numeric_col", Some(&"NUMERIC".to_string()));
+            nested.insert("float_col", Some("FLOAT"), None);
+            nested.insert("integer_col", Some("INTEGER"), None);
+            nested.insert("text_col", Some("TEXT"), None);
+            nested.insert("string_col", Some("STRING"), None);
+            nested.insert("int64_col", Some("INT64"), None);
+            nested.insert("numeric_col", Some("NUMERIC"), None);
 
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(result.get("float_col").unwrap(), "FLOAT");
@@ -2013,7 +2039,7 @@ mod tests {
         // Test case 8: Nested struct leaves preserve provided type strings
         {
             let mut nested = NestedColumnDataTypes::default();
-            nested.insert("s.x", Some(&"FLOAT".to_string()));
+            nested.insert("s.x", Some("FLOAT"), None);
 
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(result.get("s").unwrap(), "struct<x FLOAT>");

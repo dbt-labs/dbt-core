@@ -5,7 +5,7 @@ use crate::errors::AdapterResult;
 use dbt_adapter_core::DBT_EXECUTION_PHASES;
 use dbt_adbc::QueryCtx;
 use dbt_schemas::schemas::{
-    DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
+    CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
 };
 use minijinja::{
     State,
@@ -26,8 +26,11 @@ pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
     //));
     let mut query = QueryCtx::default();
     // TODO: use node_metadata_from_state
-    if let Some(node_id) = node_id_from_state(state) {
-        query = query.with_node_id(node_id);
+    let common_attrs = common_attrs_from_state(state);
+    if let Some(attrs) = &common_attrs {
+        query = query.with_node_id(attrs.unique_id.clone());
+        query = query.with_project_name(attrs.package_name.clone());
+        query = query.with_model_name(attrs.name.clone());
     }
     if let Some(target_unique_id) = target_unique_id_from_state(state) {
         query = query.with_target_unique_id(target_unique_id);
@@ -35,10 +38,13 @@ pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
     if let Some(phase) = execution_phase_from_state(state) {
         query = query.with_phase(phase);
     }
+    if let Some(run_id) = invocation_id_from_state(state) {
+        query = query.with_run_id(run_id);
+    }
     Ok(query)
 }
 
-pub fn node_id_from_state(state: &State) -> Option<String> {
+fn common_attrs_from_state(state: &State) -> Option<CommonAttributes> {
     let node = state.lookup("model", &[]).as_ref()?.clone();
     // all deserialization must go through yaml value
     // should this be a .ok?
@@ -49,20 +55,31 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
         .ok()?;
 
     if let Ok(model) = DbtModel::deserialize(&yaml_node) {
-        Some(model.__common_attr__.unique_id)
+        Some(model.__common_attr__)
     } else if let Ok(test) = DbtTest::deserialize(&yaml_node) {
-        Some(test.__common_attr__.unique_id)
+        Some(test.__common_attr__)
     } else if let Ok(snapshot) = DbtSnapshot::deserialize(&yaml_node) {
-        Some(snapshot.__common_attr__.unique_id)
+        Some(snapshot.__common_attr__)
     } else if let Ok(seed) = DbtSeed::deserialize(&yaml_node) {
-        Some(seed.__common_attr__.unique_id)
+        Some(seed.__common_attr__)
     } else if let Ok(unit_test) = DbtUnitTest::deserialize(&yaml_node) {
-        Some(unit_test.__common_attr__.unique_id)
+        Some(unit_test.__common_attr__)
     } else if let Ok(unit_test) = DbtOperation::deserialize(&yaml_node) {
-        Some(unit_test.__common_attr__.unique_id)
+        Some(unit_test.__common_attr__)
     } else {
         None
     }
+}
+
+pub fn node_id_from_state(state: &State) -> Option<String> {
+    common_attrs_from_state(state).map(|attrs| attrs.unique_id)
+}
+
+/// Read the dbt invocation id, the same key the BigQuery job-label path uses.
+fn invocation_id_from_state(state: &State) -> Option<String> {
+    state
+        .lookup("invocation_id", &[])
+        .and_then(|value| value.as_str().map(|s| s.to_string()))
 }
 
 /// Read the `TARGET_UNIQUE_ID` Jinja key, the unique id the current adapter calls target.
@@ -164,6 +181,34 @@ mod tests {
                 query_ctx.target_or_node_id().map(String::as_str),
                 Some(node_id)
             );
+        });
+    }
+
+    /// dbt-compute usage attribution reads project/model name off the node and the
+    /// invocation id off the Jinja `invocation_id` global, the same key the BigQuery
+    /// job-label path already reads.
+    #[test]
+    fn project_model_and_run_id_are_read_for_usage_attribution() {
+        let mut model = DbtModel::default();
+        model.__common_attr__.unique_id = "model.analytics.customer_orders_summary".to_string();
+        model.__common_attr__.name = "customer_orders_summary".to_string();
+        model.__common_attr__.package_name = "analytics".to_string();
+        let yaml_model = dbt_yaml::to_value(&model).expect("model yaml");
+
+        let mut ctx: BTreeMap<String, Value> = BTreeMap::new();
+        ctx.insert("model".to_string(), Value::from_serialize(&yaml_model));
+        ctx.insert("invocation_id".to_string(), Value::from("run-42"));
+        with_state(ctx, |state| {
+            let query_ctx = query_ctx_from_state(state).expect("query ctx");
+            assert_eq!(
+                query_ctx.project_name().map(String::as_str),
+                Some("analytics")
+            );
+            assert_eq!(
+                query_ctx.model_name().map(String::as_str),
+                Some("customer_orders_summary")
+            );
+            assert_eq!(query_ctx.run_id().map(String::as_str), Some("run-42"));
         });
     }
 }

@@ -535,7 +535,7 @@ quoting:
   schema: false
   identifier: false
 adapters:
-  lake_compute:
+  lakecompute:
     quoting:
       database: true
       schema: true
@@ -554,7 +554,7 @@ adapters:
         assert_eq!(
             adapters[&AdapterType::LakeCompute]
                 .quoting
-                .expect("lake_compute quoting")
+                .expect("lakecompute quoting")
                 .identifier,
             Some(true)
         );
@@ -569,7 +569,7 @@ adapters:
         );
     }
 
-    /// `lake_compute` is the only name for `AdapterType::LakeCompute`. `alt` was the
+    /// `lakecompute` is the only name for `AdapterType::LakeCompute`. `alt` was the
     /// external name before the rename and is not kept as an alias, so it has to
     /// be rejected here like any other unknown adapter.
     #[test]

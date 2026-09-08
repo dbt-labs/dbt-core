@@ -86,3 +86,56 @@ fn python_table_preserves_transient_config() {
     );
     assert!(!rendered.contains("table_type='temporary'"));
 }
+
+#[test]
+fn alter_relation_comment_uses_iceberg_syntax_after_incorporate() {
+    use dbt_adapter::relation::{Relation, RelationObject};
+    use dbt_schemas::dbt_types::RelationType;
+    use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
+
+    let harness = MacroTestHarness::for_adapter(AdapterType::Snowflake)
+        .load_all_macros()
+        .build()
+        .expect("harness should build");
+
+    let iceberg: Arc<dyn BaseRelation> = Arc::new(
+        Relation::new(
+            AdapterType::Snowflake,
+            "TEST_DB".to_string(),
+            "TEST_SCHEMA".to_string(),
+            "my_iceberg_table".to_string(),
+        )
+        .with_relation_type(Some(RelationType::Table))
+        .with_table_format(TableFormat::Iceberg),
+    );
+
+    // Mirrors `target_relation.incorporate(type='table')` in the incremental
+    // materialization, called right before `persist_docs` (fs#14268).
+    let incorporated = iceberg
+        .incorporate(None, Some(RelationType::Table), None)
+        .expect("incorporate should succeed");
+
+    let ctx = BTreeMap::from([
+        (
+            "relation".to_string(),
+            RelationObject::new(incorporated).into_value(),
+        ),
+        ("relation_comment".to_string(), Value::from("a comment")),
+    ]);
+
+    let rendered = harness
+        .render(
+            "{{ snowflake__alter_relation_comment(relation, relation_comment) }}",
+            ctx,
+        )
+        .expect("alter_relation_comment should render");
+
+    assert!(
+        rendered.contains("alter iceberg table"),
+        "expected iceberg ALTER syntax after incorporate, got:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("comment on table"),
+        "must not fall back to plain COMMENT ON TABLE for an Iceberg relation, got:\n{rendered}"
+    );
+}

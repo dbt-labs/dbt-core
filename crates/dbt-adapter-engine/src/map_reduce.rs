@@ -482,7 +482,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn map_reduce_does_not_wait_for_extra_connection_before_reducing_completed_work() {
         struct ReleaseOnDrop(Option<std::sync::mpsc::Sender<()>>);
 

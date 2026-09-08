@@ -3,7 +3,7 @@ use dbt_test_utils::task::{ProjectEnv, TaskSeq};
 
 use crate::common::TaskSeqExt;
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn compile_strict_static_analysis_warns() -> FsResult<()> {
     let env = ProjectEnv::immutable_sa("tests/data/hello_world")?;
     TaskSeq::new(current_function_name!())

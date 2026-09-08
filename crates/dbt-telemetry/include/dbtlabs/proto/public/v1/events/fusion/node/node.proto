@@ -413,4 +413,13 @@ message NodeProcessed {
   // Total time in milliseconds spent idle across all nested node evaluations.
   // This includes time spent waiting on internal backpressure.
   optional uint64 idle_time_ms = 45;
+
+  // 1-based position of this node within the invocation, assigned in the order
+  // nodes begin processing. Mirrors dbt core's `node_index`. Only set for nodes
+  // in the selection set; ephemeral models never consume an index.
+  optional uint32 node_index = 46;
+
+  // Total number of nodes in the selection set, the denominator of `node_index`.
+  // Mirrors dbt core's `num_nodes`.
+  optional uint32 node_count_total = 47;
 }

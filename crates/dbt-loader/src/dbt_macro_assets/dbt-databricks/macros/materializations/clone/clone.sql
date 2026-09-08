@@ -40,8 +40,8 @@
   {# DIVERGENCE END #}
 
       {%- set target_relation = this.incorporate(type='table') -%}
-      {% if existing_relation is not none and not existing_relation.is_table %}
-        {{ log("Dropping relation " ~ existing_relation ~ " because it is of type " ~ existing_relation.type) }}
+      {% if clone_requires_drop(existing_relation) %}
+        {{ log("Dropping relation " ~ existing_relation ~ " because it cannot be replaced by a shallow clone in place (type " ~ existing_relation.type ~ ")") }}
         {{ drop_relation_if_exists(existing_relation) }}
       {% endif %}
 

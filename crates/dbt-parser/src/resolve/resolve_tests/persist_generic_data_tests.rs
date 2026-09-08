@@ -490,6 +490,7 @@ fn persist_inner(
         unique_id_hash: Some(test_hash),
         column_tags: column_tags.to_vec(),
         unrendered_schema_config,
+        description: test.description().map(|s| s.to_string()),
     })
 }
 
@@ -1542,7 +1543,11 @@ fn collect_versioned_model_tests(
         let mut version_config = base_test_config.clone();
         version_config.version_num = Some(version_suffix.to_string());
 
-        if let Some(version_tests) = version.data_tests.clone() {
+        // In properties files, version tests may be specified via either `tests` or `data_tests`.
+        // Treat them equivalently (same as model-level and column-level tests).
+        if let Some(version_tests) =
+            base_tests_inner(version.tests.as_deref(), version.data_tests.as_deref())?
+        {
             version_config.model_tests = Some(version_tests);
         }
 
@@ -2233,8 +2238,12 @@ mod tests {
         );
     }
 
+    /// dbt-core renames a version's `tests:` to `data_tests:` in
+    /// `SchemaParser.validate_data_tests` (`core/dbt/parser/schemas.py`, the `# versioned models`
+    /// branch) before `get_tests_for_version` ever runs, so the alias is honored at the version
+    /// level exactly like it is at the model and column levels. See dbt-labs/fs#14416.
     #[test]
-    fn test_version_model_tests_legacy_alias_ignored() {
+    fn test_version_model_tests_legacy_alias_honored() {
         let base_config = versioned_model_base_config();
         let version = version_with_model_tests(
             Some(vec![DataTests::String(Spanned::from(
@@ -2247,22 +2256,44 @@ mod tests {
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].version_num.as_deref(), Some("1"));
-        assert!(
-            result[0].model_tests.is_none(),
-            "version-level `tests` should not create model tests"
-        );
+        let model_tests = result[0]
+            .model_tests
+            .as_ref()
+            .expect("version-level `tests` should create model tests");
+        assert_eq!(model_tests.len(), 1);
+        assert_eq!(model_tests[0].test_name(), Some("not_null"));
     }
 
+    /// dbt-core's `validate_and_rename` raises `ValidationError: Invalid test config: cannot have
+    /// both 'tests' and 'data_tests' defined` for a version carrying both keys, so Fusion errors
+    /// too rather than silently picking one.
     #[test]
-    fn test_version_model_data_tests_prefer_data_tests_when_legacy_alias_also_present() {
+    fn test_version_model_tests_both_keys_is_an_error() {
         let base_config = versioned_model_base_config();
-        let data_test = DataTests::String(Spanned::from("unique".to_string()));
         let version = version_with_model_tests(
             Some(vec![DataTests::String(Spanned::from(
                 "not_null".to_string(),
             ))]),
-            Some(vec![data_test]),
+            Some(vec![DataTests::String(Spanned::from("unique".to_string()))]),
         );
+
+        let err = collect_versioned_model_tests(&base_config, &[version])
+            .expect_err("a version with both `tests` and `data_tests` must be rejected");
+
+        assert!(
+            err.to_string()
+                .contains("Cannot have both 'tests' and 'data_tests' defined"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// dbt-core guards the rename with `if data.get("tests"):`, so an empty `tests:` list is falsy
+    /// and never becomes `data_tests`. `get_tests_for_version` then sees `data_tests is None` and
+    /// falls back to the model-level tests, so an empty `tests:` list must NOT override them.
+    #[test]
+    fn test_version_model_empty_tests_list_inherits_model_level() {
+        let base_config = versioned_model_base_config_with_model_tests();
+        let version = version_with_model_tests(Some(vec![]), None);
 
         let result = collect_versioned_model_tests(&base_config, &[version]).unwrap();
 
@@ -2270,9 +2301,60 @@ mod tests {
         let model_tests = result[0]
             .model_tests
             .as_ref()
-            .expect("version data_tests should be preserved");
+            .expect("an empty `tests:` list should leave the inherited model-level tests in place");
+        assert_eq!(model_tests.len(), 1);
+        assert_eq!(model_tests[0].test_name(), Some("not_null"));
+    }
+
+    /// An empty `data_tests:` list is a real value, not an absent one: dbt-core checks
+    /// `data_tests is not None`, so `[]` overrides the model-level tests with nothing.
+    #[test]
+    fn test_version_model_empty_data_tests_list_overrides_model_level() {
+        let base_config = versioned_model_base_config_with_model_tests();
+        let version = version_with_model_tests(None, Some(vec![]));
+
+        let result = collect_versioned_model_tests(&base_config, &[version]).unwrap();
+
+        assert_eq!(result.len(), 1);
+        let model_tests = result[0]
+            .model_tests
+            .as_ref()
+            .expect("an empty `data_tests:` list should still replace the inherited tests");
+        assert!(
+            model_tests.is_empty(),
+            "expected the inherited tests to be overridden with nothing; got {model_tests:?}"
+        );
+    }
+
+    /// A falsy `tests:` never reaches dbt-core's both-keys check, so pairing an empty `tests:` list
+    /// with a real `data_tests:` is allowed and the `data_tests:` value is used.
+    #[test]
+    fn test_version_model_empty_tests_list_with_data_tests_is_not_an_error() {
+        let base_config = versioned_model_base_config();
+        let version = version_with_model_tests(
+            Some(vec![]),
+            Some(vec![DataTests::String(Spanned::from("unique".to_string()))]),
+        );
+
+        let result = collect_versioned_model_tests(&base_config, &[version])
+            .expect("an empty `tests:` list must not trigger the both-keys error");
+
+        assert_eq!(result.len(), 1);
+        let model_tests = result[0]
+            .model_tests
+            .as_ref()
+            .expect("version `data_tests` should be used");
         assert_eq!(model_tests.len(), 1);
         assert_eq!(model_tests[0].test_name(), Some("unique"));
+    }
+
+    fn versioned_model_base_config_with_model_tests() -> GenericTestConfig {
+        GenericTestConfig {
+            model_tests: Some(vec![DataTests::String(Spanned::from(
+                "not_null".to_string(),
+            ))]),
+            ..versioned_model_base_config()
+        }
     }
 
     fn versioned_model_base_config() -> GenericTestConfig {
@@ -3850,5 +3932,103 @@ mod tests {
             "expected generated test SQL at {}",
             written_path.display()
         );
+    }
+
+    #[test]
+    fn test_persist_inner_carries_generic_test_description() {
+        let out_dir = tempfile::tempdir().unwrap();
+        let io_args = IoArgs {
+            out_dir: out_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "orders".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let test = DataTests::CustomTest(
+            CustomTest::MultiKey(Box::new(CustomTestMultiKey {
+                test_name: "unique".to_string(),
+                name: None,
+                description: Some("Order id must be unique across all orders.".to_string()),
+                config: None,
+                column_name: None,
+                arguments: Verbatim::from(None),
+                __deprecated_args_and_configs__: Verbatim::from(BTreeMap::new()),
+            }))
+            .into(),
+        );
+
+        let test_asset = persist_inner(
+            "project_name",
+            "project_name",
+            &test_config,
+            Some("id".to_string()),
+            Some(StringOrArrayOfStrings::String("id".to_string())),
+            &test,
+            &io_args,
+            Path::new("models/schema.yml"),
+            &mut HashSet::new(),
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &[],
+            false,
+            LegacyTestSyntaxHandling::Strict,
+            RawTestConfig::default(),
+        )
+        .expect("persist_inner should succeed");
+
+        assert_eq!(
+            test_asset.description,
+            Some("Order id must be unique across all orders.".to_string())
+        );
+    }
+
+    #[test]
+    fn test_persist_inner_bare_string_test_has_no_description() {
+        // The `- unique` bare form has no description slot at all; a generic test
+        // authored this way must not silently inherit some other value.
+        let out_dir = tempfile::tempdir().unwrap();
+        let io_args = IoArgs {
+            out_dir: out_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "orders".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let test = DataTests::String("unique".to_string().into());
+
+        let test_asset = persist_inner(
+            "project_name",
+            "project_name",
+            &test_config,
+            Some("id".to_string()),
+            Some(StringOrArrayOfStrings::String("id".to_string())),
+            &test,
+            &io_args,
+            Path::new("models/schema.yml"),
+            &mut HashSet::new(),
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &[],
+            false,
+            LegacyTestSyntaxHandling::Strict,
+            RawTestConfig::default(),
+        )
+        .expect("persist_inner should succeed");
+
+        assert_eq!(test_asset.description, None);
     }
 }

@@ -22,6 +22,7 @@ pub mod task;
 pub mod task_runner_hooks;
 pub mod task_spans;
 pub mod test_aggregation;
+pub mod unit_test_schema;
 pub mod utils;
 pub mod visitor;
 

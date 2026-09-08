@@ -57,11 +57,11 @@ where
     let query = base_query_provider(ctx)?;
     let limit = ctx.inner.arg.limit.filter(|limit| *limit > 0);
 
-    // `--job-id` always goes through the adhoc_runner path (RemoteAdhocRunner
-    // is the only one that knows how to fetch an existing job's result
+    // `--query-id` always goes through the adhoc_runner path (RemoteAdhocRunner
+    // is the only one that knows how to fetch an existing query's result
     // directly) -- never the local sidecar worker, which would just execute
-    // the placeholder SQL and silently ignore the requested job id.
-    let use_worker_backend = ctx.inner.arg.job_id.is_none()
+    // the placeholder SQL and silently ignore the requested query id.
+    let use_worker_backend = ctx.inner.arg.query_id.is_none()
         && matches!(ctx.inner.execute, Execute::Sidecar | Execute::Service)
         && ctx.is_sidecar();
 
@@ -185,7 +185,7 @@ where
     };
     let column_names = make_column_names(schema.as_ref());
     let mut title = make_title("Query", object_name.as_str());
-    // Surface the dbt-compute job id, if this ran via lake compute: the only
+    // Surface the dbt-compute query id, if this ran via lake compute: the only
     // way to later recover this result via dbt-compute's
     // `/download_credentials` endpoint, and otherwise never shown to the user.
     if let Some(query_id) = schema
@@ -193,7 +193,7 @@ where
         .get(dbt_adbc::lake_compute::schema_metadata::QUERY_ID)
         .filter(|id| !id.is_empty())
     {
-        title = format!("{title} (job_id={query_id})");
+        title = format!("{title} (query_id={query_id})");
     }
     let table = pretty_data_table(
         &title,

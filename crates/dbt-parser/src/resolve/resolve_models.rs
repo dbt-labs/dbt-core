@@ -43,7 +43,6 @@ use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
-use dbt_schemas::materialization_resolver::MaterializationResolver;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtModelAttr;
@@ -67,7 +66,6 @@ use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
 use dbt_schemas::schemas::dbt_column::VersionColumnProperties;
 use dbt_schemas::schemas::dbt_column::process_columns;
-use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::manifest::semantic_model::NodeRelation;
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
@@ -173,7 +171,6 @@ pub async fn resolve_models(
     root_package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
     models_properties: &BTreeMap<String, MinimalPropertiesEntry>,
-    macros: &BTreeMap<String, DbtMacro>,
     database: &str,
     schema: &str,
     default_adapter: AdapterType,
@@ -198,12 +195,6 @@ pub async fn resolve_models(
     let mut node_names = HashSet::new();
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
-
-    // Used to detect custom materializations — including ones that shadow a
-    // built-in name (e.g. `table`, `incremental`) — so static analysis can be
-    // skipped for the models that use them (see the per-model use below).
-    let materialization_resolver =
-        MaterializationResolver::new(macros, root_package.dbt_project.name.as_str());
 
     let is_dependency = dependency_package_name.is_some();
     // Best-effort raw parse of the root project's `models:` subtree, used only to hydrate
@@ -284,7 +275,6 @@ pub async fn resolve_models(
             // show in resolve_inner's parsing of model yaml properties
             m.remove("metrics");
         }
-
         models_properties_sans_semantics.insert(model_key.clone(), v);
     });
 
@@ -416,6 +406,18 @@ pub async fn resolve_models(
             .get(ref_name)
             .and_then(|mpe| mpe.version_info.as_ref().map(|v| v.latest_version.clone()));
 
+        let name_span = models_properties_sans_semantics
+            .get(ref_name)
+            .and_then(|mpe| {
+                mpe.name_span.is_valid().then(|| {
+                    dbt_common::Span::from_serde_span(
+                        mpe.name_span.clone(),
+                        mpe.relative_path.clone(),
+                    )
+                })
+            })
+            .unwrap_or_default();
+
         let unique_id = get_unique_id(&model_name, package_name, maybe_version.clone(), "model");
 
         if let Some(state) = &model_config.state {
@@ -517,7 +519,6 @@ pub async fn resolve_models(
 
         let mut columns = process_columns(
             properties.columns.as_ref(),
-            model_config.meta.clone(),
             model_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
         let materialized = model_config.materialized.clone();
@@ -617,23 +618,15 @@ pub async fn resolve_models(
             &dbt_asset.path,
         )?;
 
-        // A model uses a custom materialization when the macro dbt would
-        // dispatch for its materialization is user-defined — either a novel
-        // name (e.g. `my_incremental`) or a user macro that *shadows* a
-        // built-in name (e.g. `table`/`incremental`). dbt runs the user's
-        // macro in both cases, so Fusion cannot statically analyze the model;
-        // skipping static analysis avoids emitting malformed SQL when the
-        // materialization guards `graph.nodes` introspection behind
-        // `{% if execute %}` (dbt-core#14486).
-        let is_custom_materialization = materialization_resolver.is_custom_materialization(
-            &materialized.to_string(),
-            resolved_node_adapter.unwrap_or(default_adapter),
-        );
-        let static_analysis = if is_custom_materialization {
-            Spanned::new(StaticAnalysisKind::Off)
-        } else {
-            model_config.static_analysis.clone()
-        };
+        // A model using a custom materialization honors its configured
+        // `static_analysis` like any other model. Fusion used to force `off`
+        // here, on the theory that a user materialization may persist a schema
+        // Fusion cannot see. That silently opted whole projects out of static
+        // analysis — even `baseline`, which never needs the analyzed upstream
+        // schema. Schema-modifying custom materializations are now the user's
+        // to account for (set `static_analysis: off` on those models), the same
+        // way introspective queries are handled.
+        let static_analysis = model_config.static_analysis.clone();
         check_node_static_analysis(
             &model_config,
             arg.static_analysis,
@@ -734,7 +727,7 @@ pub async fn resolve_models(
                 name: model_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: DbtPath::from(dbt_asset.path.to_owned()),
-                name_span: dbt_common::Span::default(),
+                name_span,
                 original_file_path,
                 patch_path: patch_path.as_ref().map(DbtPath::from),
                 unique_id: unique_id.clone(),
@@ -884,12 +877,8 @@ pub async fn resolve_models(
                     .try_into()
                     .expect("DbtQuoting -> QuotingConfig conversion"),
                 quoting_ignore_case: model_config.quoting.snowflake_ignore_case.unwrap_or(false),
-                static_analysis_off_reason: if is_custom_materialization {
-                    Some(StaticAnalysisOffReason::CustomMaterialization)
-                } else {
-                    (*static_analysis == StaticAnalysisKind::Off)
-                        .then_some(StaticAnalysisOffReason::ConfiguredOff)
-                },
+                static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
+                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 unrendered_config,
             },
@@ -1227,7 +1216,6 @@ fn process_versioned_columns(
                 .collect();
             let version_columns = process_columns(
                 Some(&version_column_props),
-                model_config.meta.clone(),
                 model_config.tags.inner().clone().map(|tags| tags.into()),
             )?;
 

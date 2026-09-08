@@ -17,6 +17,10 @@ enum LakeComputeAuthIR<'a> {
         token_url: Option<&'a str>,
         client_id: Option<&'a str>,
     },
+    Fivetran {
+        credential: &'a str,
+        api_url: Option<&'a str>,
+    },
 }
 
 impl<'a> LakeComputeAuthIR<'a> {
@@ -55,6 +59,20 @@ impl<'a> LakeComputeAuthIR<'a> {
                     builder.with_named_option(lake_compute::OKTA_CLIENT_ID, v)?;
                 }
             }
+            Self::Fivetran {
+                credential,
+                api_url,
+            } => {
+                builder.with_named_option(
+                    lake_compute::AUTH_TYPE,
+                    lake_compute::auth_type::FIVETRAN,
+                )?;
+                builder.with_named_option(lake_compute::FIVETRAN_CREDENTIAL, credential)?;
+                // Absent, the driver exchanges against production Fivetran.
+                if let Some(v) = api_url {
+                    builder.with_named_option(lake_compute::FIVETRAN_API_URL, v)?;
+                }
+            }
         }
         Ok(builder)
     }
@@ -64,7 +82,12 @@ fn parse_auth<'a>(
     config: &'a AdapterConfig,
     _warning_printer: &dyn AuthWarningPrinter,
 ) -> Result<LakeComputeAuthIR<'a>, AuthError> {
-    let method = config.require_str("method")?;
+    // Absent `method` defaults to `'token'` -- the common case for a secondary
+    // (non-default) `lake_compute` output, which otherwise needs no auth
+    // config beyond a token. See fs#13653.
+    let method = config
+        .get_str("method")
+        .unwrap_or(lake_compute::auth_type::TOKEN);
     match method {
         lake_compute::auth_type::API_KEY => Ok(LakeComputeAuthIR::ApiKey {
             api_key: config.require_str("api_key")?,
@@ -77,11 +100,16 @@ fn parse_auth<'a>(
             token_url: config.get_str("okta_token_url"),
             client_id: config.get_str("okta_client_id"),
         }),
+        lake_compute::auth_type::FIVETRAN => Ok(LakeComputeAuthIR::Fivetran {
+            credential: config.require_str("fivetran_credential")?,
+            api_url: config.get_str("fivetran_api_url"),
+        }),
         other => Err(AuthError::config(format!(
-            "unknown ALT auth method '{other}'; expected one of: '{}', '{}', '{}'",
+            "unknown ALT auth method '{other}'; expected one of: '{}', '{}', '{}', '{}'",
             lake_compute::auth_type::API_KEY,
             lake_compute::auth_type::TOKEN,
-            lake_compute::auth_type::OKTA_BROWSER
+            lake_compute::auth_type::OKTA_BROWSER,
+            lake_compute::auth_type::FIVETRAN
         ))),
     }
 }
@@ -168,6 +196,22 @@ mod tests {
     }
 
     #[test]
+    fn missing_method_defaults_to_token() {
+        let builder = configure(Mapping::from_iter([
+            ("base_url".into(), "https://compute.example".into()),
+            ("token".into(), "secret-token".into()),
+        ]));
+        assert_eq!(
+            other_option_value(&builder, lake_compute::AUTH_TYPE),
+            Some("token")
+        );
+        assert_eq!(
+            other_option_value(&builder, lake_compute::AUTH_TOKEN),
+            Some("secret-token")
+        );
+    }
+
+    #[test]
     fn okta_browser_method() {
         let builder = configure(Mapping::from_iter([
             ("base_url".into(), "https://compute.example".into()),
@@ -185,39 +229,37 @@ mod tests {
     }
 
     #[test]
-    fn missing_base_url_defaults_to_production() {
-        // SAFETY: single-threaded test; no other test in this module reads
-        // or writes `DBT_COMPUTE_BASE_URL`.
-        unsafe {
-            std::env::remove_var("DBT_COMPUTE_BASE_URL");
-        }
+    fn fivetran_method() {
         let builder = configure(Mapping::from_iter([
-            ("method".into(), "api_key".into()),
-            ("api_key".into(), "secret-key".into()),
+            ("base_url".into(), "https://compute.example".into()),
+            ("method".into(), "fivetran".into()),
+            ("fivetran_credential".into(), "dct_secret".into()),
         ]));
         assert_eq!(
-            other_option_value(&builder, lake_compute::BASE_URL),
-            Some(DEFAULT_BASE_URL)
+            other_option_value(&builder, lake_compute::AUTH_TYPE),
+            Some("fivetran")
+        );
+        assert_eq!(
+            other_option_value(&builder, lake_compute::FIVETRAN_CREDENTIAL),
+            Some("dct_secret")
+        );
+        assert_eq!(
+            other_option_value(&builder, lake_compute::FIVETRAN_API_URL),
+            None
         );
     }
 
     #[test]
-    fn base_url_env_var_overrides_default() {
-        // SAFETY: single-threaded test; restored immediately after use.
-        #[allow(clippy::disallowed_methods)]
-        unsafe {
-            std::env::set_var("DBT_COMPUTE_BASE_URL", "https://env.example");
-        }
-        let builder = configure(Mapping::from_iter([
-            ("method".into(), "api_key".into()),
-            ("api_key".into(), "secret-key".into()),
-        ]));
-        unsafe {
-            std::env::remove_var("DBT_COMPUTE_BASE_URL");
-        }
-        assert_eq!(
-            other_option_value(&builder, lake_compute::BASE_URL),
-            Some("https://env.example")
+    fn fivetran_method_requires_a_credential() {
+        let err = LakeComputeAuth::new(Box::new(crate::NoopAuthWarningPrinter))
+            .configure(&AdapterConfig::new(Mapping::from_iter([(
+                "method".into(),
+                "fivetran".into(),
+            )])))
+            .expect_err("missing credential");
+        assert!(
+            format!("{err:?}").contains("fivetran_credential"),
+            "{err:?}"
         );
     }
 }

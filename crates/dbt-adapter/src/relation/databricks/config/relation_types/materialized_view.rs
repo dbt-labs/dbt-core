@@ -12,16 +12,13 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks materialized views
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
-    // TODO: missing from Python dbt-databricks:
-    // - relation tags
-    // - query
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 9] = [
         Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::PartitionByLoader),
-        // Box::new(components::QueryLoader),
+        Box::new(components::QueryLoader),
         Box::new(components::RefreshLoader),
-        // Box::new(components::RelationTagsLoader),
+        Box::new(components::RelationTagsLoader),
         Box::new(components::RowFilterLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::ColumnMasksLoader),
@@ -106,6 +103,12 @@ mod tests {
                                 ]),
                             ),
                         ),
+                        (
+                            components::QueryLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::QueryLoader::new_component_type_erased("SELECT 1000"),
+                            ),
+                        ),
                     ],
                     requires_full_refresh,
                 ),
@@ -115,6 +118,11 @@ mod tests {
         partition_column_new
     </partition_by>
 </partitioned_by>
+<query>
+    <query>
+        SELECT 1000
+    </query>
+</query>
 <tblproperties>
     <tblproperties>
         <data.quality>
@@ -132,9 +140,40 @@ mod tests {
                 requires_full_refresh: true,
             },
             TestCase {
+                description: "changing only a materialized view's compiled SQL should require a full refresh",
+                relation_loader: new_loader(),
+                current_state: TestModelConfig {
+                    query: Some("SELECT 1".to_string()),
+                    ..Default::default()
+                },
+                desired_state: TestModelConfig {
+                    query: Some("SELECT 1000".to_string()),
+                    ..Default::default()
+                },
+                expected_changeset: RelationComponentConfigChangeSet::new(
+                    AdapterType::Databricks,
+                    [(
+                        components::QueryLoader.type_name(),
+                        ComponentConfigChange::Some(
+                            components::QueryLoader::new_component_type_erased("SELECT 1000"),
+                        ),
+                    )],
+                    requires_full_refresh,
+                ),
+                changeset_jinja: "
+<query>
+    <query>
+        SELECT 1000
+    </query>
+</query>
+                    ",
+                requires_full_refresh: true,
+            },
+            TestCase {
                 description: "changing a materialized view's refresh cron or tags should not trigger a full refresh",
                 relation_loader: new_loader(),
                 current_state: TestModelConfig {
+                    query: Some("SELECT 1".to_string()),
                     cron: Some("* * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
                     tags: IndexMap::from_iter([
@@ -144,6 +183,7 @@ mod tests {
                     ..Default::default()
                 },
                 desired_state: TestModelConfig {
+                    query: Some("SELECT 1".to_string()),
                     cron: Some("*/60 * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
                     tags: IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
@@ -163,13 +203,14 @@ mod tests {
                                 ),
                             ),
                         ),
-                        // TODO: re-add tags
-                        // (
-                        //     components::RelationTagsLoader.type_name(),
-                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new_component_type_erased(
-                        //         IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
-                        //     )),
-                        // ),
+                        (
+                            components::RelationTagsLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::RelationTagsLoader::new_component_type_erased(
+                                    IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
+                                ),
+                            ),
+                        ),
                         (
                             components::RowFilterLoader.type_name(),
                             ComponentConfigChange::Some(
@@ -194,6 +235,13 @@ mod tests {
         True
     </is_altered>
 </refresh>
+<tags>
+    <set_tags>
+        <a_tag>
+            new
+        </a_tag>
+    </set_tags>
+</tags>
 <row_filter>
     <function>
         test_db.test_schema.new_row_filter_fn

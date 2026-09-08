@@ -104,8 +104,20 @@ pub struct ParseSafeView {
 /// `ai_context` (no writer fills them — their real values are inside the `config` JSON,
 /// which is here). `file_path` and `checksum` are absent because the information schema
 /// does not have them.
+///
+/// `raw_code` is not here, and it is the one column absent by *resource type* rather than by
+/// phase, which is why it cannot live in this macro at all: `trim_model_payload` drops it from
+/// `__common_attr__` for models only — their payloads are multi-KB mostly because of source and
+/// compiled SQL, and dropping it is the point of the trim — so it is permanently NULL for
+/// `models` and populated for every other node type that has SQL. The views that do carry it
+/// name it themselves.
+///
+/// Worth knowing why the NULL matters more than an ordinary gap: the information schema
+/// publishes `raw_code` populated even for models, because its COPY path reads the epoch
+/// payloads rather than the index. A rule developed in `dbt show --info` therefore returns rows
+/// there and nothing as a check -- and nothing is a pass.
 macro_rules! node_cols {
-    ($($extra:expr,)*) => {
+    ($($extra:expr),* $(,)?) => {
         &[
             "unique_id",
             "name",
@@ -116,7 +128,6 @@ macro_rules! node_cols {
             "alias",
             "description",
             "node_language",
-            "raw_code",
             "database_name",
             "schema_name",
             "relation_name",
@@ -187,16 +198,12 @@ pub const VIEWS: &[ParseSafeView] = &[
         filter: Filter::All,
         cols: &["package_name", "ingested_at"],
     },
-    // `project_name` is in the information schema but not here: the index stores one row
-    // per top-level `vars` key, and it takes the writer's un-nesting to say which project
-    // a package-scoped var belongs to. A var scoped to a package therefore appears with
-    // the package as its `var_name` and its whole block as `var_value`.
     ParseSafeView {
         name: "project_vars",
         vocabulary: "project_vars",
         src: Src::Table("project_vars"),
         filter: Filter::All,
-        cols: &["var_name", "var_value", "ingested_at"],
+        cols: &["project_name", "var_name", "var_value", "ingested_at"],
     },
     ParseSafeView {
         name: "project_env_vars",
@@ -225,28 +232,28 @@ pub const VIEWS: &[ParseSafeView] = &[
         vocabulary: "snapshots",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["snapshot"]),
-        cols: node_cols![],
+        cols: node_cols!["raw_code"],
     },
     ParseSafeView {
         name: "functions",
         vocabulary: "functions",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["function"]),
-        cols: node_cols![],
+        cols: node_cols!["raw_code"],
     },
     ParseSafeView {
         name: "analyses",
         vocabulary: "analyses",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["analysis"]),
-        cols: node_cols![],
+        cols: node_cols!["raw_code"],
     },
     ParseSafeView {
         name: "hooks",
         vocabulary: "hooks",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["operation", "sql_operation"]),
-        cols: node_cols![],
+        cols: node_cols!["raw_code"],
     },
     // The source-only columns live here and nowhere else, as in the information schema:
     // on a model row they would always be NULL. `loaded_at_query`, `freshness`,
@@ -337,7 +344,7 @@ pub const VIEWS: &[ParseSafeView] = &[
         vocabulary: "checks",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["check"]),
-        cols: node_cols![],
+        cols: node_cols!["raw_code"],
     },
     // ── everything else declared in YAML ────────────────────────────────
     ParseSafeView {

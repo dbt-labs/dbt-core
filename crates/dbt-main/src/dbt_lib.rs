@@ -3,6 +3,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
+use dbt_common::tracing::formatters::duration::format_duration_fixed_width;
+use dbt_common::tracing::formatters::node::{format_node_action, format_node_type_fixed_width};
+
 use dbt_adapter::load_store::ResultStore;
 use dbt_adapter::{
     Adapter, AdapterType, convert_macro_result_to_record_batch,
@@ -91,7 +94,7 @@ use dbt_tasks_sa::base_context::build_base_context;
 use dbt_telemetry::ArtifactType;
 use dbt_telemetry::{
     CompiledCodeInline, NodeOutcome, NodeSkipReason, ProgressMessage, ShowDataOutput,
-    ShowDataOutputFormat, ShowResult,
+    ShowDataOutputFormat, ShowResult, TestOutcome,
 };
 
 use dbt_vortex::vortex_producer_is_running;
@@ -99,7 +102,7 @@ use dbt_vortex::vortex_producer_is_running;
 use git_version::git_version;
 use minijinja::Value;
 use serde_json::{json, to_string_pretty};
-use tracing::{Instrument, Span};
+use tracing::Instrument;
 use vortex_events::{build_result_string, invocation_end_event};
 
 use crate::{
@@ -408,7 +411,7 @@ async fn do_execute_fs(
             Some(LoginSubcommand::Status) => execute_login_status().await,
             None => {
                 execute_login(
-                    Arc::clone(&feature_stack.login_hooks),
+                    Arc::clone(&feature_stack.login.hooks),
                     token,
                     &eval_arg.io.invocation_id,
                 )
@@ -504,7 +507,7 @@ async fn do_execute_fs(
             }
         }
     } else if let Command::Core(Deps(deps_args)) = &cli.command {
-        let command_name = feature_stack.tracing.config_provider.get_command_name();
+        let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
@@ -528,7 +531,7 @@ async fn do_execute_fs(
             }
         };
     } else if let Command::Core(Clean(clean_args)) = &cli.command {
-        let command_name = feature_stack.tracing.config_provider.get_command_name();
+        let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
@@ -558,10 +561,7 @@ pub async fn execute_setup_and_all_phases(
     task_runner_hooks_factory: Arc<dyn TaskRunnerHooksFactory>,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    emit_version_info(
-        eval_arg,
-        feature_stack.tracing.config_provider.get_command_name(),
-    )?;
+    emit_version_info(eval_arg, feature_stack.cli.command_name)?;
 
     check_options(cli);
     if let Err(e) = validate_engine_env_vars() {
@@ -1343,9 +1343,83 @@ impl<'a> AllPhasesExecutor<'a> {
                         5,
                     );
 
+                    // A selector that matched nothing is one fact about the invocation, not one
+                    // fact per check: twenty checks produced twenty identical `CheckSkipped`
+                    // warnings, none of which said why. Say it once, in the words every other
+                    // command uses for an empty selection, and drop the per-check lines it
+                    // explains -- their `skipped` *status* still goes to `run_results.json`,
+                    // which is what `dbt retry` and any honest reading of the run depend on.
+                    //
+                    // `check` is the command that has to say it here, because it is the one
+                    // deliberately exempt from the schedule phase's own empty-selection warning
+                    // (its schedule is emptied on purpose once the gate passes, so "nothing to
+                    // do" would be a lie). `build` reaches that warning normally; repeating it
+                    // is exactly what this is trying to stop.
+                    let empty_selection = scope.as_ref().is_some_and(|s| s.is_empty());
+                    if empty_selection && self.arg.command == FsCommand::Check {
+                        if let Some(select_expr) = &schedule.select {
+                            emit_warn_log_message(
+                                ErrorCode::NoNodesForSelectionCriteria,
+                                format!(
+                                    "The selection criterion '{select_expr}' does not match any enabled nodes"
+                                ),
+                            );
+                        }
+                    }
+                    // Suppress only where the reason does get stated. An `--exclude`-only
+                    // `dbt check` has no criterion to name and no schedule-phase warning coming,
+                    // so silence there would be worse than repetition: it keeps its lines.
+                    let empty_selection_explained = empty_selection
+                        && (schedule.select.is_some() || self.arg.command != FsCommand::Check);
+
                     for r in &outcome.results {
+                        // One result line per check, in the shape a test's takes:
+                        // right-aligned verdict, fixed-width duration, node type, name.
+                        // Built from the same helpers the node formatter uses, so the
+                        // columns line up with the models and tests printed around it
+                        // on `dbt build`. Checks are not tasks, so they do not flow
+                        // through `NodeProcessed` -- borrowing the formatting is what
+                        // keeps them from looking like a different program's output.
+                        //
+                        // The verdict comes from `format_node_action` rather than a
+                        // local match, so a check's label and colour are a test's by
+                        // construction: green Passed, yellow Warned, red Failed. The
+                        // file and JSON layers strip ANSI from message bodies, so
+                        // colouring here reaches the terminal only.
+                        let (outcome, test_outcome, skip_reason) = match r.status {
+                            "pass" => (NodeOutcome::Success, Some(TestOutcome::Passed), None),
+                            "warn" => (NodeOutcome::Success, Some(TestOutcome::Warned), None),
+                            "fail" => (NodeOutcome::Success, Some(TestOutcome::Failed), None),
+                            "skipped" => (
+                                NodeOutcome::Skipped,
+                                None,
+                                Some(NodeSkipReason::Unspecified),
+                            ),
+                            // Not evaluated at all: red Failed, and the error below says
+                            // why. Reporting it as a test failure would claim the check
+                            // ran and disagreed with the project.
+                            _ => (NodeOutcome::Error, None, None),
+                        };
+                        emit_info_log_message(format!(
+                            "{} [{}] {} {}",
+                            format_node_action(
+                                outcome,
+                                skip_reason,
+                                test_outcome,
+                                None,
+                                false,
+                                true
+                            ),
+                            format_duration_fixed_width(Duration::from_secs_f64(r.execution_time)),
+                            format_node_type_fixed_width("check", true),
+                            r.name,
+                        ));
+
                         match r.status {
-                            "pass" => emit_info_log_message(format!("  PASS  check  {}", r.name)),
+                            // The line above is the whole report for a pass.
+                            "pass" => {}
+                            // And for a skip whose reason was already given once, above.
+                            "skipped" if empty_selection_explained => {}
                             "skipped" => emit_warn_log_message(
                                 ErrorCode::CheckSkipped,
                                 format!(
@@ -1355,10 +1429,15 @@ impl<'a> AllPhasesExecutor<'a> {
                                 ),
                             ),
                             _ => {
+                                // Show the rows the check's SQL returned, the way
+                                // `dbt show` shows a query's rows. `message` keeps the
+                                // compact `col=value` form for `run_results.json`,
+                                // which is read by tools rather than by people.
                                 let detail = r
-                                    .message
+                                    .rows
                                     .as_deref()
-                                    .map(|m| format!("\n  {m}"))
+                                    .map(|t| format!("\n{t}"))
+                                    .or_else(|| r.message.as_deref().map(|m| format!("\n  {m}")))
                                     .unwrap_or_default();
                                 let count = r
                                     .violations
@@ -1959,13 +2038,13 @@ impl<'a> AllPhasesExecutor<'a> {
                             None,
                         ) {
                             emit_warn_log_message(
-                                ErrorCode::Generic,
+                                ErrorCode::IndexWriteFailed,
                                 format!("dbt-index: save_artifact_meta: {e}"),
                             );
                         }
                     }
                     Err(e) => emit_warn_log_message(
-                        ErrorCode::Generic,
+                        ErrorCode::IndexWriteFailed,
                         format!("dbt-index: write-index: {e}"),
                     ),
                 }
@@ -2010,7 +2089,7 @@ impl<'a> AllPhasesExecutor<'a> {
                 };
                 if let Err(e) = write_info_schema(&metadata_dir, &info_schema_dir, &staging_dir) {
                     emit_warn_log_message(
-                        ErrorCode::Generic,
+                        ErrorCode::InfoSchemaWriteFailed,
                         format!("dbt: generate-info-schema: {e}"),
                     );
                 }
@@ -2786,11 +2865,18 @@ async fn fetch_catalog_data(
         let shared_errors_clone = shared_errors.clone();
         let progress_tracker_clone = progress_tracker.clone();
 
-        let cur_span = Span::current();
+        // Deliberately NOT `Span::current().enter()`ed inside the worker. The poll loop below
+        // abandons workers that blow past `WORKER_TIMEOUT` without joining them, so a worker can
+        // outlive this function. A live thread holding a handle to the invocation span (or any of
+        // its descendants) keeps that span's refcount above zero, so the subscriber never fires
+        // `on_close` for it -- and the end-of-invocation Execution Summary, which is emitted from
+        // `handle_invocation_end`, is silently dropped. Users saw a `--write-index`/`--write-catalog`
+        // build print "Fetched partial catalog.json results" and then simply stop, with no summary
+        // and no result counts (dbt-labs/fs#14424). Abandonment has to be total: these threads must
+        // not participate in the invocation's span lifetime.
         let handle = std::thread::Builder::new()
             .stack_size(8 * 1024 * 1024)
             .spawn(move || -> FsResult<()> {
-                let _sp = cur_span.enter();
                 // Worker loop: process tasks until queue is empty
                 loop {
                     let task = task_queue_clone.lock().unwrap().pop();

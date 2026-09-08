@@ -402,7 +402,7 @@ mod tests {
     // (`GLOBAL_SESSION`/`GLOBAL_REPLAYER` in `dbt_adapter::time_machine`).
     static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn should_initialize_run_cache_service_is_false_while_replaying() {
         use dbt_adapter::time_machine::{
             EventReplayer, get_or_init_recording, get_or_init_replayer, reset_time_machine_globals,
@@ -495,7 +495,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn initialization_validation_auth_error_fails_closed() {
         let client = ValidationClient(RunCacheServiceError::Auth("bad credentials".to_string()));
 
@@ -507,7 +507,7 @@ mod tests {
         assert_eq!(err.code, ErrorCode::AuthFailed);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn initialization_validation_non_auth_error_fails_open_to_skipped() {
         let client = ValidationClient(RunCacheServiceError::Disabled);
 
@@ -597,7 +597,7 @@ mod tests {
 
         assert!(lifecycle.service_client().is_some());
     }
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn get_or_initialize_reuses_lifecycle() {
         // initialize a run cache lifecycle when one currently does not exist
         let first = RunCacheLifecycle::get_or_initialize(
@@ -625,7 +625,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn get_or_initialize_concurrent_callers() {
         let handles: Vec<_> = (0..8)
             .map(|_| {

@@ -597,7 +597,7 @@ fn test_typed_mode_execute_result_is_not_tainted() {
 }
 
 /// `adapter.type()` must report the adapter the *node* runs on. Model bodies
-/// branch on it, so a node that selected a `lake_compute` adapter seeing the
+/// branch on it, so a node that selected a `lakecompute` adapter seeing the
 /// target's default would take the wrong branch.
 #[test]
 fn adapter_type_follows_the_nodes_selected_dialect() {
@@ -608,8 +608,8 @@ fn adapter_type_follows_the_nodes_selected_dialect() {
     assert_eq!(default.as_str().unwrap(), "duckdb");
 
     // Selection: the node's dialect wins.
-    let selected = dispatch_test_with_dialect(&adapter, "lake_compute", "type", &[]).unwrap();
-    assert_eq!(selected.as_str().unwrap(), "lake_compute");
+    let selected = dispatch_test_with_dialect(&adapter, "lakecompute", "type", &[]).unwrap();
+    assert_eq!(selected.as_str().unwrap(), "lakecompute");
 }
 
 /// An unparseable or absent dialect must fall back to the adapter's own type

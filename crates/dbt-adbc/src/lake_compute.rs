@@ -35,18 +35,18 @@ pub const CATALOG_BUNDLE: &str = "adbc.dbt.catalog_bundle";
 /// notice), newline-joined. Mirrors `adbc_driver_dbt::options::LAST_WARNINGS`.
 pub const LAST_WARNINGS: &str = "adbc.dbt.last_warnings";
 
-/// Statement option. Read-only. The dbt-compute job id of the most recently
+/// Statement option. Read-only. The LakeCompute job id of the most recently
 /// submitted statement, if any. Mirrors
 /// `adbc_driver_dbt::options::LAST_QUERY_ID`.
 pub const LAST_QUERY_ID: &str = "adbc.dbt.last_query_id";
 
 /// Statement option, write-only, mutually exclusive with setting a SQL query
-/// on the same statement. The dbt-compute job id of a previously completed
+/// on the same statement. The LakeCompute query id of a previously completed
 /// query whose result should be fetched directly instead of submitting new
 /// SQL -- no worker/Temporal round trip, just a Postgres-backed status lookup
 /// plus the same object-store fetch used for normal exports. Mirrors
-/// `adbc_driver_dbt::options::RESULT_JOB_ID`.
-pub const RESULT_JOB_ID: &str = "adbc.dbt.result_job_id";
+/// `adbc_driver_dbt::options::RESULT_QUERY_ID`.
+pub const RESULT_QUERY_ID: &str = "adbc.dbt.result_query_id";
 
 /// Schema metadata keys used to convey per-statement, backend-reported
 /// information that isn't part of the Arrow schema proper.
@@ -58,7 +58,7 @@ pub mod schema_metadata {
     /// return value; read back by `AdapterResponse::from_record_batch`.
     pub const WARNINGS: &str = "LAKE_COMPUTE_WARNINGS";
 
-    /// The dbt-compute job id of the executed statement. Set by
+    /// The LakeCompute job id of the executed statement. Set by
     /// `adbc_execute_with_options` (from [`super::LAST_QUERY_ID`]) so it can
     /// survive the trip through `adbc_execute_with_options`'s `RecordBatch`
     /// return value; read back by `AdapterResponse::from_record_batch` via
@@ -73,6 +73,11 @@ pub const OKTA_TOKEN_URL: &str = "adbc.dbt.auth.okta.token_url";
 /// Okta OAuth client id.
 pub const OKTA_CLIENT_ID: &str = "adbc.dbt.auth.okta.client_id";
 
+/// Long-lived Fivetran personal access token (`dct_…`).
+pub const FIVETRAN_CREDENTIAL: &str = "adbc.dbt.auth.fivetran.credential";
+/// Fivetran public API base URL the credential is exchanged against.
+pub const FIVETRAN_API_URL: &str = "adbc.dbt.auth.fivetran.api_url";
+
 /// Accepted values for [`AUTH_TYPE`].
 pub mod auth_type {
     /// Send an `X-API-Key` header.
@@ -81,4 +86,6 @@ pub mod auth_type {
     pub const TOKEN: &str = "token";
     /// Run the interactive Okta PKCE browser flow.
     pub const OKTA_BROWSER: &str = "okta_browser";
+    /// Exchange a Fivetran PAT for a short-lived bearer token.
+    pub const FIVETRAN: &str = "fivetran";
 }

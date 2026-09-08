@@ -54,7 +54,7 @@ impl ExtendedTaskRunnerCtxFactory for EmptyExtendedTaskRunnerCtxFactory {
         Arc::new(RemoteAdhocRunner {
             env,
             adapter_type,
-            job_id: args.job_id.clone(),
+            query_id: args.query_id.clone(),
         })
     }
 

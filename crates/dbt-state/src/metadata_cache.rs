@@ -218,7 +218,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::time::{Duration as TokioDuration, sleep};
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn relation_exists_lookup_caches_success() {
         let cache = RunCacheMetadataCache::new();
         let calls = Arc::new(AtomicUsize::new(0));
@@ -245,7 +245,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn failed_lookup_is_not_cached_for_fail_open_callers() {
         let cache = RunCacheMetadataCache::new();
 
@@ -281,7 +281,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn ttl_expiry_refreshes_cached_values() {
         let cache = RunCacheMetadataCache::with_ttl(Duration::from_millis(5));
         let calls = Arc::new(AtomicUsize::new(0));
@@ -315,7 +315,7 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn ttl_expiry_refreshes_lookup_errors() {
         let cache = RunCacheMetadataCache::with_ttl(Duration::from_millis(5));
 

@@ -1,4 +1,7 @@
-use crate::warn_error_options::{WarnErrorOptions, project_flags_get_value};
+use crate::{
+    tracing::dbt_convert::log_level_filter_to_tracing,
+    warn_error_options::{WarnErrorOptions, project_flags_get_value},
+};
 use clap::{
     ValueEnum,
     builder::{BoolishValueParser, TypedValueParser},
@@ -21,6 +24,7 @@ use std::{
 };
 use strum::EnumIter;
 use strum_macros::Display;
+use tracing::level_filters::LevelFilter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum LocalExecutionBackendKind {
@@ -359,6 +363,24 @@ impl IoArgs {
         out_dir_last == rel_first
     }
 
+    pub fn max_log_verbosity(&self) -> LevelFilter {
+        self.log_level
+            .map(|lf| log_level_filter_to_tracing(&lf))
+            .unwrap_or(LevelFilter::INFO)
+    }
+
+    pub fn max_file_log_verbosity(&self) -> LevelFilter {
+        self.log_level_file
+            .map(|lf| log_level_filter_to_tracing(&lf))
+            .unwrap_or(LevelFilter::DEBUG)
+    }
+
+    /// OTel Parquet tracing is only enabled when explicitly requested via
+    /// --otel/-parquet-file-name. The write_metadata flag no longer auto-enables it.
+    pub fn otel_parquet_file_name(&self) -> Option<&str> {
+        self.otel_parquet_file_name.as_deref()
+    }
+
     // -----------------------------------------------------------------------------------------
     // Sidecar/DuckDB path helpers
     // -----------------------------------------------------------------------------------------
@@ -610,10 +632,10 @@ pub struct EvalArgs {
     /// `run-operation --adapter <type>`: run against this non-default adapter
     /// instead of the target's default one.
     pub adapter_override: Option<String>,
-    /// `show --job-id <id>`: fetch a previously completed dbt-compute job's
+    /// `show --query-id <id>`: fetch a previously completed LakeCompute query's
     /// result directly, instead of compiling/executing a query. Mutually
     /// exclusive with `inline`.
-    pub job_id: Option<String>,
+    pub query_id: Option<String>,
     pub warn_error: Option<bool>,
     pub warn_error_options: WarnErrorOptions,
     pub version_check: bool,
@@ -1379,6 +1401,10 @@ pub enum StaticAnalysisOffReason {
     ConfiguredOff,
     UnableToFetchSchema,
     NoDownstream,
+    /// No longer produced: a model with a custom materialization now honors its
+    /// configured `static_analysis` (dbt-labs/fs#14357). Retained because
+    /// `RunResultOutput` deserializes this field, so a `run_results.json`
+    /// written by an older Fusion must still parse (e.g. `dbt retry`).
     CustomMaterialization,
 }
 

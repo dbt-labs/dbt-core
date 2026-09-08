@@ -4,16 +4,19 @@ import { describe, expect, test, vi } from 'vitest';
 import type { ColumnLineageGraph } from '../shared';
 import { ColumnLineageMini } from './ColumnLineageView';
 
-// Capture the node ids the subgraph hands to the Dag so we can assert it was
-// built from `graph.edges` (not reconstructed by string-parsing).
+// Capture the node ids the subgraph hands to ReactFlow so we can assert it
+// was built from `graph.edges` (not reconstructed by string-parsing).
 const dagNodeIds = vi.fn<(ids: string[]) => void>();
-vi.mock('@dbt-labs/dbt-dag', () => ({
-  Dag: ({ nodes }: { nodes: Array<{ id: string }> }) => {
-    dagNodeIds(nodes.map((n) => n.id));
-    return <div data-testid="dag" />;
-  },
-  transformationTypes: ['RENAME', 'RAW', 'UNKNOWN'],
-}));
+vi.mock('@xyflow/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@xyflow/react')>();
+  return {
+    ...actual,
+    ReactFlow: ({ nodes }: { nodes: Array<{ id: string }> }) => {
+      dagNodeIds(nodes.map((n) => n.id));
+      return <div data-testid="dag" />;
+    },
+  };
+});
 
 describe('ColumnLineageMini gated handling', () => {
   test('renders the UpgradeCard when result is gated and a userState exists', () => {

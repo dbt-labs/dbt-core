@@ -203,15 +203,15 @@ impl<'a> CompilationPhasesExecutor<'a> {
             {
                 show_args.inline.clone()
             }
-            // `show --job-id <id>`: no SQL to compile at all -- this is a
+            // `show --query-id <id>`: no SQL to compile at all -- this is a
             // direct result-fetch, not a query. A placeholder gets the
             // inline-node machinery (loader/Showable) to build the same
             // ephemeral node `--inline` uses, so `run_adhoc.rs` has a node to
             // execute against; it's never actually rendered/run as SQL,
-            // since `eval_args.job_id` being set makes `run_adhoc.rs` set
-            // `RESULT_JOB_ID` and fetch instead of compiling this string.
+            // since `eval_args.query_id` being set makes `run_adhoc.rs` set
+            // `RESULT_QUERY_ID` and fetch instead of compiling this string.
             Command::Core(Show(ShowArgs {
-                job_id: Some(_), ..
+                query_id: Some(_), ..
             })) => Some("select 1".to_string()),
             _ => None,
         };
@@ -311,7 +311,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
         *version_check_handle = spawn_version_check_if_possible(
             config,
             self.arg.local_execution_backend,
-            !feature_stack.version_check_enabled,
+            !feature_stack.cli.version_check_enabled,
             feature_stack.cli.command_name,
         );
         self.token.check_cancellation()?;
@@ -458,7 +458,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                     None,
                 ) {
                     emit_warn_log_message(
-                        ErrorCode::Generic,
+                        ErrorCode::IndexWriteFailed,
                         format!("dbt-index: save_artifact_meta: {e}"),
                     );
                 }
@@ -2998,6 +2998,10 @@ fn write_parse_artifacts(arg: &EvalArgs) {
                     "--write-index: the index produced by `parse` is incomplete; column schemas and column-level lineage are only written by `compile`, `run`, or `build`.",
                 );
             }
+            // `Generic`, like the advisory above: this arm is only reachable through
+            // `parse --write-index`, and that flag is undocumented. The index failures a
+            // user can actually meet -- `build`/`run`/`check`, where the index is implied
+            // on -- are reported from `dbt_lib` under `IndexWriteFailed`.
             Err(e) => {
                 emit_warn_log_message(ErrorCode::Generic, format!("dbt-index: write-index: {e}"))
             }
@@ -3019,11 +3023,11 @@ fn write_parse_artifacts(arg: &EvalArgs) {
         };
         match write_info_schema(&metadata_dir, &info_schema_dir, &staging_dir) {
             Ok(_) => emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::InfoSchemaIncomplete,
                 "--generate-info-schema: the information schema produced by `parse` is incomplete; column types, column-level lineage, and runtime results are only written by `compile`, `run`, or `build`.",
             ),
             Err(e) => emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::InfoSchemaWriteFailed,
                 format!("dbt: generate-info-schema: {e}"),
             ),
         }

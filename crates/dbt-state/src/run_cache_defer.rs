@@ -897,7 +897,7 @@ mod tests {
         assert!(should_update_defer_node("model.test.manual_fallback", None));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_resolve_defer_nodes_via_state_returns_mapping_on_success() {
         let expected = HashMap::from([(
             "model.test.a".to_string(),
@@ -921,7 +921,7 @@ mod tests {
         assert_eq!(result, Some(expected));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_resolve_defer_nodes_via_state_returns_none_empty_node_ids() {
         let client: SharedRunCacheServiceClient =
             Arc::new(MockResolveClient(ResolveOutcome::Ok(HashMap::new())));
@@ -940,7 +940,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_resolve_defer_nodes_via_state_fallsback_on_client_error() {
         let client: SharedRunCacheServiceClient = Arc::new(MockResolveClient(ResolveOutcome::Err));
         let node_ids = BTreeSet::from(["model.test.a".to_string()]);
@@ -959,7 +959,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_get_state_resolved_ids_skips_unsupported_dialect() {
         let model_id = "model.test.a".to_string();
         let mut defer_nodes = Nodes::default();
@@ -989,7 +989,7 @@ mod tests {
         assert_eq!(model.__base_attr__.database, "dev_db");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_get_state_resolved_ids_empty_on_client_error() {
         let model_id = "model.test.a".to_string();
         let mut defer_nodes = Nodes::default();
@@ -1017,7 +1017,7 @@ mod tests {
         assert_eq!(model.__base_attr__.database, "dev_db");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_get_state_resolved_ids_success() {
         let model_id = "model.test.a".to_string();
         let mut defer_nodes = Nodes::default();

@@ -2,7 +2,7 @@
 
 use crate::errors::AdapterResult;
 use crate::relation::config_v2::{
-    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, impl_loader,
+    ComponentConfig, ComponentConfigLoader, RelationConfig, SimpleComponentConfigImpl, impl_loader,
 };
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
@@ -38,19 +38,24 @@ fn merge_tags_diff(
     desired_state: &IndexMap<String, IndexMap<String, String>>,
     current_state: &IndexMap<String, IndexMap<String, String>>,
 ) -> Option<IndexMap<String, IndexMap<String, String>>> {
-    let mut merged = current_state.clone();
+    let current_by_lower = current_state
+        .iter()
+        .map(|(column_name, tags)| (column_name.to_lowercase(), tags))
+        .collect::<IndexMap<_, _>>();
+    let changed = desired_state
+        .iter()
+        .filter(|(column_name, tags)| {
+            current_by_lower
+                .get(&column_name.to_lowercase())
+                .is_none_or(|current| current != tags)
+        })
+        .map(|(column_name, tags)| (column_name.clone(), tags.clone()))
+        .collect::<IndexMap<_, _>>();
 
-    for (column_name, column_tag_map) in desired_state {
-        let column_entry = merged.entry(column_name.clone()).or_default();
-        for (tag_name, tag_value) in column_tag_map {
-            column_entry.insert(tag_name.clone(), tag_value.clone());
-        }
-    }
-
-    if &merged != current_state {
-        Some(merged)
-    } else {
+    if changed.is_empty() {
         None
+    } else {
+        Some(changed)
     }
 }
 
@@ -105,6 +110,15 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Adapter
 impl_loader!(ColumnTags, DatabricksRelationMetadata);
 
 impl ColumnTagsLoader {
+    /// Column tags are set-only: diffs add or update desired tags and never unset existing tags.
+    /// When model config is available, fetch current tags only when column tags are configured.
+    pub(crate) fn requires_server_metadata_for_diff(model_config: Option<&RelationConfig>) -> bool {
+        model_config
+            .and_then(|config| config.get(TYPE_NAME))
+            .and_then(|component| component.as_any().downcast_ref::<ColumnTags>())
+            .is_none_or(|tags| !tags.value.is_empty())
+    }
+
     pub fn new_component_type_erased(
         tags: IndexMap<String, IndexMap<String, String>>,
     ) -> Box<dyn ComponentConfig> {
@@ -135,8 +149,8 @@ mod tests {
         let diff = merge_tags_diff(&new_column_tags, &old_column_tags).unwrap();
 
         let col1_tags = diff.get("col1").unwrap();
-        assert_eq!(col1_tags.get("old_tag"), Some(&"old_value".to_string()));
         assert_eq!(col1_tags.get("new_tag"), Some(&"new_value".to_string()));
+        assert_eq!(col1_tags.len(), 1);
 
         let col2_tags = diff.get("col2").unwrap();
         assert_eq!(col2_tags.get("col2_tag"), Some(&"col2_value".to_string()));
@@ -151,5 +165,55 @@ mod tests {
 
         let diff = merge_tags_diff(&column_tags, &column_tags);
         assert!(diff.is_none());
+    }
+
+    #[test]
+    fn test_get_diff_matches_column_names_case_insensitively() {
+        let desired = IndexMap::from([(
+            "account_id".to_string(),
+            IndexMap::from([("pii".to_string(), "true".to_string())]),
+        )]);
+        let existing = IndexMap::from([(
+            "Account_ID".to_string(),
+            IndexMap::from([("pii".to_string(), "true".to_string())]),
+        )]);
+
+        assert!(merge_tags_diff(&desired, &existing).is_none());
+    }
+
+    #[test]
+    fn test_get_diff_emits_only_changed_desired_columns() {
+        let desired = IndexMap::from([
+            (
+                "account_id".to_string(),
+                IndexMap::from([("pii".to_string(), "false".to_string())]),
+            ),
+            (
+                "user_name".to_string(),
+                IndexMap::from([("pii".to_string(), "true".to_string())]),
+            ),
+        ]);
+        let existing = IndexMap::from([
+            (
+                "Account_ID".to_string(),
+                IndexMap::from([("pii".to_string(), "true".to_string())]),
+            ),
+            (
+                "User_Name".to_string(),
+                IndexMap::from([("pii".to_string(), "true".to_string())]),
+            ),
+            (
+                "unmanaged".to_string(),
+                IndexMap::from([("external".to_string(), "preserved".to_string())]),
+            ),
+        ]);
+
+        assert_eq!(
+            merge_tags_diff(&desired, &existing),
+            Some(IndexMap::from([(
+                "account_id".to_string(),
+                IndexMap::from([("pii".to_string(), "false".to_string())]),
+            )]))
+        );
     }
 }

@@ -86,6 +86,9 @@
 {% endmacro %}
 
 {% macro relation_should_be_altered(existing_relation) %}
+  {% if should_full_refresh() %}
+    {{ return(False) }}
+  {% endif %}
   {% set update_via_alter = config.get('view_update_via_alter', False) | as_bool %}
   {% if existing_relation.is_view and update_via_alter %}
     {% if existing_relation.is_hive_metastore() %}

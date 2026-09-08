@@ -195,12 +195,19 @@ pub struct Relation {
     pub metadata: Option<BTreeMap<String, String>>,
     /// Whether the relation is a delta table
     pub is_delta: bool,
+    /// Whether the relation is a Databricks shallow clone
+    pub is_shallow_clone: bool,
     /// Constraints to be created with the table
     pub create_constraints: Vec<databricks::typed_constraint::TypedConstraint>,
     /// Constraints to be applied during ALTER operations
     pub alter_constraints: Vec<databricks::typed_constraint::TypedConstraint>,
     /// Whether the relation is a temporary view (session-scoped).
     pub temporary: bool,
+    /// ClickHouse catalog state; see [`BaseRelation::can_exchange`] and siblings.
+    pub can_exchange: bool,
+    pub mvs_pointing_to_it: Vec<BTreeMap<String, String>>,
+    pub is_refreshable: bool,
+    pub refreshable_append: bool,
     /// The location/region for this relation (BigQuery only, e.g., "US", "EU").
     pub location: Option<String>,
     /// DuckDB external source location, rendered in place of schema/table.
@@ -355,9 +362,14 @@ impl Relation {
             native_schema: None,
             metadata: None,
             is_delta: false,
+            is_shallow_clone: false,
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
             temporary: false,
+            can_exchange: false,
+            mvs_pointing_to_it: Vec::new(),
+            is_refreshable: false,
+            refreshable_append: false,
             external: None,
             table_format: TableFormat::Default,
         }
@@ -393,8 +405,33 @@ impl Relation {
         self
     }
 
+    pub fn with_is_shallow_clone(mut self, is_shallow_clone: bool) -> Self {
+        self.is_shallow_clone = is_shallow_clone;
+        self
+    }
+
     pub fn with_temporary(mut self, temporary: bool) -> Self {
         self.temporary = temporary;
+        self
+    }
+
+    pub fn with_can_exchange(mut self, can_exchange: bool) -> Self {
+        self.can_exchange = can_exchange;
+        self
+    }
+
+    pub fn with_mvs_pointing_to_it(mut self, mvs: Vec<BTreeMap<String, String>>) -> Self {
+        self.mvs_pointing_to_it = mvs;
+        self
+    }
+
+    pub fn with_is_refreshable(mut self, is_refreshable: bool) -> Self {
+        self.is_refreshable = is_refreshable;
+        self
+    }
+
+    pub fn with_refreshable_append(mut self, refreshable_append: bool) -> Self {
+        self.refreshable_append = refreshable_append;
         self
     }
 
@@ -452,9 +489,14 @@ impl Relation {
             native_schema: None,
             metadata: None,
             is_delta: false,
+            is_shallow_clone: false,
             create_constraints: Vec::default(),
             alter_constraints: Vec::default(),
             temporary: false,
+            can_exchange: false,
+            mvs_pointing_to_it: Vec::new(),
+            is_refreshable: false,
+            refreshable_append: false,
             location: Some("".to_string()),
             external: None,
             table_format: TableFormat::Default,
@@ -703,7 +745,12 @@ impl BaseRelation for Relation {
         .with_quoting(self.quote_policy)
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
+        .with_is_shallow_clone(self.is_shallow_clone)
         .with_temporary(self.temporary)
+        .with_can_exchange(self.can_exchange)
+        .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
+        .with_is_refreshable(self.is_refreshable)
+        .with_refreshable_append(self.refreshable_append)
         // FIXME: no need to validate here since the parent relation is already valid.
         .validate()?;
 
@@ -728,7 +775,12 @@ impl BaseRelation for Relation {
         .with_quoting(policy)
         .with_metadata(self.metadata.clone())
         .with_is_delta(self.is_delta)
+        .with_is_shallow_clone(self.is_shallow_clone)
         .with_temporary(self.temporary)
+        .with_can_exchange(self.can_exchange)
+        .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
+        .with_is_refreshable(self.is_refreshable)
+        .with_refreshable_append(self.refreshable_append)
         // FIXME: no need to validate here since the parent relation is already valid.
         .validate()?;
         relation.create_constraints = self.create_constraints.clone();
@@ -771,6 +823,22 @@ impl BaseRelation for Relation {
         self.temporary
     }
 
+    fn can_exchange(&self) -> bool {
+        self.can_exchange
+    }
+
+    fn mvs_pointing_to_it(&self) -> &[BTreeMap<String, String>] {
+        &self.mvs_pointing_to_it
+    }
+
+    fn is_refreshable(&self) -> bool {
+        self.is_refreshable
+    }
+
+    fn refreshable_append(&self) -> bool {
+        self.refreshable_append
+    }
+
     fn is_delta(&self) -> bool {
         self.is_delta
     }
@@ -779,6 +847,20 @@ impl BaseRelation for Relation {
         match self.adapter_type {
             AdapterType::Databricks | AdapterType::Spark => {
                 self.is_delta = is_delta.unwrap_or(self.is_delta);
+            }
+            _ => {}
+        }
+    }
+
+    fn is_shallow_clone(&self) -> bool {
+        self.is_shallow_clone
+    }
+
+    #[allow(clippy::single_match)]
+    fn set_is_shallow_clone(&mut self, is_shallow_clone: Option<bool>) {
+        match self.adapter_type {
+            AdapterType::Databricks => {
+                self.is_shallow_clone = is_shallow_clone.unwrap_or(self.is_shallow_clone);
             }
             _ => {}
         }
@@ -1199,7 +1281,13 @@ impl BaseRelation for Relation {
             .with_quoting(custom_quoting)
             .with_metadata(self.metadata.clone())
             .with_is_delta(self.is_delta)
+            .with_is_shallow_clone(self.is_shallow_clone)
             .with_temporary(self.temporary)
+            .with_table_format(self.table_format)
+            .with_can_exchange(self.can_exchange)
+            .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
+            .with_is_refreshable(self.is_refreshable)
+            .with_refreshable_append(self.refreshable_append)
             .validate()?;
         Ok(Arc::new(relation))
     }
@@ -2173,6 +2261,24 @@ mod tests {
             let iceberg = snowflake_relation(RelationType::InteractiveTable, TableFormat::Iceberg);
             assert!(!iceberg.can_be_renamed());
             assert!(iceberg.can_be_replaced());
+        }
+
+        #[test]
+        fn incorporate_preserves_table_format() {
+            // `incorporate` (e.g. `target_relation.incorporate(type='table')` in the
+            // incremental materialization) rebuilds the relation via `create_relation`,
+            // which used to default `table_format` back to `Default` and silently
+            // turn Iceberg models into non-Iceberg ones for anything computed from the
+            // incorporated relation, e.g. `persist_docs`' `alter_relation_comment`
+            // (fs#14268).
+            let iceberg: Arc<dyn BaseRelation> = Arc::new(snowflake_relation(
+                RelationType::Table,
+                TableFormat::Iceberg,
+            ));
+            let incorporated = iceberg
+                .incorporate(None, Some(RelationType::Table), None)
+                .unwrap();
+            assert!(incorporated.is_iceberg_format());
         }
     }
 

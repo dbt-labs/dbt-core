@@ -24,7 +24,7 @@ const ALL_V2_PLATFORMS: &[&str] = &[
     "databricks",
     "bigquery",
     "duckdb",
-    "lake_compute",
+    "lakecompute",
 ];
 
 const TARGET_FILE_SIZES: &[&str] = &["AUTO", "16MB", "32MB", "64MB", "128MB"];
@@ -295,7 +295,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", HORIZON_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", HORIZON_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lakecompute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -306,7 +306,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("lake_compute", GLUE_LAKE_COMPUTE_FIELDS),
+            PlatformBlock::new("lakecompute", GLUE_LAKE_COMPUTE_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -317,7 +317,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
         platforms: &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lakecompute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -329,7 +329,7 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
             PlatformBlock::new("snowflake", LINKED_SNOWFLAKE_FIELDS),
             PlatformBlock::new("databricks", UNITY_DATABRICKS_FIELDS),
             PlatformBlock::new("duckdb", DUCKDB_ICEBERG_FIELDS),
-            PlatformBlock::new("lake_compute", DUCKDB_ICEBERG_FIELDS),
+            PlatformBlock::new("lakecompute", DUCKDB_ICEBERG_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -352,11 +352,11 @@ const CATALOG_SCHEMAS: &[CatalogTypeSchema] = &[
     CatalogTypeSchema {
         catalog_type: CatalogType::DuckLake,
         table_format: "default",
-        description: "DuckLake metadata store catalog. Supports duckdb and/or lake_compute connection blocks.",
+        description: "DuckLake metadata store catalog. Supports duckdb and/or lakecompute connection blocks.",
         presence: ConfigPresence::AtLeastOne,
         platforms: &[
             PlatformBlock::new("duckdb", DUCKLAKE_DUCKDB_FIELDS),
-            PlatformBlock::new("lake_compute", DUCKLAKE_DUCKDB_FIELDS),
+            PlatformBlock::new("lakecompute", DUCKLAKE_DUCKDB_FIELDS),
         ],
     },
     CatalogTypeSchema {
@@ -689,22 +689,22 @@ impl CatalogType {
         }
     }
 
-    /// Whether `lake_compute` can read a catalog of this type.
+    /// Whether `lakecompute` can read a catalog of this type.
     ///
-    /// A capability of `lake_compute`, expressed here in code: it is a property of the
-    /// storage, not of anything a project declares. Requiring a catalog to carry an
-    /// `lake_compute` connection block would reject readable data over a missing
+    /// A capability of `lakecompute`, expressed here in code: it is a property of the
+    /// storage, not of anything a project declares. Requiring a catalog to carry a
+    /// `lakecompute` connection block would reject readable data over a missing
     /// declaration.
     ///
     /// Matched exhaustively on purpose, so adding a `CatalogType` forces the
     /// question to be answered rather than defaulting either way.
     pub fn lake_compute_can_read(&self) -> bool {
         match self {
-            // Open table formats `lake_compute` can attach.
+            // Open table formats `lakecompute` can attach.
             Self::Horizon | Self::Glue | Self::IcebergRest => true,
             // Snowflake-managed Iceberg under its older spelling; Horizon supersedes it.
             Self::SnowflakeBuiltIn => true,
-            // Engine-owned catalogs `lake_compute` does not support today.
+            // Engine-owned catalogs `lakecompute` does not support today.
             Self::DuckLake
             | Self::LocalFilesystem
             | Self::BiglakeMetastore

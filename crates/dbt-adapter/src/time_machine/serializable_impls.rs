@@ -146,6 +146,7 @@ impl TimeMachineSerializable for RelationObject {
             "is_interactive_table": self.is_interactive_table(),
             "is_streaming_table": self.is_streaming_table(),
             "is_delta": self.is_delta(),
+            "is_shallow_clone": self.is_shallow_clone(),
             "quote_policy": {
                 "database": quote_policy.database,
                 "schema": quote_policy.schema,
@@ -225,6 +226,7 @@ impl TimeMachineSerializable for RelationObject {
         .ok()?;
 
         relation.set_is_delta(Some(ext.bool_or("is_delta", false)));
+        relation.set_is_shallow_clone(Some(ext.bool_or("is_shallow_clone", false)));
 
         Some(RelationObject::new(relation.into()).into_value())
     }

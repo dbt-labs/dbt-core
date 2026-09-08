@@ -26,7 +26,7 @@ const KEY_SLOT_MS: &str = "slot_ms";
 const KEY_LOCATION: &str = "location";
 const KEY_PROJECT_ID: &str = "project_id";
 const KEY_JOB_ID: &str = "job_id";
-/// Non-fatal backend warning text (e.g. a dbt-compute export-limit
+/// Non-fatal backend warning text (e.g. a LakeCompute export-limit
 /// truncation notice), kept distinct from `message` (which always carries
 /// a status/row-count summary) so callers can detect "was there a warning"
 /// without parsing prose.
@@ -100,7 +100,7 @@ impl AdapterResponse {
     }
 
     /// Non-fatal backend warning text, if the executed statement's response
-    /// carried one (e.g. a dbt-compute export-limit truncation notice).
+    /// carried one (e.g. a LakeCompute export-limit truncation notice).
     pub fn warning(&self) -> Option<String> {
         self.get_str(KEY_WARNING)
     }
@@ -561,20 +561,20 @@ mod from_record_batch_tests {
             3,
             &[(
                 adbc::lake_compute::schema_metadata::WARNINGS,
-                "lake_compute_information_schema.jobs: matched 50001 rows, which exceeds the 50000-row export limit",
+                "lakecompute_information_schema.jobs: matched 50001 rows, which exceeds the 50000-row export limit",
             )],
         );
         let response = AdapterResponse::from_record_batch(&batch, AdapterType::LakeCompute);
         assert_eq!(
             response.warning().as_deref(),
             Some(
-                "lake_compute_information_schema.jobs: matched 50001 rows, which exceeds the 50000-row export limit"
+                "lakecompute_information_schema.jobs: matched 50001 rows, which exceeds the 50000-row export limit"
             )
         );
         assert!(
             response
                 .message()
-                .contains("lake_compute_information_schema.jobs: matched 50001 rows"),
+                .contains("lakecompute_information_schema.jobs: matched 50001 rows"),
             "expected warning text to be folded into the message, got: {:?}",
             response.message()
         );

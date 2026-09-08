@@ -275,6 +275,48 @@ pub enum ErrorCode {
     CheckIndexDisabled = 1655,
 
     // --------------------------------------------------------------------------------------------
+    // Information schema
+    /// `target/info_schema/` is missing, unreadable, or will not open.
+    ///
+    /// Distinct from `InvalidArgument`, which this case used to report: `--info <view>` is a
+    /// well-formed request against state that has not been produced, so calling it a bad
+    /// argument sent people to check their flags, and made a missing artifact
+    /// indistinguishable from a typo'd option in anything that reads codes rather than prose.
+    /// The query itself keeps `InvalidArgument` -- an unknown view or a syntax error really is
+    /// the argument.
+    InfoSchemaUnavailable = 1656,
+    /// `--generate-info-schema` was asked for and the write failed, so `target/info_schema/`
+    /// is missing or holds the previous run's tables. A warning rather than an error: the
+    /// artifact is opt-in and nothing downstream reads it, so a failed write must not fail a
+    /// build that otherwise succeeded. Its own code so a project that depends on the artifact
+    /// -- a report, a scheduled query -- can promote just this with `warn_error_options`
+    /// instead of every `Generic` warning in the run.
+    InfoSchemaWriteFailed = 1657,
+    /// The information schema was written from a `parse`, so the columns only `compile`,
+    /// `run` or `build` fill are absent: compiled code, column types, column-level lineage
+    /// and runtime results. Reports a successful write, not a failure -- and separated from
+    /// `InfoSchemaWriteFailed` for that reason, since the two used one code and read
+    /// identically in a log.
+    InfoSchemaIncomplete = 1658,
+
+    // --------------------------------------------------------------------------------------------
+    // Project metadata index
+    //
+    // `target/private/index/` is not a user API and is not documented as one, but its *warnings*
+    // are user-visible and no longer opt-in: `--write-index` is hidden, and the index is implied
+    // on for `build`, `run` and `check` unless `--no-write-index` says otherwise. So a failure
+    // here reaches everyone, and "promote it in CI" is a reasonable thing to want without also
+    // promoting every `Generic` warning in the run.
+    /// The index could not be written, so features that read it -- checks among them -- have
+    /// nothing current to read. For `build`/`check` the *consequence* is reported separately as
+    /// `CheckIndexUnavailable`; this is the cause, and it is the one that carries the IO error.
+    ///
+    /// The index's *parse-tier* advisory deliberately has no code and stays on `Generic`: it
+    /// fires only for `parse --write-index`, and `--write-index` is undocumented, so there is
+    /// nobody to target it. A code is worth adding when someone can act on it.
+    IndexWriteFailed = 1659,
+
+    // --------------------------------------------------------------------------------------------
     // CLI errors
     NoLongerSupportedOption = 1700,
     NotYetSupportedOption = 1701,

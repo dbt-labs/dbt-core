@@ -1,0 +1,7 @@
+kind: Fixes
+body: Keep column metadata local to each column instead of inheriting parent resource metadata.
+time: 2026-08-27T01:37:44.848185+05:30
+custom:
+    author: sd-db
+    issue: "16097"
+    project: dbt-core

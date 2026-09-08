@@ -613,20 +613,17 @@ pub async fn resolve_data_tests(
 
         // A test runs where its subject runs, so an unset `+adapter` is inherited
         // from `attached_node` -- the same lookup the `group` inheritance below
-        // does. `lake_compute` is deliberately not inherited: the compute-platform path
-        // materializes models and seeds only, so a test routed there would fail at
-        // run time. A test on an `lake_compute` node therefore stays on the target default,
-        // which is what it did before `+adapter` existed.
-        let inherited_adapter = attached_node
-            .as_deref()
-            .and_then(|id| {
-                models
-                    .get(id)
-                    .map(|m| m.node_adapter())
-                    .or_else(|| seeds.get(id).map(|s| s.node_adapter()))
-                    .or_else(|| snapshots.get(id).map(|s| s.node_adapter()))
-            })
-            .filter(|adapter| *adapter != AdapterType::LakeCompute);
+        // does. `lake_compute` inherits like any other adapter: a test has no
+        // materialization to bypass Jinja for, so it executes as a plain read
+        // through the LakeCompute adapter (see `execute_test_on_compute_platform`
+        // in `compute_platform.rs`), the same way it would on any other adapter.
+        let inherited_adapter = attached_node.as_deref().and_then(|id| {
+            models
+                .get(id)
+                .map(|m| m.node_adapter())
+                .or_else(|| seeds.get(id).map(|s| s.node_adapter()))
+                .or_else(|| snapshots.get(id).map(|s| s.node_adapter()))
+        });
         // See `resolve_models`: the flag overrides the config, and nothing is
         // validated at parse. `None` from both leaves inheritance to fill the gap.
         let resolved_node_adapter = arg
@@ -683,6 +680,18 @@ pub async fn resolve_data_tests(
                 .and_then(|asset| test_metadata_from_asset(asset))
         };
 
+        // Generic tests carry their `description:` on the GenericTestAsset (from schema.yml);
+        // singular tests carry it in their file-level properties. dbt-core surfaces both on
+        // the test node's `description`, so mirror that here rather than defaulting to ''.
+        let test_description = if is_singular_data_test {
+            properties.description.clone().unwrap_or_default()
+        } else {
+            test_path_to_test_asset
+                .get(&dbt_asset.path)
+                .and_then(|asset| asset.description.clone())
+                .unwrap_or_default()
+        };
+
         // For singular tests, parse the user-written SQL for inline {{ config(...) }}.
         let raw_inline_config = if is_singular_data_test {
             dbt_common::tokiofs::read_to_string(dbt_asset.base_path.join(&dbt_asset.path))
@@ -726,8 +735,7 @@ pub async fn resolve_data_tests(
                 patch_path: None,
                 unique_id: unique_id.clone(),
                 fqn,
-                // dbt-core: description is always default ''
-                description: Some(properties.description.clone().unwrap_or_default()),
+                description: Some(test_description),
                 checksum: data_test_checksum(singular_test_file_contents.as_deref()),
                 // TODO: hydrate for generic + singular tests
                 // Examples in Mantle:
@@ -967,6 +975,7 @@ mod tests {
             version: None,
             column_tags: vec![],
             unrendered_schema_config: BTreeMap::new(),
+            description: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -1129,6 +1138,7 @@ mod tests {
             version: None,
             column_tags: vec![],
             unrendered_schema_config: BTreeMap::new(),
+            description: None,
         };
 
         let unique_id = compute_generic_test_unique_id("my_project", &asset);
@@ -1172,6 +1182,7 @@ mod tests {
             version: None,
             column_tags: vec![],
             unrendered_schema_config: BTreeMap::new(),
+            description: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");
