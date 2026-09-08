@@ -13,7 +13,7 @@ kindFormat: "### {{.Kind}}"
 
 custom:
   - key: issue
-    label: "[Optional] dbt-oss issue number (separated by a single space if multiple)"
+    label: "[Optional] dbt-core issue number (separated by a single space if multiple)"
     type: string
     required: false
   - key: author
@@ -21,16 +21,15 @@ custom:
     type: string
     required: false
 
-# Change format: optional issue links only, rendered for dbt-core/dbt-oss
-# changes with an issue number present (dbt-fusion changes are excluded).
-# Both project values are accepted since existing unreleased entries still
-# carry the legacy `dbt-core` discriminator.
+# Change format: optional issue links only. The project field is retained in the
+# change files (for the internal changelog) but not rendered here. Issue links
+# are only rendered for dbt-core changes and only when an issue number is present.
 changeFormat: |-
   {{- $IssueList := list }}
-  {{- if or (eq $.Custom.project "dbt-core") (eq $.Custom.project "dbt-oss") }}
+  {{- if eq $.Custom.project "dbt-core" }}
   {{- range $issueNbr := splitList " " $.Custom.issue }}
     {{- if $issueNbr }}
-      {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-oss/issues/nbr)" | replace "nbr" $issueNbr }}
+      {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
       {{- $IssueList = append $IssueList $changeLink  }}
     {{- end -}}
   {{- end -}}
@@ -45,11 +44,10 @@ kinds:
   - label: Dependencies
   - label: Security
 
-# new entries are tagged dbt-oss; see the changeFormat note above for why
-# both dbt-core and dbt-oss are still accepted.
+# these changelogs are always for dbt-core
 post:
   - key: project
-    value: dbt-oss
+    value: dbt-core
 
 newlines:
   afterChangelogHeader: 1
@@ -60,7 +58,7 @@ newlines:
 
 # Contributors section (mirrors fs). Set FUSION_TEAM (space-separated handles)
 # to exclude maintainers; otherwise all non-bot authors are listed. Issue links
-# resolve to the dbt-oss repo, matching changeFormat above.
+# resolve to the dbt-core repo, matching changeFormat above.
 footerFormat: |
   {{- $contributorDict := dict }}
   {{- $fusion_team_env := default "" .Env.FUSION_TEAM }}
@@ -74,10 +72,10 @@ footerFormat: |
     {{- range $author := $authorList }}
       {{- if and $author (not (has (lower $author) $maintainers)) }}
         {{- $IssueList := list }}
-        {{- if or (eq $change.Custom.project "dbt-core") (eq $change.Custom.project "dbt-oss") }}
+        {{- if eq $change.Custom.project "dbt-core" }}
         {{- range $issueNbr := splitList " " $change.Custom.issue }}
           {{- if $issueNbr }}
-            {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-oss/issues/nbr)" | replace "nbr" $issueNbr }}
+            {{- $changeLink := "[#nbr](https://github.com/dbt-labs/dbt-core/issues/nbr)" | replace "nbr" $issueNbr }}
             {{- $IssueList = append $IssueList $changeLink }}
           {{- end }}
         {{- end }}
