@@ -60,7 +60,6 @@ import {
 } from '../shared';
 import { ColumnLineageMini, useColumnLineage } from './ColumnLineageView';
 import { LineageViewV2 } from './LineageV2/LineageView';
-import { LineageView } from './LineageView';
 import { NoColumnMetadataFallback } from './NoColumnMetadataFallback';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
@@ -342,27 +341,13 @@ export function NodeDetail({ asset, onSelect, hasColumnLineage, userState }: Pro
                   {asset.resourceType !== 'macro' && asset.resourceType !== 'group' && (
                     <DetailsSection heading="Lineage" isCompact>
                       <div className="h-[480px]">
-                        <LineageView
+                        <LineageViewV2
                           rootUniqueId={asset.uniqueId}
                           modelName={asset.name}
-                          onSelect={onSelect}
                         />
                       </div>
                     </DetailsSection>
                   )}
-
-                  {asset.resourceType !== 'macro' &&
-                    asset.resourceType !== 'group' &&
-                    import.meta.env.MODE === 'development' && (
-                      <DetailsSection heading="LineageV2" isCompact>
-                        <div className="h-[480px]">
-                          <LineageViewV2
-                            rootUniqueId={asset.uniqueId}
-                            modelName={asset.name}
-                          />
-                        </div>
-                      </DetailsSection>
-                    )}
 
                   {asset.resourceType === 'semantic_model' &&
                     (asset as SemanticModelAsset).entities.length > 0 && (

@@ -75,7 +75,7 @@ export function LineageView({ rootUniqueId, modelName }: Props) {
               icon={<Maximize2 className="size-4" />}
               ariaLabel="Open fullscreen lineage"
               tooltip="Open fullscreen lineage"
-              onClick={() => navigate(paths.lineageV2(rootUniqueId))}
+              onClick={() => navigate(paths.lineage(rootUniqueId))}
               className="h-9 w-9"
             />
           }
