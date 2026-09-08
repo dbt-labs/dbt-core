@@ -6,7 +6,7 @@ use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::resolve::resolve_utils::extract_config_map;
 use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
 use dbt_adapter_core::AdapterType;
-use dbt_common::error::AbstractLocation;
+use dbt_common::CodeLocationWithFile;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::path::DbtPath;
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
@@ -295,19 +295,30 @@ pub fn resolve_yaml_depends_on(
             dependency,
         )?;
 
+        let dep_location = if dependency.has_valid_span() {
+            Some(CodeLocationWithFile::new(
+                dependency.span().start.line as u32,
+                dependency.span().start.column as u32,
+                dependency.span().start.index as u32,
+                relative_path.to_string(),
+            ))
+        } else {
+            None
+        };
+
         match sql_resource {
             SqlResource::Ref(ref_info) => {
                 dependent_refs.push(DbtRef {
                     name: ref_info.0,
                     package: ref_info.1,
                     version: ref_info.2,
-                    location: Some(ref_info.3.with_file(relative_path)),
+                    location: dep_location,
                 });
             }
             SqlResource::Source(source_info) => {
                 dependent_sources.push(DbtSourceWrapper {
                     source: vec![source_info.0, source_info.1],
-                    location: Some(source_info.2.with_file(relative_path)),
+                    location: dep_location,
                 });
             }
             SqlResource::Metric(metric_info) => {
