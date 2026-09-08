@@ -14,7 +14,6 @@ const meta: Meta<typeof LineageView> = {
   args: {
     rootUniqueId: 'model.jaffle_shop.customers',
     modelName: 'customers',
-    onSelect: () => {},
   },
   // The DAG canvas is absolutely positioned inside `.lineage-frame`, so it needs a
   // sized parent to render into at all.

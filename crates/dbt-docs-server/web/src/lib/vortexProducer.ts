@@ -309,14 +309,12 @@ export class VortexProducerClient {
         .catch((err: unknown) => {
           if (!(err instanceof Error)) {
             rej(new Error(String(err)));
-          } else {
             // NOTE: MDN recommends using err.name to check for AbortError instead of an `instanceof` check
             // See: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal#aborting_a_fetch_operation_with_a_timeout
-            if (err.name === 'AbortError') {
-              rej(new TimeoutError(timeoutSeconds));
-            } else {
-              rej(err);
-            }
+          } else if (err.name === 'AbortError') {
+            rej(new TimeoutError(timeoutSeconds));
+          } else {
+            rej(err);
           }
         });
     });

@@ -15,10 +15,6 @@ import { BaseDag } from './BaseDag';
 interface Props {
   rootUniqueId: string;
   modelName: string;
-  // Not yet wired -- BaseDag's canvas doesn't fire node-click events yet
-  // (see DagNode's onColumnsClick, same gap). Kept so NodeDetail's other
-  // call sites don't need a separate signature.
-  onSelect(uniqueId: string): void;
 }
 
 export function LineageView({ rootUniqueId, modelName }: Props) {
@@ -83,6 +79,7 @@ export function LineageView({ rootUniqueId, modelName }: Props) {
               className="h-9 w-9"
             />
           }
+          onNodeClick={(uniqueId) => navigate(paths.details(uniqueId))}
         />
       </div>
     </div>

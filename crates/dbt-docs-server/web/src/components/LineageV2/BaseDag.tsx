@@ -21,7 +21,6 @@ import { DAG_NODE_TYPES } from './DagNode';
 
 interface Props {
   rootUniqueId: string;
-  depth?: number;
   /** Rendered on the far left of the hop bar's own holder -- see DagHopBar. */
   topBarLeft?: ReactNode;
   /** Clicking a resource pill in the Groups view bubbles here -- the caller is
@@ -41,11 +40,6 @@ interface Props {
 
 // Default hop depth, both directions -- matches the Figma states' "1+ / +1" default.
 const DEFAULT_HOPS = 1;
-// The data layer (LineageArgs.depth) only supports one symmetric depth today, not
-// independent upstream/downstream. "max" also isn't real yet -- there's no bare-plus
-// (unlimited) selector support wired up, so it falls back to this instead of feeding
-// Infinity into a query. Real per-direction depth needs a data-layer change.
-const MAX_HOPS_FALLBACK = 50;
 
 // Hoisted: an object literal here would be a new prop identity on every render, which
 // React Flow treats as a changed edge default.
@@ -244,15 +238,22 @@ export function BaseDag({ rootUniqueId, topBarLeft, onRecenter, onNodeClick }: P
   // action) always lands on a fresh 1+/+1 -- without this, hops from the
   // previous root would silently carry over, since BaseDag doesn't remount
   // when only its rootUniqueId prop changes.
-  useEffect(() => {
+  //
+  // Adjusted during render, not in an effect. An effect runs after the commit, so
+  // the new root would first render -- and fetch -- at the *previous* root's hops,
+  // then reset and fetch a second time. Setting state during render instead makes
+  // React throw this render away and immediately re-run the body with 1+/+1 already
+  // in place, before committing anything or running an effect, so the fetch below
+  // only ever sees the reset value. This is React's documented pattern for
+  // "adjusting state when a prop changes".
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [hopsRoot, setHopsRoot] = useState(rootUniqueId);
+  if (hopsRoot !== rootUniqueId) {
+    setHopsRoot(rootUniqueId);
     setUpstreamHops(DEFAULT_HOPS);
     setDownstreamHops(DEFAULT_HOPS);
-  }, [rootUniqueId]);
-  // Best-effort until the data layer supports independent depths: fetch enough to
-  // cover whichever side asked for more, symmetrically.
-  const rawDepth = Math.max(upstreamHops, downstreamHops);
-  const depth = Number.isFinite(rawDepth) ? rawDepth : MAX_HOPS_FALLBACK;
-  useHydrateLineageStore(rootUniqueId, depth);
+  }
+  useHydrateLineageStore(rootUniqueId, upstreamHops, downstreamHops);
   return (
     <BaseDagCanvas
       upstreamHops={upstreamHops}

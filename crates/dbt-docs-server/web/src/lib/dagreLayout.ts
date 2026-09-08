@@ -37,7 +37,7 @@ export const RANK_SEPARATION = 100;
 export const NODE_SEPARATION = 20;
 export const EDGE_SEPARATION = 30;
 export const GRAPH_MARGIN = 50;
-export const DEFAULT_RANKER = 'longest-path';
+export const DEFAULT_RANKER = 'tight-tree';
 export const DEFAULT_ACYCLICER = 'greedy';
 
 export const DEFAULT_LAYOUT_OPTIONS: Required<LayoutOptions> = {
@@ -49,7 +49,7 @@ export const DEFAULT_LAYOUT_OPTIONS: Required<LayoutOptions> = {
   marginy: GRAPH_MARGIN,
   nodeWidth: NODE_WIDTH,
   nodeHeight: NODE_HEIGHT,
-  ranker: 'longest-path',
+  ranker: 'tight-tree',
   acyclicer: 'greedy',
 };
 
@@ -70,10 +70,81 @@ function boxOf(node: ReactFlowNode, opts: Required<LayoutOptions>) {
   };
 }
 
+/** The graph shape {@link alignRanksTowardRoot} needs -- structural, so it owes
+ *  nothing to dagre's exported class type. */
+interface LaidOutGraph {
+  nodes(): string[];
+  hasNode(id: string): boolean;
+  node(id: string): { x?: number; y?: number; width: number; height: number };
+}
+
+/**
+ * Flush each rank against the edge that faces the root.
+ *
+ * Dagre centres every node in a rank on the rank's own axis, so a column of cards of
+ * different widths (a card is as wide as its name) comes out ragged on both sides and
+ * the gutter between one rank and the next zigzags. Aligning on the side facing the
+ * root instead -- right edges upstream of it, left edges downstream -- gives every
+ * rank one straight edge pointing at the node the graph is actually about.
+ *
+ * Runs on dagre's own centres, before they are rounded and converted to corners: every
+ * node in a rank shares one centre on the rank axis, which is what makes that centre a
+ * safe key to group by. Afterwards they no longer do, so this cannot be redone from
+ * the positions it produces.
+ *
+ * A card only ever moves toward the root, and only inside the band dagre already
+ * reserved for its rank -- the band is as wide as the rank's widest card, and that
+ * card does not move at all. So rank separation is untouched and nothing can be
+ * pushed into a neighbouring rank. Positions along the cross axis are left alone, so
+ * cards within a rank keep their spacing too.
+ *
+ * A no-op when the root is not in the graph, and effectively one under `TB`, where
+ * the rank axis is the fixed 108px card height and centred already is flush.
+ */
+function alignRanksTowardRoot(
+  g: LaidOutGraph,
+  rootId: string | null | undefined,
+  rankdir: 'TB' | 'LR',
+): void {
+  if (!rootId || !g.hasNode(rootId)) return;
+  // The axis ranks are separated along, and the node extent measured along it.
+  const axis = rankdir === 'TB' ? 'y' : 'x';
+  const extent = rankdir === 'TB' ? 'height' : 'width';
+  const rootCentre = g.node(rootId)[axis];
+  if (rootCentre === undefined) return;
+
+  const ranks = new Map<number, string[]>();
+  for (const id of g.nodes()) {
+    const centre = g.node(id)[axis];
+    if (centre === undefined) continue;
+    const members = ranks.get(centre);
+    if (members) members.push(id);
+    else ranks.set(centre, [id]);
+  }
+
+  for (const [centre, members] of ranks) {
+    // The root's own rank keeps dagre's centring: it is neither upstream nor
+    // downstream of itself, so neither of its edges is the one facing the root.
+    if (centre === rootCentre) continue;
+    const widest = Math.max(...members.map((id) => g.node(id)[extent]));
+    // Which way a card slides to go from centred to flush. Upstream of the root
+    // (a smaller centre) it moves toward the root's side, i.e. up-axis; downstream,
+    // the other way. Either way it is the edge nearest the root that lines up.
+    const direction = centre < rootCentre ? 1 : -1;
+    for (const id of members) {
+      const node = g.node(id);
+      node[axis] = centre + (direction * (widest - node[extent])) / 2;
+    }
+  }
+}
+
 export function applyDagreLayout<T extends ReactFlowNode>(
   nodes: T[],
   edges: Edge[],
   options: LayoutOptions = {},
+  /** The lineage root. Ranks are flushed against the edge facing it -- see
+   *  {@link alignRanksTowardRoot}. Omit it and every rank stays dagre-centred. */
+  rootId?: string | null,
   onDagreLayoutFailure?: (error: unknown) => void,
 ): T[] {
   if (nodes.length === 0) {
@@ -114,6 +185,8 @@ export function applyDagreLayout<T extends ReactFlowNode>(
     onDagreLayoutFailure?.(error);
     return applyGridFallbackLayout(nodes, opts);
   }
+
+  alignRanksTowardRoot(g, rootId, opts.rankdir);
 
   // Apply calculated positions to nodes
   const handles = handlePositionsForRankdir(opts.rankdir);

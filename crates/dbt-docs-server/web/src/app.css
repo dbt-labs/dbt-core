@@ -2222,9 +2222,10 @@ code.inline {
 }
 
 /* LOD compact state: just the resource badge, no card chrome. Shrinks to content
-   instead of the full node's fixed 245x108 -- dagre still reserves that footprint
-   (layout happens once, independent of zoom), so this floats inside it rather than
-   filling it, matching the reference mock. */
+   instead of the full node's fixed 245x108 -- dagre still reserves that footprint,
+   so this floats inside it rather than filling it, matching the reference mock.
+   That only holds because a card never collapses while it is being measured; see
+   `isCardCompact` in stores/lineageStore. */
 .dag-node--compact {
   flex-direction: row;
   align-items: center;
