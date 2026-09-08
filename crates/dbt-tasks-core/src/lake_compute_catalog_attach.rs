@@ -24,8 +24,17 @@ pub enum LakeComputeCatalogAttachOutcome {
         catalogs: Vec<String>,
         pat_hygiene: Option<PatHygieneReport>,
     },
-    /// The project declares no catalogs this check applies to, so nothing was
-    /// attempted. Not a failure.
+    /// The project declares no catalogs this check applies to, so no attach
+    /// was attempted -- but the credential every write needs was obtained
+    /// first, so that much is verified. Not a failure.
+    MintedOnly {
+        pat_hygiene: Option<PatHygieneReport>,
+        /// False when a still-live cached credential was reused, meaning the
+        /// mint itself was not exercised and so is not what this verified.
+        freshly_minted: bool,
+    },
+    /// The project declares no catalogs this check applies to and the target
+    /// mints no credential either, so nothing was attempted. Not a failure.
     NothingToCheck {
         pat_hygiene: Option<PatHygieneReport>,
     },

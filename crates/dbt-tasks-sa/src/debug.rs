@@ -572,6 +572,15 @@ fn format_catalog_attach_outcome(outcome: &LakeComputeCatalogAttachOutcome) -> S
         LakeComputeCatalogAttachOutcome::NothingToCheck { .. } => {
             "catalog attach test: skipped (no declared catalogs to check)".to_string()
         }
+        LakeComputeCatalogAttachOutcome::MintedOnly {
+            freshly_minted: true,
+            ..
+        } => "PAT mint test: OK (no declared catalogs to attach)".to_string(),
+        LakeComputeCatalogAttachOutcome::MintedOnly {
+            freshly_minted: false,
+            ..
+        } => "PAT mint test: skipped (reused a still-live cached PAT; no declared catalogs to attach)"
+            .to_string(),
         LakeComputeCatalogAttachOutcome::Attached { catalogs, .. } => {
             format!("catalog attach test: OK ({})", catalogs.join(", "))
         }
@@ -581,6 +590,7 @@ fn format_catalog_attach_outcome(outcome: &LakeComputeCatalogAttachOutcome) -> S
 fn pat_hygiene_of(outcome: &LakeComputeCatalogAttachOutcome) -> Option<&PatHygieneReport> {
     match outcome {
         LakeComputeCatalogAttachOutcome::NothingToCheck { pat_hygiene }
+        | LakeComputeCatalogAttachOutcome::MintedOnly { pat_hygiene, .. }
         | LakeComputeCatalogAttachOutcome::Attached { pat_hygiene, .. } => pat_hygiene.as_ref(),
     }
 }
@@ -745,6 +755,29 @@ mod tests {
             pat_hygiene: None,
         });
         assert!(msg.contains("no declared catalogs to check"));
+    }
+
+    /// A project with no declared catalogs still reports the mint, since that
+    /// is the part its first write depends on.
+    #[test]
+    fn format_catalog_attach_outcome_minted_only_reports_a_fresh_mint_as_ok() {
+        let msg = format_catalog_attach_outcome(&LakeComputeCatalogAttachOutcome::MintedOnly {
+            pat_hygiene: None,
+            freshly_minted: true,
+        });
+        assert_eq!(msg, "PAT mint test: OK (no declared catalogs to attach)");
+    }
+
+    /// A cache hit never ran the mint DDL, so it must not be reported as
+    /// having verified it.
+    #[test]
+    fn format_catalog_attach_outcome_minted_only_does_not_claim_ok_on_a_cache_hit() {
+        let msg = format_catalog_attach_outcome(&LakeComputeCatalogAttachOutcome::MintedOnly {
+            pat_hygiene: None,
+            freshly_minted: false,
+        });
+        assert!(msg.starts_with("PAT mint test: skipped"));
+        assert!(msg.contains("cached PAT"));
     }
 
     #[test]
