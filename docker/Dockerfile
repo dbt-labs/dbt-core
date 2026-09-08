@@ -1,21 +1,16 @@
-ARG py_version=3.11.2
+ARG py_version=3.11.16
 
-FROM python:$py_version-slim-bullseye AS base
+FROM python:$py_version-slim-bookworm AS base
 
 RUN apt-get update \
-  # bullseye-security is past standard support and its InRelease metadata
-  # periodically ages out past its Valid-Until window without being refreshed,
-  # intermittently hard-failing apt-get update; tolerate that staleness here
-  # (signature verification is unaffected)
-  -o Acquire::Check-Valid-Until=false \
   # Install version-pinned packages for reproducible builds
   && apt-get install -y --no-install-recommends \
     build-essential=12.9 \
-    ca-certificates=20250419~deb12u1~deb11u1 \
-    libpq-dev=13.23-0+deb11u4 \
+    ca-certificates=20230311+deb12u1 \
+    libpq-dev=15.18-0+deb12u1 \
     make=4.3-4.1 \
-    openssh-client=1:8.4p1-5+deb11u7 \
-    software-properties-common=0.96.20.2-2.1 \
+    openssh-client=1:9.2p1-2+deb12u10 \
+    software-properties-common=0.99.30-4.1~deb12u1 \
   # Prevent dist-upgrade from changing pinned package versions
   && apt-mark hold \
     build-essential \
@@ -33,7 +28,7 @@ RUN apt-get update \
     libexpat1-dev \
     libssl-dev \
     zlib1g-dev \
-  # Build and install git from source to get 2.50.1 since debian only ships with 2.47 for now
+  # Build and install git from source to get 2.50.1 since debian only ships with 2.39 for now
   && wget https://github.com/git/git/archive/refs/tags/v2.50.1.tar.gz \
   && tar -xf v2.50.1.tar.gz \
   && cd git-2.50.1 \
