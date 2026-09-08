@@ -23,7 +23,6 @@ fn set_only_diff(
     desired_state: &IndexMap<String, String>,
     current_state: &IndexMap<String, String>,
 ) -> Option<IndexMap<String, String>> {
-    // Tags are now "set only" - we never unset tags, only add or update them
     let diff: IndexMap<String, String> = desired_state
         .iter()
         .filter(|(name, value)| current_state.get(*name) != Some(*value))
@@ -165,6 +164,14 @@ mod tests {
         let diff = RelationTags::diff_from(&config, Some(&config));
 
         assert!(diff.is_none());
+    }
+
+    #[test]
+    fn test_get_diff_empty_desired_does_not_unset_remote_tags() {
+        let desired = new_component(IndexMap::new());
+        let existing = new_component(IndexMap::from([("tag".to_string(), "value".to_string())]));
+
+        assert!(RelationTags::diff_from(&desired, Some(&existing)).is_none());
     }
 
     #[test]
