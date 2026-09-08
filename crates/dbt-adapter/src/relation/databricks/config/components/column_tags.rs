@@ -41,7 +41,7 @@ fn changed_column_tags_diff(
     desired_state: &IndexMap<String, IndexMap<String, String>>,
     current_state: &IndexMap<String, IndexMap<String, String>>,
 ) -> Option<IndexMap<String, IndexMap<String, String>>> {
-    // Python lowercases column names before comparison.
+    // Identifiers are case-insensitive, so compare column names after lowercasing.
     let current_by_lower = current_state
         .iter()
         .map(|(column_name, tags)| (column_name.to_lowercase(), tags))
