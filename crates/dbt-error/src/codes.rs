@@ -267,11 +267,22 @@ pub enum ErrorCode {
     CheckSkipped = 1652,
     /// A check could not be evaluated (e.g. its query errored).
     CheckEvaluationFailed = 1653,
-    /// The parse-time index could not be written, so checks were skipped and the build proceeded.
-    CheckIndexUnavailable = 1654,
-    /// The index was turned off (`--no-write-index`), so checks were skipped and the build
-    /// proceeded. Distinct from `CheckIndexUnavailable`: that code reports a requested write that
-    /// failed, so promoting it must not also fail every deliberately opted-out build.
+    /// The metadata a check reads is not on disk, so checks were skipped and the build
+    /// proceeded. Skipped rather than failed because this is infrastructure, not a verdict on the
+    /// project; `warn_error_options` can promote it where the gate must be mandatory.
+    ///
+    /// It was `CheckIndexUnavailable` while checks read `target/private/index`. They read the
+    /// parse metadata epochs directly now, so only the name changed -- the number is the same,
+    /// and an existing `warn_error_options` entry keeps working.
+    CheckMetadataUnavailable = 1654,
+    /// No longer emitted. The number is retained rather than reused so an old
+    /// `warn_error_options` entry stays inert instead of silently promoting something else.
+    ///
+    /// It reported the index being turned off as the reason the gate did not run, which was true
+    /// while checks read the index. They read the parse metadata now, so nothing about the index
+    /// decides whether a check runs -- `--skip-checks` does, and asking to skip is not warned
+    /// about. Reachable only through `--no-write-index`, which is hidden, so in practice this
+    /// code could only be met by a programmatic caller.
     CheckIndexDisabled = 1655,
 
     // --------------------------------------------------------------------------------------------
@@ -307,9 +318,9 @@ pub enum ErrorCode {
     // on for `build`, `run` and `check` unless `--no-write-index` says otherwise. So a failure
     // here reaches everyone, and "promote it in CI" is a reasonable thing to want without also
     // promoting every `Generic` warning in the run.
-    /// The index could not be written, so features that read it -- checks among them -- have
-    /// nothing current to read. For `build`/`check` the *consequence* is reported separately as
-    /// `CheckIndexUnavailable`; this is the cause, and it is the one that carries the IO error.
+    /// The index could not be written, so features that read it have nothing current to read.
+    /// Checks are no longer among them: they read the parse metadata epochs, so a failed index
+    /// write leaves the gate running normally.
     ///
     /// The index's *parse-tier* advisory deliberately has no code and stays on `Generic`: it
     /// fires only for `parse --write-index`, and `--write-index` is undocumented, so there is

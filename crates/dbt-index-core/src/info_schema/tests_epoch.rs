@@ -35,6 +35,10 @@ use std::path::Path;
 
 use crate::db::Db;
 use crate::format::cell_to_string;
+use crate::ingest::{
+    PARSE_ALIVE, PARSE_COLUMNS_SUBDIR, PARSE_GENERATION, PARSE_NODES_SUBDIR, PARSE_PROJECT,
+    PARSE_RESOLVER_STATE,
+};
 
 use super::schema::INFO_SCHEMA;
 use super::spec::TableSpec;
@@ -509,4 +513,119 @@ fn latest_group_supersedes_the_whole_group() {
          dropped and not duplicated — while `b`, which epoch 1 does not mention, \
          keeps its epoch-0 row"
     );
+}
+
+/// A metadata directory holding the parse relations and nothing else.
+///
+/// The files are empty: `generate` decides which views to emit from whether an epoch file
+/// *exists*, and the tests below read the statements rather than run them.
+fn parse_corpus() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    for sub in [PARSE_NODES_SUBDIR, PARSE_COLUMNS_SUBDIR] {
+        let dir = tmp.path().join(sub);
+        std::fs::create_dir_all(&dir).expect("create_dir_all");
+        std::fs::write(dir.join("v1_0.parquet"), b"").expect("write epoch");
+    }
+    for file in [
+        PARSE_ALIVE,
+        PARSE_PROJECT,
+        PARSE_RESOLVER_STATE,
+        PARSE_GENERATION,
+    ] {
+        std::fs::write(tmp.path().join(file), b"").expect("write epoch");
+    }
+    tmp
+}
+
+/// The check surface: what [`epoch_views::parse_safe_statements`] registers, and nothing else.
+///
+/// Statement-level rather than differential, so it needs no corpus and runs everywhere. Only
+/// the *presence* of an epoch file decides which views `generate` emits, so touching empty
+/// ones is enough to make it emit the parse tables — the statements are inspected, never
+/// executed.
+///
+/// What it pins is a boundary, which is why it is an allowlist and not a scan for the two
+/// namespaces a reviewer would think of. Check SQL may name any relation, so a table nobody
+/// remembered — `dbt_internal.node_input_files` is published and empty at parse — must be
+/// *absent* rather than merely undocumented, and absent is what makes naming it a binder
+/// error instead of a clean pass over no rows.
+#[test]
+fn parse_safe_statements_publish_only_the_check_views() {
+    let tmp = parse_corpus();
+    let dir = tmp.path();
+
+    let statements = epoch_views::parse_safe_statements(dir).expect("parse-safe statements");
+    let parse_safe: BTreeSet<&str> = super::parse_safe::VIEWS.iter().map(|v| v.name).collect();
+    let epochs: BTreeSet<&str> = epoch::EPOCH_RELATIONS.iter().map(|r| r.view).collect();
+
+    let mut published: BTreeSet<String> = BTreeSet::new();
+    for stmt in &statements {
+        if stmt.starts_with("CREATE SCHEMA") {
+            continue;
+        }
+        let target = stmt
+            .strip_prefix("CREATE OR REPLACE VIEW ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .unwrap_or_else(|| panic!("not a view statement:\n{stmt}"));
+        let (schema, name) = target.split_once('.').expect("qualified name");
+        match schema {
+            "dbt_internal" => assert!(
+                epochs.contains(name),
+                "only the epoch relations belong in dbt_internal, not {target}:\n{stmt}"
+            ),
+            "dbt" => {
+                assert!(
+                    parse_safe.contains(name),
+                    "{target} is not a parse-safe view and must not be registered:\n{stmt}"
+                );
+                published.insert(name.to_string());
+            }
+            _ => panic!("unexpected schema in {target}:\n{stmt}"),
+        }
+    }
+
+    // Not equality with `parse_safe`: a view whose relation has no files is skipped, and this
+    // corpus has the parse relations only. `dbt.models` is the one every check reaches for.
+    assert!(
+        published.contains("models"),
+        "the parse corpus should publish dbt.models; got {published:?}"
+    );
+}
+
+/// The columns a check may read are the ones [`super::parse_safe`] declares — no more, and in
+/// that order.
+///
+/// The restriction is the reason the views exist: zero rows is a pass, so a column still empty
+/// at parse does not fail a check, it quietly satisfies one. `WHERE compiled_code IS NULL`
+/// must fail to bind rather than match every row.
+#[test]
+fn each_check_view_offers_exactly_its_declared_columns() {
+    let tmp = parse_corpus();
+    let dir = tmp.path();
+
+    let statements = epoch_views::parse_safe_statements(dir).expect("parse-safe statements");
+    let mut seen = 0;
+    for view in super::parse_safe::VIEWS {
+        let prefix = format!("CREATE OR REPLACE VIEW dbt.{} AS SELECT ", view.name);
+        let Some(stmt) = statements.iter().find(|s| s.starts_with(&prefix)) else {
+            continue;
+        };
+        seen += 1;
+        let projection = stmt[prefix.len()..]
+            .split(" FROM (")
+            .next()
+            .expect("projection");
+        let expected = view
+            .cols
+            .iter()
+            .map(|c| format!("\"{c}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        assert_eq!(
+            projection, expected,
+            "dbt.{} must offer exactly its declared columns",
+            view.name
+        );
+    }
+    assert!(seen > 0, "no parse-safe view was published to compare");
 }

@@ -4,14 +4,12 @@
 //! query against parse-safe `dbt.*` views (via `info_schema()`). A query
 //! returning zero rows passes; any returned rows are violations.
 //!
-//! Discovery and evaluation live here; `check_index_adapter` executes the SQL
+//! Discovery and evaluation live here; `check_adapter` executes the SQL
 //! against a published parse index.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
-
-use dbt_index_core::ingest::metadata_to_parquet::index_is_current;
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -135,23 +133,29 @@ pub fn selection_filter_for(
 // Result-batch evaluation
 // ---------------------------------------------------------------------------
 
-/// Why a check could not read the index, in user-facing terms. `None` means it can.
+/// Why a check could not read the project metadata, in user-facing terms. `None` means it can.
 ///
-/// Checks are **pure readers**: they never build or refresh the index. An earlier version had
-/// each check catch the index up itself, which went wrong three ways: concurrent checks rewrote
-/// the same parquet files while siblings had them open (a non-deterministic `IO error: No such
-/// file or directory`), `target/private/index/` appeared even when the invocation was never asked to
-/// write one, and what it left there lacked the `.fusion_state.json` / `.artifact_meta.json`
-/// bookkeeping of a published index — so anything reading `target/private/index` afterwards would treat
-/// a half-built directory as real.
-pub fn index_unavailable_reason(metadata_dir: &Path, index_dir: &Path) -> Option<String> {
-    if index_is_current(metadata_dir, index_dir) {
+/// Checks are **pure readers**: the views they query are declared over the epoch files this
+/// invocation's parse already wrote, and nothing is converted or published on their behalf. An
+/// earlier version read `target/private/index` instead and had each check catch that index up
+/// itself, which went wrong three ways: concurrent checks rewrote the same parquet files while
+/// siblings had them open (a non-deterministic `IO error: No such file or directory`),
+/// `target/private/index/` appeared even when the invocation was never asked to write one, and
+/// what it left there lacked the `.fusion_state.json` / `.artifact_meta.json` bookkeeping of a
+/// published index — so anything reading `target/private/index` afterwards would treat a
+/// half-built directory as real.
+///
+/// Asked *before* the views are built, not left to the first query, because a metadata directory
+/// with no parse epochs publishes no views at all: every check would then fail to bind and report
+/// its own binder error, twenty of which say less than one line naming the cause.
+pub fn metadata_unavailable_reason(metadata_dir: &Path) -> Option<String> {
+    if dbt_index_core::info_schema::epoch_views::parse_epochs_present(metadata_dir) {
         return None;
     }
     Some(format!(
-        "no current metadata index at {} — checks read the index but never build it; \
-         run `dbt build` or `dbt check`",
-        index_dir.display()
+        "no project metadata at {} — checks read the metadata this run parsed, and none was \
+         written",
+        metadata_dir.display()
     ))
 }
 
@@ -593,14 +597,14 @@ fn render_rows(batch: &arrow::record_batch::RecordBatch, total: u64) -> Option<S
     .map(|t| t.trim_end().to_string())
 }
 
-/// Run every check against the index, before anything downstream is built.
+/// Run every check against the project metadata, before anything downstream is built.
 ///
 /// This is the *only* place checks execute. `dbt check` and `dbt build` both call it, so the two
 /// cannot drift — earlier designs ran them from two places and silently disagreed about scoping and
 /// about what counted as a vacuous pass.
 ///
-/// Placement is the whole design: parse has finished, the parse layer has been published to the
-/// index, and the task graph has not been built. So a failing check needs no graph edges to stop
+/// Placement is the whole design: parse has finished, its metadata epochs are on disk, and the task
+/// graph has not been built. So a failing check needs no graph edges to stop
 /// anything — the caller simply does not proceed. That removes the gating apparatus entirely, along
 /// with its sharpest edge: a node configured `static_analysis: off` has no analyze task, so gating
 /// only the analyze heads used to let it materialize straight through a failing check.
@@ -610,7 +614,6 @@ fn render_rows(batch: &arrow::record_batch::RecordBatch, total: u64) -> Option<S
 /// rather than `pass`, because a green result must not stand in for a check that examined nothing.
 pub fn run_parse_time_checks(
     checks: &[Arc<dbt_schemas::schemas::DbtCheck>],
-    index_dir: &Path,
     metadata_dir: &Path,
     selection: Option<&BTreeSet<String>>,
     max_preview_rows: usize,
@@ -620,10 +623,9 @@ pub fn run_parse_time_checks(
         return outcome;
     }
 
-    // Checks read the index and never build it. If it does not reflect the metadata this invocation
-    // just wrote, there is nothing trustworthy to query — and every check must say so rather than
-    // return zero rows, which would read as a pass.
-    if let Some(reason) = index_unavailable_reason(metadata_dir, index_dir) {
+    // Checks read the metadata this invocation just parsed. With none there is nothing to query
+    // — and every check must say so rather than return zero rows, which would read as a pass.
+    if let Some(reason) = metadata_unavailable_reason(metadata_dir) {
         for c in checks {
             outcome.failed += 1;
             outcome.results.push(CheckResult::error(
@@ -635,8 +637,8 @@ pub fn run_parse_time_checks(
         return outcome;
     }
 
-    let adapter = match crate::check_index_adapter::open_index_adapter(
-        index_dir,
+    let adapter = match crate::check_adapter::open_metadata_adapter(
+        metadata_dir,
         dbt_common::cancellation::never_cancels(),
     ) {
         Ok(a) => a,
@@ -674,7 +676,7 @@ pub fn run_parse_time_checks(
         };
 
         let started = std::time::Instant::now();
-        let evaluated = crate::check_index_adapter::query_index(&adapter, sql)
+        let evaluated = crate::check_adapter::query_index(&adapter, sql)
             .and_then(|batches| evaluate_batches(&batches, &filter, selection, max_preview_rows));
         let execution_time = started.elapsed().as_secs_f64();
 

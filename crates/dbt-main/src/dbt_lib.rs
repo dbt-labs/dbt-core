@@ -1224,23 +1224,12 @@ impl<'a> AllPhasesExecutor<'a> {
         // `command_entrypoint`, because a retry rewrites `command` back to the original command
         // (see the retry comment on `retrying` below), so a retried build/check still gates here.
         //
-        // `parse_index_publish_failed` skips the gate entirely: checks are pure readers of the
-        // index, so with no current index every one of them would report `error` and drown the
-        // real cause. The publish already warned under `CheckIndexUnavailable`, which
-        // `warn_error_options` can promote to an error where the gate must be mandatory.
-        //
-        // `--no-write-index` (EvalArgs `write_index` false) is an opt-out, not a failure: the
-        // build proceeds, but the `else` branch warns under `CheckIndexDisabled` so a green exit
-        // is not mistaken for checks that passed. Not `CheckIndexUnavailable` -- that code is for
-        // a requested write that failed, and promoting it must stay able to fail those runs
-        // without also failing every deliberately opted-out build.
-        //
-        // `--skip-checks` is the same kind of opt-out for the gate itself: the user asked to
-        // skip, so do not warn. The index is still written.
-        if matches!(self.arg.command, FsCommand::Build | FsCommand::Check)
-            && !compilation.parse_index_publish_failed
-            && self.arg.write_index
-            && !self.arg.skip_checks
+        // `--skip-checks` is the one opt-out: the user asked to skip, so do not warn. Nothing
+        // about the index enters into it any more -- the views a check queries are declared over
+        // the parse metadata epochs, so neither `--no-write-index` nor a failed index write
+        // decides whether the gate runs. That was the whole point of reading the metadata: the
+        // gate no longer depends on a conversion having succeeded first.
+        if matches!(self.arg.command, FsCommand::Build | FsCommand::Check) && !self.arg.skip_checks
         {
             use dbt_tasks_sa::check::run_parse_time_checks;
 
@@ -1308,12 +1297,11 @@ impl<'a> AllPhasesExecutor<'a> {
                     .collect()
             };
             if !named.is_empty() {
-                if let Some(reason) = dbt_tasks_sa::check::index_unavailable_reason(
-                    &self.arg.metadata_dir(),
-                    &self.arg.index_dir(),
-                ) {
+                if let Some(reason) =
+                    dbt_tasks_sa::check::metadata_unavailable_reason(&self.arg.metadata_dir())
+                {
                     emit_warn_log_message(
-                        ErrorCode::CheckIndexUnavailable,
+                        ErrorCode::CheckMetadataUnavailable,
                         format!("{reason}. Skipping checks..."),
                     );
                 } else {
@@ -1333,13 +1321,8 @@ impl<'a> AllPhasesExecutor<'a> {
                         selection_active,
                         schedule.selected_nodes.iter(),
                     );
-                    let outcome = run_parse_time_checks(
-                        &named,
-                        &self.arg.index_dir(),
-                        &self.arg.metadata_dir(),
-                        scope.as_ref(),
-                        5,
-                    );
+                    let outcome =
+                        run_parse_time_checks(&named, &self.arg.metadata_dir(), scope.as_ref(), 5);
 
                     // A selector that matched nothing is one fact about the invocation, not one
                     // fact per check: twenty checks produced twenty identical `CheckSkipped`
@@ -1541,29 +1524,6 @@ impl<'a> AllPhasesExecutor<'a> {
                         return Err(return_exit_code_from_error_counter());
                     }
                 }
-            }
-        } else if matches!(self.arg.command, FsCommand::Build | FsCommand::Check)
-            && !compilation.parse_index_publish_failed
-            && !self.arg.write_index
-            && !self.arg.skip_checks
-        {
-            // The index is off, so the gate above could not run. Say so rather than exiting 0 on a
-            // project whose checks were never evaluated -- silence here reads as "the checks
-            // passed". Only when the project defines checks: a project without any loses nothing
-            // by turning the index off, and warning there would fire on every such build.
-            //
-            // Its own code, not `CheckIndexUnavailable`: that one reports a requested write that
-            // failed, and `warn_error_options` must be able to make *that* fatal without also
-            // failing every build that deliberately opted out.
-            let check_count = compilation.resolved_state().nodes.checks.len();
-            if check_count > 0 {
-                emit_warn_log_message(
-                    ErrorCode::CheckIndexDisabled,
-                    format!(
-                        "--no-write-index: skipping {check_count} parse-time check(s); \
-                         nothing verified them for this invocation"
-                    ),
-                );
             }
         }
 

@@ -1,13 +1,22 @@
-//! Query the metadata index through a real DuckDB **adapter**, rather than a raw ADBC connection.
+//! Query the project metadata through a real DuckDB **adapter**, rather than a raw ADBC connection.
 //!
-//! Checks have historically read the index via `dbt-index-core`'s `DuckDbViewsBackend`, which opens
-//! an ADBC connection directly and so bypasses the adapter layer entirely. Two consequences: check
+//! Checks first read the index via `dbt-index-core`'s `DuckDbViewsBackend`, which opens an ADBC
+//! connection directly and so bypasses the adapter layer entirely. Two consequences: check
 //! SQL cannot use `adapter.*` or any macro that dispatches on the adapter, and the driver it loads is
 //! `Backend::DuckDBExtended` — the bespoke dbt-built DuckDB carrying internal extensions, the same
 //! driver sidecar mode selects — rather than vanilla `Backend::DuckDB`.
 //!
 //! This module is the adapter-backed replacement. It builds a DuckDB adapter over an in-memory
-//! database, registers the index parquet as views, and executes check SQL through it.
+//! database, registers the metadata as views, and executes check SQL through it.
+//!
+//! Three entry points, and they are not the same surface:
+//!
+//! - [`open_metadata_adapter`] — `target/private/metadata/`, for a parse-time check. The
+//!   parse-safe views only: narrowed names, and columns that are final at parse.
+//! - [`open_epoch_adapter`] — the same directory, whole published surface, for
+//!   `dbt show --info`.
+//! - [`open_info_schema_adapter`] — `target/info_schema/v<n>/`, whose files are already the
+//!   published shape.
 //!
 //! Three properties were verified before writing this (see `adapter_index_spike` in `check_task`):
 //! the adapter constructs with no profile or credentials; views registered by one call are still
@@ -25,7 +34,6 @@ use dbt_adapter::adapter::adapter_factory::{AdapterFactory, DefaultAdapterFactor
 use dbt_adapter::sql_types::DefaultTypeOpsFactory;
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_index_core::info_schema::parse_safe::{self, BASE_SCHEMA};
 use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
 
 /// Build a DuckDB adapter over an in-memory database.
@@ -39,7 +47,7 @@ use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
 ///
 /// Public because rendering needs an adapter too, for a different reason: a check's Render task wants
 /// one purely so macros and utilities *dispatch* on duckdb and emit duckdb SQL. That use needs no
-/// views registered, so it takes this rather than [`open_index_adapter`].
+/// views registered, so it takes this rather than [`open_metadata_adapter`].
 pub fn in_memory_duckdb_adapter(token: CancellationToken) -> Result<Arc<Adapter>, String> {
     let mut config = dbt_yaml::Mapping::new();
     config.insert("type".into(), "duckdb".into());
@@ -60,84 +68,6 @@ pub fn in_memory_duckdb_adapter(token: CancellationToken) -> Result<Arc<Adapter>
             None,
         )
         .map_err(|e| format!("could not open an in-memory duckdb adapter: {e}"))
-}
-
-/// Register the index as the views a parse-time check reads.
-///
-/// Two layers, both from `index_dir`'s parquet. The index's own tables go into
-/// `dbt_internal`, and the parse-safe views over them into `dbt` — so `info_schema('models')`
-/// resolves, and `dbt.nodes` does not exist to be read by accident. See
-/// `dbt_index_core::info_schema::parse_safe` for why the split is a correctness boundary and
-/// not tidiness.
-///
-/// Paths are made **absolute** here rather than executing the index's own `views.sql`, which
-/// emits relative paths and would therefore depend on the process working directory.
-///
-/// A *missing* parquet is tolerated — it is skipped, and a check that needed that table then
-/// fails on its own with "table does not exist", which is the more useful error. One that is
-/// present but fails to register still aborts the batch. That is the opposite of
-/// `register_info_schema_views`, which serves a single user-named view and so has no stake in
-/// whether the rest of the directory reads.
-fn register_index_views(adapter: &Adapter, index_dir: &Path) -> Result<(), String> {
-    for schema in [parse_safe::VIEW_SCHEMA, BASE_SCHEMA] {
-        adapter
-            .execute_without_state(
-                None,
-                &format!("create schema if not exists {schema}"),
-                false,
-                None,
-            )
-            .map_err(|e| format!("could not create schema {schema}: {e}"))?;
-    }
-
-    // Only the tables the parse-safe views are built from. Registering the whole index
-    // directory would expose tables that are empty at parse — and an empty table does not
-    // error, it returns zero rows, which a check reports as a pass.
-    //
-    // Tracks which ones actually registered: `node_columns.parquet` in particular does not
-    // exist until something has written columns, so a project without them still gets every
-    // other view.
-    let mut registered = std::collections::HashSet::new();
-    for table in parse_safe::base_tables() {
-        let path = index_dir.join(format!("dbt.{table}.parquet"));
-        if !path.exists() {
-            // Left unregistered on purpose: a check that needs it then fails with "table does
-            // not exist", which is loud. An empty stand-in would make the same check pass
-            // having read nothing.
-            continue;
-        }
-        let quoted = path.to_string_lossy().replace('\'', "''");
-        let sql = format!(
-            "create or replace view {BASE_SCHEMA}.{table} as select * from read_parquet('{quoted}')"
-        );
-        adapter
-            .execute_without_state(None, &sql, false, None)
-            .map_err(|e| format!("could not register {BASE_SCHEMA}.{table}: {e}"))?;
-        registered.insert(table);
-    }
-
-    // A view whose tables are all present is created; one missing a table is skipped rather
-    // than attempted, so `dbt.node_columns`'s absence cannot take down `dbt.models`.
-    for view in parse_safe::VIEWS {
-        if !view.base_tables().iter().all(|t| registered.contains(t)) {
-            continue;
-        }
-        let sql = view.create_view_sql().map_err(|e| e.to_string())?;
-        adapter
-            .execute_without_state(None, &sql, false, None)
-            .map_err(|e| format!("could not register parse-safe view ({e}): {sql}"))?;
-    }
-    Ok(())
-}
-
-/// Open the index through a DuckDB adapter with its views registered.
-pub fn open_index_adapter(
-    index_dir: &Path,
-    token: CancellationToken,
-) -> Result<Arc<Adapter>, String> {
-    let adapter = in_memory_duckdb_adapter(token)?;
-    register_index_views(&adapter, index_dir)?;
-    Ok(adapter)
 }
 
 /// Register every `dbt*.*.parquet` in `dir` as a view.
@@ -206,33 +136,72 @@ fn parse_index_parquet_name(name: &str) -> Option<(&str, &str)> {
     Some((schema, table))
 }
 
-/// Open `target/info_schema/v<n>/` through a DuckDB adapter.
+/// An adapter a parse-time check runs against, over the project metadata.
+///
+/// Registers the parse-safe views straight from the epoch files, so nothing has to convert
+/// the metadata into an index first and there is no second representation to fall behind.
+/// The column restriction is unchanged: a later-phase column is absent, not NULL.
+pub fn open_metadata_adapter(
+    metadata_dir: &Path,
+    token: CancellationToken,
+) -> Result<Arc<Adapter>, String> {
+    open_epoch_views(
+        metadata_dir,
+        token,
+        "check views",
+        dbt_index_core::info_schema::epoch_views::parse_safe_statements,
+    )
+}
+
 /// An adapter over the metadata epochs, with the published surface registered as views.
 ///
 /// The same view layer the COPY materializer executes before writing parquet -- this stops at
 /// the views. So `dbt show --info` answers from the epochs the last command wrote rather than
 /// from a snapshot somebody has to remember to generate, and cannot report a project that no
 /// longer exists.
+///
+/// Wider than [`open_metadata_adapter`] on purpose: `--info` reports what the last command
+/// wrote, including the runtime tables, while a check runs before any of that exists and would
+/// read an empty table as a pass.
 pub fn open_epoch_adapter(
     metadata_dir: &Path,
     token: CancellationToken,
 ) -> Result<Arc<Adapter>, String> {
-    let statements = dbt_index_core::info_schema::epoch_views::generate_queryable(metadata_dir)
-        .map_err(|e| {
-            format!(
-                "could not read project metadata at {}: {e}",
-                metadata_dir.display()
-            )
-        })?;
+    open_epoch_views(
+        metadata_dir,
+        token,
+        "information schema views",
+        dbt_index_core::info_schema::epoch_views::generate_queryable,
+    )
+}
+
+/// Build an adapter and run one generator's statements against it.
+///
+/// `what` names the surface in the error, because the two callers fail for different reasons a
+/// user can act on: a check's views not registering is a build failure, while `--info`'s are a
+/// failed query.
+fn open_epoch_views(
+    metadata_dir: &Path,
+    token: CancellationToken,
+    what: &str,
+    generate: impl Fn(&Path) -> Result<Vec<String>, dbt_index_core::IndexError>,
+) -> Result<Arc<Adapter>, String> {
+    let statements = generate(metadata_dir).map_err(|e| {
+        format!(
+            "could not read project metadata at {}: {e}",
+            metadata_dir.display()
+        )
+    })?;
     let adapter = in_memory_duckdb_adapter(token)?;
     for stmt in &statements {
         adapter
             .execute_without_state(None, stmt, false, None)
-            .map_err(|e| format!("registering information schema views: {e}"))?;
+            .map_err(|e| format!("registering {what}: {e}"))?;
     }
     Ok(adapter)
 }
 
+/// Open `target/info_schema/v<n>/` through a DuckDB adapter.
 pub fn open_info_schema_adapter(
     info_schema_dir: &Path,
     token: CancellationToken,

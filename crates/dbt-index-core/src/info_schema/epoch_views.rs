@@ -117,6 +117,97 @@ pub fn generate(metadata_dir: &Path) -> Result<Generated, IndexError> {
     })
 }
 
+/// The statements a parse-time check needs, over `metadata_dir`.
+///
+/// The same view layer [`generate`] builds, narrowed to what a check may read:
+///
+/// - only the [`parse_safe::VIEWS`](super::parse_safe::VIEWS) tables are published into
+///   `dbt`, and only with the columns those views declare. A column that is empty until
+///   compile is *absent*, so naming it is a binder error rather than a NULL that reads as
+///   a clean pass.
+/// - `dbt_rt` is not registered at all. Checks run before execute, so a runtime table
+///   could only ever be empty, and zero rows is a pass.
+/// - the published `dbt_internal` tables are dropped as well. Only the epoch relations
+///   are registered there, because the projections read them.
+///
+/// Each published view is derived from `generate`'s own statement for that table rather
+/// than from a second code path: that statement becomes the subquery a column projection
+/// selects from. So a check and the published information schema cannot disagree about a
+/// column's *value* — only about whether the column is offered.
+///
+/// A view `generate` skipped — its epoch relation has no files, as `node_columns` has none
+/// until something writes columns — is simply absent, so a check naming it fails to bind.
+/// That is the same outcome as the index path it replaces, and louder than an empty
+/// stand-in, which would pass having read nothing.
+///
+/// Which is why this builds on [`generate`] and not on [`generate_queryable`], despite the
+/// latter being the one `dbt show --info` executes: the empty stand-ins it adds are right for
+/// a query, whose answer is "no rows", and wrong for a check, whose zero rows *are* the pass.
+pub fn parse_safe_statements(metadata_dir: &Path) -> Result<Vec<String>, IndexError> {
+    let generated = generate(metadata_dir)?;
+    let mut out: Vec<String> = Vec::with_capacity(generated.statements.len());
+
+    for stmt in generated.statements {
+        // An allowlist, not a denylist: check SQL may name any relation, so a published
+        // table nobody thought about must be *absent* rather than merely undocumented.
+        if stmt.starts_with("CREATE SCHEMA")
+            || EPOCH_RELATIONS
+                .iter()
+                .any(|rel| stmt.starts_with(&create_prefix(&format!("dbt_internal.{}", rel.view))))
+        {
+            out.push(stmt);
+            continue;
+        }
+        let Some(view) = super::parse_safe::VIEWS
+            .iter()
+            .find(|v| stmt.starts_with(&create_prefix(&format!("dbt.{}", v.name))))
+        else {
+            continue;
+        };
+
+        let prefix = create_prefix(&format!("dbt.{}", view.name));
+        let body = stmt.strip_prefix(&prefix).ok_or_else(|| {
+            IndexError::Other(format!(
+                "parse-safe views: `generate` no longer emits `{prefix}` for {}; the \
+                 projection below wraps that statement and cannot be built without it",
+                view.name
+            ))
+        })?;
+        let cols = view
+            .cols
+            .iter()
+            .map(|c| format!("\"{c}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        out.push(format!(
+            "CREATE OR REPLACE VIEW dbt.{} AS SELECT {cols} FROM (\n{body}\n)",
+            view.name
+        ));
+    }
+    Ok(out)
+}
+
+/// Whether `metadata_dir` holds the parse epochs the check views are built from.
+///
+/// The parse-time gate consults this before running anything, because
+/// [`parse_safe_statements`] *skips* a view whose relation has no files: with the parse
+/// epochs missing, every check would fail to bind and the run would report twenty binder
+/// errors instead of the one fact that explains them.
+///
+/// `epoch_parse_nodes` alone, and not every relation a view might read: it is the node set
+/// the views project, so its absence means nothing has been written, while a project that
+/// has parsed but never compiled legitimately lacks the rest.
+pub fn parse_epochs_present(metadata_dir: &Path) -> bool {
+    EPOCH_RELATIONS
+        .iter()
+        .any(|rel| rel.view == "epoch_parse_nodes" && rel.has_files(metadata_dir))
+}
+
+/// The prefix every generated view statement starts with, per the two `header`s above.
+fn create_prefix(qualified: &str) -> String {
+    format!("CREATE OR REPLACE VIEW {qualified} AS\n")
+}
+
 /// Output tables the mapping cannot express at all.
 ///
 /// A subset of [`Generated::skipped`], and the half of it that is a property of

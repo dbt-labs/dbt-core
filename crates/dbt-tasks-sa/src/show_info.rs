@@ -18,7 +18,7 @@ use dbt_tasks_core::pretty_table::from_pretty_table_error;
 use dbt_telemetry::{ShowDataOutput, ShowDataOutputFormat};
 use minijinja::Value;
 
-use crate::check_index_adapter::{open_epoch_adapter, query_index};
+use crate::check_adapter::{open_epoch_adapter, query_index};
 
 /// Template name handed to the Jinja parser. It only ever appears in a parse error,
 /// which this predicate discards, so it is a label for debugging rather than output.
