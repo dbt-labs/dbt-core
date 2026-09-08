@@ -180,6 +180,7 @@ pub async fn resolve_models(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
     seen_generic_test_paths: &mut HashMap<PathBuf, String>,
@@ -258,6 +259,7 @@ pub async fn resolve_models(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     // HACK: strip semantic resources out of all model properties

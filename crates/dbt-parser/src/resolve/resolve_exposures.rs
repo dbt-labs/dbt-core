@@ -281,6 +281,7 @@ pub fn resolve_yaml_depends_on(
             root_project_name,
             DEFAULT_DBT_QUOTING,
             Arc::new(DbtRuntimeConfig::default()),
+            Arc::new(DbtRuntimeConfig::default()),
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from(relative_path),

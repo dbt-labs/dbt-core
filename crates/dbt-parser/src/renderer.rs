@@ -280,6 +280,7 @@ where
         inner,
         jinja_env,
         runtime_config,
+        root_runtime_config,
     } = render_ctx;
 
     let RenderCtxInner {
@@ -402,6 +403,7 @@ where
         root_project_name,
         *package_quoting,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         sql_resources.clone(),
         execute_exists.clone(),
         &display_path,
@@ -708,8 +710,13 @@ pub struct RenderCtx<T: ResolvableConfig<T>> {
     pub inner: Arc<RenderCtxInner<T>>,
     /// The jinja environment
     pub jinja_env: Arc<JinjaEnv>,
-    /// The runtime config
+    /// This package's own runtime config — used only for the `MacroLookupContext`
+    /// package allow-list. See [`build_resolve_model_context`]'s doc comment.
     pub runtime_config: Arc<DbtRuntimeConfig>,
+    /// The root project's runtime config — backs `ref`/`source`/`metric`'s
+    /// `.config`, matching dbt Core's `self.root_project`. See
+    /// [`build_resolve_model_context`]'s doc comment.
+    pub root_runtime_config: Arc<DbtRuntimeConfig>,
 }
 
 /// Iterate over all the sql files passed in, generate the local config, initialize the sql render env, and render the sql

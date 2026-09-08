@@ -77,6 +77,7 @@ pub async fn resolve_snapshots(
     jinja_env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     node_resolver: &mut NodeResolver,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
@@ -329,6 +330,7 @@ pub async fn resolve_snapshots(
         }),
         jinja_env: jinja_env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     // Render the snapshots

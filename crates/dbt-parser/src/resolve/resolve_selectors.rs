@@ -165,6 +165,7 @@ fn load_and_parse_selectors_file(
         &BTreeMap::new(),
         DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
         namespace_keys,
+        None,
     );
 
     let yaml: SelectorFile = match dbt_jinja_utils::serde::into_typed_with_jinja(
@@ -253,6 +254,7 @@ fn render_default_template(
         &BTreeMap::new(),
         DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
         namespace_keys,
+        None,
     );
     let rendered = jinja_env.render_str(template, &context, &[]).map_err(|e| {
         fs_err!(

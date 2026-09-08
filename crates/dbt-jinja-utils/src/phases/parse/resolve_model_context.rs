@@ -70,6 +70,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
     root_project_name: &str,
     package_quoting: DbtQuoting,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
     execute_exists: Arc<AtomicBool>,
     display_path: &Path,
@@ -107,7 +108,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         schema: schema.to_string(),
         adapter_type,
         sql_resources: sql_resources_clone,
-        runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
         package_quoting,
     };
     let ref_value = MinijinjaValue::from_object(ref_function);
@@ -118,6 +119,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         database: database.to_string(),
         schema: schema.to_string(),
         sql_resources: sql_resources.clone(),
+        root_runtime_config: root_runtime_config.clone(),
         adapter_type,
         package_quoting,
     };
@@ -129,44 +131,20 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         database: database.to_string(),
         schema: schema.to_string(),
         sql_resources: sql_resources.clone(),
+        root_runtime_config: root_runtime_config.clone(),
         adapter_type,
         package_quoting,
     };
     let function_value = MinijinjaValue::from_object(function_function);
     builtins.insert("function".to_string(), function_value.clone());
 
-    let sql_resources_clone = sql_resources.clone();
-    let metric_value = MinijinjaValue::from_function(move |args: &[MinijinjaValue]| {
-        if args.is_empty() || args.len() > 3 {
-            return Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                "invalid number of arguments for metric macro",
-            ));
-        }
-        let mut parser = ArgParser::new(args, None);
-        // If there are two positional args, the first is the package name and the second is the model name
-        let arg0 = parser.get::<String>("")?;
-        let arg1 = parser.get_optional::<String>("");
-        let (package_name, metric_name) = match (arg0, arg1) {
-            (package_name, Some(metric_name)) => (Some(package_name), metric_name),
-            (metric_name, None) => (None, metric_name),
-        };
+    let metric_function = ResolveMetricFunction {
+        sql_resources: sql_resources.clone(),
+        root_runtime_config,
+    };
+    let metric_value = MinijinjaValue::from_object(metric_function);
+    builtins.insert("metric".to_string(), metric_value.clone());
 
-        // Push the SqlResource with all available information
-        sql_resources_clone
-            .lock()
-            .unwrap()
-            .push(SqlResource::Metric((
-                metric_name.clone(),
-                package_name.clone(),
-            )));
-
-        // Create and return the DbtMetricReference
-        Ok(MinijinjaValue::from_object(ParseMetricReference {
-            metric_name,
-            _package_name: package_name,
-        }))
-    });
     let package_dependency = if package_name == root_project_name {
         None
     } else {
@@ -367,14 +345,16 @@ struct ResolveRefFunction<T: ResolvableConfig<T> + 'static> {
     schema: String,
     adapter_type: AdapterType,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
-    runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     package_quoting: DbtQuoting,
 }
 
 impl<T: ResolvableConfig<T>> Object for ResolveRefFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
-            "config" => Some(MinijinjaValue::from_dyn_object(self.runtime_config.clone())),
+            "config" => Some(MinijinjaValue::from_dyn_object(
+                self.root_runtime_config.clone(),
+            )),
             "function_name" => Some(MinijinjaValue::from("ref")),
             _ => None,
         }
@@ -450,12 +430,16 @@ struct ResolveSourceFunction<T: ResolvableConfig<T>> {
     schema: String,
     adapter_type: AdapterType,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     package_quoting: DbtQuoting,
 }
 
 impl<T: ResolvableConfig<T>> Object for ResolveSourceFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
+            "config" => Some(MinijinjaValue::from_dyn_object(
+                self.root_runtime_config.clone(),
+            )),
             "function_name" => Some(MinijinjaValue::from("source")),
             _ => None,
         }
@@ -515,12 +499,16 @@ struct ResolveFunctionFunction<T: ResolvableConfig<T>> {
     schema: String,
     adapter_type: AdapterType,
     sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     package_quoting: DbtQuoting,
 }
 
 impl<T: ResolvableConfig<T>> Object for ResolveFunctionFunction<T> {
     fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
         match key.as_str()? {
+            "config" => Some(MinijinjaValue::from_dyn_object(
+                self.root_runtime_config.clone(),
+            )),
             "function_name" => Some(MinijinjaValue::from("function")),
             _ => None,
         }
@@ -587,6 +575,61 @@ impl<T: ResolvableConfig<T>> Object for ResolveFunctionFunction<T> {
         let function_object = FunctionObject::new(qualified_name);
 
         Ok(function_object.into_value())
+    }
+}
+
+#[derive(Debug)]
+struct ResolveMetricFunction<T: ResolvableConfig<T>> {
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
+}
+
+impl<T: ResolvableConfig<T>> Object for ResolveMetricFunction<T> {
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        match key.as_str()? {
+            "config" => Some(MinijinjaValue::from_dyn_object(
+                self.root_runtime_config.clone(),
+            )),
+            "function_name" => Some(MinijinjaValue::from("metric")),
+            _ => None,
+        }
+    }
+
+    fn call(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        args: &[MinijinjaValue],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        if args.is_empty() || args.len() > 3 {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "invalid number of arguments for metric macro",
+            ));
+        }
+        let mut parser = ArgParser::new(args, None);
+        // If there are two positional args, the first is the package name and the second is the model name
+        let arg0 = parser.get::<String>("")?;
+        let arg1 = parser.get_optional::<String>("");
+        let (package_name, metric_name) = match (arg0, arg1) {
+            (package_name, Some(metric_name)) => (Some(package_name), metric_name),
+            (metric_name, None) => (None, metric_name),
+        };
+
+        // Push the SqlResource with all available information
+        self.sql_resources
+            .lock()
+            .unwrap()
+            .push(SqlResource::Metric((
+                metric_name.clone(),
+                package_name.clone(),
+            )));
+
+        // Create and return the DbtMetricReference
+        Ok(MinijinjaValue::from_object(ParseMetricReference {
+            metric_name,
+            _package_name: package_name,
+        }))
     }
 }
 
@@ -975,6 +1018,7 @@ mod test {
             database: "test_db".to_string(),
             schema: "test_schema".to_string(),
             sql_resources,
+            root_runtime_config: Arc::new(DbtRuntimeConfig::default()),
             adapter_type: AdapterType::Postgres,
             package_quoting: DEFAULT_DBT_QUOTING,
         };

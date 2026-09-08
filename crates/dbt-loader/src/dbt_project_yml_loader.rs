@@ -288,6 +288,7 @@ pub fn load_project_yml(
         &BTreeMap::new(),
         BTreeMap::new(),
         namespace_keys,
+        None,
     );
 
     context.insert("var".to_string(), Value::from_object(Var::new(cli_vars)));

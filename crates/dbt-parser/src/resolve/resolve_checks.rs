@@ -50,6 +50,7 @@ pub async fn resolve_checks(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtCheck>>,
@@ -105,6 +106,7 @@ pub async fn resolve_checks(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     let mut check_sql_resources_map = render_unresolved_sql_files::<CheckConfig, CheckProperties>(

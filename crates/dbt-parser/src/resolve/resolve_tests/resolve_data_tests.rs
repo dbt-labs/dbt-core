@@ -366,6 +366,7 @@ pub async fn resolve_data_tests(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     collected_generic_tests: &[GenericTestAsset],
     node_resolver: &NodeResolver,
     token: &CancellationToken,
@@ -463,6 +464,7 @@ pub async fn resolve_data_tests(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     let mut test_sql_resources_map =
