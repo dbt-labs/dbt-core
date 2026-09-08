@@ -136,6 +136,46 @@ pub fn unmappable_tables() -> Result<Vec<String>, IndexError> {
     Ok(out)
 }
 
+/// Every statement needed to make the whole published surface queryable straight from
+/// `metadata_dir`: [`generate`]'s views, plus a column-shaped empty view for each table it
+/// skipped.
+///
+/// The stubs are what keep this equivalent to querying the parquet snapshot. A table whose
+/// epoch source produced nothing is *published empty* there, so `dbt show --info <that table>`
+/// answers with zero rows; without a stub the view would simply not exist and the same command
+/// would fail to bind. An absent table and an empty one are different answers, and only one of
+/// them is true.
+pub fn generate_queryable(metadata_dir: &Path) -> Result<Vec<String>, IndexError> {
+    let generated = generate(metadata_dir)?;
+    let mut statements = generated.statements;
+    for spec in super::schema::INFO_SCHEMA {
+        if generated
+            .skipped
+            .iter()
+            .any(|s| *s == spec.qualified_name())
+        {
+            statements.push(empty_view_sql(spec)?);
+        }
+    }
+    Ok(statements)
+}
+
+/// `CREATE VIEW` for a table's declared columns with no rows.
+fn empty_view_sql(spec: &TableSpec) -> Result<String, IndexError> {
+    let out = out_schema(spec)?;
+    let cols = spec
+        .cols
+        .iter()
+        .zip(out.fields())
+        .map(|(col, field)| column_sql(EpochExpr::Null, col.out, field.data_type(), None))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(format!(
+        "CREATE OR REPLACE VIEW {} AS SELECT {} WHERE FALSE",
+        spec.qualified_name(),
+        cols.join(", ")
+    ))
+}
+
 /// DuckDB type for an Arrow type, for the `CAST(NULL AS ...)` columns.
 ///
 /// Only the types the information schema actually declares are covered — an

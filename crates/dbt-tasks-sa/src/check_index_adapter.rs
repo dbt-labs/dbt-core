@@ -207,6 +207,32 @@ fn parse_index_parquet_name(name: &str) -> Option<(&str, &str)> {
 }
 
 /// Open `target/info_schema/v<n>/` through a DuckDB adapter.
+/// An adapter over the metadata epochs, with the published surface registered as views.
+///
+/// The same view layer the COPY materializer executes before writing parquet -- this stops at
+/// the views. So `dbt show --info` answers from the epochs the last command wrote rather than
+/// from a snapshot somebody has to remember to generate, and cannot report a project that no
+/// longer exists.
+pub fn open_epoch_adapter(
+    metadata_dir: &Path,
+    token: CancellationToken,
+) -> Result<Arc<Adapter>, String> {
+    let statements = dbt_index_core::info_schema::epoch_views::generate_queryable(metadata_dir)
+        .map_err(|e| {
+            format!(
+                "could not read project metadata at {}: {e}",
+                metadata_dir.display()
+            )
+        })?;
+    let adapter = in_memory_duckdb_adapter(token)?;
+    for stmt in &statements {
+        adapter
+            .execute_without_state(None, stmt, false, None)
+            .map_err(|e| format!("registering information schema views: {e}"))?;
+    }
+    Ok(adapter)
+}
+
 pub fn open_info_schema_adapter(
     info_schema_dir: &Path,
     token: CancellationToken,

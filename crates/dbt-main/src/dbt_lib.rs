@@ -1108,12 +1108,10 @@ impl<'a> AllPhasesExecutor<'a> {
         if let Command::Core(Show(show_args)) = &self.cli.command
             && show_queries_info_schema(show_args)
         {
-            use dbt_index_core::info_schema::versioned_dir;
-            let info_schema_dir = versioned_dir(&self.arg.info_schema_dir());
             dbt_tasks_sa::show_info::run_show_info_schema(
                 show_args.info.as_deref(),
                 show_args.inline.as_deref(),
-                &info_schema_dir,
+                &self.arg.metadata_dir(),
                 self.arg.format,
                 self.arg.limit,
                 token.clone(),
