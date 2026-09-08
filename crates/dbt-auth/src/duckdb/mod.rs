@@ -28,15 +28,15 @@ impl Auth for DuckDbAuth {
     fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
         let mut builder = database::Builder::new(self.backend());
 
+        let target = init::DuckDbTarget::from_config(config)?;
+
         // DuckDB requires the database path to be specified
         // The path option from profiles.yml specifies where to store the database file
-        if let Some(path) = config.get_string("path") {
-            // MotherDuck paths must be attached after extension initialization.
-            // Use an in-memory primary DB and let init SQL attach the md: database.
-            let path = if init::is_motherduck_path(path.as_ref()) {
-                ":memory:"
-            } else {
-                path.as_ref()
+        if config.get_string("path").is_some() {
+            let path = match &target {
+                init::DuckDbTarget::MotherDuck { .. }
+                | init::DuckDbTarget::MotherDuckWithToken { .. } => ":memory:",
+                init::DuckDbTarget::Plain { path } => path,
             };
             builder
                 .with_named_option("path", path)
@@ -126,5 +126,36 @@ path: "/tmp/local.duckdb"
                 ) if option_name == "path" && option_value == "/tmp/local.duckdb"
             )
         }));
+    }
+
+    #[test]
+    fn configure_rejects_database_main_for_memory_path() {
+        let auth = DuckDbAuth::new(
+            Backend::DuckDBExtended,
+            Box::new(crate::NoopAuthWarningPrinter),
+        );
+        let config = config_from_yaml(
+            r#"
+database: "main"
+"#,
+        );
+
+        assert!(auth.configure(&config).is_err());
+    }
+
+    #[test]
+    fn configure_rejects_database_main_for_local_path() {
+        let auth = DuckDbAuth::new(
+            Backend::DuckDBExtended,
+            Box::new(crate::NoopAuthWarningPrinter),
+        );
+        let config = config_from_yaml(
+            r#"
+path: "/tmp/local.duckdb"
+database: "main"
+"#,
+        );
+
+        assert!(auth.configure(&config).is_err());
     }
 }

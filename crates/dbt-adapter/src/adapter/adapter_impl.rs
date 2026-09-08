@@ -1806,47 +1806,62 @@ impl AdapterImpl {
         name: &str,
         token: CancellationToken,
     ) -> AdapterResult<Option<bool>> {
-        // PRE-CONDITION: adapter_type is DuckDB
-        let is_motherduck = |engine: &dyn AdapterEngine| {
-            engine
-                .config("path")
-                .map(|p| dbt_auth::is_motherduck_path(&p))
-                .unwrap_or(false)
-        };
+        fn duckdb_is_motherduck(config: &AdapterConfig) -> bool {
+            matches!(
+                dbt_auth::DuckDbTarget::from_config(config),
+                Ok(dbt_auth::DuckDbTarget::MotherDuck { .. })
+                    | Ok(dbt_auth::DuckDbTarget::MotherDuckWithToken { .. })
+            )
+        }
 
-        match (self.adapter_type(), name) {
-            (DuckDB, "motherduck") => Ok(Some(is_motherduck(self.engine().as_ref()))),
-            (DuckDB, "transactions") => {
-                // MotherDuck does not support explicit transactions
-                Ok(Some(!is_motherduck(self.engine().as_ref())))
+        // All-platform features.
+        if name == "transactions" {
+            if self.adapter_type() == DuckDB && duckdb_is_motherduck(self.engine().get_config()) {
+                return Ok(Some(false));
             }
-            // Assume that all other adapters support transactions for now.
-            (_, "transactions") => Ok(Some(true)),
-            (Redshift, "datasharing") => Ok(Some(get_bool_config(
-                self.engine().as_ref(),
-                "datasharing",
-            )?)),
-            (Redshift, "drop_without_cascade") => Ok(Some(get_bool_config(
-                self.engine().as_ref(),
-                "drop_without_cascade",
-            )?)),
-            (Databricks, _) => {
+            return Ok(Some(true));
+        }
+
+        // platform-specific features.
+        match self.adapter_type() {
+            DuckDB => match name {
+                "motherduck" => Ok(Some(duckdb_is_motherduck(self.engine().get_config()))),
+                _ => {
+                    emit_warn_log_message(
+                        ErrorCode::InvalidArgument,
+                        format!("Unrecognized feature: {name} for {} adapter", DuckDB),
+                    );
+                    Ok(None)
+                }
+            },
+            Redshift => match name {
+                "datasharing" => Ok(Some(get_bool_config(
+                    self.engine().as_ref(),
+                    "datasharing",
+                )?)),
+                "drop_without_cascade" => Ok(Some(get_bool_config(
+                    self.engine().as_ref(),
+                    "drop_without_cascade",
+                )?)),
+                _ => {
+                    emit_warn_log_message(
+                        ErrorCode::InvalidArgument,
+                        format!("Unrecognized feature: {name} for {} adapter", Redshift),
+                    );
+                    Ok(None)
+                }
+            },
+            Databricks => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let has_capability = self.has_dbr_capability(state, conn.as_mut(), name, token)?;
                 Ok(Some(has_capability))
             }
-            _ => {
+            adapter_type => {
                 emit_warn_log_message(
                     ErrorCode::InvalidArgument,
-                    format!(
-                        "Unrecognized feature: {} for {} adapter",
-                        name,
-                        self.adapter_type()
-                    ),
+                    format!("Unrecognized feature: {name} for {adapter_type} adapter"),
                 );
-                // None is falsy, so features should be named in such a way that
-                // `false` is the most reasonable assumption.
                 Ok(None)
             }
         }

@@ -413,7 +413,7 @@ impl DbConfig {
 
     /// Returns the database name with adapter-specific defaults when not explicitly configured.
     /// - DuckDB: derived from file path stem (e.g., "jaffle_shop.duckdb" → "jaffle_shop"),
-    ///   or "main" for in-memory (":memory:") or when no path is specified
+    ///   or "memory" for in-memory (":memory:") or when no path is specified
     /// - Databricks: uses hive_metastore as default catalog
     /// - Others: "dbt" as generic fallback
     pub fn get_database_or_default(&self) -> String {
@@ -1092,7 +1092,7 @@ pub struct DuckDbConfig {
     /// Path to the DuckDB database file. Defaults to in-memory (:memory:)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    /// Database name (defaults to "main")
+    /// Database name (defaults to the name DuckDB derives from `path`)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub database: Option<String>,
     /// Schema name (defaults to "main")
@@ -1828,7 +1828,7 @@ impl<'a> DuckDBPathInfo<'a> {
         let Some(effective) = path else {
             return Self {
                 location: DuckDBLocation::Memory,
-                database: "main",
+                database: "memory",
                 is_ducklake: false,
             };
         };
@@ -1842,7 +1842,7 @@ impl<'a> DuckDBPathInfo<'a> {
         if effective == ":memory:" || effective.is_empty() {
             return Self {
                 location: DuckDBLocation::Memory,
-                database: "main",
+                database: "memory",
                 is_ducklake,
             };
         }
@@ -2527,12 +2527,12 @@ query_tags:
         // Memory
         let info = DuckDBPathInfo::parse_path(None);
         assert_eq!(info.location, DuckDBLocation::Memory);
-        assert_eq!(info.database, "main");
+        assert_eq!(info.database, "memory");
         assert!(!info.is_ducklake);
 
         let info = DuckDBPathInfo::parse_path(Some(":memory:"));
         assert_eq!(info.location, DuckDBLocation::Memory);
-        assert_eq!(info.database, "main");
+        assert_eq!(info.database, "memory");
 
         // MotherDuck
         let info = DuckDBPathInfo::parse_path(Some("md:my_db"));
