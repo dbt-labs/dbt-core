@@ -857,21 +857,22 @@ jobs:
       # mashumaro; the root says >=3.9, for the binary CLI wheel). uv trusts
       # the sdist's PKG-INFO over the wheel's, so a mismatch installs broken —
       # `cargo ci pypi publish` cross-checks both and fails the release.
-      - name: Publish (dbt-core)
-        if: inputs.release_target == 'all' || inputs.release_target == 'core'
-        run: |
-          cargo ci pypi publish \
-            --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
-            --version "${{ needs.prepare-release.outputs.version }}" \
-            --download-base-url "$BASE_URL" \
-            --runtime-metadata-from crates/dbt-sa-python \
-            --python-tag cp311 \
-            --abi-tag abi3 \
-            --target x86_64-unknown-linux-gnu \
-            --target aarch64-unknown-linux-gnu \
-            --target x86_64-apple-darwin \
-            --target aarch64-apple-darwin \
-            --target x86_64-pc-windows-msvc
+      # dbt-core PyPI publishing disabled.
+      # - name: Publish (dbt-core)
+      #   if: inputs.release_target == 'all' || inputs.release_target == 'core'
+      #   run: |
+      #     cargo ci pypi publish \
+      #       --environment ${{ inputs.dry_run_with_test_pypi && 'test-pypi' || 'prod' }} \
+      #       --version "${{ needs.prepare-release.outputs.version }}" \
+      #       --download-base-url "$BASE_URL" \
+      #       --runtime-metadata-from crates/dbt-sa-python \
+      #       --python-tag cp311 \
+      #       --abi-tag abi3 \
+      #       --target x86_64-unknown-linux-gnu \
+      #       --target aarch64-unknown-linux-gnu \
+      #       --target x86_64-apple-darwin \
+      #       --target aarch64-apple-darwin \
+      #       --target x86_64-pc-windows-msvc
 
       - name: Rename pyproject for parser publish
         if: inputs.release_target == 'all' || inputs.release_target == 'parser'
