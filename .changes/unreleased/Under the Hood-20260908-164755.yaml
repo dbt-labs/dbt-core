@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Move base docker image to bookworm
+time: 2026-09-08T16:47:55.841513+05:30
+custom:
+    Author: ash2shukla
+    Issue: NA
