@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 330] = [
+); 335] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -529,6 +529,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "0904f2bb1b619b680ad2da44c22dacfd75bb671efe9e05709b72c1d127a3a328",
     ),
     (
+        ("dbt", "apple-darwin", "aarch64", "0.4.0+dbt0.1.9.g765633c"),
+        "f046ddad43c383d302f35a52c2453b91803d32eb2e38f09ee30b60eef3da1cc4",
+    ),
+    (
         ("dbt", "apple-darwin", "x86_64", "0.4.0+dbt0.1.0.ga3f6df3"),
         "a71f4dd13d7c5efef55390484d324fa1f3d2127544dc3523326ba63b98ebe31e",
     ),
@@ -559,6 +563,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("dbt", "apple-darwin", "x86_64", "0.4.0+dbt0.1.8.g5b803e8"),
         "a6a36fd8ce5f770cf439d6316c1a05fbf9e1e23440605d7d4a34188dd25ef418",
+    ),
+    (
+        ("dbt", "apple-darwin", "x86_64", "0.4.0+dbt0.1.9.g765633c"),
+        "10ee5237371599b37bb715503e90420f041f929942448a420177d5ad151c849c",
     ),
     (
         ("dbt", "manylinux_2_28-linux-gnu", "aarch64", "0.4.0+dbt0.1.0.ga3f6df3"),
@@ -593,6 +601,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "319d59dbc88fee9a17c625a32adc16e233df03735782c04a5d0c58e463019cd9",
     ),
     (
+        ("dbt", "manylinux_2_28-linux-gnu", "aarch64", "0.4.0+dbt0.1.9.g765633c"),
+        "6cf97537c2d26954f50ca3c1923a78b81a82fe86ba6f610b145b8df5006c044b",
+    ),
+    (
         ("dbt", "manylinux_2_28-linux-gnu", "x86_64", "0.4.0+dbt0.1.0.ga3f6df3"),
         "40373b8e88c457bd9c3b0067868d20c30a09b558a29450d7dfa411346277248d",
     ),
@@ -625,6 +637,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "860ba35cf4acca47d359a06de49263d4e326f73b93306adfac4168218ffb2be5",
     ),
     (
+        ("dbt", "manylinux_2_28-linux-gnu", "x86_64", "0.4.0+dbt0.1.9.g765633c"),
+        "448003266a452c6e3ce4dee339a49e2d29253260c8f932709ed5d809d48a1950",
+    ),
+    (
         ("dbt", "pc-windows-msvc", "x86_64", "0.4.0+dbt0.1.0.ga3f6df3"),
         "70a917d2628d2aae9e8eb0a90f83927eaf5d618ec47271427c27ad6715600b7b",
     ),
@@ -655,6 +671,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("dbt", "pc-windows-msvc", "x86_64", "0.4.0+dbt0.1.8.g5b803e8"),
         "f680376e32f46cb772b6d30cd0df4243efadfc7fe2a0f2760489b13f321a86da",
+    ),
+    (
+        ("dbt", "pc-windows-msvc", "x86_64", "0.4.0+dbt0.1.9.g765633c"),
+        "81a591c9db4a707262966da9d37c82bd310b4f71c2fadc341803449d3cfc3256",
     ),
     (
         ("duckdb", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.0.20"),

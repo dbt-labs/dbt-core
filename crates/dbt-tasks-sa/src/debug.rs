@@ -12,7 +12,7 @@ use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_compilation::core::DbtLoadedProject;
 use dbt_schemas::schemas::profiles::{DbConfig, Execute};
 use dbt_tasks_core::lake_compute_catalog_attach::{
-    LakeComputeCatalogAttachChecker, LakeComputeCatalogAttachOutcome,
+    LakeComputeCatalogAttachChecker, LakeComputeCatalogAttachOutcome, PatHygieneReport,
 };
 use dbt_tasks_core::lake_compute_propagation::{
     LakeComputePropagationChecker, LakeComputePropagationOutcome,
@@ -276,7 +276,20 @@ fn debug_adapter_connection(
     loaded_project: &DbtLoadedProject,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    let mut config_as_mapping = db_config.to_mapping().unwrap();
+    // dbt-auth has no notion of self_signed_jwt; the native connection it
+    // builds is identical to keypair's. Normalize a throwaway copy for the
+    // connection test only -- db_config itself still needs to read as
+    // self_signed_jwt for the PAT-hygiene report below.
+    let connection_test_config = if let DbConfig::Snowflake(snowflake) = db_config
+        && snowflake.method.as_deref() == Some("self_signed_jwt")
+    {
+        let mut snowflake = snowflake.clone();
+        snowflake.method = Some("keypair".to_string());
+        DbConfig::Snowflake(snowflake)
+    } else {
+        db_config.clone()
+    };
+    let mut config_as_mapping = connection_test_config.to_mapping().unwrap();
     // set a short timeout for the connection test to fail fast if there are issues
     config_as_mapping
         .entry("connect_timeout".into())
@@ -400,6 +413,11 @@ async fn debug_lake_compute(
                     duration_suffix(attach_started.elapsed())
                 ),
             ));
+            if let Some(report) = pat_hygiene_of(&outcome) {
+                for line in format_pat_hygiene_lines(report) {
+                    emit_info_progress_message(create_progress_msg(ACTION_DEBUGGING, &line));
+                }
+            }
         }
     }
 
@@ -551,12 +569,66 @@ fn qualify_probe_name(database: Option<&str>, schema: Option<&str>, table: &str)
 /// catalog that cannot be attached is a setup problem the user must fix.
 fn format_catalog_attach_outcome(outcome: &LakeComputeCatalogAttachOutcome) -> String {
     match outcome {
-        LakeComputeCatalogAttachOutcome::NothingToCheck => {
+        LakeComputeCatalogAttachOutcome::NothingToCheck { .. } => {
             "catalog attach test: skipped (no declared catalogs to check)".to_string()
         }
-        LakeComputeCatalogAttachOutcome::Attached { catalogs } => {
+        LakeComputeCatalogAttachOutcome::Attached { catalogs, .. } => {
             format!("catalog attach test: OK ({})", catalogs.join(", "))
         }
+    }
+}
+
+fn pat_hygiene_of(outcome: &LakeComputeCatalogAttachOutcome) -> Option<&PatHygieneReport> {
+    match outcome {
+        LakeComputeCatalogAttachOutcome::NothingToCheck { pat_hygiene }
+        | LakeComputeCatalogAttachOutcome::Attached { pat_hygiene, .. } => pat_hygiene.as_ref(),
+    }
+}
+
+const PAT_CLEANUP_RECOMMENDATION_THRESHOLD: usize = 10;
+
+fn format_pat_hygiene_lines(report: &PatHygieneReport) -> Vec<String> {
+    let ttl_line = match report.cached_ttl_remaining_secs {
+        Some(secs) => format!(
+            "PAT hygiene: your current PAT has {} left",
+            format_ttl_secs(secs)
+        ),
+        None => "PAT hygiene: no cached PAT yet".to_string(),
+    };
+    let total_line = format!(
+        "This user has {} of {} total PATs on Snowflake.",
+        report.live_token_count, report.cap
+    );
+    let untracked = report
+        .live_dbt_compute_count
+        .saturating_sub(report.in_filecache_count);
+    let filecache_line = if untracked > 0 {
+        format!(
+            "This machine's local PAT cache tracks {} of {}. The remaining {untracked} may be from another machine, or left over from a cache that's since been cleared.",
+            report.in_filecache_count, report.live_dbt_compute_count
+        )
+    } else {
+        format!(
+            "This machine's local PAT cache tracks {} of {}.",
+            report.in_filecache_count, report.live_dbt_compute_count
+        )
+    };
+    let mut lines = vec![ttl_line, total_line, filecache_line];
+    if report.live_token_count > PAT_CLEANUP_RECOMMENDATION_THRESHOLD {
+        lines.push(format!(
+            "Consider dropping unused ones: run SHOW USER PROGRAMMATIC ACCESS TOKENS FOR USER {} to list names, then ALTER USER {} REMOVE PROGRAMMATIC ACCESS TOKEN <name-from-that-list>; for each one to drop",
+            report.quoted_user, report.quoted_user
+        ));
+    }
+    lines
+}
+
+fn format_ttl_secs(remaining_secs: i64) -> String {
+    let days = remaining_secs.max(0) / (24 * 60 * 60);
+    if days >= 1 {
+        format!("{days}d")
+    } else {
+        format!("{}h", remaining_secs.max(0) / (60 * 60))
     }
 }
 
@@ -662,14 +734,90 @@ mod tests {
     fn format_catalog_attach_outcome_lists_checked_catalogs() {
         let msg = format_catalog_attach_outcome(&LakeComputeCatalogAttachOutcome::Attached {
             catalogs: vec!["mdls_horizon".to_string(), "native_db".to_string()],
+            pat_hygiene: None,
         });
         assert_eq!(msg, "catalog attach test: OK (mdls_horizon, native_db)");
     }
 
     #[test]
     fn format_catalog_attach_outcome_nothing_to_check() {
-        let msg = format_catalog_attach_outcome(&LakeComputeCatalogAttachOutcome::NothingToCheck);
+        let msg = format_catalog_attach_outcome(&LakeComputeCatalogAttachOutcome::NothingToCheck {
+            pat_hygiene: None,
+        });
         assert!(msg.contains("no declared catalogs to check"));
+    }
+
+    #[test]
+    fn format_pat_hygiene_lines_reports_ttl_total_and_filecache_when_fully_tracked() {
+        let lines = format_pat_hygiene_lines(&PatHygieneReport {
+            quoted_user: "\"DBT_USER\"".to_string(),
+            cached_ttl_remaining_secs: Some(3 * 24 * 60 * 60),
+            live_token_count: 2,
+            live_dbt_compute_count: 2,
+            in_filecache_count: 2,
+            cap: 15,
+        });
+        assert_eq!(
+            lines,
+            vec![
+                "PAT hygiene: your current PAT has 3d left".to_string(),
+                "This user has 2 of 15 total PATs on Snowflake.".to_string(),
+                "This machine's local PAT cache tracks 2 of 2.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn format_pat_hygiene_lines_reports_untracked_tokens_below_the_threshold() {
+        let lines = format_pat_hygiene_lines(&PatHygieneReport {
+            quoted_user: "\"DBT_USER\"".to_string(),
+            cached_ttl_remaining_secs: Some(3 * 24 * 60 * 60),
+            live_token_count: 2,
+            live_dbt_compute_count: 2,
+            in_filecache_count: 1,
+            cap: 15,
+        });
+        assert_eq!(lines.len(), 3);
+        assert!(lines[2].contains("This machine's local PAT cache tracks 1 of 2."));
+        assert!(lines[2].contains("The remaining 1 may be from another machine"));
+        assert!(!lines.iter().any(|line| line.contains("ALTER USER")));
+    }
+
+    #[test]
+    fn format_pat_hygiene_lines_recommends_cleanup_above_the_threshold() {
+        let lines = format_pat_hygiene_lines(&PatHygieneReport {
+            quoted_user: "\"DBT_USER\"".to_string(),
+            cached_ttl_remaining_secs: None,
+            live_token_count: 13,
+            live_dbt_compute_count: 13,
+            in_filecache_count: 1,
+            cap: 15,
+        });
+        assert!(lines[0].contains("no cached PAT yet"));
+        assert!(lines[1].contains("This user has 13 of 15 total PATs on Snowflake."));
+        assert_eq!(lines.len(), 4);
+        assert!(lines[2].contains("This machine's local PAT cache tracks 1 of 13."));
+        assert!(lines[2].contains("The remaining 12 may be from another machine"));
+        assert!(lines[3].contains(
+            "SHOW USER PROGRAMMATIC ACCESS TOKENS FOR USER \"DBT_USER\" to list names, then ALTER USER \"DBT_USER\" REMOVE PROGRAMMATIC ACCESS TOKEN"
+        ));
+    }
+
+    #[test]
+    fn format_pat_hygiene_lines_cap_count_is_account_wide_not_dbt_compute_only() {
+        // 20 total PATs on the account (over cap), only 2 are dbt-compute's --
+        // the cap line must use the account-wide count, the filecache line
+        // must use the dbt-compute-only count.
+        let lines = format_pat_hygiene_lines(&PatHygieneReport {
+            quoted_user: "\"DBT_USER\"".to_string(),
+            cached_ttl_remaining_secs: Some(3 * 24 * 60 * 60),
+            live_token_count: 20,
+            live_dbt_compute_count: 2,
+            in_filecache_count: 2,
+            cap: 15,
+        });
+        assert!(lines[1].contains("This user has 20 of 15 total PATs on Snowflake."));
+        assert!(lines[2].contains("This machine's local PAT cache tracks 2 of 2."));
     }
 
     #[test]

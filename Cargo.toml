@@ -29,6 +29,7 @@ members = [
   "crates/dbt-profile-schemas",
   "crates/dbt-index-core",
   "crates/dbt-lineage-core",
+  "crates/dbt-lease",
   "crates/dbt-error",
   "crates/dbt-freshness",
   "crates/dbt-frontend-common",
@@ -269,6 +270,7 @@ dbt-jinja-ctx = { path = "crates/dbt-jinja-ctx" }
 dbt-jinja-filters = { path = "crates/dbt-jinja-filters" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }
+dbt-lease = { path = "crates/dbt-lease" }
 dbt-lineage-core = { path = "crates/dbt-lineage-core" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-login = { path = "crates/dbt-login" }

@@ -1069,6 +1069,11 @@ pub struct LakeComputeConfig {
     /// Fivetran public API base URL; only needed to reach a non-production one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fivetran_api_url: Option<String>,
+    /// Days a minted Snowflake PAT stays valid before it needs re-minting.
+    /// Only applies when lake compute mints a PAT for Horizon catalog access
+    /// (i.e. non-keypair auth on the native Snowflake target). Default: 30.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snowflake_pat_duration_days: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
