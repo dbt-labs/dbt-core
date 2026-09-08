@@ -408,7 +408,6 @@ pub async fn resolve_snapshots(
 
             let columns = process_columns(
                 properties.columns.as_ref(),
-                snapshot_config.meta.clone(),
                 snapshot_config.tags.inner().clone().map(|tags| tags.into()),
             )?;
 
