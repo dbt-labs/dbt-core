@@ -624,9 +624,15 @@ jobs:
       # reconcile the lock rather than fail the run on dependency bookkeeping.
       # maturin develop also installs [project.dependencies] (mashumaro)
       # into .venv as part of installing the built wheel.
+      #
+      # --release matches the actual shipped wheel (the `build` job's own
+      # maturin invocation is also `--release`). A debug build here is not
+      # just slower to run -- `debug_assert!`s that are compiled out of the
+      # real artifact can fail here and nowhere else, exercising a code path
+      # end users never hit while still gating the release.
       - name: Build extension (maturin develop)
         working-directory: crates/dbt-sa-python
-        run: maturin develop
+        run: maturin develop --release
 
       - name: pytest (dbt-python)
         working-directory: crates/dbt-sa-python
