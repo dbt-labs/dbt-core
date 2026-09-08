@@ -6,8 +6,8 @@ RUN apt-get update \
   # Install version-pinned packages for reproducible builds
   && apt-get install -y --no-install-recommends \
     build-essential=12.9 \
-    ca-certificates=20230311+deb12u1 \
-    libpq-dev=15.18-0+deb12u1 \
+    ca-certificates=20250419~deb12u1 \
+    libpq-dev=15.19-0+deb12u1 \
     make=4.3-4.1 \
     openssh-client=1:9.2p1-2+deb12u10 \
     software-properties-common=0.99.30-4.1~deb12u1 \
