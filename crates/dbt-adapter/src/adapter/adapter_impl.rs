@@ -1269,16 +1269,22 @@ impl AdapterImpl {
         let dropped_schema = relation.schema().map(str::to_string);
         let args = [RelationObject::new(relation).into_value()];
         execute_macro(state, &args, "drop_schema")?;
+        // httpclient.py `database_dropped` parity: after dropping the
+        // connection's own default database, clear it so follow-up statements
+        // don't fail with UNKNOWN_DATABASE (falls back to the user's default
+        // database).
         if self.adapter_type() == ClickHouse
             && !self.engine().is_mock()
             && let Some(dropped_schema) = dropped_schema
+            && crate::engine::clickhouse::target_schema(self.engine().get_config()).as_deref()
+                == Some(dropped_schema.as_str())
         {
             let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-            crate::engine::clickhouse::database_dropped(
-                conn.as_mut(),
-                self.engine().get_config(),
-                &dropped_schema,
-            )?;
+            conn.set_option(
+                adbc_core::options::OptionConnection::CurrentSchema,
+                OptionValue::String(String::new()),
+            )
+            .map_err(adbc_error_to_adapter_error)?;
         }
         Ok(none_value())
     }

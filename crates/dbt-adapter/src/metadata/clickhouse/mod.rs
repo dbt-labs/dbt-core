@@ -1058,9 +1058,7 @@ impl LwDeletesProbe {
 /// profile requested `use_lw_deletes` — here the probe just reports
 /// "unavailable" and `validate_incremental_strategy` errors when a
 /// lightweight-delete strategy is actually used.
-fn probe_lightweight_deletes(
-    run: &mut impl FnMut(&str) -> Option<RecordBatch>,
-) -> LwDeletesProbe {
+fn probe_lightweight_deletes(run: &mut impl FnMut(&str) -> Option<RecordBatch>) -> LwDeletesProbe {
     let sql = format!(
         "SELECT value, toString(readonly) AS readonly FROM system.settings \
          WHERE name = '{ND_MUTATION_SETTING}'"
@@ -1897,6 +1895,7 @@ mod tests {
             atomic_exchange,
             has_lw_deletes: false,
             use_lw_deletes: false,
+            nd_mutation_override: false,
         };
         assert!(relation_can_exchange(
             &caps(true),

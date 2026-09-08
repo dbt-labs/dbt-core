@@ -251,7 +251,11 @@ impl AdbcEngine {
                 match self.adapter_type {
                     AdapterType::DuckDB => self.apply_duckdb_init_sql(database.as_ref(), config)?,
                     AdapterType::ClickHouse => {
-                        super::clickhouse::ensure_database(database.as_ref(), config)?
+                        // temporary connection with no current schema set
+                        let mut conn = database
+                            .new_connection()
+                            .map_err(adbc_error_to_adapter_error)?;
+                        super::clickhouse::ensure_database(conn.as_mut(), config)?
                     }
                     _ => {}
                 }
