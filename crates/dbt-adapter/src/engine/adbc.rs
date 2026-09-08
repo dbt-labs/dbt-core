@@ -890,7 +890,7 @@ mod cloud_credential_tests {
         assert!(!message.contains("dbt login"));
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[dbt_runtime::test(flavor = "multi_thread")]
     async fn configure_cloud_database_with_chain_reads_seeded_oauth_session() {
         // No dbt_cloud.yml involved in this test — the OAuth session file is the only
         // credential source, and project_id is passed in directly.

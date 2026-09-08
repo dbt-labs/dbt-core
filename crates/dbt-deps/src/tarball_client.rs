@@ -374,7 +374,7 @@ mod tests {
 
     /// A symlink out of the root, followed by a write *through* it. The link is
     /// skipped, so the write lands on a real directory inside the root.
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn contains_symlink_traversal_escape() {
         let tmp = tempfile::tempdir().unwrap();
         let target = extraction_root(&tmp);
@@ -407,7 +407,7 @@ mod tests {
     }
 
     /// The entry is not created and the rest of the package still installs.
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn skips_link_and_device_entries() {
         for entry_type in [
             EntryType::Symlink,
@@ -460,7 +460,7 @@ mod tests {
 
     /// Packages committing a self-referential `dbt_packages/<pkg> -> ../..`
     /// symlink must keep installing; only the symlink is dropped.
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn installs_package_with_self_referential_symlink() {
         let tmp = tempfile::tempdir().unwrap();
         let target = extraction_root(&tmp);
@@ -501,7 +501,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn rejects_parent_dir_traversal() {
         let tmp = tempfile::tempdir().unwrap();
         let target = extraction_root(&tmp);
@@ -517,7 +517,7 @@ mod tests {
         assert!(!tmp.path().join("escaped.txt").exists());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn extracts_regular_package() {
         let tmp = tempfile::tempdir().unwrap();
         let target = extraction_root(&tmp);
@@ -608,7 +608,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn download_and_extract_tarball_matching_sha1_succeeds() {
         let tmp = tempfile::tempdir().unwrap();
         let target = extraction_root(&tmp);
@@ -620,7 +620,7 @@ mod tests {
         assert_extracted(&target);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn download_and_extract_tarball_mismatched_sha1_fails_and_extracts_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         let target = extraction_root(&tmp);
@@ -636,7 +636,7 @@ mod tests {
     }
 
     /// Guards the untouched streaming path, which the `expected_sha1` branch moved.
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn download_and_extract_tarball_no_expected_sha1_is_unchanged() {
         let tmp = tempfile::tempdir().unwrap();
         let target = extraction_root(&tmp);

@@ -5689,7 +5689,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn final_last_modified_epoch_caches_the_value_it_returns() {
         let ctx = test_task_runner_ctx(None);
         let model = make_model(
