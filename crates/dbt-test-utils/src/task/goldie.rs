@@ -341,11 +341,7 @@ fn filter_lines_internal(content: String, in_emacs: bool) -> String {
         // an absolute path on the developer's machine, so it can never match
         // across environments and must not reach a goldie.
         "ADBC driver is being loaded from",
-        // Machine-readable diagnostic line whose content is derived from the
-        // build's own feature registry. Every entry added to that registry can
-        // change the line for any project, so it can never match stably across
-        // versions and would otherwise regolden every fixture that emits it.
-        // Asserted directly in the feature-fingerprint test instead.
+        // Derived from the feature registry, so it can't match stably; asserted in the feature-fingerprint test instead.
         "dbt_feature_fingerprint",
         // Parallel CI tests can contend on the process-wide `dbt_packages`
         // (or `target/`) directory lease. The wait line is timing-dependent.
