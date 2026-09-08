@@ -64,6 +64,29 @@ use super::dbt_catalogs_v2::{CatalogType, TableFormat};
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
 
+#[derive(Clone, Copy)]
+pub enum LoadedCatalogs<'a> {
+    None,
+    V1(&'a DbtCatalogs),
+    V2(&'a DbtCatalogs),
+}
+
+impl<'a> LoadedCatalogs<'a> {
+    pub fn catalog_names(&self) -> FsResult<Option<&'a [String]>> {
+        match self {
+            LoadedCatalogs::None => Ok(None),
+            LoadedCatalogs::V1(c) => Ok(Some(c.v1_catalog_names()?)),
+            LoadedCatalogs::V2(c) => Ok(Some(c.v2_catalog_names()?)),
+        }
+    }
+
+    pub fn has_catalog_name(&self, name: &str) -> FsResult<bool> {
+        Ok(self
+            .catalog_names()?
+            .is_some_and(|names| names.iter().any(|n| n == name)))
+    }
+}
+
 /// A validated catalogs.yml mapping.
 /// - Holds the raw YAML Mapping so external consumers can copy as needed.
 /// - Provides a borrowed, zero-copy typed view on demand.
@@ -71,6 +94,7 @@ use dbt_yaml::{self as yml};
 pub struct DbtCatalogs {
     pub repr: yml::Mapping,
     pub span: yml::Span,
+    v1_catalog_names: OnceLock<Vec<String>>,
     v2_catalog_names: OnceLock<Vec<String>>,
     v2_catalog_databases: OnceLock<Vec<String>>,
 }
@@ -80,6 +104,7 @@ impl DbtCatalogs {
         Self {
             repr,
             span,
+            v1_catalog_names: OnceLock::new(),
             v2_catalog_names: OnceLock::new(),
             v2_catalog_databases: OnceLock::new(),
         }
@@ -109,16 +134,23 @@ impl DbtCatalogs {
     }
 
     pub fn is_v2_catalog(&self, name: &str) -> FsResult<bool> {
+        Ok(self.v2_catalog_names()?.iter().any(|n| n == name))
+    }
+
+    pub fn v1_catalog_names(&self) -> FsResult<&[String]> {
+        if let Some(names) = self.v1_catalog_names.get() {
+            return Ok(names);
+        }
+        self.populate_v1_cache()?;
+        Ok(self.v1_catalog_names.get().unwrap())
+    }
+
+    pub fn v2_catalog_names(&self) -> FsResult<&[String]> {
         if let Some(names) = self.v2_catalog_names.get() {
-            return Ok(names.iter().any(|n| n == name));
+            return Ok(names);
         }
         self.populate_v2_caches()?;
-        Ok(self
-            .v2_catalog_names
-            .get()
-            .unwrap()
-            .iter()
-            .any(|n| n == name))
+        Ok(self.v2_catalog_names.get().unwrap())
     }
 
     pub fn is_v2_catalog_database(&self, db: &str) -> FsResult<bool> {
@@ -168,6 +200,17 @@ impl DbtCatalogs {
                 (!db.is_empty()).then(|| (c.name.to_owned(), db.to_owned()))
             })
             .collect())
+    }
+
+    fn populate_v1_cache(&self) -> FsResult<()> {
+        let view = self.view()?;
+        let names: Vec<String> = view
+            .catalogs
+            .iter()
+            .map(|catalog| catalog.catalog_name.0.to_owned())
+            .collect();
+        self.v1_catalog_names.get_or_init(|| names);
+        Ok(())
     }
 
     // Both is_v2_catalog and is_v2_catalog_database share a single
@@ -2832,6 +2875,43 @@ catalogs:
         assert!(c.is_v2_catalog("glue_cat").unwrap());
         assert!(c.is_v2_catalog("horizon_cat").unwrap());
         assert!(!c.is_v2_catalog("nonexistent").unwrap());
+    }
+
+    #[test]
+    fn v1_catalog_names_finds_all_names() {
+        let yaml = r#"
+catalogs:
+  - catalog_name: sf_native
+    active_write_integration: sf_native_int
+    write_integrations:
+      - name: sf_native_int
+        catalog_type: built_in
+        table_format: iceberg
+        external_volume: dbt_external_volume
+  - name: polaris
+    active_write_integration: polaris_int
+    write_integrations:
+      - name: polaris_int
+        catalog_type: iceberg_rest
+        table_format: iceberg
+"#;
+        let v: yml::Value = yml::from_str(yaml).unwrap();
+        let (repr, span) = match v {
+            yml::Value::Mapping(m, s) => (m, s),
+            _ => panic!("expected mapping"),
+        };
+        let c = DbtCatalogs::new(repr, span);
+        assert_eq!(
+            c.v1_catalog_names().unwrap(),
+            &["sf_native".to_string(), "polaris".to_string()]
+        );
+    }
+
+    #[test]
+    fn loaded_catalogs_none_has_no_catalog_names() {
+        let state = LoadedCatalogs::None;
+        assert_eq!(state.catalog_names().unwrap(), None);
+        assert!(!state.has_catalog_name("anything").unwrap());
     }
 
     #[test]
