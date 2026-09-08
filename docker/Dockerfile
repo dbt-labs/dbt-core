@@ -3,6 +3,11 @@ ARG py_version=3.11.2
 FROM python:$py_version-slim-bullseye AS base
 
 RUN apt-get update \
+  # bullseye-security is past standard support and its InRelease metadata
+  # periodically ages out past its Valid-Until window without being refreshed,
+  # intermittently hard-failing apt-get update; tolerate that staleness here
+  # (signature verification is unaffected)
+  -o Acquire::Check-Valid-Until=false \
   # Install version-pinned packages for reproducible builds
   && apt-get install -y --no-install-recommends \
     build-essential=12.9 \
