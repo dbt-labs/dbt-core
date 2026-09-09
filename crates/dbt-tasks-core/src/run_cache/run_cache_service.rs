@@ -8134,7 +8134,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[dbt_runtime::worker_test]
     fn drop_clone_target_before_clone_ignores_missing_target() {
         let ctx = test_task_runner_ctx(None);
         let adapter = ctx
