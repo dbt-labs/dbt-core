@@ -1659,7 +1659,10 @@ fn state_explain_node_info_for_parts(
     StateExplainNodeInfo {
         fqn,
         node_resource_type: node.resource_type().as_static_ref().to_string(),
-        is_view: materialized == DbtMaterialization::View,
+        is_view: matches!(
+            materialized,
+            DbtMaterialization::View | DbtMaterialization::MetricView
+        ),
         is_table: matches!(
             materialized,
             DbtMaterialization::Table
@@ -2507,7 +2510,10 @@ async fn submit_model(
         ctx,
         model,
         task_result.sql_instruction.sql.clone(),
-        model.materialized() == DbtMaterialization::View,
+        matches!(
+            model.materialized(),
+            DbtMaterialization::View | DbtMaterialization::MetricView
+        ),
         full_refresh,
         microbatch_window,
         client,
@@ -2865,7 +2871,10 @@ async fn prepare_write_only_execution_record(
             ctx,
             model,
             task_result.sql_instruction.sql.clone(),
-            model.materialized() == DbtMaterialization::View,
+            matches!(
+                model.materialized(),
+                DbtMaterialization::View | DbtMaterialization::MetricView
+            ),
             full_refresh,
             false,
         )
@@ -4508,6 +4517,7 @@ fn full_refresh_blocks_model_submit(materialization: DbtMaterialization) -> bool
         materialization,
         DbtMaterialization::Incremental
             | DbtMaterialization::MaterializedView
+            | DbtMaterialization::MetricView
             | DbtMaterialization::DynamicTable
             | DbtMaterialization::StreamingTable
             | DbtMaterialization::InteractiveTable
@@ -5128,6 +5138,9 @@ mod tests {
         ));
         assert!(full_refresh_blocks_model_submit(
             DbtMaterialization::InteractiveTable
+        ));
+        assert!(full_refresh_blocks_model_submit(
+            DbtMaterialization::MetricView
         ));
         assert!(!full_refresh_blocks_model_submit(DbtMaterialization::View));
         assert!(!full_refresh_blocks_model_submit(DbtMaterialization::Table));
