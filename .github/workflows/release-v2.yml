@@ -514,7 +514,7 @@ jobs:
 
       - name: Restore pyproject after dbt-core wheel
         if: ${{ always() && inputs.core_wheel_version != '' }}
-        run: git restore -- crates/dbt-sa-python/pyproject.toml
+        run: git -c safe.directory="$GITHUB_WORKSPACE" restore -- crates/dbt-sa-python/pyproject.toml
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
