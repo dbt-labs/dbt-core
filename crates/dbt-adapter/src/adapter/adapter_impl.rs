@@ -4829,6 +4829,14 @@ impl AdapterImpl {
         Ok(crate::relation::databricks::metric_view::quote_metric_view_sources(yaml_body))
     }
 
+    /// Drop the trailing statement terminator from a node body so it can be
+    /// spliced into a wrapping query.
+    pub fn strip_trailing_statement_terminator<'a>(&self, sql: &'a str) -> &'a str {
+        self.engine()
+            .splitter()
+            .strip_trailing_statement_terminator(sql, self.adapter_type())
+    }
+
     /// relation_max_name_length
     pub fn relation_max_name_length(&self) -> AdapterResult<u32> {
         unimplemented!("only available with Postgres and Redshift adapters")

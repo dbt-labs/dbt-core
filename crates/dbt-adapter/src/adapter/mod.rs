@@ -3594,6 +3594,27 @@ impl Adapter {
         }
     }
 
+    /// Drop the trailing statement terminator from a node body so it can be
+    /// spliced into a wrapping query.
+    #[tracing::instrument(skip_all, level = "trace")]
+    pub fn strip_trailing_statement_terminator(
+        &self,
+        _state: &State,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("strip_trailing_statement_terminator", &["sql"], args);
+        let sql = iter.next_arg::<&str>()?;
+        iter.finish()?;
+
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(
+                adapter.strip_trailing_statement_terminator(sql),
+            )),
+            // Parse-time rendering never executes SQL, so leave the body alone.
+            Parse(_) => Ok(Value::from(sql)),
+        }
+    }
+
     /// Wrap backtick-rendered SQL identifiers on metric_view `source:` lines in
     /// YAML double quotes. Other keys are left untouched.
     ///
@@ -4238,6 +4259,10 @@ impl Adapter {
             "parse_columns_and_constraints" => self.parse_columns_and_constraints(state, args),
             // sql: str
             "clean_sql" => self.clean_sql(state, args),
+            // sql: str
+            "strip_trailing_statement_terminator" => {
+                self.strip_trailing_statement_terminator(state, args)
+            }
             // yaml_body: str
             "yaml_quote_backtick_values" => self.yaml_quote_backtick_values(state, args),
             "get_seed_file_path" => {

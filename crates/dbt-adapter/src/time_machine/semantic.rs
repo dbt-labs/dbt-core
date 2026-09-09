@@ -156,7 +156,8 @@ impl SemanticCategory {
             | "get_credentials"
             | "s3source_clause"
             | "get_csv_data"
-            | "table_format" => SemanticCategory::Pure,
+            | "table_format"
+            | "strip_trailing_statement_terminator" => SemanticCategory::Pure,
 
             _ => {
                 debug_assert!(

@@ -1,4 +1,5 @@
 mod bigquery;
+mod contract_wrappers;
 mod databricks_metadata;
 mod delete_insert;
 mod duckdb;
