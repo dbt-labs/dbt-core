@@ -510,6 +510,17 @@ pub fn create_relation_from_source(
     custom_quoting: ResolvedQuoting,
     source: &DbtSource,
 ) -> FsResult<Box<dyn BaseRelation>> {
+    // A source's `catalog_name` (when configured) names the `catalogs.yml`
+    // entry this source is actually read through -- e.g. an AWS Glue
+    // catalog for dbt Compute. It takes over as the relation's leading
+    // identifier so `database` can stay a descriptive label instead of
+    // having to spell the catalog's own name (the old, implicit coupling).
+    let database = source
+        .__source_attr__
+        .catalog_name
+        .clone()
+        .unwrap_or(database);
+
     if adapter_type == AdapterType::DuckDB
         && let Some(external) = duckdb_external_location_for_source(source)?
     {
@@ -951,6 +962,44 @@ mod tests {
         .unwrap();
 
         assert_eq!(relation.render_self_as_str(), "read_csv('orders.csv')");
+    }
+
+    #[test]
+    fn source_catalog_name_overrides_database_in_relation() {
+        let mut source = source_with_meta_location("ignored/{name}.csv");
+        source.__source_attr__.catalog_name = Some("GLUE_SOURCE".to_string());
+
+        let relation = create_relation_from_source(
+            AdapterType::Snowflake,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(
+            relation.render_self_as_str(),
+            "\"GLUE_SOURCE\".\"raw\".\"orders\""
+        );
+    }
+
+    #[test]
+    fn source_without_catalog_name_keeps_database() {
+        let source = source_with_meta_location("ignored/{name}.csv");
+
+        let relation = create_relation_from_source(
+            AdapterType::Snowflake,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(relation.render_self_as_str(), "\"main\".\"raw\".\"orders\"");
     }
 
     #[test]
