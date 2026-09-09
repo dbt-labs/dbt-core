@@ -716,6 +716,31 @@ impl CatalogType {
         }
     }
 
+    /// Whether this catalog type represents a customer-owned catalog outside the
+    /// warehouse's own storage, as opposed to the warehouse's native/managed storage.
+    ///
+    /// Matched exhaustively on purpose, so adding a `CatalogType` forces the
+    /// question to be answered rather than defaulting either way.
+    pub fn is_catalog_linked(&self) -> bool {
+        match self {
+            Self::Glue
+            | Self::IcebergRest
+            | Self::HiveMetastore
+            | Self::Unity
+            | Self::BiglakeMetastore
+            | Self::DuckLake
+            | Self::LocalFilesystem => true,
+            // Snowflake-managed Iceberg, current (Horizon) and superseded
+            // (SnowflakeBuiltIn) spellings -- see lake_compute_can_read's comment on
+            // the same pairing -- plus non-Iceberg native storage.
+            Self::Horizon
+            | Self::SnowflakeBuiltIn
+            | Self::SnowflakeNative
+            | Self::BigqueryNative
+            | Self::DuckdbNative => false,
+        }
+    }
+
     pub fn parse_from_str(raw: &str, adapter_type: dbt_adapter_core::AdapterType) -> Self {
         match raw {
             "horizon" => Self::Horizon,
