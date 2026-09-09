@@ -62,7 +62,7 @@ use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::OnSchemaChange;
 use dbt_schemas::schemas::common::Versions;
-use dbt_schemas::schemas::dbt_catalogs::LoadedCatalogs;
+use dbt_schemas::schemas::dbt_catalogs::{DbtCatalogs, LoadedCatalogs};
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
@@ -629,6 +629,30 @@ pub async fn resolve_models(
             &mut model_config.loaded_at_query,
             &model_name,
         )?;
+
+        // A model that sets `database` to a catalog's database (DuckDB ATTACH
+        // alias / Snowflake linked `catalog_database`) but no `catalog_name`
+        // would otherwise silently materialize as a plain database write and be
+        // undercounted in catalog telemetry. Fail fast and make the intent
+        // explicit.
+        if model_config.enabled && use_catalogs_v2 && model_config.catalog_name.is_none() {
+            let model_database = model_config.database.clone().into_inner().unwrap_or(None);
+            if let Some(catalogs) = catalogs.as_deref()
+                && let Some(database) = model_database
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+            {
+                validate_database_not_catalog(
+                    &model_name,
+                    database,
+                    catalogs,
+                    resolved_node_adapter.unwrap_or(default_adapter),
+                    &dbt_asset.path,
+                )?;
+            }
+        }
+
         if let Some(freshness) = &model_config.freshness {
             ModelFreshnessRules::validate(freshness.build_after.as_ref()).map_err(|e| {
                 fs_err!(
@@ -1295,6 +1319,35 @@ fn has_warn_unsupported_constraints(
         })
 }
 
+fn validate_database_not_catalog(
+    model_name: &str,
+    database: &str,
+    catalogs: &DbtCatalogs,
+    adapter_type: AdapterType,
+    path: &Path,
+) -> FsResult<()> {
+    debug_assert!(!database.trim().is_empty());
+    let matches = catalogs.catalogs_matching_database(database, adapter_type)?;
+    match matches.as_slice() {
+        [] => Ok(()),
+        [catalog] => Err(fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => path.to_path_buf(),
+            "{model_name}'s database config, \"{database}\", is associated with catalog \"{catalog}\"; \
+             set `catalog_name: {catalog}` explicitly, or change the database."
+        )),
+        names => {
+            let joined = names.join("\", \"");
+            Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => path.to_path_buf(),
+                "{model_name}'s database config, \"{database}\", is associated with multiple catalogs (\"{joined}\"); \
+                 set `catalog_name` explicitly to one of them, or change the database."
+            ))
+        }
+    }
+}
+
 pub fn validate_merge_update_columns_xor(
     model_config: &ResolvedModelConfig,
     path: &Path,
@@ -1817,12 +1870,14 @@ fn apply_model_freshness_loaded_at_override(
 mod tests {
     use super::{
         apply_model_freshness_loaded_at_override, parse_ref_from_constraint,
-        parse_source_from_constraint, validate_model_freshness_sla,
+        parse_source_from_constraint, validate_database_not_catalog, validate_model_freshness_sla,
     };
+    use dbt_adapter_core::AdapterType;
     use dbt_common::{ErrorCode, FsResult};
     use dbt_schemas::schemas::common::{
         DbtMaterialization, FreshnessPeriod, FreshnessRules, ModelFreshnessRules,
     };
+    use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
     use dbt_schemas::schemas::properties::ModelFreshness;
     use dbt_schemas::schemas::serde::NodeVersion;
     use std::path::Path;
@@ -2064,6 +2119,77 @@ mod tests {
                 .contains("loaded_at_field and loaded_at_query cannot be set at the same time"),
             "error must name the conflict; got: {err}"
         );
+    }
+
+    fn catalogs_from_yaml(yaml: &str) -> DbtCatalogs {
+        let value: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
+        let span = value.span().clone();
+        let mapping = value
+            .as_mapping()
+            .expect("top-level must be a mapping")
+            .clone();
+        DbtCatalogs::new(mapping, span)
+    }
+
+    #[test]
+    fn single_match_errors() {
+        let catalogs = catalogs_from_yaml(
+            r#"
+catalogs:
+  - name: my_glue
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://glue.example.com"
+"#,
+        );
+        let err = validate_database_not_catalog(
+            "my_model",
+            "my_glue",
+            &catalogs,
+            AdapterType::DuckDB,
+            Path::new("models/m.sql"),
+        )
+        .expect_err("database matching a catalog name should error");
+        let msg = err.to_string();
+        assert!(msg.contains("my_glue"), "message was: {msg}");
+        assert!(msg.contains("catalog_name: my_glue"), "message was: {msg}");
+    }
+
+    #[test]
+    fn ambiguous_multi_catalog_match_lists_all() {
+        let catalogs = catalogs_from_yaml(
+            r#"
+catalogs:
+  - name: cat_a
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://a.example.com"
+        catalog_database: "shared"
+  - name: cat_b
+    type: glue
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://b.example.com"
+        catalog_database: "shared"
+"#,
+        );
+        let err = validate_database_not_catalog(
+            "my_model",
+            "shared",
+            &catalogs,
+            AdapterType::DuckDB,
+            Path::new("models/m.sql"),
+        )
+        .expect_err("ambiguous match should error");
+        let msg = err.to_string();
+        assert!(msg.contains("multiple catalogs"), "message was: {msg}");
+        assert!(msg.contains("cat_a"), "message was: {msg}");
+        assert!(msg.contains("cat_b"), "message was: {msg}");
     }
 
     #[test]
