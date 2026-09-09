@@ -544,6 +544,9 @@ pub struct EvalArgs {
     pub target: Option<String>,
     // Vars to pass to the jinja environment
     pub vars: BTreeMap<String, Value>,
+    /// AI coding agent(s) to install package skills for. Unset means skills are
+    /// discovered but not installed.
+    pub ai_provider: Option<Vec<String>>,
     // Stop as soon as this stage is reached
     pub phase: Phases,
     // Display rows in different formats
