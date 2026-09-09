@@ -17,9 +17,6 @@ importers:
       '@dagrejs/dagre':
         specifier: ^3.1.1
         version: 3.1.1
-      '@dbt-labs/proto':
-        specifier: ^1.0.560
-        version: 1.0.560
       '@radix-ui/react-collapsible':
         specifier: ^1.1.20
         version: 1.1.20(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -339,10 +336,6 @@ packages:
 
   '@dagrejs/graphlib@4.0.5':
     resolution: {integrity: sha512-7xrBTqIts3o+PMUZX97wSc+7TUbW+/rULzGNCTP6yooNVDXbzw4Wutg/H/xOutTB/c/k0YqOAavgPh4/Zk9PFA==}
-
-  '@dbt-labs/proto@1.0.560':
-    resolution: {integrity: sha512-TtE32atus8wzHnGOTalMULvUJfMf877boYTDqVZF6zyjYsWrXEjq/0xNMReo93xa6SZTqXs7NpLqNLhi8+vBgA==, tarball: https://npm.pkg.github.com/download/@dbt-labs/proto/1.0.560/6af9c6953b3ccbc70a444fea8224b2ce7dfb4a21}
-    engines: {node: '>=18.0.0'}
 
   '@duckdb/duckdb-wasm@1.32.0':
     resolution: {integrity: sha512-IewXTNYEjsZCPE9weUWgtjGxUlMRo7qhX0GF6tq/KjK8bnY+RAl4cyUdYUfcdzbyb4b9ZxPC+FOsCcxgaKFWMg==}
@@ -4289,10 +4282,6 @@ snapshots:
       '@dagrejs/graphlib': 4.0.5
 
   '@dagrejs/graphlib@4.0.5': {}
-
-  '@dbt-labs/proto@1.0.560':
-    dependencies:
-      '@bufbuild/protobuf': 2.13.0
 
   '@duckdb/duckdb-wasm@1.32.0':
     dependencies:

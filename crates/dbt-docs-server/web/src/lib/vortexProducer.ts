@@ -7,14 +7,13 @@ import {
 import { AnySchema, timestampNow } from '@bufbuild/protobuf/wkt';
 import { v4 as uuidv4 } from 'uuid';
 
-import aboutProto from '@dbt-labs/proto/about.json';
+import aboutProto from '../proto/about.json';
 import {
   type VortexMessage,
   type VortexMessageBatch,
   VortexMessageBatchSchema,
   VortexMessageSchema,
-} from '@dbt-labs/proto/public/events/vortex_pb';
-
+} from '../proto/dbtlabs/proto/v1/events/vortex_pb';
 import env from './vortexEnv';
 
 const VORTEX_CLIENT_VERSION = '0.3.0';
