@@ -1,3 +1,4 @@
+mod aggregated_tests;
 mod bigquery;
 mod contract_wrappers;
 mod databricks_metadata;

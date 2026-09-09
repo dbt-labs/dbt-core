@@ -24,7 +24,7 @@
     {% set query %}
     select
         {{ dbt.string_literal(column_name) }} as column_name,
-        {{ safe_cast(column_name, dbt.type_string()) }} as unique_field,
+        {{ dbt.aggregated_unique_field(column_name) }} as unique_field,
         count(*) as n_records,
         1 as failures
     from {{ model }}
@@ -48,4 +48,14 @@
     where 1=0
 {% endif %}
 
+{% endmacro %}
+
+-- funcsign: (string) -> string
+{% macro aggregated_unique_field(column_name) %}
+  {{ return(adapter.dispatch('aggregated_unique_field', 'dbt')(column_name)) }}
+{% endmacro %}
+
+-- funcsign: (string) -> string
+{% macro default__aggregated_unique_field(column_name) %}
+  {{ dbt.safe_cast(column_name, dbt.type_string()) }}
 {% endmacro %}

@@ -51,6 +51,7 @@ zip = { workspace = true }
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
 dbt-agate = { workspace = true }
+dbt-jinja-ctx = { workspace = true }
 dbt-jinja-utils = { workspace = true, features = ["testing"] }
 dbt-parser = { workspace = true }
 dbt-runtime = { workspace = true }
