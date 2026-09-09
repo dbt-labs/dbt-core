@@ -85,6 +85,9 @@ static THREAD_ID_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(thread '[^']+') \(\d+\) (panicked)").unwrap());
 // Matches absolute replay recording paths in error messages: "(path: /abs/path)"
 static REPLAY_PATH_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\(path: [^)]+\)").unwrap());
+// Matches the platform-specific text `std::io::Error`'s `Display` embeds
+static OS_ERROR_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[A-Za-z][A-Za-z0-9 .,'/-]*\(os error \d+\)").unwrap());
 
 /// Copies a directory and its contents, excluding .gitignored files.
 pub fn copy_dir_non_ignored(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> FsResult<()> {
@@ -334,6 +337,14 @@ pub fn normalize_node_index(output: String) -> String {
 pub fn normalize_replay_paths(output: String) -> String {
     REPLAY_PATH_PATTERN
         .replace_all(&output, "(path: <path>)")
+        .to_string()
+}
+
+/// Strips the platform-specific message text (and error code) for errors
+/// that wrap a raw IO failure.
+pub fn normalize_os_error_messages(output: String) -> String {
+    OS_ERROR_PATTERN
+        .replace_all(&output, "<os error>")
         .to_string()
 }
 
