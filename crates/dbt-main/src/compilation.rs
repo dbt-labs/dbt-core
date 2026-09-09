@@ -329,6 +329,7 @@ impl<'a> CompilationPhasesExecutor<'a> {
                 feature_stack.lake_compute.propagation_checker.clone();
             debug_args.lake_compute_catalog_attach_checker =
                 feature_stack.lake_compute.catalog_attach_checker.clone();
+            debug_args.mdls_checker = feature_stack.lake_compute.mdls_checker.clone();
             compilation_pipeline::loaded_project::debug(&loaded_project, debug_args, &self.token)
                 .await?;
             self.token.check_cancellation()?;

@@ -1,7 +1,7 @@
 use dbt_adapter_core::AdapterType;
 use std::process::Command;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use dbt_adbc::QueryCtx;
 use dbt_agate::MappedSequence;
@@ -14,6 +14,7 @@ use dbt_schemas::schemas::profiles::{DbConfig, Execute};
 use dbt_tasks_core::lake_compute_catalog_attach::{
     LakeComputeCatalogAttachChecker, LakeComputeCatalogAttachOutcome, PatHygieneReport,
 };
+use dbt_tasks_core::lake_compute_mdls::{LakeComputeMdlsChecker, LakeComputeMdlsOutcome};
 use dbt_tasks_core::lake_compute_propagation::{
     LakeComputePropagationChecker, LakeComputePropagationOutcome,
 };
@@ -71,6 +72,9 @@ pub struct DebugArgs {
     pub target: Option<String>,
     pub connection: bool,
     pub local_execution_backend: LocalExecutionBackendKind,
+    /// This invocation's id, sent as `adbc.dbt.run_id` on the queries the lake
+    /// compute checks issue so dbt Compute can attribute them.
+    pub invocation_id: String,
     /// Checker for verifying lake-compute-to-native propagation, if this
     /// build has one registered. `None` means the check is skipped.
     pub lake_compute_propagation_checker: Option<Arc<dyn LakeComputePropagationChecker>>,
@@ -78,6 +82,9 @@ pub struct DebugArgs {
     /// reachable from the lake compute target, if this build has one
     /// registered. `None` means the check is skipped.
     pub lake_compute_catalog_attach_checker: Option<Arc<dyn LakeComputeCatalogAttachChecker>>,
+    /// Checker for the MDLS write + read-back round trip, if this build has one
+    /// registered. `None` means the check is skipped.
+    pub mdls_checker: Option<Arc<dyn LakeComputeMdlsChecker>>,
 }
 
 impl DebugArgs {
@@ -86,8 +93,10 @@ impl DebugArgs {
             target: arg.target.clone(),
             connection: arg.connection,
             local_execution_backend: arg.local_execution_backend,
+            invocation_id: arg.io.invocation_id.to_string(),
             lake_compute_propagation_checker: None,
             lake_compute_catalog_attach_checker: None,
+            mdls_checker: None,
         }
     }
 }
@@ -372,23 +381,11 @@ async fn debug_lake_compute(
     loaded_project: &DbtLoadedProject,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    let mut lake_compute_mapping = lake_compute_db_config.to_mapping().unwrap();
-    lake_compute_mapping
-        .entry("connect_timeout".into())
-        .or_insert("1s".into());
-
-    let lake_compute_adapter_type = lake_compute_db_config.adapter_type();
-    let lake_compute_adapter = loaded_project.init_base_adapter(
-        lake_compute_adapter_type,
-        lake_compute_mapping,
-        token.clone(),
-    )?;
-    let ctx = QueryCtx::default();
-
-    // The `lake_compute` connection round trip is not done here: it is a plain connection
-    // test, and the per-adapter loop above already ran it for every declared
-    // adapter including this one. What follows is only what is genuinely specific
-    // to lake compute.
+    // No adapter is built here: the `lake_compute` connection round trip is a
+    // plain connection test the per-adapter loop above already ran for every
+    // declared adapter including this one, and each check below builds the
+    // adapter it needs itself (they each send their own catalog bundle). What
+    // follows is only what is genuinely specific to lake compute.
 
     // 1. Declared-catalog attach. Runs before the write tests below because it
     // is the cheapest check that can fail on a misconfigured catalog, and a
@@ -421,84 +418,53 @@ async fn debug_lake_compute(
         }
     }
 
+    let dbt_state = loaded_project.dbt_state();
+    let (mdls_database, mdls_schema) = resolve_probe_namespace(
+        lake_compute_db_config,
+        &dbt_state.dbt_profile.database,
+        &dbt_state.dbt_profile.schema,
+    );
+
     // 2. MDLS write + read-back, in an already-authorized namespace (the lake compute
     // target's configured database/schema). Namespace-level DDL is
     // deliberately avoided: creating a new namespace is denied for the
     // Polaris principal used here and (confirmed empirically) can hang
     // rather than fail fast, so this only exercises table create/drop
     // within a namespace that must already exist.
-    let probe_table = format!(
-        "__dbt_debug_probe_{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO)
-            .as_nanos()
-    );
-    let qualified_probe = qualify_probe_name(
-        lake_compute_db_config.get_database().map(String::as_str),
-        lake_compute_db_config.get_schema().map(String::as_str),
-        &probe_table,
-    );
-
-    let write_started = Instant::now();
-    let write_result = lake_compute_adapter.execute_without_state(
-        Some(&ctx),
-        &format!("create table {qualified_probe} (id integer)"),
-        false,
-        None,
-    );
-    let write_elapsed = write_started.elapsed();
-    let write_ok = write_result.is_ok();
-    if let Err(e) = write_result {
-        // Clean up is unnecessary: the create failed, so there's nothing to drop.
-        return Err(fs_err!(
-            ErrorCode::AuthenticationFailed,
-            "dbt was able to authenticate to dbt Compute, but failed to write to MDLS.\n\
-             The following error was returned:\n\n{}\n\n\
-             This commonly means the configured schema/namespace does not exist yet: dbt debug \
-             does not create one, since new-namespace creation is not supported for this \
-             credential. Check that the configured schema/namespace already exists and that the \
-             credentials are authorized to write to it.",
-            e
-        ));
+    //
+    // Behind a checker for one reason: the probe has to ride the same catalog
+    // bundle a real model write sends, or it tests strictly less than a write
+    // does and can pass while every write fails. Building one needs the
+    // Snowflake credential mint, which this crate cannot reach.
+    match &arg.mdls_checker {
+        None => {
+            emit_info_progress_message(create_progress_msg(
+                ACTION_SKIPPED,
+                "MDLS write/read-back test (unavailable in this build)",
+            ));
+        }
+        Some(checker) => {
+            let outcome = checker
+                .check_mdls_round_trip(
+                    native_db_config,
+                    lake_compute_db_config,
+                    mdls_database,
+                    mdls_schema,
+                    // `root_project_name()` indexes `packages[0]`, and both
+                    // `dbt debug` and `dbt init` can run before any package is
+                    // loaded -- the same guard
+                    // `send_vortex_telemetry_if_possible` uses on this path.
+                    (!loaded_project.dbt_state().packages.is_empty())
+                        .then(|| loaded_project.root_project_name()),
+                    &arg.invocation_id,
+                    token.clone(),
+                )
+                .await?;
+            for line in format_mdls_outcome(&outcome) {
+                emit_info_progress_message(create_progress_msg(ACTION_DEBUGGING, &line));
+            }
+        }
     }
-    emit_info_progress_message(create_progress_msg(
-        ACTION_DEBUGGING,
-        &format!("MDLS write test: OK{}", duration_suffix(write_elapsed)),
-    ));
-
-    let read_started = Instant::now();
-    let read_result = lake_compute_adapter.execute_without_state(
-        Some(&ctx),
-        &format!("select count(*) as c from {qualified_probe}"),
-        true,
-        None,
-    );
-    let read_elapsed = read_started.elapsed();
-
-    // Cleanup is unconditional and best-effort: don't let a drop failure mask
-    // the read-back result, but don't leave the probe table behind either.
-    let _ = lake_compute_adapter.execute_without_state(
-        Some(&ctx),
-        &format!("drop table if exists {qualified_probe}"),
-        false,
-        None,
-    );
-
-    if write_ok {
-        read_result.map_err(|e| {
-            fs_err!(
-                ErrorCode::AuthenticationFailed,
-                "dbt was able to write to MDLS, but failed to read the object back.\n\
-                 The following error was returned:\n\n{}",
-                e
-            )
-        })?;
-    }
-    emit_info_progress_message(create_progress_msg(
-        ACTION_DEBUGGING,
-        &format!("MDLS read-back test: OK{}", duration_suffix(read_elapsed)),
-    ));
 
     // 3. Snowflake propagation / catalog-linking: only if the project
     // declares a catalog-linked database, and a checker is registered.
@@ -554,14 +520,55 @@ async fn debug_lake_compute(
     Ok(())
 }
 
-/// Builds a schema/database-qualified name for the MDLS probe object from
-/// the lake compute target's own configured database/schema.
-fn qualify_probe_name(database: Option<&str>, schema: Option<&str>, table: &str) -> String {
-    match (database, schema) {
-        (Some(db), Some(schema)) => format!("{db}.{schema}.{table}"),
-        (None, Some(schema)) => format!("{schema}.{table}"),
-        _ => table.to_string(),
-    }
+/// The namespace the MDLS probe writes to: the lake compute adapter's own
+/// `database`/`schema` when it sets them, otherwise the profile's.
+///
+/// A secondary adapter that configures neither inherits the target's defaults,
+/// which `load_profiles` resolved from the *default* adapter -- the same
+/// defaults the parser hands every node (`resolver.rs` reads
+/// `dbt_profile.database`/`.schema` directly). Without this, a lake compute
+/// output that relies on those defaults gets a partially-qualified reference,
+/// which dbt Compute does not fold into the MDLS namespace at all.
+fn resolve_probe_namespace<'a>(
+    lake_compute_db_config: &'a DbConfig,
+    profile_database: &'a str,
+    profile_schema: &'a str,
+) -> (&'a str, &'a str) {
+    (
+        lake_compute_db_config
+            .get_database()
+            .map(String::as_str)
+            .unwrap_or(profile_database),
+        lake_compute_db_config
+            .get_schema()
+            .map(String::as_str)
+            .unwrap_or(profile_schema),
+    )
+}
+
+/// Renders a [`LakeComputeMdlsOutcome`] as the `dbt debug` progress lines --
+/// one per statement, as before, so the output reads as it always has. A
+/// failed write or read-back never reaches here; it comes back as an error.
+fn format_mdls_outcome(outcome: &LakeComputeMdlsOutcome) -> Vec<String> {
+    // Worth calling out: with no Snowflake credential the probe cannot send a
+    // `relation`, so the analyzer has to resolve the write target on its own
+    // and this tests less than a real model write does.
+    let bundle_note = if outcome.sent_propagation_bundle {
+        ""
+    } else {
+        " (no propagation bundle sent)"
+    };
+    vec![
+        format!(
+            "MDLS write test: OK{}{}",
+            bundle_note,
+            duration_suffix(outcome.write_elapsed)
+        ),
+        format!(
+            "MDLS read-back test: OK{}",
+            duration_suffix(outcome.read_elapsed)
+        ),
+    ]
 }
 
 /// Renders an [`LakeComputeCatalogAttachOutcome`] as the `dbt debug` progress line.
@@ -722,22 +729,61 @@ mod tests {
         assert!(line.contains("externalbrowser connection caching: Disabled"));
     }
 
+    /// A lake compute output that configures neither `database` nor `schema`
+    /// inherits the target's defaults, exactly as a node does. Without this the
+    /// probe sends a partially-qualified reference, which dbt Compute leaves
+    /// unfolded -- surfacing as an opaque "Catalog ... does not exist".
     #[test]
-    fn qualify_probe_name_with_database_and_schema() {
+    fn probe_namespace_falls_back_to_the_profile_defaults() {
+        let config = DbConfig::LakeCompute(Box::default());
         assert_eq!(
-            qualify_probe_name(Some("db"), Some("schema"), "t"),
-            "db.schema.t"
+            resolve_probe_namespace(&config, "profile_db", "profile_sch"),
+            ("profile_db", "profile_sch")
         );
     }
 
+    /// The adapter's own values win when it sets them.
     #[test]
-    fn qualify_probe_name_with_schema_only() {
-        assert_eq!(qualify_probe_name(None, Some("schema"), "t"), "schema.t");
+    fn probe_namespace_prefers_the_adapters_own_values() {
+        let config = DbConfig::LakeCompute(Box::new(
+            dbt_schemas::schemas::profiles::LakeComputeConfig {
+                database: Some("adapter_db".to_string()),
+                schema: Some("adapter_sch".to_string()),
+                ..Default::default()
+            },
+        ));
+        assert_eq!(
+            resolve_probe_namespace(&config, "profile_db", "profile_sch"),
+            ("adapter_db", "adapter_sch")
+        );
     }
 
+    /// Both statements get their own line, in order, as they did when this
+    /// check ran inline -- the checker now returns after both have run, so the
+    /// lines are emitted together rather than one per statement.
     #[test]
-    fn qualify_probe_name_with_neither() {
-        assert_eq!(qualify_probe_name(None, None, "t"), "t");
+    fn format_mdls_outcome_reports_both_statements() {
+        let lines = format_mdls_outcome(&LakeComputeMdlsOutcome {
+            write_elapsed: Duration::from_millis(1500),
+            read_elapsed: Duration::from_millis(200),
+            sent_propagation_bundle: true,
+        });
+        assert_eq!(
+            lines,
+            vec!["MDLS write test: OK (1.5s)", "MDLS read-back test: OK"]
+        );
+    }
+
+    /// A run that could not send a `relation` bundle tests strictly less than a
+    /// real model write does, so the output has to say so.
+    #[test]
+    fn format_mdls_outcome_flags_a_run_with_no_propagation_bundle() {
+        let lines = format_mdls_outcome(&LakeComputeMdlsOutcome {
+            write_elapsed: Duration::ZERO,
+            read_elapsed: Duration::ZERO,
+            sent_propagation_bundle: false,
+        });
+        assert_eq!(lines[0], "MDLS write test: OK (no propagation bundle sent)");
     }
 
     #[test]
