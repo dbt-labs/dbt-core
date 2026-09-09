@@ -140,12 +140,13 @@ impl TokenStore {
             RunCacheServiceError::Auth(format!("failed to serialize auth token: {err}"))
         })?;
 
-        let mut file = open_for_write(&self.path).await.map_err(|err| {
+        let write_err = |err| {
             RunCacheServiceError::Auth(format!("failed to write {}: {err}", self.path.display()))
-        })?;
-        file.write_all(json.as_bytes()).await.map_err(|err| {
-            RunCacheServiceError::Auth(format!("failed to write {}: {err}", self.path.display()))
-        })?;
+        };
+
+        let mut file = open_for_write(&self.path).await.map_err(&write_err)?;
+        file.write_all(json.as_bytes()).await.map_err(&write_err)?;
+        file.flush().await.map_err(&write_err)?;
         Ok(())
     }
 
