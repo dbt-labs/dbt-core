@@ -95,7 +95,7 @@ interface Props {
   /** Project-wide per-resource-type counts from the metadata adapter
    *  (`fetchAssetCounts`). Authoritative across every resource table (macros,
    *  exposures, metrics, semantic_models, saved_queries, groups, …) — `nodes`
-   *  alone only holds the dbt.nodes types so per-type tallies derived from it
+   *  alone only holds the resource-table types so per-type tallies derived from it
    *  under-count everything else. Null while the request is in flight. */
   assetCounts?: AssetCounts | null;
   /** Drives the rail upsell stack. Null while capabilities are loading —
@@ -163,7 +163,7 @@ export function LocatePane({
 
   // Project-wide per-type counts from the metadata adapter
   // (`fetchAssetCounts`). The locally-
-  // loaded `nodes` array only carries the dbt.nodes resource types
+  // loaded `nodes` array only carries the resource-table types
   // (model/source/seed/snapshot/test/analysis); macros and the SL artifacts
   // live in separate tables and would otherwise read as 0. Both the Asset
   // tab and the Filter tab's Type dimension read these as the canonical,
@@ -325,7 +325,7 @@ export function LocatePane({
  *
  *  Folder-click navigates without collapsing (first click); the caret still
  *  toggles. The detail endpoint covers every `RESOURCE_TYPE_ORDER` type that
- *  appears in `dbt.nodes`, but list views work for all of them — so no
+ *  appears in the resource tables, but list views work for all of them — so no
  *  click-gate is needed here. */
 function AssetMode({
   projectName,
@@ -689,7 +689,7 @@ function FilterMode({
   );
 
   // Project-wide counts for modeling layer / materialization / package read
-  // from the adapter's search facets so non-dbt.nodes resource types are
+  // from the adapter's search facets so resource types outside those tables are
   // included in the tally. These are unfiltered baselines — cross-filtered
   // narrowing (e.g. "packages count assuming current type selection") will land
   // alongside the search/facets cross-filter params.
