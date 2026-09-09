@@ -1629,7 +1629,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let reduce_f = move |acc: &mut Acc, _: (), batch_res: AdapterResult<Arc<RecordBatch>>| {
             let batch = match batch_res {
                 Ok(b) => b,
-                Err(e) if e.message().contains("Error 404: Not found:") => return Ok(()),
+                Err(e) if is_bigquery_not_found_error(&e) => return Ok(()),
                 Err(e) => return Err(Cancellable::Error(e)),
             };
             let schemas = batch.column_values::<StringArray>("table_schema")?;
@@ -1682,6 +1682,9 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
 /// TODO: match on the ADBC status instead — bigquery-adbc already reports
 /// `StatusNotFound` for both — once the driver migration is complete.
 pub fn is_bigquery_not_found_error(e: &AdapterError) -> bool {
+    if e.kind() == AdapterErrorKind::NotFound {
+        return true;
+    }
     let msg = e.message();
     // arrow-adbc (both sources)
     msg.contains("Error 404: Not found:")
@@ -2192,6 +2195,9 @@ mod tests {
             "googleapi: Error 404: Not found: Table proj:dataset.tbl, notFound",
         );
         assert!(is_bigquery_not_found_error(&legacy));
+
+        let typed = AdapterError::new(AdapterErrorKind::NotFound, "table missing");
+        assert!(is_bigquery_not_found_error(&typed));
 
         // arrow-adbc, query job.
         let legacy_job = AdapterError::new(
