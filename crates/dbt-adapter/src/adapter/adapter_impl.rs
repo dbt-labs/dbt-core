@@ -5202,10 +5202,10 @@ pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 4]> = Laz
         BehaviorFlag::new("enable_truthy_nulls_equals_macro", false, None, None, None),
         BehaviorFlag::new(
             "use_catalogs_v2",
-            false,
+            true,
             None,
             Some(
-                "Enable experimental catalogs.yml v2 schema validation. This syntax is under development and may change.",
+                "Validate catalogs.yml against the v2 schema. Set to `false` to keep the deprecated v1 schema.",
             ),
             Some("https://github.com/dbt-labs/dbt-core/discussions/12723"),
         ),
