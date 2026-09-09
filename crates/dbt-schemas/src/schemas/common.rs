@@ -990,7 +990,9 @@ pub enum DbtChecksum {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DbtChecksumObject {
+    /// The algorithm of the checksum, e.g., "sha256".
     pub name: String,
+    /// Hex-encoded string computed by the algorithm.
     pub checksum: String,
 }
 
@@ -1027,6 +1029,10 @@ impl DbtChecksum {
             Self::String(s) => s,
             Self::Object(o) => &o.checksum,
         }
+    }
+
+    pub fn to_checksum_string(&self) -> String {
+        self.as_checksum_string().to_string()
     }
 
     pub fn hash(s: &[u8]) -> Self {
