@@ -81,6 +81,17 @@ Released September 02, 2026
 - [@tauhid621](https://github.com/tauhid621)
 - [@wizardxz](https://github.com/wizardxz) ([#16080](https://github.com/dbt-labs/dbt-core/issues/16080))
 
+## 2.0.0-dev.39
+
+Released September 09, 2026
+
+### Features
+
+- [ClickHouse] Connection-level settings (profile custom_settings plus v1-parity synchronous-operation defaults), default database wired to the profile schema, literal '?' in SQL, and dbt identified as `dbt/<version>` in the HTTP User-Agent (`system.query_log.http_user_agent`), via the new adbc_clickhouse driver ([#14585](https://github.com/dbt-labs/dbt-core/issues/14585))
+
+### Contributors
+- [@koletzilla](https://github.com/koletzilla) ([#14585](https://github.com/dbt-labs/dbt-core/issues/14585))
+
 ## 2.0.0-beta.2
 
 Released August 18, 2026
