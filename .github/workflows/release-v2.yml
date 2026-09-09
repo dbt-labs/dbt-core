@@ -857,6 +857,13 @@ jobs:
       # mashumaro; the root says >=3.9, for the binary CLI wheel). uv trusts
       # the sdist's PKG-INFO over the wheel's, so a mismatch installs broken —
       # `cargo ci pypi publish` cross-checks both and fails the release.
+      # Only dbt-core gets the banner; swap-then-restore like the renames below.
+      - name: Prepend PyPI banner to README (dbt-core)
+        if: inputs.release_target == 'all' || inputs.release_target == 'core'
+        run: |
+          cat .github/dbt-core-pypi-banner.md README.md > README.md.tmp
+          mv README.md.tmp README.md
+
       - name: Publish (dbt-core)
         if: inputs.release_target == 'all' || inputs.release_target == 'core'
         run: |
@@ -872,6 +879,10 @@ jobs:
             --target x86_64-apple-darwin \
             --target aarch64-apple-darwin \
             --target x86_64-pc-windows-msvc
+
+      - name: Restore README after dbt-core publish
+        if: ${{ always() && (inputs.release_target == 'all' || inputs.release_target == 'core') }}
+        run: git -c safe.directory="$GITHUB_WORKSPACE" restore -- README.md
 
       - name: Rename pyproject for parser publish
         if: inputs.release_target == 'all' || inputs.release_target == 'parser'
