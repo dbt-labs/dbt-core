@@ -1141,12 +1141,12 @@ impl DatabricksMetadataAdapter {
                 FreshnessTask::Bulk(bulk) => {
                     let mut acc: Acc = BTreeMap::new();
                     for relation in bulk {
-                        if let Some(freshness) = databricks_freshness_for_relation(
+                        if let Ok(Some(freshness)) = databricks_freshness_for_relation(
                             &adapter_for_map,
                             conn,
                             relation,
                             token_clone.clone(),
-                        )? {
+                        ) {
                             acc.insert(relation.semantic_fqn(), freshness);
                         }
                     }
