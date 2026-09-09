@@ -549,7 +549,7 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
 
         check_unknown_keys(
             catalog,
-            &["name", "type", "table_format", "config"],
+            &["name", "type", "table_format", "config", "description"],
             "catalog entry",
         )?;
 
@@ -571,6 +571,16 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
                 hacky_yml_loc => field_span(catalog, "name").cloned(),
                 "Catalog name must be a non-empty string"
             );
+        }
+        if let Some(description) = get_str(catalog, "description")? {
+            if description.is_empty_or_whitespace() {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => field_span(catalog, "description").cloned(),
+                    "Supply a description or remove the tag from catalog '{}'",
+                    name
+                );
+            }
         }
         if !seen_catalog_names.insert(name) {
             return err!(
@@ -1355,6 +1365,10 @@ impl CatalogRegistry {
                         // as_str() is uppercase for the legacy Snowflake variants (Jinja egress); lowercase to get the YAML-facing type name.
                         "type": { "const": cts.catalog_type.as_str().to_lowercase() },
                         "table_format": { "const": cts.table_format },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional human-readable description of this catalog's purpose.",
+                        },
                         "config": config,
                     },
                 })
@@ -2997,6 +3011,42 @@ catalogs:
         assert!(
             format!("{res:?}").contains("default_region"),
             "unexpected: {res:?}"
+        );
+    }
+    // ===== description field (optional, free-text) =====
+
+    #[test]
+    fn catalog_with_description_is_valid() {
+        let yaml = r#"
+catalogs:
+  - name: sf_native
+    type: horizon
+    table_format: iceberg
+    description: "Primary Snowflake-managed Iceberg catalog for analytics."
+    config:
+      snowflake:
+        external_volume: my_external_volume
+"#;
+        parse_and_validate(yaml).expect("description should be accepted");
+    }
+
+    #[test]
+    fn empty_description_is_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: sf_native
+    type: horizon
+    table_format: iceberg
+    description: "   "
+    config:
+      snowflake:
+        external_volume: my_external_volume
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            format!("{res:?}").contains("Supply a description or remove the tag"),
+            "unexpected error: {res:?}"
         );
     }
 }
