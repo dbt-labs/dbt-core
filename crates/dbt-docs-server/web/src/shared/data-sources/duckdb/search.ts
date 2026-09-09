@@ -246,16 +246,14 @@ field_matches AS (
  * weights type more heavily and consequently cannot guarantee an exact match ranks
  * first; for docs on a stateless run the typed name is the stronger signal.
  */
-function rankingKey(query: string): string {
-  const exact = `CASE WHEN lower(b.name) = lower(${sqlStr(query)}) THEN '0' ELSE '1' END`;
-  const prefix = `CASE WHEN lower(b.name) LIKE lower('${escapeIlike(query)}') || '%' ESCAPE '\\' THEN '0' ELSE '1' END`;
-  const resource = `CASE b.resource_type
+const RESOURCE_TIER_SQL = `CASE b.resource_type
     WHEN 'model' THEN '0' WHEN 'source' THEN '1' WHEN 'metric' THEN '2'
     WHEN 'exposure' THEN '3' WHEN 'snapshot' THEN '4' WHEN 'semantic_model' THEN '5'
     WHEN 'seed' THEN '6' WHEN 'saved_query' THEN '7' WHEN 'test' THEN '8'
     ELSE '9' END`;
-  // Marts first, unclassified last — the same path rules the model list uses.
-  const layer = `CASE
+
+// Marts first, unclassified last — the same path rules the model list uses.
+const LAYER_TIER_SQL = `CASE
     WHEN lower(b.original_file_path) LIKE '%/marts/%'
       OR lower(b.original_file_path) LIKE '%/dim_%'
       OR lower(b.original_file_path) LIKE '%/fct_%'
@@ -268,11 +266,28 @@ function rankingKey(query: string): string {
       OR lower(b.original_file_path) LIKE 'staging/%' THEN '2'
     ELSE '3' END`;
 
-  const tiers = [exact, prefix, 'w.match_priority', resource, layer]
+function rankingKey(query: string): string {
+  const exact = `CASE WHEN lower(b.name) = lower(${sqlStr(query)}) THEN '0' ELSE '1' END`;
+  const prefix = `CASE WHEN lower(b.name) LIKE lower('${escapeIlike(query)}') || '%' ESCAPE '\\' THEN '0' ELSE '1' END`;
+
+  const tiers = [exact, prefix, 'w.match_priority', RESOURCE_TIER_SQL, LAYER_TIER_SQL]
     .map((expr) => `LPAD(CAST((${expr}) AS VARCHAR), 1, '0')`)
     .join('\n    || ');
 
   // A nameless row sorts last, and carries no name suffix to sort within.
+  return `CASE WHEN b.name IS NULL THEN '9~9999' ELSE ${tiers} || (b.name) END`;
+}
+
+/**
+ * Ranking key for a type/tag/package-only listing: no search text means no
+ * name-match or field-match tiers to rank by, so this just orders by
+ * resource type, modeling layer, then name.
+ */
+function rankingKeyTypeOnly(): string {
+  const tiers = [RESOURCE_TIER_SQL, LAYER_TIER_SQL]
+    .map((expr) => `LPAD(CAST((${expr}) AS VARCHAR), 1, '0')`)
+    .join('\n    || ');
+
   return `CASE WHEN b.name IS NULL THEN '9~9999' ELSE ${tiers} || (b.name) END`;
 }
 
@@ -309,8 +324,12 @@ function filterWhere(filter: SearchFilter): string {
 /**
  * Build the search queries, or `null` when the request cannot match anything.
  *
- * `null` covers an empty query and a type filter naming only unsearchable types —
- * both are "no results" rather than errors.
+ * `null` covers an empty query with no active filters (the blank-on-load state)
+ * and a type filter naming only unsearchable types — both are "no results"
+ * rather than errors. An empty query with a real type/package/tag filter set is
+ * not `null`: the Filter tab stays on this same query builder regardless of how
+ * many type checkboxes are ticked, so those filters need to produce a real,
+ * filtered listing even without search text to rank or highlight against.
  */
 export function buildSearchQuery(
   query: string,
@@ -319,13 +338,39 @@ export function buildSearchQuery(
   offset: number,
 ): SearchQuery | null {
   const tokens = tokenize(query);
-  if (!tokens.length) return null;
+  const hasFilters = Boolean(
+    filter.resourceTypes?.length || filter.packages?.length || filter.tags?.length,
+  );
+  if (!tokens.length && !hasFilters) return null;
 
   const base = baseUnion(filter.resourceTypes);
   if (!base) return null;
 
   const where = filterWhere(filter);
   const pageSize = Math.min(limit, MAX_PAGE_SIZE);
+
+  if (!tokens.length) {
+    const prelude = `WITH base AS (${base}
+)`;
+
+    return {
+      sql: `${prelude}
+SELECT b.*, NULL AS matched_field, NULL AS match_priority,
+       ${rankingKeyTypeOnly()} AS cursor_key,
+       NULL AS matched_column
+FROM base b
+WHERE 1 = 1${where}
+ORDER BY cursor_key ASC, b.unique_id ASC
+LIMIT ${pageSize} OFFSET ${offset}`,
+      countSql: `${prelude}
+SELECT COUNT(*) AS total
+FROM base b
+WHERE 1 = 1${where}`,
+      tables: SEARCH_TABLES,
+      offset,
+      limit: pageSize,
+    };
+  }
 
   const prelude = `WITH base AS (${base}
 ),
