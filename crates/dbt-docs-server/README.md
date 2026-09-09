@@ -210,15 +210,11 @@ cargo build -p dbt-cli   # embeds the committed web/dist/ as-is
 
 ### Rebuilding the UI
 
-Only needed if you change anything under `web/`.
-
-The SPA depends on the dbt Labs design-system packages (`@dbt-labs/sourdough`,
-`@dbt-labs/dbt-dag`, `@dbt-labs/biga`), which are published to GitHub Packages
-rather than the public npm registry. Installing them needs a token with the
-`read:packages` scope:
+Only needed if you change anything under `web/`. The SPA has no private
+dependencies — everything it needs is on the public npm registry, no token
+required:
 
 ```bash
-export GITHUB_TOKEN=<a PAT with read:packages>
 cd crates/dbt-docs-server/web
 pnpm install
 pnpm build          # writes web/dist/
@@ -238,8 +234,22 @@ pnpm lint           # eslint + prettier
 > edit.** This is a manual step — nothing in CI or in a git hook rebuilds or checks
 > the bundle, so a source-only commit will silently ship a stale UI.
 
-If you do not have access to the private packages, you can still work on the Rust
-side: `cargo build` uses the committed bundle and never invokes `pnpm`.
+### Customizing the look
+
+The UI ships with no dbt branding baked in on purpose — it's meant to be
+white-labeled for whoever is hosting it. The common tweaks, none of which need
+React or component knowledge:
+
+- **Accent color** — edit the `--bgBrand*` custom properties in
+  [`web/src/styles/tokens.css`](./web/src/styles/tokens.css). Both light and
+  dark variants live in that file.
+- **Page/tab title** — edit the `<title>` tag in
+  [`web/index.html`](./web/index.html).
+- **Favicon** — none is set by default. Add an icon file under `web/public/`
+  and a `<link rel="icon" href="/your-icon.ico">` tag in `web/index.html`.
+
+Rebuild (`pnpm build`) and commit `web/dist/` after any of these, same as any
+other `web/` change.
 
 ## 🤝 Contributing
 
