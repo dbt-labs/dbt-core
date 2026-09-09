@@ -23,6 +23,7 @@ fn main() -> ExitCode {
             .with_query_log_enabled(true) // Always enable query log for now
             .with_warn_error_options(cli.common_args().get_cli_warn_error_options())
             .with_skip_fusion_only_upgrades(cli.common_args().skip_fusion_only_upgrades())
+            .with_quiet(cli.common_args().get_quiet())
             .build();
     let tracing_config_provider = trace_config.create_config_provider();
     let telemetry_handle = match trace_config.init(Arc::clone(&tracing_config_provider)) {

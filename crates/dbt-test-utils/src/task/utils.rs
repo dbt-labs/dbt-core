@@ -449,6 +449,7 @@ where
         .with_query_log_enabled(true) // Always enable query log for now
         .with_warn_error_options(warn_error_options.as_ref().cloned().unwrap_or_default())
         .with_skip_fusion_only_upgrades(cli.common_args.skip_fusion_only_upgrades())
+        .with_quiet(cli.common_args.get_quiet())
         .build();
     let tracing_config_provider = trace_config.create_config_provider();
     let (middlewares, consumer_layers, mut shutdown_items) =
