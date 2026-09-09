@@ -131,6 +131,7 @@ mod tests {
             }),
             jinja_env: jinja_env.clone(),
             runtime_config: Arc::new(DbtRuntimeConfig::default()),
+            root_runtime_config: Arc::new(DbtRuntimeConfig::default()),
         };
 
         // Create a cancellation token
@@ -305,6 +306,7 @@ mod tests {
             }),
             jinja_env: jinja_env.clone(),
             runtime_config: Arc::new(DbtRuntimeConfig::default()),
+            root_runtime_config: Arc::new(DbtRuntimeConfig::default()),
         };
 
         use dbt_common::cancellation::CancellationToken;

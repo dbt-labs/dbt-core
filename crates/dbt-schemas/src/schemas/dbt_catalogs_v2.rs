@@ -177,14 +177,14 @@ const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
         .non_empty()
         .doc("Full REST catalog URL. Mutually exclusive with endpoint_type."),
     FieldSpec::enumerated("endpoint_type", DUCKDB_ENDPOINT_TYPES)
-        .doc("Managed endpoint type. Mutually exclusive with endpoint."),
+        .doc("Managed AWS endpoint type. DuckDB derives the endpoint URL and SigV4 authorization from it, so it's mutually exclusive with both endpoint and authorization_type."),
     FieldSpec::string("warehouse")
         .non_empty()
-        .doc("S3 warehouse URI. Required when endpoint_type is S3_TABLES."),
+        .doc("Warehouse identifier used as the ATTACH source: the S3 Tables bucket ARN (required when endpoint_type is S3_TABLES), or the Glue catalog path (defaults to ':', the current account's default catalog)."),
     FieldSpec::string("secret")
         .non_empty()
         .doc("Name of a DuckDB secret from profiles.yml to use for authentication."),
-    FieldSpec::string("attach_as").non_empty(),
+    FieldSpec::string("catalog_database").non_empty(),
     FieldSpec::string("default_region").non_empty(),
     FieldSpec::string("default_schema").non_empty(),
     FieldSpec::string("max_table_staleness").non_empty(),
@@ -240,7 +240,7 @@ const BIGLAKE_BIGQUERY_FIELDS: &[FieldSpec] = &[
 const DUCKLAKE_DUCKDB_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("metadata_path").required().non_empty(),
     FieldSpec::string("data_path").non_empty(),
-    FieldSpec::string("attach_as").non_empty(),
+    FieldSpec::string("catalog_database").non_empty(),
     FieldSpec::string("metadata_schema").non_empty(),
     FieldSpec::string("metadata_catalog").non_empty(),
     FieldSpec::u32_plain("data_inlining_row_limit")
@@ -411,6 +411,21 @@ fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<&'a yml::Mapping
     }
 }
 
+/// Validates the catalog-level `meta:` field.
+fn validate_meta_shape(m: &yml::Mapping, k: &str) -> FsResult<()> {
+    if let Some(map) = get_map(m, k)?
+        && let Some(key) = map.keys().find(|key| key.as_str().is_none())
+    {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => Some(key.span().clone()),
+            "Non-string key in '{}' mapping",
+            k
+        );
+    }
+    Ok(())
+}
+
 fn get_seq<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<&'a yml::Sequence>> {
     match m.get(yml::Value::from(k)) {
         Some(v) => match v {
@@ -549,7 +564,15 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
 
         check_unknown_keys(
             catalog,
-            &["name", "type", "table_format", "config"],
+            &[
+                "name",
+                "type",
+                "table_format",
+                "config",
+                "description",
+                "owner",
+                "meta",
+            ],
             "catalog entry",
         )?;
 
@@ -572,6 +595,27 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
                 "Catalog name must be a non-empty string"
             );
         }
+        if let Some(description) = get_str(catalog, "description")?
+            && description.is_empty_or_whitespace()
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(catalog, "description").cloned(),
+                "Supply a value for the 'description' field in catalog '{}' or consider removing it",
+                name
+            );
+        }
+        if let Some(owner) = get_str(catalog, "owner")?
+            && owner.is_empty_or_whitespace()
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(catalog, "owner").cloned(),
+                "Supply a value for the 'owner' field in catalog '{}' or consider removing it",
+                name
+            );
+        }
+        validate_meta_shape(catalog, "meta")?;
         if !seen_catalog_names.insert(name) {
             return err!(
                 code => ErrorCode::InvalidConfig,
@@ -713,6 +757,31 @@ impl CatalogType {
             // Native platform storage is not readable by an external engine at all --
             // this is the warehouse-native case the check exists to catch.
             Self::SnowflakeNative | Self::BigqueryNative | Self::DuckdbNative => false,
+        }
+    }
+
+    /// Whether this catalog type represents a customer-owned catalog outside the
+    /// warehouse's own storage, as opposed to the warehouse's native/managed storage.
+    ///
+    /// Matched exhaustively on purpose, so adding a `CatalogType` forces the
+    /// question to be answered rather than defaulting either way.
+    pub fn is_catalog_linked(&self) -> bool {
+        match self {
+            Self::Glue
+            | Self::IcebergRest
+            | Self::HiveMetastore
+            | Self::Unity
+            | Self::BiglakeMetastore
+            | Self::DuckLake
+            | Self::LocalFilesystem => true,
+            // Snowflake-managed Iceberg, current (Horizon) and superseded
+            // (SnowflakeBuiltIn) spellings -- see lake_compute_can_read's comment on
+            // the same pairing -- plus non-Iceberg native storage.
+            Self::Horizon
+            | Self::SnowflakeBuiltIn
+            | Self::SnowflakeNative
+            | Self::BigqueryNative
+            | Self::DuckdbNative => false,
         }
     }
 
@@ -965,75 +1034,101 @@ impl<'a> CatalogSpecV2View<'a> {
     // Called from CatalogRegistry::validate_semantic after structural validation passes.
 
     fn validate_duckdb_semantics(&self, duckdb: &yml::Mapping, type_name: &str) -> FsResult<()> {
-        let has_endpoint = get_str(duckdb, "endpoint")?;
-        let has_endpoint_type = get_str(duckdb, "endpoint_type")?;
+        match self.catalog_type {
+            CatalogType::Glue
+            | CatalogType::IcebergRest
+            | CatalogType::Horizon
+            | CatalogType::Unity => {
+                let has_endpoint = get_str(duckdb, "endpoint")?;
+                let has_endpoint_type = get_str(duckdb, "endpoint_type")?;
 
-        match (has_endpoint, has_endpoint_type) {
-            (None, None) => {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => self.field_span("type").cloned(),
-                    "Catalog '{}' {}/duckdb config requires 'endpoint' or 'endpoint_type'",
-                    self.name, type_name
-                );
-            }
-            (Some(ep), Some(_)) if !ep.is_empty_or_whitespace() => {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
-                    "Catalog '{}' {}/duckdb 'endpoint' and 'endpoint_type' are mutually exclusive",
-                    self.name, type_name
-                );
-            }
-            (Some(ep), _) if ep.is_empty_or_whitespace() => {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => field_span(duckdb, "endpoint").cloned(),
-                    "Catalog '{}' {}/duckdb 'endpoint' must be non-empty",
-                    self.name, type_name
-                );
-            }
-            (_, Some(et)) => {
-                let val = et.trim();
-                if !matches_enum_ci(val, DUCKDB_ENDPOINT_TYPES) {
-                    return err!(
-                        code => ErrorCode::InvalidConfig,
-                        hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
-                        "Catalog '{}' {}/duckdb 'endpoint_type' must be 'GLUE' or 'S3_TABLES'",
-                        self.name, type_name
-                    );
-                }
-                if val.eq_ignore_ascii_case("S3_TABLES") {
-                    let Some(warehouse) = get_str(duckdb, "warehouse")? else {
+                match (has_endpoint, has_endpoint_type) {
+                    (None, None) => {
+                        return err!(
+                            code => ErrorCode::InvalidConfig,
+                            hacky_yml_loc => self.field_span("type").cloned(),
+                            "Catalog '{}' {}/duckdb config requires 'endpoint' or 'endpoint_type'",
+                            self.name, type_name
+                        );
+                    }
+                    (Some(ep), Some(_)) if !ep.is_empty_or_whitespace() => {
                         return err!(
                             code => ErrorCode::InvalidConfig,
                             hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
-                            "Catalog '{}' {}/duckdb endpoint_type='S3_TABLES' requires 'warehouse'",
+                            "Catalog '{}' {}/duckdb 'endpoint' and 'endpoint_type' are mutually exclusive",
                             self.name, type_name
                         );
-                    };
-                    if warehouse.is_empty_or_whitespace() {
+                    }
+                    (Some(ep), _) if ep.is_empty_or_whitespace() => {
                         return err!(
                             code => ErrorCode::InvalidConfig,
-                            hacky_yml_loc => field_span(duckdb, "warehouse").cloned(),
-                            "Catalog '{}' {}/duckdb 'warehouse' must be non-empty",
+                            hacky_yml_loc => field_span(duckdb, "endpoint").cloned(),
+                            "Catalog '{}' {}/duckdb 'endpoint' must be non-empty",
+                            self.name, type_name
+                        );
+                    }
+                    (_, Some(et)) => {
+                        let val = et.trim();
+                        if !matches_enum_ci(val, DUCKDB_ENDPOINT_TYPES) {
+                            return err!(
+                                code => ErrorCode::InvalidConfig,
+                                hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                                "Catalog '{}' {}/duckdb 'endpoint_type' must be 'GLUE' or 'S3_TABLES'",
+                                self.name, type_name
+                            );
+                        }
+                        if val.eq_ignore_ascii_case("S3_TABLES") {
+                            let Some(warehouse) = get_str(duckdb, "warehouse")? else {
+                                return err!(
+                                    code => ErrorCode::InvalidConfig,
+                                    hacky_yml_loc => field_span(duckdb, "endpoint_type").cloned(),
+                                    "Catalog '{}' {}/duckdb endpoint_type='S3_TABLES' requires 'warehouse'",
+                                    self.name, type_name
+                                );
+                            };
+                            if warehouse.is_empty_or_whitespace() {
+                                return err!(
+                                    code => ErrorCode::InvalidConfig,
+                                    hacky_yml_loc => field_span(duckdb, "warehouse").cloned(),
+                                    "Catalog '{}' {}/duckdb 'warehouse' must be non-empty",
+                                    self.name, type_name
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+
+                if let Some(_auth_type) = get_str(duckdb, "authorization_type")? {
+                    if has_endpoint_type.is_some() {
+                        return err!(
+                            code => ErrorCode::InvalidConfig,
+                            hacky_yml_loc => field_span(duckdb, "authorization_type").cloned(),
+                            "Catalog '{}' {}/duckdb 'authorization_type' cannot be combined with 'endpoint_type'",
                             self.name, type_name
                         );
                     }
                 }
             }
-            _ => {}
+            CatalogType::DuckLake => {}
+            _ => debug_assert!(
+                false,
+                "validate_duckdb_semantics called for unsupported catalog type: {:?}",
+                self.catalog_type
+            ),
         }
 
-        if let Some(_auth_type) = get_str(duckdb, "authorization_type")? {
-            if has_endpoint_type.is_some() {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => field_span(duckdb, "authorization_type").cloned(),
-                    "Catalog '{}' {}/duckdb 'authorization_type' cannot be combined with 'endpoint_type'",
-                    self.name, type_name
-                );
-            }
+        if let Some(catalog_database) = get_str(duckdb, "catalog_database")?
+            && !catalog_database
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(duckdb, "catalog_database").cloned(),
+                "Catalog '{}' {}/duckdb 'catalog_database' must contain only ASCII letters, digits, and underscores",
+                self.name, type_name
+            );
         }
 
         Ok(())
@@ -1276,7 +1371,12 @@ impl CatalogRegistry {
                     catalog.validate_biglake_semantics(bigquery)?;
                 }
             }
-            CatalogType::HiveMetastore | CatalogType::DuckLake | CatalogType::LocalFilesystem => {}
+            CatalogType::DuckLake => {
+                if let Some(duckdb) = catalog.config_block("duckdb") {
+                    catalog.validate_duckdb_semantics(duckdb, "ducklake")?;
+                }
+            }
+            CatalogType::HiveMetastore | CatalogType::LocalFilesystem => {}
             // These are not supported as explicit catalog types in catalogs.yml's `type` field.
             CatalogType::SnowflakeBuiltIn
             | CatalogType::SnowflakeNative
@@ -1330,7 +1430,20 @@ impl CatalogRegistry {
                         // as_str() is uppercase for the legacy Snowflake variants (Jinja egress); lowercase to get the YAML-facing type name.
                         "type": { "const": cts.catalog_type.as_str().to_lowercase() },
                         "table_format": { "const": cts.table_format },
+                        "description": {
+                            "type": "string",
+                            "description": "Optional human-readable description of this catalog's purpose.",
+                        },
                         "config": config,
+                        "owner": {
+                            "type": "string",
+                            "description": "Optional dedicated ownership field (team name or email).",
+                        },
+                        "meta": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "description": "Optional free-form metadata map, following the dbt sources/models `meta:` convention.",
+                        },
                     },
                 })
             })
@@ -2089,7 +2202,7 @@ catalogs:
       duckdb:
         endpoint: "https://my-iceberg-rest.example.com"
         secret: "my_secret"
-        attach_as: "my_catalog"
+        catalog_database: "my_catalog"
 "#;
         parse_and_validate(yaml).expect("iceberg_rest + duckdb should validate");
     }
@@ -2184,7 +2297,7 @@ catalogs:
     }
 
     #[test]
-    fn iceberg_rest_duckdb_blank_attach_as() {
+    fn iceberg_rest_duckdb_blank_catalog_database() {
         let yaml = r#"
 catalogs:
   - name: rest_duck
@@ -2193,13 +2306,52 @@ catalogs:
     config:
       duckdb:
         endpoint: "https://my-rest.example.com"
-        attach_as: ""
+        catalog_database: ""
 "#;
         let res = parse_and_validate(yaml);
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("'attach_as' must be non-empty"),
+            msg.contains("'catalog_database' must be non-empty"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn snowflake_catalog_database_dashes_allowed() {
+        // The ascii-identifier check only applies to duckdb's `catalog_database`
+        // (which becomes a sanitized ATTACH alias); Snowflake's is never
+        // sanitized, so dashes are fine there.
+        let yaml = r#"
+catalogs:
+  - name: rest_sf
+    type: iceberg_rest
+    table_format: iceberg
+    config:
+      snowflake:
+        catalog_database: "my-linked-db"
+        auto_refresh: true
+"#;
+        parse_and_validate(yaml).expect("dashes in snowflake catalog_database should validate");
+    }
+
+    #[test]
+    fn ducklake_duckdb_non_ascii_identifier_catalog_database_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: my_lake
+    type: ducklake
+    table_format: default
+    config:
+      duckdb:
+        metadata_path: "metadata.ducklake"
+        catalog_database: "my-lake"
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("must contain only ASCII letters, digits, and underscores"),
             "unexpected error: {msg}"
         );
     }
@@ -2436,7 +2588,7 @@ catalogs:
         endpoint: "https://my-catalog.example.com"
         warehouse: "warehouse_name"
         secret: "my_secret"
-        attach_as: "my_db"
+        catalog_database: "my_db"
         default_region: "us-east-1"
         default_schema: "demo"
         max_table_staleness: "10 minutes"
@@ -2557,7 +2709,7 @@ catalogs:
       duckdb:
         metadata_path: "metadata.ducklake"
         data_path: "data/"
-        attach_as: "lake"
+        catalog_database: "lake"
         metadata_schema: "my_schema"
         metadata_catalog: "lake_db"
         data_inlining_row_limit: 100
@@ -2972,6 +3124,210 @@ catalogs:
         assert!(
             format!("{res:?}").contains("default_region"),
             "unexpected: {res:?}"
+        );
+    }
+    // ===== description field (optional, free-text) =====
+
+    #[test]
+    fn catalog_with_description_is_valid() {
+        let yaml = r#"
+catalogs:
+  - name: sf_native
+    type: horizon
+    table_format: iceberg
+    description: "Primary Snowflake-managed Iceberg catalog for analytics."
+    config:
+      snowflake:
+        external_volume: my_external_volume
+"#;
+        parse_and_validate(yaml).expect("description should be accepted");
+    }
+
+    #[test]
+    fn empty_description_is_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: sf_native
+    type: horizon
+    table_format: iceberg
+    description: "   "
+    config:
+      snowflake:
+        external_volume: my_external_volume
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            format!("{res:?}").contains("Supply a value for the 'description' field"),
+            "unexpected error: {res:?}"
+        );
+    }
+
+    #[test]
+    fn description_appears_in_json_schema() {
+        let schema = catalogs_v2_json_schema();
+        let branches = schema["properties"]["catalogs"]["items"]["oneOf"]
+            .as_array()
+            .expect("oneOf array");
+        for branch in branches {
+            assert_eq!(
+                branch["properties"]["description"]["type"],
+                serde_json::json!("string"),
+                "every catalog type branch should publish an optional string `description`"
+            );
+            // description is optional: it must not appear in the required list.
+            let required = branch["required"].as_array().expect("required array");
+            assert!(
+                !required
+                    .iter()
+                    .any(|r| r == &serde_json::json!("description")),
+                "description must be optional"
+            );
+        }
+    }
+
+    // ===== owner / meta fields (optional) =====
+
+    #[test]
+    fn owner_and_meta_appear_in_json_schema() {
+        let schema = catalogs_v2_json_schema();
+        let branches = schema["properties"]["catalogs"]["items"]["oneOf"]
+            .as_array()
+            .expect("oneOf array");
+        for branch in branches {
+            assert_eq!(
+                branch["properties"]["owner"]["type"],
+                serde_json::json!("string"),
+                "every catalog type branch should publish an optional string `owner`"
+            );
+            assert_eq!(
+                branch["properties"]["meta"]["type"],
+                serde_json::json!("object"),
+                "every catalog type branch should publish an optional object `meta`"
+            );
+            let required = branch["required"].as_array().expect("required array");
+            assert!(
+                !required
+                    .iter()
+                    .any(|r| r == &serde_json::json!("owner") || r == &serde_json::json!("meta")),
+                "owner and meta must be optional"
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_with_owner_is_valid() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    owner: "data-platform@example.com"
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        parse_and_validate(yaml).expect("owner should validate");
+    }
+
+    #[test]
+    fn empty_owner_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    owner: "  "
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "empty owner should be rejected");
+        assert!(format!("{res:?}").contains("owner"));
+    }
+
+    #[test]
+    fn owner_non_string_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    owner: 123
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("Key 'owner' must be a string"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn catalog_with_meta_is_valid() {
+        let yaml = r##"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    meta:
+      slack: "#data-platform"
+      sla_hours: 24
+      domain: analytics
+      nested:
+        pagerduty: data-platform-oncall
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"##;
+        parse_and_validate(yaml).expect("meta should validate");
+    }
+
+    #[test]
+    fn meta_non_string_key_rejected() {
+        let yaml = "
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    meta:
+      42: not-a-string-key
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+";
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("Non-string key in 'meta' mapping"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn meta_non_mapping_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    meta: "not-a-map"
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("Key 'meta' must be a mapping"),
+            "unexpected error: {msg}"
         );
     }
 }

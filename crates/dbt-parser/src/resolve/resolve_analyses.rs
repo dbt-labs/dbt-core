@@ -55,6 +55,7 @@ pub async fn resolve_analyses(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtAnalysis>>,
@@ -104,6 +105,7 @@ pub async fn resolve_analyses(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     let mut analysis_sql_resources_map =
@@ -193,7 +195,6 @@ pub async fn resolve_analyses(
         }
         let columns = process_columns(
             properties.columns.as_ref(),
-            analysis_config.meta.clone(),
             analysis_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
 

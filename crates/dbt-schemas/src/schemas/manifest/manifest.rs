@@ -1724,6 +1724,11 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     unrendered_database: source.unrendered_database,
                     unrendered_schema: source.unrendered_schema,
                     external: source.external,
+                    catalog_name: source
+                        .config
+                        .__warehouse_specific_config__
+                        .catalog_name
+                        .clone(),
                 },
                 deprecated_config: source.config,
                 __other__: source.__other__,

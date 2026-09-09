@@ -1238,6 +1238,15 @@ pub enum IndexItem {
     ClickHouse(ClickHouseIndex),
 }
 
+/// ClickHouse `refreshable` MV config: the settings map or a bare bool, where `false`
+/// behaves like omitting the key (dbt-clickhouse parity).
+#[derive(Debug, Clone, PartialEq, UntaggedEnumDeserialize, Serialize, DbtSchema)]
+#[serde(untagged)]
+pub enum RefreshableConfig {
+    Bool(bool),
+    Config(BTreeMap<String, YmlValue>),
+}
+
 /// A wrapper type for the `indexes` config field that handles flexible deserialization.
 ///
 /// dbt-core accepts both list and dictionary formats for indexes. This type accepts

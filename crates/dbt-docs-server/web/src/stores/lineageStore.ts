@@ -55,6 +55,8 @@ export type LineageStatus =
 /** The graph plus the root it was hydrated for. */
 export type LineageGraphInput = {
   rootUniqueId: string;
+  upstreamDepth: number;
+  downstreamDepth: number;
   /** Positions are ignored. Hydration hides the cards and leaves them stacked; they
    *  are positioned by `layoutMeasured` once React Flow has measured them. */
   nodes: ReactFlowNode[];
@@ -75,6 +77,11 @@ export type LineageState = {
   // ---- hydration ----
   /** The lineage root the graph in the store belongs to, `null` when empty. */
   rootUniqueId: string | null;
+  /** Hop counts being fetched -- the hop bar's `n+ / +n`. Written by
+   *  `startHydration` as the fetch opens, so between a hop change and its graph
+   *  landing these describe the request in flight, not the graph still on screen. */
+  upstreamDepth: number;
+  downstreamDepth: number;
   status: LineageStatus;
   error: Error | null;
 
@@ -105,9 +112,15 @@ export type LineageState = {
   setEdges: (edges: Edge[]) => void;
   setCompact: (isCompact: boolean) => void;
   setActiveLens: (lens: string) => void;
-  /** Mark a fetch as in flight. Clears the graph when the root changes, so a stale
-   *  graph never shows under a new root. */
-  startHydration: (rootUniqueId: string) => void;
+  /** Mark a fetch as in flight, and record the root and hop depths it is for.
+   *  Clears the graph when the root changes, so a stale graph never shows under a
+   *  new root; a depth change keeps it, since a different hop count is still a view
+   *  of the same lineage. */
+  startHydration: (
+    rootUniqueId: string,
+    upstreamDepth: number,
+    downstreamDepth: number,
+  ) => void;
   /** The bootstrap action: publish the graph DuckDB returned, hidden and unpositioned,
    *  for React Flow to measure. `layoutMeasured` finishes the job. */
   hydrate: (input: LineageGraphInput) => void;
@@ -130,6 +143,8 @@ const initialState = {
   layout: DEFAULT_LAYOUT_OPTIONS,
   isLaidOut: false,
   rootUniqueId: null,
+  upstreamDepth: 1,
+  downstreamDepth: 1,
   status: 'empty' as LineageStatus,
   error: null,
   selectedNodeIds: EMPTY_SELECTION,
@@ -213,11 +228,18 @@ export const useLineageStore = create<LineageState>()(
         set({ activeLens: lens }, false, 'lineage/setActiveLens');
       },
 
-      startHydration: (rootUniqueId) => {
+      startHydration: (rootUniqueId, upstreamDepth, downstreamDepth) => {
         const isSameRoot = get().rootUniqueId === rootUniqueId;
         set(
           {
             rootUniqueId,
+            // The depths describe the fetch, not the graph below, so they land now
+            // rather than at `hydrate`. Everything else here still keys off the root
+            // alone: a hop change is a wider or narrower view of lineage that is
+            // already on screen and still correct, so it keeps rendering until the
+            // new graph lands.
+            upstreamDepth,
+            downstreamDepth,
             status: 'loading',
             error: null,
             // Keep the current graph while refetching the same root — dropping it
@@ -235,10 +257,12 @@ export const useLineageStore = create<LineageState>()(
         );
       },
 
-      hydrate: ({ rootUniqueId, nodes, edges }) => {
+      hydrate: ({ rootUniqueId, upstreamDepth, downstreamDepth, nodes, edges }) => {
         set(
           {
             rootUniqueId,
+            upstreamDepth,
+            downstreamDepth,
             // Hidden and stacked wherever they came in. There is nothing to lay out
             // with yet: a card's width is whatever its name renders to, and only the
             // browser knows that. So publish them for React Flow to measure, and let
@@ -256,10 +280,13 @@ export const useLineageStore = create<LineageState>()(
       },
 
       layoutMeasured: () => {
-        const { nodes, edges, layout, isLaidOut } = get();
+        const { nodes, edges, layout, isLaidOut, rootUniqueId } = get();
         if (isLaidOut || !allMeasured(nodes)) return;
         set(
-          { nodes: reveal(applyDagreLayout(nodes, edges, layout)), isLaidOut: true },
+          {
+            nodes: reveal(applyDagreLayout(nodes, edges, layout, rootUniqueId)),
+            isLaidOut: true,
+          },
           false,
           'lineage/layoutMeasured',
         );
@@ -279,7 +306,12 @@ export const useLineageStore = create<LineageState>()(
         // runs straight away rather than going back through the hidden-and-measure
         // cycle — flipping LR ⇄ TB should not blank the canvas.
         set(
-          { layout, nodes: reveal(applyDagreLayout(get().nodes, get().edges, layout)) },
+          {
+            layout,
+            nodes: reveal(
+              applyDagreLayout(get().nodes, get().edges, layout, get().rootUniqueId),
+            ),
+          },
           false,
           'lineage/relayout',
         );
@@ -301,6 +333,10 @@ export const useLineageStore = create<LineageState>()(
     },
   ),
 );
+
+// whether the card should render in the collapsed badge-only form
+export const isCardCompact = (state: LineageState): boolean =>
+  state.isCompact && state.isLaidOut;
 
 /** The props `<ReactFlow>` needs, in one subscription. `useShallow` keeps the fresh
  *  object literal from re-rendering the canvas on every unrelated store write. */

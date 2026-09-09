@@ -1,9 +1,11 @@
 //! The views a parse-time check reads: the information schema's vocabulary,
-//! computed live over the index.
+//! computed live over the metadata this run parsed.
 //!
 //! A project quality check is SQL that runs **at parse time**, so it cannot read the
 //! materialized information schema — that is written after parse, and only when asked
-//! for. It reads the index instead (`dbt.*.parquet`), through the views declared here.
+//! for. It reads the parse metadata epochs instead, through the views declared here:
+//! [`epoch_views::parse_safe_statements`](super::epoch_views::parse_safe_statements)
+//! narrows the epoch view layer to the names and columns below.
 //!
 //! Two properties, and each one constrains the other:
 //!
@@ -21,7 +23,8 @@
 //!   which is loud.
 //!
 //! So a view here is a **strict subset** of the information-schema table of the same
-//! name: same names, fewer columns. The set of views is a subset too — a table with no
+//! name: same names, fewer columns — and literally so, since the published view's own
+//! statement is the subquery the projection reads. The set of views is a subset too — a table with no
 //! data at parse is not published at all, since an empty table is indistinguishable from
 //! a passing check. [`VIEWS`] lists what is left out and why.
 //!
@@ -44,10 +47,10 @@ use super::spec::{Filter, Ns, Src};
 /// `dbt.models` means the same thing in a check as it does in `info_schema/v1/`.
 pub const VIEW_SCHEMA: &str = "dbt";
 
-/// Schema the index's own parquet tables are registered in.
+/// Schema the relations underneath the views are registered in.
 ///
-/// Deliberately not `dbt`: the views are the contract and the tables under them are not.
-/// Keeping the tables out of `dbt` is also what stops a check from reaching one by hand —
+/// Deliberately not `dbt`: the views are the contract and what they read is not. Keeping
+/// those relations out of `dbt` is also what stops a check from reaching one by hand —
 /// `FROM dbt.nodes` fails to bind instead of returning columns that stay empty until
 /// compile. The allowlist in the `info_schema()` Jinja helper cannot do that on its own,
 /// since check SQL is free to name any relation it likes.
@@ -72,6 +75,13 @@ const L: &str = "l";
 const R: &str = "r";
 
 /// One parse-safe view.
+///
+/// [`name`](Self::name), [`vocabulary`](Self::vocabulary) and [`cols`](Self::cols) are what
+/// the published views are built from. [`src`](Self::src) and [`filter`](Self::filter) no
+/// longer render the SQL a check executes — [`create_view_sql`](Self::create_view_sql) built
+/// that while checks read the index — and are kept as the cross-check they also were: their
+/// tests resolve every declared column against the index schema and against the
+/// information-schema spec, so a rename in either place fails here rather than at query time.
 pub struct ParseSafeView {
     /// View name: `dbt.<name>`, and the argument `info_schema('<name>')` takes.
     pub name: &'static str,
@@ -105,17 +115,17 @@ pub struct ParseSafeView {
 /// which is here). `file_path` and `checksum` are absent because the information schema
 /// does not have them.
 ///
-/// `raw_code` is not here, and it is the one column absent by *resource type* rather than by
-/// phase, which is why it cannot live in this macro at all: `trim_model_payload` drops it from
-/// `__common_attr__` for models only — their payloads are multi-KB mostly because of source and
-/// compiled SQL, and dropping it is the point of the trim — so it is permanently NULL for
-/// `models` and populated for every other node type that has SQL. The views that do carry it
-/// name it themselves.
+/// `raw_code` is not here either, and it is the one column left out by *resource type* rather
+/// than by phase, which is why it cannot live in this macro at all: the views that carry it name
+/// it themselves.
 ///
-/// Worth knowing why the NULL matters more than an ordinary gap: the information schema
-/// publishes `raw_code` populated even for models, because its COPY path reads the epoch
-/// payloads rather than the index. A rule developed in `dbt show --info` therefore returns rows
-/// there and nothing as a check -- and nothing is a pass.
+/// It was excluded from `models` because the index left it NULL there — `trim_model_payload`
+/// drops it from `__common_attr__` for models only, their payloads being multi-KB mostly
+/// because of SQL — while every other node type with SQL kept it. Reading the epoch payloads
+/// removes that asymmetry: `raw_code` is populated for models there, which is why the
+/// information schema has always published it, and a rule developed in `dbt show --info` no
+/// longer returns rows there and nothing as a check. Offering it on `models` is a widening of
+/// the check surface rather than part of the port, so it is still left out here.
 macro_rules! node_cols {
     ($($extra:expr),* $(,)?) => {
         &[

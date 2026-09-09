@@ -499,6 +499,7 @@ fn resolve_given_seed(
         root_project_name,
         package_quoting,
         Arc::new(DbtRuntimeConfig::default()),
+        Arc::new(DbtRuntimeConfig::default()),
         sql_resources.clone(),
         Arc::new(AtomicBool::new(false)),
         relative_path,

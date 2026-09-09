@@ -6,6 +6,7 @@ pub mod context;
 pub mod context_factory;
 mod generate_run_results;
 pub mod lake_compute_catalog_attach;
+pub mod lake_compute_mdls;
 pub mod lake_compute_propagation;
 pub mod local_schema_builder;
 pub mod metricflow;

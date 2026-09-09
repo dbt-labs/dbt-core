@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use dbt_common::adapter::dialect_of;
 use dbt_frontend_common::Dialect;
 use dbt_sql_utils::{is_empty_or_comment_only, sql_split_statements};
 
@@ -24,8 +23,33 @@ pub struct DefaultStmtSplitter;
 
 impl StmtSplitter for DefaultStmtSplitter {
     fn split<'i>(&self, sql: &'i str, adapter_type: AdapterType) -> Vec<&'i str> {
-        let dialect = dialect_of(adapter_type);
-        sql_split_statements(sql, dialect).into_iter().collect()
+        use AdapterType::*;
+        let dialect = match adapter_type {
+            Postgres => Dialect::Postgresql,
+            Snowflake => Dialect::Snowflake,
+            Bigquery => Dialect::Bigquery,
+            // TODO(serramatutu): switch Spark to Spark dialect once frontend looks good
+            Databricks | Spark => Dialect::Databricks,
+            Redshift => Dialect::Redshift,
+            // Salesforce dialect is unclear, it claims ANSI vaguely
+            // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
+            // falls back to Postgresql at the moment
+            Salesforce => Dialect::Postgresql,
+            // `LakeCompute` defines no dialect of its own, so it falls back to DuckDB's
+            DuckDB | LakeCompute => Dialect::Duckdb,
+            // ClickHouse string literals use backslash escapes (\', \\, \xNN),
+            // which the Trino fallback lexer cannot tokenize — everything from
+            // the escape on is then passed through unsplit. The Databricks
+            // (Hive-style) lexer shares ClickHouse's string and backtick lexis.
+            // Local to splitting on purpose: dialect_of() also feeds SQL
+            // analysis, where ClickHouse stays unsupported.
+            ClickHouse => Dialect::Databricks,
+            Trino => Dialect::Trino,
+            _ => Dialect::Trino,
+        };
+        sql_split_statements(sql, Some(dialect))
+            .into_iter()
+            .collect()
     }
 
     fn is_empty(&self, sql: &str, adapter_type: AdapterType) -> bool {
@@ -37,6 +61,8 @@ impl StmtSplitter for DefaultStmtSplitter {
             Bigquery => by_dialect(Dialect::Bigquery),
             Databricks | Spark => by_dialect(Dialect::Databricks),
             Redshift => by_dialect(Dialect::Redshift),
+            // ClickHouse routes to Databricks for the same reason as split()
+            ClickHouse => by_dialect(Dialect::Databricks),
             // fallback to the Trino lexer for unsupported lexer dialects
             _ => by_dialect(Dialect::Trino),
         }
@@ -178,6 +204,23 @@ mod tests {
                 "Expected COMMENT ON COLUMN statement, got: {stmt}"
             );
         }
+    }
+
+    #[test]
+    fn test_split_clickhouse_backslash_escaped_strings() {
+        // the Trino fallback lexer cannot split these correctly
+        assert_eq!(
+            split(
+                r#"select 'don\'t; drop'; select '\x3F', 'a\\'; select 2"#,
+                AdapterType::ClickHouse
+            ),
+            vec![
+                r#"select 'don\'t; drop'"#,
+                r#" select '\x3F', 'a\\'"#,
+                " select 2"
+            ]
+        );
+        assert!(!is_empty(r#"select 'don\'t'"#, AdapterType::ClickHouse));
     }
 
     #[test]

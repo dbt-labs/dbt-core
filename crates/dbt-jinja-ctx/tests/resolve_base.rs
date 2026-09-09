@@ -1,7 +1,7 @@
 //! Tests covering `ResolveBaseCtx` end-to-end:
 //!
 //! 1. The typed ctx serializes to the same key set today's hand-built
-//!    `build_resolve_context` BTreeMap produces — ten fixed keys plus one
+//!    `build_resolve_context` BTreeMap produces — fifteen fixed keys plus one
 //!    top-level entry per `dbt_namespace` (via `#[serde(flatten)]`).
 //! 2. The `dbt_namespaces` flatten emits each namespace as its own
 //!    top-level Jinja key (not as a nested `dbt_namespaces.foo` path).
@@ -46,6 +46,11 @@ fn fixture_resolve_base_ctx() -> ResolveBaseCtx {
         store_result: MinijinjaValue::from("store-result-stub"),
         load_result: MinijinjaValue::from("load-result-stub"),
         store_raw_result: MinijinjaValue::from("store-raw-result-stub"),
+        builtins: MinijinjaValue::from("builtins-stub"),
+        ref_fn: MinijinjaValue::from("ref-stub"),
+        source: MinijinjaValue::from("source-stub"),
+        metric: MinijinjaValue::from("metric-stub"),
+        function: MinijinjaValue::from("function-stub"),
         dbt_namespaces,
     }
 }
@@ -61,18 +66,23 @@ fn resolve_base_ctx_serializes_to_expected_keys() {
         vec![
             "MACRO_DISPATCH_ORDER",
             "TARGET_PACKAGE_NAME",
+            "builtins",
             "connection_name",
             "context",
             "dbt",
             "doc",
             "execute",
+            "function",
             "load_result",
+            "metric",
             "node",
+            "ref",
             "snowflake",
+            "source",
             "store_raw_result",
             "store_result",
         ],
-        "resolve-base ctx must produce the ten base keys plus one entry per \
+        "resolve-base ctx must produce the fifteen base keys plus one entry per \
          dbt_namespace via #[serde(flatten)]"
     );
 }

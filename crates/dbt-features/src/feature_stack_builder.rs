@@ -159,6 +159,7 @@ impl FeatureStackBuilder {
         let lake_compute = crate::lake_compute::LakeComputeFeature {
             propagation_checker: None,
             catalog_attach_checker: None,
+            mdls_checker: None,
         };
 
         let stack = FeatureStack {

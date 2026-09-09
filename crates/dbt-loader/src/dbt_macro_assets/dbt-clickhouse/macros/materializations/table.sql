@@ -10,10 +10,10 @@
     {%- set backup_relation_type = existing_relation.type -%}
     {%- set backup_relation = make_backup_relation(target_relation, backup_relation_type) -%}
     {%- set preexisting_backup_relation = load_cached_relation(backup_relation) -%}
-    {# v2: no can_exchange/EXCHANGE TABLES support yet — every rebuild takes
-       upstream's intermediate+rename fallback. #}
-    {%- set intermediate_relation = make_intermediate_relation(target_relation) -%}
-    {%- set preexisting_intermediate_relation = load_cached_relation(intermediate_relation) -%}
+    {% if not existing_relation.can_exchange %}
+      {%- set intermediate_relation =  make_intermediate_relation(target_relation) -%}
+      {%- set preexisting_intermediate_relation = load_cached_relation(intermediate_relation) -%}
+    {% endif %}
   {% endif %}
 
   {% set grant_config = config.get('grants') %}
@@ -27,19 +27,112 @@
   -- `BEGIN` happens here:
   {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
+  {%- set configured_mv_on_schema_change = none -%}
+  {%- set repopulate_from_mvs_on_full_refresh = config.get('repopulate_from_mvs_on_full_refresh', False) -%}
+  {%- set dbt_mvs_pointing_to_this_table = clickhouse__get_dbt_mvs_for_target(existing_relation) -%}
+
   {# If there is not existing relation, we can just create a new one #}
   {% if existing_relation is none %}
     {{ log('Creating new relation ' + target_relation.name )}}
     {% call statement('main') -%}
       {{ get_create_table_as_sql(False, target_relation, sql) }}
     {%- endcall %}
+
+  {# If regular run was executed: Apply mv_on_schema_change strategy #}
+  {% elif not should_full_refresh() %}
+    {# mv_on_schema_change defaults to 'ignore' in dbt, so we need unrendered_config to know if the user actually set it #}
+    {%- set user_has_configured_mv_on_schema_change = 'mv_on_schema_change' in config.model.unrendered_config -%}
+
+    {# `mv_on_schema_change` is only meaningful for tables targeted by dbt-managed MVs.
+      - For non-MV tables: always rebuild normally, ignoring any mv_on_schema_change
+      - For MV-target tables: default to `fail` if it's not configured by the user #}
+    {%- if dbt_mvs_pointing_to_this_table -%}
+      {%- if user_has_configured_mv_on_schema_change -%}
+        {%- set configured_mv_on_schema_change = config.get('mv_on_schema_change', 'ignore') -%}
+      {%- else -%}
+        {{ log('Table ' ~ target_relation.name ~ ' is used as a target by a dbt-managed materialized view. Defaulting mv_on_schema_change to "fail" to prevent data loss.', info=True) }}
+        {%- set configured_mv_on_schema_change = 'fail' -%}
+      {%- endif -%}
+    {%- endif -%}
+
+    {# If no mv_on_schema_change is set, we behave as usual (rebuild the table) #}
+    {% if configured_mv_on_schema_change is none %}
+      {% if existing_relation.can_exchange %}
+      {% call statement('main') -%}
+            {{ get_create_table_as_sql(False, backup_relation, sql) }}
+          {%- endcall %}
+      {% do exchange_tables_atomic(backup_relation, existing_relation) %}
+      {% else %}
+          -- We have to use an intermediate and rename accordingly
+          {% call statement('main') -%}
+            {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
+          {%- endcall %}
+          {{ adapter.rename_relation(existing_relation, backup_relation) }}
+          {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+      {% endif %}
+
+    {# If mv_on_schema_change is set, we apply the strategy #}
+    {% else %}
+      {%- set mv_on_schema_change = incremental_validate_on_schema_change(configured_mv_on_schema_change, default='ignore') -%}
+      {% call statement('main') -%}
+        Select 1
+      {%- endcall %}
+      {{ log('on_schema_change strategy for table: ' + mv_on_schema_change) }}
+      {%- if mv_on_schema_change != 'ignore' -%}
+        {%- set column_changes = adapter.check_incremental_schema_changes(mv_on_schema_change, existing_relation, sql, materialization='table', query_settings=config.get('query_settings', {})) -%}
+        {% if column_changes %}
+          {% do clickhouse__apply_column_changes(column_changes, existing_relation) %}
+          {% set existing_relation = load_cached_relation(this) %}
+        {% endif %}
+      {%- endif %}
+    {% endif %}
+
+  {# Behaviour under full_refresh operations #}
   {% else %}
-    -- We have to use an intermediate and rename accordingly
-    {% call statement('main') -%}
-      {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
-    {%- endcall %}
-    {{ adapter.rename_relation(existing_relation, backup_relation) }}
-    {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+    {# Atomic full refresh with MV repopulation: when table is target of dbt MVs and repopulate_from_mvs_on_full_refresh is enabled #}
+    {% if dbt_mvs_pointing_to_this_table and repopulate_from_mvs_on_full_refresh %}
+      {{ log('Performing atomic full refresh with MV repopulation for ' ~ target_relation.name, info=True) }}
+
+      {# Choose staging relation based on exchange support #}
+      {% set staging_relation = backup_relation if existing_relation.can_exchange else intermediate_relation %}
+
+      {# Create staging table with new schema (empty) #}
+      {% call statement('main') -%}
+        {{ get_create_table_as_sql(False, staging_relation, sql) }}
+      {%- endcall %}
+
+      {# Populate staging table from each MV's SELECT #}
+      {% for mv_info in dbt_mvs_pointing_to_this_table %}
+          {{ log('Repopulating from MV: ' ~ mv_info.name, info=True) }}
+          {% set wrapped_sql = 'SELECT * FROM (' ~ mv_info.sql ~ ')' %}
+          {% do run_query(clickhouse__insert_into(staging_relation, wrapped_sql, false, use_columns_from_sql=True)) %}
+      {% endfor %}
+
+      {# Swap tables #}
+      {% if existing_relation.can_exchange %}
+        {% do exchange_tables_atomic(backup_relation, existing_relation) %}
+      {% else %}
+        {{ adapter.rename_relation(existing_relation, backup_relation) }}
+        {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+      {% endif %}
+
+    {# Normal full refresh: no MV repopulation, just create a new, empty table #}
+    {% else %}
+      {% if existing_relation.can_exchange %}
+        -- We can do an atomic exchange, so no need for an intermediate
+        {% call statement('main') -%}
+          {{ get_create_table_as_sql(False, backup_relation, sql) }}
+        {%- endcall %}
+        {% do exchange_tables_atomic(backup_relation, existing_relation) %}
+      {% else %}
+        -- We have to use an intermediate and rename accordingly
+        {% call statement('main') -%}
+          {{ get_create_table_as_sql(False, intermediate_relation, sql) }}
+        {%- endcall %}
+        {{ adapter.rename_relation(existing_relation, backup_relation) }}
+        {{ adapter.rename_relation(intermediate_relation, target_relation) }}
+      {% endif %}
+    {% endif %}
   {% endif %}
 
   -- cleanup
@@ -182,7 +275,7 @@
 {%- endmacro -%}
 
 {% macro on_cluster_clause(relation, force_sync) %}
-  {% set active_cluster = get_clickhouse_cluster_name() %}
+  {% set active_cluster = adapter.get_clickhouse_cluster_name() %}
   {%- if active_cluster is not none and relation.should_on_cluster %}
     {# Add trailing whitespace to avoid problems when this clause is not last #}
     ON CLUSTER {{ active_cluster + ' ' }}
@@ -212,6 +305,48 @@
     {%- endif %}
 {% endmacro %}
 
+{% macro validate_projection(projection) -%}
+    {%- set proj_name = projection.get('name') -%}
+    {%- set proj_query = projection.get('query') -%}
+    {%- set proj_index = projection.get('index') -%}
+    {%- if proj_query and proj_index -%}
+        {{ exceptions.raise_compiler_error("Projection '" ~ proj_name ~ "' cannot specify both 'query' and 'index'.") }}
+    {%- elif not proj_query and not proj_index -%}
+        {{ exceptions.raise_compiler_error("Projection '" ~ proj_name ~ "' must specify either 'query' or 'index'.") }}
+    {%- endif -%}
+{%- endmacro %}
+
+{# Validates every configured projection without emitting DDL, so materializations
+   can fail fast on bad configs before dropping or renaming any relation. #}
+{% macro validate_projections() -%}
+    {%- for projection in config.get('projections', default=[]) -%}
+        {%- do validate_projection(projection) -%}
+    {%- endfor -%}
+{%- endmacro %}
+
+{# Renders a projection declaration (PROJECTION <name> <body>), the unit shared by
+   CREATE TABLE and ALTER TABLE — ALTER call sites prepend ADD themselves. #}
+{% macro clickhouse_projection_ddl(projection) -%}
+    {%- do validate_projection(projection) -%}
+    {%- set proj_name = projection.get('name') -%}
+    {%- set proj_query = projection.get('query') -%}
+    {%- set proj_index = projection.get('index') -%}
+    {%- if proj_query -%}
+        PROJECTION {{ proj_name }} ({{ proj_query }})
+    {%- else -%}
+        {%- if proj_index is string -%}
+            {%- set proj_index = [proj_index] -%}
+        {%- endif -%}
+        {%- set cols_str = proj_index | join(', ') -%}
+        {%- set cols_index_expr = '(' ~ cols_str ~ ')' if proj_index | length > 1 else cols_str -%}
+        {%- if not adapter.is_before_version('26.1.1.1') -%}
+            PROJECTION {{ proj_name }} INDEX {{ cols_index_expr }} TYPE basic
+        {%- else -%}
+            PROJECTION {{ proj_name }} (SELECT _part_offset ORDER BY {{ cols_str }})
+        {%- endif -%}
+    {%- endif -%}
+{%- endmacro %}
+
 {#
     A macro that adds any configured projections or indexes at the same time.
     We optimise to reduce the number of ALTER TABLE statements that are run to avoid
@@ -229,7 +364,7 @@
             ALTER TABLE {{ relation }}
             {%- if projections %}
                 {%- for projection in projections %}
-                    ADD PROJECTION {{ projection.get('name') }} ({{ projection.get('query') }})
+                    ADD {{ clickhouse_projection_ddl(projection) }}
                     {%- if not loop.last or indexes | length > 0 -%}
                         ,
                     {% endif %}
@@ -284,7 +419,7 @@
 
 {%- endmacro %}
 
-{% macro clickhouse__insert_into(insert_relation, sql, has_contract, use_columns_from_sql=False) %}
+{% macro clickhouse__insert_into(target_relation, sql, has_contract, use_columns_from_sql=False) %}
   {% if use_columns_from_sql %}
     {% set dest_columns = clickhouse__get_columns_in_query(sql) %}
     {%- set ns = namespace(quoted_cols=[]) -%}
@@ -293,12 +428,12 @@
     {%- endfor -%}
     {%- set dest_cols_csv = ns.quoted_cols | join(', ') -%}
   {%- else %}
-    {%- set dest_columns = adapter.get_columns_in_relation(insert_relation) -%}
+    {%- set dest_columns = adapter.get_columns_in_relation(target_relation) -%}
     {%- set dest_cols_csv = dest_columns | map(attribute='quoted') | join(', ') -%}
   {%- endif %}
 
-  insert into {{ insert_relation }}
-        {% if dest_cols_csv %}({{ dest_cols_csv }}){% endif %}
+  insert into {{ target_relation }}
+        ({{ dest_cols_csv }})
   {%- if has_contract -%}
     -- Use a subquery to get columns in the right order
           SELECT {{ dest_cols_csv }}

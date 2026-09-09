@@ -5,8 +5,7 @@ import {
   DocsSiteOpenedSchema,
   ResourceViewedSchema,
   SearchPerformedSchema,
-} from '@dbt-labs/proto/public/events/docs_pb';
-
+} from '../proto/dbtlabs/proto/v1/events/docs_pb';
 import {
   type SiteBootstrap,
   SUPPORTED_BOOTSTRAP_SCHEMA_VERSION,

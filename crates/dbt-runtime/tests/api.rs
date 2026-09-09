@@ -3,6 +3,8 @@
 //! runtime spawns no threads (they start on first use), so shutdown and the
 //! `EnterGuard` behaviour are covered here.
 
+use std::num::NonZeroUsize;
+
 use dbt_runtime::builder::Builder;
 use dbt_runtime::handle::{EnterGuard, Handle, TryCurrentError};
 use dbt_runtime::task_hooks::TaskMeta;
@@ -34,6 +36,8 @@ fn use_runtime(rt: Runtime) {
     let _: Id = spawned.id();
     let _: &'static std::panic::Location<'static> = spawned.spawned_at();
 
+    let _: usize = handle.max_parallelism();
+    handle.set_max_parallelism(NonZeroUsize::new(8).unwrap());
     let _: usize = handle.num_blocking_threads();
     let _: usize = handle.num_idle_blocking_threads();
     let _: usize = handle.blocking_queue_depth();

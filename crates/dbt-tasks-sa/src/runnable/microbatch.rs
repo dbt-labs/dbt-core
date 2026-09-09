@@ -83,6 +83,7 @@ pub fn extend_microbatch_node_context(
     let microbatch_source = Value::from_object(SourceFunction::new_with_microbatch_context(
         node_resolver,
         model.__common_attr__.package_name.clone(),
+        runtime_config.clone().into(),
         microbatch_ctx,
     ));
 

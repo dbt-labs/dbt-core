@@ -3,6 +3,16 @@ use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::profiles::DbConfig;
 
+#[derive(Debug, Clone)]
+pub struct PatHygieneReport {
+    pub quoted_user: String,
+    pub cached_ttl_remaining_secs: Option<i64>,
+    pub live_token_count: usize,
+    pub live_dbt_compute_count: usize,
+    pub in_filecache_count: usize,
+    pub cap: usize,
+}
+
 /// Outcome of asking a lake compute target to attach the catalogs a
 /// project declares in `catalogs.yml`.
 #[derive(Debug, Clone)]
@@ -10,10 +20,24 @@ pub enum LakeComputeCatalogAttachOutcome {
     /// Every declared catalog attached. Carries the catalog names that were
     /// checked, in declaration order, so the caller can name them in its
     /// output.
-    Attached { catalogs: Vec<String> },
-    /// The project declares no catalogs this check applies to, so nothing was
-    /// attempted. Not a failure.
-    NothingToCheck,
+    Attached {
+        catalogs: Vec<String>,
+        pat_hygiene: Option<PatHygieneReport>,
+    },
+    /// The project declares no catalogs this check applies to, so no attach
+    /// was attempted -- but the credential every write needs was obtained
+    /// first, so that much is verified. Not a failure.
+    MintedOnly {
+        pat_hygiene: Option<PatHygieneReport>,
+        /// False when a still-live cached credential was reused, meaning the
+        /// mint itself was not exercised and so is not what this verified.
+        freshly_minted: bool,
+    },
+    /// The project declares no catalogs this check applies to and the target
+    /// mints no credential either, so nothing was attempted. Not a failure.
+    NothingToCheck {
+        pat_hygiene: Option<PatHygieneReport>,
+    },
 }
 
 /// Extension point for checking, during `dbt debug`, that the catalogs a

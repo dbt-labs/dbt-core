@@ -60,9 +60,49 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::OnceLock;
 
-use super::dbt_catalogs_v2::{CatalogType, TableFormat};
+use super::dbt_catalogs_v2::{
+    CatalogType, PhysicalFormatResolver, PhysicalTableFormat, TableFormat,
+};
+use dbt_adapter_core::AdapterType;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_yaml::{self as yml};
+
+#[derive(Clone, Copy)]
+pub enum LoadedCatalogs<'a> {
+    None,
+    V1(&'a DbtCatalogs),
+    V2(&'a DbtCatalogs),
+}
+
+impl<'a> LoadedCatalogs<'a> {
+    pub fn catalog_names(&self) -> FsResult<Option<&'a [String]>> {
+        match self {
+            LoadedCatalogs::None => Ok(None),
+            LoadedCatalogs::V1(c) => Ok(Some(c.v1_catalog_names()?)),
+            LoadedCatalogs::V2(c) => Ok(Some(c.v2_catalog_names()?)),
+        }
+    }
+
+    pub fn has_catalog_name(&self, name: &str) -> FsResult<bool> {
+        Ok(self
+            .catalog_names()?
+            .is_some_and(|names| names.iter().any(|n| n == name)))
+    }
+}
+
+const CATALOG_DATABASE_PLATFORMS: &[AdapterType] = &[
+    AdapterType::DuckDB,
+    AdapterType::Snowflake,
+    AdapterType::Databricks,
+    AdapterType::Bigquery,
+];
+
+#[derive(Debug, Clone)]
+pub struct CatalogPlatformEntry<'a> {
+    pub adapter_type: AdapterType,
+    pub catalog_name: &'a str,
+    pub catalog_database: Option<&'a str>,
+}
 
 /// A validated catalogs.yml mapping.
 /// - Holds the raw YAML Mapping so external consumers can copy as needed.
@@ -71,6 +111,7 @@ use dbt_yaml::{self as yml};
 pub struct DbtCatalogs {
     pub repr: yml::Mapping,
     pub span: yml::Span,
+    v1_catalog_names: OnceLock<Vec<String>>,
     v2_catalog_names: OnceLock<Vec<String>>,
     v2_catalog_databases: OnceLock<Vec<String>>,
 }
@@ -80,6 +121,7 @@ impl DbtCatalogs {
         Self {
             repr,
             span,
+            v1_catalog_names: OnceLock::new(),
             v2_catalog_names: OnceLock::new(),
             v2_catalog_databases: OnceLock::new(),
         }
@@ -109,16 +151,76 @@ impl DbtCatalogs {
     }
 
     pub fn is_v2_catalog(&self, name: &str) -> FsResult<bool> {
+        Ok(self.v2_catalog_names()?.iter().any(|n| n == name))
+    }
+
+    pub fn v1_catalog_names(&self) -> FsResult<&[String]> {
+        if let Some(names) = self.v1_catalog_names.get() {
+            return Ok(names);
+        }
+        self.populate_v1_cache()?;
+        Ok(self.v1_catalog_names.get().unwrap())
+    }
+
+    pub fn v2_catalog_names(&self) -> FsResult<&[String]> {
         if let Some(names) = self.v2_catalog_names.get() {
-            return Ok(names.iter().any(|n| n == name));
+            return Ok(names);
         }
         self.populate_v2_caches()?;
-        Ok(self
-            .v2_catalog_names
-            .get()
-            .unwrap()
+        Ok(self.v2_catalog_names.get().unwrap())
+    }
+
+    pub fn platform_entries(&self) -> FsResult<impl Iterator<Item = CatalogPlatformEntry<'_>>> {
+        let view = self.view_v2()?;
+        Ok(view.catalogs.into_iter().flat_map(|catalog| {
+            CATALOG_DATABASE_PLATFORMS
+                .iter()
+                .filter_map(move |&adapter_type| {
+                    let block = catalog.config_block(adapter_type.as_ref())?;
+                    let catalog_database = block
+                        .get(yml::Value::from("catalog_database"))
+                        .and_then(|v| v.as_str())
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty());
+                    Some(CatalogPlatformEntry {
+                        adapter_type,
+                        catalog_name: catalog.name,
+                        catalog_database,
+                    })
+                })
+        }))
+    }
+
+    pub fn catalogs_matching_database(
+        &self,
+        database: &str,
+        adapter_type: AdapterType,
+    ) -> FsResult<Vec<String>> {
+        debug_assert!(!database.trim().is_empty());
+        let names: Vec<&str> = self
+            .platform_entries()?
+            .filter(|entry| entry.adapter_type == adapter_type)
+            .filter_map(|entry| {
+                let alias = match adapter_type {
+                    AdapterType::DuckDB => entry.catalog_database.unwrap_or(entry.catalog_name),
+                    _ => entry.catalog_database?,
+                };
+                alias
+                    .eq_ignore_ascii_case(database)
+                    .then_some(entry.catalog_name)
+            })
+            .collect();
+
+        let view = self.view_v2()?;
+        Ok(view
+            .catalogs
             .iter()
-            .any(|n| n == name))
+            .filter(|catalog| {
+                names.contains(&catalog.name)
+                    && catalog.physical_table_format() != PhysicalTableFormat::Default
+            })
+            .map(|catalog| catalog.name.to_string())
+            .collect())
     }
 
     pub fn is_v2_catalog_database(&self, db: &str) -> FsResult<bool> {
@@ -168,6 +270,17 @@ impl DbtCatalogs {
                 (!db.is_empty()).then(|| (c.name.to_owned(), db.to_owned()))
             })
             .collect())
+    }
+
+    fn populate_v1_cache(&self) -> FsResult<()> {
+        let view = self.view()?;
+        let names: Vec<String> = view
+            .catalogs
+            .iter()
+            .map(|catalog| catalog.catalog_name.0.to_owned())
+            .collect();
+        self.v1_catalog_names.get_or_init(|| names);
+        Ok(())
     }
 
     // Both is_v2_catalog and is_v2_catalog_database share a single
@@ -2835,6 +2948,43 @@ catalogs:
     }
 
     #[test]
+    fn v1_catalog_names_finds_all_names() {
+        let yaml = r#"
+catalogs:
+  - catalog_name: sf_native
+    active_write_integration: sf_native_int
+    write_integrations:
+      - name: sf_native_int
+        catalog_type: built_in
+        table_format: iceberg
+        external_volume: dbt_external_volume
+  - name: polaris
+    active_write_integration: polaris_int
+    write_integrations:
+      - name: polaris_int
+        catalog_type: iceberg_rest
+        table_format: iceberg
+"#;
+        let v: yml::Value = yml::from_str(yaml).unwrap();
+        let (repr, span) = match v {
+            yml::Value::Mapping(m, s) => (m, s),
+            _ => panic!("expected mapping"),
+        };
+        let c = DbtCatalogs::new(repr, span);
+        assert_eq!(
+            c.v1_catalog_names().unwrap(),
+            &["sf_native".to_string(), "polaris".to_string()]
+        );
+    }
+
+    #[test]
+    fn loaded_catalogs_none_has_no_catalog_names() {
+        let state = LoadedCatalogs::None;
+        assert_eq!(state.catalog_names().unwrap(), None);
+        assert!(!state.has_catalog_name("anything").unwrap());
+    }
+
+    #[test]
     fn is_v2_catalog_database_collects_snowflake_catalog_databases() {
         let c = make_v2_catalogs(
             r#"
@@ -2972,5 +3122,25 @@ catalogs:
 "#,
         );
         assert!(c.iceberg_rest_catalog_databases().unwrap().is_empty());
+    }
+
+    #[test]
+    fn catalogs_matching_database_default_table_format_is_excluded() {
+        let c = make_v2_catalogs(
+            r#"
+catalogs:
+  - name: horizon_plain
+    type: horizon
+    table_format: default
+    config:
+      duckdb:
+        endpoint: "https://horizon.example.com"
+        catalog_database: "horizon_db"
+"#,
+        );
+        let matches = c
+            .catalogs_matching_database("horizon_db", AdapterType::DuckDB)
+            .unwrap();
+        assert!(matches.is_empty(), "matches was: {matches:?}");
     }
 }

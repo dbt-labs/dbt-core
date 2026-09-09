@@ -5,19 +5,10 @@
    build without it for OSS distribution — see the OSS Design Capability
    plan. Re-copy from @dbt-labs/biga/tokens.css if biga's tokens change. */
 @import './styles/tokens.css';
-/* @dbt-labs/dbt-dag bundles react-flow under the hood; its CSS provides
-   node positioning, zoom transforms, and viewport styles. Without this
-   import, nodes overlap in a tight cluster and zoom is broken. */
-@import '@dbt-labs/dbt-dag/dist/dbt-dag.css';
-/* React Flow's own stylesheet. The import above happens to carry a copy (dbt-dag
-   bundles react-flow v11), but the canvas is on `@xyflow/react` v12 now and should not
-   depend on another package's vendored CSS for node positioning — this can be the only
-   one once dbt-dag's last consumer (`LineageView`, `FullLineagePage`) is gone. */
+/* React Flow's own stylesheet: node positioning, zoom transforms, and viewport
+   styles. dbt-dag's last consumers (`LineageView`, `FullLineagePage`) are gone,
+   so this is the only lineage-canvas CSS import now. */
 @import '@xyflow/react/dist/style.css';
-/* No separate @dbt-labs/sourdough/dist/sourdough.css import here: confirmed
-   (2026-09-02) it's a byte-for-byte no-op -- @dbt-labs/dbt-dag/dist/dbt-dag.css
-   (imported above) already bundles the same sourdough styles internally, so
-   removing our own redundant import doesn't change what actually ships. */
 
 @tailwind base;
 @tailwind components;
@@ -2222,9 +2213,10 @@ code.inline {
 }
 
 /* LOD compact state: just the resource badge, no card chrome. Shrinks to content
-   instead of the full node's fixed 245x108 -- dagre still reserves that footprint
-   (layout happens once, independent of zoom), so this floats inside it rather than
-   filling it, matching the reference mock. */
+   instead of the full node's fixed 245x108 -- dagre still reserves that footprint,
+   so this floats inside it rather than filling it, matching the reference mock.
+   That only holds because a card never collapses while it is being measured; see
+   `isCardCompact` in stores/lineageStore. */
 .dag-node--compact {
   flex-direction: row;
   align-items: center;

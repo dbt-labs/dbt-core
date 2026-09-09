@@ -460,7 +460,7 @@ async fn update_package_if_needed(
 /// Native update entry point (Unix only, gated by DBT_NATIVE_UPDATE).
 ///
 /// Mirrors the install.sh `install_packages` logic:
-///   --package dbt     → install dbt and its companion runner (default)
+///   --package dbt     → install dbt; update the runner only when already present (default)
 ///   --package all     → install dbt and its companion runner
 #[cfg(not(target_os = "windows"))]
 #[doc(hidden)]
@@ -488,14 +488,15 @@ pub async fn exec_update_native(
     }
 
     if install_dbt {
-        if let Err(error) =
-            update_package_if_needed("dbt-db-runner", &target_version, target, dest_dir, client)
-                .await
+        let runner_path = dest_dir.join("dbt-db-runner");
+        if (package == "all" || runner_path.exists())
+            && let Err(error) =
+                update_package_if_needed("dbt-db-runner", &target_version, target, dest_dir, client)
+                    .await
         {
             if error.code != ErrorCode::FileNotFound {
                 return Err(error);
             }
-            let runner_path = dest_dir.join("dbt-db-runner");
             if runner_path.exists() {
                 std::fs::remove_file(&runner_path).map_err(|remove_error| {
                     fs_err!(
@@ -964,15 +965,14 @@ mod tests {
 
     #[cfg(not(target_os = "windows"))]
     #[dbt_runtime::test]
-    async fn test_native_update_installs_binary() {
+    async fn test_native_update_installs_only_dbt_by_default() {
         let version = "2.0.0-preview.154";
         let binary_content = b"#!/bin/sh\necho fake-dbt";
-        let runner_content = b"#!/bin/sh\necho fake-runner";
 
         let client = native_update_client(
             version,
             build_fake_tarball("dbt", binary_content),
-            build_fake_tarball("dbt-db-runner", runner_content),
+            build_fake_tarball("dbt-db-runner", b"runner-binary"),
         );
 
         let tmp = tempfile::tempdir().unwrap();
@@ -983,10 +983,7 @@ mod tests {
         let installed = tmp.path().join("dbt");
         assert!(installed.exists(), "binary should be installed");
         assert_eq!(std::fs::read(&installed).unwrap(), binary_content);
-        assert_eq!(
-            std::fs::read(tmp.path().join("dbt-db-runner")).unwrap(),
-            runner_content
-        );
+        assert!(!tmp.path().join("dbt-db-runner").exists());
 
         use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::metadata(&installed).unwrap().permissions().mode();
@@ -995,7 +992,7 @@ mod tests {
 
     #[cfg(not(target_os = "windows"))]
     #[dbt_runtime::test]
-    async fn test_native_update_all_installs_dbt() {
+    async fn test_native_update_all_installs_dbt_and_runner() {
         let version = "2.0.0-preview.157";
 
         let dbt_tarball = build_fake_tarball("dbt", b"dbt-binary");
@@ -1020,6 +1017,22 @@ mod tests {
         assert_eq!(
             std::fs::read(tmp.path().join("dbt")).unwrap(),
             b"dbt-binary"
+        );
+        assert_eq!(
+            client.requested_urls(),
+            vec![
+                format!("{}/versions.json", cdn_base_url()),
+                format!(
+                    "{}/cli/fs-db-runner-v{version}-{}.tar.gz",
+                    cdn_base_url(),
+                    current_target_triple().unwrap()
+                ),
+                format!(
+                    "{}/cli/fs-v{version}-{}.tar.gz",
+                    cdn_base_url(),
+                    current_target_triple().unwrap()
+                ),
+            ]
         );
     }
 
@@ -1073,7 +1086,7 @@ mod tests {
             .with_bytes(&dbt_url, build_fake_tarball("dbt", b"dbt-binary"));
 
         let tmp = tempfile::tempdir().unwrap();
-        exec_update_native(Some("extended"), Some("dbt"), tmp.path(), &client)
+        exec_update_native(Some("extended"), Some("all"), tmp.path(), &client)
             .await
             .unwrap();
 
@@ -1219,7 +1232,7 @@ mod tests {
 
     #[cfg(not(target_os = "windows"))]
     #[dbt_runtime::test]
-    async fn test_native_update_overwrites_existing_binary() {
+    async fn test_native_update_overwrites_existing_binaries() {
         let version = "2.0.0-preview.154";
 
         let client = native_update_client(
@@ -1230,6 +1243,7 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("dbt"), b"old-binary").unwrap();
+        std::fs::write(tmp.path().join("dbt-db-runner"), b"old-runner").unwrap();
 
         exec_update_native(None, Some("dbt"), tmp.path(), &client)
             .await
@@ -1238,6 +1252,10 @@ mod tests {
         assert_eq!(
             std::fs::read(tmp.path().join("dbt")).unwrap(),
             b"new-binary"
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("dbt-db-runner")).unwrap(),
+            b"runner-binary"
         );
     }
 
@@ -1386,12 +1404,10 @@ mod tests {
 
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let versions_url = format!("{base}/versions.json");
-        let runner_url = format!("{base}/cli/fs-db-runner-v{version}-{target}.tar.gz");
         let dbt_url = format!("{base}/cli/fs-v{version}-{target}.tar.gz");
 
         let client = MockHttpClient::new()
             .with_text(&versions_url, &manifest)
-            .with_bytes(&runner_url, build_fake_tarball("dbt-db-runner", b"runner"))
             .with_bytes(&dbt_url, build_fake_tarball("dbt", b"bin"));
 
         let tmp = tempfile::tempdir().unwrap();
@@ -1400,6 +1416,6 @@ mod tests {
             .unwrap();
 
         let urls = client.requested_urls();
-        assert_eq!(urls, vec![versions_url, runner_url, dbt_url]);
+        assert_eq!(urls, vec![versions_url, dbt_url]);
     }
 }

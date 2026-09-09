@@ -218,6 +218,9 @@ struct SkippedTestNodes {
     pending_names: Vec<String>,
     seen_test: bool,
     seen_unit_test: bool,
+    /// Denominator of the `N of M` counter, copied off the accumulated nodes so the summary
+    /// line can pad its bracket to the same width as the indexed lines around it.
+    node_count_total: Option<u32>,
 }
 
 /// Members of one aggregated generic-test group, buffered on the group's span until it
@@ -240,6 +243,7 @@ fn emit_pending_skips(tui: &TuiLayer, data_provider: &mut DataProvider<'_>) {
                     &skipped.pending_names,
                     skipped.seen_test,
                     skipped.seen_unit_test,
+                    skipped.node_count_total,
                     true,
                 ));
 
@@ -247,6 +251,7 @@ fn emit_pending_skips(tui: &TuiLayer, data_provider: &mut DataProvider<'_>) {
                 skipped.pending_names.clear();
                 skipped.seen_test = false;
                 skipped.seen_unit_test = false;
+                skipped.node_count_total = None;
             }
         },
     );
@@ -494,6 +499,7 @@ impl TelemetryConsumer for TuiLayer {
                 pending_names: Vec::new(),
                 seen_test: false,
                 seen_unit_test: false,
+                node_count_total: None,
             });
         }
 
@@ -1201,6 +1207,7 @@ impl TuiLayer {
             data_provider.with_ancestor_ext_mut::<TuiAllProcessingNodesGroup, SkippedTestNodes>(
                 |skipped| {
                     skipped.pending_names.push(node.name.clone());
+                    skipped.node_count_total = node.node_count_total;
                     if node.node_type() == NodeType::Test {
                         skipped.seen_test = true;
                     } else if node.node_type() == NodeType::UnitTest {
@@ -1305,6 +1312,8 @@ impl TuiLayer {
                 members.len(),
                 worst_outcome,
                 max_duration,
+                // Every member shares the one invocation-wide denominator.
+                members.first().and_then(|(node, _)| node.node_count_total),
                 true,
             )
         );

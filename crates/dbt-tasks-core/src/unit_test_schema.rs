@@ -228,7 +228,7 @@ mod tests {
 
     use super::{UnitTestExpectedSchemaKey, UnitTestExpectedSchemaKeyInput, UnitTestSchemaState};
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn fixture_schema_state_serializes_fetches_by_relation() {
         let state = UnitTestSchemaState::default();
         let canonical_fqn = CanonicalFqn::default();
@@ -265,7 +265,7 @@ mod tests {
         assert_eq!(stats.fixture_coalesced, 1);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn fixture_schema_cache_retries_failed_fetch() {
         use dbt_common::{ErrorCode, fs_err};
 
@@ -298,7 +298,7 @@ mod tests {
         assert_eq!(stats.fixture_coalesced, 0);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn fixture_schema_coordination_reads_latest_shared_schema() {
         let state = UnitTestSchemaState::default();
         let canonical_fqn = CanonicalFqn::default();

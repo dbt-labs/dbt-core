@@ -667,6 +667,14 @@ impl DbtLoadedProject {
                     }
                 }
                 DbConfig::LakeCompute(lake_compute)
+            } else if let DbConfig::Snowflake(snowflake) = matched_config {
+                // dbt-auth has no notion of self_signed_jwt; the connection
+                // it builds is identical to keypair's either way.
+                let mut snowflake = snowflake.clone();
+                if snowflake.method.as_deref() == Some("self_signed_jwt") {
+                    snowflake.method = Some("keypair".to_string());
+                }
+                DbConfig::Snowflake(snowflake)
             } else {
                 matched_config.clone()
             };

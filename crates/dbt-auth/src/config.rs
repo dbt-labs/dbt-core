@@ -13,7 +13,7 @@ pub struct AdapterConfig {
     repr: dbt_yaml::Mapping,
 }
 
-fn yml_value_to_string<'a>(value: &'a YmlValue) -> Cow<'a, str> {
+pub(crate) fn yml_value_to_string<'a>(value: &'a YmlValue) -> Cow<'a, str> {
     // This function exists because `dbt_yaml::to_string` appends
     // a newline to the end of every string. And, less importantly, it
     // also copies values that are strings already.

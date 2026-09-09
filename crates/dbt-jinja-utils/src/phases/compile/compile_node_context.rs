@@ -323,6 +323,7 @@ where
     let source_function = SourceFunction::new_with_validation(
         node_resolver.clone(),
         model.common().package_name.clone(),
+        runtime_config.clone(),
         validation_config_with_depends_on,
     );
     let source_value = MinijinjaValue::from_object(source_function);

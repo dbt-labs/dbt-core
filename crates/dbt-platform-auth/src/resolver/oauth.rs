@@ -1353,7 +1353,7 @@ mod tests {
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn configured_account_id_selects_matching_session() {
         let mut session_a = make_session(future_time(), None);
         session_a.account_id = 1;
@@ -1374,7 +1374,7 @@ mod tests {
         assert_eq!(cred.account_id(), 2);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn configured_account_id_without_session_returns_not_authenticated() {
         let cache = OAuthSessionCache {
             version: 1,
@@ -1387,7 +1387,7 @@ mod tests {
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn configured_account_id_ignores_refresh_token_of_other_account() {
         // The other account's session is expired but refreshable; without an
         // account filter it would be refreshed and returned.

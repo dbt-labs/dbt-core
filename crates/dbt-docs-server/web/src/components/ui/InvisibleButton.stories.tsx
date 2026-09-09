@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { ChevronRight } from 'lucide-react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-
-import { Icon, RyeconCaretRight } from '@dbt-labs/sourdough';
 
 import { Badge } from './Badge';
 import { InvisibleButton } from './InvisibleButton';
@@ -51,7 +50,7 @@ export const AsListRow: Story = {
       'flex w-full items-center gap-2 rounded px-2 py-1.5 hover:bg-bgMainHover',
     children: (
       <>
-        <Icon ryecon={RyeconCaretRight} size="xs" />
+        <ChevronRight className="size-3" />
         <span className="text-sm text-fgMain">stg_customers</span>
         <Badge text="view" size="xs" className="ml-auto" />
       </>
@@ -65,7 +64,7 @@ export const AsListRow: Story = {
 export const WithAriaLabel: Story = {
   args: {
     'aria-label': 'Expand customers',
-    children: <Icon ryecon={RyeconCaretRight} size="xs" />,
+    children: <ChevronRight className="size-3" />,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

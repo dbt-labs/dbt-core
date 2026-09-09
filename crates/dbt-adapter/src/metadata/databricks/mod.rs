@@ -52,6 +52,7 @@ use crate::relation::config_v2::RelationConfig;
 use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey, components,
 };
+use crate::relation::databricks::is_shallow_clone_type;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{AdapterEngine, AdapterResponse};
 
@@ -113,6 +114,7 @@ WHERE table_catalog = '{}'
     let catalogs = batch.column_values::<StringArray>("table_catalog")?;
     let table_types = batch.column_values::<StringArray>("table_type")?;
     let file_formats = batch.column_values::<StringArray>("file_format")?;
+    let databricks_table_types = batch.column_values::<StringArray>("databricks_table_type")?;
 
     for i in 0..batch.num_rows() {
         let name = names.value(i);
@@ -120,6 +122,8 @@ WHERE table_catalog = '{}'
         let catalog = catalogs.value(i);
         let table_type = table_types.value(i).to_uppercase();
         let is_delta = file_formats.value(i) == "delta";
+        let is_shallow_clone = !databricks_table_types.is_null(i)
+            && is_shallow_clone_type(databricks_table_types.value(i));
 
         let relation = Arc::new(
             Relation::new(
@@ -133,7 +137,8 @@ WHERE table_catalog = '{}'
                 table_type.as_str(),
             ))
             .with_quoting(engine.quoting())
-            .with_is_delta(is_delta),
+            .with_is_delta(is_delta)
+            .with_is_shallow_clone(is_shallow_clone),
         ) as Arc<dyn BaseRelation>;
         relations.push(relation);
     }
