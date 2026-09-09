@@ -923,6 +923,28 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_expr_noif_or_implied_tuple(&mut self) -> Result<ast::Expr<'a>, Error> {
+        let first = ok!(self.parse_expr_noif());
+        if skip_token!(self, Token::Comma) {
+            let mut items = vec![first];
+            loop {
+                if matches_token!(self, Token::BlockEnd) || matches_token!(self, Token::Colon) {
+                    break;
+                }
+                items.push(ok!(self.parse_expr_noif()));
+                if !skip_token!(self, Token::Comma) {
+                    break;
+                }
+            }
+            Ok(ast::Expr::Tuple(Spanned::new(
+                ast::Tuple { items },
+                self.stream.expand_span(self.stream.last_span()),
+            )))
+        } else {
+            Ok(first)
+        }
+    }
+
     fn parse_expr_noif(&mut self) -> Result<ast::Expr<'a>, Error> {
         self.parse_or()
     }
@@ -1218,7 +1240,7 @@ impl<'a> Parser<'a> {
         start_open_span: Span,
         start_tag_kind: JinjaLayoutEventKind,
     ) -> Result<ast::IfCond<'a>, Error> {
-        let expr = ok!(self.parse_expr_noif());
+        let expr = ok!(self.parse_expr_noif_or_implied_tuple());
         skip_token!(self, Token::Colon);
         expect_token!(self, Token::BlockEnd, "end of block");
         let start_tag_span = self.stream.expand_span(start_open_span);
@@ -1325,6 +1347,9 @@ impl<'a> Parser<'a> {
             loop {
                 targets.push(ok!(self.parse_assign_name(true)));
                 if skip_token!(self, Token::Comma) {
+                    if matches_token!(self, Token::BlockEnd) {
+                        break;
+                    }
                     continue;
                 } else {
                     break;
@@ -1354,10 +1379,15 @@ impl<'a> Parser<'a> {
         } else {
             expect_token!(self, Token::Assign, "assignment operator");
             let mut exprs: Vec<ast::Expr<'a>> = Vec::new();
-            // parse multiple righthand side expressions
+            // parse multiple righthand side expressions; a comma makes this a tuple
+            let mut is_tuple = false;
             loop {
                 exprs.push(ok!(self.parse_expr()));
                 if skip_token!(self, Token::Comma) {
+                    is_tuple = true;
+                    if matches_token!(self, Token::BlockEnd) {
+                        break;
+                    }
                     continue;
                 } else {
                     break;
@@ -1372,11 +1402,11 @@ impl<'a> Parser<'a> {
                         self.stream.current_span(),
                     ))
                 },
-                expr: if exprs.len() == 1 {
+                expr: if !is_tuple {
                     exprs.into_iter().next().unwrap()
                 } else {
-                    ast::Expr::List(Spanned::new(
-                        ast::List { items: exprs },
+                    ast::Expr::Tuple(Spanned::new(
+                        ast::Tuple { items: exprs },
                         self.stream.current_span(),
                     ))
                 },

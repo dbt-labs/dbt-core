@@ -28,7 +28,7 @@ use async_compression::tokio::bufread::GzipDecoder;
 use futures::StreamExt;
 
 use dbt_common::FsResult;
-use dbt_common::constants::DBT_CDN_URL;
+use dbt_dist::version::{VersionsHttpClient, cdn_base_url, resolve_target_version};
 use std::future::Future;
 use std::time::Duration;
 
@@ -127,11 +127,14 @@ where
 // HTTP abstraction (enables network-free testing)
 // ---------------------------------------------------------------------------
 
-/// Thin abstraction over HTTP GET, used by the update flow.
-/// The real implementation wraps `reqwest`; tests inject a mock.
+/// Thin abstraction over HTTP GET, used by the update flow. `get_text`
+/// comes from `VersionsHttpClient` -- dbt-dist's version-resolution logic
+/// (shared with `dbt-dist`'s own upgrade flow) is generic over that trait,
+/// and `UpdateHttpClient: VersionsHttpClient` lets a `&dyn UpdateHttpClient`
+/// satisfy it directly, no adapter needed. The real implementation wraps
+/// `reqwest` with retries; tests inject a mock.
 #[async_trait]
-pub trait UpdateHttpClient: Send + Sync {
-    async fn get_text(&self, url: &str) -> FsResult<String>;
+pub trait UpdateHttpClient: VersionsHttpClient {
     async fn get_bytes(&self, url: &str) -> FsResult<Vec<u8>>;
 }
 
@@ -139,7 +142,7 @@ pub trait UpdateHttpClient: Send + Sync {
 pub struct ReqwestUpdateClient;
 
 #[async_trait]
-impl UpdateHttpClient for ReqwestUpdateClient {
+impl VersionsHttpClient for ReqwestUpdateClient {
     async fn get_text(&self, url: &str) -> FsResult<String> {
         fetch_with_retries(
             url,
@@ -173,7 +176,10 @@ impl UpdateHttpClient for ReqwestUpdateClient {
         )
         .await
     }
+}
 
+#[async_trait]
+impl UpdateHttpClient for ReqwestUpdateClient {
     async fn get_bytes(&self, url: &str) -> FsResult<Vec<u8>> {
         fetch_with_retries(
             url,
@@ -214,13 +220,6 @@ impl UpdateHttpClient for ReqwestUpdateClient {
 /// subprocess spawning, temp directories, and redundant HTTP requests.
 #[cfg(not(target_os = "windows"))]
 const NATIVE_UPDATE_ENV: &str = "DBT_NATIVE_UPDATE";
-
-/// Resolve the CDN base URL, allowing override via env var.
-#[doc(hidden)]
-pub fn cdn_base_url() -> String {
-    #[allow(clippy::disallowed_methods)]
-    env::var("DBT_CDN_URL").unwrap_or_else(|_| DBT_CDN_URL.to_string())
-}
 
 #[cfg(not(target_os = "windows"))]
 fn use_native_update() -> bool {
@@ -278,61 +277,6 @@ fn installed_version(binary_path: &Path) -> Option<String> {
             let stdout = String::from_utf8_lossy(&output.stdout);
             stdout.split_whitespace().nth(1).map(String::from)
         })
-}
-
-/// Resolve a version from the versions manifest, mirroring install.sh's `determine_version`:
-///   1. No version requested  → use `latest.tag`
-///   2. Version is an alias key (e.g. "canary") → resolve `versions[alias].tag`
-///   3. Version is a literal semver → use as-is
-fn resolve_version_from_manifest(
-    versions: &serde_json::Value,
-    requested: Option<&str>,
-) -> FsResult<String> {
-    match requested {
-        None => match versions
-            .get("latest")
-            .and_then(|obj| obj.get("tag"))
-            .and_then(|t| t.as_str())
-        {
-            Some(t) => Ok(t.trim_start_matches('v').to_string()),
-            None => err!(
-                ErrorCode::IoError,
-                "Could not resolve latest version from versions.json"
-            ),
-        },
-        Some(v) => {
-            if let Some(tag) = versions
-                .get(v)
-                .and_then(|obj| obj.get("tag"))
-                .and_then(|t| t.as_str())
-            {
-                Ok(tag.trim_start_matches('v').to_string())
-            } else {
-                Ok(v.to_string())
-            }
-        }
-    }
-}
-
-/// Fetch versions.json and resolve the target version.
-#[doc(hidden)]
-pub async fn resolve_target_version(
-    version: Option<&str>,
-    client: &dyn UpdateHttpClient,
-) -> FsResult<String> {
-    let base_url = cdn_base_url();
-    let versions_url = format!("{base_url}/versions.json");
-
-    let body = client.get_text(&versions_url).await?;
-
-    let versions: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to parse versions manifest JSON: {e}"
-        )
-    })?;
-
-    resolve_version_from_manifest(&versions, version)
 }
 
 // ---------------------------------------------------------------------------
@@ -516,7 +460,7 @@ async fn update_package_if_needed(
 /// Native update entry point (Unix only, gated by DBT_NATIVE_UPDATE).
 ///
 /// Mirrors the install.sh `install_packages` logic:
-///   --package dbt     → install dbt and its companion runner (default)
+///   --package dbt     → install dbt; update the runner only when already present (default)
 ///   --package all     → install dbt and its companion runner
 #[cfg(not(target_os = "windows"))]
 #[doc(hidden)]
@@ -544,14 +488,15 @@ pub async fn exec_update_native(
     }
 
     if install_dbt {
-        if let Err(error) =
-            update_package_if_needed("dbt-db-runner", &target_version, target, dest_dir, client)
-                .await
+        let runner_path = dest_dir.join("dbt-db-runner");
+        if (package == "all" || runner_path.exists())
+            && let Err(error) =
+                update_package_if_needed("dbt-db-runner", &target_version, target, dest_dir, client)
+                    .await
         {
             if error.code != ErrorCode::FileNotFound {
                 return Err(error);
             }
-            let runner_path = dest_dir.join("dbt-db-runner");
             if runner_path.exists() {
                 std::fs::remove_file(&runner_path).map_err(|remove_error| {
                     fs_err!(
@@ -644,8 +589,9 @@ pub async fn exec_update(
     version: Option<&str>,
     package: Option<&str>,
     force: bool,
+    command_name: &str,
 ) -> FsResult<()> {
-    exec_update_with_client(version, package, force, &ReqwestUpdateClient).await
+    exec_update_with_client(version, package, force, command_name, &ReqwestUpdateClient).await
 }
 
 fn validate_update_package(package: Option<&str>) -> FsResult<()> {
@@ -669,21 +615,21 @@ fn validate_update_package(package: Option<&str>) -> FsResult<()> {
 /// Returns the error message explaining why an in-place self-update is refused,
 /// or `None` if the update may proceed. Self-update is blocked when the binary
 /// is owned by a package manager, unless `force` is set.
-fn blocked_self_update_message(
-    install_method: crate::install_method::InstallMethod,
-    force: bool,
-) -> Option<String> {
-    if install_method.is_self_updatable() || force {
+fn blocked_self_update_message(dist_info: &dbt_dist::DistInfo, force: bool) -> Option<String> {
+    if dist_info.is_self_managed() || force {
         return None;
     }
-    let message = match install_method.upgrade_command(None) {
+    if let Some(message) = dist_info.unsupported_channel_message("update") {
+        return Some(message);
+    }
+    let message = match &dist_info.upgrade_cmd {
         Some(command) => format!(
             "dbt was installed via {}. To upgrade, run:\n\n    {}\n\n\
              (Self-updating here would overwrite the binary {} manages. \
              Pass --force to self-update anyway.)",
-            install_method.label(),
+            dist_info.install_label(),
             command,
-            install_method.label(),
+            dist_info.install_label(),
         ),
         None => "dbt was installed by another package manager, so it can't self-update. \
              Please upgrade dbt using the package manager you installed it with, \
@@ -699,12 +645,13 @@ pub(crate) async fn exec_update_with_client(
     version: Option<&str>,
     package: Option<&str>,
     force: bool,
+    command_name: &str,
     client: &dyn UpdateHttpClient,
 ) -> FsResult<()> {
     validate_update_package(package)?;
 
-    let install_method = crate::install_method::InstallMethod::detect();
-    if let Some(message) = blocked_self_update_message(install_method, force) {
+    let dist_info = dbt_dist::DistInfo::current(command_name)?;
+    if let Some(message) = blocked_self_update_message(&dist_info, force) {
         return err!(ErrorCode::NotSupported, "{}", message);
     }
 
@@ -895,7 +842,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl UpdateHttpClient for MockHttpClient {
+    impl VersionsHttpClient for MockHttpClient {
         async fn get_text(&self, url: &str) -> FsResult<String> {
             self.requests.lock().unwrap().push(url.to_string());
             if let Some(code) = self.errors.get(url) {
@@ -906,7 +853,10 @@ mod tests {
                 None => err!(ErrorCode::IoError, "MockHttpClient: no response for {url}"),
             }
         }
+    }
 
+    #[async_trait]
+    impl UpdateHttpClient for MockHttpClient {
         async fn get_bytes(&self, url: &str) -> FsResult<Vec<u8>> {
             self.requests.lock().unwrap().push(url.to_string());
             if let Some(code) = self.errors.get(url) {
@@ -985,15 +935,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_cdn_base_url_default() {
-        let url = cdn_base_url();
-        assert!(
-            url.contains("cdn.getdbt.com"),
-            "expected CDN URL, got: {url}"
-        );
-    }
-
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_installed_version_nonexistent_binary() {
@@ -1001,49 +942,7 @@ mod tests {
         assert!(result.is_none());
     }
 
-    #[test]
-    fn test_resolve_version_no_version_uses_latest() {
-        let versions = test_versions_json();
-        let version = resolve_version_from_manifest(&versions, None).unwrap();
-        assert_eq!(version, "2.0.0-preview.154");
-    }
-
-    #[test]
-    fn test_resolve_version_alias_dev() {
-        let versions = test_versions_json();
-        let version = resolve_version_from_manifest(&versions, Some("dev")).unwrap();
-        assert_eq!(version, "2.0.0-preview.157");
-    }
-
-    #[test]
-    fn test_resolve_version_alias_canary() {
-        let versions = test_versions_json();
-        let version = resolve_version_from_manifest(&versions, Some("canary")).unwrap();
-        assert_eq!(version, "2.0.0-preview.157");
-    }
-
-    #[test]
-    fn test_resolve_version_literal_passthrough() {
-        let versions = test_versions_json();
-        let version = resolve_version_from_manifest(&versions, Some("2.0.0-preview.100")).unwrap();
-        assert_eq!(version, "2.0.0-preview.100");
-    }
-
-    #[test]
-    fn test_resolve_version_strips_v_prefix() {
-        let versions = serde_json::json!({ "latest": { "tag": "v3.0.0" } });
-        let version = resolve_version_from_manifest(&versions, None).unwrap();
-        assert_eq!(version, "3.0.0");
-    }
-
-    #[test]
-    fn test_resolve_version_no_latest_tag_errors() {
-        let versions = serde_json::json!({});
-        let result = resolve_version_from_manifest(&versions, None);
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_resolve_target_version_via_mock() {
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let client =
@@ -1053,7 +952,7 @@ mod tests {
         assert_eq!(version, "2.0.0-preview.154");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_resolve_target_version_with_alias() {
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let client =
@@ -1065,16 +964,15 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
-    async fn test_native_update_installs_binary() {
+    #[dbt_runtime::test]
+    async fn test_native_update_installs_only_dbt_by_default() {
         let version = "2.0.0-preview.154";
         let binary_content = b"#!/bin/sh\necho fake-dbt";
-        let runner_content = b"#!/bin/sh\necho fake-runner";
 
         let client = native_update_client(
             version,
             build_fake_tarball("dbt", binary_content),
-            build_fake_tarball("dbt-db-runner", runner_content),
+            build_fake_tarball("dbt-db-runner", b"runner-binary"),
         );
 
         let tmp = tempfile::tempdir().unwrap();
@@ -1085,10 +983,7 @@ mod tests {
         let installed = tmp.path().join("dbt");
         assert!(installed.exists(), "binary should be installed");
         assert_eq!(std::fs::read(&installed).unwrap(), binary_content);
-        assert_eq!(
-            std::fs::read(tmp.path().join("dbt-db-runner")).unwrap(),
-            runner_content
-        );
+        assert!(!tmp.path().join("dbt-db-runner").exists());
 
         use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::metadata(&installed).unwrap().permissions().mode();
@@ -1096,8 +991,8 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
-    async fn test_native_update_all_installs_dbt() {
+    #[dbt_runtime::test]
+    async fn test_native_update_all_installs_dbt_and_runner() {
         let version = "2.0.0-preview.157";
 
         let dbt_tarball = build_fake_tarball("dbt", b"dbt-binary");
@@ -1123,10 +1018,26 @@ mod tests {
             std::fs::read(tmp.path().join("dbt")).unwrap(),
             b"dbt-binary"
         );
+        assert_eq!(
+            client.requested_urls(),
+            vec![
+                format!("{}/versions.json", cdn_base_url()),
+                format!(
+                    "{}/cli/fs-db-runner-v{version}-{}.tar.gz",
+                    cdn_base_url(),
+                    current_target_triple().unwrap()
+                ),
+                format!(
+                    "{}/cli/fs-v{version}-{}.tar.gz",
+                    cdn_base_url(),
+                    current_target_triple().unwrap()
+                ),
+            ]
+        );
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_allows_literal_version_without_runner() {
         let version = "2.0.0-preview.100";
         let target = current_target_triple().unwrap();
@@ -1156,7 +1067,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_allows_alias_without_runner() {
         let version = "2.0.0-preview.194";
         let target = current_target_triple().unwrap();
@@ -1175,7 +1086,7 @@ mod tests {
             .with_bytes(&dbt_url, build_fake_tarball("dbt", b"dbt-binary"));
 
         let tmp = tempfile::tempdir().unwrap();
-        exec_update_native(Some("extended"), Some("dbt"), tmp.path(), &client)
+        exec_update_native(Some("extended"), Some("all"), tmp.path(), &client)
             .await
             .unwrap();
 
@@ -1188,7 +1099,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_propagates_non_404_runner_failure() {
         let version = "2.0.0-preview.194";
         let target = current_target_triple().unwrap();
@@ -1211,34 +1122,69 @@ mod tests {
         assert_eq!(std::fs::read(runner_path).unwrap(), b"existing-runner");
     }
 
+    fn dist_info_for_test(
+        channel: Option<dbt_dist::Channel>,
+        upgrade_cmd: Option<&str>,
+    ) -> dbt_dist::DistInfo {
+        dbt_dist::DistInfo {
+            path: "/usr/local/bin/dbt".to_string(),
+            channel,
+            distribution: None,
+            generation: dbt_dist::Generation::V2,
+            py_package_manager: None,
+            py_venv_root: None,
+            version: None,
+            is_prerelease: None,
+            upgrade_cmd: upgrade_cmd.map(str::to_string),
+            uninstall_cmd: None,
+        }
+    }
+
     #[test]
     fn test_blocked_self_update_message() {
-        use crate::install_method::InstallMethod;
+        use dbt_dist::Channel;
 
-        // Self-updatable installs are never blocked.
-        assert!(blocked_self_update_message(InstallMethod::Direct, false).is_none());
+        // Self-managed installs are never blocked.
+        for channel in [Channel::Standalone, Channel::Unclaimed] {
+            let info = dist_info_for_test(Some(channel), Some("dbt system update"));
+            assert!(blocked_self_update_message(&info, false).is_none());
+        }
 
-        // Package-manager installs are blocked with a method-specific command.
-        let msg = blocked_self_update_message(InstallMethod::Homebrew, false).unwrap();
+        // Package-manager installs are blocked with a channel-specific command.
+        let info = dist_info_for_test(Some(Channel::Brew), Some("brew upgrade dbt"));
+        let msg = blocked_self_update_message(&info, false).unwrap();
         assert!(msg.contains("brew upgrade dbt"), "got: {msg}");
         assert!(msg.contains("--force"), "got: {msg}");
 
-        // The catch-all `Other` has no command but still mentions --force.
-        let msg = blocked_self_update_message(InstallMethod::Other, false).unwrap();
+        // An unresolved channel has no command but still mentions --force.
+        let info = dist_info_for_test(None, None);
+        let msg = blocked_self_update_message(&info, false).unwrap();
         assert!(msg.contains("--force"), "got: {msg}");
 
-        // --force overrides the block for every method.
-        for method in [
-            InstallMethod::Homebrew,
-            InstallMethod::Pip,
-            InstallMethod::Winget,
-            InstallMethod::Other,
+        // A recognized-but-unsupported manager names itself and points at
+        // the install docs instead of a specific command.
+        let info = dist_info_for_test(Some(Channel::Unsupported("Chocolatey".to_string())), None);
+        let msg = blocked_self_update_message(&info, false).unwrap();
+        assert!(msg.contains("Chocolatey"), "got: {msg}");
+        assert!(
+            msg.contains("https://docs.getdbt.com/docs/local/install-dbt?version=2"),
+            "got: {msg}"
+        );
+
+        // --force overrides the block for every channel.
+        for (channel, command) in [
+            (Channel::Brew, "brew upgrade dbt"),
+            (Channel::Pypi, "pip install --upgrade dbt"),
+            (Channel::Winget, "winget upgrade --id dbtLabs.dbt --exact"),
         ] {
+            let info = dist_info_for_test(Some(channel.clone()), Some(command));
             assert!(
-                blocked_self_update_message(method, true).is_none(),
-                "--force should bypass block for {method:?}"
+                blocked_self_update_message(&info, true).is_none(),
+                "--force should bypass block for {channel:?}"
             );
         }
+        let info = dist_info_for_test(None, None);
+        assert!(blocked_self_update_message(&info, true).is_none());
     }
 
     #[test]
@@ -1253,7 +1199,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_unknown_package_errors() {
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let client =
@@ -1265,7 +1211,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_missing_binary_in_archive_errors() {
         let version = "2.0.0-preview.154";
         let client = native_update_client(
@@ -1285,8 +1231,8 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
-    async fn test_native_update_overwrites_existing_binary() {
+    #[dbt_runtime::test]
+    async fn test_native_update_overwrites_existing_binaries() {
         let version = "2.0.0-preview.154";
 
         let client = native_update_client(
@@ -1297,6 +1243,7 @@ mod tests {
 
         let tmp = tempfile::tempdir().unwrap();
         std::fs::write(tmp.path().join("dbt"), b"old-binary").unwrap();
+        std::fs::write(tmp.path().join("dbt-db-runner"), b"old-runner").unwrap();
 
         exec_update_native(None, Some("dbt"), tmp.path(), &client)
             .await
@@ -1306,9 +1253,13 @@ mod tests {
             std::fs::read(tmp.path().join("dbt")).unwrap(),
             b"new-binary"
         );
+        assert_eq!(
+            std::fs::read(tmp.path().join("dbt-db-runner")).unwrap(),
+            b"runner-binary"
+        );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_manifest_fetch_failure_propagates() {
         let client = MockHttpClient::new();
         let error = resolve_target_version(None, &client).await.unwrap_err();
@@ -1319,7 +1270,7 @@ mod tests {
     // to actually exercise the timeout path unless explicitly testing it.
     const TEST_TIMEOUT: Duration = Duration::from_secs(5);
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_succeeds_after_transient_failure() {
         let mut attempts: u32 = 0;
         let result: FsResult<&'static str> = fetch_with_retries(
@@ -1348,7 +1299,7 @@ mod tests {
         assert_eq!(attempts, 3);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_gives_up_after_max_attempts() {
         let mut attempts: u32 = 0;
         let result: FsResult<()> = fetch_with_retries(
@@ -1371,7 +1322,7 @@ mod tests {
         assert_eq!(attempts, 3);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_does_not_retry_on_non_retryable_error() {
         let mut attempts: u32 = 0;
         let result: FsResult<()> = fetch_with_retries(
@@ -1393,7 +1344,7 @@ mod tests {
         assert_eq!(attempts, 1, "non-retryable error should not retry");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_retries_treats_per_attempt_timeout_as_transient() {
         // A hung fetch is bounded by request_timeout per attempt and counts as
         // a retryable failure. The inner sleep is canceled when the per-attempt
@@ -1445,7 +1396,7 @@ mod tests {
     }
 
     #[cfg(not(target_os = "windows"))]
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn test_native_update_records_correct_urls() {
         let version = "2.0.0-preview.154";
         let target = current_target_triple().unwrap();
@@ -1453,12 +1404,10 @@ mod tests {
 
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let versions_url = format!("{base}/versions.json");
-        let runner_url = format!("{base}/cli/fs-db-runner-v{version}-{target}.tar.gz");
         let dbt_url = format!("{base}/cli/fs-v{version}-{target}.tar.gz");
 
         let client = MockHttpClient::new()
             .with_text(&versions_url, &manifest)
-            .with_bytes(&runner_url, build_fake_tarball("dbt-db-runner", b"runner"))
             .with_bytes(&dbt_url, build_fake_tarball("dbt", b"bin"));
 
         let tmp = tempfile::tempdir().unwrap();
@@ -1467,6 +1416,6 @@ mod tests {
             .unwrap();
 
         let urls = client.requested_urls();
-        assert_eq!(urls, vec![versions_url, runner_url, dbt_url]);
+        assert_eq!(urls, vec![versions_url, dbt_url]);
     }
 }

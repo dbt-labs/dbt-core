@@ -47,8 +47,12 @@ walkdir = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
+arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
+dbt-agate = { workspace = true }
 dbt-jinja-utils = { workspace = true, features = ["testing"] }
 dbt-parser = { workspace = true }
+dbt-runtime = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 

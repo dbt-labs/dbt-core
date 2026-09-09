@@ -8,6 +8,7 @@ use crate::microbatch::{BatchContext, MicrobatchBuilder};
 use crate::runnable::cache::cache_materialization_return_value;
 use crate::runnable::microbatch::{build_event_time_mapping, is_incremental};
 use chrono::{DateTime, Utc};
+use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::span_info::find_and_update_span_attrs;
@@ -47,6 +48,19 @@ pub struct MicrobatchExecUnit {
     pub run_node_context: Arc<std::collections::BTreeMap<String, Value>>,
     pub event_time_mapping: Arc<std::collections::BTreeMap<String, String>>,
     pub is_incremental: bool,
+}
+
+/// Cap on concurrent batches per model, independent of `--threads`/connection
+/// backpressure. Keeps us under Snowflake's non-configurable 20-statement
+/// lock-waiter limit (dbt-core#15987).
+const SNOWFLAKE_MAX_CONCURRENT_MICROBATCH_BATCHES: usize = 16;
+
+/// Per-adapter cap on concurrent batches per model, if any.
+fn max_concurrent_microbatch_batches(adapter_type: AdapterType) -> Option<usize> {
+    match adapter_type {
+        AdapterType::Snowflake => Some(SNOWFLAKE_MAX_CONCURRENT_MICROBATCH_BATCHES),
+        _ => None,
+    }
 }
 
 /// Prepare microbatch batches for execution.
@@ -114,7 +128,7 @@ pub fn prepare_microbatch_batches(
         build_run_node_context(
             model,
             &model.deprecated_config,
-            ctx.adapter_type(),
+            model.node_adapter(),
             None,
             &base_context,
             &ctx.inner.arg.io,
@@ -127,7 +141,7 @@ pub fn prepare_microbatch_batches(
 
     // Group batches: [[first], [mid1, mid2, ...], [last]]
     let concurrent = model.deprecated_config.concurrent_batches.unwrap_or(false);
-    let groups = batches
+    let groups: Vec<Vec<MicrobatchExecUnit>> = batches
         .chunk_by(|l, r| !l.is_first() && !r.is_last() && concurrent)
         .map(|group| {
             group
@@ -144,7 +158,25 @@ pub fn prepare_microbatch_batches(
         })
         .collect();
 
+    let groups = match max_concurrent_microbatch_batches(model.node_adapter()) {
+        Some(max_size) => cap_group_sizes(groups, max_size),
+        None => groups,
+    };
     Ok(groups)
+}
+
+/// Split any group larger than `max_size` into consecutive sub-groups of at
+/// most `max_size` elements each, preserving order.
+fn cap_group_sizes<T: Clone>(groups: Vec<Vec<T>>, max_size: usize) -> Vec<Vec<T>> {
+    groups
+        .into_iter()
+        .flat_map(|group| {
+            group
+                .chunks(max_size)
+                .map(<[T]>::to_vec)
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 /// Resolve the run-level event-time window `(start, end)` for a microbatch model.
@@ -185,7 +217,7 @@ fn resolve_batch_window(
         .deprecated_config
         .full_refresh
         .unwrap_or(ctx.inner.arg.full_refresh);
-    let is_incremental = is_incremental(model, full_refresh, ctx.adapter_type(), ctx.env.clone());
+    let is_incremental = is_incremental(model, full_refresh, model.node_adapter(), ctx.env.clone());
 
     let end_time = batch_builder.build_end_time(ctx.inner.arg.event_time_end.clone())?;
     let start_time = batch_builder.build_start_time(
@@ -262,7 +294,7 @@ pub fn execute_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
         &ctx.inner.materialization_resolver,
         ctx.env.clone(),
         &mb_unit.batch_ctx,
-        ctx.adapter_type(),
+        model.node_adapter(),
         ctx_for_batch,
         mb_unit.event_time_mapping,
         &ctx.inner.arg.io,
@@ -305,7 +337,7 @@ pub fn execute_model_remote(
     match materialize_model(
         &task_result.sql_instruction.sql,
         model,
-        ctx.adapter_type(),
+        model.node_adapter(),
         ctx.runtime_config(),
         &ctx.inner.materialization_resolver,
         ctx.env.clone(),
@@ -330,7 +362,7 @@ pub fn execute_model_remote(
     if should_create_latest_version_pointer(model, ctx.runtime_config()) {
         let relations_map = materialize_latest_version_pointer(
             model,
-            ctx.adapter_type(),
+            model.node_adapter(),
             ctx.runtime_config(),
             &ctx.inner.materialization_resolver,
             ctx.env.clone(),
@@ -424,5 +456,32 @@ mod tests {
         let (_, end) = clamp_to_sample(&builder, dt(2024, 1, 1), dt(2026, 8, 5), &filter);
 
         assert_eq!(end, dt(2026, 7, 16));
+    }
+
+    #[test]
+    fn cap_group_sizes_splits_oversized_groups() {
+        let groups = vec![vec![1], vec![2, 3, 4, 5, 6, 7], vec![8]];
+        assert_eq!(
+            cap_group_sizes(groups, 3),
+            vec![vec![1], vec![2, 3, 4], vec![5, 6, 7], vec![8]]
+        );
+    }
+
+    #[test]
+    fn cap_group_sizes_leaves_small_groups_untouched() {
+        let groups = vec![vec![1], vec![2, 3], vec![4]];
+        assert_eq!(cap_group_sizes(groups.clone(), 16), groups);
+    }
+
+    #[test]
+    fn only_snowflake_caps_concurrent_batches() {
+        assert_eq!(
+            max_concurrent_microbatch_batches(AdapterType::Snowflake),
+            Some(SNOWFLAKE_MAX_CONCURRENT_MICROBATCH_BATCHES)
+        );
+        assert_eq!(
+            max_concurrent_microbatch_batches(AdapterType::Redshift),
+            None
+        );
     }
 }

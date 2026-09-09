@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react';
-
-import { Badge, Icon, RyeconClose, RyeconLinkExternal } from '@dbt-labs/sourdough';
+import { ExternalLink, X } from 'lucide-react';
 
 import {
   RESOURCE_TYPE_LABEL,
   RESOURCE_TYPE_SINGULAR,
-  ryeconForType,
+  ResourceTypeIcon,
 } from '../lib/resourceType';
 import type { Project } from '../shared';
 import { type Asset, PageHeading } from '../shared';
 import type { NodeSummary } from '../types';
+import { Badge } from './ui/Badge';
 
 interface Props {
   project: Project;
@@ -82,7 +82,7 @@ export function PreviewDrawer({
               aria-label="Close preview"
               title="Close"
             >
-              <Icon ryecon={RyeconClose} size="xs" alt="" />
+              <X className="size-3" />
             </button>
           </div>
         </header>
@@ -91,8 +91,8 @@ export function PreviewDrawer({
         <PageHeading
           className="preview-drawer__title-row"
           additional={{
-            left: <Icon ryecon={ryeconForType(resourceType)} size="sm" alt="" />,
-            right: <Badge text={singular} type="default" size="xs" />,
+            left: <ResourceTypeIcon type={resourceType} className="size-3.5" />,
+            right: <Badge text={singular} variant="secondary" size="xs" />,
           }}
         >
           <button
@@ -105,7 +105,7 @@ export function PreviewDrawer({
           >
             {name}
             <span className="preview-drawer__title-open" aria-hidden>
-              <Icon ryecon={RyeconLinkExternal} size="xs" alt="" />
+              <ExternalLink className="size-3" />
             </span>
           </button>
         </PageHeading>

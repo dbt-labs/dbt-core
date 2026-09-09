@@ -1,6 +1,5 @@
-import { Code } from '@dbt-labs/sourdough';
-
 import { CopyCommandSnippet } from '../shared';
+import { Code } from './ui/Code';
 
 export function NoColumnMetadataFallback() {
   return (

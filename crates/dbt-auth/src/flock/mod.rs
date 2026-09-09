@@ -11,7 +11,7 @@ mod tests {
     use arrow_schema::DataType;
     use dbt_adbc::{Backend, connection, database, driver};
 
-    use crate::{AdapterConfig, Auth, NoopAuthWarningPrinter, snowflake::SnowflakeAuth};
+    use crate::{AdapterConfig, Auth, snowflake::SnowflakeAuth};
 
     /// Execute a statement through the "flock" driver.
     ///
@@ -187,15 +187,13 @@ mod tests {
                 .expect("fusion_tests.outputs.snowflake mapping in ~/.dbt/profiles.yml");
             let config = AdapterConfig::new(snowflake_mapping);
 
-            let auth = SnowflakeAuth {
-                warning_printer: Box::new(NoopAuthWarningPrinter),
-            };
+            let auth = SnowflakeAuth::new(Box::new(crate::NoopAuthWarningPrinter));
             let outcome = auth.configure(&config).map_err(|e| {
                 Error::with_message_and_status(format!("{e:?}"), adbc_core::error::Status::Internal)
             })?;
 
             let connect_start = std::time::Instant::now();
-            let mut database = outcome.builder.build(&mut driver)?;
+            let mut database = outcome.build(&mut driver)?;
             let conn_builder = connection::Builder::default();
             let mut conn = conn_builder.build(&mut database)?;
             let connect = connect_start.elapsed();

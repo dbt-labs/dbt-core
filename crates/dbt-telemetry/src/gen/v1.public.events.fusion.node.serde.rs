@@ -1055,6 +1055,7 @@ impl serde::Serialize for NodeMaterialization {
             Self::StreamingTable => "NODE_MATERIALIZATION_STREAMING_TABLE",
             Self::DynamicTable => "NODE_MATERIALIZATION_DYNAMIC_TABLE",
             Self::Function => "NODE_MATERIALIZATION_FUNCTION",
+            Self::InteractiveTable => "NODE_MATERIALIZATION_INTERACTIVE_TABLE",
             Self::Custom => "NODE_MATERIALIZATION_CUSTOM",
         };
         serializer.serialize_str(variant)
@@ -1082,6 +1083,7 @@ impl<'de> serde::Deserialize<'de> for NodeMaterialization {
             "NODE_MATERIALIZATION_STREAMING_TABLE",
             "NODE_MATERIALIZATION_DYNAMIC_TABLE",
             "NODE_MATERIALIZATION_FUNCTION",
+            "NODE_MATERIALIZATION_INTERACTIVE_TABLE",
             "NODE_MATERIALIZATION_CUSTOM",
         ];
 
@@ -1138,6 +1140,7 @@ impl<'de> serde::Deserialize<'de> for NodeMaterialization {
                     "NODE_MATERIALIZATION_STREAMING_TABLE" => Ok(NodeMaterialization::StreamingTable),
                     "NODE_MATERIALIZATION_DYNAMIC_TABLE" => Ok(NodeMaterialization::DynamicTable),
                     "NODE_MATERIALIZATION_FUNCTION" => Ok(NodeMaterialization::Function),
+                    "NODE_MATERIALIZATION_INTERACTIVE_TABLE" => Ok(NodeMaterialization::InteractiveTable),
                     "NODE_MATERIALIZATION_CUSTOM" => Ok(NodeMaterialization::Custom),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
@@ -1309,6 +1312,12 @@ impl serde::Serialize for NodeProcessed {
         if self.idle_time_ms.is_some() {
             len += 1;
         }
+        if self.node_index.is_some() {
+            len += 1;
+        }
+        if self.node_count_total.is_some() {
+            len += 1;
+        }
         if self.node_outcome_detail.is_some() {
             len += 1;
         }
@@ -1408,6 +1417,12 @@ impl serde::Serialize for NodeProcessed {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("idle_time_ms", ToString::to_string(&v).as_str())?;
         }
+        if let Some(v) = self.node_index.as_ref() {
+            struct_ser.serialize_field("node_index", v)?;
+        }
+        if let Some(v) = self.node_count_total.as_ref() {
+            struct_ser.serialize_field("node_count_total", v)?;
+        }
         if let Some(v) = self.node_outcome_detail.as_ref() {
             match v {
                 node_processed::NodeOutcomeDetail::NodeCacheDetail(v) => {
@@ -1481,6 +1496,10 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             "group",
             "idle_time_ms",
             "idleTimeMs",
+            "node_index",
+            "nodeIndex",
+            "node_count_total",
+            "nodeCountTotal",
             "node_cache_detail",
             "nodeCacheDetail",
             "node_test_detail",
@@ -1520,6 +1539,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             RowsAffected,
             Group,
             IdleTimeMs,
+            NodeIndex,
+            NodeCountTotal,
             NodeCacheDetail,
             NodeTestDetail,
             NodeFreshnessOutcome,
@@ -1572,6 +1593,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                             "rowsAffected" | "rows_affected" => Ok(GeneratedField::RowsAffected),
                             "group" => Ok(GeneratedField::Group),
                             "idleTimeMs" | "idle_time_ms" => Ok(GeneratedField::IdleTimeMs),
+                            "nodeIndex" | "node_index" => Ok(GeneratedField::NodeIndex),
+                            "nodeCountTotal" | "node_count_total" => Ok(GeneratedField::NodeCountTotal),
                             "nodeCacheDetail" | "node_cache_detail" => Ok(GeneratedField::NodeCacheDetail),
                             "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
@@ -1621,6 +1644,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                 let mut rows_affected__ = None;
                 let mut group__ = None;
                 let mut idle_time_ms__ = None;
+                let mut node_index__ = None;
+                let mut node_count_total__ = None;
                 let mut node_outcome_detail__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -1784,6 +1809,22 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                                 map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
+                        GeneratedField::NodeIndex => {
+                            if node_index__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeIndex"));
+                            }
+                            node_index__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::NodeCountTotal => {
+                            if node_count_total__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeCountTotal"));
+                            }
+                            node_count_total__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::NodeCacheDetail => {
                             if node_outcome_detail__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("nodeCacheDetail"));
@@ -1850,6 +1891,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                     rows_affected: rows_affected__,
                     group: group__,
                     idle_time_ms: idle_time_ms__,
+                    node_index: node_index__,
+                    node_count_total: node_count_total__,
                     node_outcome_detail: node_outcome_detail__,
                 })
             }
@@ -2059,6 +2102,7 @@ impl serde::Serialize for NodeType {
             Self::SavedQuery => "NODE_TYPE_SAVED_QUERY",
             Self::SemanticModel => "NODE_TYPE_SEMANTIC_MODEL",
             Self::Function => "NODE_TYPE_FUNCTION",
+            Self::Check => "NODE_TYPE_CHECK",
         };
         serializer.serialize_str(variant)
     }
@@ -2086,6 +2130,7 @@ impl<'de> serde::Deserialize<'de> for NodeType {
             "NODE_TYPE_SAVED_QUERY",
             "NODE_TYPE_SEMANTIC_MODEL",
             "NODE_TYPE_FUNCTION",
+            "NODE_TYPE_CHECK",
         ];
 
         struct GeneratedVisitor;
@@ -2142,6 +2187,7 @@ impl<'de> serde::Deserialize<'de> for NodeType {
                     "NODE_TYPE_SAVED_QUERY" => Ok(NodeType::SavedQuery),
                     "NODE_TYPE_SEMANTIC_MODEL" => Ok(NodeType::SemanticModel),
                     "NODE_TYPE_FUNCTION" => Ok(NodeType::Function),
+                    "NODE_TYPE_CHECK" => Ok(NodeType::Check),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -2440,6 +2486,9 @@ impl serde::Serialize for TestEvaluationDetail {
         if self.statically_checked.is_some() {
             len += 1;
         }
+        if self.batch_unique_id.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.node.TestEvaluationDetail", len)?;
         if self.test_outcome != 0 {
             let v = TestOutcome::try_from(self.test_outcome)
@@ -2457,6 +2506,9 @@ impl serde::Serialize for TestEvaluationDetail {
         }
         if let Some(v) = self.statically_checked.as_ref() {
             struct_ser.serialize_field("statically_checked", v)?;
+        }
+        if let Some(v) = self.batch_unique_id.as_ref() {
+            struct_ser.serialize_field("batch_unique_id", v)?;
         }
         struct_ser.end()
     }
@@ -2478,6 +2530,8 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
             "storeFailures",
             "statically_checked",
             "staticallyChecked",
+            "batch_unique_id",
+            "batchUniqueId",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -2487,6 +2541,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
             DiffTable,
             StoreFailures,
             StaticallyChecked,
+            BatchUniqueId,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -2514,6 +2569,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                             "diffTable" | "diff_table" => Ok(GeneratedField::DiffTable),
                             "storeFailures" | "store_failures" => Ok(GeneratedField::StoreFailures),
                             "staticallyChecked" | "statically_checked" => Ok(GeneratedField::StaticallyChecked),
+                            "batchUniqueId" | "batch_unique_id" => Ok(GeneratedField::BatchUniqueId),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -2538,6 +2594,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                 let mut diff_table__ = None;
                 let mut store_failures__ = None;
                 let mut statically_checked__ = None;
+                let mut batch_unique_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::TestOutcome => {
@@ -2572,6 +2629,12 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                             }
                             statically_checked__ = map_.next_value()?;
                         }
+                        GeneratedField::BatchUniqueId => {
+                            if batch_unique_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("batchUniqueId"));
+                            }
+                            batch_unique_id__ = map_.next_value()?;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -2583,6 +2646,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                     diff_table: diff_table__,
                     store_failures: store_failures__,
                     statically_checked: statically_checked__,
+                    batch_unique_id: batch_unique_id__,
                 })
             }
         }

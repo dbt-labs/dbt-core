@@ -28,5 +28,8 @@ pub(crate) use relation_comment::RelationCommentLoader;
 pub(crate) mod relation_tags;
 pub(crate) use relation_tags::RelationTagsLoader;
 
+pub(crate) mod row_filter;
+pub(crate) use row_filter::RowFilterLoader;
+
 pub(crate) mod tbl_properties;
 pub(crate) use tbl_properties::TblPropertiesLoader;

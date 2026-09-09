@@ -38,23 +38,6 @@ vi.mock('../shared', async (importOriginal) => {
     ),
   };
 });
-vi.mock('@dbt-labs/dbt-dag', () => ({
-  resourceIconMap: new Proxy({}, { get: () => 'source' }),
-  freshnessStatuses: [
-    'pass',
-    'warn',
-    'error',
-    'runtime error',
-    'unknown',
-    'skipped',
-    'unconfigured',
-    'outdated',
-  ],
-}));
-vi.mock('@dbt-labs/sourdough', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@dbt-labs/sourdough')>();
-  return { ...mod, Icon: () => null };
-});
 vi.mock('react-router-dom', async (importOriginal) => {
   const mod = await importOriginal<typeof import('react-router-dom')>();
   return {

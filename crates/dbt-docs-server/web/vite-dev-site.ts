@@ -32,11 +32,11 @@ export function devSite(): Plugin {
 
     configResolved() {
       if (haveSite) {
-        this.environment?.logger.info(
+        console.log(
           `dbt docs dev: serving ${DATA_DIR}/ from ${dataDir}`,
         );
       } else {
-        this.environment?.logger.warn(
+        console.log(
           `dbt docs dev: no generated site at ${dataDir}\n` +
             '  Generate one, then set DBT_DOCS_DEV_SITE if it lives elsewhere:\n' +
             '    dbt compile --write-index --static-analysis strict\n' +

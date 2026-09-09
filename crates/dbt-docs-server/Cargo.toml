@@ -43,5 +43,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+dbt-runtime = { workspace = true }
 # tokio macros + rt-multi-thread already enabled by the workspace dep above.
 tempfile = { workspace = true }

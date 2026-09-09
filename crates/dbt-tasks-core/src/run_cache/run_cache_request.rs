@@ -80,7 +80,7 @@ impl From<&TaskRunnerCtx> for DbtProjectInfo {
             project_name,
             project_id,
             project_root,
-            table_namespace: profile.db_config.get_adapter_unique_id(),
+            table_namespace: profile.default_db_config().get_adapter_unique_id(),
         }
     }
 }
@@ -376,7 +376,7 @@ pub fn model_execution_type_input(
         // Matches the parse-time classification in `resolve_models` so the run
         // cache treats such models as `DBT_CUSTOM` (dbt-core#14486).
         is_custom_materialization: materialization_resolver
-            .is_custom_materialization(&materialized.to_string()),
+            .is_custom_materialization(&materialized.to_string(), model.node_adapter()),
         is_incremental: materialized == &DbtMaterialization::Incremental,
         full_refresh,
         incremental_strategy: model_incremental_strategy(model),
@@ -833,7 +833,7 @@ mod tests {
     /// user-defined macro, so `is_custom_materialization` is false — matching
     /// the built-in materializations these tests use.
     fn test_materialization_resolver() -> MaterializationResolver {
-        MaterializationResolver::new(&BTreeMap::new(), AdapterType::Snowflake, "jaffle_shop")
+        MaterializationResolver::new(&BTreeMap::new(), "jaffle_shop")
     }
 
     /// A resolver where `name` is a user-defined (root-project) materialization,
@@ -848,7 +848,7 @@ mod tests {
         };
         let mut macros = BTreeMap::new();
         macros.insert(macro_def.unique_id.clone(), macro_def);
-        MaterializationResolver::new(&macros, AdapterType::Snowflake, "jaffle_shop")
+        MaterializationResolver::new(&macros, "jaffle_shop")
     }
 
     fn make_project_info() -> DbtProjectInfo {
@@ -901,10 +901,10 @@ mod tests {
             __adapter_attr__: AdapterAttr::default(),
             deprecated_config: ModelConfig {
                 incremental_strategy: Some(DbtIncrementalStrategy::Merge),
-                incremental_predicates: Some(vec![
+                incremental_predicates: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
                     "updated_at >= current_date".to_string(),
                     "deleted_at is null".to_string(),
-                ]),
+                ])),
                 unique_key: Some(DbtUniqueKey::Single("id".to_string())),
                 on_schema_change: Some(OnSchemaChange::SyncAllColumns),
                 merge_update_columns: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![

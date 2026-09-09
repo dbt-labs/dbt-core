@@ -10,9 +10,9 @@ use std::borrow::Cow;
 
 pub use crate::impls::node::{
     AnyNodeOutcomeDetail, NodeEvent, get_cache_detail, get_freshness_detail,
-    get_node_outcome_detail, get_test_outcome, has_node_warning, is_statically_checked_test,
-    set_node_warning_outcome_no_warnings, set_node_warning_outcome_warned,
-    update_dbt_core_event_code_for_node_processed_end,
+    get_node_outcome_detail, get_test_batch_unique_id, get_test_outcome, has_node_warning,
+    is_batched_test, is_statically_checked_test, set_node_warning_outcome_no_warnings,
+    set_node_warning_outcome_warned, update_dbt_core_event_code_for_node_processed_end,
 };
 pub use crate::proto::v1::public::events::fusion::node::{
     NodeCacheDetail, NodeCacheReason, NodeCancelReason, NodeErrorType, NodeEvaluated,
@@ -100,6 +100,10 @@ struct NodeProcessedJsonPayload {
     pub idle_time_ms: Option<u64>,
     /// Source name for source nodes.
     pub source_name: Option<String>,
+    /// 1-based position of this node within the invocation.
+    pub node_index: Option<u32>,
+    /// Total number of nodes in the selection set.
+    pub node_count_total: Option<u32>,
 }
 
 fn deserialize_node_evaluated_json_payload(
@@ -348,6 +352,8 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
                 node_outcome_detail: self.node_outcome_detail.clone(),
                 idle_time_ms: self.idle_time_ms,
                 source_name: self.source_name.clone(),
+                node_index: self.node_index,
+                node_count_total: self.node_count_total,
             })
             .unwrap_or_else(|_| {
                 panic!(
@@ -457,6 +463,8 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             rows_affected: record.rows_affected,
             group: record.group.as_deref().map(str::to_string),
             idle_time_ms: json_payload.idle_time_ms,
+            node_index: json_payload.node_index,
+            node_count_total: json_payload.node_count_total,
         })
     }
 }

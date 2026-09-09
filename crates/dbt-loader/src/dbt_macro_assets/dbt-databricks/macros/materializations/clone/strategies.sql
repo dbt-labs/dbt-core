@@ -4,6 +4,10 @@
     shallow clone {{ defer_relation.render() }}
 {% endmacro %}
 
+{% macro clone_requires_drop(existing_relation) %}
+    {{ return(existing_relation is not none and not (existing_relation.is_table and existing_relation.is_shallow_clone)) }}
+{% endmacro %}
+
 {% macro create_or_replace_clone_external(this_relation, defer_relation) %}
 
     {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}

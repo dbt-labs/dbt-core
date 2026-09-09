@@ -1,11 +1,31 @@
 use std::{collections::HashMap, sync::LazyLock};
 
 use crate::AdapterType;
+use chrono::{DateTime, NaiveDateTime};
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
-use dbt_sql_utils::sql_split_statements;
+use dbt_frontend_common::Dialect;
+use dbt_sql_utils::{SqlToken as DialectToken, sql_lex_tokens, sql_split_statements};
 
 use super::tokenizer::{AbstractToken, Token, abstract_tokenize, tokenize};
 use regex::Regex;
+
+/// Normalize a pair of Python model payloads (the compiled `submit_python_job` code) so that
+/// semantically equivalent but textually different forms compare equal. Reuses the same Python
+/// canonicalizers `compare_sql` applies, in the same order. The main divergence this handles is
+/// dbt-autofix's `CustomKeyInConfigDeprecation` rewrite, which turns `dbt.config.get(<custom key>)`
+/// into `dbt.config.meta_get(...)` and moves the key from `config_dict` to `meta_dict`; both forms
+/// resolve the same value at runtime. Unlike `compare_sql`, this does no SQL parsing, so it is safe
+/// to run on raw Python model code.
+pub fn canonicalize_python_model_pair(actual: &str, expected: &str) -> (String, String) {
+    let actual = actual.replace("\r\n", "\n");
+    let expected = expected.replace("\r\n", "\n");
+    let actual = canonicalize_python_config_dict(&actual, &expected);
+    let actual = canonicalize_python_meta_get_calls(&actual);
+    let expected = canonicalize_python_meta_get_calls(&expected);
+    let actual = canonicalize_python_meta_dict(&actual);
+    let expected = canonicalize_python_meta_dict(&expected);
+    (actual, expected)
+}
 
 /// Compare two SQL strings using deviation and canonicalization checks before strict comparison,
 /// using adapter-specific canonicalization where applicable.
@@ -27,6 +47,8 @@ pub fn compare_sql(actual: &str, expected: &str, adapter_type: AdapterType) -> A
     let expected = canonicalize_uuid_literals(&expected);
     let actual = canonicalize_dbt_version_literal(&actual);
     let expected = canonicalize_dbt_version_literal(&expected);
+    let actual = canonicalize_compact_timestamp_predicate(&actual, adapter_type);
+    let expected = canonicalize_compact_timestamp_predicate(&expected, adapter_type);
     let actual = canonicalize_run_started_at_literal(&actual);
     let expected = canonicalize_run_started_at_literal(&expected);
     let actual = canonicalize_yyyymmdd_batch_literals(&actual);
@@ -43,6 +65,8 @@ pub fn compare_sql(actual: &str, expected: &str, adapter_type: AdapterType) -> A
     let expected = canonicalize_test_temp_relation_identifiers(&expected);
     let actual = canonicalize_dbt_model_tmp_suffix(&actual);
     let expected = canonicalize_dbt_model_tmp_suffix(&expected);
+    let actual = canonicalize_dbt_backup_timestamp_suffix(&actual);
+    let expected = canonicalize_dbt_backup_timestamp_suffix(&expected);
     let actual = canonicalize_elementary_metadata_pkg_version(&actual);
     let expected = canonicalize_elementary_metadata_pkg_version(&expected);
     let actual = canonicalize_python_config_dict(&actual, &expected);
@@ -65,6 +89,8 @@ pub fn compare_sql(actual: &str, expected: &str, adapter_type: AdapterType) -> A
     let expected = canonicalize_numeric_to_decimal(&expected);
     let actual = canonicalize_alter_table_set_tblproperties_order(&actual);
     let expected = canonicalize_alter_table_set_tblproperties_order(&expected);
+    let actual = canonicalize_alter_set_tags_order(&actual);
+    let expected = canonicalize_alter_set_tags_order(&expected);
 
     // Short-circuit: Elementary-generated SQL is allowed to drift across recorders/runners.
     // We only short-circuit when BOTH sides are clearly Elementary-originated.
@@ -1275,6 +1301,41 @@ fn canonicalize_alter_table_set_tblproperties_order(sql: &str) -> String {
     format!("{}{}{}", prefix, entries.join(" , "), suffix)
 }
 
+/// Canonicalize `ALTER TABLE ... SET TAGS (...)` by sorting the key-value
+/// entries alphabetically by key. dbt-databricks reads in `databricks_tags`
+/// keys nondeterministically if they are set in inline `config` blocks, so
+/// Fusion and dbt-databricks may emit them in a different order.
+fn canonicalize_alter_set_tags_order(sql: &str) -> String {
+    // Match: ALTER TABLE <name> SET TAGS (<entries>)
+    // Anchored to the full statement to avoid masking unrelated DDL.
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?is)^(\s*ALTER\s+TABLE\s+.+?\s+SET\s+TAGS\s*\()(.+?)(\)\s*)$").unwrap()
+    });
+
+    let Some(caps) = RE.captures(sql) else {
+        return sql.to_string();
+    };
+
+    let prefix = &caps[1]; // "ALTER TABLE ... SET TAGS ("
+    let entries_raw = &caps[2]; // "'key1' = 'val1' , 'key2' = 'val2' , ..."
+    let suffix = &caps[3]; // ")"
+
+    // Extract 'key' = 'value' pairs via regex to avoid breaking on commas inside quoted values.
+    static ENTRY_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"'(?:[^'\\]|\\.)*'\s*=\s*'(?:[^'\\]|\\.)*'").unwrap());
+
+    let mut entries: Vec<&str> = ENTRY_RE
+        .find_iter(entries_raw)
+        .map(|m| m.as_str())
+        .collect();
+    if entries.is_empty() {
+        return sql.to_string();
+    }
+    entries.sort();
+
+    format!("{}{}{}", prefix, entries.join(" , "), suffix)
+}
+
 /// NUMERIC and DECIMAL are SQL-standard synonyms. Fusion may emit one while the
 /// recording uses the other. Normalize `numeric(` → `decimal(` so comparisons succeed.
 fn canonicalize_numeric_to_decimal(sql: &str) -> String {
@@ -1867,8 +1928,16 @@ fn split_union_all_top_level(s: &str) -> Option<Vec<String>> {
 }
 
 fn parse_create_as_subquery(s: &str) -> Option<(&str, &str, Vec<&str>)> {
-    // Recognize: CREATE [OR REPLACE] <stuff> AS (<subquery>)
-    // Case-insensitive for keywords; preserve exact <stuff> for equality check
+    // Recognize: CREATE [OR REPLACE] <stuff> AS (<subquery>)  or  CREATE [OR REPLACE] <stuff> AS <subquery>
+    // Case-insensitive for keywords; preserve exact <stuff> for equality check.
+    //
+    // The bare (unparenthesized) form matters because `AS (<subquery>)` and `AS <subquery>` are
+    // always semantically identical SQL, and not every code path that emits a `CREATE ... AS`
+    // statement wraps the body in parens -- e.g. dbt-core's hand-rolled `latest_version`
+    // pointer-view SQL is a bare `create or replace view X as select ...`, while a parametrized
+    // materialization macro might always wrap the body as `as (\n ... \n)`. This scan still
+    // prefers a parenthesized match when one exists (identical to the original behavior), and
+    // only falls back to the bare form when no `AS (` is found anywhere in the statement.
     let mut i = skip_ws(s, 0);
     i = eat_keyword_ci(s, i, "create")?;
     i = skip_ws(s, i);
@@ -1892,12 +1961,14 @@ fn parse_create_as_subquery(s: &str) -> Option<(&str, &str, Vec<&str>)> {
     }
 
     let stuff_start = i;
-    // Find 'as' followed by '(' (case-insensitive), not inside parentheses
+    // Find the wrapped form's 'as' followed by '(' (case-insensitive), not inside parentheses,
+    // while also tracking the last bare, whole-word top-level 'as' as a fallback.
     let lower = s.to_ascii_lowercase();
+    let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
     let mut depth = 0usize;
-    let mut as_pos: Option<usize> = None;
-    let iter = lower.char_indices().peekable();
-    for (j, ch) in iter {
+    let mut wrapped_as_pos: Option<usize> = None;
+    let mut bare_as_pos: Option<usize> = None;
+    for (j, ch) in lower.char_indices() {
         if j < i {
             continue;
         }
@@ -1909,25 +1980,46 @@ fn parse_create_as_subquery(s: &str) -> Option<(&str, &str, Vec<&str>)> {
             continue;
         }
         if depth == 0 && lower[j..].starts_with("as") {
+            let prev_is_word = lower[..j].chars().next_back().is_some_and(is_word_char);
+            let next_is_word = lower[j + 2..].chars().next().is_some_and(is_word_char);
+            if prev_is_word || next_is_word {
+                continue; // part of a longer identifier (e.g. "alias"), not the keyword
+            }
             let mut k = j + 2;
             k = skip_ws(&lower, k);
             if k < lower.len() && (lower.as_bytes()[k] as char) == '(' {
-                as_pos = Some(j);
+                wrapped_as_pos = Some(j);
                 break;
             }
+            bare_as_pos = Some(j);
         }
     }
-    let as_pos = as_pos?;
+
+    if let Some(as_pos) = wrapped_as_pos {
+        let stuff = s[stuff_start..as_pos].trim();
+        let mut k = as_pos + 2;
+        k = skip_ws(s, k);
+        if k >= s.len() || s.as_bytes()[k] as char != '(' {
+            return None;
+        }
+        let open = k;
+        let close = find_matching_paren(s, open)?;
+        let sub = s[open + 1..close].trim();
+        return Some((stuff, sub, keywords));
+    }
+
+    let as_pos = bare_as_pos?;
     let stuff = s[stuff_start..as_pos].trim();
-    // Move to '('
     let mut k = as_pos + 2;
     k = skip_ws(s, k);
-    if k >= s.len() || s.as_bytes()[k] as char != '(' {
+    if k >= s.len() {
         return None;
     }
-    let open = k;
-    let close = find_matching_paren(s, open)?;
-    let sub = s[open + 1..close].trim();
+    let sub = s[k..].trim();
+    let sub = sub.strip_suffix(';').unwrap_or(sub).trim();
+    if sub.is_empty() {
+        return None;
+    }
     Some((stuff, sub, keywords))
 }
 
@@ -1950,9 +2042,12 @@ fn canonicalize_query_tag(sql: &str) -> String {
 /// A lot of these are from {{ invocation_id }}. The value of the original invocation_id
 /// is available in manifest.json. We should consider using it in replay. TODO: Do this!
 fn canonicalize_uuid_literals(sql: &str) -> String {
-    // Case-insensitive UUID regex inside single quotes
+    // Case-insensitive UUID regex inside single quotes. Tolerates whitespace between the quote
+    // and the UUID (e.g. `' <uuid> '`), which some customer macros add around an
+    // `invocation_id`-derived audit-column literal. Regression: fs#14150.
     static UUID_RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'").unwrap()
+        Regex::new(r"(?i)'\s*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\s*'")
+            .unwrap()
     });
     UUID_RE.replace_all(sql, "'UUID'").to_string()
 }
@@ -2003,9 +2098,8 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 }
 
 // Replay-drift literal patterns: each matches a literal whose value is decided by the engine
-// build or the run's wall clock, never by the user's source, plus the alias that identifies it.
-// The alias requirement is the guardrail — it keeps these from rewriting literals that carry
-// real meaning.
+// build or the run's wall clock, never by the user's source, plus the SQL context that identifies
+// it. An alias or exact expression shape keeps these from rewriting unrelated literals.
 
 /// Matches a digit-leading quoted semver-ish literal, an optional `::type` cast, and the
 /// `as dbt_version` alias. The leading-digit requirement keeps it off unrelated string literals.
@@ -2046,6 +2140,143 @@ fn canonicalize_run_started_at_literal(sql: &str) -> String {
     RUN_STARTED_AT_LITERAL_RE
         .replace_all(sql, "'RUN_STARTED_AT'$cast as $alias")
         .to_string()
+}
+
+/// Replace the upper bound of the reported Snowflake temporary-view timestamp predicate when it
+/// equals the compact form of the statement's aliased `dbt_run_started_at` value.
+fn canonicalize_compact_timestamp_predicate(sql: &str, adapter_type: AdapterType) -> String {
+    match adapter_type {
+        AdapterType::Snowflake => {}
+        _ => return sql.to_string(),
+    }
+    if !contains_ignore_ascii_case(sql, "to_timestamp") {
+        return sql.to_string();
+    }
+
+    let Some(tokens) = sql_lex_tokens(sql, Dialect::Snowflake) else {
+        return sql.to_string();
+    };
+    let Some(view_body) = temporary_view_body_tokens(&tokens) else {
+        return sql.to_string();
+    };
+    let Some(compact_run_started_at) = compact_dbt_run_started_at(view_body) else {
+        return sql.to_string();
+    };
+
+    let mut rhs_spans = view_body
+        .windows(14)
+        .filter_map(|tokens| compact_timestamp_predicate_rhs(tokens, &compact_run_started_at))
+        .collect::<Vec<_>>();
+    if rhs_spans.is_empty() {
+        return sql.to_string();
+    }
+
+    let mut canonical = sql.to_string();
+    rhs_spans.sort_unstable();
+    for (start, end) in rhs_spans.into_iter().rev() {
+        canonical.replace_range(start..end, "'00000000000000'");
+    }
+    canonical
+}
+
+fn temporary_view_body_tokens(tokens: &[DialectToken]) -> Option<&[DialectToken]> {
+    const PREFIX: [&str; 5] = ["create", "or", "replace", "temporary", "view"];
+    if tokens.len() < PREFIX.len()
+        || !tokens
+            .iter()
+            .zip(PREFIX)
+            .all(|(token, expected)| token.text.eq_ignore_ascii_case(expected))
+    {
+        return None;
+    }
+
+    let as_index = tokens
+        .iter()
+        .enumerate()
+        .skip(PREFIX.len())
+        .find_map(|(index, token)| token.text.eq_ignore_ascii_case("as").then_some(index))?;
+    let open_index = as_index + 1;
+    if tokens.get(open_index)?.text != "(" {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().skip(open_index) {
+        match token.text.as_str() {
+            "(" => depth += 1,
+            ")" => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(&tokens[open_index + 1..index]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn compact_dbt_run_started_at(tokens: &[DialectToken]) -> Option<String> {
+    tokens.windows(3).find_map(|tokens| {
+        if !tokens[1].text.eq_ignore_ascii_case("as")
+            || !tokens[2].text.eq_ignore_ascii_case("dbt_run_started_at")
+        {
+            return None;
+        }
+        compact_iso_timestamp(single_quoted_literal(&tokens[0])?)
+    })
+}
+
+fn compact_iso_timestamp(value: &str) -> Option<String> {
+    let normalized = value.replacen(' ', "T", 1);
+    if let Ok(timestamp) = DateTime::parse_from_rfc3339(&normalized) {
+        return Some(timestamp.format("%Y%m%d%H%M%S").to_string());
+    }
+    NaiveDateTime::parse_from_str(&normalized, "%Y-%m-%dT%H:%M:%S%.f")
+        .ok()
+        .map(|timestamp| timestamp.format("%Y%m%d%H%M%S").to_string())
+}
+
+fn compact_timestamp_predicate_rhs(
+    tokens: &[DialectToken],
+    compact_run_started_at: &str,
+) -> Option<(usize, usize)> {
+    let punctuation = [
+        (2, "("),
+        (4, ","),
+        (6, ")"),
+        (7, "<"),
+        (9, "("),
+        (11, ","),
+        (13, ")"),
+    ];
+    if !tokens[0].text.eq_ignore_ascii_case("where")
+        || !tokens[1].text.eq_ignore_ascii_case("to_timestamp")
+        || !tokens[8].text.eq_ignore_ascii_case("to_timestamp")
+        || !punctuation
+            .iter()
+            .all(|(index, expected)| tokens[*index].text == *expected)
+    {
+        return None;
+    }
+
+    let lhs = single_quoted_literal(&tokens[3])?;
+    let lhs_format = single_quoted_literal(&tokens[5])?;
+    let rhs = single_quoted_literal(&tokens[10])?;
+    let rhs_format = single_quoted_literal(&tokens[12])?;
+    if lhs.len() != 14
+        || !lhs.bytes().all(|byte| byte.is_ascii_digit())
+        || rhs != compact_run_started_at
+        || !lhs_format.eq_ignore_ascii_case("YYYYMMDDHH24MISSFF3")
+        || !rhs_format.eq_ignore_ascii_case("YYYYMMDDHH24MISSFF3")
+    {
+        return None;
+    }
+    Some((tokens[10].start, tokens[10].end))
+}
+
+fn single_quoted_literal(token: &DialectToken) -> Option<&str> {
+    token.text.strip_prefix('\'')?.strip_suffix('\'')
 }
 
 /// Replace `YYYYMMDDHHMMSS`-derived batch id and archive path literals with fixed placeholders —
@@ -2369,6 +2600,29 @@ fn canonicalize_dbt_model_tmp_suffix(sql: &str) -> String {
     });
 
     RE.replace_all(sql, "${1}SUFFIX").to_string()
+}
+
+/// Canonicalize backup relation identifiers whose suffix is derived from the wall clock, such as
+/// the ones custom materializations build with `py_current_timestring()`:
+///   ANALYTICS.SCH.orders_DBT_BACKUP_20260824102757911107255
+///   ANALYTICS.SCH.orders__dbt_backup_20240101000000000000
+/// both become `..._DBT_BACKUP_TIMESTAMP`.
+///
+/// The recorded suffix is fixed at record time and replay regenerates it, so the identifiers can
+/// never match. This is intentionally narrow:
+/// - Only matches a `_dbt_backup_` marker (case-insensitive) immediately followed by digits.
+/// - Only matches a plausible `py_current_timestring()` value: a year in 2000-2100 followed by at
+///   least 8 more digits (the format is `%Y%m%d%H%M%S%f`, so the shortest real value is 14 digits).
+fn canonicalize_dbt_backup_timestamp_suffix(sql: &str) -> String {
+    // Fast-path: avoid regex work on the common case.
+    if !contains_ignore_ascii_case(sql, "_dbt_backup_") {
+        return sql.to_string();
+    }
+
+    static RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)(_dbt_backup_)(?:20[0-9]{2}|2100)[0-9]{8,}").unwrap());
+
+    RE.replace_all(sql, "${1}TIMESTAMP").to_string()
 }
 
 /// Check whether two SQL strings are identical modulo a top-level
@@ -3178,6 +3432,33 @@ mod tests {
         assert!(
             result.is_err(),
             "Should detect content differences even with newlines"
+        );
+    }
+
+    #[test]
+    fn test_create_view_as_tolerates_asymmetric_wrapping_parens() {
+        // `AS (<subquery>)` and `AS <subquery>` are always semantically identical. Some code
+        // paths (e.g. dbt-core's hand-rolled `latest_version` pointer-view SQL) emit the bare
+        // form while others always wrap the body in parens -- see fs#13705.
+        let wrapped = "create or replace view db.sch.v as (\n    select * from db.sch.t\n  );";
+        let bare = "create or replace view db.sch.v as select * from db.sch.t";
+
+        compare_sql(wrapped, bare, AdapterType::Snowflake)
+            .expect("wrapped vs bare CREATE VIEW body should compare as equal");
+        compare_sql(bare, wrapped, AdapterType::Snowflake)
+            .expect("bare vs wrapped CREATE VIEW body should compare as equal (order-independent)");
+    }
+
+    #[test]
+    fn test_create_view_as_bare_form_still_detects_real_mismatches() {
+        // Guard against over-relaxing: two bare (unwrapped) bodies that are actually different
+        // must still be reported as a mismatch.
+        let actual = "create or replace view db.sch.v as select * from db.sch.t1";
+        let expected = "create or replace view db.sch.v as select * from db.sch.t2";
+
+        assert!(
+            compare_sql(actual, expected, AdapterType::Snowflake).is_err(),
+            "genuinely different bare CREATE VIEW bodies must not compare as equal"
         );
     }
 
@@ -4310,6 +4591,26 @@ WHERE
 
         let result = compare_sql(actual, expected, AdapterType::Snowflake);
         assert!(result.is_ok(), "UUID literal differences should be ignored");
+    }
+
+    #[test]
+    fn test_compare_sql_whitespace_padded_uuid_literals_ignored() {
+        // Regression for fs#14150: some customer macros pad the UUID literal with spaces
+        // inside the quotes (e.g. an `invocation_id`-derived audit column), which the UUID
+        // regex previously required to hug the quotes with no interior whitespace.
+        let actual = r#"select * from (
+    select ' 01a050c0-a25d-75d1-bc8d-e46fde65bb69 '::varchar as idp_dbt_id
+) as __dbt_sbq where false limit 0"#;
+
+        let expected = r#"select * from (
+    select ' 66f899d8-7787-4998-8e66-ac219ca47493 '::varchar as idp_dbt_id
+) as __dbt_sbq where false limit 0"#;
+
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_ok(),
+            "Whitespace-padded UUID literal differences should be ignored: {result:?}"
+        );
     }
 
     #[test]
@@ -6273,6 +6574,236 @@ SELECT
     }
 
     #[test]
+    fn test_compare_sql_backup_relation_timestamp_suffix_drift_ignored() {
+        // dbt1405: a custom materialization naming its backup relation with
+        // `py_current_timestring()`, which replay re-evaluates, so the fresh suffix can never
+        // equal the recorded one. The 23-digit actual is what preview.212 rendered, before #13684
+        // fixed `%f` to Python's microsecond precision; masking has to cover both widths.
+        let actual = "CREATE OR REPLACE TABLE REPRO_DATABASE.REPRO_SCHEMA.backup_probe_DBT_BACKUP_20260824102757911107255\nCLONE REPRO_DATABASE.REPRO_SCHEMA.source_probe";
+        let expected = "CREATE OR REPLACE TABLE REPRO_DATABASE.REPRO_SCHEMA.backup_probe_DBT_BACKUP_20000101000000000000\nCLONE REPRO_DATABASE.REPRO_SCHEMA.source_probe";
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_ok(),
+            "backup relation timestamp suffix drift should be ignored: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_backup_relation_lowercase_suffix_drift_ignored() {
+        // Same shape, but with the `__dbt_backup_` spelling dbt's own naming convention uses.
+        let actual = "create or replace table analytics.sch.orders__dbt_backup_20260824102757911107255 clone analytics.sch.orders";
+        let expected = "create or replace table analytics.sch.orders__dbt_backup_20240101000000000000 clone analytics.sch.orders";
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_ok(),
+            "lowercase backup relation timestamp suffix drift should be ignored: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_backup_relation_source_drift_still_fails() {
+        // Guardrail: masking the suffix must not hide a different clone source.
+        let actual = "create or replace table analytics.sch.orders__dbt_backup_20260824102757911107255 clone analytics.sch.orders";
+        let expected = "create or replace table analytics.sch.orders__dbt_backup_20240101000000000000 clone analytics.sch.customers";
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "a different clone source must still be reported as a mismatch"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_backup_relation_non_timestamp_suffix_drift_still_fails() {
+        // Guardrail: only plausible `py_current_timestring()` values are masked, so a short
+        // numeric suffix (e.g. a user-chosen batch number) still has to match.
+        let actual = "create or replace table analytics.sch.orders__dbt_backup_17 clone analytics.sch.orders";
+        let expected = "create or replace table analytics.sch.orders__dbt_backup_42 clone analytics.sch.orders";
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "a non-timestamp backup suffix must still be reported as a mismatch"
+        );
+    }
+
+    fn compact_timestamp_temp_view(
+        run_started_at: &str,
+        alias: &str,
+        lhs: &str,
+        rhs: &str,
+        format: &str,
+    ) -> String {
+        format!(
+            "create or replace temporary view timestamp_predicate as (\n\
+             select '{run_started_at}' as {alias}\n\
+             where TO_TIMESTAMP('{lhs}', '{format}')\n\
+             < TO_TIMESTAMP('{rhs}', '{format}')\n\
+             )"
+        )
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_literal_drift_ignored() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_ok(),
+            "unaliased TO_TIMESTAMP literal drift should be ignored: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_other_format_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101",
+            "20260824",
+            "YYYYMMDD",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101",
+            "20240101",
+            "YYYYMMDD",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "compact timestamp drift with another format should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_fixed_cutoff_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "19990101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "fixed TO_TIMESTAMP predicate cutoff drift should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_hardcoded_rhs_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20990101000000",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20980101000000",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "hardcoded TO_TIMESTAMP upper-bound drift should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_plain_alias_drift_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "run_started_at",
+            "20000101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "TO_TIMESTAMP drift should bind only to dbt_run_started_at"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_drift_outside_temp_view_preserved() {
+        let actual = r#"
+select '2026-08-24T18:03:17+00:00' as dbt_run_started_at
+where TO_TIMESTAMP('20000101000000', 'YYYYMMDDHH24MISSFF3')
+  < TO_TIMESTAMP('20260824180317', 'YYYYMMDDHH24MISSFF3')"#;
+        let expected = r#"
+select '2024-01-01T01:01:01+00:00' as dbt_run_started_at
+where TO_TIMESTAMP('20000101000000', 'YYYYMMDDHH24MISSFF3')
+  < TO_TIMESTAMP('20240101010101', 'YYYYMMDDHH24MISSFF3')"#;
+
+        let result = compare_sql(actual, expected, AdapterType::Snowflake);
+        assert!(
+            result.is_err(),
+            "TO_TIMESTAMP drift outside temporary-view DDL should remain significant"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_unaliased_to_timestamp_drift_for_other_adapter_preserved() {
+        let actual = compact_timestamp_temp_view(
+            "2026-08-24T18:03:17+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20260824180317",
+            "YYYYMMDDHH24MISSFF3",
+        );
+        let expected = compact_timestamp_temp_view(
+            "2024-01-01T01:01:01+00:00",
+            "dbt_run_started_at",
+            "20000101000000",
+            "20240101010101",
+            "YYYYMMDDHH24MISSFF3",
+        );
+
+        let result = compare_sql(&actual, &expected, AdapterType::Databricks);
+        assert!(
+            result.is_err(),
+            "TO_TIMESTAMP drift for a non-Snowflake adapter should remain significant"
+        );
+    }
+
+    #[test]
     fn test_compare_sql_archive_stage_path_timestamp_drift_ignored() {
         // dbt1405: a customer macro deriving an archival stage path from the run's wall-clock time.
         let actual = "COPY FILES INTO '@DB.STG.TEMP_STAGE_FOR_ARCHIVAL/archive/20260808_180232/' FROM @DB.STG.TEMP_STAGE_FOR_ARCHIVAL";
@@ -6805,6 +7336,67 @@ def model(dbt, session):
             result.is_ok(),
             "Populated meta_dict + meta_get call sites should be treated as equivalent \
              to populated config_dict + get call sites: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_canonicalize_python_model_pair_config_meta_equivalent() {
+        // Databricks submit_python_job payload. dbt-autofix CustomKeyInConfigDeprecation rewrites
+        // `dbt.config.get(<custom key>)` to `meta_get(...)` and moves the key from config_dict to
+        // meta_dict. Fusion built the post-autofix source (meta_get + populated meta_dict), Core
+        // recorded the pre-autofix source (get + populated config_dict). canonicalize_python_model_pair
+        // must normalize the two to byte-equal so the exact compare in replay_submit_python_job passes.
+        let fusion = r#"
+def model(dbt, session):
+    start_year = int(dbt.config.meta_get("start_year", 2020))
+    end_year = int(dbt.config.meta_get("end_year", 2050))
+    return session.table("x")
+
+config_dict = {}
+meta_dict = {'start_year': 2020, 'end_year': 2050}
+
+class config:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+    @staticmethod
+    def meta_get(key, default=None):
+        return meta_dict.get(key, default)
+"#;
+
+        let core = r#"
+def model(dbt, session):
+    start_year = int(dbt.config.get("start_year", 2020))
+    end_year = int(dbt.config.get("end_year", 2050))
+    return session.table("x")
+
+config_dict = {'start_year': 2020, 'end_year': 2050}
+meta_dict = {}
+
+class config:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+    @staticmethod
+    def meta_get(key, default=None):
+        return meta_dict.get(key, default)
+"#;
+
+        // Also exercise line-ending divergence: a CRLF source (Windows) is preserved by Core
+        // and emitted as LF by Fusion, so every line would otherwise differ byte-for-byte.
+        let core_crlf = core.replace('\n', "\r\n");
+        let (a, e) = canonicalize_python_model_pair(fusion, &core_crlf);
+        assert_eq!(
+            a, e,
+            "config/meta forms and CRLF vs LF line endings should canonicalize equal"
         );
     }
 

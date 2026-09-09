@@ -534,6 +534,7 @@ fn determine_changeset_from_previous_resolved_nodes<'a>(
         nodes.unit_tests.remove(unique_id);
         nodes.exposures.remove(unique_id);
         nodes.analyses.remove(unique_id);
+        nodes.checks.remove(unique_id);
         nodes.metrics.remove(unique_id);
         nodes.semantic_models.remove(unique_id);
         nodes.sources.remove(unique_id);

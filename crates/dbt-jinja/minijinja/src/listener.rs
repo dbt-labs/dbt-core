@@ -225,6 +225,24 @@ pub trait RenderingEventListener: std::fmt::Debug {
     /// Called when a ref() or source() call is resolved to its unique_id
     fn on_ref_or_source_resolved(&self, _unique_id: &str) {}
 
+    /// Called when the literal `this` context variable is looked up (a bare
+    /// `{{ this }}` reference). `this` is bound as a plain context variable
+    /// holding a `Relation` object rather than dispatched as a function call,
+    /// so it can't be observed through [`on_ref_or_source`](Self::on_ref_or_source).
+    /// Mirrors that hook's shape so consumers can uniformly determine
+    /// ref/source/this provenance of a rendered span.
+    #[allow(clippy::too_many_arguments)]
+    fn on_this_reference(
+        &self,
+        _start_line: u32,
+        _start_col: u32,
+        _start_offset: u32,
+        _end_line: u32,
+        _end_col: u32,
+        _end_offset: u32,
+    ) {
+    }
+
     /// Called after rendering to check and emit mangled ref warnings.
     /// Only MangledRefWarningPrinter implements this; default is no-op.
     fn check_and_emit_mangled_ref_warnings(

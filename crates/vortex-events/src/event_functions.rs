@@ -37,6 +37,14 @@ pub fn noop_event_emitter() -> Box<dyn DiscreteEventEmitter> {
 struct NoopEventEmitter;
 
 impl DiscreteEventEmitter for NoopEventEmitter {
+    fn configure(&mut self, _send_anonymous_usage_stats: bool) {
+        // No-op implementation
+    }
+
+    fn dbt_distribution(&self) -> &'static str {
+        ""
+    }
+
     fn invocation_start_event(
         &self,
         _invocation_id: &Uuid,
@@ -46,29 +54,33 @@ impl DiscreteEventEmitter for NoopEventEmitter {
     ) {
         // No-op implementation
     }
-
-    fn dbt_distribution(&self) -> &'static str {
-        ""
-    }
 }
 
-pub fn fusion_sa_event_emitter(
-    enabled: bool,
+pub fn default_event_emitter(
+    enabled: Option<bool>,
     dbt_distribution: &'static str,
 ) -> Box<dyn DiscreteEventEmitter> {
-    Box::new(FusionSaEventEmitter {
+    Box::new(DefaultEventEmitter {
         enabled,
         dbt_distribution,
     })
 }
 
 /// Source-available implementation of the DiscreteEventEmitter.
-struct FusionSaEventEmitter {
-    enabled: bool,
+struct DefaultEventEmitter {
+    enabled: Option<bool>,
     dbt_distribution: &'static str,
 }
 
-impl DiscreteEventEmitter for FusionSaEventEmitter {
+impl DiscreteEventEmitter for DefaultEventEmitter {
+    fn configure(&mut self, send_anonymous_usage_stats: bool) {
+        self.enabled = Some(send_anonymous_usage_stats);
+    }
+
+    fn dbt_distribution(&self) -> &'static str {
+        self.dbt_distribution
+    }
+
     fn invocation_start_event(
         &self,
         invocation_id: &Uuid,
@@ -76,8 +88,19 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
         profile_path: Option<&Path>,
         command: String,
     ) {
-        if !self.enabled {
-            return;
+        match self.enabled {
+            Some(explicitly_enabled) => {
+                if !explicitly_enabled {
+                    return; // disabled, do nothing
+                }
+            }
+            None => {
+                debug_assert!(
+                    false,
+                    "DiscreteEventEmitter must be configured with `configure()` before use"
+                );
+                return; // not explicitly configured, do nothing on release builds
+            }
         }
         let env = InternalEnv::global();
         // Some commands don't load dbt_project
@@ -131,10 +154,6 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
         };
 
         let _ = log_proto(message);
-    }
-
-    fn dbt_distribution(&self) -> &'static str {
-        self.dbt_distribution
     }
 }
 

@@ -218,17 +218,17 @@ all_ids AS (
   SELECT unique_id, MAX(depth) FROM downstream GROUP BY unique_id
 ),
 metadata AS (
-  SELECT unique_id, name, resource_type, materialized FROM dbt.nodes
+  SELECT unique_id, name, resource_type, materialized, original_file_path FROM dbt.nodes
   UNION ALL
-  SELECT unique_id, name, 'metric', NULL FROM dbt.metrics
+  SELECT unique_id, name, 'metric', NULL, NULL FROM dbt.metrics
   UNION ALL
-  SELECT unique_id, name, 'semantic_model', NULL FROM dbt.semantic_models
+  SELECT unique_id, name, 'semantic_model', NULL, NULL FROM dbt.semantic_models
   UNION ALL
-  SELECT unique_id, name, 'exposure', NULL FROM dbt.exposures
+  SELECT unique_id, name, 'exposure', NULL, NULL FROM dbt.exposures
 )
-SELECT m.unique_id, m.name, m.resource_type, m.materialized, MIN(a.depth) AS depth
+SELECT m.unique_id, m.name, m.resource_type, m.materialized, m.original_file_path, MIN(a.depth) AS depth
 FROM all_ids a JOIN metadata m ON m.unique_id = a.unique_id
-GROUP BY m.unique_id, m.name, m.resource_type, m.materialized
+GROUP BY m.unique_id, m.name, m.resource_type, m.materialized, m.original_file_path
 ORDER BY depth, m.resource_type, m.name`;
 }
 

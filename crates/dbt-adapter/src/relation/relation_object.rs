@@ -3,7 +3,7 @@ use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
-use dbt_schemas::schemas::dbt_catalogs_v2::V2CatalogType;
+use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{DbtSource, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
@@ -306,12 +306,8 @@ impl Object for RelationObject {
                     }
                 })
             }
-            "dynamic_table_config_changeset" => {
-                let iter = ArgsIter::new(
-                    "dynamic_table_config_changeset",
-                    &["relation_results", "relation_config"],
-                    args,
-                );
+            "dynamic_table_config_changeset" | "interactive_table_config_changeset" => {
+                let iter = ArgsIter::new(name, &["relation_results", "relation_config"], args);
                 let relation_results = iter.next_arg::<Value>()?;
                 let relation_config = iter.next_arg::<Value>()?;
                 iter.finish()?;
@@ -356,6 +352,7 @@ impl Object for RelationObject {
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
+            Some("is_shallow_clone") => Some(Value::from(self.is_shallow_clone())),
             Some("alter_constraints") => {
                 let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
                 Some(Value::from_iter(
@@ -378,6 +375,7 @@ impl Object for RelationObject {
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
             Some("is_dynamic_table") => Some(Value::from(self.is_dynamic_table())),
+            Some("is_interactive_table") => Some(Value::from(self.is_interactive_table())),
             Some("is_iceberg_format") => Some(Value::from(self.is_iceberg_format())),
             Some("is_cte") => Some(Value::from(self.is_cte())),
             Some("is_pointer") => Some(Value::from(self.is_pointer())),
@@ -390,6 +388,9 @@ impl Object for RelationObject {
             }
             Some("Table") => Some(Value::from(RelationType::Table.to_string())),
             Some("DynamicTable") => Some(Value::from(RelationType::DynamicTable.to_string())),
+            Some("InteractiveTable") => {
+                Some(Value::from(RelationType::InteractiveTable.to_string()))
+            }
             Some("StreamingTable") => Some(Value::from(RelationType::StreamingTable.to_string())),
             // the Jinja logics `if resolved.render is defined and resolved.render is callable `
             // in `macro build_ref_function` depends on this
@@ -403,6 +404,12 @@ impl Object for RelationObject {
             Some("location") => Some(Value::from(self.location())),
             Some("project") => Some(Value::from(self.database())),
             Some("dataset") => Some(Value::from(self.schema())),
+
+            // ClickHouse
+            Some("can_exchange") => Some(Value::from(self.can_exchange())),
+            Some("mvs_pointing_to_it") => Some(Value::from_serialize(self.mvs_pointing_to_it())),
+            Some("is_refreshable") => Some(Value::from(self.is_refreshable())),
+            Some("refreshable_append") => Some(Value::from(self.refreshable_append())),
 
             _ => None,
         }
@@ -503,6 +510,17 @@ pub fn create_relation_from_source(
     custom_quoting: ResolvedQuoting,
     source: &DbtSource,
 ) -> FsResult<Box<dyn BaseRelation>> {
+    // A source's `catalog_name` (when configured) names the `catalogs.yml`
+    // entry this source is actually read through -- e.g. an AWS Glue
+    // catalog for dbt Compute. It takes over as the relation's leading
+    // identifier so `database` can stay a descriptive label instead of
+    // having to spell the catalog's own name (the old, implicit coupling).
+    let database = source
+        .__source_attr__
+        .catalog_name
+        .clone()
+        .unwrap_or(database);
+
     if adapter_type == AdapterType::DuckDB
         && let Some(external) = duckdb_external_location_for_source(source)?
     {
@@ -651,7 +669,7 @@ fn duckdb_local_filesystem_root(source: &DbtSource) -> Option<String> {
         .catalogs
         .iter()
         .find(|catalog| catalog.name.eq_ignore_ascii_case(catalog_name))?;
-    if catalog.catalog_type != V2CatalogType::LocalFilesystem {
+    if catalog.catalog_type != CatalogType::LocalFilesystem {
         return None;
     }
     let duckdb = catalog.config_block("duckdb")?;
@@ -947,6 +965,44 @@ mod tests {
     }
 
     #[test]
+    fn source_catalog_name_overrides_database_in_relation() {
+        let mut source = source_with_meta_location("ignored/{name}.csv");
+        source.__source_attr__.catalog_name = Some("GLUE_SOURCE".to_string());
+
+        let relation = create_relation_from_source(
+            AdapterType::Snowflake,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(
+            relation.render_self_as_str(),
+            "\"GLUE_SOURCE\".\"raw\".\"orders\""
+        );
+    }
+
+    #[test]
+    fn source_without_catalog_name_keeps_database() {
+        let source = source_with_meta_location("ignored/{name}.csv");
+
+        let relation = create_relation_from_source(
+            AdapterType::Snowflake,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(relation.render_self_as_str(), "\"main\".\"raw\".\"orders\"");
+    }
+
+    #[test]
     fn databricks_relation_exposes_constraints_to_jinja() {
         let relation = Relation::new(
             AdapterType::Databricks,
@@ -1004,6 +1060,66 @@ mod tests {
 
         assert_eq!(relation.render_self_as_str(), "`analytics`.`events`");
         assert_eq!(relation.database(), Some(""));
+    }
+
+    #[test]
+    fn interactive_table_exposes_its_own_jinja_flag_and_type_name() {
+        let relation = do_create_relation(
+            AdapterType::Snowflake,
+            "d".to_string(),
+            "s".to_string(),
+            Some("i".to_string()),
+            Some(RelationType::InteractiveTable),
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap();
+        let relation = Arc::new(RelationObject::new(relation.into()));
+
+        for (key, expected) in [
+            ("is_interactive_table", true),
+            ("is_dynamic_table", false),
+            ("is_table", false),
+            ("is_view", false),
+        ] {
+            assert_eq!(
+                relation.get_value(&Value::from(key)),
+                Some(Value::from(expected)),
+                "{key}"
+            );
+        }
+
+        assert_eq!(
+            relation.get_value(&Value::from("InteractiveTable")),
+            Some(Value::from("interactive_table"))
+        );
+        assert_eq!(
+            relation.get_value(&Value::from("type")),
+            Some(Value::from("interactive_table"))
+        );
+    }
+
+    /// Asserts on `ErrorKind`, not the message: both this arm and the catch-all name the called
+    /// method in their message text, so a message-only assertion would pass either way.
+    #[test]
+    fn interactive_table_config_changeset_alias_is_reachable_by_name() {
+        let relation = do_create_relation(
+            AdapterType::Snowflake,
+            "d".to_string(),
+            "s".to_string(),
+            Some("i".to_string()),
+            Some(RelationType::InteractiveTable),
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .unwrap();
+        let relation = Arc::new(RelationObject::new(relation.into()));
+
+        let env = minijinja::Environment::new();
+        let state = env.empty_state();
+        let err = relation
+            .call_method(&state, "interactive_table_config_changeset", &[], &[])
+            .unwrap_err();
+
+        assert_eq!(err.kind(), minijinja::ErrorKind::MissingArgument, "{err}");
     }
 
     #[test]
@@ -1251,6 +1367,82 @@ mod tests {
         assert_eq!(
             result_get_part.detail().unwrap(),
             "'bad' is not a valid argument"
+        );
+    }
+
+    #[test]
+    fn clickhouse_relation_exposes_catalog_state_attributes() {
+        let relation = Relation::new(
+            AdapterType::ClickHouse,
+            None,
+            Some("analytics".to_string()),
+            Some("events".to_string()),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING)
+        .with_mvs_pointing_to_it(vec![BTreeMap::from([
+            ("schema".to_string(), "analytics".to_string()),
+            ("name".to_string(), "events_mv".to_string()),
+            ("sql".to_string(), "select 1".to_string()),
+        ])])
+        .with_is_refreshable(true)
+        .with_can_exchange(true)
+        .validate()
+        .unwrap();
+        let obj = Arc::new(RelationObject::new(Arc::new(relation)));
+
+        assert!(
+            obj.get_value(&Value::from("can_exchange"))
+                .unwrap()
+                .is_true()
+        );
+        let mvs = obj.get_value(&Value::from("mvs_pointing_to_it")).unwrap();
+        assert_eq!(mvs.len(), Some(1));
+        assert_eq!(
+            mvs.get_item_by_index(0)
+                .unwrap()
+                .get_attr("name")
+                .unwrap()
+                .as_str(),
+            Some("events_mv")
+        );
+        assert!(
+            obj.get_value(&Value::from("is_refreshable"))
+                .unwrap()
+                .is_true()
+        );
+        assert!(
+            !obj.get_value(&Value::from("refreshable_append"))
+                .unwrap()
+                .is_true()
+        );
+
+        let bare = Relation::new(
+            AdapterType::ClickHouse,
+            None,
+            Some("analytics".to_string()),
+            Some("plain".to_string()),
+        )
+        .validate()
+        .unwrap();
+        let bare = Arc::new(RelationObject::new(Arc::new(bare)));
+        assert_eq!(
+            bare.get_value(&Value::from("mvs_pointing_to_it"))
+                .unwrap()
+                .len(),
+            Some(0)
+        );
+        assert!(
+            !bare
+                .get_value(&Value::from("is_refreshable"))
+                .unwrap()
+                .is_true()
+        );
+        assert!(
+            !bare
+                .get_value(&Value::from("can_exchange"))
+                .unwrap()
+                .is_true()
         );
     }
 }

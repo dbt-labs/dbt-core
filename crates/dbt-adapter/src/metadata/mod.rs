@@ -19,6 +19,7 @@ pub(crate) mod bigquery;
 pub(crate) mod clickhouse;
 pub mod databricks;
 pub(crate) mod duckdb;
+pub(crate) mod exasol;
 pub(crate) mod fabric;
 pub(crate) mod freshness_overrides;
 pub(crate) mod metadata_adapter;

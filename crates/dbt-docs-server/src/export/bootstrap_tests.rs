@@ -4,7 +4,7 @@ use super::*;
 
 fn options() -> ExportOptions {
     ExportOptions {
-        index_dir: PathBuf::from("target/index"),
+        index_dir: PathBuf::from("target/private/index"),
         output_dir: PathBuf::from("target"),
         duckdb_cdn_base: None,
         analytics_enabled: true,

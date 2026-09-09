@@ -40,6 +40,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
+use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::IntrospectionKind;
@@ -51,7 +52,10 @@ use dbt_schemas::schemas::common::DocsConfig;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::common::merge_vec;
+use dbt_schemas::schemas::common::normalize_sql;
 use dbt_schemas::schemas::nodes::DbtModel;
+use dbt_schemas::schemas::nodes::DbtSeed;
+use dbt_schemas::schemas::nodes::DbtSnapshot;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::project::ResolvableConfig;
@@ -60,6 +64,7 @@ use dbt_schemas::schemas::properties::DataTestProperties;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use dbt_schemas::schemas::{
     AdapterAttr, CommonAttributes, DbtTest, InternalDbtNode, NodeBaseAttributes,
 };
@@ -69,6 +74,7 @@ use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::{DbtAsset, DbtPackage};
 use dbt_yaml::Spanned;
 use dbt_yaml::Value as YmlValue;
+use indexmap::IndexMap;
 use md5;
 use minijinja::Value;
 use serde::de;
@@ -122,7 +128,14 @@ fn build_test_metadata_repr(asset: &GenericTestAsset) -> String {
 
     // column_name (sorted first)
     if let Some(col) = &asset.test_metadata_column_name {
-        kwargs_parts.push(format!("'column_name': '{}'", col));
+        let col_repr = match col {
+            StringOrArrayOfStrings::String(s) => format!("'{s}'"),
+            StringOrArrayOfStrings::ArrayOfStrings(cols) => {
+                let cols_repr: Vec<String> = cols.iter().map(|c| format!("'{c}'")).collect();
+                format!("[{}]", cols_repr.join(", "))
+            }
+        };
+        kwargs_parts.push(format!("'column_name': {col_repr}"));
     }
 
     // combination_of_columns (sorted second if present)
@@ -169,7 +182,7 @@ fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
             // Fallback for assets constructed without test_metadata_kwargs (e.g. unit tests).
             let mut kwargs = BTreeMap::new();
             if let Some(col) = &asset.test_metadata_column_name {
-                kwargs.insert("column_name".to_string(), YmlValue::string(col.clone()));
+                kwargs.insert("column_name".to_string(), col.to_yaml_value());
             }
             if let Some(cols) = &asset.test_metadata_combination_of_columns {
                 let seq = cols
@@ -247,15 +260,18 @@ fn file_key_name_from_asset(asset: &GenericTestAsset) -> Option<String> {
 /// Checksum for a data test node, matching dbt-core.
 ///
 /// A singular data test is parsed from its own `tests/*.sql` file, and dbt-core hashes that
-/// file's contents (`FileHash.from_contents`: sha256 over the whitespace-stripped UTF-8
-/// contents — the same bytes it keeps as `raw_code`). Pass those contents here.
+/// file's *whitespace-normalized* contents, not the raw bytes:
+/// `normalize_file_contents(contents) = " ".join(contents.split())`
+/// (`core/dbt/parser/read_files.py:44-48`), then `FileHash.from_contents` over that
+/// (`core/dbt/parser/read_files.py:91-96`). This matches how models and snapshots already hash
+/// their bodies via `normalize_sql` (`dbt_schemas::schemas::common`).
 ///
 /// A generic data test is synthesized from a `schema.yml` entry and has no file of its own, so
 /// dbt-core leaves it at `FileHash.empty()` (`{"name": "none", "checksum": ""}`) — pass `None`.
 /// That also keeps generic-test checksums stable across runs when schema names change.
 fn data_test_checksum(singular_test_file_contents: Option<&str>) -> DbtChecksum {
     match singular_test_file_contents {
-        Some(contents) => DbtChecksum::hash(contents.as_bytes()),
+        Some(contents) => DbtChecksum::hash(normalize_sql(contents).as_bytes()),
         None => DbtChecksum::default(),
     }
 }
@@ -346,16 +362,20 @@ pub async fn resolve_data_tests(
     test_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
+    default_adapter: AdapterType,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     collected_generic_tests: &[GenericTestAsset],
     node_resolver: &NodeResolver,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     models: &BTreeMap<String, Arc<DbtModel>>,
     disabled_models: &BTreeMap<String, Arc<DbtModel>>,
+    seeds: &BTreeMap<String, Arc<DbtSeed>>,
+    snapshots: &BTreeMap<String, Arc<DbtSnapshot>>,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
@@ -369,13 +389,17 @@ pub async fn resolve_data_tests(
         "tests"
     };
     let is_dependency = dependency_package_name.is_some();
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, test_key);
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        test_key,
+        default_adapter,
+    )?;
     let raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             test_key,
-        ))
+            default_adapter,
+        )?)
     } else {
         None
     };
@@ -393,8 +417,10 @@ pub async fn resolve_data_tests(
             .map(|test_asset| test_asset.dbt_asset.clone()),
     );
 
-    let config_resolver =
-        ProjectConfigResolver::build(root_project_configs.tests.clone(), is_dependency, || {
+    let config_resolver = ProjectConfigResolver::build(
+        root_project_configs.tests.clone(),
+        is_dependency,
+        || {
             let tests_config = match (
                 package.dbt_project.tests.clone(),
                 package.dbt_project.data_tests.clone(),
@@ -410,12 +436,15 @@ pub async fn resolve_data_tests(
                 disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref());
             init_project_config(
                 &tests_config,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
                 disallow_plus_prefix,
+                default_adapter,
             )
-        })?
-        .with_resolve_defaults((arg.static_analysis.unwrap_or_default(), arg.store_failures));
+        },
+        default_adapter,
+    )?
+    .with_resolve_defaults((arg.static_analysis.unwrap_or_default(), arg.store_failures));
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -424,9 +453,10 @@ pub async fn resolve_data_tests(
             config_resolver,
             package_quoting,
             uses_snapshot_fqn: false,
+            defer_render_errors_to_compile: true,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             // tests can be defined in any yaml config
@@ -434,6 +464,7 @@ pub async fn resolve_data_tests(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     let mut test_sql_resources_map =
@@ -457,11 +488,12 @@ pub async fn resolve_data_tests(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
-        config: test_config,
+        config: mut test_config,
         rendered_sql: _,
         macro_spans: _macro_spans,
         properties: maybe_properties,
         status,
+        render_error_deferred,
         patch_path: _,
         ..
     } in test_sql_resources_map.into_iter()
@@ -521,13 +553,19 @@ pub async fn resolve_data_tests(
             format!("test.{package_name}.{test_name}")
         };
 
-        // Use test_name (the truncated/file-stem form) as the lookup key, because that is
-        // what the renderer used when it called create_listener — see resolve_model_context.rs
-        // where unique_id = "{package_name}.{model_name}" and model_name = file stem = test_name.
+        // Use the file stem as the lookup key, because that is what the renderer used
+        // when it called create_listener — see resolve_model_context.rs where
+        // unique_id = "{package_name}.{model_name}" and model_name = file stem.
         // Using fqn_name here caused a key miss when the name was truncated, leaving
-        // depends_on.macros empty. (dbt-core#15308)
+        // depends_on.macros empty (dbt-core#15308). The stem usually equals test_name,
+        // but diverges for name-collided generic tests whose file carries a hash suffix.
+        let renderer_name = dbt_asset
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&test_name);
         jinja_type_checking_event_listener_factory
-            .update_unique_id(&format!("{package_name}.{test_name}"), &unique_id);
+            .update_unique_id(&format!("{package_name}.{renderer_name}"), &unique_id);
         let mut macro_depends_on =
             jinja_type_checking_event_listener_factory.get_macro_depends_on(&unique_id);
         filter_core_builtin_test_macro_dependencies(
@@ -556,6 +594,55 @@ pub async fn resolve_data_tests(
             dependency_package_name,
         );
         validate_compute(test_config.compute, &dbt_asset.path)?;
+
+        let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
+        // Match dbt-core's _lookup_attached_node: source tests get no attached_node;
+        // model/seed/snapshot tests get the parent's unique_id (with .v<version> for
+        // versioned models).
+        let attached_node = test_asset.and_then(|ta| {
+            if ta.resource_type == "source" {
+                None
+            } else {
+                Some(format_node_unique_id(
+                    &ta.resource_type,
+                    &ta.dbt_asset.package_name,
+                    &ta.resource_name,
+                    None,
+                    ta.version.as_deref(),
+                ))
+            }
+        });
+
+        // A test runs where its subject runs, so an unset `+adapter` is inherited
+        // from `attached_node` -- the same lookup the `group` inheritance below
+        // does. `lake_compute` inherits like any other adapter: a test has no
+        // materialization to bypass Jinja for, so it executes as a plain read
+        // through the LakeCompute adapter (see `execute_test_on_compute_platform`
+        // in `compute_platform.rs`), the same way it would on any other adapter.
+        let inherited_adapter = attached_node.as_deref().and_then(|id| {
+            models
+                .get(id)
+                .map(|m| m.node_adapter())
+                .or_else(|| seeds.get(id).map(|s| s.node_adapter()))
+                .or_else(|| snapshots.get(id).map(|s| s.node_adapter()))
+        });
+        // See `resolve_models`: the flag overrides the config, and nothing is
+        // validated at parse. `None` from both leaves inheritance to fill the gap.
+        let resolved_node_adapter = arg
+            .adapter_override
+            .or(test_config.adapter)
+            .or(inherited_adapter);
+
+        // See `resolve_models`: both remaining quoting layers depend on which
+        // adapter the node runs on, which is only known after the config merge.
+        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
+        test_config.quoting = resolve_package_quoting(
+            Some(match adapter_quoting.get(&selected_adapter) {
+                Some(authored) => test_config.quoting.filled_from(authored),
+                None => test_config.quoting,
+            }),
+            selected_adapter,
+        );
 
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =
@@ -595,6 +682,18 @@ pub async fn resolve_data_tests(
                 .and_then(|asset| test_metadata_from_asset(asset))
         };
 
+        // Generic tests carry their `description:` on the GenericTestAsset (from schema.yml);
+        // singular tests carry it in their file-level properties. dbt-core surfaces both on
+        // the test node's `description`, so mirror that here rather than defaulting to ''.
+        let test_description = if is_singular_data_test {
+            properties.description.clone().unwrap_or_default()
+        } else {
+            test_path_to_test_asset
+                .get(&dbt_asset.path)
+                .and_then(|asset| asset.description.clone())
+                .unwrap_or_default()
+        };
+
         // For singular tests, parse the user-written SQL for inline {{ config(...) }}.
         let raw_inline_config = if is_singular_data_test {
             dbt_common::tokiofs::read_to_string(dbt_asset.base_path.join(&dbt_asset.path))
@@ -620,7 +719,8 @@ pub async fn resolve_data_tests(
             raw_schema_config,
             raw_inline_config.as_ref(),
             false,
-        );
+            default_adapter,
+        )?;
 
         let mut dbt_test = DbtTest {
             defined_at,
@@ -637,8 +737,7 @@ pub async fn resolve_data_tests(
                 patch_path: None,
                 unique_id: unique_id.clone(),
                 fqn,
-                // dbt-core: description is always default ''
-                description: Some(properties.description.clone().unwrap_or_default()),
+                description: Some(test_description),
                 checksum: data_test_checksum(singular_test_file_contents.as_deref()),
                 // TODO: hydrate for generic + singular tests
                 // Examples in Mantle:
@@ -652,6 +751,10 @@ pub async fn resolve_data_tests(
                 meta: test_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
+                // A data test never runs on lake compute (see `inherited_adapter` above), so
+                // it has nothing to publish: no `+propagate` config exists for this node type.
+                propagate: Vec::new(),
                 database: database.to_owned(),
                 schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),
@@ -707,29 +810,12 @@ pub async fn resolve_data_tests(
                 unrendered_config,
             },
             __test_attr__: {
-                let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
-                // Match dbt-core's _lookup_attached_node: source tests get no attached_node;
-                // model/seed/snapshot tests get the parent's unique_id (with .v<version> for
-                // versioned models).
-                let attached_node = test_asset.and_then(|ta| {
-                    if ta.resource_type == "source" {
-                        None
-                    } else {
-                        Some(format_node_unique_id(
-                            &ta.resource_type,
-                            &ta.dbt_asset.package_name,
-                            &ta.resource_name,
-                            None,
-                            ta.version.as_deref(),
-                        ))
-                    }
-                });
                 let group = attached_node
                     .as_deref()
                     .and_then(|id| models.get(id))
                     .and_then(|m| m.__model_attr__.group.clone());
                 DbtTestAttr {
-                    column_name: test_asset.and_then(|ta| ta.test_metadata_column_name.clone()),
+                    column_name: test_asset.and_then(|ta| ta.column_name.clone()),
                     attached_node,
                     test_metadata: inferred_test_metadata.clone(),
                     file_key_name: test_asset.and_then(|ta| file_key_name_from_asset(ta)),
@@ -741,7 +827,7 @@ pub async fn resolve_data_tests(
             },
             __adapter_attr__: AdapterAttr::from_config_and_dialect(
                 &test_config.__warehouse_specific_config__,
-                adapter_type,
+                default_adapter,
             ),
             deprecated_config: test_config.clone().into(),
             __other__: BTreeMap::new(),
@@ -774,7 +860,7 @@ pub async fn resolve_data_tests(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
         // Mirror dbt-core behavior: when the synthesized name was truncated and the user
@@ -825,7 +911,11 @@ pub async fn resolve_data_tests(
                 ModelStatus::Disabled => {
                     disabled_tests.insert(unique_id, Arc::new(dbt_test));
                 }
-                ModelStatus::ParsingFailed => {}
+                ModelStatus::ParsingFailed => {
+                    if render_error_deferred {
+                        nodes.insert(unique_id, Arc::new(dbt_test));
+                    }
+                }
             }
         }
     }
@@ -838,7 +928,7 @@ pub async fn resolve_data_tests(
         nodes_with_execute,
         node_resolver,
         env.clone(),
-        adapter_type,
+        default_adapter,
         package.dbt_project.name.as_str(),
         &root_package.dbt_project.name,
         runtime_config,
@@ -874,9 +964,10 @@ mod tests {
             source_name: None,
             test_name: "not_null_customers_id".to_string(),
             defined_at: Default::default(),
+            column_name: None,
             test_metadata_name: Some("not_null".to_string()),
             test_metadata_namespace: None,
-            test_metadata_column_name: Some("id".to_string()),
+            test_metadata_column_name: Some(StringOrArrayOfStrings::String("id".to_string())),
             test_metadata_combination_of_columns: None,
             test_metadata_model: None,
             test_metadata_kwargs: BTreeMap::new(),
@@ -886,6 +977,7 @@ mod tests {
             version: None,
             column_tags: vec![],
             unrendered_schema_config: BTreeMap::new(),
+            description: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -900,14 +992,16 @@ mod tests {
     }
 
     /// A singular data test is parsed from its own `.sql` file, so its checksum must be the
-    /// sha256 of that file's contents — the value dbt-core's `FileHash.from_contents` produces.
-    /// The expected digest below is computed independently of this crate:
+    /// sha256 of that file's *whitespace-normalized* contents — the value dbt-core's
+    /// `FileHash.from_contents(normalize_file_contents(contents))` produces
+    /// (`core/dbt/parser/read_files.py:44-48,91-96`). The expected digest below is computed
+    /// independently of this crate:
     ///
     /// ```text
     /// printf %s "select 1 from {{ ref('customers') }} where x < 0" | sha256sum
     /// ```
     #[test]
-    fn test_singular_data_test_checksum_is_sha256_of_file_contents() {
+    fn test_singular_data_test_checksum_is_sha256_of_normalized_file_contents() {
         const SQL: &str = "select 1 from {{ ref('customers') }} where x < 0";
         const EXPECTED_SHA256: &str =
             "0189810ca51b8d0a3a0dd389ed3b616ca34a50d47248d42af82d2cdd16158ff8";
@@ -930,6 +1024,24 @@ mod tests {
             DbtChecksum::Object(object) => assert_eq!(object.name, "sha256"),
             other => panic!("expected object-form checksum, got {other:?}"),
         }
+    }
+
+    /// The invariant Defect 1 (fs#13735) was missing: two singular test bodies that differ only
+    /// in whitespace (blank lines, indentation, newline-vs-space) must hash identically, matching
+    /// dbt-core's `normalize_file_contents = " ".join(contents.split())`.
+    #[test]
+    fn test_singular_data_test_checksum_is_whitespace_invariant() {
+        let compact = "select *\nfrom {{ ref('my_model') }}\nwhere id is null";
+        let spread = "select *\n\n    from {{ ref('my_model') }}\n\n\n    where id is null";
+
+        let checksum_compact = data_test_checksum(Some(compact));
+        let checksum_spread = data_test_checksum(Some(spread));
+        assert_eq!(checksum_compact, checksum_spread);
+
+        // Sanity: a genuine content change (not whitespace-only) still hashes differently.
+        let different = "select * from {{ ref('my_model') }}";
+        let checksum_different = data_test_checksum(Some(different));
+        assert_ne!(checksum_compact, checksum_different);
     }
 
     /// A generic data test is synthesized from `schema.yml` and has no file of its own, so it
@@ -1013,11 +1125,12 @@ mod tests {
             source_name: None,
             test_name: truncated_name.to_string(),
             defined_at: Default::default(),
+            column_name: None,
             test_metadata_name: Some("not_null".to_string()),
             test_metadata_namespace: None,
-            test_metadata_column_name: Some(
+            test_metadata_column_name: Some(StringOrArrayOfStrings::String(
                 "very_long_column_name_that_exceeds_sixty_four_characters".to_string(),
-            ),
+            )),
             test_metadata_combination_of_columns: None,
             test_metadata_model: Some("ref('my_model')".to_string()),
             test_metadata_kwargs: BTreeMap::new(),
@@ -1027,6 +1140,7 @@ mod tests {
             version: None,
             column_tags: vec![],
             unrendered_schema_config: BTreeMap::new(),
+            description: None,
         };
 
         let unique_id = compute_generic_test_unique_id("my_project", &asset);
@@ -1057,6 +1171,7 @@ mod tests {
             source_name: None,
             test_name: "unique_combination_of_columns_customers_a__b".to_string(),
             defined_at: Default::default(),
+            column_name: None,
             test_metadata_name: Some("unique_combination_of_columns".to_string()),
             test_metadata_namespace: None,
             test_metadata_column_name: None,
@@ -1069,6 +1184,7 @@ mod tests {
             version: None,
             column_tags: vec![],
             unrendered_schema_config: BTreeMap::new(),
+            description: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");

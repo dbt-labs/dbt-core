@@ -53,12 +53,12 @@ pub use state::DistInfo;
 /// Resolve the directory containing parquet artifacts.
 ///
 /// Order of resolution:
-/// 1. `args.target_path` (if provided) → expects `<target_path>/index/` to exist.
-/// 2. `./target/index/` in the current working directory.
+/// 1. `args.target_path` (if provided) → expects `<target_path>/private/index/` to exist.
+/// 2. `./target/private/index/` in the current working directory.
 pub fn resolve_index_dir(args: &DocsServeArgs) -> PathBuf {
     match &args.target_path {
-        Some(p) => p.join("index"),
-        None => PathBuf::from("./target/index"),
+        Some(p) => p.join("private").join("index"),
+        None => PathBuf::from("./target/private/index"),
     }
 }
 

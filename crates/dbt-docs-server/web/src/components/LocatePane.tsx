@@ -6,18 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-
-import type { FileTreeItemType } from '@dbt-labs/sourdough';
-import {
-  Icon,
-  PaginatedFileTree,
-  RyeconDataGeography,
-  RyeconFile,
-  RyeconThemeDark,
-  RyeconThemeLight,
-  RyeconThemeSystem,
-  SegmentedButton,
-} from '@dbt-labs/sourdough';
+import { Globe, Moon, Sun, SunMoon } from 'lucide-react';
 
 import type { AssetFilters } from '../App';
 import { FEATURE_FLAGS } from '../lib/featureFlags';
@@ -27,7 +16,7 @@ import {
   inferModelingLayer,
   RESOURCE_TYPE_LABEL,
   RESOURCE_TYPE_ORDER,
-  RESOURCE_TYPE_RYECON,
+  ResourceTypeIcon,
 } from '../lib/resourceType';
 import { handleUpsellEvent } from '../lib/upsellAnalytics';
 import type { FileEntry, Project } from '../shared';
@@ -40,6 +29,8 @@ import {
 } from '../shared';
 import type { NodeSummary } from '../types';
 import { SEARCHABLE_RESOURCE_TYPES } from '../types';
+import { type FileTreeItemType, PaginatedFileTree } from './ui/PaginatedFileTree';
+import { SegmentedButton } from './ui/SegmentedButton';
 
 export type LocatePaneMode = 'assets' | 'files' | 'filter';
 
@@ -199,7 +190,7 @@ export function LocatePane({
       if (aSelf !== bSelf) return aSelf - bSelf;
       return a.localeCompare(b);
     });
-  }, [filtered, project.name]);
+  }, [filtered, project]);
 
   // Hide analysis files from the File tree until FEATURE_FLAGS.hasAnalysis flips on.
   const visibleFiles = useMemo(
@@ -299,12 +290,16 @@ export function LocatePane({
         <div className="flex w-full justify-center">
           <SegmentedButton
             segments={[
-              { label: 'Light', value: 'light', startIcon: { ryecon: RyeconThemeLight } },
-              { label: 'Dark', value: 'dark', startIcon: { ryecon: RyeconThemeDark } },
+              {
+                label: 'Light',
+                value: 'light',
+                startIcon: <Sun className="size-3" />,
+              },
+              { label: 'Dark', value: 'dark', startIcon: <Moon className="size-3" /> },
               {
                 label: 'System',
                 value: 'system',
-                startIcon: { ryecon: RyeconThemeSystem },
+                startIcon: <SunMoon className="size-3" />,
               },
             ]}
             selectedValue={theme}
@@ -376,7 +371,10 @@ function AssetMode({
         data: {
           pathType: 'directory',
           name: rootLabel,
-          iconOverride: { ryecon: RyeconDataGeography, label: rootLabel },
+          iconOverride: {
+            icon: <Globe className="size-3 shrink-0" />,
+            label: rootLabel,
+          },
           info: {
             text: [...typeCounts.values()].reduce((s, n) => s + n, 0).toLocaleString(),
           },
@@ -391,7 +389,7 @@ function AssetMode({
           pathType: 'file',
           name: RESOURCE_TYPE_LABEL[t] ?? t,
           iconOverride: {
-            ryecon: RESOURCE_TYPE_RYECON[t] ?? RyeconFile,
+            icon: <ResourceTypeIcon type={t} className="size-3 shrink-0" />,
             label: RESOURCE_TYPE_LABEL[t] ?? t,
           },
           info: { text: (typeCounts.get(t) ?? 0).toLocaleString() },
@@ -407,8 +405,6 @@ function AssetMode({
     },
     [setOpenDirectories],
   );
-
-  const loadChildren = useCallback(() => {}, []);
 
   const onFileSelect = useCallback(
     (relativePath: string) => {
@@ -430,7 +426,7 @@ function AssetMode({
   );
 
   const onSort = useCallback((a: string, b: string) => {
-    const prefix = `1${ASSET_ALL_PATH}/2`;
+    const prefix = `${ASSET_ALL_PATH}/`;
     const aType = a.startsWith(prefix) ? a.slice(prefix.length) : null;
     const bType = b.startsWith(prefix) ? b.slice(prefix.length) : null;
     if (aType !== null && bType !== null) {
@@ -456,14 +452,11 @@ function AssetMode({
         rootNodeName="root"
         openDirectories={openDirectories}
         setOpenDirectories={setOpenDirectoriesAdapter}
-        loadChildren={loadChildren}
         onFileSelect={onFileSelect}
         onFolderSelect={onFolderSelect}
         selectedFile={selectedFile}
         selectedFolder={selectedFolder}
         enableCloseFolderOnSecondClick
-        showExpandButton
-        isReadOnly
         onSort={onSort}
       />
 
@@ -558,10 +551,6 @@ function TreeMode({
     [setOpenDirectories],
   );
 
-  // No-op: `items` already includes any opened folder's children via the
-  // reactive derivation above. Required prop on PaginatedFileTree.
-  const loadChildren = useCallback(() => {}, []);
-
   const onFileSelect = useCallback(
     (relativePath: string) => {
       if (relativePath === projectName) {
@@ -605,12 +594,9 @@ function TreeMode({
         rootNodeName="root"
         openDirectories={openDirectories}
         setOpenDirectories={setOpenDirectoriesAdapter}
-        loadChildren={loadChildren}
         onFileSelect={onFileSelect}
         selectedFile={selectedFile}
         maxHeight={maxHeight}
-        showExpandButton
-        isReadOnly
       />
     </div>
   );

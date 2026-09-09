@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 
-import { resourceIconMap } from '@dbt-labs/dbt-dag';
-import type { DropdownOption } from '@dbt-labs/sourdough';
-
 import { useAllNodes } from '../hooks/useAllNodes';
 import { makeNameCell } from '../lib/nameCell';
 import type { Project } from '../shared';
@@ -16,6 +13,7 @@ import {
 } from '../shared';
 import { type NodeSummary } from '../types';
 import { ResourceFilterTable } from './ResourceFilterTable';
+import type { DropdownOption } from './ui/DropdownButton';
 
 interface Props {
   project: Project;
@@ -52,7 +50,7 @@ export function AnalysisFilterView({ project, onPeek }: Props) {
 
   const columns = useMemo<ColumnDef<NodeSummary>[]>(
     () => [
-      makeNameCell<NodeSummary>(resourceIconMap.analysis, onPeek, (r) => r.unique_id),
+      makeNameCell<NodeSummary>(onPeek, (r) => r.unique_id),
       {
         id: 'package',
         header: 'Package',

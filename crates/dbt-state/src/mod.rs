@@ -7,6 +7,7 @@ pub mod proto;
 pub mod redis_config;
 pub mod request_builder;
 pub mod run_cache_defer;
+pub mod selector;
 pub mod service_client;
 pub mod service_config;
 pub mod task_cache;

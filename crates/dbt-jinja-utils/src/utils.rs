@@ -46,8 +46,17 @@ pub const DBT_VERSION: &str = "2.0.0"; // easter egg jokes for now
 pub static ENV_VARS: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Cache for template lookups per (current_project, root_project, component)
-static TEMPLATE_CACHE: LazyLock<Mutex<HashMap<(String, String), String>>> =
+/// Key for [`TEMPLATE_CACHE`]: `(dialect, current_project, macro_name)`.
+///
+/// The dialect is part of the key because the final fallback resolves through the
+/// per-dialect internal-package namespace: two adapters can define the same
+/// unprefixed macro, so a Snowflake node and a DuckDB node must not share a
+/// cached answer.
+type TemplateCacheKey = (String, String, String);
+
+/// Cache for template lookups. See [`TemplateCacheKey`] for why the dialect is
+/// part of the key.
+static TEMPLATE_CACHE: LazyLock<Mutex<HashMap<TemplateCacheKey, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Matches local quoted or unquoted CTE definitions that use dbt's ephemeral CTE
@@ -562,7 +571,16 @@ pub fn find_macro_template(
     root_project_name: &str,
     current_project_name: &str,
 ) -> FsResult<String> {
-    let cache_key = (current_project_name.to_string(), macro_name.to_string());
+    let dialect = env
+        .env
+        .get_dialect()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_else(|| "postgres".to_string());
+    let cache_key = (
+        dialect.clone(),
+        current_project_name.to_string(),
+        macro_name.to_string(),
+    );
 
     // Check cache first - return early if found
     if let Ok(cache) = TEMPLATE_CACHE.lock()
@@ -591,7 +609,7 @@ pub fn find_macro_template(
     }
 
     // Last attempt - check dbt internal package
-    let dbt_and_adapters = env.get_dbt_and_adapters_namespace();
+    let dbt_and_adapters = env.get_dbt_and_adapters_namespace(&dialect);
     if let Some(package) = dbt_and_adapters.get(&Value::from(macro_name)) {
         let template_name = format!("{package}.{macro_name}");
         if env.has_template(&template_name) {

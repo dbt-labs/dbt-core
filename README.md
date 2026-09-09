@@ -4,7 +4,7 @@
 
 > [!WARNING]
 > **dbt Core v1 development has moved to the [`1.latest`](https://github.com/dbt-labs/dbt-core/tree/1.latest) branch.**
-> The `main` branch now hosts dbt Core v2.0 (alpha) — a ground-up rewrite in Rust that is the foundation of the Fusion engine. If you're looking for the Python implementation of dbt Core, switch to [`1.latest`](https://github.com/dbt-labs/dbt-core/tree/1.latest).
+> The `main` branch now hosts dbt Core v2.0 (beta) — a ground-up rewrite in Rust that is the foundation of the Fusion engine. If you're looking for the Python implementation of dbt Core, switch to [`1.latest`](https://github.com/dbt-labs/dbt-core/tree/1.latest).
 
 **[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
 
@@ -12,7 +12,7 @@
 
 ## About dbt Core v2.0
 
-> 🚧 dbt Core v2.0 is in alpha. Behavior, APIs, and on-disk formats may change before the stable release.
+> 🚧 dbt Core v2.0 is in beta. Behavior, APIs, and on-disk formats may change before the stable release.
 
 dbt Core v2.0 is engineered for performance at scale — parsing, compiling, and running projects in a fraction of the time compared to v1. It's released under the Apache 2.0 license and is the foundation of the [Fusion engine](https://docs.getdbt.com/docs/fusion/about-fusion).
 

@@ -161,7 +161,7 @@ help() {
     echo "  --target TARGET    Install for target platform TARGET"
     echo "  --to DEST          Install to DEST"
     echo "  --help, -h         Show this help text"
-    echo "  --package PACKAGE  Install package PACKAGE [dbt|all]"
+    echo "  --package PACKAGE  Select package set [dbt|all] (all adds dbt-db-runner)"
 }
 
 update=false
@@ -485,19 +485,19 @@ display_ascii_art() {
     if [ "$package_name" = "dbt" ]; then
         cat<<EOF
 
- =====              =====    ┓┓  
-=========        =========  ┏┫┣┓╋
- ===========    >========   ┗┻┗┛┗
-  ======================    ███████╗██╗   ██╗███████╗██╗ ██████╗ ███╗   ██╗
-   ====================     ██╔════╝██║   ██║██╔════╝██║██╔═══██╗████╗  ██║
-    ========--========      █████╗  ██║   ██║███████╗██║██║   ██║██╔██╗ ██║
-     =====-    -=====       ██╔══╝  ██║   ██║╚════██║██║██║   ██║██║╚██╗██║
-    ========--========      ██╔══╝  ██║   ██║╚════██║██║██║   ██║██║╚██╗██║
-   ====================     ██║     ╚██████╔╝███████║██║╚██████╔╝██║ ╚████║
-  ======================    ╚═╝      ╚═════╝ ╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝
- ========<   ============                        ┌─┐┌┐┌┌─┐┬┌┐┌┌─┐
-=========      ==========                        ├┤ ││││ ┬││││├┤ 
- =====             =====                         └─┘┘└┘└─┘┴┘└┘└─┘ $version
+ =====              =====
+=========        =========
+ ===========    >========
+  ======================         ██╗   ██╗        ██╗  
+   ====================          ██║   ██║       ████╗ 
+    ========--========       ██████║   ██████╗   ╚██╔╝ 
+     =====-    -=====       ██╔══██║   ██╔══██╗   ██║  
+    ========--========      ██║  ██║   ██║  ██║   ██║  
+   ====================     ╚██████║   ██████╔╝   ╚██╗ v$version
+  ======================     ╚═════╝   ╚═════╝     ╚═╝ 
+ ========<   ============
+=========      ==========
+ =====             =====
 
 EOF
     else
@@ -624,6 +624,7 @@ install_packages() {
     current_runner_version=""
     dbt_needs_update=false
     runner_needs_update=false
+    install_runner=false
 
     if [ "$package" = "dbt-lsp" ]; then
         err_and_exit "The standalone dbt-lsp package is no longer published. Install dbt and run 'dbt lsp' instead."
@@ -639,7 +640,12 @@ install_packages() {
         if ! compare_versions "$current_dbt_version" "$target_version" "$version" "dbt"; then
             dbt_needs_update=true
         fi
+    fi
 
+    # --package all opts in to the runner. Updates also preserve an existing
+    # runner so a bundled installation stays version-matched.
+    if [ "$package" = "all" ] || { [ "$update" = true ] && [ -e "$dest/dbt-db-runner" ]; }; then
+        install_runner=true
         current_runner_version=$(check_binary_version "$dest/dbt-db-runner" "dbt-db-runner")
         if ! compare_versions "$current_runner_version" "$target_version" "$version" "dbt-db-runner"; then
             runner_needs_update=true
@@ -652,7 +658,7 @@ install_packages() {
     fi
 
     # Install packages
-    if ([ "$package" = "all" ] || [ "$package" = "dbt" ]) && [ "$runner_needs_update" = true ]; then
+    if [ "$install_runner" = true ] && [ "$runner_needs_update" = true ]; then
         if ! install_package "dbt-db-runner" "$target_version" "$target" "$dest" "$update"; then
             return 1
         fi

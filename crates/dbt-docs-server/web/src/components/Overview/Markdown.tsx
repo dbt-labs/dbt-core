@@ -11,11 +11,10 @@ import remarkGfm from 'remark-gfm';
 // Every element a project overview can produce needs an entry here. Tailwind's
 // preflight is on (`app.css`) and there is no @tailwindcss/typography plugin in
 // the preset chain, so anything left unmapped renders genuinely flat: headings
-// inherit body size and weight, and `ol`/`ul` get `list-style: none`. dbt Core's
-// own default overview — which is what `overview.md` beside this file holds, and
-// what an unconfigured project renders — is written entirely in `###`/`####`, so
-// the h3/h4 entries below are load-bearing on the default landing page, not just
-// for projects that happen to author deep headings.
+// inherit body size and weight, and `ol`/`ul` get `list-style: none`. A project
+// authoring its own `{% docs __overview__ %}` block can reach any heading level,
+// so the h3/h4 entries below stay load-bearing even though the unconfigured
+// default (`Overview.tsx`) no longer renders through this component.
 //
 // `children` is destructured and passed explicitly rather than spread. It reads
 // as noise, but jsx-a11y cannot see content arriving through a spread and the
