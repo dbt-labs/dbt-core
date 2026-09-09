@@ -7,14 +7,13 @@ import {
 import { AnySchema, timestampNow } from '@bufbuild/protobuf/wkt';
 import { v4 as uuidv4 } from 'uuid';
 
-import aboutProto from '@dbt-labs/proto/about.json';
+import aboutProto from '../proto/about.json';
 import {
   type VortexMessage,
   type VortexMessageBatch,
   VortexMessageBatchSchema,
   VortexMessageSchema,
-} from '@dbt-labs/proto/public/events/vortex_pb';
-
+} from '../proto/dbtlabs/proto/v1/events/vortex_pb';
 import env from './vortexEnv';
 
 const VORTEX_CLIENT_VERSION = '0.3.0';
@@ -309,14 +308,12 @@ export class VortexProducerClient {
         .catch((err: unknown) => {
           if (!(err instanceof Error)) {
             rej(new Error(String(err)));
-          } else {
             // NOTE: MDN recommends using err.name to check for AbortError instead of an `instanceof` check
             // See: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal#aborting_a_fetch_operation_with_a_timeout
-            if (err.name === 'AbortError') {
-              rej(new TimeoutError(timeoutSeconds));
-            } else {
-              rej(err);
-            }
+          } else if (err.name === 'AbortError') {
+            rej(new TimeoutError(timeoutSeconds));
+          } else {
+            rej(err);
           }
         });
     });

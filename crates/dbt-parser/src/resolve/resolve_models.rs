@@ -24,6 +24,7 @@ use crate::utils::parse_unrendered_config;
 use crate::utils::update_node_relation_components;
 use crate::validation::check_node_static_analysis;
 
+use dbt_adapter::load_catalogs;
 use dbt_adapter_core::AdapterType;
 use dbt_common::CodeLocationWithFile;
 use dbt_common::ErrorCode;
@@ -61,6 +62,7 @@ use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::OnSchemaChange;
 use dbt_schemas::schemas::common::Versions;
+use dbt_schemas::schemas::dbt_catalogs::LoadedCatalogs;
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
@@ -178,6 +180,7 @@ pub async fn resolve_models(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     test_name_truncations: &mut HashMap<String, String>,
     seen_generic_test_paths: &mut HashMap<PathBuf, String>,
@@ -256,6 +259,7 @@ pub async fn resolve_models(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     // HACK: strip semantic resources out of all model properties
@@ -352,6 +356,13 @@ pub async fn resolve_models(
 
     // Initialize a counter struct to track the version of each model
     let mut duplicates = Vec::new();
+    let catalogs = load_catalogs::fetch_catalogs();
+    let use_catalogs_v2 = load_catalogs::fetch_use_catalogs_v2();
+    let catalogs_state = match catalogs.as_deref() {
+        Some(c) if use_catalogs_v2 => LoadedCatalogs::V2(c),
+        Some(c) => LoadedCatalogs::V1(c),
+        None => LoadedCatalogs::None,
+    };
 
     for SqlFileRenderResult {
         asset: dbt_asset,
@@ -519,7 +530,6 @@ pub async fn resolve_models(
 
         let mut columns = process_columns(
             properties.columns.as_ref(),
-            model_config.meta.clone(),
             model_config.tags.inner().clone().map(|tags| tags.into()),
         )?;
         let materialized = model_config.materialized.clone();
@@ -589,6 +599,29 @@ pub async fn resolve_models(
             resolved_node_adapter.unwrap_or(default_adapter),
             &dbt_asset.path,
         )?;
+
+        // catalog check: a catalog_name with no match would otherwise silently materialize to the default catalog
+        if model_config.enabled
+            && let Some(catalog_name) = model_config.catalog_name.as_deref()
+            && !catalogs_state.has_catalog_name(catalog_name)?
+        {
+            let err = match catalogs_state.catalog_names()? {
+                None => fs_err!(
+                    code => ErrorCode::InvalidConfig,
+                    loc => dbt_asset.path.clone(),
+                    "Model specifies catalog_name '{catalog_name}', but no catalogs.yml was found in the project. \
+                     Add a catalog named '{catalog_name}' to catalogs.yml, or remove the catalog_name config."
+                ),
+                Some(names) => fs_err!(
+                    code => ErrorCode::InvalidConfig,
+                    loc => dbt_asset.path.clone(),
+                    "Model specifies catalog_name '{catalog_name}', which is not defined in catalogs.yml. \
+                     Defined catalogs: [{}].", names.join(", ")
+                ),
+            };
+            emit_error_log_from_fs_error(*err);
+            continue;
+        }
 
         apply_model_freshness_loaded_at_override(
             model_config.freshness.as_mut(),
@@ -1217,7 +1250,6 @@ fn process_versioned_columns(
                 .collect();
             let version_columns = process_columns(
                 Some(&version_column_props),
-                model_config.meta.clone(),
                 model_config.tags.inner().clone().map(|tags| tags.into()),
             )?;
 

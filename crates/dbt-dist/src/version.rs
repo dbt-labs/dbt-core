@@ -226,7 +226,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn resolve_target_version_via_mock() {
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let client =
@@ -236,7 +236,7 @@ mod tests {
         assert_eq!(version, "2.0.0-preview.154");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn resolve_target_version_with_alias() {
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let client =
@@ -248,7 +248,7 @@ mod tests {
         assert_eq!(version, "2.0.0-preview.157");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn resolve_target_version_with_base_url_ignores_cdn_base_url() {
         let manifest = serde_json::to_string(&test_versions_json()).unwrap();
         let client =

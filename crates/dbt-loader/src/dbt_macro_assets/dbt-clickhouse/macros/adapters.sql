@@ -94,6 +94,10 @@
         map('schema', mv_sources.mv_database, 'name', mv_sources.mv_name, 'sql', mv_sources.mv_sql),
         mv_sources.mv_name != ''
       ) as mvs_pointing_to_it,
+      -- The refresh clause of a refreshable MV sits between the view name and the TO clause,
+      -- e.g. CREATE MATERIALIZED VIEW db.mv REFRESH EVERY 2 MINUTE [APPEND] TO db.target ...
+      max(position(substring(t.create_table_query, 1, position(t.create_table_query, ' TO ')), ' REFRESH ')) > 0 as is_refreshable,
+      max(position(substring(t.create_table_query, 1, position(t.create_table_query, ' TO ')), ' APPEND')) > 0 as refreshable_append,
       {%- if get_clickhouse_cluster_name() -%}
         count(distinct _shard_num) > 1  as  is_on_cluster
         from clusterAllReplicas({{ get_clickhouse_cluster_name() }}, system.tables) as t

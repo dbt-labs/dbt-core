@@ -7,6 +7,7 @@ use crate::resolve::resolve_utils::{canonicalize_source_config_keys, extract_con
 use crate::utils::{extract_resource_config_from_raw_project, get_node_fqn};
 use crate::validation::check_node_static_analysis;
 
+use dbt_adapter::load_catalogs;
 use dbt_adapter_core::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::DbtPath;
@@ -20,6 +21,7 @@ use dbt_schemas::schemas::common::{
     DbtChecksum, DbtMaterialization, DbtQuoting, FreshnessDefinition, FreshnessRules,
     NodeDependsOn, normalize_quoting,
 };
+use dbt_schemas::schemas::dbt_catalogs::LoadedCatalogs;
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{ResolvableConfig, SourceConfig, Tags};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables, TablesConfig};
@@ -256,6 +258,18 @@ pub async fn resolve_sources(
     // https://docs.getdbt.com/reference/resource-properties/quoting
     let source_default_quoting = default_dbt_quoting_for(adapter_type);
 
+    // See the equivalent model-side check in resolve_models.rs: a catalog_name
+    // with no match would otherwise silently materialize/read against the
+    // default catalog and fail much later, inside the query, with a
+    // confusing backend error instead of a clear one here.
+    let catalogs = load_catalogs::fetch_catalogs();
+    let use_catalogs_v2 = load_catalogs::fetch_use_catalogs_v2();
+    let catalogs_state = match catalogs.as_deref() {
+        Some(c) if use_catalogs_v2 => LoadedCatalogs::V2(c),
+        Some(c) => LoadedCatalogs::V1(c),
+        None => LoadedCatalogs::None,
+    };
+
     let config_resolver = ProjectConfigResolver::build(
         root_project_configs.sources.clone(),
         is_dependency,
@@ -389,6 +403,32 @@ pub async fn resolve_sources(
             dependency_package_name,
         );
 
+        // catalog check: a catalog_name with no match would otherwise silently read against the default catalog
+        if source_config.enabled
+            && let Some(catalog_name) = source_config
+                .__warehouse_specific_config__
+                .catalog_name
+                .as_deref()
+            && !catalogs_state.has_catalog_name(catalog_name)?
+        {
+            let err = match catalogs_state.catalog_names()? {
+                None => dbt_common::fs_err!(
+                    code => ErrorCode::InvalidConfig,
+                    loc => mpe.relative_path.clone(),
+                    "Source specifies catalog_name '{catalog_name}', but no catalogs.yml was found in the project. \
+                     Add a catalog named '{catalog_name}' to catalogs.yml, or remove the catalog_name config."
+                ),
+                Some(names) => dbt_common::fs_err!(
+                    code => ErrorCode::InvalidConfig,
+                    loc => mpe.relative_path.clone(),
+                    "Source specifies catalog_name '{catalog_name}', which is not defined in catalogs.yml. \
+                     Defined catalogs: [{}].", names.join(", ")
+                ),
+            };
+            emit_error_log_from_fs_error(*err);
+            continue;
+        }
+
         // `user_quoting` is the raw source+table YAML merge (no defaults). It is
         // serialized as `ManifestSource.quoting` and matches dbt-core's
         // `source.quoting.merged(table.quoting)`. The resolved `table_quoting`
@@ -419,7 +459,6 @@ pub async fn resolve_sources(
         let columns = if let Some(ref cols) = table.columns {
             process_columns(
                 Some(cols),
-                source_config.meta.clone(),
                 source_config.tags.inner().clone().map(|tags| tags.into()),
             )?
         } else {
@@ -554,6 +593,10 @@ pub async fn resolve_sources(
                 unrendered_database,
                 unrendered_schema,
                 external: table.external.clone(),
+                catalog_name: source_config
+                    .__warehouse_specific_config__
+                    .catalog_name
+                    .clone(),
             },
             deprecated_config: source_config.clone().into(),
             __other__: BTreeMap::new(),

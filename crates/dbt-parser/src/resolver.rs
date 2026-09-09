@@ -187,9 +187,6 @@ pub async fn resolve(
     let manifest_selectors = resolve_manifest_selectors(resolved_selectors_map.clone())?;
     let resolved_selectors = resolve_final_selectors(resolved_selectors_map, arg)?;
 
-    // Create a map to store full runtime configs for ALL packages
-    let mut all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>> = BTreeMap::new();
-
     // let mut nodes = Nodes::default();
     let mut disabled_nodes = disabled_nodes;
     resolver_hooks.pre_resolve(&arg.io, adapter_type, &mut nodes, root_project_quoting)?;
@@ -224,6 +221,49 @@ pub async fn resolve(
 
     let package_waves = utils::prepare_package_dependency_levels(dbt_state.clone());
 
+    // Build every package's runtime config up front. `DbtRuntimeConfig::new` only reads
+    // `dbt_state`/`arg.io.in_dir`, never parse output, so it doesn't need to wait on the
+    // waves below. This is what lets a *dependency* package's naming macros and model
+    // contexts see the ROOT project's config, matching dbt Core's `self.root_project`.
+    let all_runtime_configs: Arc<BTreeMap<String, Arc<DbtRuntimeConfig>>> = {
+        let mut configs: BTreeMap<String, Arc<DbtRuntimeConfig>> = BTreeMap::new();
+        for package_name in package_waves.iter().flatten() {
+            let package = dbt_state
+                .packages
+                .iter()
+                .find(|p| &p.dbt_project.name == package_name)
+                .ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "Encountered unexpected package not found in project: {}",
+                        package_name
+                    )
+                })?;
+            let vars = dbt_state
+                .vars
+                .get(package_name)
+                .expect("All packages should have vars initialized");
+            let runtime_config = Arc::new(DbtRuntimeConfig::new(
+                &arg.io.in_dir,
+                package,
+                &dbt_state.dbt_profile,
+                &configs,
+                vars,
+                &dbt_state.cli_vars,
+            ));
+            dbt_schemas::state::register_global_runtime_config(
+                package_name.clone(),
+                runtime_config.clone(),
+            );
+            configs.insert(package_name.clone(), runtime_config);
+        }
+        Arc::new(configs)
+    };
+    let root_runtime_config = all_runtime_configs
+        .get(root_project_name)
+        .expect("root project runtime config must be built by the pre-pass above")
+        .clone();
+
     let mut semantic_layer_spec_is_legacy = false;
     let mut test_name_truncations: HashMap<String, String> = HashMap::new();
     let all_macro_properties: BTreeMap<
@@ -248,7 +288,8 @@ pub async fn resolve(
         &macros,
         jinja_env.clone(),
         &mut node_resolver,
-        &mut all_runtime_configs,
+        all_runtime_configs.clone(),
+        root_runtime_config.clone(),
         token,
         jinja_type_checking_event_listener_factory.clone(),
     )
@@ -331,17 +372,13 @@ pub async fn resolve(
     get_columns_in_relation_calls.extend(get_columns_in_relation_calls_from_parse?);
     patterned_dangling_sources.extend(patterned_dangling_sources_from_parse);
 
-    let root_runtime_config = all_runtime_configs
-        .get(dbt_state.root_project_name())
-        .unwrap();
-
     // Resolve operations (on_run_start and on_run_end) with rendering and dependency extraction
     let mut operations = Operations::default();
     for package in &dbt_state.packages {
         // Get the package-specific runtime config so operations can access package vars
         let package_runtime_config = all_runtime_configs
             .get(&package.dbt_project.name)
-            .unwrap_or(root_runtime_config);
+            .unwrap_or(&root_runtime_config);
 
         let (on_run_start, on_run_end) = resolve_operations(
             &package.dbt_project,
@@ -359,6 +396,7 @@ pub async fn resolve(
                 snowflake_ignore_case: None,
             },
             package_runtime_config.clone(),
+            root_runtime_config.clone(),
         )?;
         operations.on_run_start.extend(on_run_start);
         operations.on_run_end.extend(on_run_end);
@@ -673,6 +711,7 @@ pub async fn resolve_inner(
     jinja_env: Arc<JinjaEnv>,
     mut node_resolver: NodeResolver,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     test_name_truncations: &mut HashMap<String, String>,
     seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     token: &CancellationToken,
@@ -705,6 +744,7 @@ pub async fn resolve_inner(
         &macros.docs_macros,
         DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
         namespace_keys,
+        Some(root_runtime_config.clone()),
     );
     // Resolve the dbt properties (schema.yml) files
     let mut min_properties = resolve_minimal_properties(
@@ -831,6 +871,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         &mut node_resolver,
         &mut collected_generic_tests,
         test_name_truncations,
@@ -870,6 +911,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         &mut collected_generic_tests,
         test_name_truncations,
         seen_generic_test_paths,
@@ -897,6 +939,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         token,
     )
     .await?;
@@ -917,6 +960,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         token,
     )
     .await?;
@@ -939,6 +983,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         &mut node_resolver,
         token,
     )
@@ -1031,6 +1076,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         &collected_generic_tests,
         &node_resolver,
         token,
@@ -1235,11 +1281,11 @@ async fn resolve_package(
     jinja_env: Arc<JinjaEnv>,
     node_resolver: NodeResolver,
     all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(
     String,
-    Arc<DbtRuntimeConfig>,
     Nodes,
     Nodes,
     RenderResults,
@@ -1259,19 +1305,13 @@ async fn resolve_package(
                 package_name
             )
         })?;
-    let vars = dbt_state
-        .vars
-        .get(&package_name)
-        .expect("All packages should have vars initialized");
 
-    let runtime_config = Arc::new(DbtRuntimeConfig::new(
-        &arg.io.in_dir,
-        package,
-        &dbt_state.dbt_profile,
-        all_runtime_configs,
-        vars,
-        &dbt_state.cli_vars.clone(),
-    ));
+    // Built up front for every package in `resolve()`'s pre-pass, independent of wave order —
+    // see the comment there for why the config can't be (re)built lazily here anymore.
+    let runtime_config = all_runtime_configs
+        .get(&package_name)
+        .expect("runtime config must be pre-built for every package before waves run")
+        .clone();
 
     let mut test_name_truncations: HashMap<String, String> = HashMap::new();
     let mut seen_generic_test_paths: HashMap<PathBuf, String> = HashMap::new();
@@ -1293,6 +1333,7 @@ async fn resolve_package(
         jinja_env.clone(),
         node_resolver,
         runtime_config.clone(),
+        root_runtime_config.clone(),
         &mut test_name_truncations,
         &mut seen_generic_test_paths,
         token,
@@ -1303,7 +1344,6 @@ async fn resolve_package(
     // Return everything needed for merging
     Ok((
         package_name,
-        runtime_config,
         new_nodes,
         new_disabled_nodes,
         rendering_results,
@@ -1326,7 +1366,8 @@ async fn resolve_package_waves(
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     node_resolver: &mut NodeResolver,
-    all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    all_runtime_configs: Arc<BTreeMap<String, Arc<DbtRuntimeConfig>>>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(
@@ -1356,8 +1397,11 @@ async fn resolve_package_waves(
     for package_wave in package_waves {
         token.check_cancellation()?;
 
-        // Snapshot per-wave state for parallel tasks
-        let runtime_configs_snapshot = Arc::new(all_runtime_configs.clone());
+        // Snapshot per-wave state for parallel tasks. Runtime configs for every package
+        // (including root) were already built in `resolve()`'s pre-pass, so this is just a
+        // cheap Arc clone now, not a map clone.
+        let all_runtime_configs = all_runtime_configs.clone();
+        let root_runtime_config = root_runtime_config.clone();
         let node_resolver_snapshot = node_resolver.clone();
 
         let arg = arg.clone();
@@ -1381,7 +1425,8 @@ async fn resolve_package_waves(
                 let macros = macros.clone();
                 let jinja_env = jinja_env.clone();
                 let node_resolver = node_resolver_snapshot.clone();
-                let runtime_configs = runtime_configs_snapshot.clone();
+                let all_runtime_configs = all_runtime_configs.clone();
+                let root_runtime_config = root_runtime_config.clone();
                 let token = token.clone();
                 let jinja_type_checking_event_listener_factory =
                     jinja_type_checking_event_listener_factory.clone();
@@ -1397,7 +1442,8 @@ async fn resolve_package_waves(
                         &macros,
                         jinja_env,
                         node_resolver,
-                        &runtime_configs,
+                        &all_runtime_configs,
+                        root_runtime_config,
                         &token,
                         jinja_type_checking_event_listener_factory,
                     )
@@ -1411,7 +1457,6 @@ async fn resolve_package_waves(
         for result in results {
             let (
                 package_name,
-                runtime_config,
                 new_nodes,
                 new_disabled_nodes,
                 rendering_results,
@@ -1422,12 +1467,6 @@ async fn resolve_package_waves(
             ) = result;
 
             semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
-
-            dbt_schemas::state::register_global_runtime_config(
-                package_name.clone(),
-                runtime_config.clone(),
-            );
-            all_runtime_configs.insert(package_name.clone(), runtime_config);
 
             if !macro_properties.is_empty() {
                 all_macro_properties.insert(package_name.clone(), macro_properties);

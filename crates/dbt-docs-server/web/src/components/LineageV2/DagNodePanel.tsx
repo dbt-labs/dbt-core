@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, Copy, LayoutList, MoreHorizontal, X } from 'lucide-react';
 
-import { type ResourceTypeExplorer, resourceTypesWithColumns } from '@dbt-labs/dbt-dag';
-
 import { getColumns, toRelationshipItem } from '../../lib/assetView';
 import { inferResourceType } from '../../lib/inferResourceType';
+import {
+  RESOURCE_TYPES_WITH_COLUMNS,
+  type ResourceTypeExplorer,
+} from '../../lib/resourceType';
 import { paths } from '../../routes';
 import {
   AssetMetadata,
@@ -189,7 +191,7 @@ function PanelBody({
   const referencedBy = (asset.referencedBy ?? []).map(toRelationshipItem);
   const hasRelations = dependsOn.length > 0 || referencedBy.length > 0;
 
-  const showColumns = (resourceTypesWithColumns as readonly string[]).includes(
+  const showColumns = (RESOURCE_TYPES_WITH_COLUMNS as readonly string[]).includes(
     explorerType,
   );
   const tabs = [

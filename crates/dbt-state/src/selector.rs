@@ -51,6 +51,9 @@ fn parse_selector_criteria(selector: &str) -> Result<SelectorCriteria, SelectorS
     })
 }
 
+/// Maximum number of nodes to include in a single request batch.
+pub const SELECTOR_MAX_BATCH_SIZE: usize = 10_000;
+
 pub async fn evaluate_state_selector(
     nodes: &Nodes,
     args: &RunCacheStateSelectorArgs,
@@ -89,15 +92,19 @@ pub async fn evaluate_state_selector(
 
     let criteria = parse_selector_criteria(selector)?;
 
-    let request = SelectorRequest {
-        target: args.defer_to.clone(),
-        project_id: project_id.to_string(),
-        selector_criteria: criteria as i32,
-        nodes: node_data_list,
-    };
-    let response = args.client.get_state_selection(request).await?;
+    let mut result = BTreeSet::new();
+    for batch in node_data_list.chunks(SELECTOR_MAX_BATCH_SIZE) {
+        let request = SelectorRequest {
+            target: args.defer_to.clone(),
+            project_id: project_id.to_string(),
+            selector_criteria: criteria as i32,
+            nodes: batch.to_vec(),
+        };
+        let response = args.client.get_state_selection(request).await?;
+        result.extend(response.node_unique_ids);
+    }
 
-    Ok(response.node_unique_ids.into_iter().collect())
+    Ok(result)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -115,8 +122,17 @@ pub enum SelectorServiceError {
 #[cfg(test)]
 mod tests {
     use super::{
-        SelectorServiceError, is_service_supported_state_selector, parse_selector_criteria,
+        RunCacheStateSelectorArgs, SELECTOR_MAX_BATCH_SIZE, SelectorServiceError,
+        evaluate_state_selector, is_service_supported_state_selector, parse_selector_criteria,
     };
+    use crate::proto::query_cache::{SelectorRequest, SelectorResponse};
+    use crate::service_client::{
+        RunCacheServiceClient, RunCacheServiceError, shared_run_cache_service_client,
+    };
+    use dbt_common::path::DbtPath;
+    use dbt_schemas::schemas::{DbtModel, Nodes};
+    use std::collections::BTreeMap;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn supports_only_the_service_backed_state_selector_values() {
@@ -146,5 +162,212 @@ mod tests {
             parse_selector_criteria("modified.foo"),
             Err(SelectorServiceError::InvalidSelector(selector, _)) if selector == "modified.foo"
         ));
+    }
+
+    fn model_node(unique_id: &str) -> DbtModel {
+        let mut m = DbtModel::default();
+        m.__common_attr__.unique_id = unique_id.to_string();
+        m.__common_attr__.fqn = vec!["project".to_string(), unique_id.to_string()];
+        m
+    }
+
+    fn nodes_with_count(count: usize) -> Nodes {
+        let models: BTreeMap<String, Arc<DbtModel>> = (0..count)
+            .map(|idx| {
+                let unique_id = format!("model.pkg.model_{idx}");
+                (unique_id.clone(), Arc::new(model_node(&unique_id)))
+            })
+            .collect();
+        Nodes {
+            models,
+            ..Default::default()
+        }
+    }
+
+    #[derive(Default)]
+    struct MockSelectorState {
+        request_batch_sizes: Vec<usize>,
+    }
+
+    struct MockSelectorClient {
+        responses: Mutex<Vec<SelectorResponse>>,
+        state: Arc<Mutex<MockSelectorState>>,
+    }
+
+    impl MockSelectorClient {
+        fn new(responses: Vec<SelectorResponse>) -> (Self, Arc<Mutex<MockSelectorState>>) {
+            let state = Arc::new(Mutex::new(MockSelectorState::default()));
+            (
+                Self {
+                    responses: Mutex::new(responses),
+                    state: Arc::clone(&state),
+                },
+                state,
+            )
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl RunCacheServiceClient for MockSelectorClient {
+        async fn validate_client_version(
+            &self,
+        ) -> Result<crate::service_client::ClientVersionStatus, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn submit_enriched_sql(
+            &self,
+            _request: crate::proto::query_cache::SubmitEnrichedSqlRequest,
+        ) -> Result<crate::proto::query_cache::SubmitSqlResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn submit_values(
+            &self,
+            _request: crate::proto::query_cache::SubmitValuesRequest,
+        ) -> Result<crate::proto::query_cache::SubmitSqlResponse, RunCacheServiceError> {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn confirm_execution(
+            &self,
+            _request: crate::proto::query_cache::ConfirmExecutionRequest,
+        ) -> Result<crate::proto::query_cache::ConfirmExecutionResponse, RunCacheServiceError>
+        {
+            Err(RunCacheServiceError::Disabled)
+        }
+
+        async fn get_state_selection(
+            &self,
+            request: SelectorRequest,
+        ) -> Result<SelectorResponse, RunCacheServiceError> {
+            self.state
+                .lock()
+                .unwrap()
+                .request_batch_sizes
+                .push(request.nodes.len());
+
+            let response = self
+                .responses
+                .lock()
+                .unwrap()
+                .pop()
+                .unwrap_or(SelectorResponse {
+                    node_unique_ids: Vec::new(),
+                });
+            Ok(response)
+        }
+    }
+
+    fn selector_args(client: MockSelectorClient) -> RunCacheStateSelectorArgs {
+        RunCacheStateSelectorArgs {
+            client: shared_run_cache_service_client(client),
+            defer_to: "prod".to_string(),
+            project_id: Some("project-123".to_string()),
+            macros: BTreeMap::new(),
+            project_root: DbtPath::from("test-project"),
+        }
+    }
+
+    #[tokio::test]
+    async fn evaluate_state_selector_batches_large_node_sets() {
+        let node_count = SELECTOR_MAX_BATCH_SIZE + 1;
+        let nodes = nodes_with_count(node_count);
+
+        let (client, state) = MockSelectorClient::new(vec![
+            SelectorResponse {
+                node_unique_ids: vec![format!("model.pkg.model_{}", SELECTOR_MAX_BATCH_SIZE)],
+            },
+            SelectorResponse {
+                node_unique_ids: vec!["model.pkg.model_0".to_string()],
+            },
+        ]);
+
+        let args = selector_args(client);
+        let result = evaluate_state_selector(&nodes, &args, "modified")
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.contains("model.pkg.model_0"));
+        assert!(result.contains(&format!("model.pkg.model_{}", SELECTOR_MAX_BATCH_SIZE)));
+
+        let batch_sizes = &state.lock().unwrap().request_batch_sizes;
+        assert_eq!(batch_sizes.len(), 2);
+        assert_eq!(batch_sizes[0], SELECTOR_MAX_BATCH_SIZE);
+        assert_eq!(batch_sizes[1], 1);
+    }
+
+    #[tokio::test]
+    async fn evaluate_state_selector_batches_request_sizes_and_merges_results() {
+        let node_count = 2 * SELECTOR_MAX_BATCH_SIZE;
+        let nodes = nodes_with_count(node_count);
+
+        let (client, state) = MockSelectorClient::new(vec![
+            SelectorResponse {
+                node_unique_ids: vec![
+                    format!("model.pkg.model_{}", SELECTOR_MAX_BATCH_SIZE),
+                    format!("model.pkg.model_{}", SELECTOR_MAX_BATCH_SIZE + 1),
+                ],
+            },
+            SelectorResponse {
+                node_unique_ids: vec![
+                    "model.pkg.model_0".to_string(),
+                    "model.pkg.model_1".to_string(),
+                ],
+            },
+        ]);
+
+        let args = selector_args(client);
+        let result = evaluate_state_selector(&nodes, &args, "new").await.unwrap();
+
+        assert_eq!(result.len(), 4);
+        assert!(result.contains("model.pkg.model_0"));
+        assert!(result.contains("model.pkg.model_1"));
+        assert!(result.contains(&format!("model.pkg.model_{}", SELECTOR_MAX_BATCH_SIZE)));
+        assert!(result.contains(&format!("model.pkg.model_{}", SELECTOR_MAX_BATCH_SIZE + 1)));
+
+        let batch_sizes = &state.lock().unwrap().request_batch_sizes;
+        assert_eq!(batch_sizes.len(), 2);
+        assert_eq!(batch_sizes[0], SELECTOR_MAX_BATCH_SIZE);
+        assert_eq!(batch_sizes[1], SELECTOR_MAX_BATCH_SIZE);
+    }
+
+    #[tokio::test]
+    async fn evaluate_state_selector_single_batch_for_small_node_set() {
+        let node_count = 100;
+        let nodes = nodes_with_count(node_count);
+
+        let (client, state) = MockSelectorClient::new(vec![SelectorResponse {
+            node_unique_ids: vec!["model.pkg.model_50".to_string()],
+        }]);
+
+        let args = selector_args(client);
+        let result = evaluate_state_selector(&nodes, &args, "modified")
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(result.contains("model.pkg.model_50"));
+
+        let batch_sizes = &state.lock().unwrap().request_batch_sizes;
+        assert_eq!(batch_sizes.len(), 1);
+        assert_eq!(batch_sizes[0], 100);
+    }
+
+    #[tokio::test]
+    async fn evaluate_state_selector_empty_nodes_makes_no_requests() {
+        let nodes = Nodes::default();
+
+        let (client, state) = MockSelectorClient::new(vec![]);
+        let args = selector_args(client);
+        let result = evaluate_state_selector(&nodes, &args, "modified")
+            .await
+            .unwrap();
+
+        assert!(result.is_empty());
+
+        let batch_sizes = &state.lock().unwrap().request_batch_sizes;
+        assert!(batch_sizes.is_empty());
     }
 }

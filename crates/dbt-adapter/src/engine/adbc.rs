@@ -248,8 +248,16 @@ impl AdbcEngine {
                 let database = driver
                     .new_database_with_opts(opts)
                     .map_err(adbc_error_to_adapter_error)?;
-                if self.adapter_type == AdapterType::DuckDB {
-                    self.apply_duckdb_init_sql(database.as_ref(), config)?;
+                match self.adapter_type {
+                    AdapterType::DuckDB => self.apply_duckdb_init_sql(database.as_ref(), config)?,
+                    AdapterType::ClickHouse => {
+                        // temporary connection with no current schema set
+                        let mut conn = database
+                            .new_connection()
+                            .map_err(adbc_error_to_adapter_error)?;
+                        super::clickhouse::ensure_database(conn.as_mut(), config)?
+                    }
+                    _ => {}
                 }
                 write_guard.inner.insert(fingerprint, database.clone());
                 Ok((database, fingerprint))
@@ -532,7 +540,20 @@ impl AdapterEngine for AdbcEngine {
             return Ok(Box::new(NoopConnection));
         }
         let (mut database, fingerprint) = self.load_driver_and_configure_database(config)?;
-        let connect = || connection::Builder::default().build(&mut database);
+        let connect = || {
+            let mut builder = connection::Builder::default();
+            // dbclient.py `_set_client_database` parity; ensure_database
+            // guarantees it exists.
+            if self.adapter_type == AdapterType::ClickHouse
+                && let Some(schema) = super::clickhouse::target_schema(config)
+            {
+                builder.with_option(
+                    adbc_core::options::OptionConnection::CurrentSchema,
+                    schema.as_ref(),
+                )?;
+            }
+            builder.build(&mut database)
+        };
         let retry_policy = ConnectionRetryPolicy::new(self.adapter_type(), config);
         let mut conn = retry_policy
             .execute(config, connect)
@@ -869,7 +890,7 @@ mod cloud_credential_tests {
         assert!(!message.contains("dbt login"));
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[dbt_runtime::test(flavor = "multi_thread")]
     async fn configure_cloud_database_with_chain_reads_seeded_oauth_session() {
         // No dbt_cloud.yml involved in this test — the OAuth session file is the only
         // credential source, and project_id is passed in directly.

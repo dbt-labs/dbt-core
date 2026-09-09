@@ -78,6 +78,7 @@ pub async fn resolve_functions(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     node_resolver: &mut NodeResolver,
     token: &CancellationToken,
 ) -> FsResult<(
@@ -126,6 +127,7 @@ pub async fn resolve_functions(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     // Raw config sources for `unrendered_config`, mirroring resolve_models.rs. These preserve

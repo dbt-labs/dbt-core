@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use dbt_tasks_core::lake_compute_catalog_attach::LakeComputeCatalogAttachChecker;
+use dbt_tasks_core::lake_compute_mdls::LakeComputeMdlsChecker;
 use dbt_tasks_core::lake_compute_propagation::LakeComputePropagationChecker;
 
 pub struct LakeComputeFeature {
@@ -16,4 +17,9 @@ pub struct LakeComputeFeature {
     /// For use during `dbt debug`. Returning `None` (the default) means
     /// this build has no such check available.
     pub catalog_attach_checker: Option<Arc<dyn LakeComputeCatalogAttachChecker>>,
+    /// A checker for the MDLS write + read-back round trip.
+    ///
+    /// For use during `dbt debug`. Returning `None` (the default) means
+    /// this build has no such check available.
+    pub mdls_checker: Option<Arc<dyn LakeComputeMdlsChecker>>,
 }

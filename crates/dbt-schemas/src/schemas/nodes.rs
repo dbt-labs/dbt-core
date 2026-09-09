@@ -5444,6 +5444,13 @@ pub struct DbtSourceAttr {
     pub unrendered_schema: Option<String>,
     /// Reference: https://github.com/dbt-labs/dbt-mantle/blob/da5abca4f829b167bd1b1d5c6666c12cd8c719c0/core/dbt/artifacts/resources/v1/source_definition.py#L74-L75
     pub external: Option<ExternalTable>,
+    /// Names a `catalogs.yml` entry this source should be read through
+    /// (e.g. an AWS Glue catalog for dbt Compute). When set, it replaces
+    /// `database` as the leading identifier in the source's compiled
+    /// relation, so `database` can stay a purely descriptive label instead
+    /// of doubling as the catalog's alias. Same config as the existing
+    /// model/seed `catalog_name`, just not previously wired up for reads.
+    pub catalog_name: Option<String>,
 }
 
 impl DbtSource {

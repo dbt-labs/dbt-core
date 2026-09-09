@@ -1891,7 +1891,12 @@ pub async fn execute_run_cache_service_clone(
         clone_sqls.insert(0, drop_sql);
     }
     let node_unique_id = node.unique_id();
+    let node_adapter_type = node.node_adapter();
     let ctx_inner = ctx.clone();
+    let target_relation: Arc<dyn BaseRelation> =
+        relation_from_rendered_name(node, &clone.clone_target)
+            .map_err(RunCacheCloneError::Fatal)?;
+    let drop_target_relation = target_relation.clone();
     let clone_result = TaskOp::BlockingWithConnection {
         f: Box::new(move || {
             if let Some(hook_executor) = &hook_executor {
@@ -1899,15 +1904,25 @@ pub async fn execute_run_cache_service_clone(
                     .map_err(RunCacheCloneError::Fatal)?;
             }
 
-            execute_clone_sqls_blocking(&ctx_inner, &node_unique_id, &clone_sqls).map_err(
-                |err| {
-                    if pre_hooks_configured {
-                        RunCacheCloneError::Fatal(err)
-                    } else {
-                        RunCacheCloneError::Recoverable(err)
-                    }
-                },
-            )?;
+            // Drop any relation currently occupying the clone target before
+            // running the clone SQL. `create ... clone` fails when the target
+            // already exists as a different relation type (for example a table
+            // cloned over a view)
+            drop_clone_target_before_clone(&ctx_inner, drop_target_relation);
+
+            execute_clone_sqls_blocking(
+                &ctx_inner,
+                node_adapter_type,
+                &node_unique_id,
+                &clone_sqls,
+            )
+            .map_err(|err| {
+                if pre_hooks_configured {
+                    RunCacheCloneError::Fatal(err)
+                } else {
+                    RunCacheCloneError::Recoverable(err)
+                }
+            })?;
 
             if let Some(hook_executor) = &hook_executor {
                 hook_executor(&ctx_inner, RunCacheReuseHookPhase::Post)
@@ -2338,12 +2353,84 @@ fn relation_from_rendered_name(
     .into())
 }
 
+/// Drop any relation currently occupying the clone target before the clone SQL
+/// runs. Mirrors the dbt State Python client (query-cache PR #1092): a
+/// `create ... clone` fails when the target already exists as a different
+/// relation type (for example a table cloned over a view). Reads the existing
+/// relation (with its true type) from the adapter's relation cache — the same
+/// source dbt's `adapter.get_relation` consults — and drops it via the adapter,
+/// which also evicts the cascade cache entry.
+///
+/// Best-effort: if the target is absent, untyped, or the drop fails, this logs
+/// and returns so the clone still runs and the existing recoverable/fatal
+/// handling applies unchanged.
+fn drop_clone_target_before_clone(ctx: &TaskRunnerCtx, target_relation: Arc<dyn BaseRelation>) {
+    let Ok(adapter) = ctx.adapter_store().get(target_relation.adapter_type()) else {
+        return;
+    };
+
+    let jinja_state = ctx
+        .env
+        .new_state_with_context(ctx.inner.base_context.clone());
+
+    let (Some(database), Some(schema), Some(identifier)) = (
+        target_relation.database(),
+        target_relation.schema(),
+        target_relation.identifier(),
+    ) else {
+        return;
+    };
+
+    let maybe_existing = match adapter.get_relation(
+        &jinja_state,
+        database,
+        schema,
+        identifier,
+        false,
+    ) {
+        Ok(value) => value.downcast_object::<RelationObject>().map(|r| r.inner()),
+        Err(err) => {
+            emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "dbt State clone could not inspect the existing relation at target {} before cloning: {err}; attempting the clone anyway",
+                    target_relation.semantic_fqn()
+                ),
+            );
+            return;
+        }
+    };
+
+    let Some(existing) = maybe_existing else {
+        return;
+    };
+
+    if matches!(existing.relation_type(), Some(rt) if rt == RelationType::Table) {
+        // if the existing relation is already a table; dont drop it
+        // the server clone_sql's already are the equivalent of `CREATE OR REPLACE TABLE.. CLONE..`
+        // so we can avoid the overhead of an extra drop call
+        return;
+    }
+
+    let args = [RelationObject::new(existing).into_value()];
+    if let Err(err) = adapter.drop_relation(&jinja_state, &args) {
+        let target = target_relation.semantic_fqn();
+        emit_warn_log_message(
+            ErrorCode::StateServiceWarn,
+            format!(
+                "dbt State clone could not drop the existing relation at target {target} before cloning: {err}; attempting the clone anyway"
+            ),
+        );
+    }
+}
+
 fn execute_clone_sqls_blocking(
     ctx: &TaskRunnerCtx,
+    adapter_type: AdapterType,
     node_unique_id: &str,
     clone_sqls: &[String],
 ) -> FsResult<()> {
-    let Some(adapter) = ctx.env.get_adapter_ref() else {
+    let Ok(adapter) = ctx.adapter_store().get(adapter_type) else {
         return Err(fs_err!(
             ErrorCode::Generic,
             "dbt State service clone cannot execute because no adapter is available"
@@ -2827,7 +2914,7 @@ async fn prepare_write_only_execution_record(
                 last_modified_epoch: None,
                 clone_time_travel_limit: None,
                 clone_table_properties: None,
-                clone_chain_depth_limit: None,
+                clone_chain_depth_limit: clone_chain_depth_limit_for_seed(ctx, seed),
                 dbt_project_info: DbtProjectInfo::from(ctx),
             },
             create_macro_resolver(ctx),
@@ -2907,7 +2994,7 @@ async fn submit_seed(
             last_modified_epoch,
             clone_time_travel_limit,
             clone_table_properties: None,
-            clone_chain_depth_limit: None,
+            clone_chain_depth_limit: clone_chain_depth_limit_for_seed(ctx, seed),
             dbt_project_info: DbtProjectInfo::from(ctx),
         },
         create_macro_resolver(ctx),
@@ -3272,6 +3359,22 @@ fn stale_upstream_policy_for_node(
         Some(UpdatesOn::All) => StaleUpstreamPolicy::All,
         Some(UpdatesOn::Any) | None => StaleUpstreamPolicy::Any,
     }
+}
+
+/// Seeds skip `build_sql_context`, so derive the limit the way it does.
+fn clone_chain_depth_limit_for_seed(ctx: &TaskRunnerCtx, seed: &DbtSeed) -> Option<i64> {
+    let is_targeting_prod = ctx
+        .inner
+        .run_cache_ctx
+        .run_cache_service_config
+        .as_ref()
+        .map(|config| config.is_defer_to_target(ctx.dbt_profile()))
+        .unwrap_or(false);
+    clone_chain_depth_limit_for_adapter(
+        seed.node_adapter(),
+        is_targeting_prod,
+        ctx.dbt_profile().allow_clones,
+    )
 }
 
 pub(crate) fn clone_chain_depth_limit_for_adapter(
@@ -4624,7 +4727,7 @@ fn record_submit_skipped(node: &dyn InternalDbtNodeAttributes, reason: &'static 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_adapter::{AdapterBuilder, AdapterStore};
+    use dbt_adapter::{Adapter, AdapterBuilder, AdapterImpl, AdapterStore};
     use dbt_schemas::state::ProfileAdapter;
     use indexmap::IndexMap;
     use std::any::Any;
@@ -4638,8 +4741,11 @@ mod tests {
     use arrow::array::RecordBatch;
     use arrow_schema::{Schema, SchemaRef};
     use dbt_adapter::sql_types::DefaultTypeOps;
+    use dbt_adapter::stmt_splitter::DefaultStmtSplitter;
+    use dbt_common::cancellation::never_cancels;
     use dbt_common::collections::DashMap;
     use dbt_common::io_args::RunCacheMode;
+    use dbt_common::path::DbtPath;
     use dbt_common::{CompiledSpans, MacroSpan};
     use dbt_dag::schedule::Schedule;
     use dbt_frontend_common::FullyQualifiedName;
@@ -4657,6 +4763,7 @@ mod tests {
     use dbt_schemas::schemas::macros::DbtMacro;
     use dbt_schemas::schemas::profiles::{Execute, SnowflakeDbConfig};
     use dbt_schemas::schemas::properties::{DataTestState, ModelFreshness, ModelState};
+    use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
     use dbt_schemas::state::{
         DbtProfile, DbtRuntimeConfig, DummyNodeResolverTracker, Macros, Operations, RenderResults,
         ResolverState,
@@ -5672,7 +5779,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn final_last_modified_epoch_caches_the_value_it_returns() {
         let ctx = test_task_runner_ctx(None);
         let model = make_model(
@@ -7662,20 +7769,128 @@ mod tests {
         }
     }
 
-    /// A store these tests never read from. Building a real `Adapter` needs a
-    /// `TypeOps` impl and a connection config, and nothing here executes SQL --
-    /// so the builder fails, which the store treats as "not built yet".
     fn test_adapter_store() -> Arc<AdapterStore> {
-        let build: AdapterBuilder = Box::new(|_| {
-            Err(fs_err!(
-                ErrorCode::Unexpected,
-                "adapters are not built in run cache service tests"
-            ))
+        let build: AdapterBuilder = Box::new(|adapter_type| {
+            let adapter = AdapterImpl::new_mock(
+                adapter_type,
+                BTreeMap::new(),
+                DEFAULT_RESOLVED_QUOTING,
+                Arc::new(DefaultTypeOps::new(adapter_type)),
+                Arc::new(DefaultStmtSplitter),
+            );
+            Ok(Arc::new(Adapter::new(
+                Arc::new(adapter),
+                None,
+                never_cancels(),
+            )))
         });
         Arc::new(
             AdapterStore::new(vec![AdapterType::Snowflake], AdapterType::Snowflake, build)
                 .expect("valid store"),
         )
+    }
+
+    fn clone_target(relation_type: Option<RelationType>) -> Arc<dyn BaseRelation> {
+        create_relation(
+            AdapterType::Snowflake,
+            "database".to_string(),
+            "schema".to_string(),
+            Some("target".to_string()),
+            relation_type,
+            DEFAULT_RESOLVED_QUOTING,
+        )
+        .expect("valid relation")
+        .into()
+    }
+
+    fn cached_clone_target_relation(
+        ctx: &TaskRunnerCtx,
+        adapter: &Adapter,
+        relation_type: RelationType,
+    ) -> Arc<dyn BaseRelation> {
+        let relation = clone_target(Some(relation_type));
+        let jinja_state = ctx
+            .env
+            .new_state_with_context(ctx.inner.base_context.clone());
+        adapter
+            .cache_added(&jinja_state, Arc::clone(&relation))
+            .expect("cache relation");
+        relation
+    }
+
+    #[test]
+    fn drop_clone_target_before_clone_keeps_existing_table() {
+        let ctx = test_task_runner_ctx(None);
+        let adapter = ctx
+            .adapter_store()
+            .get(AdapterType::Snowflake)
+            .expect("mock adapter");
+        let target = cached_clone_target_relation(&ctx, &adapter, RelationType::Table);
+        let cached = adapter
+            .engine()
+            .relation_cache()
+            .get_relation(target.as_ref())
+            .expect("table is cached before clone");
+        assert_eq!(cached.relation().relation_type(), Some(RelationType::Table));
+
+        drop_clone_target_before_clone(&ctx, Arc::clone(&target));
+
+        let existing = adapter
+            .engine()
+            .relation_cache()
+            .get_relation(target.as_ref())
+            .expect("cached table remains");
+        assert_eq!(
+            existing.relation().relation_type(),
+            Some(RelationType::Table)
+        );
+    }
+
+    #[test]
+    fn drop_clone_target_before_clone_drops_existing_view() {
+        let ctx = test_task_runner_ctx(None);
+        let adapter = ctx
+            .adapter_store()
+            .get(AdapterType::Snowflake)
+            .expect("mock adapter");
+        let target = cached_clone_target_relation(&ctx, &adapter, RelationType::View);
+        let cached = adapter
+            .engine()
+            .relation_cache()
+            .get_relation(target.as_ref())
+            .expect("view is cached before clone");
+        assert_eq!(cached.relation().relation_type(), Some(RelationType::View));
+
+        drop_clone_target_before_clone(&ctx, Arc::clone(&target));
+
+        assert!(
+            adapter
+                .engine()
+                .relation_cache()
+                .get_relation(target.as_ref())
+                .is_none(),
+            "existing view is removed from the relation cache"
+        );
+    }
+
+    #[test]
+    fn drop_clone_target_before_clone_ignores_missing_target() {
+        let ctx = test_task_runner_ctx(None);
+        let adapter = ctx
+            .adapter_store()
+            .get(AdapterType::Snowflake)
+            .expect("mock adapter");
+        let target = clone_target(None);
+
+        drop_clone_target_before_clone(&ctx, Arc::clone(&target));
+
+        assert!(
+            adapter
+                .engine()
+                .relation_cache()
+                .get_relation(target.as_ref())
+                .is_none()
+        );
     }
 
     fn test_resolver_state_with_nodes(nodes: Nodes) -> ResolverState {
@@ -8511,6 +8726,101 @@ mod tests {
             drop_stale_view_sql(DbtMaterialization::View, true, "dev.model_a"),
             None
         );
+    }
+
+    fn test_task_runner_ctx_with_allow_clones(allow_clones: bool) -> TaskRunnerCtx {
+        let mut ctx = test_task_runner_ctx(None);
+        Arc::get_mut(&mut ctx.inner)
+            .expect("sole owner of inner right after construction")
+            .dbt_profile = Arc::new(DbtProfile {
+            allow_clones,
+            ..ctx.dbt_profile().clone()
+        });
+        ctx
+    }
+
+    /// Seed body hashing reads the CSV off disk relative to the project root,
+    /// so the write-only record can't be built without pointing the ctx at one.
+    fn set_project_root(ctx: &mut TaskRunnerCtx, project_root: &Path) {
+        let inner =
+            Arc::get_mut(&mut ctx.inner).expect("sole owner of inner right after construction");
+        Arc::get_mut(&mut inner.arg)
+            .expect("sole owner of args right after construction")
+            .io
+            .in_dir = project_root.to_path_buf();
+    }
+
+    fn test_seed_on_adapter(adapter: AdapterType) -> DbtSeed {
+        let mut seed = DbtSeed::default();
+        seed.__base_attr__.adapter = adapter;
+        seed
+    }
+
+    fn seed_with_csv(project_root: &Path) -> DbtSeed {
+        std::fs::create_dir_all(project_root.join("seeds")).unwrap();
+        std::fs::write(
+            project_root.join("seeds").join("cities.csv"),
+            "id,name\n1,Philadelphia\n",
+        )
+        .unwrap();
+
+        let mut seed = test_seed_on_adapter(AdapterType::Snowflake);
+        seed.__common_attr__.unique_id = "seed.test.cities".to_string();
+        seed.__common_attr__.name = "cities".to_string();
+        seed.__common_attr__.original_file_path = DbtPath::from("seeds/cities.csv");
+        set_state_explain_base(&mut seed.__base_attr__, DbtMaterialization::Seed, "cities");
+        seed
+    }
+
+    fn values_request(record: RunCachePendingExecutionRecord) -> SubmitValuesRequest {
+        match record.input {
+            RunCachePendingExecutionInput::Values(request) => *request,
+            RunCachePendingExecutionInput::Sql(_) => panic!("a seed submits values, not SQL"),
+        }
+    }
+
+    async fn seed_write_only_request(allow_clones: bool) -> SubmitValuesRequest {
+        let project_root = tempfile::tempdir().unwrap();
+        let seed = seed_with_csv(project_root.path());
+        let mut ctx = test_task_runner_ctx_with_allow_clones(allow_clones);
+        set_project_root(&mut ctx, project_root.path());
+
+        let record =
+            prepare_write_only_execution_record(&ctx, &seed, &task_result_with_sql(""), None)
+                .await
+                .unwrap()
+                .expect("a seed always produces a write-only record");
+        values_request(record)
+    }
+
+    #[tokio::test]
+    async fn seed_request_sends_zero_clone_chain_depth_limit_when_clones_disallowed() {
+        // Regression test for https://github.com/dbt-labs/dbt-core/issues/16136.
+        // Asserted on the built request rather than on the derivation: the bug
+        // was that seeds hardcoded `clone_chain_depth_limit: None`, so a test of
+        // the helper alone stays green through a revert. On Snowflake (no adapter
+        // default) `Some(0)` can only come from `allow_clones: false`.
+        assert_eq!(
+            seed_write_only_request(false).await.clone_chain_depth_limit,
+            Some(0)
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_request_omits_clone_chain_depth_limit_when_clones_allowed() {
+        assert_eq!(
+            seed_write_only_request(true).await.clone_chain_depth_limit,
+            None
+        );
+    }
+
+    #[test]
+    fn clone_chain_depth_limit_for_seed_uses_the_seed_adapter() {
+        // The ctx default is Snowflake (no limit), so a Databricks seed proves
+        // the node's own adapter decides, not `ctx.default_adapter_type()`.
+        let ctx = test_task_runner_ctx_with_allow_clones(true);
+        let seed = test_seed_on_adapter(AdapterType::Databricks);
+        assert_eq!(clone_chain_depth_limit_for_seed(&ctx, &seed), Some(1));
     }
 
     fn state_explain_model(materialized: DbtMaterialization) -> DbtModel {

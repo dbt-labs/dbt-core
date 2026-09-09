@@ -107,6 +107,32 @@ pub struct ResolveBaseCtx {
     #[schemars(with = "serde_json::Value")]
     pub store_raw_result: MinijinjaValue,
 
+    /// `{{ builtins.* }}` — `ref`/`source`/`metric`/`function` stand-ins exposing `.config`, present at base scope for naming macros (dbt-core does the same).
+    /// Shadowed by [`ResolveModelCtx::builtins`] on per-model renders.
+    #[schemars(with = "serde_json::Value")]
+    pub builtins: MinijinjaValue,
+
+    /// `{{ ref.config }}` — same stand-in [`ResolveBaseCtx::builtins`] holds under `ref`; `UNDEFINED` when no runtime config is in scope.
+    /// Shadowed by the callable [`ResolveModelCtx::ref_fn`].
+    #[serde(rename = "ref")]
+    #[schemars(with = "serde_json::Value")]
+    pub ref_fn: MinijinjaValue,
+
+    /// `{{ source.config }}` — see [`ResolveBaseCtx::ref_fn`].
+    /// Shadowed by the callable [`ResolveModelCtx::source`].
+    #[schemars(with = "serde_json::Value")]
+    pub source: MinijinjaValue,
+
+    /// `{{ metric.config }}` — see [`ResolveBaseCtx::ref_fn`].
+    /// Shadowed by the callable [`ResolveModelCtx::metric`].
+    #[schemars(with = "serde_json::Value")]
+    pub metric: MinijinjaValue,
+
+    /// `{{ function.config }}` — see [`ResolveBaseCtx::ref_fn`].
+    /// Shadowed by the callable [`ResolveModelCtx::function`].
+    #[schemars(with = "serde_json::Value")]
+    pub function: MinijinjaValue,
+
     /// Per-package namespace objects. Each entry becomes its own top-level
     /// Jinja global via `#[serde(flatten)]` — e.g. `{ "dbt": <DbtNamespace>,
     /// "snowflake": <DbtNamespace>, … }` flattens into individual `{{ dbt }}`,
@@ -134,7 +160,8 @@ pub struct ResolveBaseCtx {
 ///
 /// 1. The Object impls (`ResolveRefFunction<T>`, `ParseConfig<T>`,
 ///    `ResolveSourceFunction<T>`, `ResolveFunctionFunction<T>`,
-///    `ParseExecute`, `ParseMetricReference`, `MacroLookupContext`) live in
+///    `ResolveMetricFunction<T>`, `ParseExecute`, `ParseMetricReference`,
+///    `MacroLookupContext`) live in
 ///    `dbt-jinja-utils`; this crate can't depend on them. A later PR moves
 ///    them here and tightens to `JinjaObject<…>`.
 /// 2. `builtins` is constructed via
@@ -164,7 +191,8 @@ pub struct ResolveModelCtx {
     #[schemars(with = "serde_json::Value")]
     pub function: MinijinjaValue,
 
-    /// `{{ metric(...) }}` — closure that records `SqlResource::Metric`.
+    /// `{{ metric(...) }}` — `ResolveMetricFunction<T>` Object that records
+    /// `SqlResource::Metric`.
     #[schemars(with = "serde_json::Value")]
     pub metric: MinijinjaValue,
 
@@ -180,7 +208,7 @@ pub struct ResolveModelCtx {
     pub model: MinijinjaValue,
 
     /// `{{ builtins.* }}` — `BTreeMap<String, MinijinjaValue>` Object holding
-    /// `ref` / `source` / `function` / `config`. Compile/run-phase code
+    /// `ref` / `source` / `function` / `metric` / `config`. Compile/run-phase code
     /// downcasts this to `BTreeMap<String, MinijinjaValue>` to overlay
     /// per-node validations.
     #[schemars(with = "serde_json::Value")]

@@ -19,12 +19,47 @@ import { DagResourceBadge } from './DagResourceBadge';
 
 type GraphNode = ReactFlowNode<DagNodeData>;
 
+/** How far a connector runs straight out of a card before it is allowed to turn.
+ *  Zero, deliberately. The columns sit about 50px apart, and xyflow's default 20px
+ *  reserve at *each* end leaves only ~10px in the middle for the turn itself -- the
+ *  corner radius is then clamped to a couple of pixels and what should be a right
+ *  angle renders as a curl. The channels below keep every turn clear of both cards
+ *  without reserving anything up front. */
+const CONNECTOR_OFFSET = 0;
+
+/**
+ * Where the `index`-th of `count` connectors makes its vertical run, spread evenly
+ * across the gap between the two columns.
+ *
+ * Left to xyflow, every connector turns at the midpoint of the gap. That is fine for
+ * one, but every card in a column shares a right edge and every connector ends on the
+ * same point of the root, so a second connector turns at exactly the same x, its
+ * vertical run lands on top of the first, and the two read as a single brace rather
+ * than two connectors. Giving each its own channel separates them.
+ *
+ * Exported for tests only.
+ */
+export function channelX(
+  from: number,
+  to: number,
+  index: number,
+  count: number,
+): number {
+  return from + ((to - from) * (index + 1)) / (count + 1);
+}
+
 /** The exact same right-angle-with-rounded-corners path the DAG canvas's own
  *  edges use (they're `type: 'smoothstep'`, see useLineageData.ts) -- xyflow
  *  exports its path math directly, so this is the real thing, not a
  *  hand-rolled lookalike. Horizontal in/out (Right→Left) matches how these
  *  connectors sit relative to the cards either side of them. */
-function connectorPath(x1: number, y1: number, x2: number, y2: number): string {
+function connectorPath(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  centerX: number,
+): string {
   const [path] = getSmoothStepPath({
     sourceX: x1,
     sourceY: y1,
@@ -32,6 +67,8 @@ function connectorPath(x1: number, y1: number, x2: number, y2: number): string {
     targetX: x2,
     targetY: y2,
     targetPosition: Position.Left,
+    centerX,
+    offset: CONNECTOR_OFFSET,
   });
   return path;
 }
@@ -65,31 +102,41 @@ function useGroupConnectors(
         centerY: rect.top - containerRect.top + rect.height / 2,
       });
       const rootLocal = local(root.getBoundingClientRect());
+      const cards = Array.from(groupRefs.current, ([key, el]) => ({
+        key,
+        isUpstream: key.startsWith('up-'),
+        rect: local(el.getBoundingClientRect()),
+      }));
+
       const next: ConnectorPath[] = [];
-      groupRefs.current.forEach((el, key) => {
-        const rect = local(el.getBoundingClientRect());
-        next.push(
-          key.startsWith('up-')
-            ? {
-                id: key,
-                d: connectorPath(
-                  rect.right,
-                  rect.centerY,
-                  rootLocal.left,
-                  rootLocal.centerY,
-                ),
-              }
-            : {
-                id: key,
-                d: connectorPath(
-                  rootLocal.right,
-                  rootLocal.centerY,
-                  rect.left,
-                  rect.centerY,
-                ),
-              },
-        );
-      });
+      for (const isUpstream of [true, false]) {
+        // Top to bottom, so which channel a card gets follows where it sits on screen
+        // rather than the order its ref callback happened to fire in.
+        const column = cards
+          .filter((card) => card.isUpstream === isUpstream)
+          .sort((a, b) => a.rect.centerY - b.rect.centerY);
+        column.forEach(({ key, rect }, index) => {
+          // Upstream runs card→root, downstream root→card; either way the connector
+          // leaves a right edge and arrives at a left one, and the gap it crosses is
+          // the same for every card in the column.
+          const from = isUpstream
+            ? { x: rect.right, y: rect.centerY }
+            : { x: rootLocal.right, y: rootLocal.centerY };
+          const to = isUpstream
+            ? { x: rootLocal.left, y: rootLocal.centerY }
+            : { x: rect.left, y: rect.centerY };
+          next.push({
+            id: key,
+            d: connectorPath(
+              from.x,
+              from.y,
+              to.x,
+              to.y,
+              channelX(from.x, to.x, index, column.length),
+            ),
+          });
+        });
+      }
       setPaths(next);
     };
 

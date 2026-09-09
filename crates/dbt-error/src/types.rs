@@ -12,7 +12,6 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
-use tokio::task::JoinError;
 
 use super::{ErrorCode, preprocessor_location::MacroSpan};
 use crate::code_location::{AbstractLocation, MiniJinjaErrorWrapper};
@@ -1021,8 +1020,8 @@ impl From<CancelledError> for Box<FsError> {
     }
 }
 
-impl From<JoinError> for FsError {
-    fn from(e: JoinError) -> Self {
+impl From<tokio::task::JoinError> for FsError {
+    fn from(e: tokio::task::JoinError) -> Self {
         if e.is_cancelled() {
             FsError::new(ErrorCode::OperationCanceled, "Operation cancelled")
         } else if e.is_panic() {
@@ -1034,8 +1033,27 @@ impl From<JoinError> for FsError {
     }
 }
 
-impl From<JoinError> for Box<FsError> {
-    fn from(e: JoinError) -> Self {
+impl From<tokio::task::JoinError> for Box<FsError> {
+    fn from(e: tokio::task::JoinError) -> Self {
+        Box::new(e.into())
+    }
+}
+
+impl From<dbt_runtime::JoinError> for FsError {
+    fn from(e: dbt_runtime::JoinError) -> Self {
+        if e.is_cancelled() {
+            FsError::new(ErrorCode::OperationCanceled, "Operation cancelled")
+        } else if e.is_panic() {
+            panic::resume_unwind(e.into_panic());
+        } else {
+            // as of today, this is unreachable, but we keep it for future-proofing
+            FsError::new(ErrorCode::Unknown, format!("Join error: {e}"))
+        }
+    }
+}
+
+impl From<dbt_runtime::JoinError> for Box<FsError> {
+    fn from(e: dbt_runtime::JoinError) -> Self {
         Box::new(e.into())
     }
 }

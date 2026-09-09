@@ -18,7 +18,7 @@ use dbt_tasks_core::pretty_table::from_pretty_table_error;
 use dbt_telemetry::{ShowDataOutput, ShowDataOutputFormat};
 use minijinja::Value;
 
-use crate::check_index_adapter::{open_info_schema_adapter, query_index};
+use crate::check_adapter::{open_epoch_adapter, query_index};
 
 /// Template name handed to the Jinja parser. It only ever appears in a parse error,
 /// which this predicate discards, so it is a label for debugging rather than output.
@@ -76,23 +76,24 @@ fn wrap_with_limit(sql: String, limit: Option<usize>) -> String {
 pub fn run_show_info_schema(
     info: Option<&str>,
     inline: Option<&str>,
-    info_schema_dir: &Path,
+    metadata_dir: &Path,
     format: io_args::DisplayFormat,
     limit: Option<usize>,
     token: CancellationToken,
 ) -> FsResult<()> {
     let sql = render_show_info_sql(info, inline)?;
-    // The artifact, not the argument: `--info <view>` is well-formed, and what is
-    // missing is state the user has not produced yet.
-    if !info_schema_dir.join("views.sql").exists() {
+    // Reads the project metadata directly, so there is no artifact to generate first and
+    // nothing to go stale. What can still be missing is the metadata itself: a project that
+    // has only ever been parsed has written no epochs.
+    if !metadata_dir.exists() {
         return Err(fs_err!(
             ErrorCode::InfoSchemaUnavailable,
-            "no information schema at {} — run `dbt build --generate-info-schema` \
-             (or `dbt parse --generate-info-schema`)",
-            info_schema_dir.display()
+            "no project metadata at {} — run a command that writes it, such as \
+             `dbt build`, `dbt compile`, or `dbt parse --write-metadata`",
+            metadata_dir.display()
         ));
     }
-    let adapter = open_info_schema_adapter(info_schema_dir, token)
+    let adapter = open_epoch_adapter(metadata_dir, token)
         .map_err(|e| fs_err!(ErrorCode::InfoSchemaUnavailable, "{e}"))?;
 
     let limited_sql = wrap_with_limit(sql, limit);

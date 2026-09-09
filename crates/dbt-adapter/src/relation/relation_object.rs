@@ -352,6 +352,7 @@ impl Object for RelationObject {
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
+            Some("is_shallow_clone") => Some(Value::from(self.is_shallow_clone())),
             Some("alter_constraints") => {
                 let dbx = self.relation.as_any().downcast_ref::<Relation>()?;
                 Some(Value::from_iter(
@@ -403,6 +404,12 @@ impl Object for RelationObject {
             Some("location") => Some(Value::from(self.location())),
             Some("project") => Some(Value::from(self.database())),
             Some("dataset") => Some(Value::from(self.schema())),
+
+            // ClickHouse
+            Some("can_exchange") => Some(Value::from(self.can_exchange())),
+            Some("mvs_pointing_to_it") => Some(Value::from_serialize(self.mvs_pointing_to_it())),
+            Some("is_refreshable") => Some(Value::from(self.is_refreshable())),
+            Some("refreshable_append") => Some(Value::from(self.refreshable_append())),
 
             _ => None,
         }
@@ -503,6 +510,17 @@ pub fn create_relation_from_source(
     custom_quoting: ResolvedQuoting,
     source: &DbtSource,
 ) -> FsResult<Box<dyn BaseRelation>> {
+    // A source's `catalog_name` (when configured) names the `catalogs.yml`
+    // entry this source is actually read through -- e.g. an AWS Glue
+    // catalog for dbt Compute. It takes over as the relation's leading
+    // identifier so `database` can stay a descriptive label instead of
+    // having to spell the catalog's own name (the old, implicit coupling).
+    let database = source
+        .__source_attr__
+        .catalog_name
+        .clone()
+        .unwrap_or(database);
+
     if adapter_type == AdapterType::DuckDB
         && let Some(external) = duckdb_external_location_for_source(source)?
     {
@@ -947,6 +965,44 @@ mod tests {
     }
 
     #[test]
+    fn source_catalog_name_overrides_database_in_relation() {
+        let mut source = source_with_meta_location("ignored/{name}.csv");
+        source.__source_attr__.catalog_name = Some("GLUE_SOURCE".to_string());
+
+        let relation = create_relation_from_source(
+            AdapterType::Snowflake,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(
+            relation.render_self_as_str(),
+            "\"GLUE_SOURCE\".\"raw\".\"orders\""
+        );
+    }
+
+    #[test]
+    fn source_without_catalog_name_keeps_database() {
+        let source = source_with_meta_location("ignored/{name}.csv");
+
+        let relation = create_relation_from_source(
+            AdapterType::Snowflake,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+
+        assert_eq!(relation.render_self_as_str(), "\"main\".\"raw\".\"orders\"");
+    }
+
+    #[test]
     fn databricks_relation_exposes_constraints_to_jinja() {
         let relation = Relation::new(
             AdapterType::Databricks,
@@ -1311,6 +1367,82 @@ mod tests {
         assert_eq!(
             result_get_part.detail().unwrap(),
             "'bad' is not a valid argument"
+        );
+    }
+
+    #[test]
+    fn clickhouse_relation_exposes_catalog_state_attributes() {
+        let relation = Relation::new(
+            AdapterType::ClickHouse,
+            None,
+            Some("analytics".to_string()),
+            Some("events".to_string()),
+        )
+        .with_relation_type(RelationType::Table)
+        .with_quoting(DEFAULT_RESOLVED_QUOTING)
+        .with_mvs_pointing_to_it(vec![BTreeMap::from([
+            ("schema".to_string(), "analytics".to_string()),
+            ("name".to_string(), "events_mv".to_string()),
+            ("sql".to_string(), "select 1".to_string()),
+        ])])
+        .with_is_refreshable(true)
+        .with_can_exchange(true)
+        .validate()
+        .unwrap();
+        let obj = Arc::new(RelationObject::new(Arc::new(relation)));
+
+        assert!(
+            obj.get_value(&Value::from("can_exchange"))
+                .unwrap()
+                .is_true()
+        );
+        let mvs = obj.get_value(&Value::from("mvs_pointing_to_it")).unwrap();
+        assert_eq!(mvs.len(), Some(1));
+        assert_eq!(
+            mvs.get_item_by_index(0)
+                .unwrap()
+                .get_attr("name")
+                .unwrap()
+                .as_str(),
+            Some("events_mv")
+        );
+        assert!(
+            obj.get_value(&Value::from("is_refreshable"))
+                .unwrap()
+                .is_true()
+        );
+        assert!(
+            !obj.get_value(&Value::from("refreshable_append"))
+                .unwrap()
+                .is_true()
+        );
+
+        let bare = Relation::new(
+            AdapterType::ClickHouse,
+            None,
+            Some("analytics".to_string()),
+            Some("plain".to_string()),
+        )
+        .validate()
+        .unwrap();
+        let bare = Arc::new(RelationObject::new(Arc::new(bare)));
+        assert_eq!(
+            bare.get_value(&Value::from("mvs_pointing_to_it"))
+                .unwrap()
+                .len(),
+            Some(0)
+        );
+        assert!(
+            !bare
+                .get_value(&Value::from("is_refreshable"))
+                .unwrap()
+                .is_true()
+        );
+        assert!(
+            !bare
+                .get_value(&Value::from("can_exchange"))
+                .unwrap()
+                .is_true()
         );
     }
 }

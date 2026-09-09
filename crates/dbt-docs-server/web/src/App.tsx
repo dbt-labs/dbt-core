@@ -4,7 +4,6 @@ import { Route, Routes, useLocation, useNavigate, useParams } from 'react-router
 import { Search as SearchIcon } from 'lucide-react';
 
 import { AnalysisFilterView } from './components/AnalysisFilterView';
-import FullLineagePage from './components/FullLineagePage';
 import { FullLineagePageV2 } from './components/LineageV2/FullLineagePage';
 import { LocatePane, type LocatePaneMode } from './components/LocatePane';
 import { MacroFilterView } from './components/MacroFilterView';
@@ -142,7 +141,6 @@ export default function App() {
 
   const view = useMemo(() => viewFromPath(location.pathname), [location.pathname]);
   const isLineageRoute = location.pathname.startsWith('/lineage');
-  const isLineageV2Route = location.pathname.startsWith('/lineageV2');
   const selectedId = view.kind === 'detail' ? view.uniqueId : null;
 
   // Resolve the selected node's `{ uniqueId, resourceType }` for useAssetDetail:
@@ -376,13 +374,9 @@ export default function App() {
   }
 
   if (isLineageRoute) {
-    return isLineageV2Route ? (
+    return (
       <Routes>
-        <Route path={ROUTES.lineageV2} element={<FullLineagePageV2 />} />
-      </Routes>
-    ) : (
-      <Routes>
-        <Route path={ROUTES.lineage} element={<FullLineagePage />} />
+        <Route path={ROUTES.lineage} element={<FullLineagePageV2 />} />
       </Routes>
     );
   }

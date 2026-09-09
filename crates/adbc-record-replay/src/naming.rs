@@ -36,10 +36,22 @@ fn cleanup_alter_user_identifier(input: &str) -> String {
     re.replace_all(input, r#"$1"MASKED_USER""#).to_string()
 }
 
+/// Masks the volatile suffix in the temp table names of the ClickHouse
+/// `EXCHANGE TABLES` capability probe (`__dbt_exchange_test_<n>_<pid>_<nanos>`).
+/// The suffix is a process id plus a wall-clock nanosecond timestamp, so no
+/// two runs ever emit the literal same name. Normalize it away for the same
+/// reason as the timestamp above.
+fn cleanup_exchange_probe_tables(input: &str) -> String {
+    let re = Regex::new(r"__dbt_exchange_test_(\d+)_\d+_\d+").unwrap();
+    re.replace_all(input, "__dbt_exchange_test_${1}_MASKED_ID")
+        .to_string()
+}
+
 fn checksum8(input: &str) -> String {
     let input = cleanup_schema_name(input);
     let input = cleanup_ephemeral_timestamps(&input);
     let input = cleanup_alter_user_identifier(&input);
+    let input = cleanup_exchange_probe_tables(&input);
     let mut hasher = DefaultHasher::new();
     input.hash(&mut hasher);
     let hash = hasher.finish();

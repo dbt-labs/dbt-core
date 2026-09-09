@@ -1,4 +1,4 @@
-{% macro apply_config_changeset(target_relation, model, configuration_changes) %}
+{% macro apply_config_changeset(target_relation, model, configuration_changes, existing_relation=none) %}
     {{ log("Applying configuration changes to relation " ~ target_relation) }}
     {% if configuration_changes %}
       {% set comment = configuration_changes.changes.get("comment") %}
@@ -17,7 +17,7 @@
         {% do apply_tblproperties(target_relation, tblproperties.tblproperties) %}
       {%- endif -%}
       {% if liquid_clustering is not none %}
-        {% do apply_liquid_clustered_cols(target_relation, liquid_clustering) %}
+        {% do apply_liquid_clustered_cols(target_relation, liquid_clustering, existing_relation) %}
       {%- endif -%}
       {% if comment %}
         {{ run_query_as(alter_relation_comment_sql(target_relation, comment.comment), 'alter_relation_comment', fetch_result=False) }}
