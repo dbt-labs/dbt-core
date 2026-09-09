@@ -125,8 +125,8 @@ describe('createDuckDbDataSource', () => {
     const engine = fakeEngine(() => []);
     const dist = await makeSource(engine).fetchDistribution?.();
 
-    // `name !== 'oss'` is what the UI reads as Fusion.
-    expect(dist).toMatchObject({ isFusion: true, isLoggedIn: true });
+    // `name !== 'oss'` is what the UI reads as dbt v2.
+    expect(dist).toMatchObject({ isProprietary: true, isLoggedIn: true });
     expect(engine.calls).toHaveLength(0);
   });
 

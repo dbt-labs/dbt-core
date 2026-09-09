@@ -2,12 +2,12 @@
   <h1>dbt-docs-server</h1>
   <p><strong>The next generation of dbt docs.</strong></p>
   <p>
-    A static, interactive docs site for your dbt project — the parquet artifacts the Fusion engine writes on every run, queried in the browser by DuckDB-WASM.
+    A static, interactive docs site for your dbt project — the parquet artifacts the dbt v2 engine writes on every run, queried in the browser by DuckDB-WASM.
   </p>
   <p>
     <a href="./API-CONTRACTS.md">Contracts &amp; decisions</a> ·
     <a href="https://github.com/dbt-labs/dbt-core">dbt Core repo</a> ·
-    <a href="https://docs.getdbt.com/docs/fusion/about-fusion">About Fusion</a> ·
+    <a href="https://docs.getdbt.com/docs/fusion/about-fusion">About dbt v2</a> ·
     <a href="https://docs.getdbt.com">Official dbt docs</a>
   </p>
   <p>
@@ -20,7 +20,7 @@
 
 ## 👋 Introduction
 
-`dbt-docs-server` is the successor to dbt Core v1's `dbt docs generate` + `dbt docs serve`, rebuilt for the Rust/Fusion runtime. It ships inside the Fusion binary as `dbt docs generate` and `dbt docs serve`, and can also be self-hosted in a container.
+`dbt-docs-server` is the successor to dbt Core v1's `dbt docs generate` + `dbt docs serve`, rebuilt for the Rust dbt v2 runtime. It ships inside the dbt v2 binary as `dbt docs generate` and `dbt docs serve`, and can also be self-hosted in a container.
 
 ### Static sites (`dbt docs generate`)
 
@@ -50,7 +50,7 @@ target/index/            site data: parquet copied from the engine index
 `index.html` lands exactly where dbt Core v1 wrote it, so an existing pipeline that
 publishes `target/` keeps working unchanged.
 
-Fusion writes the engine index to `target/private/index/` (not a user API). `docs generate`
+dbt v2 writes the engine index to `target/private/index/` (not a user API). `docs generate`
 copies those parquet files to `target/index/` — the static-site URL layout (`DATA_DIR =
 "index"`). A self-contained `--output-dir` export does the same under `<dir>/index/`.
 
@@ -70,7 +70,7 @@ The browser loads DuckDB-WASM from a CDN at runtime (never bundled; override the
 
 ## ⚙️ How it works
 
-Data comes from parquet files that the Fusion engine writes to `<target>/private/index/` when you run with `--write-index`.
+Data comes from parquet files that the dbt v2 engine writes to `<target>/private/index/` when you run with `--write-index`.
 
 ```
 dbt project
@@ -102,10 +102,6 @@ The SPA is baked into the binary at compile time (the `embed-ui` feature, on by 
 
 The richness of the docs depends on how the artifacts were produced.
 
-| Tier | How | What you get |
-|---|---|---|
-| **dbt Core** | `dbt --write-index` without a Fusion login | Core catalog: nodes, project info, node-to-node lineage, test coverage |
-| **Fusion** | Signed in to Fusion | Richer artifacts: column-level lineage, inferred types, sample data |
 
 ## 🚀 Getting started
 
@@ -121,7 +117,7 @@ This writes the parquet to `./target/private/index/`.
 
 ### 💻 Option A: command line
 
-If you already have a dbt binary installed (core v2 or fusion), just run:
+If you already have a dbt binary installed (core v2 or dbt v2), just run:
 
 ```bash
 dbt docs serve                 # binds 127.0.0.1:8580, opens a browser tab

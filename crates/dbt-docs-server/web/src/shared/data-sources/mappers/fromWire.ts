@@ -325,7 +325,7 @@ export interface RestCapabilities {
 }
 
 /** `GET /api/v1/distribution` — build identity, not feature capability.
- *  `name` is the build flavor (`"oss"` = dbt Core, anything else = Fusion). */
+ *  `name` is the build flavor (`"oss"` = dbt Core, anything else = dbt v2). */
 export interface RestDistribution {
   name: string;
   version?: string;
@@ -1234,7 +1234,7 @@ export function fromNodeCounts(raw: RestNodeCounts): AssetCounts {
 
 export function fromDistribution(d: RestDistribution): Distribution {
   return {
-    isFusion: d.name !== 'oss',
+    isProprietary: d.name !== 'oss',
     isLoggedIn: d.is_logged_in,
     version: d.version,
   };

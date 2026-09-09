@@ -4,7 +4,7 @@ Paths in this file are relative to the directory containing `AGENTS.md`.
 
 ## What it is
 
-The successor to Core v1's `dbt docs generate` + `dbt docs serve` for the Rust/Fusion
+The successor to Core v1's `dbt docs generate` + `dbt docs serve` for the Rust dbt v2
 runtime. Apache 2.0 crate at `crates/dbt-docs-server/`.
 
 **`dbt docs generate` writes a static site.** There is no server-side query engine and
@@ -234,7 +234,7 @@ Three consequences worth knowing:
    site, not a signal — the opposite of the index, and why there is no client-side
    empty-relation DDL any more.
 
-**Not available:** UDF/function resources — count is always 0 until Fusion writes UDF
+**Not available:** UDF/function resources — count is always 0 until dbt v2 writes UDF
 parquet. Catalog numbers (`row_count`, `bytes`, `last_modified`) need a `dbt run` or
 `dbt build`: the catalog fetch is gated on those commands, and `docs generate`
 synthesizes a *compile*. DuckDB reports no catalog stats at all, so verifying that
@@ -284,7 +284,7 @@ Its `resourceIconMap` maps each type to a Ryecon icon from `@dbt-labs/sourdough`
 | macro | `RyeconFile` | |
 | snapshot | `RyeconCamera` | |
 | saved_query | `RyeconSave` | |
-| function | `RyeconFunction` | count is 0 until Fusion writes UDF parquet |
+| function | `RyeconFunction` | count is 0 until dbt v2 writes UDF parquet |
 | analysis | `RyeconCrosshair` | kept for older project compat |
 
 `DbtResourceIcon`'s `resource` prop expects a specific union type. Cast with `resource={t as any}`

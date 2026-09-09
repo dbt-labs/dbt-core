@@ -326,7 +326,7 @@ describe.each([fakeHarness, duckdbHarness])('$name conforms', (harness) => {
     const source = harness.create({});
     const dist = await source.fetchDistribution?.();
     expect(dist).toMatchObject({
-      isFusion: expect.any(Boolean),
+      isProprietary: expect.any(Boolean),
       isLoggedIn: expect.any(Boolean),
     });
   });
