@@ -170,6 +170,11 @@ fn build_duckdb_catalog_attach_stmt(
     duckdb: &dbt_yaml::Mapping,
 ) -> AdapterResult<(String, String)> {
     let alias = resolve_required_attach_alias(catalog)?;
+    let endpoint_type = duckdb_get_str(duckdb, "endpoint_type");
+    // Glue is reached either by `type: glue` or by `endpoint_type: GLUE` on any
+    // Iceberg REST catalog; DuckDB picks its Glue code path off the latter.
+    let is_glue = matches!(catalog.catalog_type, CatalogType::Glue)
+        || endpoint_type.is_some_and(|et| et.trim().eq_ignore_ascii_case("GLUE"));
 
     let mut opts = vec!["TYPE ICEBERG".to_string()];
     if let Some(secret) = duckdb_get_str(duckdb, "secret") {
@@ -182,6 +187,14 @@ fn build_duckdb_catalog_attach_stmt(
         opts.push(format!(
             "ENDPOINT '{}'",
             escape_string_literal(ep, AdapterType::DuckDB)
+        ));
+    }
+    // Mutually exclusive with `endpoint`: DuckDB derives both the endpoint URL
+    // and SigV4 authorization from the endpoint type itself.
+    if let Some(et) = endpoint_type {
+        opts.push(format!(
+            "ENDPOINT_TYPE '{}'",
+            escape_string_literal(et, AdapterType::DuckDB)
         ));
     }
 
@@ -222,19 +235,25 @@ fn build_duckdb_catalog_attach_stmt(
     // attach read-write by default; a user-supplied `read_only` config overrides.
     let read_only = duckdb_get_bool(duckdb, "read_only")?.unwrap_or(false);
     opts.push(format!("READ_ONLY {read_only}"));
-    // Preset write-compat defaults per catalog type for keys the user did not set.
-    for (config_key, default_clause) in catalog_attach_defaults(catalog.catalog_type) {
-        if !duckdb_has_key(duckdb, config_key) {
-            opts.push((*default_clause).to_string());
-        }
+    // Preset write-compat defaults per catalog type for keys the user did not
+    // set. `endpoint_type` implies its own authorization inside DuckDB, which
+    // rejects the pair, so that default is filtered out when it's present.
+    for (_, default_clause) in catalog_attach_defaults(catalog.catalog_type)
+        .iter()
+        .filter(|(k, _)| !(*k == "authorization_type" && endpoint_type.is_some()))
+        .filter(|(k, _)| !duckdb_has_key(duckdb, k))
+    {
+        opts.push((*default_clause).to_string());
     }
     if duckdb_get_bool(duckdb, "encode_entire_prefix")?.unwrap_or(false) {
         opts.push("ENCODE_ENTIRE_PREFIX true".to_string());
     }
 
     // For Iceberg REST catalogs, source is the warehouse name, not the endpoint
-    // URL.
-    let warehouse = duckdb_get_str(duckdb, "warehouse").unwrap_or(catalog.name);
+    // URL. Glue reads it as a catalog path, so a plain dbt catalog name fails
+    // its grammar; ':' is the caller's own default account catalog.
+    let warehouse =
+        duckdb_get_str(duckdb, "warehouse").unwrap_or(if is_glue { ":" } else { catalog.name });
     let source = format!(
         "'{}'",
         escape_string_literal(warehouse, AdapterType::DuckDB)
@@ -309,6 +328,11 @@ fn catalog_attach_defaults(catalog_type: CatalogType) -> &'static [(&'static str
             "disable_multi_table_commit",
             "DISABLE_MULTI_TABLE_COMMIT true",
         )],
+        // AWS Glue's Iceberg REST endpoint authenticates with SigV4, never
+        // DuckDB's OAuth2 fallback. `endpoint_type: GLUE` gets SigV4 from
+        // DuckDB itself; this covers a Glue catalog pinning an explicit
+        // `endpoint` instead, which has nothing else to supply it.
+        CatalogType::Glue => &[("authorization_type", "AUTHORIZATION_TYPE 'SIGV4'")],
         _ => &[],
     }
 }
