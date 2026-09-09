@@ -419,7 +419,6 @@ pub async fn resolve_sources(
         let columns = if let Some(ref cols) = table.columns {
             process_columns(
                 Some(cols),
-                source_config.meta.clone(),
                 source_config.tags.inner().clone().map(|tags| tags.into()),
             )?
         } else {

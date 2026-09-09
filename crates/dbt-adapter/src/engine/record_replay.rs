@@ -248,6 +248,17 @@ static DBT_COMPUTE_TOKEN_NAME: std::sync::LazyLock<regex::Regex> =
 static ALTER_USER_IDENTIFIER: std::sync::LazyLock<regex::Regex> =
     std::sync::LazyLock::new(|| regex::Regex::new(r#"(?i)(alter user )"[^"]+""#).unwrap());
 
+/// Matches the temp table names of the ClickHouse `EXCHANGE TABLES` capability
+/// probe (`can_exchange` in `metadata/clickhouse`), e.g.
+/// `__dbt_exchange_test_0_31337_1788805827133081759`. The suffix is a process
+/// id plus a wall-clock nanosecond timestamp, so record and replay runs never
+/// emit the literal same name -- mask it out the same way as the timestamp
+/// above. Mirrors `cleanup_exchange_probe_tables` in `adbc-record-replay`'s
+/// `naming.rs`, which does the same masking for the recording lookup key;
+/// this one is for the post-lookup text-equality check below.
+static EXCHANGE_PROBE_TABLE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"__dbt_exchange_test_(\d+)_\d+_\d+").unwrap());
+
 impl adbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
     fn normalize(&self, sql: &str) -> String {
         use crate::sql::normalize::normalize_dbt_tmp_name;
@@ -258,6 +269,9 @@ impl adbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
             .into_owned();
         let collapsed = ALTER_USER_IDENTIFIER
             .replace_all(&collapsed, r#"$1"[MASKED_USER]""#)
+            .into_owned();
+        let collapsed = EXCHANGE_PROBE_TABLE
+            .replace_all(&collapsed, "__dbt_exchange_test_${1}_[MASKED_ID]")
             .into_owned();
         collapsed
             .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")

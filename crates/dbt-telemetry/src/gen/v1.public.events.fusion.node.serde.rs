@@ -1312,6 +1312,12 @@ impl serde::Serialize for NodeProcessed {
         if self.idle_time_ms.is_some() {
             len += 1;
         }
+        if self.node_index.is_some() {
+            len += 1;
+        }
+        if self.node_count_total.is_some() {
+            len += 1;
+        }
         if self.node_outcome_detail.is_some() {
             len += 1;
         }
@@ -1411,6 +1417,12 @@ impl serde::Serialize for NodeProcessed {
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("idle_time_ms", ToString::to_string(&v).as_str())?;
         }
+        if let Some(v) = self.node_index.as_ref() {
+            struct_ser.serialize_field("node_index", v)?;
+        }
+        if let Some(v) = self.node_count_total.as_ref() {
+            struct_ser.serialize_field("node_count_total", v)?;
+        }
         if let Some(v) = self.node_outcome_detail.as_ref() {
             match v {
                 node_processed::NodeOutcomeDetail::NodeCacheDetail(v) => {
@@ -1484,6 +1496,10 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             "group",
             "idle_time_ms",
             "idleTimeMs",
+            "node_index",
+            "nodeIndex",
+            "node_count_total",
+            "nodeCountTotal",
             "node_cache_detail",
             "nodeCacheDetail",
             "node_test_detail",
@@ -1523,6 +1539,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             RowsAffected,
             Group,
             IdleTimeMs,
+            NodeIndex,
+            NodeCountTotal,
             NodeCacheDetail,
             NodeTestDetail,
             NodeFreshnessOutcome,
@@ -1575,6 +1593,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                             "rowsAffected" | "rows_affected" => Ok(GeneratedField::RowsAffected),
                             "group" => Ok(GeneratedField::Group),
                             "idleTimeMs" | "idle_time_ms" => Ok(GeneratedField::IdleTimeMs),
+                            "nodeIndex" | "node_index" => Ok(GeneratedField::NodeIndex),
+                            "nodeCountTotal" | "node_count_total" => Ok(GeneratedField::NodeCountTotal),
                             "nodeCacheDetail" | "node_cache_detail" => Ok(GeneratedField::NodeCacheDetail),
                             "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
@@ -1624,6 +1644,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                 let mut rows_affected__ = None;
                 let mut group__ = None;
                 let mut idle_time_ms__ = None;
+                let mut node_index__ = None;
+                let mut node_count_total__ = None;
                 let mut node_outcome_detail__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -1787,6 +1809,22 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                                 map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
+                        GeneratedField::NodeIndex => {
+                            if node_index__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeIndex"));
+                            }
+                            node_index__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::NodeCountTotal => {
+                            if node_count_total__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeCountTotal"));
+                            }
+                            node_count_total__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::NodeCacheDetail => {
                             if node_outcome_detail__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("nodeCacheDetail"));
@@ -1853,6 +1891,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                     rows_affected: rows_affected__,
                     group: group__,
                     idle_time_ms: idle_time_ms__,
+                    node_index: node_index__,
+                    node_count_total: node_count_total__,
                     node_outcome_detail: node_outcome_detail__,
                 })
             }

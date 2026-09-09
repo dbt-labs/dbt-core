@@ -3,7 +3,7 @@ import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { Columns3 } from 'lucide-react';
 
 import { iconForType } from '../../lib/resourceType';
-import { useLineageStore } from '../../stores/lineageStore';
+import { isCardCompact, useLineageStore } from '../../stores/lineageStore';
 import { Tooltip } from '../ui/Tooltip';
 import { lensBadgeFor } from './lensBadges';
 
@@ -25,6 +25,7 @@ export type DagNodeData = {
   /** Fired when the column-count chip is clicked. Not wired to real navigation
    *  yet -- the intent is to open the node's detail drawer on its Columns tab. */
   onColumnsClick?: () => void;
+  id?: string;
 } & Record<string, unknown>;
 
 export type DagNodeType = Node<DagNodeData, typeof DAG_NODE_TYPE>;
@@ -56,10 +57,12 @@ export function DagNode({
   sourcePosition = Position.Right,
   targetPosition = Position.Left,
 }: NodeProps<DagNodeType>) {
-  const { name, resourceType, columnCount, onColumnsClick } = data;
+  const { name, resourceType, columnCount, onColumnsClick, id } = data;
   const label = TYPE_LABEL[resourceType] ?? resourceType;
   const hasColumnLineage = columnCount != null;
-  const isCompact = useLineageStore((s) => s.isCompact);
+  const rootUniqueId = useLineageStore((s) => s.rootUniqueId);
+  const nodeIsRoot = rootUniqueId != null && rootUniqueId == id;
+  const isCompact = useLineageStore(isCardCompact);
   const activeLens = useLineageStore((s) => s.activeLens);
   // `data` carries whatever the lineage payload put on it beyond DagNodeData's
   // own typed fields (see the `& Record<string, unknown>` on the type) --
@@ -93,7 +96,7 @@ export function DagNode({
 
   return (
     <div
-      className={`dag-node${selected ? ' dag-node--active' : ''}`}
+      className={`dag-node${selected || nodeIsRoot ? ' dag-node--active' : ''}`}
       data-resource-type={resourceType}
     >
       {/* Handle positions follow the layout direction rather than being pinned

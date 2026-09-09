@@ -100,6 +100,10 @@ struct NodeProcessedJsonPayload {
     pub idle_time_ms: Option<u64>,
     /// Source name for source nodes.
     pub source_name: Option<String>,
+    /// 1-based position of this node within the invocation.
+    pub node_index: Option<u32>,
+    /// Total number of nodes in the selection set.
+    pub node_count_total: Option<u32>,
 }
 
 fn deserialize_node_evaluated_json_payload(
@@ -348,6 +352,8 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
                 node_outcome_detail: self.node_outcome_detail.clone(),
                 idle_time_ms: self.idle_time_ms,
                 source_name: self.source_name.clone(),
+                node_index: self.node_index,
+                node_count_total: self.node_count_total,
             })
             .unwrap_or_else(|_| {
                 panic!(
@@ -457,6 +463,8 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             rows_affected: record.rows_affected,
             group: record.group.as_deref().map(str::to_string),
             idle_time_ms: json_payload.idle_time_ms,
+            node_index: json_payload.node_index,
+            node_count_total: json_payload.node_count_total,
         })
     }
 }

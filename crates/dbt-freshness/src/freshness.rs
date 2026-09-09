@@ -1199,6 +1199,7 @@ pub fn build_sources_artifact(
     build_artifact(
         invocation_id,
         freshness_results_to_nodes(resolver_state, results),
+        "https://schemas.getdbt.com/dbt/sources/v3.json",
     )
 }
 
@@ -1212,16 +1213,18 @@ pub fn build_freshness_artifact(
     build_artifact(
         invocation_id,
         freshness_results_to_freshness_nodes(resolver_state, results),
+        "https://schemas.getdbt.com/dbt/freshness/v0.json",
     )
 }
 
 fn build_artifact(
     invocation_id: &uuid::Uuid,
     results: Vec<FreshnessResultsNode>,
+    dbt_schema_version: &str,
 ) -> FreshnessResultsArtifact {
     let generated_at: DateTime<Utc> = Utc::now();
     let metadata = FreshnessResultsMetadata {
-        dbt_schema_version: "https://schemas.getdbt.com/dbt/sources/v3.json".to_string(),
+        dbt_schema_version: dbt_schema_version.to_string(),
         dbt_version: env!("CARGO_PKG_VERSION").to_string(),
         generated_at,
         invocation_id: invocation_id.to_string(),

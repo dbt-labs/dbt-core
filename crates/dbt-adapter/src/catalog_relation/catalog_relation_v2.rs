@@ -917,8 +917,6 @@ impl CatalogRelation {
         let endpoint = get_yaml_str(duckdb, "endpoint").map(|s| s.to_string());
         let warehouse = get_yaml_str(duckdb, "warehouse").map(|s| s.to_string());
         let secret = get_yaml_str(duckdb, "secret").map(|s| s.to_string());
-        // Same alias resolution as ATTACH SQL generation and metadata routing
-        // (attach_as | name, sanitized) so they can never drift apart.
         let alias = catalog.resolved_attach_alias().unwrap_or_default();
 
         let Some(endpoint) = endpoint else {
@@ -2127,7 +2125,6 @@ catalogs:
             r.adapter_properties.get("endpoint").map(|s| s.as_str()),
             Some("https://rest.example.com")
         );
-        // When no attach_as, alias defaults to catalog_name
         assert_eq!(
             r.adapter_properties
                 .get("attached_database")
@@ -2380,7 +2377,7 @@ catalogs:
       duckdb:
         metadata_path: "metadata.ducklake"
         data_path: "s3://bucket/data/"
-        attach_as: "lake"
+        catalog_database: "lake"
 "#,
         );
         let conf = json!({ "catalog_name": "my_lake" });

@@ -1,7 +1,7 @@
 import type { Edge, Node as ReactFlowNode } from '@xyflow/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { useLineageStore } from './lineageStore';
+import { isCardCompact, useLineageStore } from './lineageStore';
 
 const ROOT = 'model.jaffle_shop.customers';
 
@@ -46,7 +46,12 @@ describe('lineageStore', () => {
   });
 
   it('publishes the graph hidden and unpositioned on hydrate', () => {
-    useLineageStore.getState().hydrate({ rootUniqueId: ROOT, ...graph() });
+    useLineageStore.getState().hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
 
     const { nodes, edges, status, rootUniqueId, isLaidOut } =
       useLineageStore.getState();
@@ -65,7 +70,12 @@ describe('lineageStore', () => {
 
   it('will not lay out until every card has been measured', () => {
     const store = useLineageStore.getState();
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
 
     // One of the two measured. Laying out now would place `b` on the fallback box and
     // risk dropping it on its neighbour.
@@ -81,7 +91,12 @@ describe('lineageStore', () => {
 
   it('lays out on the measured sizes and reveals the cards', () => {
     const store = useLineageStore.getState();
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
     measure(SAME_SIZES);
     store.layoutMeasured();
 
@@ -95,7 +110,12 @@ describe('lineageStore', () => {
   it('gives a wider card a wider slot', () => {
     const store = useLineageStore.getState();
 
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
     measure(SAME_SIZES);
     store.layoutMeasured();
     const narrowGap =
@@ -103,7 +123,12 @@ describe('lineageStore', () => {
       useLineageStore.getState().nodes[0].position.x;
 
     store.reset();
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
     measure({ a: { width: 600, height: 108 }, b: { width: 245, height: 108 } });
     store.layoutMeasured();
     const wideGap =
@@ -117,7 +142,12 @@ describe('lineageStore', () => {
 
   it('does not lay out twice', () => {
     const store = useLineageStore.getState();
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
     measure(SAME_SIZES);
     store.layoutMeasured();
 
@@ -130,20 +160,107 @@ describe('lineageStore', () => {
 
   it('keeps the graph across a refetch of the same root, drops it on a new root', () => {
     const store = useLineageStore.getState();
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
 
-    store.startHydration(ROOT);
+    store.startHydration(ROOT, 3, 3);
     expect(useLineageStore.getState().nodes).toHaveLength(2);
     expect(useLineageStore.getState().status).toBe('loading');
 
-    store.startHydration('model.jaffle_shop.orders');
+    store.startHydration('model.jaffle_shop.orders', 3, 3);
     expect(useLineageStore.getState().nodes).toEqual([]);
     expect(useLineageStore.getState().rootUniqueId).toBe('model.jaffle_shop.orders');
   });
 
+  it('records the hop depths as the fetch opens, keeping the graph up meanwhile', () => {
+    const store = useLineageStore.getState();
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 1,
+      downstreamDepth: 1,
+      ...graph(),
+    });
+    measure(SAME_SIZES);
+    store.layoutMeasured();
+
+    // The depths land immediately, before the wider fetch resolves -- but the graph
+    // on screen is still correct lineage, just narrower, so it stays up rather than
+    // flashing the canvas empty.
+    store.startHydration(ROOT, 2, 1);
+    const loading = useLineageStore.getState();
+    expect(loading.upstreamDepth).toBe(2);
+    expect(loading.downstreamDepth).toBe(1);
+    expect(loading.status).toBe('loading');
+    expect(loading.nodes).toHaveLength(2);
+    expect(loading.isLaidOut).toBe(true);
+
+    // A new root, on the other hand, still drops everything -- including the depths
+    // it was requested at.
+    store.startHydration('model.jaffle_shop.orders', 1, 1);
+    const swapped = useLineageStore.getState();
+    expect(swapped.nodes).toEqual([]);
+    expect(swapped.isLaidOut).toBe(false);
+    expect(swapped.upstreamDepth).toBe(1);
+    expect(swapped.downstreamDepth).toBe(1);
+  });
+
+  it('does not collapse cards to badges while they are being measured', () => {
+    const store = useLineageStore.getState();
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 1,
+      downstreamDepth: 1,
+      ...graph(),
+    });
+    measure(SAME_SIZES);
+    store.layoutMeasured();
+    const laidOutGap =
+      useLineageStore.getState().nodes[1].position.x -
+      useLineageStore.getState().nodes[0].position.x;
+
+    // Zoom out past the LOD threshold: the cards on screen collapse to badges.
+    store.setCompact(true);
+    expect(isCardCompact(useLineageStore.getState())).toBe(true);
+
+    // Now change hops. The new graph arrives unmeasured, so the cards go back in the
+    // DOM to be measured -- and must be measured at full size even though the
+    // viewport is still zoomed out. Measuring them collapsed would hand dagre a
+    // badge-sized box for a full-sized card, and the first fitView back past the
+    // threshold would expand them onto each other.
+    store.startHydration(ROOT, 2, 2);
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 2,
+      downstreamDepth: 2,
+      ...graph(),
+    });
+    expect(useLineageStore.getState().isCompact).toBe(true);
+    expect(isCardCompact(useLineageStore.getState())).toBe(false);
+
+    // Same root and same card sizes as the first pass, so the same layout.
+    measure(SAME_SIZES);
+    store.layoutMeasured();
+    expect(
+      useLineageStore.getState().nodes[1].position.x -
+        useLineageStore.getState().nodes[0].position.x,
+    ).toBe(laidOutGap);
+
+    // Laid out again, so the LOD collapse is back on.
+    expect(isCardCompact(useLineageStore.getState())).toBe(true);
+  });
+
   it('tracks selection separately from nodes, without churning its identity', () => {
     const store = useLineageStore.getState();
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
 
     store.onNodesChange([{ id: 'a', type: 'select', selected: true }]);
     expect(useLineageStore.getState().selectedNodeIds).toEqual(['a']);
@@ -175,7 +292,12 @@ describe('lineageStore', () => {
 
   it('relayouts the graph already in the store, without hiding it again', () => {
     const store = useLineageStore.getState();
-    store.hydrate({ rootUniqueId: ROOT, ...graph() });
+    store.hydrate({
+      rootUniqueId: ROOT,
+      upstreamDepth: 3,
+      downstreamDepth: 3,
+      ...graph(),
+    });
     measure(SAME_SIZES);
     store.layoutMeasured();
     const lr = useLineageStore.getState().nodes.map((n) => n.position);

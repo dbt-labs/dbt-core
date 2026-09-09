@@ -436,6 +436,15 @@ pub struct NodeProcessed {
     /// This includes time spent waiting on internal backpressure.
     #[prost(uint64, optional, tag = "45")]
     pub idle_time_ms: ::core::option::Option<u64>,
+    /// 1-based position of this node within the invocation, assigned in the order
+    /// nodes begin processing. Mirrors dbt core's `node_index`. Only set for nodes
+    /// in the selection set; ephemeral models never consume an index.
+    #[prost(uint32, optional, tag = "46")]
+    pub node_index: ::core::option::Option<u32>,
+    /// Total number of nodes in the selection set, the denominator of `node_index`.
+    /// Mirrors dbt core's `num_nodes`.
+    #[prost(uint32, optional, tag = "47")]
+    pub node_count_total: ::core::option::Option<u32>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[prost(oneof = "node_processed::NodeOutcomeDetail", tags = "30, 31, 32, 33, 34")]
     pub node_outcome_detail: ::core::option::Option<node_processed::NodeOutcomeDetail>,

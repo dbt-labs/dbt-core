@@ -1128,7 +1128,11 @@ fn extract_v1_installed_version(stdout: &str) -> Option<String> {
         .map(|v| v.trim().to_string())
 }
 
-fn classify_version_output(stdout: &str) -> Option<(Generation, Distribution, Option<String>)> {
+/// Classifies the stdout of a `dbt --version` invocation into a
+/// `(generation, distribution, version)` triple, or `None` if the output
+/// doesn't look like any known `dbt` banner. Handles both the `dbt-fusion
+/// X.Y.Z` banner and the renamed `dbt X.Y.Z` banner as `Generation::V2`.
+pub fn classify_version_output(stdout: &str) -> Option<(Generation, Distribution, Option<String>)> {
     if stdout.contains("Core:") {
         return Some((
             Generation::V1,

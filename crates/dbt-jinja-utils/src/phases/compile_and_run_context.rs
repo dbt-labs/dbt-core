@@ -80,8 +80,11 @@ pub fn build_compile_base_ctx(
     builtins.insert("ref".to_string(), ref_value.clone());
 
     // Create source function
-    let source_function =
-        SourceFunction::new_unvalidated(node_resolver.clone(), package_name.to_owned());
+    let source_function = SourceFunction::new_unvalidated(
+        node_resolver.clone(),
+        package_name.to_owned(),
+        runtime_config.clone(),
+    );
     let source_value = MinijinjaValue::from_object(source_function);
     builtins.insert("source".to_string(), source_value.clone());
 
@@ -542,6 +545,7 @@ impl Object for RefFunction {
 pub struct SourceFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
+    runtime_config: Arc<DbtRuntimeConfig>,
     microbatch_context: Option<MicrobatchRefContext>,
     validation_config: DependencyValidationConfig,
 }
@@ -554,11 +558,13 @@ impl SourceFunction {
     pub fn new_with_microbatch_context(
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
         microbatch_context: MicrobatchRefContext,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
+            runtime_config,
             microbatch_context: Some(microbatch_context),
             validation_config: DependencyValidationConfig::default(),
         }
@@ -571,10 +577,12 @@ impl SourceFunction {
     pub fn new_unvalidated(
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
+            runtime_config,
             microbatch_context: None,
             validation_config: DependencyValidationConfig::default(),
         }
@@ -584,11 +592,13 @@ impl SourceFunction {
     pub fn new_with_validation(
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
         validation_config: DependencyValidationConfig,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
+            runtime_config,
             microbatch_context: None,
             validation_config,
         }
@@ -632,6 +642,14 @@ Or remove the source() from the model if it's unused."
 }
 
 impl Object for SourceFunction {
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        match key.as_str()? {
+            "config" => Some(MinijinjaValue::from_dyn_object(self.runtime_config.clone())),
+            "function_name" => Some(MinijinjaValue::from("source")),
+            _ => None,
+        }
+    }
+
     fn call(
         self: &Arc<Self>,
         _state: &State<'_, '_>,

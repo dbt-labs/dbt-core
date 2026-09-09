@@ -60,6 +60,7 @@ mod tests {
             "test",
             DEFAULT_DBT_QUOTING,
             Arc::new(DbtRuntimeConfig::default()),
+            Arc::new(DbtRuntimeConfig::default()),
             sql_resources.clone(),
             Arc::new(AtomicBool::new(false)),
             &PathBuf::from("test"),

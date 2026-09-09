@@ -154,6 +154,17 @@ impl PhysicalFormatResolver for CatalogRelation {
 }
 
 impl CatalogRelation {
+    // safety: v1 uses adapter_properties, v2 uses catalog_database
+    pub fn has_catalog_linked_database(&self) -> bool {
+        // v1
+        self.adapter_properties
+            .get("catalog_linked_database")
+            .is_some_and(|v| !v.trim().is_empty())
+            // v2
+            || self.catalog_database.as_deref().is_some_and(|v| !v.trim().is_empty())
+                && self.catalog_type.is_catalog_linked()
+    }
+
     // Builder pattern setters - prefer these over introducing a new named
     // `default_catalog_relation_<adapter>_<variant>()` constructor
     pub fn with_table_format(mut self, table_format: TableFormat) -> Self {
@@ -1708,6 +1719,10 @@ impl Object for CatalogRelation {
         _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, minijinja::Error> {
         match name {
+            "has_catalog_linked_database" => Ok(self
+                .gate_by_adapter(vec![AdapterType::Snowflake], || {
+                    Value::from(self.has_catalog_linked_database())
+                })),
             "supports_create_or_replace" => {
                 if load_catalogs::fetch_use_catalogs_v2() {
                     Ok(self.gate_by_adapter(vec![AdapterType::Databricks], || {
@@ -1746,6 +1761,52 @@ impl Object for LinkedCatalogProvider {
             "is_unity" => Value::from(self.is_unity()),
             _ => Value::from(()),
         })
+    }
+}
+
+#[cfg(test)]
+mod has_catalog_linked_database_tests {
+    use super::*;
+
+    fn snowflake(catalog_type: CatalogType) -> CatalogRelation {
+        CatalogRelation {
+            catalog_type,
+            table_format: TableFormat::Iceberg,
+            ..CatalogRelation::default_catalog_relation_snowflake()
+        }
+    }
+
+    #[test]
+    fn v1_catalog_linked_database_is_linked() {
+        let mut relation = snowflake(CatalogType::IcebergRest);
+        relation.adapter_properties.insert(
+            "catalog_linked_database".to_string(),
+            "MY_LINKED_DB".to_string(),
+        );
+        assert!(relation.has_catalog_linked_database());
+    }
+
+    #[test]
+    fn blank_catalog_linked_database_is_not_linked() {
+        let mut relation = snowflake(CatalogType::IcebergRest);
+        relation
+            .adapter_properties
+            .insert("catalog_linked_database".to_string(), "  ".to_string());
+        assert!(!relation.has_catalog_linked_database());
+    }
+
+    #[test]
+    fn v2_catalog_database_on_a_linked_catalog_is_linked() {
+        let mut relation = snowflake(CatalogType::IcebergRest);
+        relation.catalog_database = Some("MY_LINKED_DB".to_string());
+        assert!(relation.has_catalog_linked_database());
+    }
+
+    #[test]
+    fn v2_catalog_database_on_the_managed_catalog_is_not_linked() {
+        let mut relation = snowflake(CatalogType::SnowflakeBuiltIn);
+        relation.catalog_database = Some("ANALYTICS_ICEBERG".to_string());
+        assert!(!relation.has_catalog_linked_database());
     }
 }
 

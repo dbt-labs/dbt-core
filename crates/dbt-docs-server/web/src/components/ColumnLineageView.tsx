@@ -265,14 +265,23 @@ function edgesFromGraph(graph: ColumnLineageGraph): ColumnLineageEdge[] {
   }));
 }
 
+/** Value `normalizeLineageKind` (duckdb data source, the only production
+ *  source) emits for a `scan`-kind edge -- e.g. a column only referenced in a
+ *  WHERE/JOIN condition, never copied or transformed into the target's value.
+ *  Filtered out below so it never appears as a false lineage node. Keep in
+ *  sync with `shared/data-sources/duckdb/sql.ts`. */
+const SCAN_KIND = 'indirect';
+
 /** BFS the edge set both upstream and downstream from the target column,
- *  then materialize nodes for the reachable composite ids. */
+ *  then materialize nodes for the reachable composite ids. Scan-kind edges
+ *  are dropped first, so a column reachable only through one never enters
+ *  the subgraph at all (matches VSCE's effective behavior). */
 function buildColumnSubgraph(
   graph: ColumnLineageGraph,
   rootUniqueId: string,
   columnName: string,
 ): { nodes: ColumnLineageNode[] } {
-  const edges = edgesFromGraph(graph);
+  const edges = edgesFromGraph(graph).filter((e) => e.kind !== SCAN_KIND);
   const target = compositeId(rootUniqueId, columnName);
 
   const outgoing = new Map<string, ColumnLineageEdge[]>();

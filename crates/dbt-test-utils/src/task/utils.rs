@@ -37,6 +37,7 @@ static SCHEMA_TIMESTAMP_SUFFIX_PATTERN: Lazy<Regex> =
 static ISO_TIMESTAMP_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z").unwrap());
 static TIME_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\d{2}:\d{2}:\d{2}\b").unwrap());
+static NODE_INDEX_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\[(\d+) of (\d+)").unwrap());
 static BRACKETED_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     // Matches bracketed durations in fixed 7-char width format with optional spacing:
     // "[  1.5s ]", "[ 2m42s]", "[1h 2m3s]", "[ 500ms ]", "[  100us]", "[1000ns ]", "[-------]"
@@ -311,6 +312,19 @@ pub fn normalize_inline_sql_files(output: String) -> String {
 /// be updated on every run.
 pub fn normalize_thread_ids(output: String) -> String {
     THREAD_ID_PATTERN.replace_all(&output, "$1 $2").to_string()
+}
+
+/// Replaces the position in a `[N of M ...]` execution index with `index`.
+///
+/// Only applied to tests that sort their output. Sorting is how a test declares that the
+/// order its nodes run in is not fixed, and the position is assigned in that same order --
+/// so `N` genuinely differs between runs and cannot be pinned in a golden file. `M` is left
+/// alone: the total is stable, and it is what catches a node entering or leaving the
+/// selection. Tests that run sequentially keep their positions asserted in full.
+pub fn normalize_node_index(output: String) -> String {
+    NODE_INDEX_PATTERN
+        .replace_all(&output, "[index of $2")
+        .to_string()
 }
 
 /// Strips absolute replay recording paths from error messages.

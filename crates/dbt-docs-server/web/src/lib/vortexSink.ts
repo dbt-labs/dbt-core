@@ -43,8 +43,7 @@ import {
   UpsellPromptClickedSchema,
   UpsellPromptDismissedSchema,
   UpsellPromptDisplayedSchema,
-} from '@dbt-labs/proto/public/events/docs_pb';
-
+} from '../proto/dbtlabs/proto/v1/events/docs_pb';
 import type { AnalyticsEvent } from '../types';
 import type { SiteBootstrap } from './siteBootstrap';
 import producer from './vortexProducer';

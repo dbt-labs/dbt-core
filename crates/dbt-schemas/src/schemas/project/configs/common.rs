@@ -21,6 +21,7 @@ use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::{ResolvableConfig, ResolvedConfig};
 use crate::schemas::serde::PartitionsConfig;
 use crate::schemas::serde::QueryTag;
+use crate::schemas::serde::RefreshableConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
     IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, StringOrInteger, bool_or_string_bool,
@@ -286,7 +287,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub definer: Option<String>,
     pub sql_security: Option<String>,
     // materialized-view materialization
-    pub refreshable: Option<BTreeMap<String, YmlValue>>,
+    pub refreshable: Option<RefreshableConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub catchup: Option<bool>,
     pub mv_on_schema_change: Option<String>,

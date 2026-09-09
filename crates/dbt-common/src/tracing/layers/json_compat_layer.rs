@@ -824,12 +824,14 @@ impl JsonCompatLayer {
         ))
         .expect("Failed to serialize core event info to JSON");
 
-        // TODO: we can theoretically add index & total either by exteding NodeProcessed or
-        // tracking on TUI only TuiAllProcessingNodesGroup
+        // dbt core always emits these as integers, using 0 for the ephemeral models that
+        // never take an index, so mirror that rather than omitting the keys.
         let value_log = json!({
             "info": info_json_log,
             "data": {
-                "node_info": node_info
+                "node_info": node_info,
+                "index": node.node_index.unwrap_or(0),
+                "total": node.node_count_total.unwrap_or(0)
             }
         })
         .to_string();
@@ -969,7 +971,9 @@ impl JsonCompatLayer {
         let mut data = json!({
             "node_info": node_info,
             "status": status,
-            "execution_time": duration.as_secs_f32()
+            "execution_time": duration.as_secs_f32(),
+            "index": node.node_index.unwrap_or(0),
+            "total": node.node_count_total.unwrap_or(0)
         });
 
         if is_freshness {

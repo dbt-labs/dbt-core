@@ -1781,6 +1781,10 @@ mod snowflake_alter_relation_type_keyword {
                     relation_value(harness, relation_type),
                 ),
                 ("column_dict".to_string(), column_dict),
+                (
+                    "config".to_string(),
+                    Value::from_dyn_object(default_mock_config()),
+                ),
             ]);
             harness
                 .render(

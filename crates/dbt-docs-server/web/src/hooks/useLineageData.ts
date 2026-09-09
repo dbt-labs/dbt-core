@@ -1,13 +1,26 @@
 import { useMemo } from 'react';
 import { Edge, Node as ReactFlowNode } from '@xyflow/react';
 
-import type { DbtDagNode } from '@dbt-labs/dbt-dag';
-
 import { DAG_NODE_TYPE } from '../components/LineageV2/DagNode';
 import { type LineageGraph, type ResourceType, useLineage } from '../shared';
 
 export const LOCAL_PROJECT = 'local';
 export const LOCAL_PROJECT_ID = 0;
+
+/** The fields of dbt-dag's `DbtDagNode` this hook actually populates -- kept
+ *  local rather than importing the real type, since only the old dbt-dag-based
+ *  `LineageView`/`FullLineagePage` need the full shape (and cast into it at
+ *  their own `<Dag nodes={...}>` call site); the new LineageV2 engine only
+ *  ever reads `dagNodes.length`. */
+export type LineageDagNode = {
+  id: string;
+  parents: string[];
+  label: string;
+  resourceType: ResourceType;
+  dbtCloudProject: string;
+  projectId: number;
+  materializationType: string | null;
+};
 
 export function fqnFromUniqueId(uniqueId: string): string {
   // unique_id: `<resource_type>.<package>.<...path>.<name>` → drop resource_type prefix
@@ -30,7 +43,7 @@ export function useLineageData(
 ): {
   data: LineageGraph | null;
   error: Error | null;
-  dagNodes: DbtDagNode[];
+  dagNodes: LineageDagNode[];
   selector: string;
   /** False when the active data source has no `fetchLineage`. */
   isSupported: boolean;
@@ -49,7 +62,7 @@ export function useLineageData(
   );
   const data = query.data ?? null;
 
-  const dagNodes = useMemo<DbtDagNode[]>(() => {
+  const dagNodes = useMemo<LineageDagNode[]>(() => {
     if (!data) return [];
     const parents = new Map<string, string[]>();
     for (const e of data.edges) {
@@ -64,8 +77,7 @@ export function useLineageData(
       resourceType: n.resourceType,
       dbtCloudProject: LOCAL_PROJECT,
       projectId: LOCAL_PROJECT_ID,
-      materializationType:
-        (n.materialized as DbtDagNode['materializationType']) ?? null,
+      materializationType: n.materialized ?? null,
     }));
   }, [data]);
 
