@@ -236,37 +236,6 @@ jobs:
         with:
           ref: ${{ needs.prepare-release.outputs.branch }}
 
-      - name: Validate dbt-core wheel version
-        id: core-wheel-version
-        if: inputs.core_wheel_version != ''
-        env:
-          CORE_WHEEL_VERSION: ${{ inputs.core_wheel_version }}
-        run: |
-          if [ -x /opt/python/cp311-cp311/bin/python ]; then
-            PY=/opt/python/cp311-cp311/bin/python
-          else
-            PY=python3
-          fi
-          "$PY" - <<'PY'
-          import os
-          import re
-
-          # Match the SemVer-to-PEP-440 conversion used by the sdist publisher.
-          version = os.environ["CORE_WHEEL_VERSION"]
-          number = r"(?:0|[1-9][0-9]*)"
-          match = re.fullmatch(
-              rf"({number}\.{number}\.{number})(?:-(alpha|beta|rc|preview|dev)\.({number}))?",
-              version,
-          )
-          if match is None:
-              raise SystemExit("core_wheel_version must be X.Y.Z or X.Y.Z-{alpha|beta|rc|preview|dev}.N")
-          base, lane, sequence = match.groups()
-          suffix = {"alpha": "a", "beta": "b", "rc": "rc", "preview": "rc", "dev": ".dev"}
-          version = base if lane is None else f"{base}{suffix[lane]}{sequence}"
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"pep440={version}\n")
-          PY
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # dtolnay/rust-toolchain@stable
         with:
@@ -461,6 +430,40 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Runs after Setup Python above: on macOS/Windows legs, `python3` isn't
+      # guaranteed on PATH until setup-python has run (Windows runner images
+      # in particular don't reliably ship a `python3` shim).
+      - name: Validate dbt-core wheel version
+        id: core-wheel-version
+        if: inputs.core_wheel_version != ''
+        env:
+          CORE_WHEEL_VERSION: ${{ inputs.core_wheel_version }}
+        run: |
+          if [ -x /opt/python/cp311-cp311/bin/python ]; then
+            PY=/opt/python/cp311-cp311/bin/python
+          else
+            PY=python3
+          fi
+          "$PY" - <<'PY'
+          import os
+          import re
+
+          # Match the SemVer-to-PEP-440 conversion used by the sdist publisher.
+          version = os.environ["CORE_WHEEL_VERSION"]
+          number = r"(?:0|[1-9][0-9]*)"
+          match = re.fullmatch(
+              rf"({number}\.{number}\.{number})(?:-(alpha|beta|rc|preview|dev)\.({number}))?",
+              version,
+          )
+          if match is None:
+              raise SystemExit("core_wheel_version must be X.Y.Z or X.Y.Z-{alpha|beta|rc|preview|dev}.N")
+          base, lane, sequence = match.groups()
+          suffix = {"alpha": "a", "beta": "b", "rc": "rc", "preview": "rc", "dev": ".dev"}
+          version = base if lane is None else f"{base}{suffix[lane]}{sequence}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"pep440={version}\n")
+          PY
+
       # A venv sidesteps the mac/windows runners' externally-managed system
       # Python (PEP 668), which rejects a plain `pip install maturin`
       # outright. `maturin build` only writes a wheel file (it doesn't
@@ -498,6 +501,8 @@ jobs:
             PYPROJECT=crates/dbt-sa-python/pyproject.toml
             sed "s/dynamic = \[\"version\"\]/version = \"$CORE_WHEEL_VERSION\"/" "$PYPROJECT" > "$PYPROJECT.tmp"
             mv "$PYPROJECT.tmp" "$PYPROJECT"
+            # Guard against a silent no-op sed (exits 0 either way).
+            grep -qx "version = \"$CORE_WHEEL_VERSION\"" "$PYPROJECT"
           fi
 
           "$VENV_BIN/maturin" build --release --locked \
