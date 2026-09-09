@@ -411,6 +411,21 @@ fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<&'a yml::Mapping
     }
 }
 
+/// Validates the catalog-level `meta:` field.
+fn validate_meta_shape(m: &yml::Mapping, k: &str) -> FsResult<()> {
+    if let Some(map) = get_map(m, k)?
+        && let Some(key) = map.keys().find(|key| key.as_str().is_none())
+    {
+        return err!(
+            code => ErrorCode::InvalidConfig,
+            hacky_yml_loc => Some(key.span().clone()),
+            "Non-string key in '{}' mapping",
+            k
+        );
+    }
+    Ok(())
+}
+
 fn get_seq<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<&'a yml::Sequence>> {
     match m.get(yml::Value::from(k)) {
         Some(v) => match v {
@@ -549,7 +564,15 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
 
         check_unknown_keys(
             catalog,
-            &["name", "type", "table_format", "config", "description"],
+            &[
+                "name",
+                "type",
+                "table_format",
+                "config",
+                "description",
+                "owner",
+                "meta",
+            ],
             "catalog entry",
         )?;
 
@@ -572,16 +595,27 @@ pub fn validate_catalogs_v2_shape(map: &yml::Mapping, span: &yml::Span) -> FsRes
                 "Catalog name must be a non-empty string"
             );
         }
-        if let Some(description) = get_str(catalog, "description")? {
-            if description.is_empty_or_whitespace() {
-                return err!(
-                    code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => field_span(catalog, "description").cloned(),
-                    "Supply a description or remove the tag from catalog '{}'",
-                    name
-                );
-            }
+        if let Some(description) = get_str(catalog, "description")?
+            && description.is_empty_or_whitespace()
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(catalog, "description").cloned(),
+                "Supply a value for the 'description' field in catalog '{}' or consider removing it",
+                name
+            );
         }
+        if let Some(owner) = get_str(catalog, "owner")?
+            && owner.is_empty_or_whitespace()
+        {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => field_span(catalog, "owner").cloned(),
+                "Supply a value for the 'owner' field in catalog '{}' or consider removing it",
+                name
+            );
+        }
+        validate_meta_shape(catalog, "meta")?;
         if !seen_catalog_names.insert(name) {
             return err!(
                 code => ErrorCode::InvalidConfig,
@@ -1370,6 +1404,15 @@ impl CatalogRegistry {
                             "description": "Optional human-readable description of this catalog's purpose.",
                         },
                         "config": config,
+                        "owner": {
+                            "type": "string",
+                            "description": "Optional dedicated ownership field (team name or email).",
+                        },
+                        "meta": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "description": "Optional free-form metadata map, following the dbt sources/models `meta:` convention.",
+                        },
                     },
                 })
             })
@@ -3045,8 +3088,176 @@ catalogs:
         let res = parse_and_validate(yaml);
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            format!("{res:?}").contains("Supply a description or remove the tag"),
+            format!("{res:?}").contains("Supply a value for the 'description' field"),
             "unexpected error: {res:?}"
+        );
+    }
+
+    #[test]
+    fn description_appears_in_json_schema() {
+        let schema = catalogs_v2_json_schema();
+        let branches = schema["properties"]["catalogs"]["items"]["oneOf"]
+            .as_array()
+            .expect("oneOf array");
+        for branch in branches {
+            assert_eq!(
+                branch["properties"]["description"]["type"],
+                serde_json::json!("string"),
+                "every catalog type branch should publish an optional string `description`"
+            );
+            // description is optional: it must not appear in the required list.
+            let required = branch["required"].as_array().expect("required array");
+            assert!(
+                !required
+                    .iter()
+                    .any(|r| r == &serde_json::json!("description")),
+                "description must be optional"
+            );
+        }
+    }
+
+    // ===== owner / meta fields (optional) =====
+
+    #[test]
+    fn owner_and_meta_appear_in_json_schema() {
+        let schema = catalogs_v2_json_schema();
+        let branches = schema["properties"]["catalogs"]["items"]["oneOf"]
+            .as_array()
+            .expect("oneOf array");
+        for branch in branches {
+            assert_eq!(
+                branch["properties"]["owner"]["type"],
+                serde_json::json!("string"),
+                "every catalog type branch should publish an optional string `owner`"
+            );
+            assert_eq!(
+                branch["properties"]["meta"]["type"],
+                serde_json::json!("object"),
+                "every catalog type branch should publish an optional object `meta`"
+            );
+            let required = branch["required"].as_array().expect("required array");
+            assert!(
+                !required
+                    .iter()
+                    .any(|r| r == &serde_json::json!("owner") || r == &serde_json::json!("meta")),
+                "owner and meta must be optional"
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_with_owner_is_valid() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    owner: "data-platform@example.com"
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        parse_and_validate(yaml).expect("owner should validate");
+    }
+
+    #[test]
+    fn empty_owner_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    owner: "  "
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        let res = parse_and_validate(yaml);
+        assert!(res.is_err(), "empty owner should be rejected");
+        assert!(format!("{res:?}").contains("owner"));
+    }
+
+    #[test]
+    fn owner_non_string_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    owner: 123
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("Key 'owner' must be a string"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn catalog_with_meta_is_valid() {
+        let yaml = r##"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    meta:
+      slack: "#data-platform"
+      sla_hours: 24
+      domain: analytics
+      nested:
+        pagerduty: data-platform-oncall
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"##;
+        parse_and_validate(yaml).expect("meta should validate");
+    }
+
+    #[test]
+    fn meta_non_string_key_rejected() {
+        let yaml = "
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    meta:
+      42: not-a-string-key
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+";
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("Non-string key in 'meta' mapping"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn meta_non_mapping_rejected() {
+        let yaml = r#"
+catalogs:
+  - name: local
+    type: local_filesystem
+    table_format: default
+    meta: "not-a-map"
+    config:
+      duckdb:
+        root_path: /tmp/catalog
+"#;
+        let res = parse_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains("Key 'meta' must be a mapping"),
+            "unexpected error: {msg}"
         );
     }
 }
