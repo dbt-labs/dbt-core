@@ -494,7 +494,7 @@ mod tests {
     fn test_normalize_version_banner_for_every_brand() {
         // The banner's brand comes from the binary's `CliFeature::command_name`,
         // and the action column is right-aligned, hence the leading padding.
-        for (brand, padding) in [("dbt-fusion", ""), ("dbt-core", "  "), ("dbt-repl", "  ")] {
+        for (brand, padding) in [("dbt", "       "), ("dbt-oss", "   "), ("dbt-repl", "  ")] {
             let line = format!("{padding}{brand} {}", env!("CARGO_PKG_VERSION"));
             assert_eq!(
                 format!("{padding}{brand} "),

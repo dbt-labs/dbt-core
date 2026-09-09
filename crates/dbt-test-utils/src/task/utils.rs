@@ -5,7 +5,7 @@ use crate::task::task_seq::FeatureStackFactory;
 use dbt_clap_core::{Cli, CliParser};
 use dbt_common::FsError;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::constants::DBT_FUSION;
+use dbt_common::constants::DBT_BRAND_NAME;
 use dbt_common::tracing::FsTraceConfigBuilder;
 use dbt_main::ctrl_c::run_future_with_ctrlc_support;
 use std::fmt::Debug;
@@ -289,9 +289,9 @@ pub fn maybe_normalize_time(output: String) -> String {
 }
 
 /// Strip the version number out of the startup version banner, whose brand name
-/// varies per binary (`dbt-fusion`, `dbt-core`, `dbt-repl`).
+/// varies per binary (`dbt`, `dbt-oss`, `dbt-repl`).
 pub fn normalize_version(output: String) -> String {
-    const BRANDS: [&str; 3] = ["dbt-fusion", "dbt-core", "dbt-repl"];
+    const BRANDS: [&str; 3] = ["dbt", "dbt-oss", "dbt-repl"];
 
     BRANDS.iter().fold(output, |acc, brand| {
         acc.replace(
@@ -442,7 +442,7 @@ where
     // this helper does not need a `CliParser`.
     let warn_error_options = Some(cli.common_args.get_cli_warn_error_options());
     let fail_fast_flag = cli.common_args.fail_fast;
-    let trace_config = FsTraceConfigBuilder::from_io_args("dbt-tests", DBT_FUSION, &arg.io)
+    let trace_config = FsTraceConfigBuilder::from_io_args("dbt-tests", DBT_BRAND_NAME, &arg.io)
         .with_command(arg.command)
         .with_project_dir(Some(&project_dir))
         .with_target_path(Some(&target_dir))

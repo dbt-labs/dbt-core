@@ -117,7 +117,7 @@ pub fn enforce_adapter_gating(
     }
 
     let mut message = format!(
-        "The '{}' adapter is not yet supported by dbt Fusion. \
+        "The '{}' adapter is not yet supported by dbt. \
 Supported adapters: ",
         adapter_type
     );

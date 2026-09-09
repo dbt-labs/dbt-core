@@ -1575,7 +1575,7 @@ fn insert_effective_optimize_test_option(
 
 fn parse_boolish_env(value: &OsStr) -> Option<bool> {
     BoolishValueParser::new()
-        .parse_ref(&clap::Command::new("dbt-fusion"), None, value)
+        .parse_ref(&clap::Command::new("dbt"), None, value)
         .ok()
 }
 

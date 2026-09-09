@@ -3855,7 +3855,7 @@ impl Adapter {
         _args: &[Value],
     ) -> Result<Value, minijinja::Error> {
         unimplemented!(
-            "get_catalog_integration is unavailable in Fusion. Access catalogs metadata directly from a catalog relation obtained using adapter.build_catalog_relation(model: RelationConfig)"
+            "get_catalog_integration is unavailable in dbt. Access catalogs metadata directly from a catalog relation obtained using adapter.build_catalog_relation(model: RelationConfig)"
         )
     }
 }

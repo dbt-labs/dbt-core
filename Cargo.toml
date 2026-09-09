@@ -66,6 +66,7 @@ members = [
   "crates/dbt-jinja-utils",
   "crates/dbt-main",
   "crates/dbt-dist",
+  "crates/dbt-dist-classify",
   "crates/dbt-sa-cli",
   "crates/dbt-adbc",
   "crates/dbt-tracked-stmt",
@@ -253,6 +254,7 @@ dbt-defer = { path = "crates/dbt-defer" }
 dbt-deps = { path = "crates/dbt-deps" }
 dbt-df-providers = { path = "crates/dbt-df-providers" }
 dbt-dist = { path = "crates/dbt-dist" }
+dbt-dist-classify = { path = "crates/dbt-dist-classify" }
 dbt-docs-core = { path = "crates/dbt-docs-core" }
 dbt-docs-server = { path = "crates/dbt-docs-server", default-features = false }
 dbt-env = { path = "crates/dbt-env" }

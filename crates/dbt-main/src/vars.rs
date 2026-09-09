@@ -243,9 +243,9 @@ pub fn apply_color_env_overrides() {
     }
 }
 
-/// Warns about environment variables that are recognized but not supported by fusion.
+/// Warns about environment variables that are recognized but not supported by dbt.
 ///
-/// These are typically dbt-core specific variables that have no effect in fusion.
+/// These are typically dbt-core specific variables that have no effect in dbt.
 /// Returns a list of the unused variables that were set (for testing purposes).
 pub fn warn_unused_engine_env_vars() -> Vec<String> {
     let unused: Vec<String> = std::env::vars()
@@ -256,7 +256,7 @@ pub fn warn_unused_engine_env_vars() -> Vec<String> {
     for var in &unused {
         emit_warn_log_message(
             ErrorCode::UnsupportedFusionFeature,
-            format!("{var} is not supported by fusion and will have no effect."),
+            format!("{var} is not supported by dbt and will have no effect."),
         );
     }
 
