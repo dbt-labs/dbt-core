@@ -76,14 +76,9 @@ interface Props {
   onSetTheme(theme: 'dark' | 'light' | 'system'): void;
   filters: AssetFilters;
   onSetFilters(next: AssetFilters): void;
-  /**
-   * In-place filter setter used by Filter mode. Does **not** navigate, so the
-   * user can toggle filter checkboxes without bouncing between routes —
-   * `/search/` stays the canonical surface while Filter mode is active.
-   */
-  onUpdateFiltersInPlace(next: AssetFilters): void;
   /** URL-driven mode: `/search` → 'filter'; elsewhere `?view=assets|files`,
-   *  default 'assets'. */
+   *  default 'assets'. Selecting 'filter' doesn't navigate — see App.tsx's
+   *  `filterModeOverride`. */
   mode: LocatePaneMode;
   /** Tab click. Owner handles URL navigation (and the /search ↔ project-home
    *  transitions). */
@@ -121,7 +116,6 @@ export function LocatePane({
   onSetTheme,
   filters,
   onSetFilters,
-  onUpdateFiltersInPlace,
   mode,
   onSelectMode,
   searchFacets,
@@ -264,7 +258,7 @@ export function LocatePane({
             nodes={nodes}
             typeCounts={typeCounts}
             filters={filters}
-            onSetFilters={onUpdateFiltersInPlace}
+            onSetFilters={onSetFilters}
             searchFacets={searchFacets ?? null}
           />
         )}
