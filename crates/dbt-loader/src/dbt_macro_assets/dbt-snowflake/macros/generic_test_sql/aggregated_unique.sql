@@ -7,6 +7,7 @@
         {% do filtered_columns.append(column_name) %}
     {% endif %}
 {% endfor %}
+{#- Each duplicated value is one failure. #}
 {% if filtered_columns %}
 select
     case
@@ -15,7 +16,8 @@ select
         {%- endfor %}
     end as column_name,
     coalesce({{ filtered_columns | join(', ') }}) as unique_field,
-    count(*) as n_records
+    count(*) as n_records,
+    1 as failures
 from {{ model }}
 where {{ filtered_columns | join(' is not null or ') }} is not null
 group by grouping sets (
@@ -30,7 +32,8 @@ having count(*) > 1
 select
     cast(null as {{ dbt.type_string() }}) as column_name,
     cast(null as {{ dbt.type_string() }}) as unique_field,
-    cast(null as {{ dbt.type_int() }}) as n_records
+    cast(null as {{ dbt.type_int() }}) as n_records,
+    cast(null as {{ dbt.type_int() }}) as failures
 where 1 = 0
 {% endif %}
 {% endmacro %}
