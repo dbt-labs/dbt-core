@@ -184,7 +184,7 @@ const DUCKDB_ICEBERG_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("secret")
         .non_empty()
         .doc("Name of a DuckDB secret from profiles.yml to use for authentication."),
-    FieldSpec::string("attach_as").non_empty(),
+    FieldSpec::string("catalog_database").non_empty(),
     FieldSpec::string("default_region").non_empty(),
     FieldSpec::string("default_schema").non_empty(),
     FieldSpec::string("max_table_staleness").non_empty(),
@@ -240,7 +240,7 @@ const BIGLAKE_BIGQUERY_FIELDS: &[FieldSpec] = &[
 const DUCKLAKE_DUCKDB_FIELDS: &[FieldSpec] = &[
     FieldSpec::string("metadata_path").required().non_empty(),
     FieldSpec::string("data_path").non_empty(),
-    FieldSpec::string("attach_as").non_empty(),
+    FieldSpec::string("catalog_database").non_empty(),
     FieldSpec::string("metadata_schema").non_empty(),
     FieldSpec::string("metadata_catalog").non_empty(),
     FieldSpec::u32_plain("data_inlining_row_limit")
@@ -2128,7 +2128,7 @@ catalogs:
       duckdb:
         endpoint: "https://my-iceberg-rest.example.com"
         secret: "my_secret"
-        attach_as: "my_catalog"
+        catalog_database: "my_catalog"
 "#;
         parse_and_validate(yaml).expect("iceberg_rest + duckdb should validate");
     }
@@ -2223,7 +2223,7 @@ catalogs:
     }
 
     #[test]
-    fn iceberg_rest_duckdb_blank_attach_as() {
+    fn iceberg_rest_duckdb_blank_catalog_database() {
         let yaml = r#"
 catalogs:
   - name: rest_duck
@@ -2232,13 +2232,13 @@ catalogs:
     config:
       duckdb:
         endpoint: "https://my-rest.example.com"
-        attach_as: ""
+        catalog_database: ""
 "#;
         let res = parse_and_validate(yaml);
         let msg = format!("{res:?}");
         assert!(res.is_err(), "expected error but got Ok");
         assert!(
-            msg.contains("'attach_as' must be non-empty"),
+            msg.contains("'catalog_database' must be non-empty"),
             "unexpected error: {msg}"
         );
     }
@@ -2475,7 +2475,7 @@ catalogs:
         endpoint: "https://my-catalog.example.com"
         warehouse: "warehouse_name"
         secret: "my_secret"
-        attach_as: "my_db"
+        catalog_database: "my_db"
         default_region: "us-east-1"
         default_schema: "demo"
         max_table_staleness: "10 minutes"
@@ -2596,7 +2596,7 @@ catalogs:
       duckdb:
         metadata_path: "metadata.ducklake"
         data_path: "data/"
-        attach_as: "lake"
+        catalog_database: "lake"
         metadata_schema: "my_schema"
         metadata_catalog: "lake_db"
         data_inlining_row_limit: 100

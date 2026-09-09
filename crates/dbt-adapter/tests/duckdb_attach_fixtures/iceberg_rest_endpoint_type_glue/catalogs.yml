@@ -9,6 +9,6 @@ catalogs:
     config:
       duckdb:
         endpoint_type: GLUE
-        attach_as: "glue_rest_db"
+        catalog_database: "glue_rest_db"
         secret: glue_s3
         default_schema: "analytics"

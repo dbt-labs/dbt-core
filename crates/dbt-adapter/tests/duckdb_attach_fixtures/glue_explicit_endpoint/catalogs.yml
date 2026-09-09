@@ -10,5 +10,5 @@ catalogs:
       duckdb:
         endpoint: "glue.us-east-1.amazonaws.com/iceberg"
         warehouse: "123456789012"
-        attach_as: "glue_db"
+        catalog_database: "glue_db"
         secret: glue_s3

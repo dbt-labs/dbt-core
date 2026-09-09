@@ -431,10 +431,6 @@ pub(crate) trait CatalogSpecDuckDbExt {
     /// config block), carrying its sanitized `ATTACH` alias.
     fn external_iceberg_attach(&self) -> Option<ExternalIcebergAttach>;
 
-    /// The sanitized DuckDB `ATTACH` alias this catalog resolves to
-    /// (`attach_as` when set, otherwise the catalog name), or `None` when the
-    /// catalog has no `duckdb` config block. Single source of truth for alias
-    /// resolution so routing and attachment can never drift apart.
     fn resolved_attach_alias(&self) -> Option<String>;
 }
 
@@ -454,15 +450,14 @@ impl CatalogSpecDuckDbExt for CatalogSpecV2View<'_> {
         })
     }
 
+    /// Single source of truth for alias resolution, so routing and attachment
+    /// can never drift apart.
     fn resolved_attach_alias(&self) -> Option<String> {
-        // The base DuckDB adapter uses the `duckdb` block; the lake compute engine
-        // uses `lake_compute`. Fall back so a catalog configured for either
-        // resolves.
         let duckdb_block = self
             .config_block(AdapterType::DuckDB.as_ref())
             .or_else(|| self.config_block(AdapterType::LakeCompute.as_ref()))?;
         let alias = duckdb_block
-            .get(dbt_yaml::Value::from("attach_as"))
+            .get(dbt_yaml::Value::from("catalog_database"))
             .and_then(|value| value.as_str())
             .unwrap_or(self.name);
         Some(dbt_adapter_sql::ident::sanitize_identifier(
@@ -740,7 +735,7 @@ catalogs:
       duckdb:
         endpoint: http://localhost:8181/catalog
         warehouse: demo
-        attach_as: iceberg_demo
+        catalog_database: iceberg_demo
   - name: horizon_demo
     type: horizon
     table_format: iceberg
@@ -754,7 +749,7 @@ catalogs:
     config:
       duckdb:
         endpoint: https://dbc.example.com/api/2.1/unity-catalog/iceberg
-        attach_as: unity_db
+        catalog_database: unity_db
   - name: files
     type: local_filesystem
     table_format: default
@@ -816,7 +811,7 @@ catalogs:
     config:
       duckdb:
         root_path: /tmp/remote
-        attach_as: remote_db
+        catalog_database: remote_db
 "#,
             |view| {
                 assert_eq!(view.table_format_for_database("lake"), Some("ducklake"));

@@ -9,5 +9,5 @@ catalogs:
       duckdb:
         endpoint_type: S3_TABLES
         warehouse: "arn:aws:s3tables:us-east-1:123456789012:bucket/demo-bucket"
-        attach_as: "s3_tables_db"
+        catalog_database: "s3_tables_db"
         secret: s3_tables_secret
