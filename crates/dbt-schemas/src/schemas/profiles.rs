@@ -266,7 +266,7 @@ impl DbConfig {
                 "base_url",
                 "method",
                 "organization",
-                "fivetran_api_url",
+                "fivetran_auth_url",
             ],
             // Adapter types with no `DbConfig` variant, so nothing to display.
             AdapterType::Athena
@@ -1068,7 +1068,7 @@ pub struct LakeComputeConfig {
     pub fivetran_credential: Option<String>,
     /// Fivetran public API base URL; only needed to reach a non-production one.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub fivetran_api_url: Option<String>,
+    pub fivetran_auth_url: Option<String>,
     /// Days a minted Snowflake PAT stays valid before it needs re-minting.
     /// Only applies when lake compute mints a PAT for Horizon catalog access
     /// (i.e. non-keypair auth on the native Snowflake target). Default: 30.
