@@ -1,6 +1,15 @@
+<p align="center">
+  <img width="750" alt="dbt logo" src="https://github.com/user-attachments/assets/26b0c2cd-70c1-4aa2-b66a-cda491ffa99c" />
+</p>
+<p align="center">
+  <a href="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml">
+    <img src="https://github.com/dbt-labs/dbt-core/actions/workflows/main.yml/badge.svg?event=push" alt="CI Badge"/>
+  </a>
+</p>
+
 > [!WARNING]
-> **dbt Core v1 development has moved to the [`1.latest`](https://github.com/dbt-labs/dbt/tree/1.latest) branch.**
-> The `main` branch now contains all the Apache 2.0 source code of dbt v2.0 — a ground-up rewrite of dbt in Rust. If you're looking for the Python implementation of dbt Core, switch to [`1.latest`](https://github.com/dbt-labs/dbt/tree/1.latest).
+> **dbt v1 development has moved to the [`1.latest`](https://github.com/dbt-labs/dbt/tree/1.latest) branch.**
+> The `main` branch now contains all the Apache 2.0 source code of dbt v2.0 — a ground-up rewrite of dbt in Rust. If you're looking for the v1 Python implementation of the dbt framework, switch to [`1.latest`](https://github.com/dbt-labs/dbt/tree/1.latest).
 
 **[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
 
@@ -44,15 +53,10 @@ These select statements, or "models", form a dbt project. Models frequently buil
 
 ## Getting started
 
-Start by choosing a distribution. dbt Core is the baseline distribution of dbt. Fusion extends dbt Core with additional SQL comprehension abilities. Both distributions are free to install and can run locally.
+* [Install dbt](https://docs.getdbt.com/docs/local/install-dbt?version=2)
+* Read the [introduction](https://docs.getdbt.com/docs/introduction/) and [viewpoint](https://docs.getdbt.com/docs/about/viewpoint/)
+* Explore the [dbt platform](https://docs.getdbt.com/docs/cloud/about-cloud/dbt-cloud-features) for an enhanced collaboration experience.
 
-- **If you need an Apache 2.0 licensed tool** and the ability to review every line of code inside of it, [install dbt Core](https://docs.getdbt.com/docs/local/install-dbt-core-v2?version=2.0).
-- **If you need a free CLI you can use locally**, [install Fusion](https://docs.getdbt.com/docs/local/install-dbt?version=2.0). It can do more than dbt Core out of the box and you can seamlessly enable other advanced features over time if you choose to.
-
-Regardless of the distribution you choose, each is part of a single framework with a single language specification, meaning your business logic is portable in both directions.
-
-Explore the [dbt platform](https://docs.getdbt.com/docs/cloud/about-cloud/dbt-cloud-features) for an enhanced collaboration experience.
-Read the [introduction](https://docs.getdbt.com/docs/introduction/) and [viewpoint](https://docs.getdbt.com/docs/about/viewpoint/)
 
 ## Join the dbt Community
 
