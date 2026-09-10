@@ -52,7 +52,7 @@ use dbt_dist::command::execute_get_distribution_info;
 use dbt_docs_server::providers::Backend;
 use dbt_features::feature_stack::FeatureStack;
 use dbt_features::index::write_metadata_parquet;
-use dbt_index_core::backend::DuckDbViewsBackend;
+use dbt_index_core::backend::DuckDbInfoSchemaBackend;
 use dbt_index_core::ingest::ingest_state::IngestState;
 use dbt_index_core::ingest::metadata_to_parquet::{
     apply_delta_direct, has_persisted_state, ingest_from_metadata_direct,
@@ -2225,6 +2225,14 @@ async fn run_docs_generate(
         .index_dir
         .clone()
         .unwrap_or_else(|| default_index_dir(&target_dir));
+    // The site's data directory. Public under `target/`, unlike the index, because
+    // the browser fetches it over HTTP. An explicit `--info-schema-dir` still wins,
+    // for the same reason `--index-dir` does.
+    let info_schema_root = eval_arg
+        .info_schema_dir
+        .clone()
+        .unwrap_or_else(|| target_dir.join(dbt_common::constants::DBT_INFO_SCHEMA_DIR_NAME));
+    let info_schema_dir = dbt_index_core::versioned_dir(&info_schema_root);
     let output_dir = generate_args
         .output_dir
         .clone()
@@ -2258,33 +2266,42 @@ async fn run_docs_generate(
         .await?;
     }
 
-    // No index to export. Under `--no-compile` that is the expected way to get here;
+    // Build the information schema last, from whatever the metadata directory now
+    // holds. It has to be here rather than left to the compile's own
+    // `--generate-info-schema`: the invocation record is written *after* that point,
+    // so an artifact set built during the compile would miss it and the site's
+    // timings and status surfaces would come up empty — the same reason the ingest
+    // above runs twice. Under `--no-compile` this is the only thing that advances it.
+    build_info_schema_for_docs(&metadata_dir, &index_dir, &info_schema_root);
+
+    // Nothing to export. Under `--no-compile` that is the expected way to get here;
     // otherwise the compile above ran but wrote nothing. Checked before opening the
     // backend so the user gets the export's message — which names both commands that
-    // write an index — rather than the backend's generic "index directory does not exist".
-    if !dbt_docs_server::index_dir_has_artifacts(&index_dir) {
+    // produce the artifacts — rather than the backend's generic "does not exist".
+    if !dbt_docs_server::has_artifacts(&info_schema_dir) {
         emit_error_log_message(
             ErrorCode::Generic,
             format!(
                 "dbt docs generate: {}",
-                dbt_docs_server::ExportError::NoIndex { index_dir }
+                dbt_docs_server::ExportError::NoIndex { info_schema_dir }
             ),
         );
         return Err(FsError::exit_with_status(1));
     }
 
-    let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
-        Ok(backend) => backend,
-        Err(err) => {
-            emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
-            return Err(FsError::exit_with_status(1));
-        }
-    });
+    let backend: Arc<dyn Backend> =
+        Arc::new(match DuckDbInfoSchemaBackend::open(&info_schema_dir) {
+            Ok(backend) => backend,
+            Err(err) => {
+                emit_error_log_message(ErrorCode::Generic, format!("dbt docs generate: {err}"));
+                return Err(FsError::exit_with_status(1));
+            }
+        });
     let providers = (feature_stack.index.providers_factory)(backend);
 
     let project_dir = &eval_arg.io.in_dir;
     let options = dbt_docs_server::ExportOptions {
-        index_dir,
+        info_schema_dir,
         output_dir,
         duckdb_cdn_base: generate_args.duckdb_cdn_base,
         // Consent is resolved here because the project and profile are only
@@ -2356,6 +2373,37 @@ fn ingest_metadata_into_index(
         emit_warn_log_message(
             ErrorCode::Generic,
             format!("{context}: failed to ingest metadata: {err}"),
+        );
+    }
+}
+
+/// Build the information schema the site reads, best-effort.
+///
+/// Mirrors [`ingest_metadata_into_index`]'s contract: a missing metadata directory is
+/// nothing to do, and a failure is worth a warning but not the command — whatever is
+/// already on disk is still exportable, and the export's own emptiness check is what
+/// decides whether the site can be written.
+///
+/// The flat index is reused as the intermediate when one is present, which it is
+/// whenever a compile has run: the same ingest builds both, so this takes the delta
+/// path instead of re-reading every epoch. Without one it stages privately.
+fn build_info_schema_for_docs(
+    metadata_dir: &std::path::Path,
+    index_dir: &std::path::Path,
+    info_schema_root: &std::path::Path,
+) {
+    if !metadata_dir.exists() {
+        return;
+    }
+    let staging = if has_persisted_state(index_dir) {
+        index_dir.to_path_buf()
+    } else {
+        info_schema_root.with_file_name(dbt_common::constants::DBT_INFO_SCHEMA_STAGING_DIR_NAME)
+    };
+    if let Err(err) = write_info_schema(metadata_dir, info_schema_root, &staging) {
+        emit_warn_log_message(
+            ErrorCode::InfoSchemaWriteFailed,
+            format!("dbt docs: could not build the information schema: {err}"),
         );
     }
 }
@@ -2491,37 +2539,44 @@ async fn run_docs_serve(
         // Filled in below, once the site has been generated.
         site_dir: None,
     };
-    let index_dir = dbt_docs_server::resolve_index_dir(&args);
+    let info_schema_dir = dbt_docs_server::resolve_info_schema_dir(&args);
 
     let target = args
         .target_path
         .clone()
         .unwrap_or_else(|| std::path::PathBuf::from("./target"));
     let metadata_dir = default_metadata_dir(&target);
+    let index_dir = default_index_dir(&target);
+    let info_schema_root = target.join(dbt_common::constants::DBT_INFO_SCHEMA_DIR_NAME);
 
-    if !index_dir.exists() && !metadata_dir.exists() {
+    if !info_schema_dir.exists() && !metadata_dir.exists() {
         emit_error_log_message(
             ErrorCode::Generic,
             format!(
                 "dbt docs serve: no data to serve\n\n\
-                 Index directory not found: {}\n\
-                 Run `dbt build` or `dbt docs generate` to generate parquet artifacts,\n\
-                 or pass `--target-path <DIR>` pointing at a directory whose `private/index/` subdirectory contains them.",
-                index_dir.display(),
+                 Information schema not found: {}\n\
+                 Run `dbt build` or `dbt docs generate` to write it,\n\
+                 or pass `--target-path <DIR>` pointing at a directory that contains it.",
+                info_schema_dir.display(),
             ),
         );
         return Err(FsError::exit_with_status(1));
     }
 
+    // Opportunistic catch-up, the same one `docs generate` does: roll any newer
+    // metadata epochs into the index and rebuild the information schema from them,
+    // so a run since the last `docs generate` is picked up without one.
     ingest_metadata_into_index(&metadata_dir, &index_dir, "dbt docs serve");
+    build_info_schema_for_docs(&metadata_dir, &index_dir, &info_schema_root);
 
-    let backend: Arc<dyn Backend> = Arc::new(match DuckDbViewsBackend::open(&index_dir) {
-        Ok(b) => b,
-        Err(err) => {
-            emit_error_log_message(ErrorCode::Generic, format!("dbt docs serve: {err}"));
-            return Err(FsError::exit_with_status(1));
-        }
-    });
+    let backend: Arc<dyn Backend> =
+        Arc::new(match DuckDbInfoSchemaBackend::open(&info_schema_dir) {
+            Ok(b) => b,
+            Err(err) => {
+                emit_error_log_message(ErrorCode::Generic, format!("dbt docs serve: {err}"));
+                return Err(FsError::exit_with_status(1));
+            }
+        });
     let providers = (feature_stack.index.providers_factory)(backend);
 
     // Serve the same static site `docs generate` produces rather than the
@@ -2529,9 +2584,9 @@ async fn run_docs_serve(
     // actually host. Regenerated when missing or older than the index; a failure
     // here is not fatal, because the embedded bundle is still a usable fallback.
     let site_dir = target.clone();
-    if site_needs_regenerating(&site_dir, &index_dir) {
+    if site_needs_regenerating(&site_dir, &info_schema_dir) {
         let options = dbt_docs_server::ExportOptions {
-            index_dir: index_dir.clone(),
+            info_schema_dir: info_schema_dir.clone(),
             output_dir: site_dir.clone(),
             duckdb_cdn_base: None,
             analytics_enabled: std::env::var("DO_NOT_TRACK").as_deref() != Ok("1")
@@ -2563,17 +2618,17 @@ async fn run_docs_serve(
         })
 }
 
-/// Whether `site_dir` is missing or predates the index it was built from.
+/// Whether `site_dir` is missing or predates the data it was built from.
 ///
-/// Compares against the index directory's mtime, the same staleness signal
+/// Compares against the data directory's mtime, the same staleness signal
 /// `AppState::compute_generation` reports to the UI. Any unreadable timestamp
 /// means regenerate: cheap, and being wrong the other way serves stale docs.
-fn site_needs_regenerating(site_dir: &std::path::Path, index_dir: &std::path::Path) -> bool {
+fn site_needs_regenerating(site_dir: &std::path::Path, data_dir: &std::path::Path) -> bool {
     let Ok(site_mtime) = std::fs::metadata(site_dir.join("index.html")).and_then(|m| m.modified())
     else {
         return true;
     };
-    let Ok(index_mtime) = std::fs::metadata(index_dir).and_then(|m| m.modified()) else {
+    let Ok(index_mtime) = std::fs::metadata(data_dir).and_then(|m| m.modified()) else {
         return true;
     };
     site_mtime < index_mtime

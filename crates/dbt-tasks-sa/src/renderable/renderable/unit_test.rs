@@ -340,6 +340,7 @@ async fn hydrate_unit_test_relation_schema(
             Some(unit_test_unique_id.to_string()),
             Some(ExecutionPhase::Analyze),
             &relations,
+            None,
             adapter.cancellation_token(),
         )
         .await

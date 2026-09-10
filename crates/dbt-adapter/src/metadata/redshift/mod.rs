@@ -485,6 +485,7 @@ impl ListRelationsSchemasStrategy for RedshiftListRelationsSchemasStrategy {
         relations: Arc<Vec<Arc<dyn BaseRelation>>>,
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
+        item_span_operation_id: Option<&str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'static, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -604,8 +605,15 @@ AND table_name = '{identifier}'"
             acc.insert(relation.semantic_fqn(), schema);
             Ok(())
         };
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), None);
-        map_reduce.run(Arc::new(relations.to_vec()), token)
+        run_schema_cache_map_reduce(
+            factory,
+            relations.to_vec(),
+            item_span_operation_id,
+            map_f,
+            reduce_f,
+            None,
+            token,
+        )
     }
 
     fn run_by_patterns(
@@ -1393,11 +1401,12 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>], // TODO: change to an Arc<Vec<..>>
+        item_span_operation_id: Option<&str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let strategy = RedshiftListRelationsSchemasStrategy::new(self.adapter.clone());
         let relations = Arc::new(relations.to_vec());
-        strategy.run(relations, unique_id, phase, token)
+        strategy.run(relations, unique_id, phase, item_span_operation_id, token)
     }
 
     fn list_relations_schemas_by_patterns_inner(

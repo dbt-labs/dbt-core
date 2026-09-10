@@ -462,11 +462,44 @@ impl DatabricksMetadataAdapter {
 
         // IMPORTANT (Mantle replay): query ordering is observable in replay.
         // Match dbt-databricks v1 `_describe_relation` query order:
-        //   MV:    DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
-        //   ST:    DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
-        //   View:  optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
-        //   Table: UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   MV:          DESCRIBE EXTENDED → optional tags → view SQL → row filters → TBLPROPERTIES
+        //   ST:          DESCRIBE EXTENDED → optional tags → TBLPROPERTIES → row filters
+        //   View:        optional tags → optional column tags → view SQL → TBLPROPERTIES → DESCRIBE EXTENDED
+        //   MetricView:  TBLPROPERTIES → optional tags → DESCRIBE EXTENDED
+        //   Table:       UC information_schema (if not HMS) → TBLPROPERTIES → DESCRIBE EXTENDED
         match relation_type {
+            RelationType::MetricView => {
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ShowTblProperties,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn, token.clone())?,
+                );
+
+                if fetch_relation_tags {
+                    metadata.insert(
+                        DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                        self.fetch_tags(
+                            &database,
+                            &schema,
+                            &identifier,
+                            state,
+                            &mut *conn,
+                            token.clone(),
+                        )?,
+                    );
+                }
+
+                metadata.insert(
+                    DatabricksRelationMetadataKey::DescribeExtended,
+                    self.describe_extended(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                        token,
+                    )?,
+                );
+            }
             RelationType::MaterializedView => {
                 metadata.insert(
                     DatabricksRelationMetadataKey::DescribeExtended,
@@ -770,7 +803,6 @@ impl DatabricksMetadataAdapter {
             | RelationType::PointerTable
             | RelationType::DynamicTable
             | RelationType::InteractiveTable
-            | RelationType::MetricView
             | RelationType::Function
             | RelationType::Dictionary => {
                 return Err(AdapterError::new(
@@ -1038,9 +1070,12 @@ impl DatabricksMetadataAdapter {
         let sql = format!(
             "SELECT tag_name, tag_value
             FROM `system`.`information_schema`.`table_tags`
-            WHERE catalog_name = '{database}'
-                AND schema_name = '{schema}'
-                AND table_name = '{identifier}'"
+            WHERE catalog_name = '{}'
+                AND schema_name = '{}'
+                AND table_name = '{}'",
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
         );
         let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch tags", conn, token)?;
         Ok(result)
@@ -1058,9 +1093,12 @@ impl DatabricksMetadataAdapter {
         let sql = format!(
             "SELECT column_name, tag_name, tag_value
             FROM `system`.`information_schema`.`column_tags`
-            WHERE catalog_name = '{database}'
-                AND schema_name = '{schema}'
-                AND table_name = '{identifier}'"
+            WHERE catalog_name = '{}'
+                AND schema_name = '{}'
+                AND table_name = '{}'",
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
         );
         let (_, result) =
             self.execute_sql_with_context(&sql, state, "Fetch column tags", conn, token)?;
@@ -1103,12 +1141,12 @@ impl DatabricksMetadataAdapter {
                 FreshnessTask::Bulk(bulk) => {
                     let mut acc: Acc = BTreeMap::new();
                     for relation in bulk {
-                        if let Some(freshness) = databricks_freshness_for_relation(
+                        if let Ok(Some(freshness)) = databricks_freshness_for_relation(
                             &adapter_for_map,
                             conn,
                             relation,
                             token_clone.clone(),
-                        )? {
+                        ) {
                             acc.insert(relation.semantic_fqn(), freshness);
                         }
                     }
@@ -1281,6 +1319,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        item_span_operation_id: Option<&str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -1386,8 +1425,15 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             acc.insert(relation.semantic_fqn(), schema);
             Ok(())
         };
-        let map_reduce = MapReduce::new(factory, Box::new(map_f), Box::new(reduce_f), unique_id);
-        map_reduce.run(Arc::new(relations.to_vec()), token)
+        run_schema_cache_map_reduce(
+            factory,
+            relations.to_vec(),
+            item_span_operation_id,
+            map_f,
+            reduce_f,
+            unique_id,
+            token,
+        )
     }
 
     fn list_relations_schemas_by_patterns_inner(

@@ -802,32 +802,39 @@ async fn run_freshness_with_spans(
         .keys()
         .cloned()
         .collect();
-    for node in sources.iter() {
-        if let Some(result) = measure_query_based_freshness(
-            *node,
+    let mut node_errors: HashMap<String, Box<FsError>> =
+        HashMap::with_capacity(sources.len() + sla_models.len());
+    let sources_as_query_nodes = sources.iter().map(|node| *node as &dyn FreshnessNodeRef);
+    let sla_models_as_query_nodes = sla_models.iter().map(|node| *node as &dyn FreshnessNodeRef);
+    let query_based_nodes = sources_as_query_nodes.chain(sla_models_as_query_nodes);
+    for node in query_based_nodes {
+        match measure_query_based_freshness(
+            node,
             resolver_state.adapter_type,
             env,
             compile_base,
             io_args,
             dependencies.clone(),
         )
-        .await?
+        .await
         {
-            results.insert(node.__common_attr__.unique_id.clone(), result);
-        }
-    }
-    for node in sla_models.iter() {
-        if let Some(result) = measure_query_based_freshness(
-            *node,
-            resolver_state.adapter_type,
-            env,
-            compile_base,
-            io_args,
-            dependencies.clone(),
-        )
-        .await?
-        {
-            results.insert(node.__common_attr__.unique_id.clone(), result);
+            Ok(Some(result)) => {
+                results.insert(node.common().unique_id.clone(), result);
+            }
+            Ok(None) => {}
+            Err(e) if !is_freshness_command => {
+                emit_warn_log_message(
+                    ErrorCode::FreshnessMetadataWarning,
+                    format!(
+                        "Failed to calculate freshness for {} '{}': {e}. It will be treated as updated, and dependent models will rebuild.",
+                        node.kind_label().to_lowercase(),
+                        node.common().unique_id
+                    ),
+                );
+            }
+            Err(e) => {
+                node_errors.insert(node.common().unique_id.clone(), e);
+            }
         }
     }
 
@@ -896,12 +903,23 @@ async fn run_freshness_with_spans(
                 }
             }
         } else if is_freshness_command {
-            return err!(
-                    code => ErrorCode::Unexpected,
-                    loc => node.common().name_span.start.clone(),
-                    "Could not find freshness information for {kind} '{}'. Please verify that you have access to view metadata for this {kind} in the warehouse.",
-                    node.common().unique_id
-            );
+            if let Some(span) = node_spans.get(node.common().unique_id.as_str()) {
+                update_span_attrs(span, |ev: &mut NodeProcessed| {
+                    ev.node_outcome = NodeOutcome::Error as i32;
+                    update_dbt_core_event_code_for_node_processed_end(ev);
+                });
+            }
+            let err = node_errors
+                .remove(&node.common().unique_id)
+                .unwrap_or_else(|| {
+                    fs_err!(
+                        code => ErrorCode::Unexpected,
+                        loc => node.common().name_span.start.clone(),
+                        "Could not find freshness information for {kind} '{}'. Please verify that you have access to view metadata for this {kind} in the warehouse.",
+                        node.common().unique_id
+                    )
+                });
+            emit_error_log_from_fs_error(*err);
         } else {
             // When freshness is collected as part of a build, missing freshness info is
             // non-fatal. The downstream task runner falls back to Utc::now() for sources
