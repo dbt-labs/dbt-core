@@ -62,6 +62,7 @@ use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::OnSchemaChange;
 use dbt_schemas::schemas::common::Versions;
+use dbt_schemas::schemas::common::normalize_sql;
 use dbt_schemas::schemas::dbt_catalogs::{DbtCatalogs, LoadedCatalogs};
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
@@ -1542,7 +1543,8 @@ fn process_python_models(
         // Analyze Python AST to extract dbt function calls
         // Use the Python model source to compute the model checksum. This is used by `state:*`
         // selectors (e.g. `state:modified`) when comparing to a deferred/previous-state manifest.
-        let checksum = dbt_schemas::schemas::common::DbtChecksum::hash(source.as_bytes());
+        let checksum =
+            dbt_schemas::schemas::common::DbtChecksum::hash(normalize_sql(&source).as_bytes());
         let python_file_info: PythonFileInfo<ModelConfig> = match analyze_python_file(
             &python_asset.path,
             &source,
