@@ -417,6 +417,22 @@ pub(crate) fn resolve_connection_config<'a>(
     }
 }
 
+/// Asserts that the caller is running on a dbt-runtime pool worker, as every
+/// connection-opening path must.
+///
+/// When this assertion is violated, it means that a database connection
+/// (consequently database work) is being performed in code that is not
+/// triggered by a `dbt_runtime::spawn_blocking` call and this is a BUG.
+///
+/// This is a bug because to enforce `--threads` and in general, not overload
+/// the databases with dbt work, we must run all the jinja and database work
+/// in the dbt-runtime thread-pool.
+pub(super) fn assert_connection_on_pool_worker() {
+    if cfg!(debug_assertions) && !dbt_runtime::is_pool_worker() {
+        off_pool_connection_bug();
+    }
+}
+
 /// Reports the off-pool connection bug detected in [`AdbcEngine::new_connection`]
 /// and unwinds.
 ///
@@ -512,16 +528,7 @@ impl AdapterEngine for AdbcEngine {
         state: Option<&State>,
         _node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        // When this assertion is violated, it means that a database connection
-        // (consequently database work) is being performed in code that is not
-        // triggered by a `dbt_runtime::spawn_blocking` call and this is a BUG.
-        //
-        // This is a bug because to enforce `--threads` and in general, not overload
-        // the databases with dbt work, we must run all the jinja and database work
-        // in the dbt-runtime thread-pool.
-        if cfg!(debug_assertions) && !dbt_runtime::is_pool_worker() {
-            off_pool_connection_bug();
-        }
+        assert_connection_on_pool_worker();
 
         match &self.mode {
             EngineMode::Mock => {

@@ -22,6 +22,7 @@ use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
 
 use super::adapter_engine::{AdapterEngine, Options};
+use super::adbc::assert_connection_on_pool_worker;
 
 static GENERATION: AtomicU64 = AtomicU64::new(1);
 
@@ -145,6 +146,12 @@ impl AdapterEngine for RecordReplayEngine {
         state: Option<&State>,
         node_id: Option<String>,
     ) -> dbt_common::AdapterResult<Box<dyn Connection>> {
+        // Same contract as the live engine (`AdbcEngine::new_connection`).
+        // Checked here rather than left to the `Mode::Record` delegation below,
+        // so replayed runs -- which never reach an inner engine -- catch an
+        // off-pool caller too.
+        assert_connection_on_pool_worker();
+
         match self.mode {
             Mode::Replay => {
                 let mut conn = ReplayConnection::new(
