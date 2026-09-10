@@ -185,6 +185,7 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        item_span_operation_id: Option<&str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>>;
 
@@ -197,6 +198,7 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
+        item_span_operation_id: Option<&'a str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let caller_id = unique_id.clone().unwrap_or_else(|| "global".to_string());
@@ -208,7 +210,13 @@ pub trait MetadataAdapter: Send + Sync {
                 phase.map(|p| p.as_str().to_string()),
                 relations.iter().map(|r| r.semantic_fqn()),
             ),
-            self.list_relations_schemas_inner(unique_id, phase, relations, token),
+            self.list_relations_schemas_inner(
+                unique_id,
+                phase,
+                relations,
+                item_span_operation_id,
+                token,
+            ),
         )
     }
 
@@ -221,10 +229,11 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
+        item_span_operation_id: Option<&'a str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<SdfSchema>>> {
         let future = async move {
-            self.list_relations_schemas(unique_id, phase, relations, token)
+            self.list_relations_schemas(unique_id, phase, relations, item_span_operation_id, token)
                 .await
                 .map(|map| {
                     map.into_iter()
@@ -768,6 +777,7 @@ mod tests {
             _: Option<String>,
             _: Option<ExecutionPhase>,
             _: &[Arc<dyn BaseRelation>],
+            _: Option<&str>,
             _: CancellationToken,
         ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
             Box::pin(async { Ok(HashMap::new()) })

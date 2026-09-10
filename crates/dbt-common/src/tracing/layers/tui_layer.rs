@@ -868,7 +868,6 @@ impl TuiLayer {
             | ExecutionPhase::TaskGraphBuild
             | ExecutionPhase::Debug
             | ExecutionPhase::DeferHydration
-            | ExecutionPhase::SchemaHydration
             | ExecutionPhase::FreshnessAnalysis
             | ExecutionPhase::OnRunStart
             | ExecutionPhase::OnRunEnd => {
@@ -878,6 +877,7 @@ impl TuiLayer {
             | ExecutionPhase::Compare
             | ExecutionPhase::InitAdapter
             | ExecutionPhase::NodeCacheHydration
+            | ExecutionPhase::SchemaHydration
             | ExecutionPhase::Lineage => {
                 // Do not show progress for these phases
             }
@@ -922,7 +922,6 @@ impl TuiLayer {
             | ExecutionPhase::TaskGraphBuild
             | ExecutionPhase::Debug
             | ExecutionPhase::DeferHydration
-            | ExecutionPhase::SchemaHydration
             | ExecutionPhase::FreshnessAnalysis
             | ExecutionPhase::OnRunStart
             | ExecutionPhase::OnRunEnd => {
@@ -932,6 +931,7 @@ impl TuiLayer {
             | ExecutionPhase::Compare
             | ExecutionPhase::InitAdapter
             | ExecutionPhase::NodeCacheHydration
+            | ExecutionPhase::SchemaHydration
             | ExecutionPhase::Lineage => {
                 // Do not show progress for these phases
             }
