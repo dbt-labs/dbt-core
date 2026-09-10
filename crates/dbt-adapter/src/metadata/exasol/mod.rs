@@ -37,8 +37,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::future;
 use std::sync::Arc;
 
-const MAX_CONNECTIONS: usize = 4;
-
 pub struct ExasolMetadataAdapter {
     adapter: AdapterImpl,
 }
@@ -192,10 +190,7 @@ impl MetadataAdapter for ExasolMetadataAdapter {
             .map(|relation| (relation.semantic_fqn(), relation.render_self_as_str()))
             .collect();
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            Some(MAX_CONNECTIONS),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();

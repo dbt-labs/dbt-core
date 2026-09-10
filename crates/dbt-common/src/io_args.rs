@@ -555,9 +555,9 @@ pub struct EvalArgs {
     pub limit: Option<usize>,
     /// called as bin or as library
     pub from_main: bool,
-    /// The number of threads to use. Drives the adapter connection backpressure
-    /// high-water-mark and parser rendering parallelism. Not used to force
-    /// sequential task execution — use `no_parallel` for that.
+    /// The max number of threads to use in the dbt-runtime thread-pool.
+    ///
+    /// Not used to force sequential task execution — use `no_parallel` for that.
     pub num_threads: Option<usize>,
     /// Force sequential task execution and sequential parser rendering without
     /// constraining the connection pool. Set by `--no-parallel`.

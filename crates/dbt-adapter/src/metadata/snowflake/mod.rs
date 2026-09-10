@@ -52,7 +52,7 @@ fn metadata_warehouse_error(err: impl Display) -> AdapterError {
 /// to once per *physical connection* rather than once per query.
 ///
 /// `MapReduce` workers reuse a single connection across many tasks in a batch
-/// before recycling it, so switching the warehouse inside the per-task closure
+/// before handing it back, so switching the warehouse inside the per-task closure
 /// re-issues `use warehouse` before and after every task on a reused
 /// connection. Wrapping the factory instead moves
 /// the switch to `new_connection` (once, when the connection is first obtained
@@ -131,11 +131,12 @@ impl ConnectionFactory for MetadataWarehouseConnectionFactory {
     }
 
     fn recycle_connection(&self, mut conn: Box<dyn Connection>) {
-        // These connections go back into the global recycling pool shared with
-        // unrelated jobs. A failed restore leaves the connection stuck on the
-        // metadata warehouse, so drop it instead of recycling it — otherwise an
-        // unrelated node could silently inherit the metadata warehouse. Mirrors
-        // `reset_node_overrides` in dbt-tasks-sa/src/materialize.rs.
+        // These connections go back into the worker thread's slot, where the
+        // next node to run there picks them up. A failed restore leaves the
+        // connection stuck on the metadata warehouse, so drop it instead —
+        // otherwise an unrelated node could silently inherit the metadata
+        // warehouse. Mirrors `reset_node_overrides` in
+        // dbt-tasks-sa/src/materialize.rs.
         if self.active_warehouse().is_some() {
             if let Err(e) = (self.restore_warehouse)(conn.as_mut()) {
                 tracing::warn!(
@@ -145,10 +146,6 @@ impl ConnectionFactory for MetadataWarehouseConnectionFactory {
             }
         }
         self.inner.recycle_connection(conn);
-    }
-
-    fn connection_limit(&self) -> u32 {
-        self.inner.connection_limit()
     }
 }
 
@@ -584,10 +581,7 @@ impl SnowflakeMetadataAdapter {
             self.adapter.clone(),
             metadata_warehouse,
             token.clone(),
-            Box::new(AdapterConnectionFactory::new(
-                self.adapter.engine().clone(),
-                self.adapter.engine().threads(),
-            )),
+            Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone())),
         ));
 
         let adapter = self.adapter.clone();
@@ -665,7 +659,6 @@ impl SnowflakeMetadataAdapter {
         }
 
         let engine = self.adapter.engine().clone();
-        let threads = engine.threads();
 
         // Run the bulk and per-override queries through one MapReduce pass so
         // they share the same connection-factory threadpool — same parallelism
@@ -675,7 +668,7 @@ impl SnowflakeMetadataAdapter {
             self.adapter.clone(),
             metadata_warehouse,
             token.clone(),
-            Box::new(AdapterConnectionFactory::new(engine, threads)),
+            Box::new(AdapterConnectionFactory::new(engine)),
         ));
         type Acc = BTreeMap<String, MetadataFreshness>;
 
@@ -769,10 +762,7 @@ impl SnowflakeMetadataAdapter {
             self.adapter.clone(),
             metadata_warehouse,
             token.clone(),
-            Box::new(AdapterConnectionFactory::new(
-                self.adapter.engine().clone(),
-                self.adapter.engine().threads(),
-            )),
+            Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone())),
         ));
 
         let adapter = self.adapter.clone();
@@ -837,10 +827,7 @@ impl SnowflakeMetadataAdapter {
             adapter.clone(),
             None,
             token_clone.clone(),
-            Box::new(AdapterConnectionFactory::new(
-                adapter.engine().clone(),
-                adapter.engine().threads(),
-            )),
+            Box::new(AdapterConnectionFactory::new(adapter.engine().clone())),
         ));
 
         let map_f = move |conn: &'_ mut dyn Connection, _: &()| -> AdapterResult<usize> {
@@ -1051,10 +1038,7 @@ impl SnowflakeMetadataAdapter {
             adapter.clone(),
             metadata_warehouse,
             token_clone.clone(),
-            Box::new(AdapterConnectionFactory::new(
-                adapter.engine().clone(),
-                adapter.engine().threads(),
-            )),
+            Box::new(AdapterConnectionFactory::new(adapter.engine().clone())),
         ));
         type Acc = BTreeMap<String, MetadataFreshness>;
 
@@ -1337,10 +1321,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             })
             .collect::<Vec<_>>();
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -1432,10 +1413,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
             .map(|relation| (relation.semantic_fqn(), relation.render_self_as_str()))
             .collect();
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -1525,10 +1503,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                 )
             });
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         // map_f runs the queries, reduce_f decodes the result set and builds the schemas
         let adapter = self.adapter.clone();
@@ -1680,10 +1655,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
             adapter.clone(),
             metadata_warehouse,
             token_clone.clone(),
-            Box::new(AdapterConnectionFactory::new(
-                adapter.engine().clone(),
-                adapter.engine().threads(),
-            )),
+            Box::new(AdapterConnectionFactory::new(adapter.engine().clone())),
         ));
         type Acc = BTreeMap<String, MetadataFreshness>;
 
@@ -1938,10 +1910,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
 
         let script = build_view_definition_script(&fqns);
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -2137,10 +2106,6 @@ mod tests {
 
         fn recycle_connection(&self, _conn: Box<dyn Connection>) {
             *self.recycled.lock().unwrap() += 1;
-        }
-
-        fn connection_limit(&self) -> u32 {
-            4
         }
     }
 

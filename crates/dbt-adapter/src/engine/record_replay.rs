@@ -46,9 +46,10 @@ pub struct RecordReplayEngine {
 impl RecordReplayEngine {
     pub fn record(inner: Arc<dyn AdapterEngine>, recordings_path: PathBuf) -> Self {
         let generation = next_generation();
-        if adbc_record_replay::reset_counters(&recordings_path) {
-            crate::connection::drain_recycling_pool();
-        }
+        // A reset invalidates every connection from an earlier generation, and
+        // `fingerprint()` *is* the generation, so any cached one is discarded on
+        // the fingerprint mismatch when it is next borrowed.
+        adbc_record_replay::reset_counters(&recordings_path);
         Self {
             inner,
             recordings_path,
@@ -67,9 +68,10 @@ impl RecordReplayEngine {
         query_comment: Option<QueryCommentConfig>,
     ) -> Self {
         let generation = next_generation();
-        if adbc_record_replay::reset_counters(&recordings_path) {
-            crate::connection::drain_recycling_pool();
-        }
+        // A reset invalidates every connection from an earlier generation, and
+        // `fingerprint()` *is* the generation, so any cached one is discarded on
+        // the fingerprint mismatch when it is next borrowed.
+        adbc_record_replay::reset_counters(&recordings_path);
         Self {
             inner,
             recordings_path,

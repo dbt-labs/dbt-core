@@ -31,8 +31,6 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-const MAX_CONNECTIONS: usize = 4;
-
 /// Escape a value to be safely interpolated inside a single-quoted ClickHouse
 /// string literal. ClickHouse uses backslash escaping for `\` and `'` within
 /// string literals (see <https://clickhouse.com/docs/en/sql-reference/syntax#string>).
@@ -289,10 +287,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
             })
             .collect();
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            Some(MAX_CONNECTIONS),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -370,10 +365,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            Some(MAX_CONNECTIONS),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();

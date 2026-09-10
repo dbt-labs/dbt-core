@@ -2806,9 +2806,9 @@ impl CommonArgs {
                 Some(10)
             },
             from_main: false,
-            // `threads` controls connection backpressure and rendering
-            // parallelism. Sequential task execution is requested via the
-            // separate `no_parallel` flag below.
+            // `threads` caps the `dbt-runtime` blocking pool, and with it both
+            // warehouse concurrency and rendering parallelism. Sequential task
+            // execution is requested via the separate `no_parallel` flag below.
             num_threads: self.threads,
             no_parallel: self.no_parallel,
             select: select_option,

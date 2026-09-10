@@ -368,12 +368,11 @@ impl AggregatedTestRunRemoteTask {
         let sql_instruction = self.receive_sql_instruction().await?;
 
         let adapter_type = self.group.aggregated_test.node_adapter();
-        let max_threads = ctx.dbt_profile().threads;
         let test = self.group.aggregated_test.clone();
         let ctx_inner = ctx.clone();
 
-        let (test_results, failing_rows_opt, main_response) = TaskOp::BlockingWithConnection {
-            f: Box::new(move || {
+        let (test_results, failing_rows_opt, main_response) =
+            TaskOp::Blocking(Box::new(move || {
                 materialize_test(
                     &sql_instruction.sql,
                     &test,
@@ -385,12 +384,9 @@ impl AggregatedTestRunRemoteTask {
                     &base_context,
                     &ctx_inner.inner.arg.io,
                 )
-            }),
-            adapter_type,
-            max_threads,
-        }
-        .run()
-        .await??;
+            }))
+            .run()
+            .await??;
 
         let (member_results, worst_status) =
             self.get_member_test_results(&test_results, &ctx.inner.arg.warn_error_options);
@@ -500,15 +496,6 @@ impl AggregatedTestRunRemoteTask {
 }
 
 impl Task for AggregatedTestRunRemoteTask {
-    // The batched query is issued under TaskOp::BlockingWithConnection in `run_task_inner`,
-    // so taking the default outer guard too would deadlock the gate once it saturates.
-    fn run_task_with_backpressure<'a>(
-        &'a self,
-        ctx: &'a mut TaskRunnerCtx,
-    ) -> Pin<Box<dyn Future<Output = FsResult<NodeStatus>> + Send + 'a>> {
-        self.run_task(ctx)
-    }
-
     fn run_task<'a>(
         &'a self,
         ctx: &'a mut TaskRunnerCtx,

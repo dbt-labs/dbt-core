@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::profiles::DbConfig;
@@ -22,12 +21,11 @@ pub enum LakeComputePropagationOutcome {
 /// target and the profile's native connection during `dbt debug`. A build
 /// that doesn't support this check simply doesn't register an implementation
 /// (see `lake_compute_propagation_checker()` on the CLI hooks it's wired through).
-#[async_trait]
 pub trait LakeComputePropagationChecker: Send + Sync {
     // `linked_database` is the Snowflake database linked to the external
     // catalog (`catalogs.yml`'s `catalog_database` / `catalog_linked_database`),
     // i.e. where a propagated write should become visible.
-    async fn check_lake_compute_propagation(
+    fn check_lake_compute_propagation(
         &self,
         native_db_config: &DbConfig,
         lake_compute_db_config: &DbConfig,

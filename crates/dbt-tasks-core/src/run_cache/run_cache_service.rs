@@ -1912,8 +1912,6 @@ pub async fn execute_run_cache_service_clone(
     ctx: &TaskRunnerCtx,
     node: &dyn InternalDbtNodeAttributes,
     clone: &RunCacheCloneDecision,
-    adapter_type: AdapterType,
-    max_threads: Option<usize>,
     hook_executor: Option<RunCacheReuseHookExecutor>,
     pre_hooks_configured: bool,
 ) -> FsResult<NodeStatus, RunCacheCloneError> {
@@ -1947,25 +1945,19 @@ pub async fn execute_run_cache_service_clone(
         relation_from_rendered_name(node, &clone.clone_target)
             .map_err(RunCacheCloneError::Fatal)?;
     let drop_target_relation = target_relation.clone();
-    let clone_result = TaskOp::BlockingWithConnection {
-        f: Box::new(move || {
-            if let Some(hook_executor) = &hook_executor {
-                hook_executor(&ctx_inner, RunCacheReuseHookPhase::Pre)
-                    .map_err(RunCacheCloneError::Fatal)?;
-            }
+    let clone_result = TaskOp::Blocking(Box::new(move || {
+        if let Some(hook_executor) = &hook_executor {
+            hook_executor(&ctx_inner, RunCacheReuseHookPhase::Pre)
+                .map_err(RunCacheCloneError::Fatal)?;
+        }
 
-            // Drop any relation currently occupying the clone target before
-            // running the clone SQL. `create ... clone` fails when the target
-            // already exists as a different relation type (for example a table
-            // cloned over a view)
-            drop_clone_target_before_clone(&ctx_inner, drop_target_relation);
+        // Drop any relation currently occupying the clone target before
+        // running the clone SQL. `create ... clone` fails when the target
+        // already exists as a different relation type (for example a table
+        // cloned over a view)
+        drop_clone_target_before_clone(&ctx_inner, drop_target_relation);
 
-            execute_clone_sqls_blocking(
-                &ctx_inner,
-                node_adapter_type,
-                &node_unique_id,
-                &clone_sqls,
-            )
+        execute_clone_sqls_blocking(&ctx_inner, node_adapter_type, &node_unique_id, &clone_sqls)
             .map_err(|err| {
                 if pre_hooks_configured {
                     RunCacheCloneError::Fatal(err)
@@ -1974,15 +1966,12 @@ pub async fn execute_run_cache_service_clone(
                 }
             })?;
 
-            if let Some(hook_executor) = &hook_executor {
-                hook_executor(&ctx_inner, RunCacheReuseHookPhase::Post)
-                    .map_err(RunCacheCloneError::Fatal)?;
-            }
-            Ok(())
-        }),
-        adapter_type,
-        max_threads,
-    }
+        if let Some(hook_executor) = &hook_executor {
+            hook_executor(&ctx_inner, RunCacheReuseHookPhase::Post)
+                .map_err(RunCacheCloneError::Fatal)?;
+        }
+        Ok(())
+    }))
     .run()
     .await
     .map_err(RunCacheCloneError::Recoverable)?;

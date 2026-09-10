@@ -38,17 +38,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
         let Some(clone) = replay_dev_clone_decision(node_id) else {
             return;
         };
-        match execute_run_cache_service_clone(
-            ctx,
-            node.as_ref(),
-            &clone,
-            node.node_adapter(),
-            ctx.dbt_profile().threads,
-            None,
-            false,
-        )
-        .await
-        {
+        match execute_run_cache_service_clone(ctx, node.as_ref(), &clone, None, false).await {
             Ok(_) => {
                 finish_dev_clone(
                     ctx,
@@ -122,17 +112,7 @@ pub async fn maybe_run_dev_clone_for_node(ctx: &TaskRunnerCtx, node_id: &str) {
     };
 
     let clone = RunCacheCloneDecision::from_response(&ready_to_clone, 0);
-    match execute_run_cache_service_clone(
-        ctx,
-        node.as_ref(),
-        &clone,
-        node.node_adapter(),
-        ctx.dbt_profile().threads,
-        None,
-        false,
-    )
-    .await
-    {
+    match execute_run_cache_service_clone(ctx, node.as_ref(), &clone, None, false).await {
         Ok(_) => {
             record_dev_clone_decision(node_id, &clone);
             finish_dev_clone(

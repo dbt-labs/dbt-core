@@ -666,6 +666,12 @@ fn volatile_keys(deterministic_sort: bool) -> Vec<&'static str> {
         "host_os",
         "host_arch",
         "version",
+        // `mem::size_of` of the closure handed to `spawn_blocking`, so it is a
+        // target-layout fact, not an observation: the same closure measures 136
+        // bytes on Linux/macOS and 144 on windows-msvc. Snapshotting it makes
+        // the golden pass on one platform and fail on the others.
+        "size.bytes",
+        "original_size.bytes",
     ];
     if deterministic_sort {
         keys.extend(["span_id", "event_id", "parent_span_id"]);

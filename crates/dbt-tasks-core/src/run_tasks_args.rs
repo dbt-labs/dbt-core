@@ -61,8 +61,9 @@ pub struct RunTasksArgs {
     pub write_lineage: bool,
     /// Whether this is the main command or a subcommand
     pub from_main: bool,
-    /// Number of threads (connection backpressure + parser rendering). Not
-    /// used to force sequential task execution; see `no_parallel`.
+    /// Number of threads: the cap on the `dbt-runtime` blocking pool, which
+    /// bounds warehouse concurrency and parser rendering alike. Not used to
+    /// force sequential task execution; see `no_parallel`.
     pub num_threads: usize,
     /// When true, the task graph is visited sequentially (one node at a time)
     /// regardless of `num_threads`. Use for deterministic test output.

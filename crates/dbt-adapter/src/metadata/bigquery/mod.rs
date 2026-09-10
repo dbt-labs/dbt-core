@@ -909,10 +909,7 @@ impl BigqueryMetadataAdapter {
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
         type Acc = BTreeMap<String, MetadataFreshness>;
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
         let adapter_for_map = self.adapter.clone();
         let token_clone = token.clone();
         let map_f = move |conn: &mut dyn Connection, task: &FreshnessTask| {
@@ -1284,10 +1281,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
         let node_id = unique_id.or_else(|| Some("sources".to_string()));
 
         let adapter = self.adapter.clone();
@@ -1436,10 +1430,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -1534,10 +1525,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                 .push(table);
         }
 
-        let factory = Box::new(AdapterConnectionFactory::new(
-            self.adapter.engine().clone(),
-            self.adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(self.adapter.engine().clone()));
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
@@ -1621,10 +1609,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let sql = build_schema_freshness_query(database, schema);
         let relations = relations.to_vec();
         let adapter = self.adapter.clone();
-        let factory = Box::new(AdapterConnectionFactory::new(
-            adapter.engine().clone(),
-            adapter.engine().threads(),
-        ));
+        let factory = Box::new(AdapterConnectionFactory::new(adapter.engine().clone()));
         type Acc = BTreeMap<String, MetadataFreshness>;
 
         let token_clone = token.clone();

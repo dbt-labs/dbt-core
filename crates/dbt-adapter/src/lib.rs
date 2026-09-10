@@ -11,7 +11,7 @@ pub mod adapter;
 pub mod cache;
 pub mod catalog_relation;
 pub mod column;
-/// Connection management, thread-local storage, and connection backpressure.
+/// Connection management: the per-worker-thread connection and its guard.
 pub mod connection;
 pub mod engine;
 pub mod errors;

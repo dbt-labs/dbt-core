@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use async_trait::async_trait;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::profiles::DbConfig;
@@ -28,7 +27,6 @@ pub struct LakeComputeMdlsOutcome {
 /// namespace -- and building one means minting a short-lived Snowflake
 /// credential, which is not reachable from this crate. A build that doesn't support the check simply doesn't register
 /// an implementation.
-#[async_trait]
 pub trait LakeComputeMdlsChecker: Send + Sync {
     /// `native_db_config` is the profile's active target, used to mint the
     /// credential the bundle's declared catalogs authenticate with; a
@@ -46,7 +44,7 @@ pub trait LakeComputeMdlsChecker: Send + Sync {
     /// probe queries. `project_name` is `None` when no package has been loaded
     /// -- `dbt debug` and `dbt init` both run before that happens -- and the
     /// project option is then simply not sent.
-    async fn check_mdls_round_trip(
+    fn check_mdls_round_trip(
         &self,
         native_db_config: &DbConfig,
         lake_compute_db_config: &DbConfig,

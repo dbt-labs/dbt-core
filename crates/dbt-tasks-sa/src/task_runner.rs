@@ -242,15 +242,22 @@ impl TaskRunner {
         schedule: &Schedule<String>,
         base_context: BTreeMap<String, minijinja::Value>,
     ) -> FsResult<()> {
-        let state = self.jinja_env.new_state_with_context(base_context);
-
+        // Walking the schedule is pure in-memory work; only the adapter calls
+        // below talk to the warehouse and need the blocking pool.
         let selected_catalog_schemas =
             get_catalog_schemas_and_ids(&self.resolved_state.nodes, schedule);
 
-        let catalog_schemas_to_register =
-            filter_missing_schemas(&self.adapter, &state, &selected_catalog_schemas)?;
+        let jinja_env = Arc::clone(&self.jinja_env);
+        let adapter = Arc::clone(&self.adapter);
+        dbt_runtime::spawn_blocking(move || {
+            let state = jinja_env.new_state_with_context(base_context);
 
-        register_catalog_schemas_remote(&self.adapter, &state, catalog_schemas_to_register).await
+            let catalog_schemas_to_register =
+                filter_missing_schemas(&adapter, &state, &selected_catalog_schemas)?;
+
+            register_catalog_schemas_remote(&adapter, &state, catalog_schemas_to_register)
+        })
+        .await?
     }
 
     #[allow(clippy::too_many_arguments)]
