@@ -3898,14 +3898,21 @@ impl Adapter {
                 };
                 // TODO(harry): add iter.finish() and fix the tests
 
-                // NOTE(serramatutu): this is a hacky fix for: https://github.com/dbt-labs/dbt-fusion/issues/1332
-                // It is possible this still fails for other things that return large result sets
-                // unnecessarily. Without users explicitly running with `fetch=False`, we'd need full SQL
-                // parsing to determine whether to fetch or not.
-                if self.adapter_type() == AdapterType::Bigquery
-                    && sql.trim().to_lowercase().starts_with("alter table")
-                {
-                    fetch = false;
+                // dbt.run_query always passes fetch=true. We try to guess whether to actually
+                // fetch the resulting record batch based on the statement SQL contents.
+                if dbt_adapter_sql::statements::is_update_statement(sql, self.adapter_type()) {
+                    let splitter = self.engine().splitter();
+                    let statement_count = splitter
+                        .split(sql, self.adapter_type())
+                        .into_iter()
+                        .filter(|stmt| !splitter.is_empty(stmt, self.adapter_type()))
+                        .count();
+
+                    // we conservatively assume it's not an update statement if the executed SQL
+                    // has multiple statements
+                    if statement_count <= 1 {
+                        fetch = false;
+                    }
                 }
 
                 let (response, table) =
