@@ -2040,10 +2040,24 @@ impl TuiLayer {
                 });
         }
 
-        // Only show if ShowOptions::Completed or All is enabled
-        if !self.show_options.contains(&ShowOptions::Completed)
-            && !self.show_options.contains(&ShowOptions::All)
-        {
+        // Lint/format run one of these spans per source file, including every
+        // macro -- an order of magnitude more items than a typical node-based
+        // command schedules, so `ShowOptions::Completed` alone (already on by
+        // default) would print one line per file. Require `All` for these
+        // commands specifically; other commands keep the normal `Completed`
+        // gate.
+        let item_visible = if matches!(
+            self.command,
+            FsCommand::Extension("lint")
+                | FsCommand::Extension("format")
+                | FsCommand::Extension("format-legacy")
+        ) {
+            self.show_options.contains(&ShowOptions::All)
+        } else {
+            self.show_options.contains(&ShowOptions::Completed)
+                || self.show_options.contains(&ShowOptions::All)
+        };
+        if !item_visible {
             return;
         }
 
