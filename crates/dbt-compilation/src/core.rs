@@ -883,6 +883,7 @@ impl DbtLoadedProject {
         &self,
         adapter_type: AdapterType,
         config_as_mapping: dbt_yaml::Mapping,
+        replay_mode: Option<ReplayMode>,
         token: CancellationToken,
     ) -> FsResult<Arc<Adapter>> {
         let type_ops_factory = self.type_ops_factory.clone();
@@ -891,7 +892,7 @@ impl DbtLoadedProject {
             adapter_type,
             config_as_mapping,
             type_ops_factory,
-            None, // replay_mode
+            replay_mode,
             BTreeMap::new(),
             None,
             DEFAULT_RESOLVED_QUOTING,

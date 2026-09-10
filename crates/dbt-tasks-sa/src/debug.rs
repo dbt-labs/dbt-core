@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use dbt_adbc::QueryCtx;
 use dbt_agate::MappedSequence;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::io_args::{EvalArgs, LocalExecutionBackendKind};
+use dbt_common::io_args::{EvalArgs, LocalExecutionBackendKind, ReplayMode};
 use dbt_common::tracing::dbt_emit::emit_info_progress_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_compilation::core::DbtLoadedProject;
@@ -75,6 +75,10 @@ pub struct DebugArgs {
     /// This invocation's id, sent as `adbc.dbt.run_id` on the queries the lake
     /// compute checks issue so dbt Compute can attribute them.
     pub invocation_id: String,
+    /// The invocation's record/replay mode. Every adapter these checks build
+    /// has to be created with it, or `--fs-record` captures nothing and
+    /// `--fs-replay` goes to the network anyway.
+    pub replay: Option<ReplayMode>,
     /// Checker for verifying lake-compute-to-native propagation, if this
     /// build has one registered. `None` means the check is skipped.
     pub lake_compute_propagation_checker: Option<Arc<dyn LakeComputePropagationChecker>>,
@@ -94,6 +98,7 @@ impl DebugArgs {
             connection: arg.connection,
             local_execution_backend: arg.local_execution_backend,
             invocation_id: arg.io.invocation_id.to_string(),
+            replay: arg.replay.clone(),
             lake_compute_propagation_checker: None,
             lake_compute_catalog_attach_checker: None,
             mdls_checker: None,
@@ -223,6 +228,7 @@ pub async fn debug(
             adapter_db_config,
             &label,
             loaded_project,
+            arg.replay.as_ref(),
             &token,
         )
         .await
@@ -287,6 +293,7 @@ pub async fn debug(
             let native_db_config = db_config.clone();
             let invocation_id = arg.invocation_id.clone();
             let worker_token = token.clone();
+            let reply = arg.replay.clone();
 
             // Every probe in the section opens a connection, so the whole
             // section runs on one worker. The timeout lives here, around that
@@ -315,6 +322,7 @@ pub async fn debug(
                         project_name,
                         invocation_id,
                         linked_database,
+                        reply.as_ref(),
                         worker_token,
                     )
                 }),
@@ -361,6 +369,7 @@ async fn debug_adapter_connection(
     db_config: &DbConfig,
     label: &str,
     loaded_project: &DbtLoadedProject,
+    replay: Option<&ReplayMode>,
     token: &CancellationToken,
 ) -> FsResult<()> {
     // dbt-auth has no notion of self_signed_jwt; the native connection it
@@ -383,8 +392,12 @@ async fn debug_adapter_connection(
         .or_insert("1s".into());
 
     // Attempt connection using 'select 1 as id'
-    let base_adapter =
-        loaded_project.init_base_adapter(adapter_type, config_as_mapping, token.clone())?;
+    let base_adapter = loaded_project.init_base_adapter(
+        adapter_type,
+        config_as_mapping,
+        replay.cloned(),
+        token.clone(),
+    )?;
 
     // Everything below issues a query, so it runs on a `dbt-runtime` worker:
     // every database connection must be created by one. Only the adapter, the
@@ -473,6 +486,7 @@ fn debug_lake_compute(
     project_name: Option<String>,
     invocation_id: String,
     linked_database: Option<String>,
+    replay: Option<&ReplayMode>,
     token: CancellationToken,
 ) -> FsResult<()> {
     // No adapter is built here: the `lake_compute` connection round trip is a
@@ -496,6 +510,7 @@ fn debug_lake_compute(
             let outcome = checker.check_catalog_attach(
                 &native_db_config,
                 &lake_compute_db_config,
+                replay,
                 token.clone(),
             )?;
             emit_info_progress_message(create_progress_msg(
@@ -536,6 +551,7 @@ fn debug_lake_compute(
             let outcome = checker.check_mdls_round_trip(
                 &native_db_config,
                 &lake_compute_db_config,
+                replay,
                 &mdls_database,
                 &mdls_schema,
                 project_name.as_deref(),
@@ -575,6 +591,7 @@ fn debug_lake_compute(
                 &native_db_config,
                 &lake_compute_db_config,
                 linked_database,
+                replay,
                 token,
             )?;
             let propagation_elapsed = propagation_started.elapsed();

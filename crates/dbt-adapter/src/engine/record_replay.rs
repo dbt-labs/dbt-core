@@ -268,6 +268,28 @@ static ALTER_USER_IDENTIFIER: std::sync::LazyLock<regex::Regex> =
 static EXCHANGE_PROBE_TABLE: std::sync::LazyLock<regex::Regex> =
     std::sync::LazyLock::new(|| regex::Regex::new(r"__dbt_exchange_test_(\d+)_\d+_\d+").unwrap());
 
+/// Matches the quoted Snowflake username in `show user programmatic access
+/// tokens for user "<user>"` (`pat_hygiene_report` in `compute_platform.rs`).
+/// Mirrors `cleanup_show_user_pat_identifier` in `adbc-record-replay`'s
+/// `naming.rs`, which does the same masking for the recording lookup key;
+/// this one is for the post-lookup text-equality check below.
+static SHOW_USER_PAT_IDENTIFIER: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| {
+        regex::Regex::new(r#"(?i)(show user programmatic access tokens for user )"[^"]+""#).unwrap()
+    });
+
+/// Matches `dbt debug`'s MDLS write/read-back probe table name
+/// (`__dbt_debug_probe_<nanos>`, `debug_mdls.rs`), e.g.
+/// `__dbt_debug_probe_1789002662171033000`. A fresh wall-clock nanosecond
+/// timestamp generated on every invocation, record or replay alike, so no
+/// two runs ever emit the literal same name -- mask it out the same way as
+/// the timestamp above. Mirrors `cleanup_debug_probe_table` in
+/// `adbc-record-replay`'s `naming.rs`, which does the same masking for the
+/// recording lookup key; this one is for the post-lookup text-equality
+/// check below.
+static DEBUG_PROBE_TABLE: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| regex::Regex::new(r"__dbt_debug_probe_\d+").unwrap());
+
 impl adbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
     fn normalize(&self, sql: &str) -> String {
         use crate::sql::normalize::normalize_dbt_tmp_name;
@@ -281,6 +303,12 @@ impl adbc_record_replay::SqlNormalizer for DbtSqlNormalizer {
             .into_owned();
         let collapsed = EXCHANGE_PROBE_TABLE
             .replace_all(&collapsed, "__dbt_exchange_test_${1}_[MASKED_ID]")
+            .into_owned();
+        let collapsed = SHOW_USER_PAT_IDENTIFIER
+            .replace_all(&collapsed, r#"$1"[MASKED_USER]""#)
+            .into_owned();
+        let collapsed = DEBUG_PROBE_TABLE
+            .replace_all(&collapsed, "__dbt_debug_probe_[MASKED_ID]")
             .into_owned();
         collapsed
             .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")

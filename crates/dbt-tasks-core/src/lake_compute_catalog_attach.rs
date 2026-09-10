@@ -1,5 +1,6 @@
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::io_args::ReplayMode;
 use dbt_schemas::schemas::profiles::DbConfig;
 
 #[derive(Debug, Clone)]
@@ -52,6 +53,7 @@ pub trait LakeComputeCatalogAttachChecker: Send + Sync {
         &self,
         native_db_config: &DbConfig,
         lake_compute_db_config: &DbConfig,
+        replay: Option<&ReplayMode>,
         token: CancellationToken,
     ) -> FsResult<LakeComputeCatalogAttachOutcome>;
 }
