@@ -69,17 +69,12 @@ static INLINE_SQL_PATTERN: Lazy<Regex> =
 #[cfg(not(windows))]
 static TEMP_ROOT_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?:/private)?/var/folders/[^/]+/[^/]+/T/").unwrap());
-#[cfg(windows)]
-static TEMP_ROOT_PATTERN: Lazy<Regex> = Lazy::new(|| {
+#[cfg(any(windows, test))]
+static WINDOWS_TEMP_ROOT_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)[A-Z]:\\Users\\[^\\]+\\AppData\\Local\\Temp\\|[A-Z]:\\Windows\\Temp\\|[A-Z]:\\Temp\\",
+        r"(?i)[A-Z]:\\+Users\\+[^\\]+\\+AppData\\+Local\\+Temp\\+|[A-Z]:\\+Windows\\+Temp\\+|[A-Z]:\\+Temp\\+",
     )
     .unwrap()
-});
-#[cfg(windows)]
-static TEMP_ROOT_PATTERN_ESCAPED: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)[A-Z]:\\\\Users\\\\[^\\\\]+\\\\AppData\\\\Local\\\\Temp\\\\|[A-Z]:\\\\Windows\\\\Temp\\\\|[A-Z]:\\\\Temp\\\\")
-        .unwrap()
 });
 static MKTEMP_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"/\.tmp[0-9A-Za-z_-]+").unwrap());
 // Matches OS thread IDs in Rust panic messages: "thread 'name' (12345678) panicked"
@@ -208,11 +203,7 @@ pub fn check_set_user_env_var() {
 pub fn maybe_normalize_tmp_paths(output: String) -> String {
     #[cfg(windows)]
     {
-        let normalized = TEMP_ROOT_PATTERN_ESCAPED.replace_all(&output, "/tmp/");
-        let normalized = TEMP_ROOT_PATTERN.replace_all(&normalized, "/tmp/");
-        MKTEMP_PATTERN
-            .replace_all(&normalized, "/.tmpXXXXXX")
-            .to_string()
+        normalize_windows_tmp_paths(output)
     }
     #[cfg(not(windows))]
     {
@@ -221,6 +212,14 @@ pub fn maybe_normalize_tmp_paths(output: String) -> String {
             .replace_all(&normalized, "/.tmpXXXXXX")
             .to_string()
     }
+}
+
+#[cfg(any(windows, test))]
+pub(super) fn normalize_windows_tmp_paths(output: String) -> String {
+    let normalized = WINDOWS_TEMP_ROOT_PATTERN.replace_all(&output, "/tmp/");
+    MKTEMP_PATTERN
+        .replace_all(&normalized, "/.tmpXXXXXX")
+        .to_string()
 }
 
 /// On Windows, this normalizes forward/backward slashes to '|' so as to ignore
