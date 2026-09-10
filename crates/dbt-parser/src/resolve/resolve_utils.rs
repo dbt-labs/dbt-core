@@ -6,7 +6,10 @@ use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::error::FsError;
 use dbt_common::fs_err;
-use dbt_common::io_args::ComputeArg;
+use dbt_common::io_args::{
+    ComputeArg, LOCAL_UNIT_TESTS_ENV, MULTI_ADAPTER_ENV, local_unit_tests_enabled,
+    multi_adapter_enabled,
+};
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_schemas::schemas::project::AdapterProjectConfig;
 use dbt_schemas::state::ProfileAdapter;
@@ -264,10 +267,24 @@ pub(crate) fn validate_compute(compute: Option<ComputeArg>, path: &Path) -> FsRe
     }
 }
 
-/// Unit tests can run on either on the `remote` warehouse or `sidecar`
+/// Unit tests can run on either on the `remote` warehouse or `sidecar`.
+///
+/// `sidecar` is gated: promoting an individual unit test to local execution is unreleased, so
+/// it is refused unless [`LOCAL_UNIT_TESTS_ENV`] opts in. The run-wide `--compute` flag is a
+/// separate, older knob and is deliberately still open -- a unit test run under
+/// `--compute sidecar` goes local without this config, and without this gate.
 pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Path) -> FsResult<()> {
     match compute {
-        None | Some(ComputeArg::Remote) | Some(ComputeArg::Sidecar) => Ok(()),
+        None | Some(ComputeArg::Remote) => Ok(()),
+        Some(ComputeArg::Sidecar) if local_unit_tests_enabled() => Ok(()),
+        Some(ComputeArg::Sidecar) => Err(fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => path.to_path_buf(),
+            "Running an individual unit test on local compute is experimental and not yet \
+             supported. To use it, set the environment variable {LOCAL_UNIT_TESTS_ENV}=true. \
+             Note that experimental features may be unstable and are not yet recommended for \
+             production use.",
+        )),
         Some(other) => Err(fs_err!(
             code => ErrorCode::InvalidConfig,
             loc => path.to_path_buf(),
@@ -276,10 +293,117 @@ pub(crate) fn validate_unit_test_compute(compute: Option<ComputeArg>, path: &Pat
     }
 }
 
+/// Validates a node's authored `+adapter`, from any resource type that can carry one.
+///
+/// Selecting the adapter a node runs on is unreleased, so *any* value is refused unless
+/// [`MULTI_ADAPTER_ENV`] opts in -- not just `lakecompute`.
+///
+/// Pass the **authored** config field, never the resolved adapter. Data tests inherit from
+/// their attached node and unit tests from their subject, so the resolved value is `Some` for
+/// essentially every node in every project; checking it would reject them all.
+///
+/// Unlike the lake compute *preconditions*, which commit `2f2ac9052c` deliberately moved out
+/// of parse because parse resolves nodes an invocation never runs, this is a gate rather than
+/// a precondition: an opted-out config should be refused wherever it is written, whether or
+/// not the node is selected.
+pub(crate) fn validate_node_adapter(adapter: Option<AdapterType>, path: &Path) -> FsResult<()> {
+    match adapter {
+        None => Ok(()),
+        Some(_) if multi_adapter_enabled() => Ok(()),
+        Some(adapter) => Err(fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc => path.to_path_buf(),
+            "Selecting a node's adapter with `adapter: {adapter}` is experimental and not yet \
+             supported. To use it, set the environment variable {MULTI_ADAPTER_ENV}=true. \
+             Note that experimental features may be unstable and are not yet recommended for \
+             production use.",
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::utils::RawProjectConfig;
+    use std::sync::Mutex;
+
+    /// The gate predicates read process-wide state, so the two gate tests below cannot run
+    /// concurrently under `cargo test`. Nextest gives each test its own process, but the
+    /// lock keeps a plain `cargo test` honest too.
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    /// Run `f` with `var` set, restoring the previous value afterwards.
+    fn with_env_var<T>(var: &str, value: &str, f: impl FnOnce() -> T) -> T {
+        let _lock = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var(var).ok();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            std::env::set_var(var, value);
+        }
+        let result = f();
+        unsafe {
+            #[allow(clippy::disallowed_methods)]
+            match previous {
+                Some(previous) => std::env::set_var(var, previous),
+                None => std::env::remove_var(var),
+            }
+        }
+        result
+    }
+
+    #[test]
+    fn an_authored_adapter_is_refused_unless_the_gate_is_set() {
+        let path = Path::new("models/m.sql");
+
+        // Not just `lakecompute`: selecting *any* adapter is what is unreleased.
+        let err = validate_node_adapter(Some(AdapterType::Bigquery), path).unwrap_err();
+        assert!(
+            err.to_string().contains(MULTI_ADAPTER_ENV),
+            "the refusal must name the variable that lifts it: {err}"
+        );
+
+        with_env_var(MULTI_ADAPTER_ENV, "true", || {
+            assert!(validate_node_adapter(Some(AdapterType::LakeCompute), path).is_ok());
+        });
+    }
+
+    #[test]
+    fn a_node_without_an_authored_adapter_is_always_accepted() {
+        // The gate reads the *authored* config, never the resolved adapter. Data tests
+        // inherit from their attached node and unit tests from their subject, so a resolved
+        // value is `Some` for essentially every node in every project -- checking that
+        // instead would reject them all. `None` here is what those nodes actually carry.
+        assert!(validate_node_adapter(None, Path::new("models/m.sql")).is_ok());
+    }
+
+    #[test]
+    fn a_unit_test_selecting_local_compute_is_refused_unless_the_gate_is_set() {
+        let path = Path::new("models/unit_tests.yml");
+
+        assert!(validate_unit_test_compute(None, path).is_ok());
+        assert!(validate_unit_test_compute(Some(ComputeArg::Remote), path).is_ok());
+
+        let err = validate_unit_test_compute(Some(ComputeArg::Sidecar), path).unwrap_err();
+        assert!(
+            err.to_string().contains(LOCAL_UNIT_TESTS_ENV),
+            "the refusal must name the variable that lifts it: {err}"
+        );
+
+        with_env_var(LOCAL_UNIT_TESTS_ENV, "true", || {
+            assert!(validate_unit_test_compute(Some(ComputeArg::Sidecar), path).is_ok());
+        });
+    }
+
+    #[test]
+    fn the_gate_does_not_widen_the_accepted_compute_values() {
+        // `inline` and `service` are rejected for a unit test whether or not the gate is
+        // set -- the gate governs `sidecar`, it does not turn the config into a free-for-all.
+        let path = Path::new("models/unit_tests.yml");
+        with_env_var(LOCAL_UNIT_TESTS_ENV, "true", || {
+            assert!(validate_unit_test_compute(Some(ComputeArg::Inline), path).is_err());
+            assert!(validate_unit_test_compute(Some(ComputeArg::Service), path).is_err());
+        });
+    }
 
     fn config_map(pairs: &[(&str, &str)]) -> BTreeMap<String, dbt_yaml::Value> {
         pairs

@@ -1607,6 +1607,47 @@ pub fn env_path(name: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// Opts in to multi-adapter targets: `type: lakecompute` in profiles.yml, the `+adapter`
+/// config on any node type, and the `--adapter` flag.
+pub const MULTI_ADAPTER_ENV: &str = "DBT_ENGINE_EXPERIMENTAL_MULTI_ADAPTER";
+
+/// Opts in to promoting an individual unit test to local execution with `+compute: local`
+/// (or its `sidecar` spelling). The run-wide `--compute` flag is a separate, older knob and
+/// is deliberately not covered by this gate.
+pub const LOCAL_UNIT_TESTS_ENV: &str = "DBT_ENGINE_EXPERIMENTAL_LOCAL_UNIT_TESTS";
+
+/// Whether an experimental feature's opt-in environment variable is set.
+///
+/// Unset reads as off: an experimental gate never defaults on, not even in debug builds. A
+/// malformed value warns and reads as off rather than enabling, mirroring how
+/// `experimental_adapters_allowed` handles `DBT_ALLOW_EXPERIMENTAL_ADAPTERS`.
+///
+/// Every name passed here carries the `DBT_ENGINE_` prefix, so it must also be registered in
+/// `USED_ENGINE_ENV_VARS` (`dbt-main/src/vars.rs`) -- `validate_engine_env_vars` rejects an
+/// unregistered one at startup, which would otherwise make the gate impossible to turn on.
+fn experimental_gate_enabled(name: &str) -> bool {
+    match env_flag_enabled(name) {
+        Ok(enabled) => enabled,
+        Err(e) => {
+            crate::tracing::dbt_emit::emit_warn_log_message(
+                crate::ErrorCode::InvalidConfig,
+                e.to_string(),
+            );
+            false
+        }
+    }
+}
+
+/// Whether multi-adapter support is opted in to. See [`MULTI_ADAPTER_ENV`].
+pub fn multi_adapter_enabled() -> bool {
+    experimental_gate_enabled(MULTI_ADAPTER_ENV)
+}
+
+/// Whether per-unit-test local execution is opted in to. See [`LOCAL_UNIT_TESTS_ENV`].
+pub fn local_unit_tests_enabled() -> bool {
+    experimental_gate_enabled(LOCAL_UNIT_TESTS_ENV)
+}
+
 pub const LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT_ENV: &str =
     "DBT_LATEST_VERSION_POINTER_ENABLED_BY_DEFAULT";
 
