@@ -8159,6 +8159,11 @@ mod tests {
             .macros
             .insert(custom_table_mat.unique_id.clone(), custom_table_mat);
 
+        let user_defined_schema_registry = dbt_schemas::state::hydrate_user_defined_schema_registry(
+            &nodes,
+            AdapterType::Snowflake,
+        );
+
         ResolverState {
             root_project_name: "test".to_string(),
             adapter_type: AdapterType::Snowflake,
@@ -8201,6 +8206,7 @@ mod tests {
             nodes_with_access_errors: Default::default(),
             semantic_layer_spec_is_legacy: false,
             test_name_truncations: Default::default(),
+            user_defined_schema_registry,
         }
     }
 

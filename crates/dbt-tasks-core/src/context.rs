@@ -187,6 +187,9 @@ pub struct TaskRunnerCtxInner {
     pub dbt_profile: Arc<DbtProfile>,
     pub runtime_config: Arc<DbtRuntimeConfig>,
     pub generic_test_relationships: GenericTestRelationships,
+    /// Cross-model schema-inference state for `--infer-schemas`, shared by
+    /// every task in this run.
+    pub infer_schema_registry: Arc<dbt_common::infer_schema_registry::InferSchemaRegistry>,
     span_manager: Arc<SpanManager<FsResult<NodeStatus>, SkipReason>>,
     /// Captured show batches for the LSP preview path; set by run_show, collected after the task loop.
     pub preview_results: parking_lot::Mutex<Option<(Vec<RecordBatch>, SchemaRef)>>,
@@ -243,6 +246,9 @@ impl TaskRunnerCtxInner {
             map
         };
 
+        let infer_schema_registry =
+            Arc::new(dbt_common::infer_schema_registry::InferSchemaRegistry::new());
+
         TaskRunnerCtxInner {
             arg,
             worker_id,
@@ -270,6 +276,7 @@ impl TaskRunnerCtxInner {
             dbt_profile: Arc::new(resolver_state.dbt_profile.clone()),
             runtime_config: resolver_state.runtime_config.clone(),
             generic_test_relationships,
+            infer_schema_registry,
             span_manager,
             preview_results: parking_lot::Mutex::new(None),
             preview_error: parking_lot::Mutex::new(None),

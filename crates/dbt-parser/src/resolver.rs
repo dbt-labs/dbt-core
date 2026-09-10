@@ -460,6 +460,9 @@ pub async fn resolve(
             .insert(uid.clone(), Arc::new(macro_node.clone()));
     }
 
+    let user_defined_schema_registry =
+        dbt_schemas::state::hydrate_user_defined_schema_registry(&nodes, adapter_type);
+
     Ok((
         ResolverState {
             root_project_name: root_project_name.to_string(),
@@ -486,6 +489,7 @@ pub async fn resolve(
             defer_nodes: None,
             semantic_layer_spec_is_legacy,
             test_name_truncations,
+            user_defined_schema_registry,
         },
         jinja_env,
     ))

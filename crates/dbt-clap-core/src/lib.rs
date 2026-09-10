@@ -437,6 +437,16 @@ got {:?}, expected an instance of {}",
             Command::Extension(ext_cmd) => ext_cmd.to_eval_args(&common_args, system_arg)?,
         };
         arg.from_main = from_main;
+        // Must be derived from the caller's *original* `--static-analysis`
+        // value, before the force-to-strict override just below can
+        // overwrite it for local execution — otherwise `baseline` could
+        // never survive to be observed here. `unwrap_or_default()` because
+        // omitting `--static-analysis` leaves `arg.static_analysis` as
+        // `None`, not `Some(Baseline)`, even though baseline is the actual
+        // default behavior everywhere else it's consulted.
+        arg.infer_schemas_and_typeless = arg.static_analysis.unwrap_or_default()
+            == StaticAnalysisKind::Baseline
+            && arg.write_lineage;
         if arg.local_execution_backend != LocalExecutionBackendKind::Remote {
             arg.static_analysis = Some(StaticAnalysisKind::Strict);
         }
@@ -2908,6 +2918,9 @@ impl CommonArgs {
             task_cache_url: self.task_cache_url.clone(),
             static_analysis: None,
             full_refresh: false,
+            // Derived later in `Cli::to_eval_args` from the caller's
+            // original `--static-analysis`/`--write-lineage` values.
+            infer_schemas_and_typeless: false,
             store_failures: self.store_failures,
             check_all: false,
             sample_renaming: BTreeMap::new(),

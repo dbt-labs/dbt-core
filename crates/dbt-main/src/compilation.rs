@@ -15,7 +15,10 @@ use dbt_common::{
         metrics::increment_metric,
     },
 };
-use dbt_compilation::{core::DbtLoadedProject, schema_hydration::SchemaHydrationState};
+use dbt_compilation::{
+    core::{AdapterConnectionMode, DbtLoadedProject},
+    schema_hydration::SchemaHydrationState,
+};
 use dbt_dag::{deps_mgmt::reverse, schedule::Schedule};
 use dbt_defer::DeferState;
 use dbt_features::feature_stack::FeatureStack;
@@ -1945,6 +1948,11 @@ impl DbtProjectCompilation {
             token,
             sidecar_client.clone(),
             execute_mode,
+            if arg.infer_schemas_and_typeless {
+                AdapterConnectionMode::Offline
+            } else {
+                AdapterConnectionMode::AllowRemote
+            },
         )?;
         let adapter = if let Some(adapter_override) = arg
             .adapter_override
@@ -2699,6 +2707,11 @@ async fn write_catalog(
         token,
         None,
         execute,
+        if arg.infer_schemas_and_typeless {
+            AdapterConnectionMode::Offline
+        } else {
+            AdapterConnectionMode::AllowRemote
+        },
     )?;
     let mut jinja_env = Arc::unwrap_or_clone(jinja_env.clone());
     configure_compile_and_run_jinja_environment(&mut jinja_env, adapter.clone());

@@ -648,6 +648,9 @@ pub struct EvalArgs {
     pub empty: bool,
     pub sample: Option<String>,
     pub full_refresh: bool,
+    /// Bind without a catalog; assume referenced tables/columns exist and
+    /// infer schemas from usage. Set from `--infer-schemas` on `compile`.
+    pub infer_schemas_and_typeless: bool,
     pub store_failures: bool,
     pub favor_state: bool,
     pub refresh_sources: bool,
