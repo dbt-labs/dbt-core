@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Sync winget PAT fork with upstream before submitting to avoid opaque wingetcreate submit failures on fork drift
-time: 2026-09-08T20:09:14.094423+05:30
-custom:
-    author: "itsnamangoyal"
-    issue: ""
-    project: dbt-core
