@@ -95,6 +95,7 @@ members = [
   "crates/dbt-ci",
   "crates/dbt-login",
   "crates/dbt-platform-auth",
+  "crates/dbt-platform",
 
   # COPYBARA-END-PRIVATE
 ]
@@ -281,6 +282,7 @@ dbt-login = { path = "crates/dbt-login" }
 dbt-main = { path = "crates/dbt-main", default-features = false }
 dbt-metricflow = { path = "crates/dbt-metricflow" }
 dbt-parser = { path = "crates/dbt-parser" }
+dbt-platform = { path = "crates/dbt-platform" }
 dbt-platform-auth = { path = "crates/dbt-platform-auth" }
 dbt-pretty-table = { path = "crates/dbt-pretty-table" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
