@@ -750,11 +750,11 @@ impl AdapterImpl {
             // execute() call avoids the need for cross-call connection caching.
             //
             // Lake compute: also supports batching
-            //
-            // GizmoSQL deliberately does not batch: Flight SQL executes one statement
-            // per request, and its connections are pooled per thread, so temp tables
-            // stay visible across calls without batching.
             Bigquery | DuckDB | LakeCompute => vec![sql],
+            // Everything else is split into single statements. That includes
+            // GizmoSQL even though it runs DuckDB: Flight SQL executes one
+            // statement per request, and its connections are pooled per thread,
+            // so temp tables stay visible across calls without batching.
             _ => splitter.split(sql, adapter_type),
         };
         // Filter out empty and comment-only statements.

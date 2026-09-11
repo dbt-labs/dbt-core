@@ -1844,7 +1844,7 @@ pub struct ExasolTargetEnv {
 #[derive(Serialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct GizmoSQLTargetEnv {
-    pub host: Option<String>,
+    pub host: String,
     pub port: Option<StringOrInteger>,
     pub username: Option<String>,
     pub __common__: CommonTargetContext,
@@ -2277,7 +2277,13 @@ impl TryFrom<DbConfig> for TargetContext {
             })),
 
             DbConfig::GizmoSQL(config) => Ok(TargetContext::GizmoSQL(GizmoSQLTargetEnv {
-                host: config.host.clone(),
+                // Unlike Exasol there is no sensible default host, and the auth
+                // layer requires one, so fail at profile load rather than later.
+                host: config
+                    .host
+                    .clone()
+                    .filter(|host| !host.is_empty())
+                    .ok_or_else(|| missing("host"))?,
                 port: config.port.clone(),
                 username: config.username.clone(),
                 __common__: CommonTargetContext {
