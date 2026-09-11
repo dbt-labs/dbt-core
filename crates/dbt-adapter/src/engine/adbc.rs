@@ -599,6 +599,18 @@ impl AdapterEngine for AdbcEngine {
                     schema.as_ref(),
                 )?;
             }
+            // dbt-gizmosql (Python) parity: the profile's `database` is the DuckDB
+            // catalog made current for the Flight SQL session, so unqualified
+            // names in user SQL resolve against it.
+            if self.adapter_type == AdapterType::GizmoSQL
+                && let Some(catalog) = config.get_string("database")
+                && !catalog.is_empty()
+            {
+                builder.with_option(
+                    adbc_core::options::OptionConnection::CurrentCatalog,
+                    catalog.as_ref(),
+                )?;
+            }
             builder.build(&mut database)
         };
         let retry_policy = ConnectionRetryPolicy::new(self.adapter_type(), config);
