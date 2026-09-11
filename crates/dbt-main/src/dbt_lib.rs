@@ -93,8 +93,8 @@ use dbt_tasks_core::{
 use dbt_tasks_sa::base_context::build_base_context;
 use dbt_telemetry::ArtifactType;
 use dbt_telemetry::{
-    CompiledCodeInline, NodeOutcome, NodeSkipReason, ProgressMessage, ShowDataOutput,
-    ShowDataOutputFormat, ShowResult, TestOutcome,
+    CompiledCodeInline, GenericOpExecuted, NodeOutcome, NodeSkipReason, ProgressMessage,
+    ShowDataOutput, ShowDataOutputFormat, ShowResult, TestOutcome,
 };
 
 use dbt_vortex::vortex_producer_is_running;
@@ -2888,6 +2888,10 @@ async fn fetch_catalog_data(
     let concurrency = batches.max(1); // this means max of (1 or batches)
     let mut handles = Vec::new();
 
+    // An `Id`, not a `Span`: holds no refcount, so it cannot keep the invocation alive.
+    // Only used for the `follows_from` link below; a stale `Id` is a no-op there.
+    let invocation_span_id = tracing::Span::current().id();
+
     for worker_id in 0..concurrency {
         let task_queue_clone = task_queue.clone();
         let relations_map_clone = relations_map.clone();
@@ -2902,6 +2906,7 @@ async fn fetch_catalog_data(
         let shared_results_clone = shared_results.clone();
         let shared_errors_clone = shared_errors.clone();
         let progress_tracker_clone = progress_tracker.clone();
+        let invocation_span_id_clone = invocation_span_id.clone();
 
         // `Handle::spawn_blocking`, not the free `dbt_runtime::spawn_blocking`,
         // and deliberately NOT `Span::current().enter()`ed inside the worker.
@@ -2922,6 +2927,23 @@ async fn fetch_catalog_data(
         // abandonment still works. The pool's threads are built with
         // `FS_DEFAULT_STACK_SIZE` (8 MiB, `main_impl.rs`), which is the stack
         // these workers used to ask for themselves.
+        //
+        // ############################################################################
+        // # DO NOT COPY THIS PATTERN.                                                #
+        // #                                                                          #
+        // # CLI code running outside the invocation span is NOT allowed -- a lot of  #
+        // # things depend on that invariant. These workers are a deliberate, short-  #
+        // # term exception, tolerated only because an abandoned one would otherwise  #
+        // # pin the invocation span open (dbt-labs/fs#14424).                        #
+        // #                                                                          #
+        // # TODO(dbt-labs/fs#14598): once dbt-tracing can force a root span to shut  #
+        // # down, put these workers back under the invocation and delete the         #
+        // # independent root below.                                                  #
+        // ############################################################################
+        //
+        // A root rather than nothing at all: with no span context, the adapter's first
+        // span becomes an unnamed root and trips the data layer's `debug_assert!`, which
+        // panics the worker in debug builds.
         let handle = dbt_runtime::Handle::current().spawn_blocking(move || -> FsResult<()> {
             // Worker loop: process tasks until queue is empty
             loop {
@@ -2982,6 +3004,18 @@ async fn fetch_catalog_data(
                 ))
                 .into_value();
 
+                // Independent root -- see the DO NOT COPY banner on the spawn above.
+                // Dropped at the end of this iteration so tasks do not nest in each other.
+                let catalog_fetch_span = create_root_info_span(GenericOpExecuted::new(
+                    "catalog_fetch".to_string(),
+                    "fetching catalog".to_string(),
+                    Some(relation_as_values.len() as u64),
+                ));
+                // A link, not a parent: keeps the span correlatable to the run without
+                // pinning it open.
+                catalog_fetch_span.follows_from(invocation_span_id_clone.clone());
+                let _catalog_fetch_span_guard = catalog_fetch_span.clone().entered();
+
                 // To avoid blowing up the query, we use the get_catalog macro for batches with more than 50 relations
                 let jinja_result: FsResult<Value> = if relation_as_values.len() > 50 {
                     let args = vec![
@@ -3013,16 +3047,19 @@ async fn fetch_catalog_data(
                 match jinja_result {
                     Ok(v) => match convert_macro_result_to_record_batch(&v) {
                         Ok(record_batch) => {
+                            record_span_status(&catalog_fetch_span, None);
                             shared_results_clone.lock().unwrap().push(record_batch);
                         }
                         Err(e) => {
                             let msg = format!("[Non-critical] Issue processing catalog for schema '{database}.{schema}': {e}");
+                            record_span_status(&catalog_fetch_span, Some(&msg));
                             emit_info_log_message(&msg);
                             shared_errors_clone.lock().unwrap().push(msg);
                         }
                     },
                     Err(e) => {
                         let msg = format!("[Non-critical] Issue fetching catalog for schema '{database}.{schema}': {e}");
+                        record_span_status(&catalog_fetch_span, Some(&msg));
                         emit_info_log_message(&msg);
                         shared_errors_clone.lock().unwrap().push(msg);
                     }
