@@ -61,14 +61,14 @@ impl<'a> GizmoSQLAuthIR<'a> {
                 tls_skip_verify,
                 auth_type,
             } => {
-                // The GizmoSQL driver accepts the upstream Flight SQL URI schemes
-                // unchanged: `grpc+tls://` for TLS and `grpc+tcp://` for plaintext.
-                let scheme = if use_encryption {
-                    "grpc+tls"
-                } else {
-                    "grpc+tcp"
-                };
-                let uri = format!("{scheme}://{host}:{port}");
+                // `gizmosql://` is the driver's own URI scheme: TLS by default, with
+                // `?transport=tcp` for plaintext. Using it rather than the underlying
+                // `grpc+tls://` / `grpc+tcp://` forms keeps the transport a driver
+                // concern.
+                let mut uri = format!("gizmosql://{host}:{port}");
+                if !use_encryption {
+                    uri.push_str("?transport=tcp");
+                }
                 builder.with_parse_uri(uri)?;
 
                 if let Some(username) = username {
@@ -246,7 +246,7 @@ mod tests {
             ("password".into(), "secret".into()),
         ]));
 
-        assert_eq!(uri_value(&builder), "grpc+tls://gizmosql.example.com:31337");
+        assert_eq!(uri_value(&builder), "gizmosql://gizmosql.example.com:31337");
         assert_eq!(
             option_value(&builder, OptionDatabase::Username).as_deref(),
             Some("dbt")
@@ -266,14 +266,14 @@ mod tests {
             ("port".into(), "9494".into()),
             ("username".into(), "dbt".into()),
         ]));
-        assert_eq!(uri_value(&builder), "grpc+tls://localhost:9494");
+        assert_eq!(uri_value(&builder), "gizmosql://localhost:9494");
 
         let builder = configure(Mapping::from_iter([
             ("host".into(), "localhost".into()),
             ("port".into(), YmlValue::number(9494i64.into())),
             ("username".into(), "dbt".into()),
         ]));
-        assert_eq!(uri_value(&builder), "grpc+tls://localhost:9494");
+        assert_eq!(uri_value(&builder), "gizmosql://localhost:9494");
     }
 
     #[test]
@@ -289,7 +289,10 @@ mod tests {
                 ("username".into(), "dbt".into()),
                 ("use_encryption".into(), value),
             ]));
-            assert_eq!(uri_value(&builder), "grpc+tcp://localhost:31337");
+            assert_eq!(
+                uri_value(&builder),
+                "gizmosql://localhost:31337?transport=tcp"
+            );
         }
     }
 
@@ -305,7 +308,10 @@ use_encryption: false
         )
         .expect("parse yaml");
         let builder = configure(config);
-        assert_eq!(uri_value(&builder), "grpc+tcp://localhost:31337");
+        assert_eq!(
+            uri_value(&builder),
+            "gizmosql://localhost:31337?transport=tcp"
+        );
     }
 
     #[test]

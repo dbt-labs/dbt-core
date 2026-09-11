@@ -169,7 +169,7 @@ mod tests {
             Backend::GizmoSQL => {
                 let mut builder = database::Builder::new(backend);
                 let uri = env::var("ADBC_GIZMOSQL_URI")
-                    .unwrap_or_else(|_| "grpc+tls://localhost:31337".to_owned());
+                    .unwrap_or_else(|_| "gizmosql://localhost:31337".to_owned());
                 let username = env::var("ADBC_GIZMOSQL_USERNAME")
                     .unwrap_or_else(|_| "gizmosql_username".to_owned());
                 let password = env::var("ADBC_GIZMOSQL_PASSWORD")
