@@ -62,6 +62,7 @@ use dbt_schemas::schemas::common::ModelFreshnessRules;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::OnSchemaChange;
 use dbt_schemas::schemas::common::Versions;
+use dbt_schemas::schemas::common::normalize_sql;
 use dbt_schemas::schemas::dbt_catalogs::{DbtCatalogs, LoadedCatalogs};
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
@@ -97,7 +98,7 @@ use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::resolve_tests::persist_generic_data_tests::{
     TestUnrenderedConfigs, extract_test_unrendered_configs,
 };
-use super::resolve_utils::validate_compute;
+use super::resolve_utils::{validate_compute, validate_node_adapter};
 use super::validate_models::validate_model;
 
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
@@ -588,10 +589,13 @@ pub async fn resolve_models(
 
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
         validate_compute(model_config.compute, &dbt_asset.path)?;
-        // `--adapter` overrides the authored `+adapter`, as a flag should. Nothing
-        // is validated here: parse resolves every node in the project while only
-        // selected nodes run, so a precondition checked here would reject nodes
-        // the invocation never touches. See `resolve_compute_write_target`.
+        // `--adapter` overrides the authored `+adapter`, as a flag should. No
+        // *precondition* is checked here: parse resolves every node in the project
+        // while only selected nodes run, so one checked here would reject nodes the
+        // invocation never touches. See `resolve_compute_write_target`. The gate
+        // below is a different thing -- it refuses a config the run has not opted in
+        // to at all, which is true wherever that config is written.
+        validate_node_adapter(model_config.adapter, &dbt_asset.path)?;
         let resolved_node_adapter = arg.adapter_override.or(model_config.adapter);
         validate_interactive_table_config(
             &model_config,
@@ -1539,7 +1543,8 @@ fn process_python_models(
         // Analyze Python AST to extract dbt function calls
         // Use the Python model source to compute the model checksum. This is used by `state:*`
         // selectors (e.g. `state:modified`) when comparing to a deferred/previous-state manifest.
-        let checksum = dbt_schemas::schemas::common::DbtChecksum::hash(source.as_bytes());
+        let checksum =
+            dbt_schemas::schemas::common::DbtChecksum::hash(normalize_sql(&source).as_bytes());
         let python_file_info: PythonFileInfo<ModelConfig> = match analyze_python_file(
             &python_asset.path,
             &source,
