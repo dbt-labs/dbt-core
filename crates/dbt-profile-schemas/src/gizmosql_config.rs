@@ -24,20 +24,16 @@ impl InteractiveSetup for GizmoSQLDbConfig {
                 prompt: "Port (Arrow Flight SQL port)".to_string(),
                 required: false,
             },
-            ConfigField {
-                name: "username".to_string(),
-                field_type: FieldType::Input { default: None },
-                condition: FieldCondition::Always,
-                prompt: "Username".to_string(),
-                required: true,
-            },
-            ConfigField {
-                name: "password".to_string(),
-                field_type: FieldType::Password,
-                condition: FieldCondition::Always,
-                prompt: "Password".to_string(),
-                required: true,
-            },
+            ConfigField::select(
+                "auth_type",
+                "Authentication (password, or external for the OAuth/SSO browser flow)",
+                vec!["password", "external"],
+                0,
+            ),
+            ConfigField::input("username", "Username")
+                .when_field_equals("auth_type", FieldValue::Integer(0)),
+            ConfigField::password("password", "Password")
+                .when_field_equals("auth_type", FieldValue::Integer(0)),
             ConfigField {
                 name: "database".to_string(),
                 field_type: FieldType::Input { default: None },
@@ -69,6 +65,11 @@ impl InteractiveSetup for GizmoSQLDbConfig {
                     .to_string(),
                 required: true,
             },
+            ConfigField::input(
+                "external_root",
+                "Root path on the server for external materializations (optional)",
+            )
+            .optional(),
         ]
     }
 
@@ -87,6 +88,16 @@ impl InteractiveSetup for GizmoSQLDbConfig {
                 }
                 FieldValue::Integer(val) => {
                     self.port = Some(StringOrInteger::Integer(val));
+                }
+                _ => {}
+            },
+            "auth_type" => match value {
+                FieldValue::Integer(index) => {
+                    self.auth_type =
+                        Some(if index == 1 { "external" } else { "password" }.to_string());
+                }
+                FieldValue::String(val) => {
+                    self.auth_type = Some(val);
                 }
                 _ => {}
             },
@@ -120,6 +131,11 @@ impl InteractiveSetup for GizmoSQLDbConfig {
                     self.tls_skip_verify = Some(val);
                 }
             }
+            "external_root" => {
+                if let FieldValue::String(val) = value {
+                    self.external_root = Some(val);
+                }
+            }
             _ => {
                 return Err(fs_err!(
                     ErrorCode::InvalidArgument,
@@ -138,6 +154,10 @@ impl InteractiveSetup for GizmoSQLDbConfig {
                 StringOrInteger::String(s) => FieldValue::String(s.clone()),
                 StringOrInteger::Integer(i) => FieldValue::Integer(*i),
             }),
+            "auth_type" => self
+                .auth_type
+                .as_deref()
+                .map(|auth_type| FieldValue::Integer(if auth_type == "external" { 1 } else { 0 })),
             "username" => self
                 .username
                 .as_ref()
@@ -153,6 +173,10 @@ impl InteractiveSetup for GizmoSQLDbConfig {
             "schema" => self.schema.as_ref().map(|v| FieldValue::String(v.clone())),
             "use_encryption" => self.use_encryption.map(FieldValue::Boolean),
             "tls_skip_verify" => self.tls_skip_verify.map(FieldValue::Boolean),
+            "external_root" => self
+                .external_root
+                .as_ref()
+                .map(|v| FieldValue::String(v.clone())),
             _ => None,
         }
     }
@@ -161,12 +185,14 @@ impl InteractiveSetup for GizmoSQLDbConfig {
         match field_name {
             "host" => self.host.is_some(),
             "port" => self.port.is_some(),
+            "auth_type" => self.auth_type.is_some(),
             "username" => self.username.is_some(),
             "password" => self.password.is_some(),
             "database" => self.database.is_some(),
             "schema" => self.schema.is_some(),
             "use_encryption" => self.use_encryption.is_some(),
             "tls_skip_verify" => self.tls_skip_verify.is_some(),
+            "external_root" => self.external_root.is_some(),
             _ => false,
         }
     }

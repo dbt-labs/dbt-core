@@ -49,7 +49,7 @@ impl<'a> GizmoSQLAuthIR<'a> {
     pub fn apply(
         self,
         mut builder: DatabaseBuilder,
-        _warning_printer: &dyn AuthWarningPrinter,
+        warning_printer: &dyn AuthWarningPrinter,
     ) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::Connect {
@@ -71,7 +71,17 @@ impl<'a> GizmoSQLAuthIR<'a> {
                 }
                 builder.with_parse_uri(uri)?;
 
-                if let Some(username) = username {
+                if auth_type.as_deref() == Some(AUTH_TYPE_EXTERNAL) {
+                    // The OAuth/SSO flow supplies the credentials itself (the driver
+                    // presents the identity token as basic auth); anything in the
+                    // profile would be ignored, so never send it and say so.
+                    if username.is_some() || password.is_some() {
+                        warning_printer.warn(
+                            "GizmoSQL: 'username' and 'password' are ignored when \
+                             auth_type is 'external'",
+                        );
+                    }
+                } else if let Some(username) = username {
                     builder.with_username(username.as_ref());
                     // Flight SQL basic auth always sends a password; an empty one
                     // matches the Python adapter's behavior.
@@ -223,6 +233,15 @@ mod tests {
         GizmoSQLAuth::new(Box::new(crate::NoopAuthWarningPrinter))
             .configure(&AdapterConfig::new(config))
             .expect("configure")
+    }
+
+    /// Collects warnings into a shared log so tests can assert on them.
+    struct RecordingWarningPrinter(std::sync::Arc<std::sync::Mutex<Vec<String>>>);
+
+    impl AuthWarningPrinter for RecordingWarningPrinter {
+        fn warn(&self, message: &str) {
+            self.0.lock().unwrap().push(message.to_string());
+        }
     }
 
     fn option_value(builder: &DatabaseBuilder, key: OptionDatabase) -> Option<String> {
@@ -377,6 +396,33 @@ use_encryption: false
             Some("external")
         );
         assert!(option_value(&builder, OptionDatabase::Username).is_none());
+        assert!(option_value(&builder, OptionDatabase::Password).is_none());
+    }
+
+    #[test]
+    fn test_auth_type_external_ignores_credentials_and_warns() {
+        let warnings_log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let auth = GizmoSQLAuth::new(Box::new(RecordingWarningPrinter(warnings_log.clone())));
+        let builder = auth
+            .configure(&AdapterConfig::new(Mapping::from_iter([
+                ("host".into(), "gizmosql.example.com".into()),
+                ("auth_type".into(), "external".into()),
+                ("username".into(), "dbt".into()),
+                ("password".into(), "secret".into()),
+            ])))
+            .expect("configure");
+
+        // The OAuth flow supplies its own credentials; the profile's must not be sent.
+        assert!(option_value(&builder, OptionDatabase::Username).is_none());
+        assert!(option_value(&builder, OptionDatabase::Password).is_none());
+        assert_eq!(
+            other_option_value(&builder, OPTION_AUTH_TYPE),
+            Some("external")
+        );
+
+        let warnings = warnings_log.lock().unwrap().clone();
+        assert_eq!(warnings.len(), 1, "expected one warning, got {warnings:?}");
+        assert_contains!(&warnings[0], "ignored when auth_type is 'external'");
     }
 
     #[test]

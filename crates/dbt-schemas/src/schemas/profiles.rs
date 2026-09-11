@@ -2292,7 +2292,10 @@ impl TryFrom<DbConfig> for TargetContext {
                                 .parse::<u16>()
                                 .map_err(|_| "threads must be a positive integer".to_string())?,
                         ),
-                        Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
+                        Some(StringOrInteger::Integer(threads)) => Some(
+                            u16::try_from(threads)
+                                .map_err(|_| "threads must be a positive integer".to_string())?,
+                        ),
                         None => None,
                     },
                 },
