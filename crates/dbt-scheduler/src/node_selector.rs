@@ -6,7 +6,8 @@ use dbt_common::{
     ErrorCode, FsResult,
     constants::DBT_GENERIC_TESTS_DIR_NAME,
     err,
-    node_selector::{MethodName, SelectExpression, SelectionCriteria},
+    node_selector::{MethodName, SelectExpression, SelectionCriteria, SelectionValue},
+    tracing::dbt_emit::emit_warn_log_message,
 };
 use dbt_frontend_common::Dialect;
 use dbt_schemas::schemas::{
@@ -21,6 +22,10 @@ use std::{
 };
 
 type YmlValue = dbt_yaml::Value;
+
+/// Node selections returned by an external state-selector implementation, keyed by the exact
+/// `state:` criterion value.
+pub type StateSelectorResults = BTreeMap<String, BTreeSet<String>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateModifiedSubType {
@@ -84,7 +89,15 @@ pub fn filter_select(
     Ok(result)
 }
 
-/// Filter the manifest for a **single** criterion
+/// Filter the manifest for a **single** criterion.
+///
+/// This is a plain scan of every node that runs with or without the `previous_state`
+/// comparison manifest (`None` is understood as "nothing is modified").
+/// This is useful in `dbt-defer`'s `modified_nodes`, which legitimately runs without a
+/// comparison manifest (deferral does not require `--state`).
+///
+/// On the user-authored-selector path, additional checks are necessary,
+/// see [`filter_select_criteria_with_state_selector_results`].
 pub fn filter_select_criteria(
     nodes: &Nodes,
     criteria: &SelectionCriteria,
@@ -92,7 +105,7 @@ pub fn filter_select_criteria(
     adapter_type: AdapterType,
 ) -> FsResult<BTreeSet<String>> {
     let project_name = nodes.project_name.as_deref();
-    let result = nodes
+    nodes
         .iter()
         .try_fold(BTreeSet::new(), |mut acc, (_, node)| {
             predicate_include_identifier_node(
@@ -109,8 +122,42 @@ pub fn filter_select_criteria(
                 }
                 acc
             })
-        })?;
-    Ok(result)
+        })
+}
+
+/// Filter the manifest for a single criterion on the user-authored-selector path.
+///
+/// Whenever a `state:...` criterion is used, this checks for presence of a comparison manifest,
+/// unless there is an override with a precomputed selection result.
+pub fn filter_select_criteria_with_state_selector_results(
+    nodes: &Nodes,
+    criteria: &SelectionCriteria,
+    previous_state: Option<&StateArtifacts>,
+    state_selector_results: Option<&StateSelectorResults>,
+    adapter_type: AdapterType,
+) -> FsResult<BTreeSet<String>> {
+    if criteria.method == MethodName::State {
+        // Reuse the selection an external state-selector implementation already made, if it
+        // evaluated this exact `state:` value. Deliberately ahead of the manifest check below.
+        if let Some(selected) =
+            state_selector_results.and_then(|results| results.get(criteria.value.as_str()?))
+        {
+            return Ok(selected.clone());
+        }
+
+        // Otherwise every `state:*` criterion needs something to compare against. This is the
+        // single point every user-authored state criterion reaches — however it was written
+        // (`--select state:modified`, a top-level `--selector`, or a `{selector: name}` reference
+        // nested arbitrarily deep inside a composed selector).
+        if previous_state.is_none() {
+            return err!(
+                ErrorCode::SelectorError,
+                "Got a state selector method, but no comparison manifest"
+            );
+        }
+    }
+
+    filter_select_criteria(nodes, criteria, previous_state, adapter_type)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -217,7 +264,9 @@ fn match_source(pattern: &str, node: &dyn InternalDbtNode) -> FsResult<bool> {
 }
 
 fn match_resource_type(pattern: &str, node: &dyn InternalDbtNode) -> FsResult<bool> {
-    if pattern == "relation" && node.resource_type() != NodeType::Test {
+    // Checks produce no database relation, so they are never a `relation`. (This arm remains an
+    // approximation for other non-relational types like exposures and metrics; not widened here.)
+    if pattern == "relation" && !matches!(node.resource_type(), NodeType::Test | NodeType::Check) {
         Ok(true)
     } else {
         Ok(pattern == node.resource_type().as_static_ref())
@@ -415,7 +464,7 @@ fn match_column(
     let node_pat = parts.next().unwrap_or(""); // e.g.  "model.jaffle_shop.orders"
     let mut new_critera = criteria.clone();
     new_critera.method = MethodName::Fqn;
-    new_critera.value = node_pat.to_string();
+    new_critera.value = SelectionValue::Scalar(node_pat.to_string());
     // check if the fqn match the node part of the column selector
     predicate_include_identifier_node(
         &new_critera,
@@ -467,9 +516,11 @@ fn match_path(pattern: &str, common_attr: &CommonAttributes) -> FsResult<bool> {
     let pattern = normalised.to_string_lossy();
     let pattern = pattern.as_ref();
 
-    // ── 1. Wildcard selector → fnmatch against full path string
+    // ── 1. Wildcard selector → fnmatch against the original file and its parent directories
     if has_special_chars(pattern) {
-        return Ok(fnmatch(pattern, &node_path.to_string_lossy())
+        return Ok(node_path
+            .ancestors()
+            .any(|path| fnmatch(pattern, &path.to_string_lossy()))
             || patch_path.is_some_and(|p| fnmatch(pattern, &p.to_string_lossy())));
     }
 
@@ -766,8 +817,9 @@ fn match_source_status(
 
     let Some(prev_sources_results) = &prev_state.source_freshness_results else {
         // No sources.json in state directory - selector cannot be used
-        eprintln!(
-            "Warning: source_status selector requires a sources.json with freshness results in the state directory."
+        emit_warn_log_message(
+            ErrorCode::SelectorError,
+            "source_status selector requires a sources.json with freshness results in the state directory.",
         );
         return Ok(false);
     };
@@ -814,7 +866,10 @@ fn match_source_status(
 
             // Check if current sources.json has any results
             if current_sources_results.results.is_empty() {
-                eprintln!("Warning: The current sources.json file contains no freshness results.");
+                emit_warn_log_message(
+                    ErrorCode::SelectorError,
+                    "The current sources.json file contains no freshness results.",
+                );
                 return Ok(false);
             }
 
@@ -849,7 +904,8 @@ fn predicate_include_identifier_node(
     adapter_type: AdapterType,
 ) -> FsResult<bool> {
     let method = criteria.method;
-    let pattern = &criteria.value;
+    // Deferred failure point for a non-scalar `value:` (dbt-labs/fs#13604).
+    let pattern = criteria.value.resolve(method)?;
     let args: &[String] = &criteria.method_args;
     let common_attr = node.common();
 
@@ -892,6 +948,10 @@ fn predicate_include_identifier_node(
         MethodName::Group => match_group(pattern, node.get_group()),
         MethodName::Tag => match_tag(pattern, node.tags()),
         MethodName::SourceStatus => match_source_status(pattern, node, previous_state),
+        MethodName::Selector => err!(
+            ErrorCode::SelectorError,
+            "selector: method cannot be evaluated per-node; it requires graph context"
+        ),
     }
 }
 
@@ -1039,11 +1099,15 @@ fn predicate_include_node_column(
     let mut result = BTreeMap::new();
 
     // 1) column:foo.bar.* → exact match on that table (foo.bar) and that column glob (*)
+    // `column:` is internal-only, so a non-scalar value never reaches here.
     if criteria.method == MethodName::Column {
-        let (table_pat, col_pat) = if let Some(idx) = criteria.value.rfind('.') {
-            (&criteria.value[..idx], &criteria.value[idx + 1..])
+        let Some(value) = criteria.value.as_str() else {
+            return result;
+        };
+        let (table_pat, col_pat) = if let Some(idx) = value.rfind('.') {
+            (&value[..idx], &value[idx + 1..])
         } else {
-            ("", &criteria.value[..])
+            ("", value)
         };
         // only select columns on matching tables
         if table_pat.is_empty() || fnmatch(table_pat, node.common().unique_id.as_str()) {
@@ -1084,7 +1148,7 @@ fn has_special_chars(pattern: &str) -> bool {
     const SPECIAL_CHARS: [char; 4] = ['*', '?', '[', ']'];
     pattern.chars().any(|c| SPECIAL_CHARS.contains(&c))
 }
-fn fnmatch(pattern: &str, text: &str) -> bool {
+pub(crate) fn fnmatch(pattern: &str, text: &str) -> bool {
     if has_special_chars(pattern) {
         match Pattern::new(pattern) {
             Ok(p) => p.matches(text),
@@ -1283,9 +1347,9 @@ mod tests {
                 deprecation_date: None,
                 event_time: None,
                 catalog_name: None,
-                alt_compute: None,
                 table_format: None,
                 sync: None,
+                compiled_code: None,
             },
             __adapter_attr__: AdapterAttr::default(),
             __other__: BTreeMap::new(),
@@ -1304,6 +1368,38 @@ mod tests {
                 (ColId { table, column }, value)
             })
             .collect()
+    }
+
+    #[test]
+    fn filter_select_criteria_uses_service_state_selection() {
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.project.selected".to_string(),
+            create_test_node("model.project.selected", vec![]),
+        );
+
+        let select = parse_model_specifiers(&["state:modified".to_string()]).unwrap();
+        let SelectExpression::Atom(criteria) = select else {
+            panic!("expected a single selection criterion");
+        };
+        let results = StateSelectorResults::from([(
+            "modified".to_string(),
+            BTreeSet::from(["model.project.selected".to_string()]),
+        )]);
+
+        let selected = filter_select_criteria_with_state_selector_results(
+            &nodes,
+            &criteria,
+            None,
+            Some(&results),
+            AdapterType::Bigquery,
+        )
+        .unwrap();
+
+        assert_eq!(
+            selected,
+            BTreeSet::from(["model.project.selected".to_string()])
+        );
     }
 
     #[test]
@@ -1780,6 +1876,35 @@ mod tests {
     }
 
     #[test]
+    fn test_match_path_wildcard_directory() {
+        for path in [
+            "models/group_a/one/subdir/leaf/model_a.sql",
+            "models/group_a/two/subdir/leaf/model_b.sql",
+        ] {
+            let common_attr = CommonAttributes {
+                original_file_path: path.into(),
+                ..Default::default()
+            };
+
+            assert!(match_path("models/group_a/*/subdir/leaf", &common_attr).unwrap());
+        }
+
+        let sibling_attr = CommonAttributes {
+            original_file_path: "models/group_a/one/other/model_c.sql".into(),
+            ..Default::default()
+        };
+        assert!(!match_path("models/group_a/*/subdir/leaf", &sibling_attr).unwrap());
+
+        let patched_attr = CommonAttributes {
+            original_file_path: "models/other/model.sql".into(),
+            patch_path: Some("models/group_a/one/subdir/leaf/schema.yml".into()),
+            ..Default::default()
+        };
+        assert!(!match_path("models/group_a/*/subdir/leaf", &patched_attr).unwrap());
+        assert!(match_path("models/group_a/*/subdir/leaf/*.yml", &patched_attr).unwrap());
+    }
+
+    #[test]
     fn test_match_path_directory_with_dot() {
         // Test that directories with dots in their names work correctly
         // Path::starts_with matches on component boundaries, so "staging.v2" won't
@@ -2218,6 +2343,7 @@ mod tests {
                 introspection: IntrospectionKind::None,
                 original_name: None,
                 group: None,
+                state: None,
             },
             __adapter_attr__: Default::default(),
             __other__: Default::default(),
@@ -2251,6 +2377,7 @@ mod tests {
                 introspection: IntrospectionKind::None,
                 original_name: None,
                 group: None,
+                state: None,
             },
             __adapter_attr__: Default::default(),
             deprecated_config: Default::default(),
@@ -2351,6 +2478,7 @@ mod tests {
                 env: BTreeMap::new(),
             },
             results: vec![FreshnessResultsNode {
+                resource_type: None,
                 unique_id: source_unique_id.to_string(),
                 max_loaded_at: prev_time,
                 snapshotted_at: prev_time,
@@ -2390,6 +2518,7 @@ mod tests {
                 env: BTreeMap::new(),
             },
             results: vec![FreshnessResultsNode {
+                resource_type: None,
                 unique_id: source_unique_id.to_string(),
                 max_loaded_at: current_time,
                 snapshotted_at: current_time,
@@ -2441,6 +2570,7 @@ mod tests {
                 env: BTreeMap::new(),
             },
             results: vec![FreshnessResultsNode {
+                resource_type: None,
                 unique_id: source_unique_id.to_string(),
                 max_loaded_at: prev_time, // Same as previous
                 snapshotted_at: prev_time,
@@ -2530,6 +2660,7 @@ mod tests {
                 introspection: IntrospectionKind::None,
                 original_name: None,
                 group: None,
+                state: None,
             },
             __adapter_attr__: Default::default(),
             deprecated_config: Default::default(),
@@ -2583,6 +2714,7 @@ mod tests {
                 introspection: IntrospectionKind::None,
                 original_name: None,
                 group: None,
+                state: None,
             },
             __adapter_attr__: Default::default(),
             deprecated_config: Default::default(),
@@ -2695,6 +2827,47 @@ mod tests {
             )
             .unwrap(),
             "FQN selector should match exposures by name"
+        );
+    }
+
+    #[test]
+    /// Regression (dbt-labs/fs#13604): a non-scalar `value:` must fail only once
+    /// resolved against a node, and the error must name the method.
+    fn test_unsupported_criteria_value_fails_only_on_resolution() {
+        let node = create_test_node("model.test.my_model", vec![]);
+        let mut criteria = SelectionCriteria::new(
+            MethodName::Path,
+            vec![],
+            "placeholder",
+            false,
+            None,
+            None,
+            None,
+            None,
+        );
+        criteria.value = SelectionValue::Unsupported(Box::new(dbt_yaml::Value::from(vec![
+            dbt_yaml::Value::from("models"),
+            dbt_yaml::Value::from("seeds"),
+        ])));
+        let expr = SelectExpression::Atom(criteria);
+
+        let result = select_expression_include_node(
+            &expr,
+            node.as_ref(),
+            None,
+            None,
+            None,
+            AdapterType::DuckDB,
+        );
+
+        assert!(
+            result.is_err(),
+            "resolving a criteria with an unsupported value should fail, not silently match/skip"
+        );
+        let message = result.unwrap_err().to_string();
+        assert!(
+            message.contains("path"),
+            "error should name the method that received the bad value, got: {message}"
         );
     }
 }

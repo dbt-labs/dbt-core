@@ -8,11 +8,13 @@ use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
 use dbt_common::{
     ErrorCode, FsError, FsResult,
-    constants::{DBT_LOG_DIR_NAME, DBT_TARGET_DIR_NAME},
+    constants::{DBT_LOG_DIR_NAME, DBT_TARGET_DIR_NAME, default_metadata_dir},
     err, stdfs,
 };
 use dbt_test_primitives::is_update_golden_files_mode;
 use dbt_tracing::{IndexedTelemetryDeserializeError, TelemetryRecord};
+#[cfg(any(windows, test))]
+use once_cell::sync::Lazy;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use sha2::{Digest, Sha256};
 
@@ -43,6 +45,10 @@ const OTEL_PARQUET_FILE_NAME: &str = "otel.parquet";
 
 /// Stable invocation id used to keep telemetry snapshots reproducible.
 const TELEMETRY_INVOCATION_ID: &str = "424242424242";
+
+#[cfg(any(windows, test))]
+static JSON_ESCAPED_BACKSLASH_PATTERN: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r"\\{2,}").unwrap());
 
 /// Telemetry event types that are known to be unstable and removed before normalization.
 const UNSTABLE_TELEMETRY_EVENT_TYPES: &[&str] = &[
@@ -157,22 +163,6 @@ impl Task for ExecuteAndCompareTelemetry {
     }
 }
 
-#[async_trait]
-impl Task for Arc<ExecuteAndCompareTelemetry> {
-    async fn run(
-        &self,
-        project_env: &ProjectEnv,
-        test_env: &TestEnv,
-        task_index: usize,
-    ) -> TestResult<()> {
-        self.as_ref().run(project_env, test_env, task_index).await
-    }
-
-    fn is_counted(&self) -> bool {
-        true
-    }
-}
-
 /// Panics when a command vector already contains a flag owned by telemetry snapshot setup.
 fn assert_flag_absent(cmd_vec: &[String], flag: &str, message: &str) {
     if cmd_vec.iter().any(|arg| arg.contains(flag)) {
@@ -201,7 +191,7 @@ fn compare_telemetry(
 
     let task_suffix = task_suffix(task_index);
     let actual_jsonl_path = log_dir.join(OTEL_JSONL_FILE_NAME);
-    let actual_parquet_path = target_dir.join("metadata").join(OTEL_PARQUET_FILE_NAME);
+    let actual_parquet_path = default_metadata_dir(&target_dir).join(OTEL_PARQUET_FILE_NAME);
     let golden_jsonl_path = test_env
         .golden_dir
         .join(format!("{}{}.otel.jsonl", task.name, task_suffix));
@@ -630,8 +620,17 @@ fn canonicalize_telemetry_ids(content: String) -> String {
         .join("\n")
 }
 
-/// Removes telemetry records whose event type is listed as unstable.
+/// Matches the `body` of ad hoc perf-debugging `tracing::debug!("... took {duration:?}")`
+/// log records, which embed a live-measured duration and can never reproduce byte-for-byte
+/// across runs.
+const PERF_TIMING_LOG_BODY_PATTERN: &str = r"took [0-9.]+(?:ns|µs|ms|s)$";
+
+/// Removes telemetry records whose event type is listed as unstable, and ad hoc
+/// perf-timing log records whose body embeds a live-measured, non-reproducible duration.
 fn remove_unstable_telemetry_records(content: String) -> String {
+    let timing_re = regex::Regex::new(PERF_TIMING_LOG_BODY_PATTERN)
+        .expect("Invalid perf-timing log body regex");
+
     content
         .lines()
         .filter_map(|line| {
@@ -645,10 +644,14 @@ fn remove_unstable_telemetry_records(content: String) -> String {
             if event_type
                 .is_some_and(|event_type| UNSTABLE_TELEMETRY_EVENT_TYPES.contains(&event_type))
             {
-                None
-            } else {
-                Some(line.to_string())
+                return None;
             }
+            if event_type == Some("v1.public.events.fusion.log.LogMessage")
+                && string_field(&json, "body").is_some_and(|body| timing_re.is_match(body))
+            {
+                return None;
+            }
+            Some(line.to_string())
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -669,6 +672,12 @@ fn volatile_keys(deterministic_sort: bool) -> Vec<&'static str> {
         "host_os",
         "host_arch",
         "version",
+        // `mem::size_of` of the closure handed to `spawn_blocking`, so it is a
+        // target-layout fact, not an observation: the same closure measures 136
+        // bytes on Linux/macOS and 144 on windows-msvc. Snapshotting it makes
+        // the golden pass on one platform and fail on the others.
+        "size.bytes",
+        "original_size.bytes",
     ];
     if deterministic_sort {
         keys.extend(["span_id", "event_id", "parent_span_id"]);
@@ -743,12 +752,19 @@ fn strip_non_replayable_keys(content: String) -> String {
 fn json_safe_normalize_slashes(output: String) -> String {
     #[cfg(windows)]
     {
-        output.replace("\\\\", "|").replace("/", "|")
+        normalize_json_escaped_slashes(output)
     }
     #[cfg(not(windows))]
     {
         output
     }
+}
+
+#[cfg(any(windows, test))]
+fn normalize_json_escaped_slashes(output: String) -> String {
+    JSON_ESCAPED_BACKSLASH_PATTERN
+        .replace_all(&output, "|")
+        .replace('/', "|")
 }
 
 /// Applies every telemetry JSONL normalization transform in comparison order.
@@ -789,7 +805,20 @@ fn normalize_unrendered_config_in_model_strings(output: String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_volatile_keys;
+    use super::{normalize_json_escaped_slashes, normalize_volatile_keys};
+    use crate::task::utils::normalize_windows_tmp_paths;
+
+    #[test]
+    fn normalizes_nested_windows_temp_paths() {
+        let expected = r#"{"string":"{'root_path': '|tmp|.tmpXXXXXX|root'}"}"#;
+        for content in [
+            r#"{"string":"{'root_path': 'C:\\Users\\Administrator\\AppData\\Local\\Temp\\.tmpcSTNo8\\root'}"}"#,
+            r#"{"string":"{'root_path': 'C:\\\\Users\\\\Administrator\\\\AppData\\\\Local\\\\Temp\\\\.tmpcSTNo8\\\\root'}"}"#,
+        ] {
+            let normalized = normalize_windows_tmp_paths(content.to_string());
+            assert_eq!(normalize_json_escaped_slashes(normalized), expected);
+        }
+    }
 
     #[test]
     fn normalizes_preview_nightly_version_targets() {

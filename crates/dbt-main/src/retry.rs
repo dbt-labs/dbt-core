@@ -8,11 +8,18 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 
-/// Statuses that should be retried on retry command.
-/// These match dbt-core's retryable statuses.
-pub const RETRYABLE_STATUSES: &[&str] = &["error", "fail", "skipped", "warn"];
+/// Statuses that are always retryable. Matches dbt-core's `RETRYABLE_STATUSES`
+/// (`error`, `fail`, `skipped`).
+pub const RETRYABLE_STATUSES: &[&str] = &["error", "fail", "skipped"];
 
-pub const RETRIABLE_COMMANDS: &[&str] = &["run", "build", "test", "seed", "snapshot", "compile"];
+/// Additional status that is retryable only when the *retry* invocation passes
+/// `--warn-error`, matching dbt-core:
+/// `if args.warn_error: RETRYABLE_STATUSES.add(NodeStatus.Warn)`.
+pub const WARN_ERROR_RETRYABLE_STATUSES: &[&str] = &["warn"];
+
+pub const RETRIABLE_COMMANDS: &[&str] = &[
+    "run", "build", "test", "seed", "snapshot", "compile", "check",
+];
 
 /// Holds the state extracted from a previous run's run_results.json
 /// needed to execute a retry command.
@@ -30,16 +37,34 @@ pub struct RetryState {
     pub original_full_refresh: bool,
 }
 
+/// Decode check names from `check.<package>.<name>` unique_ids.
+///
+/// Everything after the second `.` is the name, so a name containing a
+/// dot survives. Keys that don't fit (e.g. a legacy artifact) drop out;
+/// an empty result means "run every discovered check".
+pub fn check_names_from_retry_ids(ids: &[String]) -> Vec<String> {
+    ids.iter()
+        .filter_map(|id| {
+            id.strip_prefix("check.")
+                .and_then(|rest| rest.split_once('.').map(|(_, name)| name.to_string()))
+        })
+        .collect()
+}
+
 impl RetryState {
     /// Load retry state from a run_results.json file.
     ///
     /// # Arguments
     /// * `path` - Path to the run_results.json file
+    /// * `warn_error` - Whether the *retry* invocation passed `--warn-error`.
+    ///   When true, nodes recorded as `warn` are also retryable (and will be
+    ///   escalated to failures during execution), matching dbt-core which keys
+    ///   off the retry invocation's own `--warn-error` flag.
     ///
     /// # Returns
     /// * `Ok(RetryState)` - If the file was parsed and contains retryable nodes
     /// * `Err` - If the file doesn't exist, is invalid, or has no failed nodes
-    pub fn from_run_results(path: &Path) -> FsResult<Self> {
+    pub fn from_run_results(path: &Path, warn_error: bool) -> FsResult<Self> {
         let artifact = RunResultsArtifact::from_file(path)?;
 
         let original_command = artifact.args.which.clone();
@@ -61,12 +86,23 @@ impl RetryState {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        // Collect all retryable nodes: error, fail, skipped, warn
-        // The graph infrastructure will handle dependency ordering automatically
+        // Collect all retryable nodes: error, fail, skipped (and warn only under
+        // --warn-error). The graph infrastructure handles dependency ordering.
         let retryable_node_ids: Vec<String> = artifact
             .results
             .iter()
-            .filter(|r| RETRYABLE_STATUSES.contains(&r.status.as_str()))
+            .filter(|r| {
+                RETRYABLE_STATUSES.contains(&r.status.as_str())
+                    || (warn_error && WARN_ERROR_RETRYABLE_STATUSES.contains(&r.status.as_str()))
+            })
+            // dbt-core skips operation nodes unless the original command was
+            // `run-operation`, because on-run-start / on-run-end hooks are attached
+            // to the command and re-execute as part of whatever command retry
+            // reconstructs — retrying the operation node itself would be wrong.
+            // (dbt-labs/fs#12418, core/dbt/task/retry.py.)
+            .filter(|r| {
+                original_command == "run-operation" || !r.unique_id.starts_with("operation.")
+            })
             .map(|r| r.unique_id.clone())
             .collect();
 
@@ -151,6 +187,16 @@ impl RetryState {
                 full_refresh,
                 ..CompileArgs::default()
             }),
+            "check" => {
+                // Re-run exactly the checks that failed, by name. See
+                // `check_names_from_retry_ids`.
+                let check_names = check_names_from_retry_ids(&self.retryable_node_ids);
+                CoreCommand::Check(CheckArgs {
+                    check_names,
+                    common_args,
+                    static_analysis,
+                })
+            }
             other => {
                 debug_assert!(!RETRIABLE_COMMANDS.contains(&other));
                 return Err(other.to_string());
@@ -171,9 +217,11 @@ mod tests {
         assert!(RETRYABLE_STATUSES.contains(&"error"));
         assert!(RETRYABLE_STATUSES.contains(&"fail"));
         assert!(RETRYABLE_STATUSES.contains(&"skipped"));
-        assert!(RETRYABLE_STATUSES.contains(&"warn"));
         assert!(!RETRYABLE_STATUSES.contains(&"success"));
         assert!(!RETRYABLE_STATUSES.contains(&"pass"));
+        // `warn` is retryable only under --warn-error, so it lives in a separate set.
+        assert!(!RETRYABLE_STATUSES.contains(&"warn"));
+        assert!(WARN_ERROR_RETRYABLE_STATUSES.contains(&"warn"));
     }
 
     fn cmd_for_retry(
@@ -274,7 +322,7 @@ expected_sa: {expected_sa:?}",
             "build",
             Some(true),
         );
-        let state = RetryState::from_run_results(with_ff.path()).unwrap();
+        let state = RetryState::from_run_results(with_ff.path(), false).unwrap();
         assert!(state.original_full_refresh);
 
         let without_ff = create_run_results_json_with_full_refresh(
@@ -282,13 +330,54 @@ expected_sa: {expected_sa:?}",
             "build",
             Some(false),
         );
-        let state = RetryState::from_run_results(without_ff.path()).unwrap();
+        let state = RetryState::from_run_results(without_ff.path(), false).unwrap();
         assert!(!state.original_full_refresh);
 
         // Missing full_refresh (e.g. run_results from an older version) defaults to false.
         let file = create_run_results_json(&[("model.my_project.model_a", "error")], "build");
-        let state = RetryState::from_run_results(file.path()).unwrap();
+        let state = RetryState::from_run_results(file.path(), false).unwrap();
         assert!(!state.original_full_refresh);
+    }
+
+    #[test]
+    fn test_retry_check_decodes_check_names_from_recorded_ids() {
+        let state = RetryState {
+            original_command: "check".into(),
+            retryable_node_ids: vec![
+                "check.my_project.no_undocumented_models".to_string(),
+                // A check name that itself contains a dot must survive decoding.
+                "check.my_project.pii.not_leaked".to_string(),
+            ],
+            original_static_analysis: None,
+            previous_batch_results: Default::default(),
+            original_full_refresh: false,
+        };
+        let retry_args = RetryArgs {
+            common_args: CommonArgs::default(),
+            static_analysis: None,
+        };
+        match state.to_command(&retry_args).unwrap() {
+            CoreCommand::Check(args) => assert_eq!(
+                args.check_names,
+                vec![
+                    "no_undocumented_models".to_string(),
+                    "pii.not_leaked".to_string(),
+                ]
+            ),
+            other => panic!("expected Check, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_check_names_from_retry_ids_ignores_non_check_nodes() {
+        assert_eq!(
+            check_names_from_retry_ids(&[
+                "check.pkg.failed_check".to_string(),
+                "model.pkg.skipped".to_string(),
+                "check.pkg.dot.named".to_string(),
+            ]),
+            vec!["failed_check".to_string(), "dot.named".to_string()]
+        );
     }
 
     #[test]
@@ -408,7 +497,7 @@ expected_sa: {expected_sa:?}",
             "run",
         );
 
-        let state = RetryState::from_run_results(file.path()).unwrap();
+        let state = RetryState::from_run_results(file.path(), false).unwrap();
 
         assert_eq!(state.original_command, "run");
         assert_eq!(state.retryable_node_ids.len(), 3);
@@ -445,7 +534,7 @@ expected_sa: {expected_sa:?}",
             "run",
         );
 
-        let result = RetryState::from_run_results(file.path());
+        let result = RetryState::from_run_results(file.path(), false);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("No failed nodes"));
@@ -453,7 +542,8 @@ expected_sa: {expected_sa:?}",
 
     #[test]
     fn test_from_run_results_file_not_found() {
-        let result = RetryState::from_run_results(Path::new("/nonexistent/run_results.json"));
+        let result =
+            RetryState::from_run_results(Path::new("/nonexistent/run_results.json"), false);
         assert!(result.is_err());
     }
 
@@ -462,27 +552,37 @@ expected_sa: {expected_sa:?}",
         for cmd in &["run", "build", "test", "seed", "snapshot", "compile"] {
             let file = create_run_results_json(&[("model.my_project.model_a", "error")], cmd);
 
-            let state = RetryState::from_run_results(file.path()).unwrap();
+            let state = RetryState::from_run_results(file.path(), false).unwrap();
             assert_eq!(state.original_command, *cmd);
         }
     }
 
     #[test]
-    fn test_from_run_results_includes_warn_status() {
-        let file = create_run_results_json(
-            &[
-                ("test.my_project.test_a", "pass"),
-                ("test.my_project.test_b", "warn"),
-            ],
-            "test",
+    fn test_from_run_results_gates_warn_status_on_warn_error() {
+        // A passing test plus a warning test: the only non-success status is `warn`.
+        let make = || {
+            create_run_results_json(
+                &[
+                    ("test.my_project.test_a", "pass"),
+                    ("test.my_project.test_b", "warn"),
+                ],
+                "test",
+            )
+        };
+
+        // Without --warn-error, `warn` is NOT retryable -> nothing to retry.
+        let file = make();
+        assert!(
+            RetryState::from_run_results(file.path(), false).is_err(),
+            "warn-only run must have nothing to retry without --warn-error"
         );
 
-        let state = RetryState::from_run_results(file.path()).unwrap();
-        assert_eq!(state.retryable_node_ids.len(), 1);
-        assert!(
-            state
-                .retryable_node_ids
-                .contains(&"test.my_project.test_b".to_string())
+        // With --warn-error, the warned node becomes retryable (the passing one does not).
+        let file = make();
+        let state = RetryState::from_run_results(file.path(), true).unwrap();
+        assert_eq!(
+            state.retryable_node_ids,
+            vec!["test.my_project.test_b".to_string()],
         );
     }
 
@@ -494,7 +594,7 @@ expected_sa: {expected_sa:?}",
             Some("on"),
         );
 
-        let state = RetryState::from_run_results(file.path()).unwrap();
+        let state = RetryState::from_run_results(file.path(), false).unwrap();
         assert_eq!(state.original_static_analysis, Some(StaticAnalysisKind::On));
     }
 
@@ -506,7 +606,7 @@ expected_sa: {expected_sa:?}",
             Some("off"),
         );
 
-        let state = RetryState::from_run_results(file.path()).unwrap();
+        let state = RetryState::from_run_results(file.path(), false).unwrap();
         assert_eq!(
             state.original_static_analysis,
             Some(StaticAnalysisKind::Off)
@@ -521,7 +621,7 @@ expected_sa: {expected_sa:?}",
             Some("unsafe"),
         );
 
-        let state = RetryState::from_run_results(file.path()).unwrap();
+        let state = RetryState::from_run_results(file.path(), false).unwrap();
         assert_eq!(
             state.original_static_analysis,
             Some(StaticAnalysisKind::Unsafe)
@@ -536,7 +636,7 @@ expected_sa: {expected_sa:?}",
             Some("baseline"),
         );
 
-        let state = RetryState::from_run_results(file.path()).unwrap();
+        let state = RetryState::from_run_results(file.path(), false).unwrap();
         assert_eq!(
             state.original_static_analysis,
             Some(StaticAnalysisKind::Baseline)
@@ -547,7 +647,7 @@ expected_sa: {expected_sa:?}",
     fn test_from_run_results_no_static_analysis() {
         let file = create_run_results_json(&[("model.my_project.model_a", "error")], "run");
 
-        let state = RetryState::from_run_results(file.path()).unwrap();
+        let state = RetryState::from_run_results(file.path(), false).unwrap();
         assert_eq!(state.original_static_analysis, None);
     }
 }

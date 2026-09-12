@@ -45,6 +45,30 @@ fn is_empty(sql: &str, dialect: Dialect) -> bool {
 }
 
 #[test]
+fn test_snowflake_terminal_flow_statement() {
+    assert_eq!(
+        snowflake_terminal_flow_statement("SHOW TABLES"),
+        "SHOW TABLES"
+    );
+    assert_eq!(
+        snowflake_terminal_flow_statement(
+            "SHOW TABLES ->> SELECT 'first' ->> SELECT \"name\" FROM $1"
+        ),
+        " SELECT \"name\" FROM $1"
+    );
+    assert_eq!(
+        snowflake_terminal_flow_statement(
+            "SHOW TABLES LIKE '->>' /* ->> SELECT */ ->> SELECT $$->>$$, \"->>\" FROM $1"
+        ),
+        " SELECT $$->>$$, \"->>\" FROM $1"
+    );
+    assert_eq!(
+        snowflake_terminal_flow_statement("SHOW TABLES LIKE 'café' ->> SELECT \"naïve\" FROM $1"),
+        " SELECT \"naïve\" FROM $1"
+    );
+}
+
+#[test]
 fn test_is_empty_or_comment_only() {
     // Test the comment detection helper function across all dialects
     for dialect in Dialect::iter() {

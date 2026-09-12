@@ -25,6 +25,10 @@ pub struct AdapterInfo {
     /// The specific string varies per adapter_type.
     #[prost(string, tag = "5")]
     pub adapter_unique_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "6")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for AdapterInfo {
     const NAME: &'static str = "AdapterInfo";
@@ -75,6 +79,10 @@ pub struct AdapterInfoV2 {
     pub model_adapter_details: ::std::collections::HashMap<
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
+    >,
+    #[prost(message, optional, tag = "8")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
     >,
 }
 impl ::prost::Name for AdapterInfoV2 {
@@ -156,6 +164,10 @@ pub struct Invocation {
     /// The distribution of dbt that was used to run this command.
     #[prost(string, tag = "11")]
     pub distribution: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "12")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for Invocation {
     const NAME: &'static str = "Invocation";
@@ -192,6 +204,10 @@ pub struct InvocationEnv {
     /// string formats and IDs provided.
     #[prost(string, tag = "4")]
     pub environment: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "5")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for InvocationEnv {
     const NAME: &'static str = "InvocationEnv";
@@ -233,6 +249,10 @@ pub struct PackageInstall {
     /// a git commit hash (if installed through git).
     #[prost(string, tag = "6")]
     pub version: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "7")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for PackageInstall {
     const NAME: &'static str = "PackageInstall";
@@ -309,6 +329,10 @@ pub struct ResourceCounts {
     /// total count of catalogs in the project.
     #[prost(int32, tag = "18")]
     pub catalogs: i32,
+    #[prost(message, optional, tag = "19")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for ResourceCounts {
     const NAME: &'static str = "ResourceCounts";
@@ -413,6 +437,10 @@ pub struct RunModel {
     /// catalog label). empty string when the model does not use catalogs.yml.
     #[prost(string, tag = "23")]
     pub catalog_type: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "24")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for RunModel {
     const NAME: &'static str = "RunModel";
@@ -456,6 +484,10 @@ pub struct Onboarding {
     /// across sessions. This is usually found in ~/.dbt/.user.yml.
     #[prost(string, tag = "7")]
     pub user_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "8")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for Onboarding {
     const NAME: &'static str = "Onboarding";
@@ -511,6 +543,14 @@ pub struct Login {
     pub platform_account_identifier: ::core::option::Option<
         ::prost::alloc::string::String,
     >,
+    #[prost(message, optional, tag = "11")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
+    #[prost(enumeration = "LoginErrorCode", optional, tag = "12")]
+    pub error_code: ::core::option::Option<i32>,
+    #[prost(string, optional, tag = "13")]
+    pub error_message: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl ::prost::Name for Login {
     const NAME: &'static str = "Login";
@@ -558,6 +598,10 @@ pub struct StaticAnalysisInvocation {
     /// Count of nodes with static analysis off after propagation.
     #[prost(int32, tag = "9")]
     pub off_node_count: i32,
+    #[prost(message, optional, tag = "10")]
+    pub common_context: ::core::option::Option<
+        super::super::common::vortex_telemetry_contexts::VortexTelemetryCommonContext,
+    >,
 }
 impl ::prost::Name for StaticAnalysisInvocation {
     const NAME: &'static str = "StaticAnalysisInvocation";
@@ -727,6 +771,52 @@ impl LoginType {
             "LOGIN_TYPE_UNSPECIFIED" => Some(Self::Unspecified),
             "PLATFORM" => Some(Self::Platform),
             "STATE" => Some(Self::State),
+            _ => None,
+        }
+    }
+}
+/// LoginErrorCode should mirror dbt_platform_auth::AuthError in the fs codebase.
+/// This enum need not track the internal "Aborted" variant of that error enum because
+/// it is an internal variant that is only used to signal that either the platform or
+/// dbt state login callback was aborted because the other callback completed.
+#[derive(::serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LoginErrorCode {
+    NotAuthenticated = 0,
+    AuthenticationExpired = 1,
+    InaccessibleSource = 2,
+    MalformedConfig = 3,
+    InteractiveFailure = 4,
+    InadequateScopes = 5,
+    RefreshFailed = 6,
+}
+impl LoginErrorCode {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::NotAuthenticated => "NOT_AUTHENTICATED",
+            Self::AuthenticationExpired => "AUTHENTICATION_EXPIRED",
+            Self::InaccessibleSource => "INACCESSIBLE_SOURCE",
+            Self::MalformedConfig => "MALFORMED_CONFIG",
+            Self::InteractiveFailure => "INTERACTIVE_FAILURE",
+            Self::InadequateScopes => "INADEQUATE_SCOPES",
+            Self::RefreshFailed => "REFRESH_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "NOT_AUTHENTICATED" => Some(Self::NotAuthenticated),
+            "AUTHENTICATION_EXPIRED" => Some(Self::AuthenticationExpired),
+            "INACCESSIBLE_SOURCE" => Some(Self::InaccessibleSource),
+            "MALFORMED_CONFIG" => Some(Self::MalformedConfig),
+            "INTERACTIVE_FAILURE" => Some(Self::InteractiveFailure),
+            "INADEQUATE_SCOPES" => Some(Self::InadequateScopes),
+            "REFRESH_FAILED" => Some(Self::RefreshFailed),
             _ => None,
         }
     }

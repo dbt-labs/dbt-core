@@ -330,13 +330,18 @@ where
         // Best-effort attempt to shut down cleanly. If anything goes wrong we
         // just give up quietly.
         let (lock, cvar) = &*self.shutdown;
-        let Ok(mut shutdown) = lock.lock() else {
-            // Lock poisoned, so we can't proceed
-            return;
-        };
+        {
+            let Ok(mut shutdown) = lock.lock() else {
+                // Lock poisoned, so we can't proceed
+                return;
+            };
 
-        *shutdown = true;
-        cvar.notify_all();
+            *shutdown = true;
+            cvar.notify_all();
+            // Guard dropped here: the ticker thread's `wait_timeout` needs to
+            // reacquire this same mutex to observe the flag and return, which
+            // would otherwise deadlock against the `join()` below.
+        }
 
         // Wait for the ticker thread to finish
         if let Some(ticker) = self.ticker.take() {

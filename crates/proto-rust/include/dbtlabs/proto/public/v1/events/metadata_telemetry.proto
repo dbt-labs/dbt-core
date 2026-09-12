@@ -60,4 +60,5 @@ message Handoff {
 
   // asset type of resource being handed off; see HandoffAssetType for possible values
   string asset_type = 7;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 8;
 }

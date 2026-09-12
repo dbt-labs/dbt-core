@@ -13,6 +13,7 @@ message PageLoad {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message CatalogLiteOpen {
@@ -20,6 +21,7 @@ message CatalogLiteOpen {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message QueryHistoryOpen {
@@ -27,6 +29,7 @@ message QueryHistoryOpen {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message BookmarksOpen {
@@ -34,6 +37,7 @@ message BookmarksOpen {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message BookmarksOpenDetails {
@@ -41,6 +45,7 @@ message BookmarksOpenDetails {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message BookmarksEditDetails {
@@ -48,6 +53,7 @@ message BookmarksEditDetails {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message VersionHistoryOpen {
@@ -55,6 +61,7 @@ message VersionHistoryOpen {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message CopilotOpen {
@@ -62,6 +69,7 @@ message CopilotOpen {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message CopilotCreateChat {
@@ -69,6 +77,7 @@ message CopilotCreateChat {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message CopilotAddCode {
@@ -77,6 +86,7 @@ message CopilotAddCode {
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
   string copilot_request_id = 3;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 4;
 }
 
 message CopilotFeedbackGood {
@@ -85,6 +95,7 @@ message CopilotFeedbackGood {
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
   string copilot_request_id = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 message CopilotFeedbackBad {
@@ -93,6 +104,7 @@ message CopilotFeedbackBad {
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
   string copilot_request_id = 3;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 4;
 }
 
 message ChartsOpen {
@@ -100,6 +112,7 @@ message ChartsOpen {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message ChartsConfigOpen {
@@ -107,6 +120,7 @@ message ChartsConfigOpen {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message ShareCreateLink {
@@ -114,6 +128,7 @@ message ShareCreateLink {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message ShareOpenLink {
@@ -121,6 +136,7 @@ message ShareOpenLink {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message ShareCopyToNewQuery {
@@ -128,6 +144,7 @@ message ShareCopyToNewQuery {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message CsvDownload {
@@ -136,6 +153,7 @@ message CsvDownload {
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
   int32 file_size_bytes = 3;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 4;
 }
 
 message RunQuery {
@@ -145,6 +163,7 @@ message RunQuery {
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
   string sql = 3;
   string error = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 message HandoffOpenSqlInStudio {
@@ -152,6 +171,7 @@ message HandoffOpenSqlInStudio {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message HandoffOpenSqlInCanvas {
@@ -159,6 +179,7 @@ message HandoffOpenSqlInCanvas {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message HandoffOpenModelInCatalog {
@@ -166,6 +187,7 @@ message HandoffOpenModelInCatalog {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 
 message Acknowledge2025LaunchTrialBanner {
@@ -173,5 +195,6 @@ message Acknowledge2025LaunchTrialBanner {
   option (v1.public.common.vortex_enabled) = true;
   v1.events.vortex.VortexMessageEnrichment enrichment = 1;
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 3;
 }
 

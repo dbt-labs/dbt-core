@@ -1,9 +1,12 @@
 use crate::args::ResolveArgs;
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::resolve::resolve_utils::build_unrendered_config;
 use crate::utils::{
     extract_resource_config_from_raw_project, get_node_fqn, get_original_file_path, get_unique_id,
 };
+use dbt_adapter_core::AdapterType;
 
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::path::DbtPath;
@@ -21,6 +24,7 @@ use dbt_schemas::schemas::manifest::semantic_model::{
     SemanticModelDefaults,
 };
 use dbt_schemas::schemas::project::SemanticModelConfig;
+use dbt_schemas::schemas::project::Tags;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::properties::metrics_properties::{AggregationType, PercentileType};
 use dbt_schemas::schemas::ref_and_source::DbtRef;
@@ -46,12 +50,13 @@ fn semantic_model_properties_config(model_props: &ModelProperties) -> Option<Sem
             enabled: Some(smc.enabled),
             group: smc.group.clone(),
             meta: smc.config.as_ref().and_then(|c| c.meta.clone()),
-            tags: None,
+            tags: Tags::default(),
         })
 }
 
 #[allow(clippy::too_many_arguments, clippy::expect_fun_call)]
 pub async fn resolve_semantic_models(
+    adapter_type: AdapterType,
     args: &ResolveArgs,
     package: &DbtPackage,
     root_package: &DbtPackage,
@@ -75,13 +80,17 @@ pub async fn resolve_semantic_models(
 
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
     let is_dependency = dependency_package_name.is_some();
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "semantic-models");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "semantic-models",
+        adapter_type,
+    )?;
     let raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "semantic-models",
-        ))
+            adapter_type,
+        )?)
     } else {
         None
     };
@@ -91,12 +100,14 @@ pub async fn resolve_semantic_models(
         is_dependency,
         || {
             init_project_config(
-                &args.io,
                 &package.dbt_project.semantic_models,
                 (),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                adapter_type,
             )
         },
+        adapter_type,
     )?;
 
     for (model_name, model_props) in typed_models_properties.iter() {
@@ -135,7 +146,6 @@ pub async fn resolve_semantic_models(
                 format!(
                     "Cannot find resolved model '{model_unique_id}' referenced by semantic_model in package '{package_name}'"
                 ),
-                args.io.status_reporter.as_ref(),
             );
             continue;
         };
@@ -159,8 +169,16 @@ pub async fn resolve_semantic_models(
 
         // Get combined config from project config and semantic_model config
         let properties_config = semantic_model_properties_config(model_props);
-        let semantic_model_config = config_resolver
+        let mut semantic_model_config = config_resolver
             .resolve_with_properties(&semantic_model_fqn, properties_config.as_ref());
+        // Same round-trip canonicalization as `canonicalize_semantic_entity`
+        if semantic_model_config
+            .meta
+            .as_ref()
+            .is_some_and(|m| m.is_empty())
+        {
+            semantic_model_config.meta = None;
+        }
         let is_enabled = semantic_model_config.enabled;
 
         let measures: Vec<SemanticMeasure> = model_props
@@ -252,7 +270,8 @@ pub async fn resolve_semantic_models(
             raw_properties_yml_config.as_ref(),
             None,
             false,
-        );
+            adapter_type,
+        )?;
 
         let dbt_semantic_model = DbtSemanticModel {
             __common_attr__: CommonAttributes {
@@ -277,13 +296,18 @@ pub async fn resolve_semantic_models(
                 language: None,
                 tags: semantic_model_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: Default::default(),
                 meta: semantic_model_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                // Not executed against a warehouse; records the target it parsed under.
+                adapter: adapter_type,
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 database: "".to_string(),
                 schema: "".to_string(),
                 alias: "".to_string(),
@@ -346,6 +370,15 @@ pub async fn resolve_semantic_models(
     Ok((semantic_models, disabled_semantic_models))
 }
 
+/// Canonicalize authored-empty entity fields to `None`.
+fn canonicalize_semantic_entity(mut entity: SemanticEntity) -> SemanticEntity {
+    entity.description = entity.description.filter(|d| !d.is_empty());
+    entity.config = entity
+        .config
+        .filter(|c| *c != SemanticLayerElementConfig::default());
+    entity
+}
+
 pub fn model_props_to_semantic_entities(model_props: ModelProperties) -> Vec<SemanticEntity> {
     let mut entities: Vec<SemanticEntity> = vec![];
 
@@ -379,7 +412,7 @@ pub fn model_props_to_semantic_entities(model_props: ModelProperties) -> Vec<Sem
                 role: None,
                 metadata: None,
             };
-            entities.push(semantic_entity);
+            entities.push(canonicalize_semantic_entity(semantic_entity));
         }
     }
 
@@ -400,7 +433,7 @@ pub fn model_props_to_semantic_entities(model_props: ModelProperties) -> Vec<Sem
             role: None,
             metadata: None,
         };
-        entities.push(semantic_entity);
+        entities.push(canonicalize_semantic_entity(semantic_entity));
     }
 
     entities

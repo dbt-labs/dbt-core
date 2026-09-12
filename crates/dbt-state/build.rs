@@ -13,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         proto_root.join("query_cache_protobuf/query_cache/services/client_telemetry_service.proto"),
         proto_root.join("query_cache_protobuf/query_cache/services/explain_service.proto"),
         proto_root.join("query_cache_protobuf/query_cache/services/health_service.proto"),
+        proto_root.join("query_cache_protobuf/query_cache/services/selector_service.proto"),
     ];
 
     println!("cargo:rerun-if-changed=build.rs");
@@ -22,6 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tonic_prost_build::configure()
         .build_server(false)
+        .boxed(".com.fivetran.query_cache.ExecutionRecord.input") // avoids a clippy warning about large enum variants
         .compile_protos(&proto_files, &[proto_root])?;
 
     Ok(())

@@ -1,6 +1,0 @@
-
-name: dbt_fdcs
-version: 1.0
-config-version: 2
-
-macro-paths: ["macros"]

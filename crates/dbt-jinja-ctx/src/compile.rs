@@ -7,9 +7,8 @@
 //!
 //! Two flavours:
 //! * [`CompileBaseCtx`] — the compile-time base, returned by
-//!   `build_compile_and_run_base_context`. Used as the foundation for every
-//!   per-node compile context (today's caller `.clone()`s it onto a per-node
-//!   overlay).
+//!   `build_compile_base_ctx`. Used as the foundation for every per-node
+//!   compile context (today's caller `.clone()`s it onto a per-node overlay).
 //! * [`CompileNodeCtx`] — the per-node overlay layered on top of
 //!   `CompileBaseCtx` when rendering each node's SQL. Adds `this`, the
 //!   per-node `model` map, the validated `ref`/`source`/`function`/`config`
@@ -34,7 +33,7 @@ use serde::Serialize;
 use crate::JinjaObject;
 use crate::objects::{DbtNamespace, DummyConfig, MacroLookupContext};
 
-/// Per-render compile-base context. Today's `build_compile_and_run_base_context`
+/// Per-render compile-base context. Today's `build_compile_base_ctx`
 /// populates this 1:1 — same field names, same key constants
 /// (`MACRO_DISPATCH_ORDER`, `TARGET_PACKAGE_NAME`).
 ///
@@ -42,11 +41,6 @@ use crate::objects::{DbtNamespace, DummyConfig, MacroLookupContext};
 /// `.clone()`s it and overlays per-node validations.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct CompileBaseCtx {
-    /// `{{ config(...) }}` — base-scope `DummyConfig` Object that absorbs
-    /// macro-time `config(...)` calls (overlaid per-node by
-    /// [`CompileNodeCtx::config`]).
-    pub config: JinjaObject<DummyConfig>,
-
     /// `{{ MACRO_DISPATCH_ORDER }}` — per-package dispatch order map. Same
     /// downcast contract as [`crate::ResolveBaseCtx::macro_dispatch_order`]:
     /// each value MUST be `MinijinjaValue::from(Vec<String>)` constructed at
@@ -122,6 +116,48 @@ pub struct CompileBaseCtx {
     pub dbt_namespaces: BTreeMap<String, JinjaObject<DbtNamespace>>,
 }
 
+/// Operation-scope render context (REPL, `run-operation`, pre-compile macro
+/// evaluation): a [`CompileBaseCtx`] plus a no-op `DummyConfig` to absorb
+/// `config(...)` calls where there is no node config. Node contexts carry
+/// their own validated `config`, so it lives here rather than on the base.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct OperationCtx {
+    #[serde(flatten)]
+    pub base: CompileBaseCtx,
+
+    /// `{{ config(...) }}` — no-op for macro renders without a current
+    /// node. Calling `config(...)` returns `""`; `config.get(...)` returns
+    /// `None`.
+    pub config: JinjaObject<DummyConfig>,
+}
+
+/// Render context for an ad-hoc SQL string in operation scope with a bound
+/// `{{ this }}` relation — e.g. a source's `loaded_at_query`. Layers
+/// [`OperationCtx`] (base + no-op `config`) with `this` plus its
+/// `database`/`schema`/`identifier` parts so the query can reference
+/// `{{ this }}`. Passed directly to `render_named_str`; no `BTreeMap`.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct CustomSqlRenderCtx {
+    #[serde(flatten)]
+    pub operation: OperationCtx,
+
+    /// `{{ this }}` — `RelationObject` Object bound for the rendered query.
+    /// Typed [`MinijinjaValue`] for the same reason as [`CompileNodeCtx::this`]:
+    /// the concrete `RelationObject` impl lives in `dbt-adapter` and is built
+    /// via `Value::from_object(...)`.
+    #[schemars(with = "serde_json::Value")]
+    pub this: MinijinjaValue,
+
+    /// `{{ database }}` — the relation's database.
+    pub database: String,
+
+    /// `{{ schema }}` — the relation's schema.
+    pub schema: String,
+
+    /// `{{ identifier }}` — the relation's identifier (alias).
+    pub identifier: String,
+}
+
 /// Per-node compile-time overlay layered onto [`CompileBaseCtx`] for each
 /// node SQL render. Today's `build_compile_node_context_inner<T>` populates
 /// this 1:1 — same field-key strings (including the underscore-decorated
@@ -132,9 +168,15 @@ pub struct CompileBaseCtx {
 /// overlays a `CompileNodeCtx` on top. Several keys (`config`, `ref`,
 /// `source`, `function`, `builtins`, `context`) are intentionally
 /// re-emitted on the overlay — they shadow the base entries with validated
-/// per-node variants. Today's code uses `BTreeMap::insert(...)` to overlay;
-/// after migration, callers `.extend(...)` the typed overlay onto the typed
-/// base before rendering.
+/// per-node variants.
+///
+/// The `base` field is the typed composition seam: when `Some`, the full
+/// context (base + per-node overlay) can be passed directly to
+/// `render_named_str<S: Serialize>` without a `BTreeMap` intermediate —
+/// per-node fields shadow the flattened base keys because they appear later
+/// in serde's field order. When `None` (today's path), the overlay is
+/// serialized alone via `to_jinja_btreemap` and `.extend()`-ed onto the
+/// caller's `base_context.clone()`.
 ///
 /// All Object-typed slots are typed [`MinijinjaValue`] for the same reasons
 /// as [`crate::ResolveModelCtx`]: their concrete impls live in
@@ -143,6 +185,13 @@ pub struct CompileBaseCtx {
 /// which downstream code downcasts.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct CompileNodeCtx {
+    /// Typed base context. `None` on today's BTreeMap-overlay path; `Some`
+    /// on the future typed-throughout path where this struct is passed
+    /// directly to `render_named_str`. Flattened so base keys appear at the
+    /// top level; per-node fields declared below shadow any shared keys.
+    #[serde(flatten)]
+    pub base: Option<CompileBaseCtx>,
+
     /// `{{ this }}` — `RelationObject` Object (or deferred-relation
     /// `RelationObject` for unsafe nodes with deferred state available).
     #[schemars(with = "serde_json::Value")]
@@ -191,10 +240,9 @@ pub struct CompileNodeCtx {
     #[schemars(with = "serde_json::Value")]
     pub builtins: MinijinjaValue,
 
-    /// `{{ model.* }}` — model dict serialized via
-    /// `convert_yml_to_value_map(model.serialize())` plus a `batch` entry
-    /// (today's parse-time stub uses London-1970 datetimes; replaced by the
-    /// real microbatch context at run time).
+    /// `{{ model.* }}` — mutable dict-compatible model object built from
+    /// `convert_yml_to_value_map(model.serialize())` plus a `batch` entry.
+    /// The run-time context replaces `batch` with the real microbatch context.
     #[schemars(with = "serde_json::Value")]
     pub model: MinijinjaValue,
 

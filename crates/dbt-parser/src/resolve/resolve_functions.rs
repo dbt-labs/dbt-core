@@ -12,7 +12,8 @@ use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
-use dbt_schemas::schemas::common::{Access, DbtQuoting};
+use dbt_schemas::dbt_utils::resolve_package_quoting;
+use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::project::FunctionConfig;
 use dbt_schemas::schemas::project::ResolvedConfig;
 use dbt_schemas::schemas::{AbsorbedOverload, DbtFunctionAttr};
@@ -28,11 +29,16 @@ use dbt_schemas::{
     },
     state::{DbtPackage, DbtRuntimeConfig, NodeResolverTracker},
 };
+use indexmap::IndexMap;
 use minijinja::MacroSpans;
 
-use crate::dbt_project_config::{ProjectConfigResolver, RootProjectConfigs, init_project_config};
+use crate::dbt_project_config::{
+    ProjectConfigResolver, RootProjectConfigs, disallow_plus_prefix_from_flags, init_project_config,
+};
 use crate::renderer::{RenderCtx, RenderCtxInner};
-use crate::resolve::resolve_utils::{build_unrendered_config, extract_config_map};
+use crate::resolve::resolve_utils::{
+    build_unrendered_config, extract_config_map, validate_node_adapter,
+};
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, parse_unrendered_config,
     update_node_relation_components,
@@ -68,11 +74,13 @@ pub async fn resolve_functions(
     function_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
-    adapter_type: AdapterType,
+    default_adapter: AdapterType,
+    adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     package_name: &str,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
+    root_runtime_config: Arc<DbtRuntimeConfig>,
     node_resolver: &mut NodeResolver,
     token: &CancellationToken,
 ) -> FsResult<(
@@ -88,12 +96,14 @@ pub async fn resolve_functions(
         dependency_package_name.is_some(),
         || {
             init_project_config(
-                &arg.io,
                 &package.dbt_project.functions,
-                package_quoting,
+                DbtQuoting::default(),
                 dependency_package_name,
+                disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                default_adapter,
             )
         },
+        default_adapter,
     )?
     .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
 
@@ -103,9 +113,11 @@ pub async fn resolve_functions(
             root_project_name: root_package.dbt_project.name.clone(),
             config_resolver,
             package_quoting,
+            uses_snapshot_fqn: false,
+            defer_render_errors_to_compile: false,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
-            adapter_type,
+            adapter_type: default_adapter,
             database: database.to_string(),
             schema: schema.to_string(),
             resource_paths: package
@@ -117,6 +129,7 @@ pub async fn resolve_functions(
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
+        root_runtime_config: root_runtime_config.clone(),
     };
 
     // Raw config sources for `unrendered_config`, mirroring resolve_models.rs. These preserve
@@ -125,13 +138,17 @@ pub async fn resolve_functions(
     // prerequisite — the Stage-1 wholesale comparison requires a fully populated
     // `unrendered_config`).
     let is_dependency = dependency_package_name.is_some();
-    let raw_local_project_config =
-        extract_resource_config_from_raw_project(&package.raw_project_yml, "functions");
+    let raw_local_project_config = extract_resource_config_from_raw_project(
+        &package.raw_project_yml,
+        "functions",
+        default_adapter,
+    )?;
     let raw_root_project_functions_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
             "functions",
-        ))
+            default_adapter,
+        )?)
     } else {
         None
     };
@@ -210,7 +227,7 @@ pub async fn resolve_functions(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
-        config: model_config,
+        config: mut model_config,
         raw_code,
         rendered_sql,
         macro_spans,
@@ -276,6 +293,20 @@ pub async fn resolve_functions(
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
 
         let unique_id = get_unique_id(function_name, package_name, None, "function");
+        // See `resolve_models`: the flag overrides the config. A function selects
+        // explicitly; it has no attached node to inherit from.
+        validate_node_adapter(model_config.adapter, &dbt_asset.path)?;
+        let resolved_node_adapter = arg.adapter_override.or(model_config.adapter);
+        // See `resolve_models`: both remaining quoting layers depend on which
+        // adapter the node runs on, which is only known after the config merge.
+        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
+        model_config.quoting = resolve_package_quoting(
+            Some(match adapter_quoting.get(&selected_adapter) {
+                Some(authored) => model_config.quoting.filled_from(authored),
+                None => model_config.quoting,
+            }),
+            selected_adapter,
+        );
         let static_analysis = model_config.static_analysis.clone();
         if let Some(spanned) = model_config.get_static_analysis() {
             let kind = spanned.into_inner();
@@ -286,14 +317,9 @@ pub async fn resolve_functions(
                         unique_id: unique_id.as_str(),
                     },
                     dependency_package_name,
-                    arg.io.status_reporter.as_ref(),
                 );
                 if dbt_asset.is_python() {
-                    crate::validation::warn_python_static_analysis(
-                        kind,
-                        unique_id.as_str(),
-                        arg.io.status_reporter.as_ref(),
-                    );
+                    crate::validation::warn_python_static_analysis(kind, unique_id.as_str());
                 }
             }
         }
@@ -325,7 +351,8 @@ pub async fn resolve_functions(
             raw_schema_yml_configs.get(function_name),
             raw_config_call_dict.as_ref(),
             false,
-        );
+            default_adapter,
+        )?;
 
         let properties = if let Some(properties) = maybe_properties {
             properties
@@ -363,22 +390,28 @@ pub async fn resolve_functions(
                 },
                 tags: model_config
                     .tags
+                    .inner()
                     .clone()
-                    .map(|tags| tags.into())
+                    .map(Into::into)
                     .unwrap_or_default(),
                 classifiers: Default::default(),
                 meta: model_config.meta.clone().unwrap_or_default(),
             },
             __base_attr__: NodeBaseAttributes {
+                adapter: selected_adapter,
+                // A function is not a relation, so there is nothing to bind into another
+                // platform's catalog: no `+propagate` config exists for this node type.
+                propagate: Vec::new(),
                 database: database.to_string(), // will be updated below
                 schema: schema.to_string(),     // will be updated below
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
-                materialized: dbt_schemas::schemas::common::DbtMaterialization::Function,
+                materialized: DbtMaterialization::Function,
                 static_analysis,
                 static_analysis_off_reason: None,
                 compute: None,
-                quoting: package_quoting
+                quoting: model_config
+                    .quoting
                     .try_into()
                     .expect("DbtQuoting should be set"),
                 quoting_ignore_case: false,
@@ -455,6 +488,8 @@ pub async fn resolve_functions(
                 entry_point: model_config.entry_point.clone(),
                 packages: model_config.packages.clone(),
                 snowflake: model_config.snowflake.clone(),
+                pre_hook: model_config.pre_hook.clone(),
+                post_hook: model_config.post_hook.clone(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),
@@ -475,14 +510,14 @@ pub async fn resolve_functions(
             package_name,
             base_ctx,
             &components,
-            adapter_type,
+            default_adapter,
         )?;
 
-        match node_resolver.insert_function(&function, adapter_type, status) {
+        match node_resolver.insert_function(&function, default_adapter, status) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
-                emit_error_log_from_fs_error(&err_with_loc, arg.io.status_reporter.as_ref());
+                emit_error_log_from_fs_error(err_with_loc);
             }
         }
 

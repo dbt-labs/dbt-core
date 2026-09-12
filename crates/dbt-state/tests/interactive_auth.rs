@@ -24,7 +24,7 @@ fn make_jwt(scope: &str) -> String {
     .unwrap()
 }
 
-#[tokio::test]
+#[dbt_runtime::test]
 async fn browser_flow_end_to_end_writes_token_to_disk_with_600_perms() {
     let server = MockServer::start().await;
     let scope = "runcache:scope:org:dev:admin";
@@ -83,6 +83,9 @@ async fn browser_flow_end_to_end_writes_token_to_disk_with_600_perms() {
                 reqwest::get(&cb).await.ok();
             });
         }),
+        // The `opener` above simulates a browser completing the redirect, so
+        // this should run regardless of whether the test runner has a TTY.
+        available: true,
     });
 
     // Empty chain so AuthChain::resolve() deterministically returns

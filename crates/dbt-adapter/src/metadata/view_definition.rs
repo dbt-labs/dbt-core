@@ -4,6 +4,8 @@
 //! `fetch_view_definitions` returns. Recursive traversal that parses these
 //! definitions to discover upstream references is performed by callers.
 
+use std::collections::BTreeSet;
+
 use dbt_adapter_core::AdapterType;
 
 /// A single fetched view definition.
@@ -24,4 +26,14 @@ pub struct ViewDefinition {
 
     /// Schema used to qualify any unqualified references inside `definition`.
     pub default_schema: String,
+}
+
+/// Result of fetching view definitions for a batch of relations.
+#[derive(Debug, Clone, Default)]
+pub struct ViewDefinitionFetchResult {
+    /// Definitions fetched for inputs that are views.
+    pub definitions: Vec<ViewDefinition>,
+
+    /// Fully-qualified relation names whose view definition could not be fetched.
+    pub unresolvable: BTreeSet<String>,
 }

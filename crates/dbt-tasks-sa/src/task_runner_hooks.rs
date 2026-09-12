@@ -117,9 +117,16 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
     async fn did_collect_all_run_task_results(
         &self,
         _run_task_args: &RunTasksArgs,
-        _ctx: &mut TaskRunnerCtx,
+        ctx: &mut TaskRunnerCtx,
+        token: &CancellationToken,
     ) {
-        // No-op
+        if ctx.inner.run_cache_ctx.run_cache_service_requested {
+            dbt_tasks_core::run_cache::run_cache_service::run_cache_service_after_run(
+                ctx,
+                token.is_cancelled(),
+            )
+            .await;
+        }
     }
 
     async fn will_visit_taskgraph(
@@ -129,9 +136,13 @@ impl TaskRunnerHooks for DefaultTaskRunnerHooks {
         _has_dynamic_closure: bool,
         _on_run_start_sqls: &[String],
         _graph: &Graph<Arc<dyn Task>, ()>,
-        _ctx: &mut TaskRunnerCtx,
+        ctx: &mut TaskRunnerCtx,
         _token: &CancellationToken,
     ) -> FsResult<()> {
+        if ctx.inner.run_cache_ctx.run_cache_service_requested {
+            dbt_tasks_core::run_cache::run_cache_service::run_cache_service_start_telemetry(ctx)
+                .await;
+        }
         Ok(())
     }
 

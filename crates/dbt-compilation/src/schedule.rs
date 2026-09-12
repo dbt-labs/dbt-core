@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use dbt_common::io_utils::YML_EXT;
+use dbt_common::node_selector::IndirectSelection;
 use dbt_common::path::DbtPath;
 use dbt_schemas::state::CacheState;
 
@@ -10,6 +11,12 @@ pub struct DbtCustomScheduleDescription {
     pub unique_ids: Vec<String>,
     pub include_parents: bool,
     pub include_children: bool,
+    /// Indirect selection mode used when expanding the atoms built from
+    /// `unique_ids`. This controls whether nodes that indirectly attach to the
+    /// selected nodes (e.g. tests) are pulled into the schedule. Callers set this
+    /// to reflect the semantics they want (e.g. `Empty` when the originating
+    /// command does not execute tests).
+    pub indirect_selection: IndirectSelection,
 }
 
 pub enum DbtScheduleDescription<'a> {

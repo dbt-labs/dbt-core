@@ -1,12 +1,12 @@
 use crate::{CodeLocationWithFile, fs_err};
 use dbt_error::ErrorCode;
-use dbt_telemetry::LogMessage;
 use dbt_tracing::{SeverityNumber, TelemetryOutputFlags};
 use std::panic::Location;
 
 use crate::tracing::dbt_init::create_tracing_subcriber_with_layer;
 use crate::tracing::{
     dbt_emit::{emit_error_log_from_fs_error, emit_error_log_message, emit_warn_log_message},
+    fs_error_log::get_log_message,
     layer::{ConsumerLayer, MiddlewareLayer},
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
 };
@@ -44,10 +44,10 @@ fn test_convenience_log_message_functions() {
         .entered();
 
         error_location = Location::caller();
-        emit_error_log_message(ErrorCode::Generic, "Test error log message", None);
+        emit_error_log_message(ErrorCode::Generic, "Test error log message");
 
         warn_location = Location::caller();
-        emit_warn_log_message(ErrorCode::AccessDenied, "Test warn log message", None);
+        emit_warn_log_message(ErrorCode::AccessDenied, "Test warn log message");
     });
 
     let log_records = {
@@ -70,7 +70,7 @@ fn test_convenience_log_message_functions() {
         .expect("Should find error log message");
     assert_eq!(error_event.severity_number, SeverityNumber::Error);
     assert_eq!(error_event.severity_text, "ERROR");
-    if let Some(lm) = error_event.attributes.downcast_ref::<LogMessage>() {
+    if let Some(lm) = get_log_message(&error_event.attributes) {
         assert_eq!(
             lm.code,
             Some(ErrorCode::Generic as u32),
@@ -98,7 +98,7 @@ fn test_convenience_log_message_functions() {
         .expect("Should find warn log message");
     assert_eq!(warn_event.severity_number, SeverityNumber::Warn);
     assert_eq!(warn_event.severity_text, "WARN");
-    if let Some(lm) = warn_event.attributes.downcast_ref::<LogMessage>() {
+    if let Some(lm) = get_log_message(&warn_event.attributes) {
         assert_eq!(
             lm.code,
             Some(ErrorCode::AccessDenied as u32),
@@ -148,7 +148,7 @@ fn test_emit_error_log_from_fs_error_md_reports_warning() {
 
         let err = fs_err!(ErrorCode::MacroSyntaxInvalid, "md parse error")
             .with_location(CodeLocationWithFile::new(1, 1, 0, "models/README.md"));
-        emit_error_log_from_fs_error(&err, None);
+        emit_error_log_from_fs_error(err);
     });
 
     let log_records = {
@@ -164,7 +164,7 @@ fn test_emit_error_log_from_fs_error_md_reports_warning() {
         record.body.contains("md parse error"),
         "Expected body to contain error message"
     );
-    let log_attrs = record.attributes.downcast_ref::<LogMessage>().unwrap();
+    let log_attrs = get_log_message(&record.attributes).unwrap();
     assert_eq!(log_attrs.relative_path.as_deref(), Some("models/README.md"));
 }
 
@@ -196,7 +196,7 @@ fn test_emit_error_log_from_fs_error_sql_reports_error() {
 
         let err = fs_err!(ErrorCode::MacroSyntaxInvalid, "sql parse error")
             .with_location(CodeLocationWithFile::new(1, 1, 0, "models/view.sql"));
-        emit_error_log_from_fs_error(&err, None);
+        emit_error_log_from_fs_error(err);
     });
 
     let log_records = {
@@ -212,6 +212,6 @@ fn test_emit_error_log_from_fs_error_sql_reports_error() {
         record.body.contains("sql parse error"),
         "Expected body to contain error message"
     );
-    let log_attrs = record.attributes.downcast_ref::<LogMessage>().unwrap();
+    let log_attrs = get_log_message(&record.attributes).unwrap();
     assert_eq!(log_attrs.relative_path.as_deref(), Some("models/view.sql"));
 }

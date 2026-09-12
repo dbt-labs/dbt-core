@@ -20,7 +20,7 @@
         {%- if catalog_relation.catalog_type == 'BUILT_IN' %}
             {% do exceptions.raise_compiler_error('Iceberg is incompatible with Python models. Please use a SQL model for the iceberg format.') %}
         {%- else -%}
-            {{ py_write_table(compiled_code, relation) }}
+            {{ py_write_table(compiled_code, relation, temporary) }}
         {%- endif %}
 
     {%- else -%}
@@ -234,7 +234,7 @@ create or replace iceberg table {{ relation }}
     {%- endif %}
     {{ optional('external_volume', catalog_relation.external_volume, "'") }}
     catalog = 'SNOWFLAKE'  -- required, and always SNOWFLAKE for built-in Iceberg tables
-    base_location = '{{ catalog_relation.base_location }}'
+    {{ optional('base_location', catalog_relation.base_location, "'") }}
     {% if partition_by_string -%} partition by ({{ partition_by_string }}) {%- endif %}
     {{ optional('storage_serialization_policy', catalog_relation.storage_serialization_policy, "'")}}
     {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
@@ -460,11 +460,13 @@ insert into {{ glue_relation }}
 {%- endmacro %}
 
 
-{% macro py_write_table(compiled_code, target_relation) %}
+{% macro py_write_table(compiled_code, target_relation, temporary=False) %}
 
 {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
 
-{% if catalog_relation.is_transient %}
+{% if temporary %}
+    {%- set table_type='temporary' -%}
+{% elif catalog_relation.is_transient %}
     {%- set table_type='transient' -%}
 {% endif %}
 

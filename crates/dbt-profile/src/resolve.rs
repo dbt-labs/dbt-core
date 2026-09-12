@@ -8,6 +8,7 @@ use minijinja::listener::RenderingEventListener;
 use regex::Regex;
 use serde::Serialize;
 
+use crate::adapters::{AdapterConnections, parse_target_connections};
 use crate::error::{ProfileError, Result};
 use crate::jinja::{ProfileContext, profile_environment};
 
@@ -58,11 +59,6 @@ pub struct ResolveArgs {
     /// If unset, uses the profile's `target:` field, defaulting to `"default"`.
     pub target: Option<String>,
 
-    /// Explicit output to use for the alternate compute target (equivalent to
-    /// `--x-alt-target` / `DBT_X_ALT_TARGET`). If unset, uses the
-    /// profile's `x_alt_target:` field; absent means no compute output.
-    pub x_alt_target: Option<String>,
-
     /// Variables to inject into the Jinja context as `var(...)`.
     /// Equivalent to `--vars '{"key": "value"}'`.
     pub vars: BTreeMap<String, dbt_yaml::Value>,
@@ -79,11 +75,18 @@ pub struct ResolvedProfile {
     pub adapter_type: String,
     /// The rendered target output as a YAML mapping — the source of truth for
     /// connection configuration. Flows directly to `AdapterConfig` / `dbt-auth`.
+    ///
+    /// This is the *default* adapter's config. When the target declares several
+    /// adapters, read [`Self::adapters`] to reach the others.
     pub credentials: dbt_yaml::Mapping,
-    /// The rendered `x_alt_target` output, if one is configured — the
-    /// connection config for the alternate compute target. `None` when the
-    /// profile declares no compute output.
-    pub alt_target_credentials: Option<dbt_yaml::Mapping>,
+    /// Every adapter the target declares, in declaration order, keyed by adapter
+    /// type, each with its connections. A target using the legacy
+    /// single-adapter shape yields one entry with one connection, so callers
+    /// never branch on the `profiles.yml` shape.
+    ///
+    /// This is where non-default adapters — including an alternate compute
+    /// target — are reached. There is no separate field for them.
+    pub adapters: Vec<AdapterConnections>,
     /// Path to the `profiles.yml` file that was loaded.
     pub profile_path: PathBuf,
 }
@@ -91,6 +94,33 @@ pub struct ResolvedProfile {
 impl ResolvedProfile {
     pub fn get_str(&self, key: &str) -> Option<&str> {
         self.credentials.get(key).and_then(|v| v.as_str())
+    }
+
+    /// The adapter a node's `+adapter` config selects, if the target declares it.
+    pub fn adapter_by_type(&self, adapter_type: &str) -> Option<&AdapterConnections> {
+        self.adapters
+            .iter()
+            .find(|a| a.adapter_type.eq_ignore_ascii_case(adapter_type))
+    }
+
+    /// The target's default adapter — the one used by nodes that select none.
+    ///
+    /// The adapter holding the connection marked `default: true`, which is why the
+    /// marker is resolved target-wide rather than per adapter.
+    pub fn default_adapter(&self) -> &AdapterConnections {
+        self.adapters
+            .iter()
+            .find(|a| a.connections.iter().any(|c| c.is_default))
+            .expect("a resolved profile always has exactly one default connection")
+    }
+
+    /// The adapters a node may select *other* than the default, in declaration
+    /// order.
+    pub fn non_default_adapters(&self) -> impl Iterator<Item = &AdapterConnections> {
+        let default = self.default_adapter().adapter_type.clone();
+        self.adapters
+            .iter()
+            .filter(move |a| a.adapter_type != default)
     }
 
     pub fn database(&self) -> Option<&str> {
@@ -133,13 +163,7 @@ pub fn resolve(args: &ResolveArgs) -> Result<ResolvedProfile> {
     let profile_path = find_profiles_path(args.profiles_dir.as_deref())?;
     let profile_name = resolve_profile_name(args)?;
 
-    resolve_with_env_ext(
-        &penv,
-        &profile_path,
-        &profile_name,
-        args.target.as_deref(),
-        args.x_alt_target.as_deref(),
-    )
+    resolve_with_env(&penv, &profile_path, &profile_name, args.target.as_deref())
 }
 
 /// Resolve a profile using an externally-provided [`ProfileEnvironment`].
@@ -148,18 +172,6 @@ pub fn resolve_with_env(
     profile_path: &Path,
     profile_name: &str,
     target_override: Option<&str>,
-) -> Result<ResolvedProfile> {
-    resolve_with_env_ext(penv, profile_path, profile_name, target_override, None)
-}
-
-/// Like [`resolve_with_env`], but also resolves the `x_alt_target` output
-/// (for the alternate compute target) into `alt_target_credentials`.
-pub fn resolve_with_env_ext(
-    penv: &ProfileEnvironment,
-    profile_path: &Path,
-    profile_name: &str,
-    target_override: Option<&str>,
-    x_alt_target_override: Option<&str>,
 ) -> Result<ResolvedProfile> {
     let raw_yaml = std::fs::read_to_string(profile_path)?;
     let sanitized = sanitize_yml(&raw_yaml);
@@ -203,68 +215,28 @@ pub fn resolve_with_env_ext(
             target: target_name.clone(),
         })?;
 
-    let credentials = render_target(target_raw, penv)?;
+    // Both `profiles.yml` shapes collapse to the same structure here; the legacy
+    // single-adapter mapping yields one adapter with one connection, so
+    // `credentials` and `adapter_type` below keep their existing meaning for every
+    // caller.
+    let adapters = parse_target_connections(profile_name, &target_name, target_raw, penv)?;
 
-    let adapter_type = credentials
-        .get("type")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_owned())
-        .ok_or(ProfileError::NoAdapterType)?;
+    let default_adapter = adapters
+        .iter()
+        .find(|a| a.connections.iter().any(|c| c.is_default))
+        .expect("parse_target_connections guarantees exactly one default connection");
 
-    // Resolve the optional alternate compute target output.
-    let alt_target_credentials =
-        match resolve_x_alt_target(x_alt_target_override, profile_val, penv)? {
-            Some(compute_target) => {
-                let raw =
-                    outputs
-                        .get(&compute_target)
-                        .ok_or_else(|| ProfileError::TargetMissing {
-                            profile: profile_name.to_owned(),
-                            target: compute_target,
-                        })?;
-                Some(render_target(raw, penv)?)
-            }
-            None => None,
-        };
+    let credentials = default_adapter.default_connection().credentials.clone();
+    let adapter_type = default_adapter.adapter_type.clone();
 
     Ok(ResolvedProfile {
         profile_name: profile_name.to_owned(),
         target_name,
         adapter_type,
         credentials,
-        alt_target_credentials,
+        adapters,
         profile_path: profile_path.to_path_buf(),
     })
-}
-
-/// Resolve the compute output name from overrides, `DBT_X_ALT_TARGET`, or
-/// the profile's `x_alt_target:` field (which may contain Jinja). Unlike
-/// `target`, there is no default: `None` means the profile has no compute output.
-fn resolve_x_alt_target(
-    override_name: Option<&str>,
-    profile_val: &dbt_yaml::Value,
-    penv: &ProfileEnvironment,
-) -> Result<Option<String>> {
-    if let Some(t) = override_name {
-        return Ok(Some(t.to_owned()));
-    }
-    if let Some(t) = std::env::var("DBT_X_ALT_TARGET")
-        .ok()
-        .filter(|s| !s.is_empty())
-    {
-        return Ok(Some(t));
-    }
-    let Some(raw_str) = profile_val.get("x_alt_target").and_then(|v| v.as_str()) else {
-        return Ok(None);
-    };
-    if raw_str.contains("{{") || raw_str.contains("{%") {
-        let rendered = penv
-            .env
-            .render_str(raw_str, &penv.ctx, &[])
-            .map_err(ProfileError::Jinja)?;
-        return Ok(Some(rendered));
-    }
-    Ok(Some(raw_str.to_owned()))
 }
 
 // ---------------------------------------------------------------------------

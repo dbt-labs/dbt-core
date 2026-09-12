@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::compiler::tokens::{Span, Token};
 use crate::error::{Error, ErrorKind};
-use crate::listener::TokenizerEventListener;
+use crate::listener::{BlockNameKind, TokenizerEventListener};
 use crate::syntax::SyntaxConfig;
 use crate::utils::{memchr, memstr, unescape};
 
@@ -390,6 +390,12 @@ impl<'s> Tokenizer<'s> {
     fn notify_source_listeners(&self, rv: &(Token<'s>, Span)) {
         for listener in &self.source_listeners {
             listener.on_source_token(&rv.0, &rv.1);
+        }
+    }
+
+    pub fn notify_malformed_block_name(&self, kind: BlockNameKind, name: &str, span: &Span) {
+        for listener in &self.source_listeners {
+            listener.on_malformed_block_name(kind, name, span);
         }
     }
 

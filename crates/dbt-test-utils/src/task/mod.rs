@@ -92,11 +92,11 @@ pub use task_seq::{CommandFn, FeatureStackFactory, TaskSeq, fs_cmd_vec};
 
 // Public tasks.
 pub use artifact_validation::ArtifactComparisonTask;
-pub use assertions::{AssertDirExistsTask, AssertFileContainsTask, AssertFileExistsTask};
+pub use assertions::{AssertDirExistsTask, AssertFileExistsTask, assert_file_contains};
 pub use check_compiled::CheckCompiledFiles;
 pub use check_publication::CheckPublicationArtifact;
 pub use dbt::DbtRecordTask;
-pub use io::{CpFromTargetTask, FileWriteTask, RmDirTask, RmTask, SedTask};
+pub use io::{CpFromTargetTask, FileWriteTask, RmDirTask, SedTask};
 pub use log_capture::{ExecuteAndCaptureLogs, JsonLogEvent};
 pub use manifest_capture::CaptureDbtManifest;
 pub use manifest_capture::CompareDbtManifest;
@@ -114,7 +114,7 @@ pub use tasks::{
 pub use dir_manifest::{CompareDirManifest, assert_golden_manifest, compute_dir_manifest};
 
 // File golden comparison
-pub use file_golden::CompareFileGolden;
+pub use file_golden::compare_file_golden;
 
 use async_trait::async_trait;
 

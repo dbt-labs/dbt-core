@@ -4,15 +4,17 @@ use crate::macro_exec::execute_macro;
 use crate::relation::{RelationObject, create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::time_machine::{
-    args_fetch_view_definitions, args_freshness, args_list_relations_in_parallel,
-    args_list_relations_schemas, args_list_relations_schemas_by_patterns, args_list_udfs,
-    with_time_machine_metadata_wrapper,
+    args_fetch_view_definitions, args_freshness, args_freshness_all_in_schema,
+    args_list_relations_in_parallel, args_list_relations_schemas,
+    args_list_relations_schemas_by_patterns, args_list_udfs, with_time_machine_metadata_wrapper,
 };
 use crate::{AdapterEngine, metadata::*};
 
 use arrow::array::RecordBatch;
 use dbt_adapter_core::ExecutionPhase;
+use dbt_common::ErrorCode;
 use dbt_common::cancellation::{Cancellable, CancellationToken};
+use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
@@ -27,9 +29,22 @@ use std::sync::Arc;
 
 // XXX: we should unify relation representation as Arrow schemas across the codebase
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MetadataQueryOptions {
     pub warehouse: Option<String>,
+    /// Whether the adaptive broad-vs-sequential freshness prefetch is enabled.
+    /// Only the Snowflake no-metadata-warehouse strategy consults it; other
+    /// adapters ignore it. Defaults to `true` (adaptive on).
+    pub adaptive_metadata_fetch: bool,
+}
+
+impl Default for MetadataQueryOptions {
+    fn default() -> Self {
+        Self {
+            warehouse: None,
+            adaptive_metadata_fetch: true,
+        }
+    }
 }
 
 /// `(parent, child)` pair for the relation cache dependency graph.
@@ -38,26 +53,10 @@ pub type ParentChildPair = (Arc<dyn BaseRelation>, Arc<dyn BaseRelation>);
 
 /// Adapter that supports metadata query.
 ///
-/// # Recording Pattern
-///
 /// Methods that perform I/O follow the `*_inner` pattern for transparent recording:
-/// - Implementers override `*_inner` methods with the actual implementation
-/// - Public methods are provided by the trait and wrap `_inner` with recording
-/// - Call sites use the public methods and don't need to know about recording
-///
-/// Example:
-/// ```ignore
-/// impl MetadataAdapter for MyAdapter {
-///     fn list_relations_schemas_inner(
-///         &self,
-///         unique_id: Option<String>,
-///         phase: Option<ExecutionPhase>,
-///         relations: &[Arc<dyn BaseRelation>],
-///     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
-///         // Actual implementation here
-///     }
-/// }
-/// ```
+/// implementers override the `*_inner` methods with the real implementation, the trait's
+/// public methods wrap those with recording, and call sites just use the public methods
+/// without needing to know recording is happening.
 pub trait MetadataAdapter: Send + Sync {
     /// The adapter type backing this metadata adapter (Snowflake, BigQuery, ...).
     /// Used by callers (e.g. `ViewDefinitionTraverser`) that need to construct
@@ -75,7 +74,6 @@ pub trait MetadataAdapter: Send + Sync {
         _: Arc<RecordBatch>,
     ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>>;
 
-    /// Check if the returned error is due to insufficient permissions.
     #[allow(unused_variables)]
     fn is_permission_error(&self, e: &AdapterError) -> bool {
         #[cfg(debug_assertions)]
@@ -187,6 +185,7 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
+        item_span_operation_id: Option<&str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>>;
 
@@ -199,6 +198,7 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
+        item_span_operation_id: Option<&'a str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let caller_id = unique_id.clone().unwrap_or_else(|| "global".to_string());
@@ -210,7 +210,13 @@ pub trait MetadataAdapter: Send + Sync {
                 phase.map(|p| p.as_str().to_string()),
                 relations.iter().map(|r| r.semantic_fqn()),
             ),
-            self.list_relations_schemas_inner(unique_id, phase, relations, token),
+            self.list_relations_schemas_inner(
+                unique_id,
+                phase,
+                relations,
+                item_span_operation_id,
+                token,
+            ),
         )
     }
 
@@ -223,10 +229,11 @@ pub trait MetadataAdapter: Send + Sync {
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
+        item_span_operation_id: Option<&'a str>,
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<SdfSchema>>> {
         let future = async move {
-            self.list_relations_schemas(unique_id, phase, relations, token)
+            self.list_relations_schemas(unique_id, phase, relations, item_span_operation_id, token)
                 .await
                 .map(|map| {
                     map.into_iter()
@@ -297,7 +304,7 @@ pub trait MetadataAdapter: Send + Sync {
         with_time_machine_metadata_wrapper(
             "global",
             "freshness",
-            args_freshness(relations.iter().map(|r| r.semantic_fqn())),
+            args_freshness(relations.iter().map(|r| r.semantic_fqn()), None),
             self.freshness_inner(relations, token),
         )
     }
@@ -342,35 +349,23 @@ pub trait MetadataAdapter: Send + Sync {
         self.freshness_with_overrides(relations, overrides, token)
     }
 
-    /// Fetch freshness for **all** tables in the given schema without
-    /// per-table filtering.
+    /// Fetch freshness for all tables in the given schema without per-table filtering.
     ///
     /// This mirrors the plugin's
     /// `_fetch_last_modified_epochs_from_schemas_in_catalog` which uses a
     /// `table_schema IN (...)` filter rather than per-table predicates.  For
     /// large projects the per-table OR-predicate on `INFORMATION_SCHEMA.TABLES`
     /// can be slower than a plain schema dump; adapters that have validated
-    /// this approach should override this method.
-    ///
-    /// The default implementation returns an empty map, signalling to the
-    /// caller that it should fall back to `freshness_with_overrides_and_options`.
-    /// Fetch freshness for **all** tables in the given schema without
-    /// per-table filtering.
-    ///
-    /// This mirrors the plugin's
-    /// `_fetch_last_modified_epochs_from_schemas_in_catalog` which uses a
-    /// `table_schema IN (...)` filter rather than per-table predicates.  For
-    /// large projects the per-table OR-predicate on `INFORMATION_SCHEMA.TABLES`
-    /// can be slower than a plain schema dump; adapters that have validated
-    /// this approach should override this method.
+    /// this approach override this method (and `supports_bulk_freshness_dump`).
     ///
     /// `relations` is the subset of input relations in this (database, schema)
     /// group; adapters use `find_matching_relation` on the dump results to key
     /// the returned map by the same semantic FQN as `relation.semantic_fqn()`.
     ///
-    /// The default implementation returns an empty map, signalling to the
-    /// caller that it should fall back to `freshness_with_overrides_and_options`.
-    fn freshness_all_in_schema<'a>(
+    /// The default implementation returns an empty map; it is only reached by
+    /// adapters that do not implement a bulk dump, which never route through this
+    /// method (see `supports_bulk_freshness_dump`).
+    fn freshness_all_in_schema_inner<'a>(
         &'a self,
         _database: &'a str,
         _schema: &'a str,
@@ -379,6 +374,96 @@ pub trait MetadataAdapter: Send + Sync {
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
         Box::pin(async move { Ok(BTreeMap::new()) })
+    }
+
+    fn freshness_all_in_schema<'a>(
+        &'a self,
+        database: &'a str,
+        schema: &'a str,
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        with_time_machine_metadata_wrapper(
+            "global",
+            "freshness_all_in_schema",
+            args_freshness_all_in_schema(
+                database,
+                schema,
+                relations.iter().map(|r| r.semantic_fqn()),
+                options.warehouse.clone(),
+            ),
+            self.freshness_all_in_schema_inner(database, schema, relations, options, token),
+        )
+    }
+
+    /// Whether this adapter implements a bulk per-schema freshness dump
+    /// (`freshness_all_in_schema`).
+    ///
+    /// Governs which single path `freshness_all_in_schemas` takes: `true` →
+    /// per-schema dumps; `false` → the per-table bulk query. An adapter uses
+    /// exactly the one path it supports. Must be `true` for exactly the adapters
+    /// that override `freshness_all_in_schema`.
+    fn supports_bulk_freshness_dump(&self) -> bool {
+        false
+    }
+
+    /// Fetch freshness for the given relations using the adapter's bulk strategy.
+    ///
+    /// This is *the* freshness-prefetch entry point: the run-cache orchestration
+    /// hands over all non-override relations (which may span several databases
+    /// and schemas) and lets the adapter bulk-load their freshness in as few
+    /// queries as it can. The returned map is keyed by `relation.semantic_fqn()`;
+    /// relations whose freshness the bulk query did not return are simply absent
+    /// (the caller caches them as unknown). Prefetch is strictly a bulk load: any
+    /// relation the bulk query does not cover is resolved by the per-node path at
+    /// submit time, not re-queried per-relation here.
+    ///
+    /// The default implementation dispatches on `supports_bulk_freshness_dump`:
+    /// adapters with a bulk dump group by resolved `(database, schema)` and issue
+    /// one `freshness_all_in_schema` dump per group (fail-open per group); adapters
+    /// without one use the batched per-table `freshness_with_overrides_and_options`.
+    /// Adapters with a warehouse-specific strategy (Snowflake) override this method.
+    ///
+    /// Grouping uses each relation's *resolved* (normalized-if-unquoted)
+    /// database/schema so that, e.g., Snowflake's uppercase folding lines up with
+    /// the `WHERE table_schema = '...'` clause `freshness_all_in_schema` builds.
+    fn freshness_all_in_schemas<'a>(
+        &'a self,
+        relations: &'a [Arc<dyn BaseRelation>],
+        options: &'a MetadataQueryOptions,
+        token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+        Box::pin(async move {
+            if !self.supports_bulk_freshness_dump() {
+                // No bulk per-schema dump — the per-table bulk query (one batched
+                // statement) is this adapter's bulk path.
+                let no_overrides = BTreeMap::new();
+                return self
+                    .freshness_with_overrides_and_options(relations, &no_overrides, options, token)
+                    .await;
+            }
+
+            let mut groups: BTreeMap<(String, String), Vec<Arc<dyn BaseRelation>>> =
+                BTreeMap::new();
+            for relation in relations {
+                let database = relation.database_as_resolved_str().unwrap_or_default();
+                let schema = relation.schema_as_resolved_str().unwrap_or_default();
+                groups
+                    .entry((database, schema))
+                    .or_default()
+                    .push(Arc::clone(relation));
+            }
+
+            let mut result: BTreeMap<String, MetadataFreshness> = BTreeMap::new();
+            for ((database, schema), group) in groups {
+                result.extend(
+                    freshness_group_dump(self, &database, &schema, &group, options, token.clone())
+                        .await?,
+                );
+            }
+            Ok(result)
+        })
     }
 
     /// Check whether each relation exists, keyed by semantic FQN.
@@ -446,9 +531,6 @@ pub trait MetadataAdapter: Send + Sync {
     ///
     /// Override this method with your adapter's implementation.
     /// Call `list_relations_in_parallel` for the recorded version.
-    ///
-    /// # Arguments
-    /// * `db_schemas` - List of (catalog, schema) pairs to discover relations in
     fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
@@ -459,9 +541,6 @@ pub trait MetadataAdapter: Send + Sync {
     ///
     /// This is a provided method that wraps `list_relations_in_parallel_inner`
     /// with time machine recording.
-    ///
-    /// # Arguments
-    /// * `db_schemas` - List of (catalog, schema) pairs to discover relations in
     fn list_relations_in_parallel<'a>(
         &'a self,
         db_schemas: &'a [CatalogAndSchema],
@@ -484,8 +563,10 @@ pub trait MetadataAdapter: Send + Sync {
     /// Implementations are responsible for:
     /// - Issuing a single (or minimal-count) database query for the entire batch.
     /// - Returning a `ViewDefinition` for each input that *is* a view.
-    /// - Omitting tables, missing objects, and permission failures from the
-    ///   result. The orchestrator caches those omissions so they are not re-fetched.
+    /// - Reporting unresolvable views separately from ordinary tables, so
+    ///   callers can treat their freshness metadata conservatively.
+    /// - Omitting ordinary tables from the result. The orchestrator caches
+    ///   those omissions so they are not re-fetched.
     ///
     /// This method must be safe to call concurrently from multiple async tasks;
     /// each call acquires its own connection via the engine's connection factory.
@@ -496,7 +577,7 @@ pub trait MetadataAdapter: Send + Sync {
         &'a self,
         _relations: &'a [Arc<dyn BaseRelation>],
         _token: CancellationToken,
-    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+    ) -> AsyncAdapterResult<'a, ViewDefinitionFetchResult> {
         Box::pin(async {
             Err(Cancellable::Error(AdapterError::new(
                 AdapterErrorKind::NotSupported,
@@ -513,7 +594,7 @@ pub trait MetadataAdapter: Send + Sync {
         &'a self,
         relations: &'a [Arc<dyn BaseRelation>],
         token: CancellationToken,
-    ) -> AsyncAdapterResult<'a, Vec<ViewDefinition>> {
+    ) -> AsyncAdapterResult<'a, ViewDefinitionFetchResult> {
         with_time_machine_metadata_wrapper(
             "global",
             "fetch_view_definitions",
@@ -530,6 +611,50 @@ pub trait MetadataAdapter: Send + Sync {
         _token: CancellationToken,
     ) -> AsyncAdapterResult<'a, Vec<ParentChildPair>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+/// Fetch freshness for one already-grouped `(database, schema)` set of relations
+/// via [`MetadataAdapter::freshness_all_in_schema`], with per-group fail-open.
+///
+/// Ordinary dump failures return an empty map so a single bad schema never aborts
+/// the prefetch. ReplayDataMissing is propagated so callers can fall back to a
+/// legacy replay event. An empty result means "unknown freshness" for the group;
+/// uncovered relations are resolved by the per-node path at submit time.
+pub(crate) async fn freshness_group_dump<A: MetadataAdapter + ?Sized>(
+    adapter: &A,
+    database: &str,
+    schema: &str,
+    relations: &[Arc<dyn BaseRelation>],
+    options: &MetadataQueryOptions,
+    token: CancellationToken,
+) -> Result<BTreeMap<String, MetadataFreshness>, Cancellable<AdapterError>> {
+    match adapter
+        .freshness_all_in_schema(database, schema, relations, options, token)
+        .await
+    {
+        Ok(dump) => Ok(dump),
+        Err(Cancellable::Error(err)) if err.kind() == AdapterErrorKind::ReplayDataMissing => {
+            Err(Cancellable::Error(err))
+        }
+        Err(Cancellable::Cancelled) => Err(Cancellable::Cancelled),
+        // A cancelled join/query can surface as `Cancellable::Error` with kind
+        // `Cancelled` instead of `Cancellable::Cancelled` — treat it the same
+        // way so cancellation always stops the run instead of fail-opening.
+        Err(Cancellable::Error(err)) if err.kind() == AdapterErrorKind::Cancelled => {
+            Err(Cancellable::Error(err))
+        }
+        Err(Cancellable::Error(err)) => {
+            emit_warn_log_message(
+                ErrorCode::StateServiceWarn,
+                format!(
+                    "dbt State schema-level freshness dump failed for {database}.{schema}: {err}; \
+                     omitting freshness for {} relations",
+                    relations.len()
+                ),
+            );
+            Ok(BTreeMap::new())
+        }
     }
 }
 
@@ -589,4 +714,259 @@ pub fn flatten_catalog_schemas(
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::time_machine::{
+        EventReplayer, MetadataCallArgs, RecordedEvent, get_or_init_recording,
+        get_or_init_replayer, reset_time_machine_globals,
+    };
+    use chrono::{TimeZone, Utc};
+    use dbt_schemas::schemas::common::ResolvedQuoting;
+    use flate2::read::GzDecoder;
+    use std::io::{BufRead, BufReader};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    struct MockMetadataAdapter {
+        freshness_all_in_schema_calls: AtomicUsize,
+        replay_missing: bool,
+    }
+
+    impl MockMetadataAdapter {
+        fn new() -> Self {
+            Self {
+                freshness_all_in_schema_calls: AtomicUsize::new(0),
+                replay_missing: false,
+            }
+        }
+    }
+
+    impl MetadataAdapter for MockMetadataAdapter {
+        fn adapter_type(&self) -> AdapterType {
+            AdapterType::Snowflake
+        }
+
+        fn build_schemas_from_stats_sql(
+            &self,
+            _: Arc<RecordBatch>,
+        ) -> AdapterResult<BTreeMap<String, CatalogTable>> {
+            Ok(BTreeMap::new())
+        }
+
+        fn build_columns_from_get_columns(
+            &self,
+            _: Arc<RecordBatch>,
+        ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
+            Ok(BTreeMap::new())
+        }
+
+        fn create_schemas_if_not_exists(
+            &self,
+            _: &State<'_, '_>,
+            _: Vec<(String, String, String)>,
+        ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
+            Ok(Vec::new())
+        }
+
+        fn list_relations_schemas_inner(
+            &self,
+            _: Option<String>,
+            _: Option<ExecutionPhase>,
+            _: &[Arc<dyn BaseRelation>],
+            _: Option<&str>,
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
+            Box::pin(async { Ok(HashMap::new()) })
+        }
+
+        fn list_relations_schemas_by_patterns_inner(
+            &self,
+            _: &[RelationPattern],
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn freshness_inner(
+            &self,
+            _: &[Arc<dyn BaseRelation>],
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
+            Box::pin(async { Ok(BTreeMap::new()) })
+        }
+
+        fn freshness_all_in_schema_inner<'a>(
+            &'a self,
+            _database: &'a str,
+            _schema: &'a str,
+            relations: &'a [Arc<dyn BaseRelation>],
+            _options: &'a MetadataQueryOptions,
+            _token: CancellationToken,
+        ) -> AsyncAdapterResult<'a, BTreeMap<String, MetadataFreshness>> {
+            Box::pin(async move {
+                self.freshness_all_in_schema_calls
+                    .fetch_add(1, Ordering::SeqCst);
+                if self.replay_missing {
+                    return Err(Cancellable::Error(AdapterError::new(
+                        AdapterErrorKind::ReplayDataMissing,
+                        "missing schema freshness recording",
+                    )));
+                }
+                Ok(BTreeMap::from([(
+                    relations[0].semantic_fqn(),
+                    MetadataFreshness {
+                        last_altered: Utc.timestamp_millis_opt(1_234_000).unwrap(),
+                        is_view: false,
+                    },
+                )]))
+            })
+        }
+
+        fn list_relations_in_parallel_inner(
+            &self,
+            _: &[CatalogAndSchema],
+            _: CancellationToken,
+        ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>>
+        {
+            Box::pin(async { Ok(BTreeMap::new()) })
+        }
+    }
+
+    #[dbt_runtime::test]
+    async fn schema_freshness_replay_missing_is_propagated_for_legacy_fallback() {
+        let _guard = TIME_MACHINE_TEST_LOCK.lock().await;
+        let adapter = MockMetadataAdapter {
+            replay_missing: true,
+            ..MockMetadataAdapter::new()
+        };
+        let relation: Arc<dyn BaseRelation> = create_relation(
+            AdapterType::Snowflake,
+            "db".to_string(),
+            "schema".to_string(),
+            Some("table".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap()
+        .into();
+
+        let result = freshness_group_dump(
+            &adapter,
+            "db",
+            "schema",
+            &[relation],
+            &MetadataQueryOptions::default(),
+            CancellationToken::never_cancels(),
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(Cancellable::Error(error))
+                if error.kind() == AdapterErrorKind::ReplayDataMissing
+        ));
+    }
+
+    #[dbt_runtime::test]
+    async fn schema_wide_freshness_records_and_replays_without_calling_inner() {
+        let _guard = TIME_MACHINE_TEST_LOCK.lock().await;
+        reset_time_machine_globals().await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let handle = get_or_init_recording(
+            dir.path(),
+            "snowflake",
+            "test-invocation",
+            None,
+            CancellationToken::never_cancels(),
+        );
+
+        let relation: Arc<dyn BaseRelation> = create_relation(
+            AdapterType::Snowflake,
+            "db".to_string(),
+            "schema".to_string(),
+            Some("table".to_string()),
+            None,
+            ResolvedQuoting::default(),
+        )
+        .unwrap()
+        .into();
+        let relations = vec![relation];
+        let adapter = MockMetadataAdapter::new();
+
+        let recorded = adapter
+            .freshness_all_in_schema(
+                "db",
+                "schema",
+                &relations,
+                &MetadataQueryOptions::default(),
+                CancellationToken::never_cancels(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            adapter.freshness_all_in_schema_calls.load(Ordering::SeqCst),
+            1
+        );
+
+        handle.shutdown().await.unwrap();
+
+        let events = read_recorded_events(dir.path());
+        let RecordedEvent::MetadataCall(event) = &events[0] else {
+            panic!("expected metadata event");
+        };
+        assert_eq!(event.caller_id, "global");
+        assert_eq!(event.method, "freshness_all_in_schema");
+        assert!(matches!(
+            &event.args,
+            MetadataCallArgs::FreshnessAllInSchema {
+                database,
+                schema,
+                relations: args,
+                warehouse,
+            } if database == "db"
+                && schema == "schema"
+                && args == &vec![relations[0].semantic_fqn()]
+                && warehouse.is_none()
+        ));
+
+        reset_time_machine_globals().await.unwrap();
+        get_or_init_replayer(|| Ok(Arc::new(EventReplayer::load(dir.path())?))).unwrap();
+
+        let replay_adapter = MockMetadataAdapter::new();
+        let replayed = replay_adapter
+            .freshness_all_in_schema(
+                "db",
+                "schema",
+                &relations,
+                &MetadataQueryOptions::default(),
+                CancellationToken::never_cancels(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            replay_adapter
+                .freshness_all_in_schema_calls
+                .load(Ordering::SeqCst),
+            0
+        );
+        assert_eq!(recorded.len(), replayed.len());
+        let key = relations[0].semantic_fqn();
+        assert_eq!(recorded[&key].last_altered, replayed[&key].last_altered);
+        assert_eq!(recorded[&key].is_view, replayed[&key].is_view);
+
+        reset_time_machine_globals().await.unwrap();
+    }
+
+    fn read_recorded_events(path: &std::path::Path) -> Vec<RecordedEvent> {
+        let file = std::fs::File::open(path.join("events.ndjson.gz")).unwrap();
+        BufReader::new(GzDecoder::new(file))
+            .lines()
+            .map(|line| serde_json::from_str(&line.unwrap()).unwrap())
+            .collect()
+    }
 }

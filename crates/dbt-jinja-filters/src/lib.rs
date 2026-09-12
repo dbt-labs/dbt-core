@@ -39,52 +39,14 @@ pub fn as_text(value: Value) -> Result<Value, MinijinjaError> {
     }
 }
 
-/// Convert a value to a boolean.
+/// Pass-through filter — returns the value unchanged.
+///
+/// dbt only coerces to a boolean while rendering *native* values; when rendering
+/// text (SQL, macros) `as_bool` is the identity filter, so `{{ "true" | as_bool }}`
+/// renders `true`, not `True`. Bool configs such as `enabled` accept the
+/// resulting bool-like string when they are deserialized.
 pub fn as_bool(value: Value) -> Result<Value, MinijinjaError> {
-    match value.kind() {
-        ValueKind::Undefined => Ok(Value::UNDEFINED),
-        ValueKind::None => Ok(Value::from(false)),
-        ValueKind::Bool | ValueKind::Number => Ok(value),
-        ValueKind::String => {
-            let str_ref = value.as_str().unwrap();
-            if str_ref == "False" || str_ref == "false" {
-                Ok(Value::from(false))
-            } else if str_ref == "True" || str_ref == "true" {
-                Ok(Value::from(true))
-            } else {
-                Ok(value)
-            }
-        }
-        ValueKind::Bytes => {
-            let bytes_ref = value.as_bytes().unwrap();
-            let string_from_bytes = String::from_utf8(bytes_ref.to_vec()).map_err(|_| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "Failed applying 'as_bool' filter to bytes",
-                )
-            })?;
-            let bool_val = string_from_bytes.parse::<bool>().map_err(|_| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    format!(
-                        "Failed applying 'as_bool' filter to bytes string '{string_from_bytes}'"
-                    ),
-                )
-            })?;
-            Ok(Value::from(bool_val))
-        }
-        ValueKind::Seq | ValueKind::Map | ValueKind::Iterable | ValueKind::Plain => {
-            Ok(Value::from(value.is_true()))
-        }
-        ValueKind::Invalid => Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
-            "Failed applying 'as_bool' filter to invalid value",
-        )),
-        _ => Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
-            "Failed applying 'as_bool' filter to unknown value",
-        )),
-    }
+    Ok(value)
 }
 
 /// Convert a value to a number (i32).
@@ -225,27 +187,28 @@ mod tests {
 
     // ── as_bool ──────────────────────────────────────────────────────
 
+    // Bool-like strings pass through unchanged — dbt only converts them when
+    // rendering native values, not when rendering text.
     #[test]
     fn as_bool_true_string() {
-        assert_eq!(render(r#"{{ "true" | as_bool }}"#), "True");
+        assert_eq!(render(r#"{{ "true" | as_bool }}"#), "true");
         assert_eq!(render(r#"{{ "True" | as_bool }}"#), "True");
     }
 
     #[test]
     fn as_bool_false_string() {
-        assert_eq!(render(r#"{{ "false" | as_bool }}"#), "False");
+        assert_eq!(render(r#"{{ "false" | as_bool }}"#), "false");
         assert_eq!(render(r#"{{ "False" | as_bool }}"#), "False");
     }
 
     #[test]
     fn as_bool_non_bool_string() {
-        // Non-bool strings pass through unchanged
         assert_eq!(render(r#"{{ "hello" | as_bool }}"#), "hello");
     }
 
     #[test]
     fn as_bool_none() {
-        assert_eq!(render(r#"{{ none | as_bool }}"#), "False");
+        assert_eq!(render(r#"{{ none | as_bool }}"#), "None");
     }
 
     #[test]
@@ -262,8 +225,8 @@ mod tests {
 
     #[test]
     fn as_bool_list() {
-        assert_eq!(render(r#"{{ [1, 2] | as_bool }}"#), "True");
-        assert_eq!(render(r#"{{ [] | as_bool }}"#), "False");
+        assert_eq!(render(r#"{{ [1, 2] | as_bool }}"#), "[1, 2]");
+        assert_eq!(render(r#"{{ [] | as_bool }}"#), "[]");
     }
 
     // ── as_number ────────────────────────────────────────────────────
@@ -314,6 +277,6 @@ mod tests {
 
     #[test]
     fn chain_as_bool_as_text() {
-        assert_eq!(render(r#"{{ "true" | as_bool | as_text }}"#), "True");
+        assert_eq!(render(r#"{{ "true" | as_bool | as_text }}"#), "true");
     }
 }

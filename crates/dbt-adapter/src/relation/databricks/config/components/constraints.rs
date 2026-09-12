@@ -216,11 +216,11 @@ impl Constraints {
                     Ok(to_column),
                 ) = (
                     row.get_attr("constraint_name"),
-                    row.get_attr("column_name"),
-                    row.get_attr("parent_catalog_name"),
-                    row.get_attr("parent_schema_name"),
-                    row.get_attr("parent_table_name"),
-                    row.get_attr("parent_column_name"),
+                    row.get_attr("from_column"),
+                    row.get_attr("to_catalog"),
+                    row.get_attr("to_schema"),
+                    row.get_attr("to_table"),
+                    row.get_attr("to_column"),
                 ) && let (
                     Some(name_str),
                     Some(col_str),
@@ -263,7 +263,6 @@ impl Constraints {
     }
 
     fn from_remote_state(results: &DatabricksRelationMetadata) -> Self {
-        // Get non-null constraint columns from results
         let mut non_null_columns = results
             .get(&DatabricksRelationMetadataKey::NonNullConstraints)
             .map(|table| {
@@ -271,14 +270,12 @@ impl Constraints {
                     .rows()
                     .into_iter()
                     .filter_map(|row| {
-                        // Try both "column_name" and "col_name" as different sources might use different names
-                        // Try "column_name" first, but filter out undefined values
+                        // Different metadata sources use "column_name" or "col_name"; try both.
                         row.get_attr("column_name")
                             .ok()
                             .map(|v| v.to_string())
                             .filter(|s| !s.is_empty() && s != "undefined")
                             .or_else(|| {
-                                // If that didn't work, try "col_name"
                                 row.get_attr("col_name")
                                     .ok()
                                     .map(|v| v.to_string())
@@ -292,17 +289,14 @@ impl Constraints {
         // The engine might return them in random order so sorting to always be consistent
         non_null_columns.sort();
 
-        // Process check constraints from table properties
         let check_constraints = Self::process_check_constraints(
             results.get(&DatabricksRelationMetadataKey::ShowTblProperties),
         );
 
-        // Process primary key constraints
         let pk_constraints = Self::process_primary_key_constraints(
             results.get(&DatabricksRelationMetadataKey::PrimaryKeyConstraints),
         );
 
-        // Process foreign key constraints
         let fk_constraints = Self::process_foreign_key_constraints(
             results.get(&DatabricksRelationMetadataKey::ForeignKeyConstraints),
         );
@@ -324,9 +318,17 @@ impl Constraints {
     }
 
     fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Self {
+        let contract_enforced = relation_config
+            .as_any()
+            .downcast_ref::<dbt_schemas::schemas::nodes::DbtModel>()
+            .and_then(|model| model.deprecated_config.contract.as_ref())
+            .is_some_and(|contract| contract.enforced);
+        if !contract_enforced {
+            return Self::default();
+        }
+
         let columns = &relation_config.base().columns;
 
-        // Get model constraints from the node by downcasting to DbtModel
         let model_constraints = if let Some(model) = relation_config
             .as_any()
             .downcast_ref::<dbt_schemas::schemas::nodes::DbtModel>(
@@ -336,7 +338,6 @@ impl Constraints {
             &[]
         };
 
-        // Use our parse_constraints function to handle both column and model constraints
         let Ok((not_null_columns, other_constraints)) =
             crate::relation::databricks::typed_constraint::parse_constraints(
                 columns,
@@ -513,6 +514,7 @@ mod tests {
     use dbt_schemas::schemas::{
         common::{Constraint, ConstraintType},
         nodes::DbtModel,
+        properties::ModelConstraint,
     };
     use dbt_test_primitives::assert_contains;
     use indexmap::{IndexMap, IndexSet};
@@ -568,14 +570,14 @@ pk_composite,user_id"#,
     fn create_mock_foreign_key_constraints_table() -> AgateTable {
         let schema = Schema::new(vec![
             Field::new("constraint_name", DataType::Utf8, false),
-            Field::new("column_name", DataType::Utf8, false),
-            Field::new("parent_catalog_name", DataType::Utf8, false),
-            Field::new("parent_schema_name", DataType::Utf8, false),
-            Field::new("parent_table_name", DataType::Utf8, false),
-            Field::new("parent_column_name", DataType::Utf8, false),
+            Field::new("from_column", DataType::Utf8, false),
+            Field::new("to_catalog", DataType::Utf8, false),
+            Field::new("to_schema", DataType::Utf8, false),
+            Field::new("to_table", DataType::Utf8, false),
+            Field::new("to_column", DataType::Utf8, false),
         ]);
         let csv = io::Cursor::new(
-            r#"constraint_name,column_name,parent_catalog_name,parent_schema_name,parent_table_name,parent_column_name
+            r#"constraint_name,from_column,to_catalog,to_schema,to_table,to_column
 fk_user_org,org_id,main,default,organizations,id
 fk_composite,parent_id,main,default,parents,id
 fk_composite,parent_type,main,default,parents,type
@@ -601,6 +603,24 @@ fk_composite,parent_type,main,default,parents,type
                     ..Default::default()
                 })
                 .collect(),
+            ..Default::default()
+        };
+        test_helpers::create_mock_dbt_model(cfg)
+    }
+
+    fn create_mock_unenforced_dbt_model_with_constraints(
+        constraints: IndexMap<&str, Vec<Constraint>>,
+    ) -> DbtModel {
+        let cfg = test_helpers::TestModelConfig {
+            columns: constraints
+                .into_iter()
+                .map(|(name, constraints)| test_helpers::TestModelColumn {
+                    name: name.to_string(),
+                    constraints,
+                    ..Default::default()
+                })
+                .collect(),
+            contract_enforced: Some(false),
             ..Default::default()
         };
         test_helpers::create_mock_dbt_model(cfg)
@@ -829,6 +849,28 @@ fk_composite,parent_type,main,default,parents,type
     }
 
     #[test]
+    fn test_from_local_config_ignores_declared_constraints_when_contract_is_unenforced() {
+        let columns = IndexMap::from_iter([(
+            "id",
+            vec![Constraint {
+                type_: ConstraintType::NotNull,
+                ..Default::default()
+            }],
+        )]);
+        let mut mock_node = create_mock_unenforced_dbt_model_with_constraints(columns);
+        mock_node.__model_attr__.constraints = vec![ModelConstraint {
+            type_: ConstraintType::PrimaryKey,
+            columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        }];
+
+        let config = Constraints::from_local_config(&mock_node);
+
+        assert!(config.set_non_nulls.is_empty());
+        assert!(config.set_constraints.is_empty());
+    }
+
+    #[test]
     fn test_from_local_config_no_constraints() {
         let columns = IndexMap::new();
         let mock_node = create_mock_dbt_model_with_constraints(columns);
@@ -924,7 +966,6 @@ fk_composite,parent_type,main,default,parents,type
         let render_val = constraint_val
             .get_attr("render")
             .expect("render should be accessible");
-        // "render" should be a function value (non-None, non-undefined)
         assert!(
             !render_val.is_undefined(),
             "render should be a callable function"
@@ -933,8 +974,6 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_constraint_normalization_and_diff() {
-        // Test that normalization works correctly during diff calculation
-        // Focus on the main Databricks-specific normalization: clearing columns for check constraints
         let prev_constraint = TypedConstraint::Check {
             name: Some("test_check".to_string()),
             expression: "value > 0".to_string(),
@@ -942,8 +981,8 @@ fk_composite,parent_type,main,default,parents,type
         };
         let next_constraint = TypedConstraint::Check {
             name: Some("test_check".to_string()),
-            expression: "value > 0".to_string(), // Same expression
-            columns: None,                       // No columns (like Databricks stores it)
+            expression: "value > 0".to_string(),
+            columns: None, // No columns (like Databricks stores it)
         };
 
         let prev = Constraints::new(
@@ -959,27 +998,106 @@ fk_composite,parent_type,main,default,parents,type
             IndexSet::new(),
         );
 
-        // The diff should be None because after normalization they should be considered equal
-        // (The main difference - columns being cleared - should be normalized away)
         let diff = Constraints::diff_from(&next, Some(&prev));
         assert!(
             diff.is_none(),
             "Normalized constraints should be considered equal"
         );
 
-        // Test expression normalization with safe cases (no quotes/strings)
         let normalized_expr1 = Constraints::normalize_expression("value > 0");
-        let normalized_expr2 = Constraints::normalize_expression("  value > 0  "); // Just whitespace
+        let normalized_expr2 = Constraints::normalize_expression("  value > 0  ");
         assert_eq!(
             normalized_expr1, normalized_expr2,
             "Whitespace should be normalized"
         );
 
-        // Test that quoted identifiers are preserved (not broken)
         let quoted_expr = Constraints::normalize_expression(r#""user name" IS NOT NULL"#);
         assert!(
             quoted_expr.contains(r#""user name""#),
             "Quoted identifiers should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_as_json_path_produces_no_false_diff_vs_info_schema_path_for_constraints() {
+        use crate::metadata::databricks::describe_json::{
+            ForeignKeyConstraintRow, PrimaryKeyConstraintRow,
+        };
+        use crate::metadata::databricks::{
+            foreign_key_constraints_to_agate, primary_key_constraints_to_agate,
+        };
+
+        let info_schema_results = IndexMap::from([
+            (
+                DatabricksRelationMetadataKey::PrimaryKeyConstraints,
+                create_mock_primary_key_constraints_table(),
+            ),
+            (
+                DatabricksRelationMetadataKey::ForeignKeyConstraints,
+                create_mock_foreign_key_constraints_table(),
+            ),
+        ]);
+        let info_schema_config = Constraints::from_remote_state(&info_schema_results);
+
+        let pk_rows = vec![
+            PrimaryKeyConstraintRow {
+                constraint_name: "pk_users".to_string(),
+                column_name: "id".to_string(),
+            },
+            PrimaryKeyConstraintRow {
+                constraint_name: "pk_composite".to_string(),
+                column_name: "org_id".to_string(),
+            },
+            PrimaryKeyConstraintRow {
+                constraint_name: "pk_composite".to_string(),
+                column_name: "user_id".to_string(),
+            },
+        ];
+        let fk_rows = vec![
+            ForeignKeyConstraintRow {
+                constraint_name: "fk_user_org".to_string(),
+                from_column: "org_id".to_string(),
+                to_catalog: "main".to_string(),
+                to_schema: "default".to_string(),
+                to_table: "organizations".to_string(),
+                to_column: "id".to_string(),
+            },
+            ForeignKeyConstraintRow {
+                constraint_name: "fk_composite".to_string(),
+                from_column: "parent_id".to_string(),
+                to_catalog: "main".to_string(),
+                to_schema: "default".to_string(),
+                to_table: "parents".to_string(),
+                to_column: "id".to_string(),
+            },
+            ForeignKeyConstraintRow {
+                constraint_name: "fk_composite".to_string(),
+                from_column: "parent_type".to_string(),
+                to_catalog: "main".to_string(),
+                to_schema: "default".to_string(),
+                to_table: "parents".to_string(),
+                to_column: "type".to_string(),
+            },
+        ];
+        let as_json_results = IndexMap::from([
+            (
+                DatabricksRelationMetadataKey::PrimaryKeyConstraints,
+                primary_key_constraints_to_agate(&pk_rows).unwrap(),
+            ),
+            (
+                DatabricksRelationMetadataKey::ForeignKeyConstraints,
+                foreign_key_constraints_to_agate(&fk_rows).unwrap(),
+            ),
+        ]);
+        let as_json_config = Constraints::from_remote_state(&as_json_results);
+
+        assert!(
+            Constraints::diff_from(&as_json_config, Some(&info_schema_config)).is_none(),
+            "AS-JSON path should not produce a diff against the info_schema path for identical constraints"
+        );
+        assert!(
+            Constraints::diff_from(&info_schema_config, Some(&as_json_config)).is_none(),
+            "info_schema path should not produce a diff against the AS-JSON path for identical constraints"
         );
     }
 }

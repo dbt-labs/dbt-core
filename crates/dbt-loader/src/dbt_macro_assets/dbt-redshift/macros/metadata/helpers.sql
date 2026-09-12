@@ -7,7 +7,7 @@
 {% endmacro %}
 
 {% macro redshift__use_grants_extended() %}
-    {{ return(adapter.use_grants_extended()) }}
+    {{ return(adapter.behavior.redshift_grants_extended.no_warn) }}
 {% endmacro %}
 
 {% macro redshift__drop_without_cascade() %}

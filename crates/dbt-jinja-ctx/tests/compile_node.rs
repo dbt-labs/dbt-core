@@ -30,6 +30,7 @@ fn fixture_compile_node_ctx() -> CompileNodeCtx {
     builtins_inner.insert("config".to_string(), MinijinjaValue::from("config-stub"));
 
     CompileNodeCtx {
+        base: None,
         this: MinijinjaValue::from("this-stub"),
         database: "analytics".to_string(),
         schema: "public".to_string(),

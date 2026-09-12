@@ -72,11 +72,7 @@ impl CloudYamlResolver {
         let project_block = self.read_project_block();
 
         let active_project_id = env("DBT_CLOUD_PROJECT_ID")
-            .or_else(|| {
-                project_block
-                    .as_ref()
-                    .and_then(|b| b.project_id.as_ref().map(|v| v.to_string()))
-            })
+            .or_else(|| project_block.as_ref().and_then(|b| b.project_id_str()))
             .unwrap_or_else(|| config.context.active_project.clone());
 
         let active_host = env("DBT_CLOUD_ACCOUNT_HOST")
@@ -187,7 +183,7 @@ projects:
         )
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn happy_path_service_token() {
         let f = write_yaml(&valid_cloud_yaml(
             "proj-1",
@@ -204,7 +200,7 @@ projects:
         assert_eq!(cred.account_id(), 42);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn happy_path_pat() {
         let f = write_yaml(&valid_cloud_yaml(
             "proj-1",
@@ -219,7 +215,7 @@ projects:
         assert_eq!(cred.token(), "dbtu_user_token");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn missing_cloud_yaml_returns_not_authenticated() {
         let r = CloudYamlResolver {
             path: Some(PathBuf::from("/nonexistent/path/dbt_cloud.yml")),
@@ -229,7 +225,7 @@ projects:
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn no_matching_project_returns_not_authenticated() {
         let f = write_yaml(
             r#"
@@ -254,7 +250,7 @@ projects:
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn host_mismatch_returns_not_authenticated() {
         let f = write_yaml(
             r#"
@@ -279,7 +275,7 @@ projects:
         assert!(matches!(err, AuthError::NotAuthenticated));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn invalid_yaml_returns_malformed() {
         let f = write_yaml("not: valid: yaml: [[[");
         let err = resolver_at(f.path())
@@ -289,7 +285,7 @@ projects:
         assert!(matches!(err, AuthError::Malformed(_)));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn empty_token_value_returns_malformed() {
         let f = write_yaml(
             r#"
@@ -314,7 +310,7 @@ projects:
         assert!(matches!(err, AuthError::Malformed(_)));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn non_numeric_account_id_returns_malformed() {
         let f = write_yaml(
             r#"
@@ -339,7 +335,7 @@ projects:
         assert!(matches!(err, AuthError::Malformed(_)));
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn dbt_project_yml_overrides_active_project() {
         let cloud = write_yaml(
             r#"
@@ -379,7 +375,7 @@ dbt-cloud:
         assert_eq!(cred.account_id(), 2);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn dbt_project_yml_integer_project_id() {
         let cloud = write_yaml(
             r#"
@@ -419,7 +415,7 @@ dbt-cloud:
         assert_eq!(cred.account_id(), 9);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn dbt_project_yml_missing_is_ignored() {
         let cloud = write_yaml(&valid_cloud_yaml("proj-1", "ab123.us1.dbt.com", "dbtc_abc"));
         let r = CloudYamlResolver {
@@ -430,7 +426,7 @@ dbt-cloud:
         assert_eq!(cred.token(), "dbtc_abc");
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn env_var_overrides_active_project() {
         let cloud = write_yaml(
             r#"
@@ -463,7 +459,7 @@ projects:
         assert_eq!(cred.account_id(), 2);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn env_var_overrides_host() {
         let cloud = write_yaml(
             r#"
@@ -496,7 +492,7 @@ projects:
         assert_eq!(cred.account_id(), 2);
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn env_var_takes_priority_over_dbt_project_yml() {
         let cloud = write_yaml(
             r#"

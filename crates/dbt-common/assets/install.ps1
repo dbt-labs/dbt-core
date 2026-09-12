@@ -479,7 +479,9 @@ function Set-DbtAlias {
     )
 
     try {
-        $null = New-Item -ItemType File -Path $PROFILE -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -Path $PROFILE)) {
+            $null = New-Item -ItemType File -Path $PROFILE -Force -ErrorAction SilentlyContinue
+        }
         $aliasCommand = "Set-Alias -Name dbtf -Value '$InstallPath\dbt.exe'"
 
         if (-not (Select-String -Path $PROFILE -Pattern "Set-Alias.*dbtf.*dbt\.exe" -Quiet)) {
@@ -522,13 +524,13 @@ function Show-AsciiArt {
     # This differs from the original install.sh because windows doesn't support ANSI escape codes
     Write-Host @"
 
- =====              =====    DBT  
-=========        =========  FUSION
+ =====              =====      
+=========        =========   DBT
  ===========    >========   ------
   ======================    ********************************************
-   ====================     *          FUSION ENGINE INSTALLED         *
-    ========--========      *                                          *
-     =====-    -=====                    Version: $Version
+   ====================     *               DBT INSTALLED              *
+    ========--========      *             Version: $Version            *
+     =====-    -=====                    
     ========--========      *                                          *
    ====================     *     Run 'dbt --help' to get started      *
   ======================    ********************************************

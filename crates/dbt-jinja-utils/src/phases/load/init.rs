@@ -55,7 +55,6 @@ pub fn initialize_load_jinja_environment(
         adapter_config_mapping,
         package_quoting,
         type_ops,
-        io_args.status_reporter.clone(),
         catalogs,
     );
 

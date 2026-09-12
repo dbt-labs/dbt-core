@@ -1,15 +1,14 @@
 use std::collections::HashMap;
+use std::io::Read;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-use async_trait::async_trait;
 use once_cell::sync::Lazy;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 use serde_json::Value;
-use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
+use ureq::http::header::{HeaderName, HeaderValue};
+use ureq::{Agent, Body, Error as UreqError, http};
 
 #[derive(Clone, Debug)]
 struct CachedToken {
@@ -31,7 +30,7 @@ pub enum TokenServiceError {
     RateLimited,
 
     #[error("HTTP request failed: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(UreqError),
 
     #[error("Invalid header name: {0}")]
     InvalidHeaderName(String),
@@ -44,6 +43,9 @@ pub enum TokenServiceError {
 
     #[error("Token not found in response body")]
     MissingToken,
+
+    #[error("Token service synchronization failed: {0}")]
+    Synchronization(String),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -69,46 +71,39 @@ impl TokenEndpoint {
     }
 }
 
-#[async_trait]
 pub trait TokenService: Send + Sync {
-    async fn handle_request(&self) -> Result<String, TokenServiceError>;
+    fn handle_request(&self) -> Result<String, TokenServiceError>;
     fn build_headers(&self) -> Result<HashMap<String, String>, TokenServiceError>;
 }
 
 pub struct BaseTokenService {
-    client: Client,
+    agent: Agent,
     endpoint: TokenEndpoint,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ParsedTokenResponse {
+    token: String,
+    expires_in: u64,
 }
 
 impl BaseTokenService {
     pub fn new(endpoint: TokenEndpoint) -> Result<Self, TokenServiceError> {
         endpoint.validate()?;
-        let client = Client::builder()
-            .timeout(Duration::from_secs(15))
-            .build()
-            .map_err(TokenServiceError::Http)?;
-        Ok(Self { client, endpoint })
+        let config = Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_global(Some(Duration::from_secs(15)))
+            .build();
+        let agent = Agent::new_with_config(config);
+        Ok(Self { agent, endpoint })
     }
 
-    pub fn header_map(headers: &HashMap<String, String>) -> Result<HeaderMap, TokenServiceError> {
-        let mut map = HeaderMap::new();
-        for (k, v) in headers {
-            let name = HeaderName::from_bytes(k.as_bytes())
-                .map_err(|_| TokenServiceError::InvalidHeaderName(k.clone()))?;
-            let value = HeaderValue::from_str(v)
-                .map_err(|_| TokenServiceError::InvalidHeaderValue(k.clone(), v.clone()))?;
-            map.insert(name, value);
-        }
-        Ok(map)
-    }
-
-    pub async fn post(
-        &self,
-        headers: HashMap<String, String>,
-    ) -> Result<String, TokenServiceError> {
+    pub fn post(&self, headers: HashMap<String, String>) -> Result<String, TokenServiceError> {
         // --- Check cache first ---
         {
-            let cache = TOKEN_CACHE.read().await;
+            let cache = TOKEN_CACHE.read().map_err(|_| {
+                TokenServiceError::Synchronization("token cache read lock poisoned".into())
+            })?;
             if let Some(ref token) = *cache
                 && Instant::now() < token.expires_at
             {
@@ -116,10 +111,14 @@ impl BaseTokenService {
             }
         }
 
-        let _lock = TOKEN_FETCH_LOCK.lock().await;
+        let _lock = TOKEN_FETCH_LOCK
+            .lock()
+            .map_err(|_| TokenServiceError::Synchronization("token fetch lock poisoned".into()))?;
 
         {
-            let cache = TOKEN_CACHE.read().await;
+            let cache = TOKEN_CACHE.read().map_err(|_| {
+                TokenServiceError::Synchronization("token cache read lock poisoned".into())
+            })?;
             if let Some(ref token) = *cache
                 && Instant::now() < token.expires_at
             {
@@ -128,55 +127,87 @@ impl BaseTokenService {
         }
 
         // --- Perform the request ---
-        let header_map = Self::header_map(&headers)?;
-        let resp = self
-            .client
-            .post(&self.endpoint.request_url)
-            .headers(header_map)
-            .body(self.endpoint.request_data.clone())
-            .send()
-            .await?;
-
-        if resp.status() == StatusCode::TOO_MANY_REQUESTS {
-            return Err(TokenServiceError::RateLimited);
+        validate_headers(&headers)?;
+        let mut request = self.agent.post(&self.endpoint.request_url);
+        for (k, v) in &headers {
+            request = request.header(k, v);
         }
+        let response = request
+            .send(self.endpoint.request_data.as_str())
+            .map_err(TokenServiceError::Http)?;
 
-        resp.error_for_status_ref()?;
+        classify_response_status(response.status().as_u16())?;
+        let bytes = Self::read_body(response)?;
+        let parsed = parse_token_response(&bytes)?;
 
-        let bytes = resp.bytes().await?;
-        let json: Value =
-            serde_json::from_slice(&bytes).map_err(|_| TokenServiceError::MissingToken)?;
-
-        let token = json
-            .get("access_token")
-            .and_then(|v| v.as_str())
-            .ok_or(TokenServiceError::MissingToken)?
-            .to_string();
-
-        let expires_in = json
-            .get("expires_in")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(3600);
-
-        let mut cache = TOKEN_CACHE.write().await;
+        let mut cache = TOKEN_CACHE.write().map_err(|_| {
+            TokenServiceError::Synchronization("token cache write lock poisoned".into())
+        })?;
         *cache = Some(CachedToken {
-            value: token.clone(),
-            expires_at: Instant::now() + Duration::from_secs(expires_in),
+            value: parsed.token.clone(),
+            expires_at: Instant::now() + Duration::from_secs(parsed.expires_in),
         });
 
-        Ok(token)
+        Ok(parsed.token)
     }
+
+    fn read_body(response: http::Response<Body>) -> Result<Vec<u8>, TokenServiceError> {
+        let mut reader = response.into_body().into_reader();
+        let mut bytes = Vec::new();
+        reader
+            .read_to_end(&mut bytes)
+            .map_err(|err| TokenServiceError::Http(UreqError::Io(err)))?;
+        Ok(bytes)
+    }
+}
+
+fn validate_headers(headers: &HashMap<String, String>) -> Result<(), TokenServiceError> {
+    for (k, v) in headers {
+        HeaderName::from_bytes(k.as_bytes())
+            .map_err(|_| TokenServiceError::InvalidHeaderName(k.clone()))?;
+        HeaderValue::from_str(v)
+            .map_err(|_| TokenServiceError::InvalidHeaderValue(k.clone(), v.clone()))?;
+    }
+
+    Ok(())
+}
+
+fn classify_response_status(status: u16) -> Result<(), TokenServiceError> {
+    if status == 429 {
+        return Err(TokenServiceError::RateLimited);
+    }
+    if status >= 400 {
+        return Err(TokenServiceError::Http(UreqError::StatusCode(status)));
+    }
+
+    Ok(())
+}
+
+fn parse_token_response(bytes: &[u8]) -> Result<ParsedTokenResponse, TokenServiceError> {
+    let json: Value = serde_json::from_slice(bytes).map_err(|_| TokenServiceError::MissingToken)?;
+
+    let token = json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .ok_or(TokenServiceError::MissingToken)?
+        .to_string();
+
+    let expires_in = json
+        .get("expires_in")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(3600);
+
+    Ok(ParsedTokenResponse { token, expires_in })
 }
 
 pub struct OktaIdpTokenService {
     base: BaseTokenService,
 }
 
-#[async_trait]
 impl TokenService for OktaIdpTokenService {
-    async fn handle_request(&self) -> Result<String, TokenServiceError> {
+    fn handle_request(&self) -> Result<String, TokenServiceError> {
         let headers = self.build_headers()?;
-        self.base.post(headers).await
+        self.base.post(headers)
     }
 
     fn build_headers(&self) -> Result<HashMap<String, String>, TokenServiceError> {
@@ -207,11 +238,10 @@ pub struct EntraIdpTokenService {
     base: BaseTokenService,
 }
 
-#[async_trait]
 impl TokenService for EntraIdpTokenService {
-    async fn handle_request(&self) -> Result<String, TokenServiceError> {
+    fn handle_request(&self) -> Result<String, TokenServiceError> {
         let headers = self.build_headers()?;
-        self.base.post(headers).await
+        self.base.post(headers)
     }
 
     fn build_headers(&self) -> Result<HashMap<String, String>, TokenServiceError> {
@@ -236,5 +266,209 @@ pub fn create_token_service_client(
             base: BaseTokenService::new(endpoint)?,
         })),
         _ => Err(TokenServiceError::UnsupportedProvider(endpoint.r#type)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn endpoint(request_url: String) -> TokenEndpoint {
+        TokenEndpoint {
+            r#type: "okta".into(),
+            request_url,
+            request_data: "grant_type=refresh_token".into(),
+            other_params: HashMap::from([(
+                "idp_auth_credentials".into(),
+                "Q2xpZW50SWQ6Q2xpZW50U2VjcmV0".into(),
+            )]),
+        }
+    }
+
+    #[test]
+    fn token_endpoint_validate_requires_all_fields() {
+        for missing_key in ["type", "request_url", "request_data"] {
+            let mut endpoint = endpoint("http://127.0.0.1/token".into());
+            match missing_key {
+                "type" => endpoint.r#type.clear(),
+                "request_url" => endpoint.request_url.clear(),
+                "request_data" => endpoint.request_data.clear(),
+                _ => unreachable!(),
+            }
+
+            let err = endpoint.validate().expect_err("validation should fail");
+            assert!(matches!(err, TokenServiceError::MissingKey(ref key) if key == missing_key));
+        }
+    }
+
+    #[test]
+    fn create_token_service_client_rejects_unknown_provider() {
+        let result = create_token_service_client(TokenEndpoint {
+            r#type: "github".into(),
+            request_url: "http://127.0.0.1/token".into(),
+            request_data: "grant_type=refresh_token".into(),
+            other_params: HashMap::new(),
+        });
+
+        let err = match result {
+            Ok(_) => panic!("unknown provider should fail"),
+            Err(err) => err,
+        };
+
+        assert!(matches!(err, TokenServiceError::UnsupportedProvider(ref ty) if ty == "github"));
+    }
+
+    #[test]
+    fn okta_build_headers_sets_basic_auth_and_trims_credentials() {
+        let client = create_token_service_client(TokenEndpoint {
+            r#type: "okta".into(),
+            request_url: "http://127.0.0.1/token".into(),
+            request_data: "grant_type=refresh_token".into(),
+            other_params: HashMap::from([(
+                "idp_auth_credentials".into(),
+                "  Q2xpZW50SWQ6Q2xpZW50U2VjcmV0  ".into(),
+            )]),
+        })
+        .expect("okta client");
+
+        let headers = client.build_headers().expect("okta headers");
+        assert_eq!(
+            headers.get("accept").map(String::as_str),
+            Some("application/json")
+        );
+        assert_eq!(
+            headers.get("authorization").map(String::as_str),
+            Some("Basic Q2xpZW50SWQ6Q2xpZW50U2VjcmV0")
+        );
+        assert_eq!(
+            headers.get("content-type").map(String::as_str),
+            Some("application/x-www-form-urlencoded")
+        );
+    }
+
+    #[test]
+    fn okta_build_headers_requires_credentials() {
+        let client = create_token_service_client(TokenEndpoint {
+            r#type: "okta".into(),
+            request_url: "http://127.0.0.1/token".into(),
+            request_data: "grant_type=refresh_token".into(),
+            other_params: HashMap::new(),
+        })
+        .expect("okta client");
+
+        let err = client
+            .build_headers()
+            .expect_err("missing credentials should fail");
+        assert!(
+            matches!(err, TokenServiceError::MissingKey(ref key) if key.contains("idp_auth_credentials"))
+        );
+    }
+
+    #[test]
+    fn entra_build_headers_sets_form_headers() {
+        let client = create_token_service_client(TokenEndpoint {
+            r#type: "entra".into(),
+            request_url: "http://127.0.0.1/token".into(),
+            request_data: "grant_type=refresh_token".into(),
+            other_params: HashMap::new(),
+        })
+        .expect("entra client");
+
+        let headers = client.build_headers().expect("entra headers");
+        assert_eq!(
+            headers.get("accept").map(String::as_str),
+            Some("application/json")
+        );
+        assert_eq!(
+            headers.get("content-type").map(String::as_str),
+            Some("application/x-www-form-urlencoded")
+        );
+        assert!(!headers.contains_key("authorization"));
+    }
+
+    #[test]
+    fn validate_headers_rejects_invalid_header_name() {
+        let err = validate_headers(&HashMap::from([("bad header".into(), "value".into())]))
+            .expect_err("invalid header name should fail");
+
+        assert!(
+            matches!(err, TokenServiceError::InvalidHeaderName(ref name) if name == "bad header")
+        );
+    }
+
+    #[test]
+    fn validate_headers_rejects_invalid_header_value() {
+        let err = validate_headers(&HashMap::from([(
+            "authorization".into(),
+            "Basic line1\r\nline2".into(),
+        )]))
+        .expect_err("invalid header value should fail");
+
+        assert!(
+            matches!(err, TokenServiceError::InvalidHeaderValue(ref name, _) if name == "authorization")
+        );
+    }
+
+    #[test]
+    fn classify_response_status_allows_success() {
+        assert!(classify_response_status(200).is_ok());
+        assert!(classify_response_status(399).is_ok());
+    }
+
+    #[test]
+    fn classify_response_status_returns_rate_limited() {
+        let err = classify_response_status(429).expect_err("429 should fail");
+        assert!(matches!(err, TokenServiceError::RateLimited));
+    }
+
+    #[test]
+    fn classify_response_status_returns_http_error() {
+        let err = classify_response_status(500).expect_err("500 should fail");
+        assert!(matches!(
+            err,
+            TokenServiceError::Http(UreqError::StatusCode(500))
+        ));
+    }
+
+    #[test]
+    fn parse_token_response_extracts_token_and_expiry() {
+        let parsed = parse_token_response(br#"{"access_token":"token-1","expires_in":120}"#)
+            .expect("valid token response");
+
+        assert_eq!(
+            parsed,
+            ParsedTokenResponse {
+                token: "token-1".into(),
+                expires_in: 120
+            }
+        );
+    }
+
+    #[test]
+    fn parse_token_response_defaults_expiry() {
+        let parsed =
+            parse_token_response(br#"{"access_token":"token-1"}"#).expect("valid token response");
+
+        assert_eq!(
+            parsed,
+            ParsedTokenResponse {
+                token: "token-1".into(),
+                expires_in: 3600
+            }
+        );
+    }
+
+    #[test]
+    fn parse_token_response_requires_access_token() {
+        let err =
+            parse_token_response(br#"{"expires_in":120}"#).expect_err("missing token should fail");
+        assert!(matches!(err, TokenServiceError::MissingToken));
+    }
+
+    #[test]
+    fn parse_token_response_rejects_malformed_json() {
+        let err = parse_token_response(br#"{"access_token":"token-1""#)
+            .expect_err("malformed json should fail");
+        assert!(matches!(err, TokenServiceError::MissingToken));
     }
 }

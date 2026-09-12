@@ -320,7 +320,6 @@ impl TryFrom<&ModelConstraint> for TypedConstraint {
             }
         };
 
-        // Validate the constructed constraint
         typed_constraint.validate()?;
         Ok(typed_constraint)
     }
@@ -408,7 +407,6 @@ pub fn parse_constraints(
     let (not_nulls_from_models, constraints_from_models) =
         parse_model_constraints(model_constraints)?;
 
-    // Union the not null sets and concatenate constraints
     let mut all_not_nulls = not_nulls_from_columns;
     all_not_nulls.extend(not_nulls_from_models);
 
@@ -430,7 +428,6 @@ pub fn parse_column_constraints(
     for column in columns {
         let column_name = &column.name;
         for constraint in &column.constraints {
-            // Validate unique constraints are not supported
             if constraint.type_ == ConstraintType::Unique {
                 return Err("Unique constraints are not supported on Databricks".to_string());
             }
@@ -438,7 +435,6 @@ pub fn parse_column_constraints(
             if constraint.type_ == ConstraintType::NotNull {
                 column_names.insert(column_name.clone());
             } else {
-                // For other column-level constraints, set the column and parse
                 let quoted_column = if column.quote.unwrap_or(false) {
                     format!("`{column_name}`")
                 } else {
@@ -464,7 +460,6 @@ pub fn parse_model_constraints(
     let mut constraints = Vec::new();
 
     for constraint in model_constraints {
-        // Validate unique constraints are not supported
         if constraint.type_ == ConstraintType::Unique {
             return Err("Unique constraints are not supported on Databricks".to_string());
         }
@@ -586,7 +581,6 @@ mod tests {
         });
 
         let render_val = pk.get_value(&Value::from("render")).unwrap();
-        // "render" should be a function value (non-None, non-undefined)
         assert!(!render_val.is_undefined());
 
         // Verify render works via TypedConstraint::render (not Object::render)
@@ -596,7 +590,6 @@ mod tests {
 
     #[test]
     fn test_typed_constraint_validation() {
-        // Valid check constraint
         let check = TypedConstraint::Check {
             name: Some("positive_id".to_string()),
             expression: "id > 0".to_string(),
@@ -604,7 +597,7 @@ mod tests {
         };
         assert!(check.validate().is_ok());
 
-        // Invalid check constraint (empty expression)
+        // Empty expression should fail validation
         let invalid_check = TypedConstraint::Check {
             name: Some("empty".to_string()),
             expression: "".to_string(),
@@ -612,7 +605,6 @@ mod tests {
         };
         assert!(invalid_check.validate().is_err());
 
-        // Valid custom constraint
         let custom = TypedConstraint::Custom {
             name: Some("my_custom".to_string()),
             expression: "some_custom_logic".to_string(),
@@ -682,7 +674,6 @@ mod tests {
 
     #[test]
     fn test_typed_constraint_rendering() {
-        // Check constraint
         let check = TypedConstraint::Check {
             name: Some("positive_id".to_string()),
             expression: "id > 0".to_string(),
@@ -690,7 +681,6 @@ mod tests {
         };
         assert_eq!(check.render(), "CONSTRAINT positive_id CHECK (id > 0)");
 
-        // Primary key constraint
         let pk = TypedConstraint::PrimaryKey {
             name: Some("pk_users".to_string()),
             columns: vec!["id".to_string()],
@@ -698,7 +688,6 @@ mod tests {
         };
         assert_eq!(pk.render(), "CONSTRAINT pk_users PRIMARY KEY (id)");
 
-        // Foreign key with to/to_columns
         let fk = TypedConstraint::ForeignKey {
             name: Some("fk_user_org".to_string()),
             columns: vec!["org_id".to_string()],
@@ -737,7 +726,6 @@ mod tests {
             "CONSTRAINT fk_inline FOREIGN KEY (col_b) REFERENCES target_table (pk)"
         );
 
-        // Custom constraint
         let custom = TypedConstraint::Custom {
             name: Some("my_custom".to_string()),
             expression: "VALIDATE(column_a, column_b)".to_string(),
@@ -780,7 +768,6 @@ mod tests {
 
     #[test]
     fn test_from_model_constraint_conversions() {
-        // Test ModelConstraint -> TypedConstraint conversion (TryFrom)
         let model_constraint = ModelConstraint {
             type_: ConstraintType::Check,
             name: Some("email_check".to_string()),
@@ -802,7 +789,6 @@ mod tests {
             panic!("Expected Check constraint");
         }
 
-        // Test TypedConstraint -> ModelConstraint conversion (From)
         let back_to_model = ModelConstraint::from(&typed_constraint);
         assert_eq!(back_to_model.type_, ConstraintType::Check);
         assert_eq!(back_to_model.name, Some("email_check".to_string()));
@@ -834,7 +820,6 @@ mod tests {
             panic!("Expected PrimaryKey constraint");
         }
 
-        // Round-trip conversion
         let back_to_model = ModelConstraint::from(&typed_constraint);
         assert_eq!(back_to_model.type_, ConstraintType::PrimaryKey);
         assert_eq!(
@@ -876,7 +861,6 @@ mod tests {
 
     #[test]
     fn test_invalid_model_constraint_conversion() {
-        // Test that invalid constraints return errors
         let invalid_constraint = ModelConstraint {
             type_: ConstraintType::Check,
             name: Some("invalid_check".to_string()),
@@ -898,7 +882,6 @@ mod tests {
 
     #[test]
     fn test_validation_called_during_conversion() {
-        // Test that validate() is called during TryFrom conversion
         // This creates a constraint that passes initial parsing but fails validation
         let constraint_with_empty_expression = ModelConstraint {
             type_: ConstraintType::Check,

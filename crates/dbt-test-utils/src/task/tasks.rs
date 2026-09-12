@@ -331,9 +331,9 @@ impl ExecuteAndCompare {
         func: Arc<CommandFn>,
         use_recording: bool,
     ) -> Self {
-        // `--no-parallel` forces sequential task execution for
-        // deterministic golden output without throttling the connection pool
-        // via `--threads`, which now controls adapter connection backpressure.
+        // `--no-parallel` forces sequential task execution for deterministic
+        // golden output without shrinking the `dbt-runtime` blocking pool via
+        // `--threads`.
         cmd_vec.push("--no-parallel".to_string());
         if !cmd_vec.iter().any(|s| *s == "--log-format") {
             cmd_vec.push("--log-format=text".to_string());
@@ -423,24 +423,6 @@ impl Task for ExecuteAndCompare {
             Ok(patches) => Err(TestError::GoldieMismatch(patches)),
             Err(e) => Err(e.into()),
         }
-    }
-
-    fn is_counted(&self) -> bool {
-        true
-    }
-}
-
-pub struct NopTask;
-
-#[async_trait]
-impl Task for NopTask {
-    async fn run(
-        &self,
-        _project_env: &ProjectEnv,
-        _test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
-        Ok(())
     }
 
     fn is_counted(&self) -> bool {

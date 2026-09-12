@@ -1,7 +1,7 @@
 //! Tests covering `CompileBaseCtx` end-to-end:
 //!
 //! 1. The typed ctx serializes to the same key set today's hand-built
-//!    `build_compile_and_run_base_context` BTreeMap produces — 14 fixed keys
+//!    `build_operation_context_btreemap` BTreeMap produces — 14 fixed keys
 //!    plus one top-level entry per `dbt_namespace` (via `#[serde(flatten)]`).
 //! 2. `MACRO_DISPATCH_ORDER` per-namespace values must downcast to
 //!    `Vec<String>` (the type minijinja's dispatch lookup expects).
@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use dbt_jinja_ctx::{
-    CompileBaseCtx, DbtNamespace, DummyConfig, JinjaObject, MacroLookupContext, to_jinja_btreemap,
+    CompileBaseCtx, DbtNamespace, JinjaObject, MacroLookupContext, to_jinja_btreemap,
 };
 use minijinja::Value as MinijinjaValue;
 
@@ -39,7 +39,6 @@ fn fixture_compile_base_ctx() -> CompileBaseCtx {
     );
 
     CompileBaseCtx {
-        config: JinjaObject::new(DummyConfig),
         macro_dispatch_order,
         ref_fn: MinijinjaValue::from("ref-fn-stub"),
         source: MinijinjaValue::from("source-fn-stub"),
@@ -74,7 +73,6 @@ fn compile_base_ctx_serializes_to_expected_keys() {
             "MACRO_DISPATCH_ORDER",
             "TARGET_PACKAGE_NAME",
             "builtins",
-            "config",
             "connection_name",
             "context",
             "dbt",
@@ -88,7 +86,7 @@ fn compile_base_ctx_serializes_to_expected_keys() {
             "source",
             "store_result",
         ],
-        "compile-base ctx must produce 15 fixed keys plus one entry per \
+        "compile-base ctx must produce 14 fixed keys plus one entry per \
          dbt_namespace via #[serde(flatten)]"
     );
 }

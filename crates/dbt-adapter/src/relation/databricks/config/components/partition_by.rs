@@ -15,9 +15,7 @@ use minijinja::value::{Value, ValueMap};
 pub(crate) const TYPE_NAME: &str = "partitioned_by";
 
 // TODO(serramatutu): reuse this for `partition_by` in other warehouses
-/// Component for Databricks partitioned by
-///
-/// Holds a vec of columns to partition by.
+/// Component for Databricks partitioned by.
 pub type PartitionBy = SimpleComponentConfigImpl<Vec<String>>;
 
 fn to_jinja(v: &Vec<String>) -> Value {
@@ -115,11 +113,9 @@ mod tests {
 
         let mut csv_data = "key,value\n".to_string();
 
-        // Add regular table info rows
         csv_data.push_str("Table,test_table\n");
         csv_data.push_str("Owner,test_user\n");
 
-        // Add partition information section
         if !partition_columns.is_empty() {
             csv_data.push_str("# Partition Information,\n");
             csv_data.push_str("# col_name,data_type\n");
@@ -129,7 +125,6 @@ mod tests {
             csv_data.push_str(",\n");
         }
 
-        // Add remaining info
         csv_data.push_str("# Detailed Table Information,\n");
 
         let schema = Arc::new(Schema::new(vec![

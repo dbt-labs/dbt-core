@@ -11,9 +11,7 @@ use dbt_schemas::schemas::{
 use normalize_path::NormalizePath;
 use sha1::Digest;
 
-use dbt_common::{
-    ErrorCode, FsResult, constants::DBT_PROJECT_YML, fs_err, io_args::IoArgs, tokiofs,
-};
+use dbt_common::{ErrorCode, FsResult, constants::DBT_PROJECT_YML, fs_err, tokiofs};
 
 const DEFAULT_DEPS_MAX_CONCURRENCY: usize = 8;
 const MAX_DEPS_CONCURRENCY: usize = 16;
@@ -182,7 +180,6 @@ fn missing_dbt_project_error(checkout_path: &Path, dir_exists: bool) -> Box<dbt_
 }
 
 pub async fn read_and_validate_dbt_project(
-    io: &IoArgs,
     checkout_path: &Path,
     show_errors_or_warnings: bool,
     jinja_env: &JinjaEnv,
@@ -200,13 +197,12 @@ pub async fn read_and_validate_dbt_project(
 
     // Try to deserialize only the package name for error reporting,
     // falling back to the path if deserialization fails
-    let dependency_package_name = value_from_file_async(io, &path_to_dbt_project, false, None)
+    let dependency_package_name = value_from_file_async(&path_to_dbt_project, false, None)
         .await
         .ok()
         .and_then(|value| {
             let deps_context = LoadContext::new(vars.clone());
             into_typed_with_jinja::<DbtProjectNameOnly, _>(
-                io,
                 value,
                 false,
                 jinja_env,
@@ -222,9 +218,7 @@ pub async fn read_and_validate_dbt_project(
 
     let deps_context = LoadContext::new(vars.clone());
     into_typed_with_jinja(
-        io,
         value_from_file_async(
-            io,
             &path_to_dbt_project,
             show_errors_or_warnings,
             Some(&dependency_package_name),

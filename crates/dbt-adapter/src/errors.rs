@@ -27,9 +27,18 @@ pub fn arrow_error_to_adapter_error(err: ArrowError) -> AdapterError {
     AdapterError::new(AdapterErrorKind::Arrow, err.to_string())
 }
 
+const BIGQUERY_STORAGE_API_ERROR_MESSAGE: &str = "There was a problem connecting to the BigQuery Storage API.\n\ndbt v2 requires the BigQuery Read Session User role to connect to BigQuery. See https://docs.getdbt.com/docs/platform/connect-data-platform/connect-bigquery?version=2.0&name=Fusion#required-permissions to make sure you have all the required permissions to use BigQuery with v2.";
+
 /// Convert [adbc_core::error::Error] to [AdapterError]
 /// This will also chain the given error to the [AdapterError]
 pub fn adbc_error_to_adapter_error(err: adbc_core::error::Error) -> AdapterError {
+    if err
+        .message
+        .contains("Storage API is not available for query")
+    {
+        return AdapterError::new(AdapterErrorKind::Driver, BIGQUERY_STORAGE_API_ERROR_MESSAGE);
+    }
+
     let sqlstate: [u8; 5] = {
         // Transmute SQLSTATE to unsigned bytes. It was mistake to make this i8
         // in ADBC core [1].

@@ -81,23 +81,60 @@ impl PyTimeDelta {
         PyTimeDelta { duration }
     }
 
+    /// Split the duration the way Python normalizes `timedelta`: the sign lives entirely in
+    /// `days`, with `0 <= seconds < 86400` and `0 <= microseconds < 1_000_000`.
+    ///
+    /// Deliberately avoids `Duration::num_microseconds()` on the whole duration: that overflows
+    /// (returns `None`) past ~292,471 years, and `timedelta.min` / `timedelta.max` are
+    /// ±999,999,999 days, which is well beyond it. Only the sub-second remainder is converted to
+    /// microseconds, and that always fits.
+    fn normalized(&self) -> (i64, i64, i64) {
+        // Truncates toward zero, so for negative durations this is the *ceiling*.
+        let trunc_secs = self.duration.num_seconds();
+        let sub_us = (self.duration - Duration::seconds(trunc_secs))
+            .num_microseconds()
+            .unwrap_or(0);
+
+        // Convert truncation into flooring so the remainder is never negative.
+        let (total_secs, micros) = if sub_us < 0 {
+            (trunc_secs - 1, sub_us + 1_000_000)
+        } else {
+            (trunc_secs, sub_us)
+        };
+
+        (
+            total_secs.div_euclid(86400),
+            total_secs.rem_euclid(86400),
+            micros,
+        )
+    }
+
     // Instance attributes
     pub fn days(&self) -> Option<Value> {
-        Some(Value::from(self.duration.num_days()))
+        Some(Value::from(self.normalized().0))
     }
 
     pub fn seconds(&self) -> Option<Value> {
-        Some(Value::from(self.duration.num_seconds() % 86400))
+        Some(Value::from(self.normalized().1))
     }
 
     pub fn microseconds(&self) -> Option<Value> {
-        Some(Value::from(
-            self.duration.num_microseconds().unwrap_or(0) % 1_000_000,
-        ))
+        Some(Value::from(self.normalized().2))
+    }
+
+    /// `num_seconds()` alone truncates to whole seconds and drops the fractional part, so add the
+    /// sub-second remainder back. Computed off the truncated seconds rather than `normalized()` so
+    /// the f64 keeps full precision for large durations.
+    fn total_seconds_f64(&self) -> f64 {
+        let trunc_secs = self.duration.num_seconds();
+        let sub_us = (self.duration - Duration::seconds(trunc_secs))
+            .num_microseconds()
+            .unwrap_or(0);
+        trunc_secs as f64 + sub_us as f64 / 1_000_000.0
     }
 
     pub fn total_seconds(&self) -> Result<Value, Error> {
-        Ok(Value::from(self.duration.num_seconds() as f64))
+        Ok(Value::from(self.total_seconds_f64()))
     }
 
     // ----------------------------------------------------------------
@@ -193,7 +230,8 @@ impl PyTimeDelta {
 // ----------------------------------------------------------------
 impl Object for PyTimeDelta {
     fn is_true(self: &Arc<Self>) -> bool {
-        self.duration.num_seconds() != 0
+        // Python: any non-zero timedelta is truthy, down to a single microsecond.
+        !self.duration.is_zero()
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
@@ -226,40 +264,24 @@ impl Object for PyTimeDelta {
         }
     }
 
-    /// e.g.  "2 days, 05:00:00.000123"
+    /// Mirrors CPython's `timedelta.__str__`: e.g. `"2 days, 3:30:00.123456"`, `"0:00:00"`,
+    /// `"-1 day, 23:59:58.500000"`. Hours are unpadded, the microseconds suffix is omitted when
+    /// zero, and the sign is carried by the (normalized) day count rather than prefixed.
     fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let days = self.duration.num_days();
-        let total_secs = self.duration.num_seconds().abs();
-        let seconds_in_day = total_secs % 86400;
-        let hours = seconds_in_day / 3600;
-        let minutes = (seconds_in_day % 3600) / 60;
-        let seconds = seconds_in_day % 60;
-        // handle the sign for negative durations
-        let sign = if self.duration.num_seconds() < 0 {
-            "-"
-        } else {
-            ""
-        };
-
-        let microseconds = self.duration.num_microseconds().unwrap_or(0).abs() % 1_000_000;
+        let (days, seconds, microseconds) = self.normalized();
+        let hours = seconds / 3600;
+        let minutes = (seconds % 3600) / 60;
+        let seconds = seconds % 60;
 
         if days != 0 {
-            write!(
-                f,
-                "{}{} days, {:02}:{:02}:{:02}.{:06}",
-                sign,
-                days.abs(),
-                hours,
-                minutes,
-                seconds,
-                microseconds
-            )
-        } else {
-            write!(
-                f,
-                "{sign}{hours:02}:{minutes:02}:{seconds:02}.{microseconds:06}"
-            )
+            let plural = if days.abs() == 1 { "" } else { "s" };
+            write!(f, "{days} day{plural}, ")?;
         }
+        write!(f, "{hours}:{minutes:02}:{seconds:02}")?;
+        if microseconds != 0 {
+            write!(f, ".{microseconds:06}")?;
+        }
+        Ok(())
     }
 }
 
@@ -344,6 +366,189 @@ mod tests {
             .unwrap();
         let result = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(result, "345600.0");
+    }
+
+    /// Renders `{{ td }}` / `{{ td.<attr> }}` through a template the way user Jinja would, so the
+    /// assertions cover the `Object` impl rather than just the inherent methods.
+    fn render_expr(expr: &str) -> String {
+        let mut env = Environment::new();
+        env.add_global("timedelta", Value::from_object(PyTimeDeltaClass));
+        env.template_from_str(expr)
+            .unwrap()
+            .render(minijinja::context!(), &[])
+            .unwrap()
+    }
+
+    /// dbt-labs/dbt-core#15756: `total_seconds()` truncated to whole seconds, so every sub-second
+    /// duration came back as `0.0`. Expected values are CPython 3.12 `timedelta` output.
+    #[test]
+    fn test_total_seconds_keeps_sub_second_precision() {
+        // The reported case: an 11.27 ms interval.
+        assert_eq!(
+            render_expr("{{ timedelta(milliseconds=11, microseconds=270).total_seconds() }}"),
+            "0.01127"
+        );
+        // Non-zero seconds *and* a fraction — catches dropping only the fractional part, which a
+        // whole-second-only case cannot distinguish from a correct implementation.
+        assert_eq!(
+            render_expr("{{ timedelta(seconds=2, milliseconds=500).total_seconds() }}"),
+            "2.5"
+        );
+        // Largest sub-second value: nothing is being rounded to nearest.
+        assert_eq!(
+            render_expr("{{ timedelta(microseconds=999999).total_seconds() }}"),
+            "0.999999"
+        );
+        assert_eq!(
+            render_expr("{{ timedelta(microseconds=1).total_seconds() }}"),
+            "0.000001"
+        );
+        // Whole seconds still render with the trailing `.0`, as Python does.
+        assert_eq!(
+            render_expr("{{ timedelta(4).total_seconds() }}"),
+            "345600.0"
+        );
+        assert_eq!(render_expr("{{ timedelta(0).total_seconds() }}"), "0.0");
+        assert_eq!(
+            render_expr(
+                "{{ timedelta(days=2, hours=3, minutes=30, microseconds=123456).total_seconds() }}"
+            ),
+            "185400.123456"
+        );
+        assert_eq!(
+            render_expr("{{ timedelta(seconds=-1, microseconds=-500000).total_seconds() }}"),
+            "-1.5"
+        );
+        assert_eq!(
+            render_expr("{{ timedelta(seconds=-90).total_seconds() }}"),
+            "-90.0"
+        );
+    }
+
+    /// A sub-second duration must be truthy; `is_true` also tested whole seconds.
+    #[test]
+    fn test_sub_second_timedelta_is_truthy() {
+        assert_eq!(
+            render_expr("{{ 'yes' if timedelta(milliseconds=11) else 'no' }}"),
+            "yes"
+        );
+        assert_eq!(
+            render_expr("{{ 'yes' if timedelta(microseconds=1) else 'no' }}"),
+            "yes"
+        );
+        assert_eq!(render_expr("{{ 'yes' if timedelta(0) else 'no' }}"), "no");
+        // Still truthy when negative and sub-second.
+        assert_eq!(
+            render_expr("{{ 'yes' if timedelta(microseconds=-1) else 'no' }}"),
+            "yes"
+        );
+    }
+
+    /// Python carries the sign in `days` and keeps `seconds` / `microseconds` non-negative.
+    /// Rust's `%` truncates toward zero, which produced negative values in all three fields.
+    #[test]
+    fn test_negative_durations_normalize_like_python() {
+        let cases: &[(&str, i64, i64, i64)] = &[
+            // (constructor args, days, seconds, microseconds) — from CPython 3.12
+            ("seconds=-1, microseconds=-500000", -1, 86398, 500000),
+            ("days=-1", -1, 0, 0),
+            ("days=-2, seconds=-1", -3, 86399, 0),
+            ("seconds=-90", -1, 86310, 0),
+            ("microseconds=-1", -1, 86399, 999999),
+            // Positive values are unaffected.
+            (
+                "days=2, hours=3, minutes=30, microseconds=123456",
+                2,
+                12600,
+                123456,
+            ),
+            ("hours=25", 1, 3600, 0),
+            ("seconds=0", 0, 0, 0),
+        ];
+
+        for (args, days, seconds, micros) in cases {
+            assert_eq!(
+                render_expr(&format!(
+                    "{{{{ timedelta({args}).days }}}},{{{{ timedelta({args}).seconds }}}},{{{{ timedelta({args}).microseconds }}}}"
+                )),
+                format!("{days},{seconds},{micros}"),
+                "timedelta({args})"
+            );
+        }
+    }
+
+    /// `str(timedelta)` parity with CPython: unpadded hours, `.microseconds` suffix only when
+    /// non-zero, singular `day`, and the sign carried by the normalized day count.
+    #[test]
+    fn test_render_matches_python_str() {
+        let cases: &[(&str, &str)] = &[
+            ("0", "0:00:00"),
+            ("microseconds=1", "0:00:00.000001"),
+            ("milliseconds=11, microseconds=270", "0:00:00.011270"),
+            ("seconds=2, milliseconds=500", "0:00:02.500000"),
+            ("microseconds=999999", "0:00:00.999999"),
+            (
+                "seconds=-1, microseconds=-500000",
+                "-1 day, 23:59:58.500000",
+            ),
+            (
+                "days=2, hours=3, minutes=30, microseconds=123456",
+                "2 days, 3:30:00.123456",
+            ),
+            ("days=-1", "-1 day, 0:00:00"),
+            ("days=-2, seconds=-1", "-3 days, 23:59:59"),
+            ("seconds=-90", "-1 day, 23:58:30"),
+            ("hours=25", "1 day, 1:00:00"),
+        ];
+
+        for (args, expected) in cases {
+            assert_eq!(
+                render_expr(&format!("{{{{ timedelta({args}) }}}}")),
+                *expected,
+                "timedelta({args})"
+            );
+        }
+    }
+
+    /// `timedelta.min` / `timedelta.max` are ±999,999,999 days, which overflows
+    /// `Duration::num_microseconds()`. The fix must not silently degrade to `0` there.
+    #[test]
+    fn test_extreme_constants_do_not_overflow_to_zero() {
+        let max = Arc::new(PyTimeDeltaClass::max());
+        assert_eq!(max.days().unwrap().as_i64().unwrap(), 999_999_999);
+        assert_eq!(max.seconds().unwrap().as_i64().unwrap(), 86399);
+        assert_eq!(max.microseconds().unwrap().as_i64().unwrap(), 999999);
+        let max_total = max.total_seconds_f64();
+        assert!(
+            max_total > 8.6e13,
+            "timedelta.max.total_seconds() collapsed to {max_total}"
+        );
+
+        let min = Arc::new(PyTimeDeltaClass::min());
+        assert_eq!(min.days().unwrap().as_i64().unwrap(), -999_999_999);
+        assert_eq!(min.seconds().unwrap().as_i64().unwrap(), 0);
+        assert_eq!(min.microseconds().unwrap().as_i64().unwrap(), 0);
+        assert!(min.total_seconds_f64() < -8.6e13);
+    }
+
+    /// The end-to-end shape from the issue: time an interval, then read it back both ways.
+    #[test]
+    fn test_datetime_difference_reports_sub_second_elapsed() {
+        let t0 = chrono::NaiveDate::from_ymd_opt(2026, 7, 31)
+            .unwrap()
+            .and_hms_micro_opt(12, 0, 0, 0)
+            .unwrap();
+        let t1 = chrono::NaiveDate::from_ymd_opt(2026, 7, 31)
+            .unwrap()
+            .and_hms_micro_opt(12, 0, 0, 11270)
+            .unwrap();
+        let elapsed = Arc::new(PyTimeDelta::new(t1 - t0));
+
+        assert_eq!(elapsed.total_seconds_f64(), 0.011270_f64);
+        // The workaround users adopted must agree with the now-correct total_seconds().
+        let by_hand = elapsed.seconds().unwrap().as_i64().unwrap() as f64
+            + elapsed.microseconds().unwrap().as_i64().unwrap() as f64 / 1_000_000.0;
+        assert_eq!(elapsed.total_seconds_f64(), by_hand);
     }
 
     #[test]

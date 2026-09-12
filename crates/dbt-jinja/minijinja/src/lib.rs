@@ -227,6 +227,7 @@ mod utils;
 mod vm;
 pub use vm::listeners::DefaultTypecheckingEventListener;
 pub use vm::listeners::TypecheckingEventListener;
+pub use vm::typemeta::INTROSPECTIVE_METHOD_NAMES;
 
 pub mod cache_key;
 pub mod filters;

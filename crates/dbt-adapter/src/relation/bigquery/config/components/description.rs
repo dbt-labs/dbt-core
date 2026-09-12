@@ -10,7 +10,7 @@ use minijinja::value::Value;
 
 pub(crate) const TYPE_NAME: &str = "description";
 
-/// Component for BigQuery refresh config
+/// Component for BigQuery relation description.
 pub(crate) type Description = SimpleComponentConfigImpl<String>;
 
 fn new_component(description: String) -> Description {

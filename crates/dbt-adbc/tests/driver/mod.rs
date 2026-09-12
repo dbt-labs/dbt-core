@@ -126,16 +126,8 @@ mod tests {
                 builder.with_named_option("path", database_path)?;
                 Ok(builder)
             }
-            Backend::Alt => {
-                // The MVP alt compute driver runs a local in-process DuckDB, so
-                // it takes the same `path` option. The `adbc.dbt.*` options are
-                // accepted-and-ignored by the driver; we set one here to exercise
-                // that they don't leak into the DuckDB backend.
-                let mut builder = database::Builder::new(backend);
-                builder
-                    .with_named_option("path", ":memory:")?
-                    .with_named_option("adbc.dbt.base_url", "https://example.invalid")?;
-                Ok(builder)
+            Backend::LakeCompute => {
+                unimplemented!("LakeCompute backend database builder in tests")
             }
             Backend::ClickHouse => {
                 let mut builder = database::Builder::new(backend);
@@ -291,9 +283,7 @@ mod tests {
                 | Backend::Redshift
                 | Backend::Databricks
                 | Backend::DuckDB
-                | Backend::DuckDBExtended
-                // alt compute (MVP) is DuckDB-backed, so it returns Int32 too.
-                | Backend::Alt => {
+                | Backend::DuckDBExtended => {
                     assert_eq!(batch.column(0).as_primitive::<Int32Type>().value(0), 42);
                 }
                 Backend::ClickHouse => {
@@ -349,16 +339,6 @@ mod tests {
     #[test]
     fn statement_execute_duckdb() -> Result<()> {
         execute_statement(Backend::DuckDBExtended)
-    }
-
-    /// Load the `Alt` driver and run `SELECT 21 + 21`, asserting
-    /// the Arrow result. Gated behind `ALT_DRIVER_TESTS` because it requires the
-    /// `adbc_driver_dbt` cdylib to be built and discoverable by the loader, and
-    /// (for the MVP) the backing DuckDB driver reachable via `ADBC_DBT_DUCKDB_LIB`.
-    #[test_with::env(ALT_DRIVER_TESTS)]
-    #[test]
-    fn statement_execute_alt() -> Result<()> {
-        execute_statement(Backend::Alt)
     }
 
     #[test]

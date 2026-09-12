@@ -10,6 +10,8 @@ const OS_ARCH: &[(&str, &str)] = &[
     ("apple-darwin", "x86_64"),
     ("manylinux_2_17-linux-gnu", "aarch64"),
     ("manylinux_2_17-linux-gnu", "x86_64"),
+    ("manylinux_2_28-linux-gnu", "aarch64"),
+    ("manylinux_2_28-linux-gnu", "x86_64"),
     ("pc-windows-msvc", "x86_64"),
 ];
 
@@ -51,6 +53,12 @@ fn build_driver_entries(toml: &toml::Table) -> Vec<DriverEntry> {
             .expect("drivers.toml: each driver entry must be a string");
         let (backend, version) = parse_backend_and_version(bv);
         for &(os, arch) in OS_ARCH {
+            // XXX: reduce noise by skipping platforms that don't have a build
+            // for manylinux 2.28 yet. This should change in the future when
+            // we fix the manylinux labels in all the drivers.
+            if os.starts_with("manylinux_2_28") && backend != "dbt" {
+                continue;
+            }
             entries.push((
                 backend.to_string(),
                 OwnedDriverTriplet {
@@ -82,6 +90,11 @@ fn download_and_hash(agent: &ureq::Agent, url: &str) -> Result<String, ureq::Err
 }
 
 fn main() {
+    // Checksums are of whatever this host serves, so name it: a stray
+    // DBT_ADBC_USE_STAGING_CDN would otherwise silently record pre-release
+    // hashes.
+    eprintln!("Syncing checksums from https://{}", install::cdn_host());
+
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let output_path = crate_dir.join("src/checksums.rs");
 

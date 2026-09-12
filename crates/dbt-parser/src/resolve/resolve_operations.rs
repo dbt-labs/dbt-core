@@ -6,10 +6,7 @@ use std::{
 
 use crate::utils::NoOpConfig;
 use dbt_adapter_core::AdapterType;
-use dbt_common::{
-    CodeLocationWithFile, ErrorCode, FsResult, fs_err,
-    io_args::{IoArgs, StaticAnalysisKind},
-};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsResult, fs_err, io_args::StaticAnalysisKind};
 use dbt_common::{path::DbtPath, tracing::dbt_emit::emit_warn_log_from_fs_error};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
@@ -36,12 +33,12 @@ pub fn resolve_operations(
     package_base_path: &Path,
     project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
-    io: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
     schema: &str,
     root_project_quoting: DbtQuoting,
+    package_runtime_config: Arc<DbtRuntimeConfig>,
     root_runtime_config: Arc<DbtRuntimeConfig>,
 ) -> FsResult<(Vec<Spanned<DbtOperation>>, Vec<Spanned<DbtOperation>>)> {
     let mut on_run_start = Vec::new();
@@ -56,12 +53,12 @@ pub fn resolve_operations(
             package_base_path,
             project_root,
             jinja_env,
-            io,
             global_static_analysis,
             adapter_type,
             database,
             schema,
             &root_project_quoting,
+            &package_runtime_config,
             &root_runtime_config,
         )?);
     }
@@ -75,12 +72,12 @@ pub fn resolve_operations(
             package_base_path,
             project_root,
             jinja_env,
-            io,
             global_static_analysis,
             adapter_type,
             database,
             schema,
             &root_project_quoting,
+            &package_runtime_config,
             &root_runtime_config,
         )?);
     }
@@ -96,12 +93,12 @@ fn new_operation(
     _package_base_path: &Path,
     _project_root: &Path,
     jinja_env: &Arc<JinjaEnv>,
-    io: &IoArgs,
     global_static_analysis: Option<StaticAnalysisKind>,
     adapter_type: AdapterType,
     database: &str,
     schema: &str,
     root_project_quoting: &DbtQuoting,
+    package_runtime_config: &Arc<DbtRuntimeConfig>,
     root_runtime_config: &Arc<DbtRuntimeConfig>,
 ) -> FsResult<Vec<Spanned<DbtOperation>>> {
     let project_name = &dbt_project.name;
@@ -138,12 +135,28 @@ fn new_operation(
                 checksum: DbtChecksum::hash(operation_sql.trim().as_bytes()),
                 raw_code: Some(operation_sql.to_string()),
                 language: Some("sql".to_string()),
+                // Stored as a plain field (unlike `Spanned<T>`'s own span) so it
+                // survives the `--partial-parse` cache's JSON round-trip; see
+                // `run_operation_on_run` in dbt-tasks-sa, which relies on this to
+                // attribute hook-execution errors back to their real location.
+                name_span: dbt_common::Span::from_serde_span(
+                    operation_sql_spanned.span().clone(),
+                    original_file_path.clone(),
+                ),
                 ..Default::default()
             },
             __base_attr__: NodeBaseAttributes {
                 alias: name,
                 database: database.to_string(),
                 schema: schema.to_string(),
+                // A hook is not a node the user configures, so it runs on the
+                // target default. This must be set rather than defaulted: the
+                // adapter decides which dialect's internal-macro namespace the
+                // hook resolves `dbt.run_query` and friends through, and a wrong
+                // one yields an empty namespace rather than an error.
+                adapter: adapter_type,
+                // This node type has no `+propagate` config; nothing is published.
+                propagate: Vec::new(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),
@@ -160,24 +173,25 @@ fn new_operation(
             let mut operation_ctx = BTreeMap::new();
             operation_ctx.extend(build_resolve_model_context(
                 &NoOpConfig {},
+                false,
                 adapter_type,
                 database,
                 schema,
                 &operation.__common_attr__.name,
                 vec![
-                    root_runtime_config.inner.project_name.clone(),
+                    package_runtime_config.inner.project_name.clone(),
                     "hooks".to_string(),
                     operation.__common_attr__.name.clone(),
                 ],
                 &operation.__common_attr__.package_name,
                 &root_runtime_config.inner.project_name,
                 *root_project_quoting,
+                package_runtime_config.clone(),
                 root_runtime_config.clone(),
                 sql_resources.clone(),
                 execute_exists,
                 &operation.__common_attr__.original_file_path,
                 &PathBuf::new(),
-                io,
                 global_static_analysis,
             ));
 
@@ -259,7 +273,7 @@ fn new_operation(
                         err.to_string()
                     )
                     .with_location(operation.__common_attr__.original_file_path.to_path_buf());
-                    emit_warn_log_from_fs_error(&err, io.status_reporter.as_ref());
+                    emit_warn_log_from_fs_error(err);
                 }
             }
         }
@@ -269,4 +283,116 @@ fn new_operation(
     }
 
     Ok(resolved_operations)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use chrono_tz::Tz;
+    use dbt_common::io_args::IoArgs;
+    use dbt_jinja_utils::invocation_args::InvocationArgs;
+    use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
+    use dbt_schemas::schemas::profiles::PostgresDbConfig;
+    use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
+    use dbt_schemas::schemas::serde::StringOrInteger;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn runtime_config_named(project_name: &str) -> Arc<DbtRuntimeConfig> {
+        let mut cfg = DbtRuntimeConfig::default();
+        cfg.inner.project_name = project_name.to_string();
+        Arc::new(cfg)
+    }
+
+    fn test_jinja_env() -> Arc<JinjaEnv> {
+        let invocation_args = InvocationArgs::default();
+        let tz_now: chrono::DateTime<Tz> = Utc::now().with_timezone(&Tz::UTC);
+        Arc::new(
+            initialize_parse_jinja_environment(
+                "root_project",
+                "profile",
+                "target",
+                AdapterType::Postgres,
+                PostgresDbConfig {
+                    port: Some(StringOrInteger::Integer(5432)),
+                    database: Some("postgres".to_string()),
+                    host: Some("localhost".to_string()),
+                    user: Some("postgres".to_string()),
+                    password: Some("postgres".to_string()),
+                    schema: Some("schema".to_string()),
+                    ..Default::default()
+                }
+                .into(),
+                vec![AdapterType::Postgres],
+                DEFAULT_DBT_QUOTING,
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                tz_now,
+                &invocation_args,
+                BTreeSet::from(["root_project".to_string(), "dep_pkg".to_string()]),
+                IoArgs::default(),
+                None,
+            )
+            .unwrap(),
+        )
+    }
+
+    /// Regression: `resolve_operations` previously received a single `Arc<DbtRuntimeConfig>`
+    /// parameter misleadingly named `root_runtime_config`, but the caller in `resolver.rs`
+    /// actually passed each package's OWN config there. So `context.project_name` inside a
+    /// dependency package's on-run-start/on-run-end hook resolved to the dependency's own name
+    /// instead of the true root project's, unlike dbt Core (`generate_runtime_model_context`
+    /// always uses the root `RuntimeConfig`). This is the same root-vs-package gap as #13819,
+    /// found in the process of fixing it — split the parameter into a genuinely
+    /// package-scoped one (for the hook's own `fqn[0]`) and a genuinely root-scoped one (for
+    /// `context.project_name` and `ref`/`source`/`metric`'s `.config`).
+    #[test]
+    fn dependency_package_hook_reads_root_project_name() {
+        let dbt_project: DbtProject = dbt_yaml::from_str(
+            r#"
+name: dep_pkg
+version: '1.0'
+config-version: 2
+on-run-start:
+  - "{{ ref(context.project_name) }}"
+"#,
+        )
+        .unwrap();
+
+        let jinja_env = test_jinja_env();
+        let package_runtime_config = runtime_config_named("dep_pkg");
+        let root_runtime_config = runtime_config_named("root_project");
+
+        let (on_run_start, _on_run_end) = resolve_operations(
+            &dbt_project,
+            Path::new("dep_pkg"),
+            Path::new("/tmp/project"),
+            &jinja_env,
+            None,
+            AdapterType::Postgres,
+            "db",
+            "schema",
+            DEFAULT_DBT_QUOTING,
+            package_runtime_config,
+            root_runtime_config,
+        )
+        .unwrap();
+
+        let hook = on_run_start
+            .first()
+            .expect("on-run-start hook should be resolved")
+            .as_ref();
+        let hook_ref = hook
+            .__base_attr__
+            .refs
+            .first()
+            .expect("ref(context.project_name) should be recorded");
+        assert_eq!(
+            hook_ref.name, "root_project",
+            "context.project_name inside a dependency package's hook must resolve to the \
+             ROOT project's name, not the dependency's own"
+        );
+    }
 }

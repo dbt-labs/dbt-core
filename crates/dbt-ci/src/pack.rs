@@ -103,12 +103,16 @@ fn collect_binaries(dir: &Path) -> Result<Vec<Binary>> {
 }
 
 /// PEP 491 wheel filename; the single source of truth shared by `pack` and `sdist`.
+/// `python_tag`/`abi_tag` are the interpreter/ABI compatibility tags — `py3`/`none`
+/// for the binary CLI wheel, `cp310`/`abi3` for the maturin `dbt-core` extension.
 pub(crate) fn wheel_filename(
     dist_normalized: &str,
     version_pep440: &str,
+    python_tag: &str,
+    abi_tag: &str,
     platform_tag: &str,
 ) -> String {
-    format!("{dist_normalized}-{version_pep440}-py3-none-{platform_tag}.whl")
+    format!("{dist_normalized}-{version_pep440}-{python_tag}-{abi_tag}-{platform_tag}.whl")
 }
 
 /// Packs one binary into a wheel under `out_dir`, returning the wheel path.
@@ -122,7 +126,8 @@ fn pack_wheel(
     let platform_tag = target_to_platform_tag(&bin.target_triple)
         .ok_or_else(|| anyhow!("unsupported target triple {:?}", bin.target_triple))?;
     let dist = normalize_wheel_name(&spec.wheel_name);
-    let wheel_filename = wheel_filename(&dist, version_pep440, &platform_tag);
+    // The CLI wheel wraps a prebuilt binary — interpreter-agnostic, so `py3-none`.
+    let wheel_filename = wheel_filename(&dist, version_pep440, "py3", "none", &platform_tag);
     let wheel_path = out_dir.join(&wheel_filename);
     let dist_info = format!("{dist}-{version_pep440}.dist-info");
     let data_scripts = format!("{dist}-{version_pep440}.data/scripts");
@@ -197,6 +202,9 @@ pub(crate) fn render_metadata(spec: &Spec, version_pep440: &str) -> String {
     }
     if let Some(rp) = &spec.requires_python {
         let _ = writeln!(out, "Requires-Python: {rp}");
+    }
+    for dep in &spec.dependencies {
+        let _ = writeln!(out, "Requires-Dist: {dep}");
     }
     if let Some(l) = &spec.license {
         let _ = writeln!(out, "License: {}", flatten_for_header(l));
@@ -301,6 +309,20 @@ mod tests {
     }
 
     #[test]
+    fn wheel_filename_carries_interpreter_and_abi_tags() {
+        // Binary CLI wheel: interpreter-agnostic.
+        assert_eq!(
+            wheel_filename("dbt", "2.0.0", "py3", "none", "manylinux_2_28_x86_64"),
+            "dbt-2.0.0-py3-none-manylinux_2_28_x86_64.whl"
+        );
+        // maturin abi3 extension wheel (the `dbt-core` package).
+        assert_eq!(
+            wheel_filename("dbt_core", "2.0.0", "cp310", "abi3", "macosx_11_0_arm64"),
+            "dbt_core-2.0.0-cp310-abi3-macosx_11_0_arm64.whl"
+        );
+    }
+
+    #[test]
     fn target_to_platform_tag_handles_known_triples() {
         assert_eq!(
             target_to_platform_tag("x86_64-unknown-linux-gnu").as_deref(),
@@ -367,6 +389,7 @@ mod tests {
             pyproject_dir: dir.to_path_buf(),
             summary: Some("dbt fusion standalone analyzer CLI".to_string()),
             requires_python: Some(">=3.9".to_string()),
+            dependencies: vec!["mashumaro[msgpack]>=3.14".to_string()],
             classifiers: vec!["Programming Language :: Rust".to_string()],
             urls: vec![("Homepage".to_string(), "https://getdbt.com".to_string())],
             authors: vec![Author {
@@ -410,6 +433,9 @@ mod tests {
         assert!(metadata.contains("Version: 2.0.0a1"));
         assert!(metadata.contains("Summary: dbt fusion standalone analyzer CLI"));
         assert!(metadata.contains("Requires-Python: >=3.9"));
+        // Dropping these leaves an installer that trusts static metadata with a
+        // dependency-free install.
+        assert!(metadata.contains("Requires-Dist: mashumaro[msgpack]>=3.14"));
         assert!(metadata.contains("Classifier: Programming Language :: Rust"));
         assert!(metadata.contains("Project-URL: Homepage, https://getdbt.com"));
         assert!(metadata.contains("Author-email: dbt Labs <info@dbtlabs.com>"));
@@ -453,6 +479,7 @@ mod tests {
             pyproject_dir: dir.to_path_buf(),
             summary: None,
             requires_python: None,
+            dependencies: Vec::new(),
             classifiers: vec![],
             urls: vec![],
             authors: vec![],

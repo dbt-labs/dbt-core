@@ -27,16 +27,19 @@ use dbt_common::tracing::span_info::{
 use dbt_common::{ErrorCode, FsResult, err, stdfs};
 use dbt_common::{create_info_span, fs_err, lease};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_schemas::schemas::ResolvedCloudConfig;
 use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
 use dbt_telemetry::{DepsAllPackagesInstalled, GenericOpExecuted};
+use std::sync::Arc;
 use std::{collections::BTreeMap, path::Path};
 use steps::{
-    compute_package_lock, install_packages, load_dbt_packages,
+    SkillInstallInputs, compute_package_lock, install_packages, install_skills, load_dbt_packages,
     load_dbt_packages_lock_without_validation, try_load_valid_dbt_packages_lock,
 };
 use tracing::Instrument as _;
 
 use crate::context::DepsOperationContext;
+use crate::private_package::PrivatePackageResolver;
 
 /// Loads and installs packages, and returns the packages lock and the dependencies map
 #[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
@@ -55,6 +58,10 @@ pub async fn get_or_install_packages(
     replay_mode: Option<&ReplayMode>,
     token: &CancellationToken,
     use_v2_compatible_package_downloads: bool,
+    require_hub_verified_downloads: bool,
+    private_package_resolver: Arc<dyn PrivatePackageResolver>,
+    cloud_config: Option<ResolvedCloudConfig>,
+    ai_provider: Option<&[String]>,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     let Some(packages_relative_dir) =
         DbtPath::from(packages_install_path).get_relative_path(&io.in_dir)
@@ -81,13 +88,10 @@ pub async fn get_or_install_packages(
                 .await?
                 .unwrap_or_default();
 
-        emit_info_progress_message(
-            dbt_telemetry::ProgressMessage::new_from_action_and_target(
-                "Loading".to_string(),
-                "package-lock.yml".to_string(),
-            ),
-            io.status_reporter.as_ref(),
-        );
+        emit_info_progress_message(dbt_telemetry::ProgressMessage::new_from_action_and_target(
+            "Loading".to_string(),
+            "package-lock.yml".to_string(),
+        ));
 
         // Return empty upstream projects since we're not fetching anything
         return Ok((dbt_packages_lock, vec![]));
@@ -101,6 +105,9 @@ pub async fn get_or_install_packages(
         skip_private_deps,
         version_check,
         use_v2_compatible_package_downloads,
+        require_hub_verified_downloads,
+        private_package_resolver,
+        cloud_config,
     );
 
     // Add package first if specified, then load the package definition
@@ -109,7 +116,7 @@ pub async fn get_or_install_packages(
     }
 
     // This gets the package entries from packages.yml or dependencies.yml
-    let (package_def, package_yml_name) = load_dbt_packages(io, &io.in_dir).await?;
+    let (package_def, package_yml_name) = load_dbt_packages(&io.in_dir).await?;
 
     let dbt_packages_lock = if let Some(ref dbt_packages) = package_def {
         deps_context.notices.collect(dbt_packages);
@@ -132,13 +139,10 @@ pub async fn get_or_install_packages(
         };
 
         if let Some(dbt_packages_lock) = try_cached_lock {
-            emit_info_progress_message(
-                dbt_telemetry::ProgressMessage::new_from_action_and_target(
-                    "Loading".to_string(),
-                    package_yml_name.to_string(),
-                ),
-                io.status_reporter.as_ref(),
-            );
+            emit_info_progress_message(dbt_telemetry::ProgressMessage::new_from_action_and_target(
+                "Loading".to_string(),
+                package_yml_name.to_string(),
+            ));
             dbt_packages_lock
         } else {
             let fetch_span = create_info_span(GenericOpExecuted::new(
@@ -180,20 +184,16 @@ pub async fn get_or_install_packages(
             emit_warn_log_message(
                 ErrorCode::InvalidConfig,
                 "Cannot upgrade packages without packages.yml or dependencies.yml. Using existing package-lock.yml.",
-                io.status_reporter.as_ref(),
             );
         }
 
         if let Some(dbt_packages_lock) =
             load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars).await?
         {
-            emit_info_progress_message(
-                dbt_telemetry::ProgressMessage::new_from_action_and_target(
-                    "Loading".to_string(),
-                    "package-lock.yml".to_string(),
-                ),
-                io.status_reporter.as_ref(),
-            );
+            emit_info_progress_message(dbt_telemetry::ProgressMessage::new_from_action_and_target(
+                "Loading".to_string(),
+                "package-lock.yml".to_string(),
+            ));
             dbt_packages_lock
         } else {
             // No packages.yml and no valid package-lock.yml - return empty
@@ -292,6 +292,18 @@ pub async fn get_or_install_packages(
     }
 
     deps_context.flush_notices(&dbt_packages_lock);
+
+    // Skills ship inside packages, so install them at the same moment the
+    // packages land. Skipped in lock-only mode, where nothing was unpacked. A
+    // skill-name collision is the one skill problem that fails `dbt deps`.
+    if !lock {
+        install_skills(SkillInstallInputs {
+            in_dir: &io.in_dir,
+            packages_install_path,
+            dbt_packages_lock: &dbt_packages_lock,
+            ai_provider,
+        })?;
+    }
 
     Ok((
         dbt_packages_lock,

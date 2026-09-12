@@ -56,7 +56,11 @@ pub(crate) fn get_common_table_options_value(
     // `description`). A sorted map would reorder them and break parity.
     let mut result = IndexMap::new();
 
-    if let Some(hours) = config.__warehouse_specific_config__.hours_to_expiration
+    if let Some(hours) = config
+        .__warehouse_specific_config__
+        .hours_to_expiration
+        .as_ref()
+        .and_then(|o| o.clone())
         && !temporary
     {
         let expiration = format!("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL {hours} hour)");
@@ -181,7 +185,9 @@ pub(crate) fn get_table_options_value(
             );
         }
 
-        if catalog_relation.table_format.is_iceberg() {
+        if catalog_relation.table_format.is_iceberg()
+            && catalog_relation.lakehouse_catalog.is_none()
+        {
             opts.insert(
                 "table_format".to_string(),
                 Value::from(format!("'{}'", catalog_relation.table_format.as_str())),
@@ -212,10 +218,11 @@ pub(crate) fn get_table_options_value(
         }
     }
 
-    // Partition expiration if specified
-    if let Some(days) = config
-        .__warehouse_specific_config__
-        .partition_expiration_days
+    // Partition expiration applies only to the final table.
+    if !temporary
+        && let Some(days) = config
+            .__warehouse_specific_config__
+            .partition_expiration_days
     {
         opts.insert("partition_expiration_days".to_string(), Value::from(days));
     }
@@ -232,7 +239,8 @@ mod tests {
         let env = minijinja::Environment::new();
         let state = env.empty_state();
         let mut config = ModelConfig::default();
-        config.__warehouse_specific_config__.hours_to_expiration = hours;
+        config.__warehouse_specific_config__.hours_to_expiration =
+            dbt_common::serde_utils::Omissible::Present(hours);
         let common = CommonAttributes::default();
         let opts = get_common_table_options_value(&state, config, &common, temporary);
         opts.get("expiration_timestamp").map(|v| v.to_string())
@@ -267,6 +275,38 @@ mod tests {
         assert_eq!(
             expiration_for(Some(StringOrInteger::Integer(12)), true),
             None
+        );
+    }
+
+    fn table_options_with_partition_expiration(temporary: bool) -> IndexMap<String, Value> {
+        let env = minijinja::Environment::new();
+        let state = env.empty_state();
+        let mut config = ModelConfig::default();
+        config
+            .__warehouse_specific_config__
+            .partition_expiration_days = Some(90);
+        let node = InternalDbtNodeWrapper::Model(Box::default());
+        get_table_options_value(&state, config, &node, temporary, AdapterType::Bigquery).unwrap()
+    }
+
+    #[test]
+    fn partition_expiration_is_retained_for_final_tables() {
+        let options = table_options_with_partition_expiration(false);
+        assert_eq!(
+            options.get("partition_expiration_days"),
+            Some(&Value::from(90))
+        );
+    }
+
+    #[test]
+    fn partition_expiration_is_omitted_for_temporary_tables() {
+        let options = table_options_with_partition_expiration(true);
+        assert_eq!(options.get("partition_expiration_days"), None);
+        assert_eq!(
+            options.get("expiration_timestamp"),
+            Some(&Value::from(
+                "TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)"
+            ))
         );
     }
 

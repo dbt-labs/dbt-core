@@ -39,7 +39,7 @@ pub enum SqlResource<T: ResolvableConfig<T>> {
     /// A snapshot definition (e.g. `{% snapshot my_snapshot %}`)
     Snapshot(String, Span, Span), // name, span, macro_name_span
     /// A materialization macro definition (e.g. `{% materialization my_materialization, adapter='snowflake' %}`)
-    Materialization(String, String, Span, Span), // name, adapter, span, macro_name_span
+    Materialization(String, String, Option<Vec<String>>, Span, Span), // name, adapter, supported_languages, span, macro_name_span
 }
 
 impl<T: ResolvableConfig<T>> std::fmt::Display for SqlResource<T> {
@@ -65,7 +65,7 @@ impl<T: ResolvableConfig<T>> std::fmt::Display for SqlResource<T> {
             SqlResource::Test(name, span, _, _) => write!(f, "Test({name} {span:#?})"),
             SqlResource::Macro(name, span, _, _, _) => write!(f, "Macro({name} {span:#?})"),
             SqlResource::Doc(name, span) => write!(f, "Docs({name} {span:#?})"),
-            SqlResource::Materialization(name, adapter, span, _) => {
+            SqlResource::Materialization(name, adapter, _, span, _) => {
                 write!(f, "Materialization({name} {adapter} {span:#?})")
             }
             SqlResource::Snapshot(name, span, _) => {

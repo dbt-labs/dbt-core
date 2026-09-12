@@ -2,6 +2,7 @@ use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::MetricConfig;
 use dbt_yaml::DbtSchema;
 use dbt_yaml::UntaggedEnumDeserialize;
+use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -21,8 +22,7 @@ pub struct MetricsProperties {
     pub join_to_timespine: Option<bool>,
     pub fill_nulls_with: Option<i32>,
     pub expr: Option<MetricExpr>,
-    // TODO: can we add a macro to this field for it to be ignored during jinja transformation?
-    pub filter: Option<String>,
+    pub filter: Verbatim<Option<String>>,
     pub config: Option<MetricConfig>,
     pub non_additive_dimension: Option<MetricPropertiesNonAdditiveDimension>,
     pub agg_time_dimension: Option<String>,
@@ -46,7 +46,7 @@ pub fn default_hidden() -> Option<bool> {
     Some(false)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, DbtSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MetricType {
     #[default]
@@ -111,7 +111,7 @@ pub enum WindowChoice {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct MetricPropertiesMetricInput {
     pub name: String,
-    pub filter: Option<String>,
+    pub filter: Verbatim<Option<String>>,
     pub alias: Option<String>,
     pub offset_window: Option<String>,
     pub offset_to_grain: Option<String>,

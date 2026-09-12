@@ -58,6 +58,7 @@ pub trait TaskRunnerHooks: Send + Sync {
         &self,
         run_task_args: &RunTasksArgs,
         ctx: &mut TaskRunnerCtx,
+        token: &CancellationToken,
     );
 
     async fn will_visit_taskgraph(

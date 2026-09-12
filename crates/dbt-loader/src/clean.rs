@@ -11,9 +11,9 @@ use std::{
 use dbt_common::{
     ErrorCode, FsResult,
     cancellation::CancellationToken,
-    constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
+    constants::{DBT_INDEX_DIR_NAME, DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME},
     err, fs_err,
-    io_args::{EvalArgs, EvalArgsBuilder, IoArgs},
+    io_args::{EvalArgs, EvalArgsBuilder},
     lease,
     path::DbtPath,
     stdfs,
@@ -54,8 +54,8 @@ pub async fn execute_clean_command(
     let env = initialize_load_jinja_environment(
         &dbt_state.dbt_profile.profile,
         &dbt_state.dbt_profile.target,
-        dbt_state.dbt_profile.db_config.adapter_type(),
-        dbt_state.dbt_profile.db_config.clone(),
+        dbt_state.dbt_profile.default_db_config().adapter_type(),
+        dbt_state.dbt_profile.default_db_config().clone(),
         dbt_state.run_started_at,
         &flags,
         invocation_args.warn_error_options.clone(),
@@ -64,8 +64,7 @@ pub async fn execute_clean_command(
     )?;
 
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);
-    let (dbt_project, _) =
-        load_project_yml(&arg.io, &env, &dbt_project_path, None, arg.vars.clone())?;
+    let (dbt_project, _) = load_project_yml(&env, &dbt_project_path, None, arg.vars.clone())?;
 
     clean_project(&arg, files, &dbt_project, /* clean_targets */ true).await?;
 
@@ -107,15 +106,21 @@ pub async fn clean_project(
         })
         .collect::<Result<HashSet<_>, _>>()?;
 
-    paths_to_delete.insert(DbtPath::from(&arg.io.out_dir));
+    let out_dir = DbtPath::from(&arg.io.out_dir);
+    paths_to_delete.insert(out_dir.clone());
+    // Leftover public copies from before index/metadata moved under `private/`.
+    // Wiping `out_dir` already removes them; keep the paths explicit so a custom
+    // `clean-targets` that does not delete the whole target still hides them.
+    paths_to_delete.insert(out_dir.join(DBT_INDEX_DIR_NAME));
+    paths_to_delete.insert(out_dir.join(DBT_METADATA_DIR_NAME));
 
     let all_safe = paths_to_delete.iter().all(|path_to_delete| {
         // The clean command does not delete anything outside of the project directory
-        unrelated_paths(&arg.io, &arg.io.in_dir, path_to_delete)
+        unrelated_paths(&arg.io.in_dir, path_to_delete)
             // The clean command does not delete protected directories ("models", "macros", etc.)
             && protected_paths
                 .iter()
-                .all(|protected_path| unrelated_paths(&arg.io, protected_path, path_to_delete))
+                .all(|protected_path| unrelated_paths(protected_path, path_to_delete))
     });
 
     if all_safe {
@@ -163,13 +168,10 @@ pub async fn clean_project(
         };
 
         for (path, display_path_string, _) in &lease_guards {
-            emit_info_progress_message(
-                ProgressMessage::new_from_action_and_target(
-                    "Removing".to_string(),
-                    display_path_string.to_string(),
-                ),
-                arg.io.status_reporter.as_ref(),
-            );
+            emit_info_progress_message(ProgressMessage::new_from_action_and_target(
+                "Removing".to_string(),
+                display_path_string.to_string(),
+            ));
             stdfs::remove_dir_all(path)?;
         }
 
@@ -184,25 +186,35 @@ pub async fn clean_project(
     // Explicitly release to predictably wait for the lease internally to drop.
     target_guard.release().await;
 
+    // Remove the agent skills dbt installed into the provider directories. Only
+    // dbt's own installs are touched; anything the user authored is left alone.
+    if let Err(e) =
+        dbt_skills::prune_installed_skills(&arg.io.in_dir, dbt_project, arg.ai_provider.as_deref())
+    {
+        // A skill-pruning problem should not fail `dbt clean`; warn and move on.
+        emit_error_log_from_fs_error(*e);
+    }
+
     Ok(())
 }
 
-fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(io: &IoArgs, to: P, from: Q) -> bool {
-    stdfs::diff_paths(&to, &from)
-        .and_then(|diff| {
-            // It is safe to delete a directory if the only way to get to a protected directory is to navigate to the parent.
-            if diff.components().next() == Some(std::path::Component::ParentDir) {
-                Ok(true)
-            } else {
-                Err(fs_err!(
-                    ErrorCode::InvalidPath,
-                    "The target directory is protected: {}",
-                    from.as_ref().display()
-                ))
-            }
-        })
-        .inspect_err(|e| {
-            emit_error_log_from_fs_error(e, io.status_reporter.as_ref());
-        })
-        .is_ok()
+fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(to: P, from: Q) -> bool {
+    match stdfs::diff_paths(&to, &from).and_then(|diff| {
+        // It is safe to delete a directory if the only way to get to a protected directory is to navigate to the parent.
+        if diff.components().next() == Some(std::path::Component::ParentDir) {
+            Ok(true)
+        } else {
+            Err(fs_err!(
+                ErrorCode::InvalidPath,
+                "The target directory is protected: {}",
+                from.as_ref().display()
+            ))
+        }
+    }) {
+        Ok(_) => true,
+        Err(e) => {
+            emit_error_log_from_fs_error(*e);
+            false
+        }
+    }
 }

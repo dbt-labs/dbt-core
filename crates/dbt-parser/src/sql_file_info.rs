@@ -110,7 +110,7 @@ impl<T: ResolvableConfig<T>> SqlFileInfo<T> {
                 SqlResource::Macro(name, span, func_sign, args, _) => {
                     macros.push((name, span, func_sign, args))
                 }
-                SqlResource::Materialization(name, adapter, span, _) => {
+                SqlResource::Materialization(name, adapter, _, span, _) => {
                     materializations.push((name, adapter, span))
                 }
                 SqlResource::Doc(name, span) => docs.push((name, span)),

@@ -11,6 +11,7 @@ pub struct Stats {
     pub stats: Vec<Stat>,
     pub nodes: Option<Nodes>,
     pub batch_results: HashMap<String, BatchResults>,
+    pub compiled_code: HashMap<String, String>,
 }
 
 impl fmt::Display for Stats {

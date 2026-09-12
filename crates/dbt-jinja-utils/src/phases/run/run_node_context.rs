@@ -28,7 +28,8 @@ use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
 use serde::Serialize;
 
 use dbt_jinja_ctx::{
-    HookConfig, JinjaObject, LazyModelWrapper, MacroLookupContext, RunNodeCtx, to_jinja_btreemap,
+    CompileBaseCtx, HookConfig, JinjaObject, LazyModelWrapper, MacroLookupContext, RunNodeCtx,
+    to_jinja_btreemap, to_model_context_map,
 };
 
 use super::run_config::RunConfig;
@@ -126,7 +127,16 @@ fn build_model_context_fields<S: Serialize>(
 
     let config_yml = dbt_yaml::to_value(deprecated_config).expect("Failed to serialize object");
 
-    let pre_hooks = config_yml.get("pre_hook").map(|pre_hook| {
+    // `ModelConfig`/`SeedConfig`/`SnapshotConfig` serialize hooks under the underscored
+    // name; `FunctionConfig` doubles as its own manifest type and so uses dbt-core's
+    // hyphenated key. Accept either.
+    let hooks_of = |underscored: &str, hyphenated: &str| {
+        config_yml
+            .get(underscored)
+            .or_else(|| config_yml.get(hyphenated))
+    };
+
+    let pre_hooks = hooks_of("pre_hook", "pre-hook").map(|pre_hook| {
         let values: Vec<HookConfig> = match pre_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(pre_hook).into_iter().collect()
@@ -137,7 +147,6 @@ fn build_model_context_fields<S: Serialize>(
                 emit_warn_log_message(
                     ErrorCode::InvalidConfig,
                     format!("Unknown pre-hook type: {:?}", pre_hook),
-                    io_args.status_reporter.as_ref(),
                 );
                 vec![]
             }
@@ -149,7 +158,7 @@ fn build_model_context_fields<S: Serialize>(
             .into()
     });
 
-    let post_hooks = config_yml.get("post_hook").map(|post_hook| {
+    let post_hooks = hooks_of("post_hook", "post-hook").map(|post_hook| {
         let values: Vec<HookConfig> = match post_hook {
             YmlValue::String(_, _) | YmlValue::Mapping(_, _) => {
                 parse_hook_item(post_hook).into_iter().collect()
@@ -160,7 +169,6 @@ fn build_model_context_fields<S: Serialize>(
                 emit_warn_log_message(
                     ErrorCode::InvalidConfig,
                     format!("Unknown post-hook type: {:?}", post_hook),
-                    io_args.status_reporter.as_ref(),
                 );
                 vec![]
             }
@@ -193,7 +201,6 @@ fn build_model_context_fields<S: Serialize>(
             emit_warn_log_message(
                 ErrorCode::IoError,
                 format!("Failed to read raw_sql: {}", raw_sql_path.display()),
-                io_args.status_reporter.as_ref(),
             );
         };
     }
@@ -213,17 +220,23 @@ fn build_model_context_fields<S: Serialize>(
         }
     };
 
+    // Create the lazy wrappers for the model with the compiled path. All three
+    // share one mutable map so `{% do model.update(...) %}` in a
+    // materialization is observable through `model`, `node` and `config.model`
+    // alike.
+    let compiled_path =
+        node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
+    let shared_model_map = to_model_context_map(model_map);
+
     let node_config = RunConfig {
         model_config: config_map,
-        model: model_map.clone(),
+        model: shared_model_map.clone(),
+        model_compiled_path: compiled_path.clone(),
         valid_keys,
     };
 
-    // Create the lazy wrapper for the model with the compiled path
-    let compiled_path =
-        node.get_node_path_abs(NodePathKind::Compiled, &io_args.in_dir, &io_args.out_dir);
-    let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path.clone());
-    let lazy_node = LazyModelWrapper::new(model_map, compiled_path);
+    let lazy_model = LazyModelWrapper::new(shared_model_map.clone(), compiled_path.clone());
+    let lazy_node = LazyModelWrapper::new(shared_model_map, compiled_path);
 
     ModelContextFields {
         this: this_relation,
@@ -292,7 +305,7 @@ pub fn extend_base_context_stateful_fn(
 ///
 /// Calling this on each per-batch context gives every batch its own registry,
 /// mirroring dbt-core where each batch runner builds its own model context.
-pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
+pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) -> ResultStore {
     let result_store = ResultStore::default();
     context.insert(
         "store_result".to_owned(),
@@ -306,21 +319,40 @@ pub fn reset_result_store(context: &mut BTreeMap<String, MinijinjaValue>) {
         "store_raw_result".to_owned(),
         MinijinjaValue::from_function(result_store.store_raw_result()),
     );
+    result_store
 }
 
-/// Build a run context - parent function that orchestrates the context building
+/// Downcast a base context's `builtins` Object back to its concrete
+/// `BTreeMap<String, MinijinjaValue>` — same trap as `MACRO_DISPATCH_ORDER`.
+fn downcast_builtins_map(builtins: &MinijinjaValue) -> BTreeMap<String, MinijinjaValue> {
+    builtins
+        .as_object()
+        .unwrap()
+        .downcast_ref::<BTreeMap<String, MinijinjaValue>>()
+        .unwrap()
+        .clone()
+}
+
+/// Build the per-node run overlay ([`RunNodeCtx`]) with `base: None`.
+///
+/// Shared core of [`build_run_node_context`] and [`build_run_node_ctx`], which
+/// can't delegate to each other (one holds a `&BTreeMap`, the other a
+/// `&CompileBaseCtx`). `base_builtins` is that base's `builtins` map — already
+/// downcast by each caller via [`downcast_builtins_map`] — extended here with
+/// the per-node `RunConfig` before being re-wrapped as a `MinijinjaValue`
+/// Object (downstream macro code downcasts it back).
 #[allow(clippy::too_many_arguments)]
-pub fn build_run_node_context<S: Serialize>(
+fn build_run_node_overlay<S: Serialize>(
     node: &dyn InternalDbtNode,
     deprecated_config: &S,
     adapter_type: AdapterType,
     agate_table: Option<AgateTable>,
-    base_context: &BTreeMap<String, MinijinjaValue>,
+    base_builtins: Option<BTreeMap<String, MinijinjaValue>>,
     io_args: &IoArgs,
     phase: ExecutionPhase,
     sql_header: Option<MinijinjaValue>,
     packages: BTreeSet<String>,
-) -> BTreeMap<String, MinijinjaValue> {
+) -> (RunNodeCtx, ResultStore) {
     let common_attr = node.common();
     let resource_type = node.resource_type();
 
@@ -362,20 +394,12 @@ pub fn build_run_node_context<S: Serialize>(
         })
     });
 
-    // Builtins overlay: clone the compile-base map and insert the per-node
-    // RunConfig. The map underlying `builtins` MUST be
-    // `BTreeMap<String, MinijinjaValue>` exactly (downstream macro code
-    // downcasts to that type) — same trap as `MACRO_DISPATCH_ORDER`.
-    let mut base_builtins = if let Some(builtins) = base_context.get("builtins") {
-        builtins
-            .as_object()
-            .unwrap()
-            .downcast_ref::<BTreeMap<String, MinijinjaValue>>()
-            .unwrap()
-            .clone()
-    } else {
-        BTreeMap::new()
-    };
+    // Builtins overlay: take the caller-provided compile-base map and insert
+    // the per-node RunConfig, then re-wrap as an Object below. The map
+    // underlying `builtins` MUST be `BTreeMap<String, MinijinjaValue>` exactly
+    // (downstream macro code downcasts to that type) — same trap as
+    // `MACRO_DISPATCH_ORDER`.
+    let mut base_builtins = base_builtins.unwrap_or_default();
     let node_config = model_fields
         .config
         .as_object()
@@ -394,7 +418,8 @@ pub fn build_run_node_context<S: Serialize>(
         .map(|p| p.to_path_buf())
         .unwrap_or(abs_current_path);
 
-    let overlay = RunNodeCtx {
+    let ctx = RunNodeCtx {
+        base: None,
         this: model_fields.this,
         database: model_fields.database,
         schema: model_fields.schema,
@@ -418,15 +443,89 @@ pub fn build_run_node_context<S: Serialize>(
         current_span: MinijinjaValue::from_serialize(Span::default()),
     };
 
-    // Today's caller still consumes `BTreeMap<String, MinijinjaValue>`. We
-    // serialize the typed overlay and `.extend(...)` onto a clone of the
-    // base — same last-write-wins shadowing semantic the original
-    // BTreeMap-based code produced. PR 9 (cleanup) flows the typed struct
-    // directly through `render_named_str<S: Serialize>` and drops the
-    // conversion.
+    (ctx, result_store)
+}
+
+/// Build a run context as a `BTreeMap` overlaid onto `base_context`.
+///
+/// Legacy BTreeMap path: builds the typed [`RunNodeCtx`] overlay (`base:
+/// None`), serializes it, and `.extend(...)`s onto a clone of `base_context`
+/// — the same last-write-wins shadowing the original BTreeMap-based code
+/// produced. Callers that already hold a typed [`CompileBaseCtx`] should use
+/// [`build_run_node_ctx`] instead, which skips the `to_jinja_btreemap`
+/// round-trip.
+///
+/// TODO: remove once the remaining `&BTreeMap` callers (the `materialize_*`
+/// render path, LSP preview) are migrated to [`build_run_node_ctx`]; at that
+/// point [`build_run_node_overlay`] folds into `build_run_node_ctx`.
+#[allow(clippy::too_many_arguments)]
+pub fn build_run_node_context<S: Serialize>(
+    node: &dyn InternalDbtNode,
+    deprecated_config: &S,
+    adapter_type: AdapterType,
+    agate_table: Option<AgateTable>,
+    base_context: &BTreeMap<String, MinijinjaValue>,
+    io_args: &IoArgs,
+    phase: ExecutionPhase,
+    sql_header: Option<MinijinjaValue>,
+    packages: BTreeSet<String>,
+) -> (BTreeMap<String, MinijinjaValue>, ResultStore) {
+    // Downcast the base `builtins` Object to its concrete map here so the
+    // shared overlay builder receives a typed map (no downcast on its side).
+    let base_builtins = base_context.get("builtins").map(downcast_builtins_map);
+    let (overlay, result_store) = build_run_node_overlay(
+        node,
+        deprecated_config,
+        adapter_type,
+        agate_table,
+        base_builtins,
+        io_args,
+        phase,
+        sql_header,
+        packages,
+    );
+
     let mut context = base_context.clone();
     context.extend(to_jinja_btreemap(&overlay));
-    context
+    (context, result_store)
+}
+
+/// Build a run context as a typed [`RunNodeCtx`] composed onto `base` via the
+/// `RunNodeCtx::base` flatten seam.
+///
+/// Typed path: the returned overlay carries `base: Some(base.clone())`, so it
+/// can be passed straight into `render_named_str` / `Expression::eval`
+/// (`S: Serialize`) with no intermediate `to_jinja_btreemap` — the base keys
+/// flatten in and the per-node fields shadow them. This is the composition
+/// seam the base-context migration moves callers onto incrementally.
+#[allow(clippy::too_many_arguments)]
+pub fn build_run_node_ctx<S: Serialize>(
+    node: &dyn InternalDbtNode,
+    deprecated_config: &S,
+    adapter_type: AdapterType,
+    agate_table: Option<AgateTable>,
+    base: &CompileBaseCtx,
+    io_args: &IoArgs,
+    phase: ExecutionPhase,
+    sql_header: Option<MinijinjaValue>,
+    packages: BTreeSet<String>,
+) -> RunNodeCtx {
+    // `CompileBaseCtx::builtins` is a `MinijinjaValue` (Jinja-facing Object
+    // slot), so downcast it to the concrete map for the shared overlay builder.
+    let base_builtins = downcast_builtins_map(&base.builtins);
+    let (mut overlay, _result_store) = build_run_node_overlay(
+        node,
+        deprecated_config,
+        adapter_type,
+        agate_table,
+        Some(base_builtins),
+        io_args,
+        phase,
+        sql_header,
+        packages,
+    );
+    overlay.base = Some(base.clone());
+    overlay
 }
 
 #[cfg(test)]
@@ -504,6 +603,49 @@ mod tests {
         normalize_model_context_column_data_types(&mut model, AdapterType::Postgres);
 
         assert_eq!(column_data_type(&model, "float_col"), "FLOAT");
+    }
+
+    #[test]
+    fn write_file_creates_nested_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("run/pkg/snapshots/my_snap.sql/my_snap.sql");
+
+        write_file(&path, "snapshot", "select 1").unwrap();
+
+        assert_eq!(fs::read_to_string(&path).unwrap(), "select 1");
+    }
+
+    #[test]
+    fn write_file_replaces_stale_flat_file_on_parent_chain() {
+        // A pre-#14125 Fusion (or dbt Core v1) left a flat file where we now
+        // need a directory: target/run/pkg/snapshots/my_snap.sql is a file, but
+        // the nested layout requires it to be a directory. Writing must succeed
+        // rather than fail with ENOTDIR. See dbt-core#15692.
+        let dir = tempfile::tempdir().unwrap();
+        let stale = dir.path().join("run/pkg/snapshots/my_snap.sql");
+        fs::create_dir_all(stale.parent().unwrap()).unwrap();
+        fs::write(&stale, "stale flat file").unwrap();
+
+        let nested = stale.join("my_snap.sql");
+        write_file(&nested, "snapshot", "select 1").unwrap();
+
+        assert!(stale.is_dir());
+        assert_eq!(fs::read_to_string(&nested).unwrap(), "select 1");
+    }
+
+    #[test]
+    fn write_file_replaces_stale_directory_at_target() {
+        // The reverse layout drift: a stale directory sits where we now write a
+        // flat file. Writing must succeed rather than fail with EISDIR.
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("run/pkg/models/my_model.sql");
+        fs::create_dir_all(target.join("my_model.sql").parent().unwrap()).unwrap();
+        fs::write(target.join("my_model.sql"), "nested leftover").unwrap();
+
+        write_file(&target, "model", "select 1").unwrap();
+
+        assert!(target.is_file());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "select 1");
     }
 }
 
@@ -588,14 +730,49 @@ fn write_file(full_path: &Path, resource_type: &str, payload: &str) -> Result<()
         ));
     }
 
-    // Create parent directories if needed
+    // Reconcile a target/ left behind by a different artifact layout — e.g.
+    // dbt Core v1, or a pre-#14125 Fusion that wrote snapshot run artifacts as
+    // a flat file where we now write a nested directory (or vice versa). Without
+    // this, a stale file sitting where we now need a directory fails the write
+    // below with ENOTDIR ("Not a directory"), and a stale directory sitting
+    // where we now write a flat file fails with EISDIR ("Is a directory").
+    // See https://github.com/dbt-labs/dbt-core/issues/15692.
     if let Some(parent) = full_path.parent()
-        && !parent.exists()
-        && let Err(e) = fs::create_dir_all(parent)
+        && !parent.is_dir()
+    {
+        // Parent is missing, or a stale file on the parent chain (from an older
+        // layout) sits where we now need a directory. Remove the deepest such
+        // file so create_dir_all can rebuild the tree, then create it.
+        for ancestor in parent.ancestors() {
+            if ancestor.is_file() {
+                if let Err(e) = fs::remove_file(ancestor) {
+                    return Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Failed to remove stale file {}: {}", ancestor.display(), e),
+                    ));
+                }
+                break;
+            }
+        }
+        if let Err(e) = fs::create_dir_all(parent) {
+            return Err(Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Failed to create directory {}: {}", parent.display(), e),
+            ));
+        }
+    }
+
+    // A stale directory sitting where we now write a flat file fails with EISDIR.
+    if full_path.is_dir()
+        && let Err(e) = fs::remove_dir_all(full_path)
     {
         return Err(Error::new(
             ErrorKind::InvalidOperation,
-            format!("Failed to create directory {}: {}", parent.display(), e),
+            format!(
+                "Failed to remove stale directory {}: {}",
+                full_path.display(),
+                e
+            ),
         ));
     }
 

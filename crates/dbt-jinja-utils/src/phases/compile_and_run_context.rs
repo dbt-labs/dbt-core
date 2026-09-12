@@ -7,6 +7,7 @@ use std::sync::{Arc, OnceLock};
 use chrono::{DateTime, Utc};
 
 use crate::functions::build_flat_graph;
+use crate::invocation_graph::invocation_graph;
 use crate::jinja_environment::JinjaEnv;
 use crate::phases::compile::DependencyValidationConfig;
 use dbt_adapter::Adapter;
@@ -19,14 +20,14 @@ use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use dbt_telemetry::NodeType;
 use minijinja::arg_utils::ArgParser;
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::Object;
+use minijinja::value::{Object, ValueMap};
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value as MinijinjaValue,
 };
 use minijinja::{State, UndefinedBehavior};
 use std::rc::Rc;
 
-use dbt_jinja_ctx::{CompileBaseCtx, JinjaObject, to_jinja_btreemap};
+use dbt_jinja_ctx::{CompileBaseCtx, DummyConfig, JinjaObject, OperationCtx, to_jinja_btreemap};
 
 /// Configure the Jinja environment for the compile phase.
 pub fn configure_compile_and_run_jinja_environment(env: &mut JinjaEnv, adapter: Arc<Adapter>) {
@@ -34,24 +35,21 @@ pub fn configure_compile_and_run_jinja_environment(env: &mut JinjaEnv, adapter: 
     env.set_undefined_behavior(UndefinedBehavior::Lenient);
 }
 
-// `DummyConfig` moved to `dbt_jinja_ctx::objects::compile`. Re-exported
-// here so existing call sites that imported it from this crate keep
-// working unchanged. Removed once every consumer migrates to
-// `dbt-jinja-ctx` directly.
-pub use dbt_jinja_ctx::DummyConfig;
-
-/// Configure the Jinja environment for the compile phase.
+/// Build the truly-shared compile/run base ctx — values that are identical
+/// across REPL, `run-operation`, per-node compile, and per-node run renders.
+/// Leaf ctxs ([`OperationCtx`], `CompileNodeCtx`, `RunNodeCtx`) hold this via
+/// `#[serde(flatten)]` and add their scope-specific overlay.
 ///
 /// `defer_nodes`, when supplied (compile/run with `--defer --state`), drives
 /// the `defer_relation` field on each deferrable graph node. (#1366)
-pub fn build_compile_and_run_base_context(
+pub fn build_compile_base_ctx(
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: &str,
     nodes: &Nodes,
     defer_nodes: Option<&Nodes>,
     runtime_config: Arc<DbtRuntimeConfig>,
     namespace_keys: Vec<String>,
-) -> BTreeMap<String, MinijinjaValue> {
+) -> CompileBaseCtx {
     // Wrap each per-namespace search order as `Value::from(Vec<String>)` —
     // dispatch lookup downcasts to `Vec<String>` so the underlying Object
     // type must be exactly that, not the `MutableVec<Value>` that
@@ -82,8 +80,11 @@ pub fn build_compile_and_run_base_context(
     builtins.insert("ref".to_string(), ref_value.clone());
 
     // Create source function
-    let source_function =
-        SourceFunction::new_unvalidated(node_resolver.clone(), package_name.to_owned());
+    let source_function = SourceFunction::new_unvalidated(
+        node_resolver.clone(),
+        package_name.to_owned(),
+        runtime_config.clone(),
+    );
     let source_value = MinijinjaValue::from_object(source_function);
     builtins.insert("source".to_string(), source_value.clone());
 
@@ -117,8 +118,7 @@ pub fn build_compile_and_run_base_context(
         })
         .collect();
 
-    let ctx = CompileBaseCtx {
-        config: JinjaObject::new(DummyConfig {}),
+    CompileBaseCtx {
         macro_dispatch_order,
         ref_fn: ref_value,
         source: source_value,
@@ -140,14 +140,66 @@ pub fn build_compile_and_run_base_context(
         node: MinijinjaValue::NONE,
         connection_name: String::new(),
         dbt_namespaces,
-    };
+    }
+}
 
-    to_jinja_btreemap(&ctx)
+/// Build the operation-scope ctx (REPL / `run-operation` / pre-compile macro
+/// evaluation): the shared base values plus a no-op [`DummyConfig`] for
+/// `{{ config(...) }}` calls in macros that aren't tied to a specific node.
+pub fn build_operation_context(
+    node_resolver: Arc<dyn NodeResolverTracker>,
+    package_name: &str,
+    nodes: &Nodes,
+    defer_nodes: Option<&Nodes>,
+    runtime_config: Arc<DbtRuntimeConfig>,
+    namespace_keys: Vec<String>,
+    base_ctx: Option<CompileBaseCtx>,
+) -> OperationCtx {
+    let base = base_ctx.unwrap_or_else(|| {
+        build_compile_base_ctx(
+            node_resolver,
+            package_name,
+            nodes,
+            defer_nodes,
+            runtime_config,
+            namespace_keys,
+        )
+    });
+    OperationCtx {
+        base,
+        config: JinjaObject::new(DummyConfig {}),
+    }
+}
+
+/// Backward-compat shim: today's callers consume the operation-scope context
+/// as a `BTreeMap<String, MinijinjaValue>`. Wraps [`build_operation_context`]
+/// + [`to_jinja_btreemap`] so call-site migration can land separately.
+///
+/// New callers should use [`build_operation_context`] or
+/// [`build_compile_base_ctx`] directly.
+pub fn build_operation_context_btreemap(
+    node_resolver: Arc<dyn NodeResolverTracker>,
+    package_name: &str,
+    nodes: &Nodes,
+    defer_nodes: Option<&Nodes>,
+    runtime_config: Arc<DbtRuntimeConfig>,
+    namespace_keys: Vec<String>,
+    base_ctx: Option<CompileBaseCtx>,
+) -> BTreeMap<String, MinijinjaValue> {
+    to_jinja_btreemap(&build_operation_context(
+        node_resolver,
+        package_name,
+        nodes,
+        defer_nodes,
+        runtime_config,
+        namespace_keys,
+        base_ctx,
+    ))
 }
 
 // `DbtNamespace` moved to `dbt_jinja_ctx::objects::lookup`. Re-exported here
 // so existing call sites in this crate (`build_resolve_context`,
-// `build_compile_and_run_base_context`, etc.) keep importing the type from
+// `build_operation_context_btreemap`, etc.) keep importing the type from
 // the path they always have. The transitional re-export is removed once
 // every call site has been migrated to consume `dbt-jinja-ctx` directly.
 pub use dbt_jinja_ctx::DbtNamespace;
@@ -493,6 +545,7 @@ impl Object for RefFunction {
 pub struct SourceFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
+    runtime_config: Arc<DbtRuntimeConfig>,
     microbatch_context: Option<MicrobatchRefContext>,
     validation_config: DependencyValidationConfig,
 }
@@ -505,11 +558,13 @@ impl SourceFunction {
     pub fn new_with_microbatch_context(
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
         microbatch_context: MicrobatchRefContext,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
+            runtime_config,
             microbatch_context: Some(microbatch_context),
             validation_config: DependencyValidationConfig::default(),
         }
@@ -522,10 +577,12 @@ impl SourceFunction {
     pub fn new_unvalidated(
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
+            runtime_config,
             microbatch_context: None,
             validation_config: DependencyValidationConfig::default(),
         }
@@ -535,11 +592,13 @@ impl SourceFunction {
     pub fn new_with_validation(
         node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
         validation_config: DependencyValidationConfig,
     ) -> Self {
         Self {
             node_resolver,
             package_name,
+            runtime_config,
             microbatch_context: None,
             validation_config,
         }
@@ -583,23 +642,50 @@ Or remove the source() from the model if it's unused."
 }
 
 impl Object for SourceFunction {
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        match key.as_str()? {
+            "config" => Some(MinijinjaValue::from_dyn_object(self.runtime_config.clone())),
+            "function_name" => Some(MinijinjaValue::from("source")),
+            _ => None,
+        }
+    }
+
     fn call(
         self: &Arc<Self>,
         _state: &State<'_, '_>,
         args: &[MinijinjaValue],
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        let num_args = parser.positional_len();
+        let mut parser = ArgParser::new(args, None);
+        let num_args = parser.positional_len() + parser.kwargs_len();
         let (source_name, table_name) = match num_args {
             0 | 1 => Err(MinijinjaError::new(
                 MinijinjaErrorKind::MissingArgument,
                 "source macro requires 2 arguments: source name and table name",
             )),
-            2 => Ok((
-                args[0].as_str().unwrap().to_string(), // source name (namespace)
-                args[1].as_str().unwrap().to_string(), // name (relation name)
-            )),
+            2 => {
+                let source_name_value = parser.get::<MinijinjaValue>("source_name")?;
+                let table_name_value = parser.get::<MinijinjaValue>("table_name")?;
+                let source_name = source_name_value.as_str().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        format!(
+                            "The source name (first) argument to source() must be a string, got {}",
+                            source_name_value.kind()
+                        ),
+                    )
+                })?;
+                let table_name = table_name_value.as_str().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        format!(
+                            "The table name (second) argument to source() must be a string, got {}",
+                            table_name_value.kind()
+                        ),
+                    )
+                })?;
+                Ok((source_name.to_string(), table_name.to_string()))
+            }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::TooManyArguments,
                 "source",
@@ -820,7 +906,7 @@ impl Object for FunctionFunction {
 }
 
 // `MacroLookupContext` moved to `dbt_jinja_ctx::objects::lookup`. Re-exported
-// here so existing call sites in this crate (`build_compile_and_run_base_context`,
+// here so existing call sites in this crate (`build_operation_context_btreemap`,
 // the parse-phase resolve-model context, etc.) keep importing from the path
 // they always have. The transitional re-export is removed once every call
 // site has been migrated to consume `dbt-jinja-ctx` directly.
@@ -849,7 +935,15 @@ impl LazyFlatGraph {
 
     fn get_graph(&self) -> &MinijinjaValue {
         self.graph.get_or_init(|| {
-            MinijinjaValue::from(build_flat_graph(&self.nodes, self.defer_nodes.as_ref()))
+            // Seed the flat graph into the invocation-wide `graph` mapping
+            // rather than into a private map, so scratch state written by
+            // macros during parsing (and by other base contexts) survives.
+            // `update` merges, so only the derived flat-graph keys (`nodes`,
+            // `sources`, `macros`, …) are overwritten. dbt-labs/fs#13454.
+            let shared = invocation_graph();
+            let flat = build_flat_graph(&self.nodes, self.defer_nodes.as_ref());
+            shared.update(&ValueMap::from(flat));
+            MinijinjaValue::from_dyn_object(shared)
         })
     }
 }
@@ -939,7 +1033,7 @@ mod tests {
         let runtime_config = Arc::new(DbtRuntimeConfig::default());
 
         // Act
-        let ctx = build_compile_and_run_base_context(
+        let ctx = build_compile_base_ctx(
             node_resolver,
             "test_pkg",
             &nodes,
@@ -955,9 +1049,7 @@ mod tests {
         }
 
         // Assert
-        let meta = ctx
-            .get("dbt_metadata_envs")
-            .expect("dbt_metadata_envs should be set");
+        let meta = ctx.dbt_metadata_envs;
         let map = meta
             .as_object()
             .and_then(|o| o.downcast_ref::<BTreeMap<String, MinijinjaValue>>())
@@ -967,6 +1059,35 @@ mod tests {
             map.get("FOO").and_then(|v| v.as_str()),
             Some("bar"),
             "Expected dbt_metadata_envs['FOO']='bar'"
+        );
+    }
+
+    #[test]
+    fn build_operation_context_includes_config_as_dummy_config() {
+        let node_resolver = Arc::new(DummyNodeResolverTracker);
+        let nodes = Nodes::default();
+        let runtime_config = Arc::new(DbtRuntimeConfig::default());
+
+        let ctx = build_operation_context(
+            node_resolver,
+            "test_pkg",
+            &nodes,
+            None,
+            runtime_config,
+            vec![],
+            None,
+        );
+
+        let registered = to_jinja_btreemap(&ctx);
+        let config = registered
+            .get("config")
+            .expect("config must be present in OperationCtx");
+        let downcast = config
+            .as_object()
+            .and_then(|obj| obj.downcast::<DummyConfig>());
+        assert!(
+            downcast.is_some(),
+            "OperationCtx.config must be a DummyConfig Object"
         );
     }
 }

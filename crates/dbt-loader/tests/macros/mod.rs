@@ -1,4 +1,13 @@
+mod aggregated_tests;
+mod bigquery;
+mod contract_wrappers;
+mod databricks_metadata;
+mod delete_insert;
 mod duckdb;
 mod equals;
+mod multi_adapter;
 mod persist_docs;
+mod python;
 mod relations;
+mod snowflake;
+mod spark;

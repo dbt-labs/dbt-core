@@ -6,7 +6,9 @@ use std::{
 };
 
 pub use dbt_schemas::schemas::{DbtCloudConfig, DbtCloudContext, DbtCloudProject};
-pub use resolve::{CloudCredentials, ResolvedCloudConfig, resolve_cloud_config};
+pub use resolve::{
+    CloudCredentials, ResolvedCloudConfig, detect_unlinked_project, resolve_cloud_config,
+};
 
 /// Test-only env var honored by [`get_cloud_project_path`] in debug builds.
 /// Set by the test harness to point the loader at a non-existent directory,

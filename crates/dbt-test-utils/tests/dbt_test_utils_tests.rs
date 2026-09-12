@@ -1,27 +1,23 @@
 mod assertions {
     use dbt_common::{FsResult, current_function_name};
     use dbt_test_utils::task::{
-        AssertDirExistsTask, AssertFileContainsTask, AssertFileExistsTask, ProjectEnv, TaskSeq,
+        AssertDirExistsTask, AssertFileExistsTask, ProjectEnv, TaskSeq, assert_file_contains,
     };
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn tasks_file_contains() -> FsResult<()> {
         let root = env!("CARGO_MANIFEST_DIR");
         let env = ProjectEnv::immutable_from(root, "tests/data/hello")?;
 
         TaskSeq::new(current_function_name!())
-            .task(Box::new(AssertFileContainsTask::new(
-                "profiles.yml",
-                "datafusion",
-                false,
-            )))
+            .task_fn(assert_file_contains("profiles.yml", "datafusion", false))
             .execute_in(&env)
             .await?;
 
         Ok(())
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn tasks_file_exists() -> FsResult<()> {
         let root = env!("CARGO_MANIFEST_DIR");
         let env = ProjectEnv::immutable_from(root, "tests/data/hello")?;
@@ -34,7 +30,7 @@ mod assertions {
         Ok(())
     }
 
-    #[tokio::test]
+    #[dbt_runtime::test]
     async fn tasks_dir_exists() -> FsResult<()> {
         let root = env!("CARGO_MANIFEST_DIR");
         let env = ProjectEnv::immutable_from(root, "tests/data/hello")?;

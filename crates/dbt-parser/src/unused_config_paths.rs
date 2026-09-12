@@ -3,7 +3,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use dbt_common::constants::DBT_PROJECT_YML;
-use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::serde::value_from_file;
@@ -72,18 +71,12 @@ const RESOURCE_SECTIONS: &[ResourceSection] = &[
 
 /// Emits dbt-core compatible warnings for config paths that do not match any resource FQN.
 pub(crate) fn check_unused_resource_config_paths(
-    io_args: &IoArgs,
     root_project_path: &Path,
     nodes: &Nodes,
     disabled_nodes: &Nodes,
     skip_data_tests: bool,
 ) -> FsResult<()> {
-    let dbt_project_yml = value_from_file(
-        io_args,
-        &root_project_path.join(DBT_PROJECT_YML),
-        false,
-        None,
-    )?;
+    let dbt_project_yml = value_from_file(&root_project_path.join(DBT_PROJECT_YML), false, None)?;
     let used_fqns = collect_used_fqns(nodes);
     let disabled_fqns = collect_disabled_fqns(disabled_nodes);
     let unused_config_paths = collect_unused_config_paths(
@@ -109,11 +102,7 @@ There are {} unused configuration paths:\n{}",
         unused_paths,
     );
 
-    emit_warn_log_message(
-        ErrorCode::UnusedResourceConfigPath,
-        message,
-        io_args.status_reporter.as_ref(),
-    );
+    emit_warn_log_message(ErrorCode::UnusedResourceConfigPath, message);
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{
-    Expr, Field, Fields, GenericArgument, Ident, LitStr, PathArguments, Type, Variant,
+    Expr, Field, Fields, GenericArgument, Ident, LitBool, LitStr, PathArguments, Type, Variant,
     spanned::Spanned,
 };
 
@@ -412,6 +412,223 @@ fn is_spanned_type(ty: &Type) -> bool {
             let segments = &type_path.path.segments;
             if let Some(last) = segments.last() {
                 return last.ident == "Spanned";
+            }
+        }
+    }
+    false
+}
+
+/// `#[derive(DefaultTo)]` generates `fn default_to_fields(&mut self, parent: &Self)` for a
+/// config struct.
+///
+/// For each named field in the struct, the generated method calls
+/// `dbt_schemas::schemas::project::configs::config_merge::DefaultTo::inherit_from` on the
+/// field with the corresponding parent field.
+///
+/// Fields annotated with `#[default_to(skip)]` are excluded from the generated body.
+#[proc_macro_derive(DefaultTo, attributes(default_to))]
+pub fn derive_default_to(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = syn::parse_macro_input!(input as syn::ItemStruct);
+
+    let struct_name = &input.ident;
+
+    let named_fields = match &input.fields {
+        Fields::Named(f) => &f.named,
+        _ => {
+            return syn::Error::new_spanned(
+                &input.ident,
+                "#[derive(DefaultTo)] requires a struct with named fields",
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let trait_path = quote! {
+        crate::schemas::project::configs::config_merge::DefaultTo
+    };
+
+    let inherit_calls: Vec<TokenStream2> = named_fields
+        .iter()
+        .filter_map(|field| {
+            let field_name = field.ident.as_ref()?;
+
+            let skip = field.attrs.iter().any(|attr| {
+                if !attr.path().is_ident("default_to") {
+                    return false;
+                }
+                let mut found_skip = false;
+                let _ = attr.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("skip") {
+                        found_skip = true;
+                    }
+                    Ok(())
+                });
+                found_skip
+            });
+
+            if skip {
+                return None;
+            }
+
+            Some(quote! {
+                #trait_path::inherit_from(&mut self.#field_name, &parent.#field_name);
+            })
+        })
+        .collect();
+
+    let output = quote! {
+        impl #struct_name {
+            pub fn default_to_fields(&mut self, parent: &Self) {
+                #(#inherit_calls)*
+            }
+        }
+    };
+
+    output.into()
+}
+
+/// `#[derive(StringOrArrayNewtype)]` generates the boilerplate for a newtype wrapping
+/// `Option<StringOrArrayOfStrings>` that always serializes non-`None` values as an array,
+/// matching dbt-core's `listify` behavior (used for fields like `tags`/`classifiers`/
+/// `packages`/`primary_key`, which accept a bare string or array on input).
+///
+/// Requires `#[string_or_array(none_as_empty_list = <bool>)]` on the struct, which controls
+/// whether `None` serializes as `[]` (`true`) or `null` (`false`). `Deserialize` is identical
+/// in both cases.
+///
+/// Generates: `Serialize`/`Deserialize` impls, `is_some`/`inner`/`into_inner` inherent methods,
+/// and `impl AsStringOrArrayOfStrings`.
+///
+/// Does NOT add `#[serde(transparent)]` — callers that want the JSON schema inlined (rather
+/// than a standalone named definition) must add that attribute themselves.
+#[proc_macro_derive(StringOrArrayNewtype, attributes(string_or_array))]
+pub fn derive_string_or_array_newtype(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = syn::parse_macro_input!(input as syn::ItemStruct);
+    let struct_name = &input.ident;
+
+    let field = match &input.fields {
+        Fields::Unnamed(fields) if fields.unnamed.len() == 1 => &fields.unnamed[0],
+        _ => {
+            return syn::Error::new_spanned(
+                &input.ident,
+                "#[derive(StringOrArrayNewtype)] requires a single-field tuple struct wrapping Option<StringOrArrayOfStrings>",
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+
+    let wraps_string_or_array_of_strings = extract_generic_inner(&field.ty, "Option")
+        .map(is_string_or_array_of_strings_type)
+        .unwrap_or(false);
+    if !wraps_string_or_array_of_strings {
+        return syn::Error::new_spanned(
+            &field.ty,
+            "#[derive(StringOrArrayNewtype)] requires the field type to be Option<StringOrArrayOfStrings>",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let Some(attr) = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("string_or_array"))
+    else {
+        return syn::Error::new_spanned(
+            &input.ident,
+            "#[derive(StringOrArrayNewtype)] requires #[string_or_array(none_as_empty_list = <bool>)]",
+        )
+        .to_compile_error()
+        .into();
+    };
+
+    let mut none_as_empty_list: Option<bool> = None;
+    let parse_result = attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("none_as_empty_list") {
+            let value = meta.value()?;
+            let lit: LitBool = value.parse()?;
+            none_as_empty_list = Some(lit.value);
+            Ok(())
+        } else {
+            Err(meta.error("unsupported #[string_or_array(...)] key"))
+        }
+    });
+    if let Err(err) = parse_result {
+        return err.to_compile_error().into();
+    }
+
+    let Some(none_as_empty_list) = none_as_empty_list else {
+        return syn::Error::new_spanned(
+            attr,
+            "#[string_or_array(...)] requires `none_as_empty_list = <bool>`",
+        )
+        .to_compile_error()
+        .into();
+    };
+
+    let none_serialize = if none_as_empty_list {
+        quote! { ::serde::Serialize::serialize(&Vec::<String>::new(), serializer) }
+    } else {
+        quote! { serializer.serialize_none() }
+    };
+
+    let output = quote! {
+        impl #struct_name {
+            pub fn is_some(&self) -> bool {
+                self.0.is_some()
+            }
+
+            pub fn inner(&self) -> &Option<crate::schemas::serde::StringOrArrayOfStrings> {
+                &self.0
+            }
+
+            pub fn into_inner(self) -> Option<crate::schemas::serde::StringOrArrayOfStrings> {
+                self.0
+            }
+        }
+
+        impl crate::schemas::serde::AsStringOrArrayOfStrings for #struct_name {
+            fn as_string_or_array_of_strings(&self) -> &Option<crate::schemas::serde::StringOrArrayOfStrings> {
+                self.inner()
+            }
+        }
+
+        impl ::serde::Serialize for #struct_name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: ::serde::Serializer,
+            {
+                match &self.0 {
+                    Some(value) => ::serde::Serialize::serialize(
+                        &crate::schemas::serde::AsArray(value),
+                        serializer,
+                    ),
+                    None => #none_serialize,
+                }
+            }
+        }
+
+        impl<'de> ::serde::Deserialize<'de> for #struct_name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: ::serde::Deserializer<'de>,
+            {
+                let value = <Option<crate::schemas::serde::StringOrArrayOfStrings> as ::serde::Deserialize>::deserialize(deserializer)?;
+                Ok(#struct_name(value))
+            }
+        }
+    };
+
+    output.into()
+}
+
+fn is_string_or_array_of_strings_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if type_path.qself.is_none() {
+            if let Some(last) = type_path.path.segments.last() {
+                return last.ident == "StringOrArrayOfStrings";
             }
         }
     }

@@ -39,7 +39,7 @@
        multiple runs share the same target schema.
   #} */
 
-  {% if language == "python" and tmp_relation_type is not none %}
+  {% if language == "python" and tmp_relation_type is not none and tmp_relation_type != "table" %}
     {% do exceptions.raise_compiler_error(
       "Python models currently only support 'table' for tmp_relation_type but "
        ~ tmp_relation_type ~ " was specified."

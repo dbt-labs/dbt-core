@@ -12,12 +12,13 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks views
 pub(crate) fn new_loader() -> RelationConfigLoader<'static, DatabricksRelationMetadata> {
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 6] = [
         Box::new(components::ColumnCommentsLoader),
         Box::new(components::QueryLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
+        Box::new(components::ColumnTagsLoader),
     ];
 
     RelationConfigLoader::new(AdapterType::Databricks, loaders, requires_full_refresh)
@@ -63,12 +64,8 @@ mod tests {
                         ("b_tag".to_string(), "old".to_string()),
                     ]),
                     tbl_properties: IndexMap::from_iter([
-                        ("delta.enableRowTracking".to_string(), "false".to_string()),
-                        (
-                            "pipelines.pipelineId".to_string(),
-                            "my_old_pipeline".to_string(),
-                        ),
-                        ("customKey".to_string(), "old".to_string()),
+                        ("data.owner".to_string(), "data-engineering".to_string()),
+                        ("data.quality".to_string(), "bronze".to_string()),
                     ]),
                     ..Default::default()
                 },
@@ -93,16 +90,11 @@ mod tests {
                         ("b_tag".to_string(), "old".to_string()),
                     ]),
                     tbl_properties: IndexMap::from_iter([
-                        // changing these key should not result in anything as these should be ignored
-                        ("delta.enableRowTracking".to_string(), "true".to_string()),
                         (
-                            "pipelines.pipelineId".to_string(),
-                            "my_new_pipeline".to_string(),
+                            "data.owner".to_string(),
+                            "analytics-engineering".to_string(),
                         ),
-                        // changing a key not in the ignore list should cause a changeset entry
-                        ("customKey".to_string(), "new".to_string()),
-                        // introducing a new key should also add it to the changeset
-                        ("customKey2".to_string(), "value".to_string()),
+                        ("data.quality".to_string(), "silver".to_string()),
                     ]),
                     ..Default::default()
                 },
@@ -131,20 +123,22 @@ mod tests {
                                 ),
                             ),
                         ),
-                        // TODO: query is not implemented
-                        // (
-                        //     components::QueryLoader.type_name(),
-                        //     ComponentConfigChange::Some(components::QueryLoader::new_component_type_erased(
-                        //         "SELECT 1000",
-                        //     )),
-                        // ),
+                        (
+                            components::QueryLoader.type_name(),
+                            ComponentConfigChange::Some(
+                                components::QueryLoader::new_component_type_erased("SELECT 1000"),
+                            ),
+                        ),
                         (
                             components::TblPropertiesLoader.type_name(),
                             ComponentConfigChange::Some(
                                 components::TblPropertiesLoader::new_component_type_erased(
                                     IndexMap::from_iter([
-                                        ("customKey".to_string(), "new".to_string()),
-                                        ("customKey2".to_string(), "value".to_string()),
+                                        (
+                                            "data.owner".to_string(),
+                                            "analytics-engineering".to_string(),
+                                        ),
+                                        ("data.quality".to_string(), "silver".to_string()),
                                     ]),
                                 ),
                             ),
@@ -163,6 +157,11 @@ mod tests {
         True
     </persist>
 </column_comments>
+<query>
+    <query>
+        SELECT 1000
+    </query>
+</query>
 <tags>
     <set_tags>
         <a_tag>
@@ -175,18 +174,15 @@ mod tests {
 </tags>
 <tblproperties>
     <tblproperties>
-        <customKey>
-            new
-        </customKey>
-        <customKey2>
-            value
-        </customKey2>
-        <delta.enableRowTracking>
-            true
-        </delta.enableRowTracking>
+        <data.owner>
+            analytics-engineering
+        </data.owner>
+        <data.quality>
+            silver
+        </data.quality>
     </tblproperties>
     <pipeline_id>
-        my_new_pipeline
+        None
     </pipeline_id>
 </tblproperties>
                     ",
@@ -199,11 +195,14 @@ mod tests {
                 current_state: TestModelConfig {
                     relation_comment: Some("old comment".to_string()),
                     persist_relation_comments: true,
+                    // A view always has SQL; holding it constant keeps `query` out of the changeset
+                    query: Some("SELECT 1".to_string()),
                     ..Default::default()
                 },
                 desired_state: TestModelConfig {
                     relation_comment: Some("new comment".to_string()),
                     persist_relation_comments: true,
+                    query: Some("SELECT 1".to_string()),
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(

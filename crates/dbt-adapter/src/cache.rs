@@ -1,5 +1,6 @@
 use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use dashmap::DashMap;
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
@@ -85,6 +86,9 @@ pub struct RelationCache {
     /// `RelationCacheEntry` so the cache entry stays Clone-via-derive and
     /// graph state lives in one place. All mutation goes through `graph_lock`.
     graph: Arc<RwLock<RelationGraph>>,
+    /// Whether the project defines any function (UDF) nodes. Set once, before
+    /// the run starts.
+    project_has_functions: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Default)]
@@ -93,6 +97,14 @@ struct RelationGraph {
 }
 
 impl RelationCache {
+    pub fn set_project_has_functions(&self, value: bool) {
+        self.project_has_functions.store(value, Ordering::Relaxed);
+    }
+
+    pub fn project_has_functions(&self) -> bool {
+        self.project_has_functions.load(Ordering::Relaxed)
+    }
+
     /// Retrieves a cached entry by relation
     pub fn get_relation(&self, relation: &dyn BaseRelation) -> Option<RelationCacheEntry> {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
@@ -183,7 +195,6 @@ impl RelationCache {
         }
     }
 
-    /// Drops an entire schema
     pub fn evict_schema_for_relation(&self, relation: &dyn BaseRelation) {
         let schema_key = Self::get_schema_cache_key_from_relation(relation);
         self.schemas_and_relations.remove(&schema_key);
@@ -200,7 +211,6 @@ impl RelationCache {
             .unwrap_or(false)
     }
 
-    /// Checks if the entire schema was cached
     pub fn contains_full_schema(&self, schema: &CatalogAndSchema) -> bool {
         self.schemas_and_relations
             .get(&schema.to_string())
@@ -208,7 +218,6 @@ impl RelationCache {
             .unwrap_or(false)
     }
 
-    /// Checks if a relation exists in the cache
     pub fn contains_relation(&self, relation: &dyn BaseRelation) -> bool {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
         if let Some(relation_cache) = self.schemas_and_relations.get(&schema_key) {
@@ -569,7 +578,6 @@ mod tests {
 
         let cache = RelationCache::default();
 
-        // With DEFAULT_RESOLVED_QUOT: Arc<dyn BaseRelation> =
         let relation_quoted: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "MyDB".to_string(),
@@ -828,6 +836,51 @@ mod tests {
             "issue #943: uppercase schema 'NOTLIKETHIS' should find the relation that \
              Databricks returned with lowercase schema 'notlikethis'"
         );
+    }
+
+    #[test]
+    fn test_project_has_functions_defaults_false_and_is_settable() {
+        let cache = RelationCache::default();
+        assert!(!cache.project_has_functions());
+        cache.set_project_has_functions(true);
+        assert!(cache.project_has_functions());
+    }
+
+    #[test]
+    fn test_insert_relation_into_complete_schema() {
+        use crate::metadata::CatalogAndSchema;
+        use crate::relation::do_create_relation;
+
+        let bq_relation = |identifier: &str| -> Arc<dyn BaseRelation> {
+            do_create_relation(
+                AdapterType::Bigquery,
+                "my_project".to_string(),
+                "my_dataset".to_string(),
+                Some(identifier.to_string()),
+                None,
+                DEFAULT_RESOLVED_QUOTING,
+            )
+            .unwrap()
+            .into()
+        };
+
+        let cache = RelationCache::default();
+
+        let table = bq_relation("my_table");
+        cache.insert_schema(CatalogAndSchema::from(table.as_ref()), vec![table.clone()]);
+
+        let udf = bq_relation("add_one");
+        assert!(cache.contains_full_schema_for_relation(udf.as_ref()));
+        assert!(!cache.contains_relation(udf.as_ref()));
+
+        // Listing routines afterwards makes the UDF findable...
+        cache.insert_relation(udf.clone(), None);
+        assert!(cache.contains_relation(udf.as_ref()));
+        assert!(cache.get_relation(udf.as_ref()).is_some());
+
+        // ...without evicting the listed relations or clearing completeness.
+        assert!(cache.contains_relation(table.as_ref()));
+        assert!(cache.contains_full_schema_for_relation(udf.as_ref()));
     }
 
     /// Helpers + tests ported from

@@ -1,7 +1,0 @@
-kind: Under the Hood
-body: Publish pre-release versions to Homebrew and winget during the pre-stable window, and fix the empty-version bug in the release-v2 publish jobs.
-time: 2026-07-02T00:00:00.000000+05:30
-custom:
-    author: itsnamangoyal
-    issue: ""
-    project: dbt-fusion

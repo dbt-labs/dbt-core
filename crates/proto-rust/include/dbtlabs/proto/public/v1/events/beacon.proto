@@ -101,6 +101,7 @@ message BeaconSplitPaneOpened {
   // dbt project file path shown in the pane (for diff view; empty for views
   // that don't have a single file).
   string file_path = 5;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 6;
 }
 
 // Fired when the Beacon side pane closes (CopilotSidePaneContext.close()).
@@ -116,6 +117,7 @@ message BeaconSplitPaneClosed {
   // Why the pane closed — user-initiated close vs. automatic close from a
   // chat-thread change, etc.
   BeaconSplitPaneCloseReason close_reason = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Fired when the user switches between views inside the side pane via the
@@ -131,6 +133,7 @@ message BeaconSplitPaneViewToggled {
   BeaconSplitPaneViewKind from_view_kind = 3;
   // The view the user toggled to.
   BeaconSplitPaneViewKind to_view_kind = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Fired when the side pane's Canvas parse (`useCanvasParse`) settles. Covers
@@ -164,6 +167,7 @@ message BeaconCanvasParseCompleted {
   // Wall-clock duration of the parseSql round-trip in milliseconds (start to
   // settle). Captured via performance.now().
   uint32 duration_ms = 10;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 11;
 }
 
 // Fired when the user clicks a kickout destination (Open in Editor, Open in
@@ -187,4 +191,5 @@ message BeaconKickoutClicked {
   // meaningful when surface = SIDE_PANE; for INLINE_DIFF_CARD callsites this
   // will be UNSPECIFIED.
   BeaconSplitPaneViewKind active_view = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }

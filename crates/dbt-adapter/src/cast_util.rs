@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 pub const THIS_RELATION_KEY: &str = "__this__";
 
-/// Downcast a minijinja::Value to a dyn BaseRelation object
 pub fn downcast_value_to_dyn_base_relation(
     value: &minijinja::Value,
 ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {

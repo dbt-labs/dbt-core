@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{ErrorCode, collections::HashMap};
 use dbt_yaml::{Value, Verbatim};
 use serde::{Deserialize, Serialize, Serializer};
-use strum::{AsRefStr, EnumMessage};
+use strum::{AsRefStr, EnumMessage, IntoEnumIterator};
 
 mod legacy;
 
@@ -528,10 +528,7 @@ impl WarnErrorOptions {
         let matches = |value: &WarnErrorOptionValue| match value {
             WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::All) => MatchType::All,
             WarnErrorOptionValue::LegacyGroup(LegacyWarnErrorGroupValue::Deprecations)
-                if matches!(
-                    error_code,
-                    ErrorCode::PackageRedirectDeprecation | ErrorCode::WEOIncludeExcludeDeprecation
-                ) =>
+                if matches_deprecations_group(error_code) =>
             {
                 MatchType::Group
             }
@@ -640,6 +637,25 @@ impl WarnErrorOptions {
     }
 }
 
+fn matches_deprecations_group(error_code: ErrorCode) -> bool {
+    matches!(
+        error_code,
+        ErrorCode::PackageRedirectDeprecation
+            | ErrorCode::WEOIncludeExcludeDeprecation
+            | ErrorCode::MalformedBlockName
+    )
+}
+
+/// Returns true if no dbt-core warning maps to this error code.
+///
+/// Derived from the legacy mapping rather than a hand-kept list, so a newly
+/// added code counts as Fusion-only until it is wired to a dbt-core event.
+pub fn is_fusion_only_warning(error_code: ErrorCode) -> bool {
+    !matches_deprecations_group(error_code)
+        && !SupportedLegacyWarnError::iter()
+            .any(|legacy| matches_legacy_error_code(legacy, error_code))
+}
+
 fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: ErrorCode) -> bool {
     match legacy {
         SupportedLegacyWarnError::JinjaLogWarning => error_code == ErrorCode::JinjaWarn,
@@ -707,6 +723,12 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
         SupportedLegacyWarnError::UnusedResourceConfigPath => {
             error_code == ErrorCode::UnusedResourceConfigPath
         }
+        SupportedLegacyWarnError::ConstraintNotEnforced => {
+            error_code == ErrorCode::ConstraintNotEnforced
+        }
+        SupportedLegacyWarnError::ConstraintNotSupported => {
+            error_code == ErrorCode::ConstraintNotSupported
+        }
     }
 }
 
@@ -715,6 +737,56 @@ fn matches_legacy_error_code(legacy: SupportedLegacyWarnError, error_code: Error
 mod tests {
     use super::*;
     use crate::ErrorCode;
+
+    /// Guards the derivation in [`is_fusion_only_warning`]: every legacy warning
+    /// wired to an error code must count as having a dbt-core counterpart.
+    #[test]
+    fn mapped_legacy_warnings_are_not_fusion_only() {
+        for legacy in SupportedLegacyWarnError::iter() {
+            for code in [
+                ErrorCode::JinjaWarn,
+                ErrorCode::NoNodesSelected,
+                ErrorCode::DeprecatedModel,
+                ErrorCode::PackageRedirectDeprecation,
+                ErrorCode::UnusedResourceConfigPath,
+                ErrorCode::ConstraintNotSupported,
+            ] {
+                if matches_legacy_error_code(legacy, code) {
+                    assert!(
+                        !is_fusion_only_warning(code),
+                        "{code:?} maps to legacy warning {legacy:?} and must not be Fusion-only"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn deprecations_group_codes_are_not_fusion_only() {
+        for code in [
+            ErrorCode::PackageRedirectDeprecation,
+            ErrorCode::WEOIncludeExcludeDeprecation,
+            ErrorCode::MalformedBlockName,
+        ] {
+            assert!(
+                !is_fusion_only_warning(code),
+                "{code:?} is a dbt-core deprecation"
+            );
+        }
+    }
+
+    #[test]
+    fn codes_without_a_legacy_mapping_are_fusion_only() {
+        for code in [
+            ErrorCode::PackageParsingCompatibility,
+            ErrorCode::UnusedConfigKey,
+        ] {
+            assert!(
+                is_fusion_only_warning(code),
+                "{code:?} has no dbt-core counterpart"
+            );
+        }
+    }
 
     #[test]
     fn error_decision_honors_precedence() {
@@ -773,6 +845,22 @@ mod tests {
             deprecations_options.decision_for_error_code(ErrorCode::WEOIncludeExcludeDeprecation),
             WarnErrorDecision::Silence,
             "Named event silence should beat Deprecations warn and All error"
+        );
+    }
+
+    #[test]
+    fn malformed_block_name_is_a_deprecation() {
+        let options = WarnErrorOptions {
+            error: vec![WarnErrorOptionValue::LegacyGroup(
+                LegacyWarnErrorGroupValue::Deprecations,
+            )],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            options.decision_for_error_code(ErrorCode::MalformedBlockName),
+            WarnErrorDecision::UpgradeToError,
+            "MalformedBlockName should be escalated by the Deprecations group"
         );
     }
 
@@ -1112,6 +1200,14 @@ mod tests {
         use strum::IntoEnumIterator;
 
         let expected_overlaps = BTreeMap::from([
+            (
+                "ConstraintNotEnforced".to_string(),
+                ErrorCode::ConstraintNotEnforced,
+            ),
+            (
+                "ConstraintNotSupported".to_string(),
+                ErrorCode::ConstraintNotSupported,
+            ),
             ("DeprecatedModel".to_string(), ErrorCode::DeprecatedModel),
             (
                 "DeprecatedReference".to_string(),

@@ -8,7 +8,8 @@ use crate::python_ast::{
     offset_to_line_col,
 };
 use crate::python_file_info::PythonFileInfo;
-use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs};
+use dbt_adapter_core::AdapterType;
+use dbt_common::{ErrorCode, FsResult, err};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_jinja_utils::serde::into_typed_with_error;
 use dbt_schemas::schemas::project::ResolvableConfig;
@@ -122,14 +123,15 @@ pub struct DbtPythonVisitor<'a, T: ResolvableConfig<T>> {
     pub file_info: PythonFileInfo<T>,
     /// Errors encountered during parsing
     pub errors: Vec<String>,
-    /// IO args for emitting strict parse warnings/errors
-    io_args: &'a IoArgs,
     /// Dependency package name if analyzing a package asset
     dependency_package_name: Option<&'a str>,
     /// Display path used when reporting errors
     error_path: Option<PathBuf>,
     /// Precomputed line start offsets for translating ranges to positions
     line_starts: Vec<usize>,
+    /// The target's adapter type, used to canonicalize adapter config-key aliases in
+    /// `dbt.config(...)` calls. [dbt-core's `credentials.translate_aliases`]
+    adapter_type: AdapterType,
 }
 
 impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
@@ -137,20 +139,20 @@ impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
     pub fn new(
         file_path: &'a PathBuf,
         file_info: PythonFileInfo<T>,
-        io_args: &'a IoArgs,
         dependency_package_name: Option<&'a str>,
         error_path: Option<PathBuf>,
         source: &str,
+        adapter_type: AdapterType,
     ) -> Self {
         let line_starts = compute_line_starts(source);
         Self {
             file_path,
             file_info,
             errors: Vec::new(),
-            io_args,
             dependency_package_name,
             error_path,
             line_starts,
+            adapter_type,
         }
     }
 
@@ -340,10 +342,42 @@ impl<'a, T: ResolvableConfig<T>> DbtPythonVisitor<'a, T> {
             );
         }
 
+        // Canonicalize adapter config-key aliases before typing, mirroring the equivalent
+        // Jinja/SQL inline-config path (`ParseConfig::apply_config`,
+        // dbt-jinja-utils's resolve_model_context.rs) -- so an alias with no dedicated typed
+        // field (e.g. postgres/redshift `dbname` -> `database`) resolves instead of raising an
+        // unrecognized-key error.
+        let raw_config: std::collections::BTreeMap<String, (dbt_yaml::Span, dbt_yaml::Value)> =
+            mapping
+                .into_iter()
+                .filter_map(|(key, value)| match key {
+                    dbt_yaml::Value::String(name, span) => Some((name, (span, value))),
+                    _ => None,
+                })
+                .collect();
+        let canonicalized = match dbt_adapter_core::config_aliases::canonicalize_config_keys(
+            self.adapter_type,
+            raw_config,
+        ) {
+            Ok(canonicalized) => canonicalized,
+            Err(dup) => {
+                self.errors.push(format!(
+                    "Config keys `{}` and `{}` both resolve to `{}` for adapter '{}'; a project \
+                     cannot set the same underlying config key two different ways in the same \
+                     place.",
+                    dup.key_a, dup.key_b, dup.canonical, self.adapter_type,
+                ));
+                return;
+            }
+        };
+        let mapping: dbt_yaml::Mapping = canonicalized
+            .into_iter()
+            .map(|(name, (span, value))| (dbt_yaml::Value::String(name, span), value))
+            .collect();
+
         // Deserialize the entire mapping into the config struct, emitting strict warnings on unused keys
         let yaml_value = dbt_yaml::Value::Mapping(mapping, call_span);
         match into_typed_with_error(
-            self.io_args,
             yaml_value,
             true,
             self.dependency_package_name,
@@ -495,18 +529,18 @@ pub fn analyze_python_file<T: ResolvableConfig<T>>(
     source: &str,
     stmts: &[Stmt],
     checksum: dbt_schemas::schemas::common::DbtChecksum,
-    io_args: &IoArgs,
     dependency_package_name: Option<&str>,
     error_path: Option<PathBuf>,
+    adapter_type: AdapterType,
 ) -> FsResult<PythonFileInfo<T>> {
     let file_info = PythonFileInfo::new(checksum);
     let mut visitor = DbtPythonVisitor::new(
         file_path,
         file_info,
-        io_args,
         dependency_package_name,
         error_path,
         source,
+        adapter_type,
     );
 
     // Walk the AST
@@ -531,7 +565,6 @@ pub fn analyze_python_file<T: ResolvableConfig<T>>(
 mod tests {
     use super::*;
     use crate::python_ast::parse_python;
-    use dbt_common::io_args::IoArgs;
     use dbt_schemas::schemas::common::DbtChecksum;
     use std::path::PathBuf;
 
@@ -549,9 +582,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -573,9 +606,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -598,9 +631,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -611,6 +644,94 @@ def model(dbt, session):
             result.config.materialized,
             Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
         );
+    }
+
+    /// fs#13424: Databricks' `catalog` -> `database` alias must canonicalize the same way in a
+    /// Python model's `dbt.config(...)` as it does in the Jinja/SQL inline-config path
+    /// (`test_databricks_catalog_alias_canonicalizes_to_database` and
+    /// `ParseConfig::apply_config`'s own tests) -- landing in `database`, not the separate
+    /// `catalog` field `ModelConfig` also carries.
+    #[test]
+    fn test_python_model_dbt_config_catalog_alias_resolves_to_database_on_databricks() {
+        let source = r#"
+def model(dbt, session):
+    dbt.config(catalog='my_catalog')
+    return session.table('data')
+"#;
+        let path = PathBuf::from("test.py");
+        let suite = parse_python(source, &path).unwrap();
+        let result = analyze_python_file::<dbt_schemas::schemas::project::ModelConfig>(
+            &path,
+            source,
+            &suite,
+            DbtChecksum::default(),
+            None,
+            Some(path.clone()),
+            AdapterType::Databricks,
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.config.database.clone().into_inner().flatten(),
+            Some("my_catalog".to_string())
+        );
+        assert_eq!(result.config.__warehouse_specific_config__.catalog, None);
+    }
+
+    /// The same alias is inert on an adapter with no `_ALIASES` map (D1): `catalog` stays its
+    /// own field rather than being renamed to `database`.
+    #[test]
+    fn test_python_model_dbt_config_catalog_is_inert_on_snowflake() {
+        let source = r#"
+def model(dbt, session):
+    dbt.config(catalog='my_catalog')
+    return session.table('data')
+"#;
+        let path = PathBuf::from("test.py");
+        let suite = parse_python(source, &path).unwrap();
+        let result = analyze_python_file::<dbt_schemas::schemas::project::ModelConfig>(
+            &path,
+            source,
+            &suite,
+            DbtChecksum::default(),
+            None,
+            Some(path.clone()),
+            AdapterType::Snowflake,
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.config.__warehouse_specific_config__.catalog,
+            Some("my_catalog".to_string())
+        );
+        assert_eq!(result.config.database.clone().into_inner().flatten(), None);
+    }
+
+    /// Two keys in the same `dbt.config(...)` call that canonicalize to the same field is a
+    /// `DuplicateAliasError` in dbt-core (`Translator.translate_mapping`); Fusion must reject it
+    /// here too, mirroring `test_parse_config_inline_duplicate_alias_key_errors` for the
+    /// Jinja/SQL inline path.
+    #[test]
+    fn test_python_model_dbt_config_duplicate_alias_key_errors() {
+        let source = r#"
+def model(dbt, session):
+    dbt.config(catalog='a', database='b')
+    return session.table('data')
+"#;
+        let path = PathBuf::from("test.py");
+        let suite = parse_python(source, &path).unwrap();
+        let err = analyze_python_file::<dbt_schemas::schemas::project::ModelConfig>(
+            &path,
+            source,
+            &suite,
+            DbtChecksum::default(),
+            None,
+            Some(path.clone()),
+            AdapterType::Databricks,
+        )
+        .unwrap_err();
+
+        assert!(format!("{err}").contains("both resolve to `database`"));
     }
 
     #[test]
@@ -629,9 +750,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -654,9 +775,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -678,9 +799,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -710,9 +831,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -743,9 +864,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -771,9 +892,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -797,9 +918,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         );
 
         assert!(result.is_err());
@@ -825,9 +946,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         );
 
         assert!(result.is_err());
@@ -881,9 +1002,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -939,9 +1060,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -968,9 +1089,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1022,9 +1143,9 @@ def model(dbt, fal):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1057,9 +1178,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         );
 
         // Should fail because ref() is called with a variable, not a literal
@@ -1088,9 +1209,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1115,9 +1236,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1153,9 +1274,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1191,9 +1312,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1218,9 +1339,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1245,9 +1366,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1276,9 +1397,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1303,9 +1424,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1330,9 +1451,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1359,9 +1480,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1386,9 +1507,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1420,9 +1541,9 @@ def model(dbt, _):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1476,9 +1597,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         );
 
         assert!(result.is_err());
@@ -1504,9 +1625,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1531,9 +1652,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         )
         .unwrap();
 
@@ -1559,9 +1680,9 @@ def model(dbt, session):
             source,
             &suite,
             DbtChecksum::default(),
-            &IoArgs::default(),
             None,
             Some(path.clone()),
+            AdapterType::Snowflake,
         );
 
         assert!(result.is_err());

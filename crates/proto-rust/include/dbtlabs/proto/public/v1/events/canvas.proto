@@ -40,6 +40,7 @@ message OpenInCanvasCtaShown {
   // The dbt project file path that triggered the CTA (e.g. "models/foo.sql").
   string file_path = 3;
   CanvasHandoffPayloadKind payload_kind = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Fired when the user clicks the "Open in Canvas" CTA.
@@ -51,6 +52,7 @@ message OpenInCanvasCtaClicked {
 
   string file_path = 3;
   CanvasHandoffPayloadKind payload_kind = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Fired when the CTA is hidden because validate_sql returned invalid.
@@ -64,6 +66,7 @@ message OpenInCanvasCtaSuppressed {
   string file_path = 3;
   // Free-form error returned by validate_sql.
   string error_message = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Fired in the Canvas read-only route when parseSql succeeds.
@@ -75,6 +78,7 @@ message OpenInCanvasHandoffSucceeded {
 
   string file_path = 3;
   CanvasHandoffPayloadKind payload_kind = 4;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 5;
 }
 
 // Fired in the Canvas read-only route when parseSql fails.
@@ -89,6 +93,7 @@ message OpenInCanvasHandoffFailed {
   CanvasHandoffParseFailureReason reason = 5;
   // Raw error string for debugging — complements the typed reason above.
   string error_message = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }
 
 // Fired when the user clicks the inline "Canvas" tab in the diff card.
@@ -99,6 +104,7 @@ message DiffCardCanvasTabClicked {
   v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 2;
 
   string file_path = 3;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 4;
 }
 
 // Fired when the inline diff fails to parse on either side.
@@ -112,4 +118,5 @@ message DiffCardCanvasParseFailed {
   CanvasHandoffDiffSide side = 4;
   CanvasHandoffParseFailureReason reason = 5;
   string error_message = 6;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 7;
 }

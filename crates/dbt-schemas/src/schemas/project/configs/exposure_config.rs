@@ -9,13 +9,12 @@ use std::collections::btree_map::Iter;
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
 
-use crate::{
-    default_to,
-    schemas::{
-        project::{ResolvableConfig, configs::common::default_meta_and_tags},
-        serde::{StringOrArrayOfStrings, bool_or_string_bool},
-    },
+use crate::schemas::project::configs::config_merge::Tags;
+use crate::schemas::{
+    project::ResolvableConfig,
+    serde::{StringOrArrayOfStrings, bool_or_string_bool},
 };
+use dbt_proc_macros::DefaultTo;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq)]
@@ -37,21 +36,24 @@ impl TypedRecursiveConfig for ProjectExposureConfig {
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }
+
+    fn has_set_fields(&self) -> bool {
+        self.meta.is_some() || self.tags.is_some() || self.enabled.is_some()
+    }
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Resolvable, Deserialize, Serialize, Debug, Clone, Default, DbtSchema, PartialEq)]
+#[derive(
+    Resolvable, DefaultTo, Deserialize, Serialize, Debug, Clone, Default, DbtSchema, PartialEq,
+)]
 pub struct ExposureConfig {
     #[resolved(promote, method = get_enabled_with_default)]
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(serialize_with = "crate::schemas::serde::serialize_option_as_empty_map")]
+    #[serde(serialize_with = "crate::schemas::serde::serialize_none_as_empty_map")]
     pub meta: Option<IndexMap<String, YmlValue>>,
-    #[serde(
-        default,
-        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
-    )]
-    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(default)]
+    pub tags: Tags,
 }
 
 impl From<ProjectExposureConfig> for ExposureConfig {
@@ -59,7 +61,7 @@ impl From<ProjectExposureConfig> for ExposureConfig {
         Self {
             enabled: config.enabled,
             meta: config.meta,
-            tags: config.tags,
+            tags: Tags(config.tags),
         }
     }
 }
@@ -68,7 +70,7 @@ impl From<ExposureConfig> for ProjectExposureConfig {
     fn from(config: ExposureConfig) -> Self {
         Self {
             meta: config.meta,
-            tags: config.tags,
+            tags: config.tags.into_inner(),
             enabled: config.enabled,
             __additional_properties__: BTreeMap::new(),
         }
@@ -95,17 +97,6 @@ impl ResolvableConfig<ExposureConfig> for ExposureConfig {
     }
 
     fn default_to(&mut self, parent: &ExposureConfig) {
-        let ExposureConfig {
-            meta,
-            tags,
-            enabled,
-        } = self;
-
-        #[allow(unused, clippy::let_unit_value)]
-        let meta = default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
-        #[allow(unused)]
-        let tags = ();
-
-        default_to!(parent, [enabled]);
+        self.default_to_fields(parent);
     }
 }

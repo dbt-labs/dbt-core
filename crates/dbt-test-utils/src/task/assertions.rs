@@ -8,44 +8,20 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-/// Task that asserts that specific file contains specific text.
-#[derive(Debug, Clone)]
-pub struct AssertFileContainsTask {
-    /// Path to file relative to project in which the task is running
-    rel_file_path: PathBuf,
-    /// Text to check if in the file
-    text: String,
-    /// Is `rel_file_path` relative to the test env tmp dir?
+/// Builds a task closure that asserts a specific file contains specific text.
+pub fn assert_file_contains(
+    rel_file_path: impl Into<PathBuf>,
+    text: impl Into<String>,
     use_test_env_path: bool,
-}
-
-impl AssertFileContainsTask {
-    pub fn new(
-        rel_file_path: impl Into<PathBuf>,
-        text: impl Into<String>,
-        use_test_env_path: bool,
-    ) -> Self {
-        Self {
-            rel_file_path: rel_file_path.into(),
-            text: text.into(),
-            use_test_env_path,
-        }
-    }
-}
-
-#[async_trait]
-impl Task for AssertFileContainsTask {
-    async fn run(
-        &self,
-        project_env: &ProjectEnv,
-        test_env: &TestEnv,
-        _task_index: usize,
-    ) -> TestResult<()> {
+) -> impl Fn(&ProjectEnv, &TestEnv, usize) -> TestResult<()> {
+    let rel_file_path = rel_file_path.into();
+    let text = text.into();
+    move |project_env: &ProjectEnv, test_env: &TestEnv, _task_index: usize| {
         // First we check that file actually exists.
-        let path = if self.use_test_env_path {
-            test_env.temp_dir.join(&self.rel_file_path)
+        let path = if use_test_env_path {
+            test_env.temp_dir.join(&rel_file_path)
         } else {
-            project_env.absolute_project_dir.join(&self.rel_file_path)
+            project_env.absolute_project_dir.join(&rel_file_path)
         };
 
         assert!(path.exists(), "Path {} does not exist", path.display());
@@ -54,7 +30,7 @@ impl Task for AssertFileContainsTask {
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
         assert!(
-            contents.contains(&self.text),
+            contents.contains(&text),
             "File at {} does not contain text",
             path.display()
         );

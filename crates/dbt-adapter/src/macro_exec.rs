@@ -8,13 +8,8 @@ use minijinja::{State, Value};
 use std::error::Error;
 use std::sync::Arc;
 
-/// Execute a macro under the `dbt` package.
-/// Unlike [`execute_macro`] that returns a `Value`,
-/// this function returns a `RecordBatch` which may become handy when the result manipulation is necessary.
-///
-/// # Panics
-///
-/// This function will panic if the macro named `dbt.{macro_name}` does not exist in the template state.
+// All four panic if the named macro doesn't exist in the template state.
+
 pub fn execute_macro_wrapper(
     state: &State,
     args: &[Value],
@@ -23,12 +18,6 @@ pub fn execute_macro_wrapper(
     execute_macro_wrapper_with_package(state, args, macro_name, "dbt")
 }
 
-/// Execute a macro under "dbt" package.
-/// If you need to manipulate the result, checkout [`execute_macro_wrapper`]
-///
-/// # Panics
-///
-/// This function will panic if the macro named `dbt.{macro_name}` does not exist in the template state.
 pub fn execute_macro(
     state: &State,
     args: &[Value],
@@ -37,13 +26,6 @@ pub fn execute_macro(
     execute_macro_with_package(state, args, macro_name, "dbt")
 }
 
-/// Execute a macro under a given package.
-/// Unlike [`execute_macro_with_package`] that returns a `Value`,
-/// this function returns a `RecordBatch` which may become handy when the result manipulation is necessary.
-///
-/// # Panics
-///
-/// This function will panic if the macro named `{package}.{macro_name}` does not exist in the template state.
 pub fn execute_macro_wrapper_with_package(
     state: &State,
     args: &[Value],
@@ -73,12 +55,6 @@ pub fn convert_macro_result_to_record_batch(
     Ok(record_batch)
 }
 
-/// Execute a macro under a given package.
-/// If you need to manipulate the result, checkout [`execute_macro_wrapper_with_package`]
-///
-/// # Panics
-///
-/// This function will panic if the macro named `{package_name}.{macro_name}` does not exist in the template state.
 pub fn execute_macro_with_package(
     state: &State,
     args: &[Value],

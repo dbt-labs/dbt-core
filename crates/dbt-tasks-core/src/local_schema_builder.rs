@@ -17,7 +17,7 @@ use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_dag::schedule::Schedule;
 use dbt_schema_store::{
     CanonicalFqn, LocalSchemaEntry,
-    store::{DataStore, SchemaStore, StoreFormat},
+    store::{DataStore, SchemaStore},
 };
 use dbt_schemas::schemas::{DbtSource, InternalDbtNodeAttributes, Nodes, dbt_column::DbtColumnRef};
 use dbt_telemetry::NodeType;
@@ -159,8 +159,6 @@ pub fn init_schema_store(
     cache_dir: &Path,
     adapter_type: AdapterType,
     extra_frontier_unique_ids: Option<&BTreeSet<String>>,
-    use_parquet_schema_store: bool,
-    verify_parquet_schema_store: bool,
 ) -> FsResult<SchemaStore> {
     // Filter out unit tests and data tests from selected nodes.
     // Unit tests inherit the database/schema/alias from the model they test, which causes
@@ -226,30 +224,18 @@ pub fn init_schema_store(
     // Build per-source refresh intervals
     let refresh_intervals = build_refresh_intervals(&all_frontier_ids, nodes);
 
-    let (primary_format, verify_format) = if verify_parquet_schema_store {
-        // Verify mode: old store is primary (its results are returned),
-        // new parquet store runs as shadow for comparison.
-        (StoreFormat::Parquet, Some(StoreFormat::ParquetCache))
-    } else if use_parquet_schema_store {
-        (StoreFormat::ParquetCache, None)
-    } else {
-        (StoreFormat::Parquet, None)
-    };
-
     let store = SchemaStore::new(
         cache_dir.to_path_buf(),
         selected,
         remote_frontier,
         local,
         local_schemas,
-        primary_format,
         refresh_intervals,
-        verify_format,
     );
 
     Ok(store)
 }
 
 pub fn init_data_store(cache_dir: &Path) -> DataStore {
-    DataStore::new(cache_dir.to_path_buf(), StoreFormat::Parquet)
+    DataStore::new(cache_dir.to_path_buf())
 }

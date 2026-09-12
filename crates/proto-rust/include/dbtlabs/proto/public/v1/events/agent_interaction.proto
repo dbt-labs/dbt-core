@@ -46,6 +46,7 @@ message AgentToolCallPermissionCheck {
   // Unique per tool invocation within a run; useful for deduplication
   // and joining with backend ToolCalled events.
   string call_id = 8;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 9;
 }
 
 message AgentToolCallPresented {
@@ -61,6 +62,7 @@ message AgentToolCallPresented {
   string agent_mode = 7;
   string skill_name = 8;          // populated only when tool_name = "load_dbt_skill"
   int64 skills_available_count = 9;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 10;
 }
 
 // Fires when execution begins. A Started without a matching Completed indicates the tool ran but never returned.
@@ -77,6 +79,7 @@ message AgentToolCallStarted {
   string agent_mode = 7;
   string skill_name = 8;
   bool auto_allowed = 9;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 10;
 }
 
 // Possible values for AgentToolCallCompleted.status:
@@ -102,4 +105,5 @@ message AgentToolCallCompleted {
   // Server-generated id correlating to backend command execution.
   // Populated only for invoke_dbt, run_autofix, run_dbt_index.
   optional string command_id = 13;
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryCommonContext common_context = 14;
 }

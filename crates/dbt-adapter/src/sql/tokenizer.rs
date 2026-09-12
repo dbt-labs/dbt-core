@@ -33,7 +33,6 @@ impl Token {
 
     pub fn append(&mut self, c: char) {
         self.value.push(c);
-        // check if c is 0-9 or a-f
         if !(c.is_ascii_digit() || ('a'..='f').contains(&c)) {
             self.maybe_hash = false;
         }
@@ -115,7 +114,6 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
     while index < tokens.len() {
         let token = tokens.get(index).unwrap();
         if token.matches("_") {
-            // check if the next token is a hash
             if tokens
                 .get(index + 1)
                 .map(|t| t.is_very_likely_hash())
@@ -139,7 +137,6 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                     }
                 }
                 if prefix.len() >= 30 {
-                    // pop index - i tokens from abstract_tokens
                     abstract_tokens.truncate(abstract_tokens.len() - (index - i - 1));
                     if prefix.len() > 30 {
                         let token = AbstractToken::Token(Token {

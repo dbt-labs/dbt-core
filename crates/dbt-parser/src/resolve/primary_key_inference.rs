@@ -326,6 +326,7 @@ mod tests {
                 introspection: IntrospectionKind::None,
                 original_name: None,
                 group: None,
+                state: None,
             },
             ..Default::default()
         };
@@ -351,6 +352,7 @@ mod tests {
                 introspection: IntrospectionKind::None,
                 original_name: None,
                 group: None,
+                state: None,
             },
             ..Default::default()
         };

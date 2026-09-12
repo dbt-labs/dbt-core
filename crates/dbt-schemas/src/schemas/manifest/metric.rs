@@ -285,7 +285,7 @@ impl From<MetricPropertiesMetricInput> for MetricInput {
     fn from(metric_input: MetricPropertiesMetricInput) -> Self {
         Self {
             name: metric_input.name.clone(),
-            filter: metric_input.filter.map(|filter| WhereFilterIntersection {
+            filter: metric_input.filter.0.map(|filter| WhereFilterIntersection {
                 where_filters: vec![WhereFilter {
                     where_sql_template: filter,
                 }],

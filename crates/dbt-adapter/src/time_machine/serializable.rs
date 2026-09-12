@@ -135,7 +135,6 @@ impl<'a> JsonExtractor<'a> {
         json.as_object().map(|obj| Self { obj })
     }
 
-    /// Get an optional string field.
     pub fn opt_str(&self, key: &str) -> Option<String> {
         self.obj
             .get(key)
@@ -143,47 +142,38 @@ impl<'a> JsonExtractor<'a> {
             .map(|s| s.to_string())
     }
 
-    /// Get a required string field with a default.
     pub fn str_or(&self, key: &str, default: &str) -> String {
         self.opt_str(key).unwrap_or_else(|| default.to_string())
     }
 
-    /// Get an optional i64 field.
     pub fn opt_i64(&self, key: &str) -> Option<i64> {
         self.obj.get(key).and_then(|v| v.as_i64())
     }
 
-    /// Get a required i64 field with a default.
     pub fn i64_or(&self, key: &str, default: i64) -> i64 {
         self.opt_i64(key).unwrap_or(default)
     }
 
-    /// Get an optional u64 field.
     pub fn opt_u64(&self, key: &str) -> Option<u64> {
         self.obj.get(key).and_then(|v| v.as_u64())
     }
 
-    /// Get an optional u32 field.
     pub fn opt_u32(&self, key: &str) -> Option<u32> {
         self.opt_u64(key).map(|v| v as u32)
     }
 
-    /// Get an optional bool field.
     pub fn opt_bool(&self, key: &str) -> Option<bool> {
         self.obj.get(key).and_then(|v| v.as_bool())
     }
 
-    /// Get a required bool field with a default.
     pub fn bool_or(&self, key: &str, default: bool) -> bool {
         self.opt_bool(key).unwrap_or(default)
     }
 
-    /// Get an optional nested object.
     pub fn opt_object(&self, key: &str) -> Option<&serde_json::Map<String, serde_json::Value>> {
         self.obj.get(key).and_then(|v| v.as_object())
     }
 
-    /// Get the raw JSON value for a key.
     pub fn get(&self, key: &str) -> Option<&serde_json::Value> {
         self.obj.get(key)
     }

@@ -1,7 +1,5 @@
-use crate::{
-    functions::register_base_functions, jinja_environment::JinjaEnv, utils::set_status_reporter,
-};
-use dbt_adapter::Adapter;
+use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
+use dbt_adapter::{Adapter, relation::is_parse_time_relation};
 use dbt_common::{
     ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err,
     warn_error_options::WarnErrorOptions,
@@ -14,7 +12,7 @@ use minijinja::{
         DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
         NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
     },
-    dispatch_object::get_internal_packages,
+    dispatch_object::{get_internal_packages, get_internal_packages_for},
     funcsign_parser, load_builtins_with_namespace,
     macro_unit::MacroUnit,
     value::ValueMap,
@@ -51,6 +49,9 @@ pub struct JinjaEnvBuilder {
     io_args: IoArgs,
     warn_error_options: WarnErrorOptions,
     function_registry: Arc<FunctionRegistry>,
+    /// Dialects whose internal macro packages this environment serves. Empty
+    /// means "just the adapter's own", which is the single-adapter case.
+    extra_dialects: Vec<String>,
 }
 
 impl JinjaEnvBuilder {
@@ -65,6 +66,7 @@ impl JinjaEnvBuilder {
             io_args: IoArgs::default(),
             warn_error_options: WarnErrorOptions::default(),
             function_registry: Arc::new(FunctionRegistry::new()),
+            extra_dialects: Vec::new(),
         }
     }
 
@@ -97,6 +99,15 @@ impl JinjaEnvBuilder {
     /// TODO: create a typed struct to validate we recieve all the globals we need
     pub fn with_globals(mut self, globals: BTreeMap<String, Value>) -> Self {
         self.globals = globals;
+        self
+    }
+
+    /// Declare additional dialects this environment serves, beyond the
+    /// adapter's own. A multi-adapter target supplies the other adapters' types
+    /// so their internal packages are recognised as internal and each dialect
+    /// gets its own macro namespace.
+    pub fn with_extra_dialects(mut self, dialects: Vec<String>) -> Self {
+        self.extra_dialects = dialects;
         self
     }
 
@@ -194,11 +205,23 @@ impl JinjaEnvBuilder {
             .clone()
             .ok_or_else(|| unexpected_fs_err!("try_with_macros requires root package to be set"))?;
 
-        // Get internal packages for this adapter
+        // The dialects whose internal packages this environment serves. One today;
+        // a multi-adapter target will supply several, at which point each gets its
+        // own namespace below.
+        let mut dialects: Vec<String> = vec![adapter.adapter_type().as_ref().to_string()];
+        for dialect in &self.extra_dialects {
+            if !dialects.contains(dialect) {
+                dialects.push(dialect.clone());
+            }
+        }
+
+        // Internal packages across every dialect served. Resolution stays
+        // per-dialect (see the namespace build below), so widening this set does
+        // not let one adapter's unprefixed macros leak into another's lookups.
         #[allow(unused_mut)]
-        let mut internal_packages = get_internal_packages(adapter.adapter_type().as_ref());
+        let mut internal_packages = get_internal_packages_for(dialects.iter().map(String::as_str));
         // Initialize all registries
-        let mut macro_namespace_registry = ValueMap::new(); // package_name → [macro_names]
+        let mut macro_namespace_registry = ValueMap::new(); // package_name → {macro_name → true}
         let mut macro_template_registry = ValueMap::new(); // template_name → macro_info
 
         let mut non_internal_packages: ValueMap = ValueMap::new(); // package_name → [macro_names]
@@ -208,15 +231,20 @@ impl JinjaEnvBuilder {
 
         // Process all macros
         for (package_name, macro_units) in macros.macros.clone() {
-            // Add package to namespace registry
+            // Add package to namespace registry.
+            //
+            // Stored as a map keyed by macro name rather than a sequence: the hot
+            // consumer is `DbtNamespace::get_property`, which membership-tests this on
+            // every `pkg.macro_name` access. A map makes that a hash lookup instead of a
+            // scan over the whole package. Iterating a minijinja map yields its keys, so
+            // consumers that walk this for macro names are unaffected.
+            let macro_names: ValueMap = macro_units
+                .iter()
+                .map(|m| (Value::from(m.info.name.clone()), Value::from(true)))
+                .collect();
             macro_namespace_registry.insert(
                 Value::from(package_name.clone()),
-                Value::from_serialize(
-                    macro_units
-                        .iter()
-                        .map(|m| m.info.name.clone())
-                        .collect::<Vec<_>>(),
-                ),
+                Value::from_object(macro_names),
             );
         }
         self.env.add_global(
@@ -350,15 +378,25 @@ impl JinjaEnvBuilder {
         self.function_registry = Arc::new(function_registry);
         AdapterDispatchFunction::instance().set_function_registry(self.function_registry.clone());
 
-        // Process internal packages in reverse order (like dbt)
-        let mut dbt_and_adapters_namespace = ValueMap::new();
-        for pkg in internal_packages.iter().rev() {
-            if let Some(pkg_macros) = internal_packages_macros.get(pkg) {
-                for macro_name in pkg_macros.keys() {
-                    dbt_and_adapters_namespace
-                        .insert(Value::from(macro_name.clone()), Value::from(pkg.clone()));
+        // One `macro_name -> package` namespace per dialect, keyed by dialect.
+        //
+        // Within a dialect the packages are walked in reverse order, as dbt does,
+        // so a more specific adapter package overrides `dbt-adapters`. That
+        // layering is load-bearing and preserved. Keying by dialect is what lets
+        // two adapters that both define an unprefixed macro (`run_hooks`,
+        // `py_write_table`) coexist without one silently winning for every node.
+        let mut dbt_and_adapters_namespaces = ValueMap::new();
+        for dialect in &dialects {
+            let mut namespace = ValueMap::new();
+            for pkg in get_internal_packages(dialect).iter().rev() {
+                if let Some(pkg_macros) = internal_packages_macros.get(pkg) {
+                    for macro_name in pkg_macros.keys() {
+                        namespace.insert(Value::from(macro_name.clone()), Value::from(pkg.clone()));
+                    }
                 }
             }
+            dbt_and_adapters_namespaces
+                .insert(Value::from(dialect.clone()), Value::from_object(namespace));
         }
 
         // Ensure the root package is ALWAYS in non_internal_packages even if it has no macros
@@ -377,7 +415,7 @@ impl JinjaEnvBuilder {
         );
         self.env.add_global(
             DBT_AND_ADAPTERS_NAMESPACE,
-            Value::from_object(dbt_and_adapters_namespace),
+            Value::from_object(dbt_and_adapters_namespaces),
         );
 
         // Register the dbt_classification macro package — embedded SQL
@@ -402,8 +440,6 @@ impl JinjaEnvBuilder {
 
     /// Build the Minijinja Environment with all configured settings.
     pub fn build(mut self) -> JinjaEnv {
-        let status_reporter = self.io_args.status_reporter.as_ref().map(|x| x.clone());
-
         // Register filters (as_bool, as_number, as_native, as_text)
         // These are used to convert values to the appropriate type that might be
         // expected by the jinja template.
@@ -418,7 +454,7 @@ impl JinjaEnvBuilder {
         let function_registry = self.register_filter_types();
 
         // Register "base" dbt style functions.
-        register_base_functions(&mut self.env, self.io_args, self.warn_error_options);
+        register_base_functions(&mut self.env, self.warn_error_options);
 
         // Register all configured global values.
         // TODO (Ani) type the globals struct to validate we recieve all the globals we need
@@ -434,8 +470,6 @@ impl JinjaEnvBuilder {
         // Pull in the pycompat methods
         self.env
             .set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
-
-        set_status_reporter(&mut self.env, status_reporter);
 
         let mut jinja_env = JinjaEnv::new(self.env);
         if let Some(adapter) = self.adapter {
@@ -458,6 +492,10 @@ impl JinjaEnvBuilder {
     }
 
     fn register_tests(&mut self) {
+        self.env.add_test("none", |value: Value| {
+            value.is_none() || is_parse_time_relation(&value)
+        });
+
         // https://github.com/pallets/jinja/blob/5ef70112a1ff19c05324ff889dd30405b1002044/src/jinja2/runtime.py#L878
         // Since `__call__` is technically implemented, {{ undefined is callable }} is true.
         self.env.add_test("callable", |value: Value| {
@@ -552,6 +590,36 @@ all okay!");
     }
 
     #[test]
+    fn parse_get_relation_matches_none_control_flow() {
+        let adapter = Arc::new(Adapter::new_parse_phase_adapter(
+            AdapterType::DuckDB,
+            dbt_yaml::Mapping::new(),
+            DEFAULT_DBT_QUOTING,
+            Arc::new(DefaultTypeOps::new(AdapterType::DuckDB)),
+            None,
+        ));
+        let globals = BTreeMap::from([(
+            "adapter".to_string(),
+            Value::from_object(adapter.as_ref().clone()),
+        )]);
+        let env = JinjaEnvBuilder::new()
+            .with_adapter(adapter)
+            .with_globals(globals)
+            .build();
+
+        let rendered = env
+            .render_str(
+                r#"{%- set relation = adapter.get_relation(database="", schema="main", identifier="missing") -%}
+{{- relation is none }}|{{ relation is not none }}|{{ relation and "truthy" or "falsey" }}|{{ relation.include(database=false, schema=false, identifier=false).render() is none -}}"#,
+                context! {},
+                &[],
+            )
+            .unwrap();
+
+        assert_eq!(rendered, "True|False|falsey|True");
+    }
+
+    #[test]
     fn test_dispatch_mode() {
         set_thread_local_dependencies(std::iter::empty());
         let mut macro_units = MacroUnitsWrapper::new(BTreeMap::new());
@@ -614,7 +682,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-            None,
             None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
@@ -703,7 +770,6 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
-            None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(Arc::new(adapter) as Arc<Adapter>)
@@ -765,7 +831,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-            None,
             None,
         );
         let env = JinjaEnvBuilder::new()
@@ -915,7 +980,6 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
-            None,
         );
 
         // Root package has no macros
@@ -967,7 +1031,6 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
             None,
-            None,
         );
 
         let globals = BTreeMap::from([(
@@ -1012,7 +1075,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-            None,
             None,
         );
 
@@ -1074,7 +1136,6 @@ all okay!");
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Arc::new(DefaultTypeOps::new(AdapterType::Postgres)),
-            None,
             None,
         );
 

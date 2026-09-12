@@ -24,6 +24,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use crate::JinjaObject;
+use crate::compile::CompileBaseCtx;
 use crate::objects::{LazyModelWrapper, MacroLookupContext};
 
 /// Per-node run-time overlay layered onto [`crate::CompileBaseCtx`] for each
@@ -41,6 +42,13 @@ use crate::objects::{LazyModelWrapper, MacroLookupContext};
 /// the agate table is supplied).
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct RunNodeCtx {
+    /// Typed base context. `None` on today's BTreeMap-overlay path; `Some`
+    /// on the future typed-throughout path where this struct is passed
+    /// directly to `render_named_str`. Flattened so base keys appear at the
+    /// top level; per-node fields declared below shadow any shared keys.
+    #[serde(flatten)]
+    pub base: Option<CompileBaseCtx>,
+
     /// `{{ this }}` — `RelationObject` for the node's adapter relation.
     #[schemars(with = "serde_json::Value")]
     pub this: MinijinjaValue,

@@ -1,4 +1,5 @@
-use dbt_common::io_utils::StatusReporter;
+//! Loads and validates `<project_root>/catalogs.yml` into a global holder.
+
 use dbt_common::tracing::dbt_emit::emit_warn_log_message;
 use dbt_common::warn_error_options::project_flags_get_value;
 use dbt_common::{ErrorCode, FsResult, fs_err};
@@ -14,7 +15,6 @@ const CATALOGS_V2_DISCUSSION_URL: &str = "https://github.com/dbt-labs/dbt-core/d
 static CATALOGS: RwLock<Option<Arc<DbtCatalogs>>> = RwLock::new(None);
 static USE_CATALOGS_V2: RwLock<bool> = RwLock::new(false);
 
-/// Reader: returns a read guard to loaded catalogs.yml if present
 pub fn fetch_catalogs() -> Option<Arc<DbtCatalogs>> {
     match CATALOGS.read() {
         Ok(g) => g.as_ref().cloned(),
@@ -22,7 +22,6 @@ pub fn fetch_catalogs() -> Option<Arc<DbtCatalogs>> {
     }
 }
 
-/// Reader: returns whether the use_catalogs_v2 behavior flag was set at load time.
 pub fn fetch_use_catalogs_v2() -> bool {
     match USE_CATALOGS_V2.read() {
         Ok(g) => *g,
@@ -38,21 +37,19 @@ pub fn set_use_catalogs_v2_from_flags(project_flags: Option<&yml::Value>) {
     let enabled = project_flags
         .and_then(|f| project_flags_get_value(f, "use_catalogs_v2"))
         .and_then(yml::Value::as_bool)
-        .unwrap_or(false);
+        .unwrap_or(true);
     *match USE_CATALOGS_V2.write() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
     } = enabled;
 }
 
-/// Load <project_root>/catalogs.yml, validate, and return a validated mapping holder.
 pub fn load_catalogs(
     text_yml: yml::Value,
     path: &Path,
     project_flags: Option<&yml::Value>,
-    status_reporter: Option<&Arc<dyn StatusReporter>>,
 ) -> FsResult<()> {
-    let validated = do_load_catalogs(text_yml, path, project_flags, status_reporter)?;
+    let validated = do_load_catalogs(text_yml, path, project_flags)?;
     let mut write_guard = match CATALOGS.write() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
@@ -65,7 +62,6 @@ pub fn do_load_catalogs(
     text_yml: yml::Value,
     path: &Path,
     project_flags: Option<&yml::Value>,
-    status_reporter: Option<&Arc<dyn StatusReporter>>,
 ) -> FsResult<DbtCatalogs> {
     let _guard = yml::with_filename(Some(path.to_path_buf()));
 
@@ -81,19 +77,19 @@ pub fn do_load_catalogs(
     };
 
     let catalogs = DbtCatalogs::new(repr, span);
-    // TODO: remove v1 after discussion/product alignment (see CATALOGS_V2_DISCUSSION_URL)
     set_use_catalogs_v2_from_flags(project_flags);
     if fetch_use_catalogs_v2() {
-        emit_warn_log_message(
-            ErrorCode::NotYetSupportedOption,
-            format!(
-                "catalogs.yml v2 schema validation is experimental, not officially supported yet, and its spec is liable to change. See {CATALOGS_V2_DISCUSSION_URL}"
-            ),
-            status_reporter,
-        );
         let view = catalogs.view_v2()?;
         validate_catalogs_v2(&view, path)?;
     } else {
+        emit_warn_log_message(
+            ErrorCode::DeprecatedOption,
+            format!(
+                "catalogs.yml is being validated against the deprecated v1 schema. To migrate, \
+                 remove the `use_catalogs_v2: false` override (or set it to `true`) under \
+                 `flags:` in dbt_project.yml. See {CATALOGS_V2_DISCUSSION_URL}"
+            ),
+        );
         let view = catalogs.view()?;
         validate_catalogs(&view, path)?;
     }

@@ -10,7 +10,7 @@ use minijinja::value::Value;
 
 pub(crate) const TYPE_NAME: &str = "kms_key_name";
 
-/// Component for BigQuery refresh config
+/// Component for BigQuery KMS key name.
 pub(crate) type KmsKey = SimpleComponentConfigImpl<String>;
 
 fn new_component(key_name: String) -> KmsKey {
