@@ -1,0 +1,7 @@
+kind: Features
+body: Add a data_governance_tags column property that sets one BigQuery governance tag from a key and value
+time: 2026-10-11T09:26:19.330713+02:00
+custom:
+    author: AxelThevenot
+    issue: "16693"
+    project: dbt-core

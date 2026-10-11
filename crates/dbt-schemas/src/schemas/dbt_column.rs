@@ -49,6 +49,7 @@ pub struct DbtColumn {
     #[serde(default)]
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<StringOrMap>>,
+    pub data_governance_tags: Option<DataGovernanceTag>,
     pub classifiers: Option<Vec<String>>,
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -125,6 +126,7 @@ pub struct ColumnProperties {
     pub granularity: Option<Granularity>,
     #[serde(default, deserialize_with = "policy_tags_from_scalar_or_list")]
     pub policy_tags: Option<Vec<StringOrMap>>,
+    pub data_governance_tags: Option<DataGovernanceTag>,
     pub classifiers: Option<Vec<String>>,
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -155,6 +157,7 @@ pub struct VersionColumnProperties {
     pub granularity: Option<Granularity>,
     #[serde(default, deserialize_with = "policy_tags_from_scalar_or_list")]
     pub policy_tags: Option<Vec<StringOrMap>>,
+    pub data_governance_tags: Option<DataGovernanceTag>,
     pub classifiers: Option<Vec<String>>,
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     pub column_mask: Option<ColumnMask>,
@@ -183,6 +186,7 @@ impl VersionColumnProperties {
             data_tests: self.data_tests.clone(),
             granularity: self.granularity.clone(),
             policy_tags: self.policy_tags.clone(),
+            data_governance_tags: self.data_governance_tags.clone(),
             classifiers: self.classifiers.clone(),
             databricks_tags: self.databricks_tags.clone(),
             column_mask: self.column_mask.clone(),
@@ -194,6 +198,15 @@ impl VersionColumnProperties {
             dimension: self.dimension.clone(),
         })
     }
+}
+
+/// One BigQuery data governance tag. A column accepts exactly one.
+///
+/// `key` is the namespaced name `{parent_id}/{short_name}`. `value` is the tag value's short name.
+#[derive(Debug, Deserialize, Serialize, Clone, DbtSchema, Eq, PartialEq)]
+pub struct DataGovernanceTag {
+    pub key: String,
+    pub value: String,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone, DbtSchema, Eq, PartialEq)]
@@ -228,6 +241,7 @@ pub struct ColumnConfig {
     pub databricks_tags: Option<IndexMap<String, YmlValue>>,
     #[serde(default, deserialize_with = "policy_tags_from_scalar_or_list")]
     pub policy_tags: Option<Vec<StringOrMap>>,
+    pub data_governance_tags: Option<DataGovernanceTag>,
 }
 
 /// Represents column inheritance rules for a model version
@@ -354,6 +368,10 @@ pub fn process_columns(
                     .clone()
                     .map(|c| (c.meta, c.tags, c.databricks_tags, c.policy_tags))
                     .unwrap_or_default();
+                let cp_data_governance_tags = cp
+                    .config
+                    .as_ref()
+                    .and_then(|c| c.data_governance_tags.clone());
                 let column_meta = cp_meta.unwrap_or_default();
 
                 let col = Arc::new(DbtColumn {
@@ -368,6 +386,10 @@ pub fn process_columns(
                         .unwrap_or_default(),
                     // Top-level policy_tags takes precedence over config.policy_tags
                     policy_tags: cp.policy_tags.clone().or(cp_policy_tags),
+                    data_governance_tags: cp
+                        .data_governance_tags
+                        .clone()
+                        .or(cp_data_governance_tags),
                     classifiers: cp.classifiers.clone(),
                     databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
                     column_mask: cp.column_mask.clone(),
@@ -409,6 +431,7 @@ mod tests {
             data_tests: None,
             granularity: None,
             policy_tags: None,
+            data_governance_tags: None,
             classifiers: None,
             databricks_tags: None,
             column_mask: None,
@@ -591,6 +614,69 @@ policy_tags: governance.tags.PII
             StringOrMap::StringValue(s) => assert_eq!(s, "governance.tags.PII"),
             StringOrMap::MapValue(_) => panic!("expected StringValue"),
         }
+    }
+
+    #[test]
+    fn test_column_properties_data_governance_tags_parses_key_value() {
+        let yaml = "\
+name: email
+data_governance_tags:
+  key: my-project/data_class
+  value: email
+";
+        let parsed: ColumnProperties = dbt_yaml::from_str(yaml).unwrap();
+        let tag = parsed
+            .data_governance_tags
+            .expect("data_governance_tags preserved");
+        assert_eq!(tag.key, "my-project/data_class");
+        assert_eq!(tag.value, "email");
+    }
+
+    #[test]
+    fn test_column_properties_data_governance_tags_rejects_scalar() {
+        let yaml = "\
+name: email
+data_governance_tags: email
+";
+        let parsed = dbt_yaml::from_str::<ColumnProperties>(yaml);
+        assert!(
+            parsed.is_err(),
+            "a scalar data_governance_tags value must fail"
+        );
+    }
+
+    #[test]
+    fn test_process_columns_data_governance_tags_top_level_wins_over_config() {
+        let yaml = "\
+name: email
+data_governance_tags:
+  key: my-project/data_class
+  value: email
+config:
+  data_governance_tags:
+    key: my-project/data_class
+    value: phone
+";
+        let column: ColumnProperties = dbt_yaml::from_str(yaml).unwrap();
+        let result = process_columns(Some(&vec![column]), None).unwrap();
+        let tag = result[0].data_governance_tags.as_ref().unwrap();
+        assert_eq!(tag.value, "email");
+    }
+
+    #[test]
+    fn test_process_columns_data_governance_tags_falls_back_to_config() {
+        let yaml = "\
+name: email
+config:
+  data_governance_tags:
+    key: my-project/data_class
+    value: email
+";
+        let column: ColumnProperties = dbt_yaml::from_str(yaml).unwrap();
+        let result = process_columns(Some(&vec![column]), None).unwrap();
+        let tag = result[0].data_governance_tags.as_ref().unwrap();
+        assert_eq!(tag.key, "my-project/data_class");
+        assert_eq!(tag.value, "email");
     }
 }
 
