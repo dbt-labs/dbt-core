@@ -41,11 +41,10 @@ _ADAPTER_TO_EXTRA_KEYS = {
     "bigquery": ["dataset", "project"],
     # databricks/dbt-databricks#1540, #1302
     "databricks": [
-        "query_tags",
+        # The synced project schema only declares these for models, but snapshots use them too.
         "zorder",
-        "options",
-        "unique_tmp_table_suffix",
         "skip_optimize",
+        "options",
     ],
 }
 
