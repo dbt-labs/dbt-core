@@ -1,5 +1,6 @@
 from typing import List, Optional, Set
 
+from metricflow.engine.metricflow_engine import MetricFlowEngine, MetricFlowQueryRequest
 from metricflow_semantic_interfaces.implementations.metric import PydanticMetric
 from metricflow_semantic_interfaces.implementations.node_relation import (
     PydanticNodeRelation,
@@ -35,6 +36,8 @@ from metricflow_semantic_interfaces.validations.validator_helpers import (
 )
 
 from dbt import deprecations
+from dbt.artifacts.resources import SemanticQueryArgs
+from dbt.clients.metricflow import build_metricflow_engine
 from dbt.constants import (
     LEGACY_TIME_SPINE_GRANULARITY,
     LEGACY_TIME_SPINE_MODEL_NAME,
@@ -57,6 +60,34 @@ from dbt_common.events.functions import fire_event
 class SemanticManifest:
     def __init__(self, manifest: Manifest) -> None:
         self.manifest = manifest
+        self._metricflow_engine: Optional[MetricFlowEngine] = None
+
+    def _get_metricflow_engine(self, adapter_type: str) -> MetricFlowEngine:
+        """The engine is expensive to build and only valid for the manifest as it is now, so it
+        is built on first use and then reused for the lifetime of this object. Don't hold on
+        to a `SemanticManifest` across changes to the manifest."""
+        if self._metricflow_engine is None:
+            self._metricflow_engine = build_metricflow_engine(
+                self._get_pydantic_semantic_manifest(), adapter_type
+            )
+        return self._metricflow_engine
+
+    def source_semantic_models(self, query: SemanticQueryArgs, adapter_type: str) -> List[str]:
+        """The names of the semantic models MetricFlow reads from to answer the query. This
+        includes the ones only reached by joining, for example for a group by or where
+        filter on a dimension of another semantic model.
+
+        Raises a MetricFlow `InformativeUserError` if the query can't be answered."""
+        if query.saved_query is not None:
+            request = MetricFlowQueryRequest.create(saved_query_name=query.saved_query)
+        else:
+            request = MetricFlowQueryRequest.create(
+                metric_names=query.metrics,
+                group_by_names=query.group_by,
+                where_constraints=query.where,
+            )
+        dataflow_plan = self._get_metricflow_engine(adapter_type).explain(request).dataflow_plan
+        return sorted(ref.semantic_model_name for ref in dataflow_plan.source_semantic_models)
 
     def validate(self) -> bool:
 
