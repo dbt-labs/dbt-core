@@ -144,28 +144,28 @@ impl Constraints {
     ) -> impl Iterator<Item = (&'a TypedConstraint, &'a TypedConstraint)> {
         next_by_key.iter().filter_map(|(key, next)| {
             let prev = *prev_by_key.get(key)?;
-            match (*next, prev) {
-                (
-                    TypedConstraint::ForeignKey {
-                        to: Some(to),
-                        to_columns,
-                        ..
-                    },
-                    TypedConstraint::ForeignKey {
-                        to: prev_to,
-                        to_columns: prev_to_columns,
-                        ..
-                    },
-                ) if (Some(to), to_columns.as_deref().unwrap_or_default())
-                    != (
-                        prev_to.as_ref(),
-                        prev_to_columns.as_deref().unwrap_or_default(),
-                    ) =>
-                {
-                    Some((*next, prev))
-                }
-                _ => None,
-            }
+            let TypedConstraint::ForeignKey {
+                to: Some(to),
+                to_columns,
+                ..
+            } = *next
+            else {
+                return None;
+            };
+            let TypedConstraint::ForeignKey {
+                to: prev_to,
+                to_columns: prev_to_columns,
+                ..
+            } = prev
+            else {
+                return None;
+            };
+            let target = (Some(to), to_columns.as_deref().unwrap_or_default());
+            let prev_target = (
+                prev_to.as_ref(),
+                prev_to_columns.as_deref().unwrap_or_default(),
+            );
+            (target != prev_target).then_some((*next, prev))
         })
     }
 
