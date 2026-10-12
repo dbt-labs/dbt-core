@@ -10,6 +10,7 @@ pub mod hashing;
 pub mod io_utils;
 pub mod node_selector;
 pub mod pretty_string;
+pub mod sources_extractor;
 pub mod static_analysis;
 pub mod stats;
 pub mod stdfs;
@@ -36,7 +37,6 @@ pub mod serde_utils;
 pub mod status_reporter;
 pub mod time;
 pub mod tracing;
-pub mod url;
 pub mod user_defined_schema_registry;
 pub mod warn_error_options;
 
