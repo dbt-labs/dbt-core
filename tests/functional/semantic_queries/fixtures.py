@@ -96,3 +96,24 @@ select * from (
     {{ metric_query(metrics=['revenue']) }}
 ) as total_revenue
 """
+
+metric_query_metric_only_model_sql = """
+select * from (
+    {{ metric_query(metrics=['revenue']) }}
+) as total_revenue
+"""
+
+metric_query_where_only_model_sql = """
+select * from (
+    {{ metric_query(
+        metrics=['revenue'],
+        where="{{ Dimension('customer__region') }} = 'west'",
+    ) }}
+) as west_revenue
+"""
+
+metric_query_unknown_dimension_model_sql = """
+select * from (
+    {{ metric_query(metrics=['revenue'], group_by=['customer__nope']) }}
+) as bad_query
+"""

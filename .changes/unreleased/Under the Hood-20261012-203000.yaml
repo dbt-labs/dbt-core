@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Make nodes which call `metric_query()` or `saved_query()` depend on the semantic models they join to
+time: 2026-10-12T20:30:00.000000-07:00
+custom:
+    Author: QMalcolm
+    Issue: ""

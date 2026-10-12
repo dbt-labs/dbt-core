@@ -26,6 +26,7 @@ import msgpack
 from jinja2.nodes import Call, Const
 from metricflow_semantic_interfaces.enum_extension import assert_values_exhausted
 from metricflow_semantic_interfaces.type_enums import MetricType
+from metricflow_semantics.errors.error_classes import InformativeUserError
 
 import dbt.deprecations
 import dbt.exceptions
@@ -542,6 +543,7 @@ class ManifestLoader:
             semantic_manifest = SemanticManifest(self.manifest)
             if not semantic_manifest.validate():
                 raise dbt.exceptions.ParsingError("Semantic Manifest validation failed.")
+            self.process_semantic_query_semantic_models(semantic_manifest)
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
@@ -1368,6 +1370,49 @@ class ManifestLoader:
             if node.created_at < self.started_at:
                 continue
             _process_semantic_queries_for_node(self.manifest, current_project, node)
+
+    def process_semantic_query_semantic_models(self, semantic_manifest: SemanticManifest):
+        """Makes nodes which make semantic queries depend on every semantic model the queries
+        read from, including those only reached by joining for a group by or where filter.
+
+        Must run after the semantic manifest is validated, as it asks MetricFlow to plan each
+        query. `process_semantic_queries` has already made the nodes depend on the metrics."""
+        semantic_layer_changed = self._semantic_manifest_changed()
+        adapter_type = self.root_project.credentials.type
+        semantic_model_ids: Optional[Dict[str, str]] = None
+
+        for node in self.manifest.nodes.values():
+            if isinstance(node, SeedNode) or not node.semantic_queries:
+                continue
+            # The semantic models a query reads from can change without the node changing, for
+            # example if another semantic model is added which a dimension can now be joined from.
+            if node.created_at < self.started_at and not semantic_layer_changed:
+                continue
+            if semantic_model_ids is None:
+                semantic_model_ids = {
+                    semantic_model.name: semantic_model.unique_id
+                    for semantic_model in self.manifest.semantic_models.values()
+                }
+
+            # Nodes can't otherwise depend on semantic models, so any there are left over
+            # from the last time the queries were resolved.
+            node.depends_on.nodes = [
+                unique_id
+                for unique_id in node.depends_on.nodes
+                if not unique_id.startswith(f"{NodeType.SemanticModel.value}.")
+            ]
+            for query in node.semantic_queries:
+                try:
+                    semantic_model_names = semantic_manifest.source_semantic_models(
+                        query, adapter_type
+                    )
+                except InformativeUserError as exc:
+                    raise dbt.exceptions.ParsingError(
+                        f"Invalid semantic query in {node.resource_type} '{node.name}': {exc}",
+                        node=node,
+                    ) from exc
+                for semantic_model_name in semantic_model_names:
+                    node.depends_on.add_node(semantic_model_ids[semantic_model_name])
 
     def process_model_inferred_primary_keys(self):
         """Processes Model nodes to populate their `primary_key`."""
