@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add `semantic_queries` field to compiled nodes to record semantic layer queries made from node code
+time: 2026-10-12T17:35:00.000000-07:00
+custom:
+    Author: QMalcolm
+    Issue: ""

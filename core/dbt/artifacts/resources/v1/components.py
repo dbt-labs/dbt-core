@@ -76,6 +76,19 @@ class RefArgs(dbtClassMixin):
 
 
 @dataclass
+class SemanticQueryArgs(dbtClassMixin):
+    """The dependency-relevant arguments of a semantic layer query made from a node's
+    code, either ad hoc (`metrics`, `group_by`, `where`) or via a saved query
+    (`saved_query`). Only what is needed to work out which nodes the query reads from
+    is recorded; the rest of the query is rendered at compile time."""
+
+    saved_query: Optional[str] = None
+    metrics: List[str] = field(default_factory=list)
+    group_by: List[str] = field(default_factory=list)
+    where: List[str] = field(default_factory=list)
+
+
+@dataclass
 class ColumnConfig(BaseConfig):
     meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)
@@ -283,6 +296,7 @@ class CompiledResource(ParsedResource):
     refs: List[RefArgs] = field(default_factory=list)
     sources: List[List[str]] = field(default_factory=list)
     metrics: List[List[str]] = field(default_factory=list)
+    semantic_queries: List[SemanticQueryArgs] = field(default_factory=list)
     functions: List[List[str]] = field(default_factory=list)
     depends_on: DependsOn = field(default_factory=DependsOn)
     compiled_path: Optional[str] = None

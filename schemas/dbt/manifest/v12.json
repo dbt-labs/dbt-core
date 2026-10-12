@@ -2340,6 +2340,45 @@
                   }
                 }
               },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
               "functions": {
                 "type": "array",
                 "items": {
@@ -3210,6 +3249,45 @@
                   "items": {
                     "type": "string"
                   }
+                }
+              },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "functions": {
@@ -4219,6 +4297,45 @@
                   "items": {
                     "type": "string"
                   }
+                }
+              },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "functions": {
@@ -5348,6 +5465,45 @@
                   "items": {
                     "type": "string"
                   }
+                }
+              },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "functions": {
@@ -6950,6 +7106,45 @@
                   }
                 }
               },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
               "functions": {
                 "type": "array",
                 "items": {
@@ -7820,6 +8015,45 @@
                   "items": {
                     "type": "string"
                   }
+                }
+              },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "functions": {
@@ -9024,6 +9258,45 @@
                   "items": {
                     "type": "string"
                   }
+                }
+              },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "functions": {
@@ -10522,6 +10795,45 @@
                   "items": {
                     "type": "string"
                   }
+                }
+              },
+              "semantic_queries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "title": "SemanticQueryArgs",
+                  "properties": {
+                    "saved_query": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "metrics": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "group_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "functions": {
@@ -16699,6 +17011,45 @@
                         }
                       }
                     },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
                     "functions": {
                       "type": "array",
                       "items": {
@@ -17569,6 +17920,45 @@
                         "items": {
                           "type": "string"
                         }
+                      }
+                    },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "functions": {
@@ -18578,6 +18968,45 @@
                         "items": {
                           "type": "string"
                         }
+                      }
+                    },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "functions": {
@@ -19707,6 +20136,45 @@
                         "items": {
                           "type": "string"
                         }
+                      }
+                    },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "functions": {
@@ -21309,6 +21777,45 @@
                         }
                       }
                     },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
                     "functions": {
                       "type": "array",
                       "items": {
@@ -22179,6 +22686,45 @@
                         "items": {
                           "type": "string"
                         }
+                      }
+                    },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "functions": {
@@ -23383,6 +23929,45 @@
                         "items": {
                           "type": "string"
                         }
+                      }
+                    },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "functions": {
@@ -24881,6 +25466,45 @@
                         "items": {
                           "type": "string"
                         }
+                      }
+                    },
+                    "semantic_queries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "title": "SemanticQueryArgs",
+                        "properties": {
+                          "saved_query": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
+                          },
+                          "metrics": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "group_by": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "where": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "functions": {
@@ -29514,6 +30138,28 @@
                               }
                             ],
                             "default": null
+                          },
+                          "datatype": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "string",
+                                  "integer",
+                                  "decimal",
+                                  "float",
+                                  "boolean",
+                                  "date",
+                                  "time",
+                                  "datetime",
+                                  "datetime_tz",
+                                  "opaque"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "default": null
                           }
                         },
                         "additionalProperties": false,
@@ -31180,6 +31826,28 @@
                     }
                   ],
                   "default": null
+                },
+                "datatype": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "string",
+                        "integer",
+                        "decimal",
+                        "float",
+                        "boolean",
+                        "date",
+                        "time",
+                        "datetime",
+                        "datetime_tz",
+                        "opaque"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 }
               },
               "additionalProperties": false,
@@ -32723,6 +33391,45 @@
               "items": {
                 "type": "string"
               }
+            }
+          },
+          "semantic_queries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "title": "SemanticQueryArgs",
+              "properties": {
+                "saved_query": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "metrics": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "group_by": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "where": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
             }
           },
           "functions": {

@@ -25,6 +25,7 @@ from dbt.artifacts.resources.v1.components import (
     ParsedResourceMandatory,
     Quoting,
     RefArgs,
+    SemanticQueryArgs,
     Time,
 )
 from dbt.artifacts.resources.v1.config import (

@@ -63,6 +63,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "refs",
         "sources",
         "metrics",
+        "semantic_queries",
         "functions",
         "meta",
         "depends_on",
