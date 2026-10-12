@@ -531,6 +531,7 @@ class ManifestLoader:
             self.process_docs(self.root_project)
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
+            self.process_semantic_queries(self.root_project)
             self.process_model_inferred_primary_keys()
             self.process_functions(self.root_project.project_name)
             self.check_valid_group_config()
@@ -1357,6 +1358,16 @@ class ManifestLoader:
             # 1. process `where` of SavedQuery for `depends_on`s
             # 2. process `group_by` of SavedQuery for `depends_on``
             _process_metrics_for_node(self.manifest, current_project, saved_query)
+
+    def process_semantic_queries(self, config: RuntimeConfig):
+        """Sets `depends_on` for nodes which make semantic queries. Must run after
+        `process_saved_queries`, as a saved query's dependencies are what a node using
+        it inherits."""
+        current_project = config.project_name
+        for node in self.manifest.nodes.values():
+            if node.created_at < self.started_at:
+                continue
+            _process_semantic_queries_for_node(self.manifest, current_project, node)
 
     def process_model_inferred_primary_keys(self):
         """Processes Model nodes to populate their `primary_key`."""
@@ -2399,6 +2410,58 @@ def _process_metrics_for_node(
         target_metric_id = target_metric.unique_id
 
         node.depends_on.add_node(target_metric_id)
+
+
+def _process_semantic_queries_for_node(
+    manifest: Manifest,
+    current_project: str,
+    node: ManifestNode,
+) -> None:
+    """Given a manifest and a node in that manifest, make the node depend on everything
+    the semantic queries made from its code read from.
+
+    A node depends on the metrics a query uses, and never on a saved query itself. Saved
+    queries can carry exports which are run by `dbt build`, and a node that merely reuses
+    a saved query's definition should not be ordered behind those. The metrics (and what
+    they in turn depend on) are enough to order the node after its inputs.
+    """
+    if isinstance(node, SeedNode):
+        return
+
+    for query in node.semantic_queries:
+        if query.saved_query is not None:
+            target_saved_query = manifest.resolve_saved_query(
+                query.saved_query, None, current_project, node.package_name
+            )
+            if target_saved_query is None or isinstance(target_saved_query, Disabled):
+                node.config.enabled = False
+                invalid_target_fail_unless_test(
+                    node=node,
+                    target_name=query.saved_query,
+                    target_kind="saved query",
+                    disabled=(isinstance(target_saved_query, Disabled)),
+                    should_warn_if_disabled=False,
+                )
+                continue
+            # `process_saved_queries` has already resolved the saved query's metrics
+            for unique_id in target_saved_query.depends_on.nodes:
+                node.depends_on.add_node(unique_id)
+
+        for metric_name in query.metrics:
+            target_metric = manifest.resolve_metric(
+                metric_name, None, current_project, node.package_name
+            )
+            if target_metric is None or isinstance(target_metric, Disabled):
+                node.config.enabled = False
+                invalid_target_fail_unless_test(
+                    node=node,
+                    target_name=metric_name,
+                    target_kind="metric",
+                    disabled=(isinstance(target_metric, Disabled)),
+                    should_warn_if_disabled=False,
+                )
+                continue
+            node.depends_on.add_node(target_metric.unique_id)
 
 
 def remove_dependent_project_references(manifest, external_node_unique_id):
