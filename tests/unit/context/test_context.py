@@ -230,6 +230,8 @@ REQUIRED_MACRO_KEYS = REQUIRED_QUERY_HEADER_KEYS | {
     "ref",
     "source",
     "metric",
+    "metric_query",
+    "saved_query",
     "config",
     "execute",
     "exceptions",

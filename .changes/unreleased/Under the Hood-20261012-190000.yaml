@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Record `metric_query()` and `saved_query()` calls in models and analyses, and make those nodes depend on the metrics queried
+time: 2026-10-12T19:00:00.000000-07:00
+custom:
+    Author: QMalcolm
+    Issue: ""

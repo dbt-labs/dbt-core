@@ -35,6 +35,7 @@ from dbt.artifacts.resources import (
     NodeVersion,
     RefArgs,
     SeedConfig,
+    SemanticQueryArgs,
     SourceConfig,
 )
 from dbt.clients.jinja import (
@@ -361,7 +362,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
         return event_time_filter
 
     @abc.abstractmethod
-    def __call__(self, *args: str) -> Union[str, RelationProxy, MetricReference]:
+    def __call__(self, *args: Any, **kwargs: Any) -> Union[str, RelationProxy, MetricReference]:
         pass
 
 
@@ -501,6 +502,92 @@ class BaseFunctionResolver(BaseResolver):
             raise RefArgsError(node=self.model, args=args)
         self.validate_args(name, package)
         return self.resolve(name, package)
+
+
+# Semantic layer queries can only be made from nodes that are rendered as a
+# query of their own. Elsewhere (tests, snapshots, hooks, ...) there is no
+# sensible place for the generated SQL to go.
+SEMANTIC_QUERY_NODE_TYPES = (NodeType.Model, NodeType.Analysis)
+
+
+class BaseSemanticQueryResolver(BaseResolver):
+    """Shared by the `metric_query()` and `saved_query()` context functions."""
+
+    function_name: str
+
+    @abc.abstractmethod
+    def resolve(self, query_args: SemanticQueryArgs) -> str: ...
+
+    def validate_node_type(self) -> None:
+        if self.model.resource_type not in SEMANTIC_QUERY_NODE_TYPES:
+            raise CompilationError(
+                f"{self.function_name}() is only available in models and analyses, but was "
+                f"called from {self.model.resource_type} '{self.model.name}'"
+            )
+
+    def _string_list(self, arg_name: str, value: Any, split_on_commas: bool) -> List[str]:
+        """Normalize an argument that may be given as a single string or a list of
+        strings. Like the `dbt sl query` flags, `metrics` and `group_by` also accept a
+        comma separated string. `where` does not, as filters can contain commas."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            items = value.split(",") if split_on_commas else [value]
+            return [item.strip() for item in items if item.strip()]
+        if isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
+            return [item.strip() for item in value if item.strip()]
+        raise CompilationError(
+            f"The {arg_name} argument to {self.function_name}() must be a string or a list "
+            f"of strings, got {value!r}"
+        )
+
+
+class BaseMetricQueryResolver(BaseSemanticQueryResolver):
+    function_name = "metric_query"
+
+    def __call__(
+        self,
+        metrics: Union[str, List[str]],
+        group_by: Union[None, str, List[str]] = None,
+        where: Union[None, str, List[str]] = None,
+        order_by: Union[None, str, List[str]] = None,
+        limit: Optional[int] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+    ) -> str:
+        self.validate_node_type()
+        query_args = SemanticQueryArgs(
+            metrics=self._string_list("metrics", metrics, split_on_commas=True),
+            group_by=self._string_list("group_by", group_by, split_on_commas=True),
+            where=self._string_list("where", where, split_on_commas=False),
+        )
+        if not query_args.metrics:
+            raise CompilationError("metric_query() requires at least one metric")
+        # These only affect the generated SQL, so they are validated here but not recorded.
+        self._string_list("order_by", order_by, split_on_commas=True)
+        if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int)):
+            raise CompilationError(
+                f"The limit argument to metric_query() must be an integer, got {limit!r}"
+            )
+        for arg_name, value in (("start_time", start_time), ("end_time", end_time)):
+            if value is not None and not isinstance(value, str):
+                raise CompilationError(
+                    f"The {arg_name} argument to metric_query() must be a string, "
+                    f"got {type(value)}"
+                )
+        return self.resolve(query_args)
+
+
+class BaseSavedQueryResolver(BaseSemanticQueryResolver):
+    function_name = "saved_query"
+
+    def __call__(self, name: str) -> str:
+        self.validate_node_type()
+        if not isinstance(name, str):
+            raise CompilationError(
+                f"The name argument to saved_query() must be a string, got {type(name)}"
+            )
+        return self.resolve(SemanticQueryArgs(saved_query=name))
 
 
 class Config(Protocol):
@@ -931,6 +1018,40 @@ class RuntimeMetricResolver(BaseMetricResolver):
         return ResolvedMetricReference(target_metric, self.manifest)
 
 
+# `metric_query` and `saved_query` implementations
+# At parse time a query is only recorded, so that the node can be made to depend on
+# everything the query reads from. The placeholder returned is valid SQL, and is never run.
+PARSE_TIME_SEMANTIC_QUERY_SQL = "select 1"
+
+
+def _record_semantic_query(model, query_args: SemanticQueryArgs) -> str:
+    if query_args not in model.semantic_queries:
+        model.semantic_queries.append(query_args)
+    return PARSE_TIME_SEMANTIC_QUERY_SQL
+
+
+class ParseMetricQueryResolver(BaseMetricQueryResolver):
+    def resolve(self, query_args: SemanticQueryArgs) -> str:
+        return _record_semantic_query(self.model, query_args)
+
+
+class ParseSavedQueryResolver(BaseSavedQueryResolver):
+    def resolve(self, query_args: SemanticQueryArgs) -> str:
+        return _record_semantic_query(self.model, query_args)
+
+
+# Rendering the SQL for a query happens in a later change. Until then using either
+# function in a node that is compiled is an error, rather than quietly doing nothing.
+class RuntimeMetricQueryResolver(BaseMetricQueryResolver):
+    def resolve(self, query_args: SemanticQueryArgs) -> str:
+        raise CompilationError("metric_query() can not yet be compiled")
+
+
+class RuntimeSavedQueryResolver(BaseSavedQueryResolver):
+    def resolve(self, query_args: SemanticQueryArgs) -> str:
+        raise CompilationError("saved_query() can not yet be compiled")
+
+
 # `var` implementations.
 class ModelConfiguredVar(Var):
     def __init__(
@@ -1066,6 +1187,8 @@ class Provider(Protocol):
     ref: Type[BaseRefResolver]
     source: Type[BaseSourceResolver]
     metric: Type[BaseMetricResolver]
+    metric_query: Type[BaseMetricQueryResolver]
+    saved_query: Type[BaseSavedQueryResolver]
     function: Type[BaseFunctionResolver]
 
 
@@ -1077,6 +1200,8 @@ class ParseProvider(Provider):
     ref = ParseRefResolver
     source = ParseSourceResolver
     metric = ParseMetricResolver
+    metric_query = ParseMetricQueryResolver
+    saved_query = ParseSavedQueryResolver
     function = ParseFunctionResolver
 
 
@@ -1088,6 +1213,8 @@ class GenerateNameProvider(Provider):
     ref = ParseRefResolver
     source = ParseSourceResolver
     metric = ParseMetricResolver
+    metric_query = ParseMetricQueryResolver
+    saved_query = ParseSavedQueryResolver
     function = ParseFunctionResolver
 
 
@@ -1099,6 +1226,8 @@ class RuntimeProvider(Provider):
     ref = RuntimeRefResolver
     source = RuntimeSourceResolver
     metric = RuntimeMetricResolver
+    metric_query = RuntimeMetricQueryResolver
+    saved_query = RuntimeSavedQueryResolver
     function = RuntimeFunctionResolver
 
 
@@ -1110,6 +1239,8 @@ class RuntimeUnitTestProvider(Provider):
     ref = RuntimeUnitTestRefResolver
     source = RuntimeUnitTestSourceResolver
     metric = RuntimeMetricResolver
+    metric_query = RuntimeMetricQueryResolver
+    saved_query = RuntimeSavedQueryResolver
     function = RuntimeFunctionResolver
 
 
@@ -1388,6 +1519,14 @@ class ProviderContext(ManifestContext):
     @contextproperty()
     def metric(self) -> Callable:
         return self.provider.metric(self.db_wrapper, self.model, self.config, self.manifest)
+
+    @contextproperty()
+    def metric_query(self) -> Callable:
+        return self.provider.metric_query(self.db_wrapper, self.model, self.config, self.manifest)
+
+    @contextproperty()
+    def saved_query(self) -> Callable:
+        return self.provider.saved_query(self.db_wrapper, self.model, self.config, self.manifest)
 
     @contextproperty()
     def function(self) -> Callable:
