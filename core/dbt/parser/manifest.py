@@ -1333,23 +1333,23 @@ class ManifestLoader:
                 continue
             _process_metrics_for_node(self.manifest, current_project, exposure)
 
-    def process_saved_queries(self, config: RuntimeConfig):
-        """Processes SavedQuery nodes to populate their `depends_on`."""
+    def _semantic_manifest_changed(self) -> bool:
+        """Whether any saved query, semantic model or metric was (re)parsed in this run."""
         # Note: This will also capture various nodes which have been re-parsed
         # because they refer to some other changed node, so there will be
         # false positives. Ideally we would compare actual changes.
-        semantic_manifest_changed = False
         semantic_manifest_nodes: chain[SemanticManifestNode] = chain(
             self.manifest.saved_queries.values(),
             self.manifest.semantic_models.values(),
             self.manifest.metrics.values(),
         )
-        for node in semantic_manifest_nodes:
-            # Check if this node has been modified in this parsing run
-            if node.created_at > self.started_at:
-                semantic_manifest_changed = True
-                break  # as soon as we run into one changed node we can stop
-        if semantic_manifest_changed is False:
+        # Check if any node has been modified in this parsing run. As soon as we run into
+        # one changed node we can stop.
+        return any(node.created_at > self.started_at for node in semantic_manifest_nodes)
+
+    def process_saved_queries(self, config: RuntimeConfig):
+        """Processes SavedQuery nodes to populate their `depends_on`."""
+        if not self._semantic_manifest_changed():
             return
 
         current_project = config.project_name
