@@ -508,6 +508,52 @@ fn spark_get_relation(
     )))
 }
 
+fn databricks_describe_relation_state(
+    adapter_type: AdapterType,
+    batch: arrow::record_batch::RecordBatch,
+    as_json_unsupported: bool,
+) -> AdapterResult<(
+    Option<RelationType>,
+    bool,
+    TableFormat,
+    bool,
+    Option<BTreeMap<String, String>>,
+)> {
+    use crate::metadata::MetadataProcessor as _;
+
+    if as_json_unsupported {
+        let (relation_type, _is_delta, is_shallow_clone, metadata_map) =
+            parse_describe_table_extended(adapter_type, &batch)?;
+        let provider = metadata_map
+            .get("Provider")
+            .map(|s| s.as_str())
+            .unwrap_or("");
+        let (is_delta, table_format) = databricks_flags_from_provider(provider);
+        return Ok((
+            Some(relation_type),
+            is_delta,
+            table_format,
+            is_shallow_clone,
+            Some(metadata_map),
+        ));
+    }
+
+    debug_assert_eq!(batch.num_rows(), 1);
+    let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
+    let (is_delta, table_format) =
+        databricks_flags_from_provider(json_metadata.provider.as_deref().unwrap_or(""));
+    Ok((
+        Some(RelationType::from_adapter_type(
+            adapter_type,
+            &json_metadata.type_,
+        )),
+        is_delta,
+        table_format,
+        is_shallow_clone_type(&json_metadata.type_),
+        Some(json_metadata.into_metadata()),
+    ))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn databricks_get_relation(
     adapter: &AdapterImpl,
@@ -519,7 +565,6 @@ fn databricks_get_relation(
     identifier: &str,
     token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
-    use crate::metadata::MetadataProcessor as _;
     use crate::metadata::databricks::DatabricksMetadataAdapter;
     use crate::metadata::databricks::version::EngineVersion;
     use crate::relation::databricks::{INFORMATION_SCHEMA_SCHEMA, SYSTEM_DATABASE};
@@ -593,40 +638,8 @@ fn databricks_get_relation(
         return Ok(None);
     }
 
-    let (relation_type, is_delta, table_format, is_shallow_clone, metadata) = if as_json_unsupported
-    {
-        let (relation_type, _is_delta, is_shallow_clone, metadata_map) =
-            parse_describe_table_extended(adapter.adapter_type(), &batch)?;
-        let provider = metadata_map
-            .get("Provider")
-            .map(|s| s.as_str())
-            .unwrap_or("");
-        let (is_delta, table_format) = databricks_flags_from_provider(provider);
-        (
-            Some(relation_type),
-            is_delta,
-            table_format,
-            is_shallow_clone,
-            Some(metadata_map),
-        )
-    } else {
-        debug_assert_eq!(batch.num_rows(), 1);
-        let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
-        let (is_delta, table_format) =
-            databricks_flags_from_provider(json_metadata.provider.as_deref().unwrap_or(""));
-        let is_shallow_clone = is_shallow_clone_type(&json_metadata.type_);
-        let relation_type = Some(RelationType::from_adapter_type(
-            adapter.adapter_type(),
-            &json_metadata.type_,
-        ));
-        (
-            relation_type,
-            is_delta,
-            table_format,
-            is_shallow_clone,
-            Some(json_metadata.into_metadata()),
-        )
-    };
+    let (relation_type, is_delta, table_format, is_shallow_clone, metadata) =
+        databricks_describe_relation_state(adapter.adapter_type(), batch, as_json_unsupported)?;
 
     let db = if database.is_empty() {
         None

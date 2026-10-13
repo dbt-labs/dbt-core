@@ -76,6 +76,38 @@ pub(crate) fn databricks_flags_from_provider(provider: &str) -> (bool, TableForm
     }
 }
 
+fn optional_utf8(column: &StringArray, i: usize) -> Option<&str> {
+    (!column.is_null(i)).then(|| column.value(i))
+}
+
+fn relation_from_information_schema_row(
+    engine: &dyn AdapterEngine,
+    catalog: &str,
+    schema: &str,
+    name: &str,
+    table_type: &str,
+    file_format: &str,
+    databricks_table_type: Option<&str>,
+) -> Arc<dyn BaseRelation> {
+    let (is_delta, table_format) = databricks_flags_from_provider(file_format);
+    Arc::new(
+        Relation::new(
+            engine.adapter_type(),
+            catalog.to_string(),
+            schema.to_string(),
+            name.to_string(),
+        )
+        .with_relation_type(RelationType::from_adapter_type(
+            AdapterType::Databricks,
+            table_type,
+        ))
+        .with_quoting(engine.quoting())
+        .with_is_delta(is_delta)
+        .with_table_format(table_format)
+        .with_is_shallow_clone(databricks_table_type.is_some_and(is_shallow_clone_type)),
+    ) as Arc<dyn BaseRelation>
+}
+
 // Reference: https://github.com/databricks/dbt-databricks/blob/92f1442faabe0fce6f0375b95e46ebcbfcea4c67/dbt/include/databricks/macros/adapters/metadata.sql
 pub fn list_relations(
     engine: &dyn AdapterEngine,
@@ -133,36 +165,15 @@ WHERE table_catalog = '{}'
     let databricks_table_types = batch.column_values::<StringArray>("databricks_table_type")?;
 
     for i in 0..batch.num_rows() {
-        let name = names.value(i);
-        let schema = schemas.value(i);
-        let catalog = catalogs.value(i);
-        let table_type = table_types.value(i).to_uppercase();
-        let file_format = if file_formats.is_null(i) {
-            ""
-        } else {
-            file_formats.value(i)
-        };
-        let (is_delta, table_format) = databricks_flags_from_provider(file_format);
-        let is_shallow_clone = !databricks_table_types.is_null(i)
-            && is_shallow_clone_type(databricks_table_types.value(i));
-
-        let relation = Arc::new(
-            Relation::new(
-                engine.adapter_type(),
-                catalog.to_string(),
-                schema.to_string(),
-                name.to_string(),
-            )
-            .with_relation_type(RelationType::from_adapter_type(
-                AdapterType::Databricks,
-                table_type.as_str(),
-            ))
-            .with_quoting(engine.quoting())
-            .with_is_delta(is_delta)
-            .with_table_format(table_format)
-            .with_is_shallow_clone(is_shallow_clone),
-        ) as Arc<dyn BaseRelation>;
-        relations.push(relation);
+        relations.push(relation_from_information_schema_row(
+            engine,
+            catalogs.value(i),
+            schemas.value(i),
+            names.value(i),
+            &table_types.value(i).to_uppercase(),
+            optional_utf8(&file_formats, i).unwrap_or(""),
+            optional_utf8(&databricks_table_types, i),
+        ));
     }
 
     Ok(relations)
@@ -1960,7 +1971,7 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn databricks_flags_from_provider_classifies_iceberg_delta_and_uniform() {
+    fn databricks_flags_from_provider_classifies_iceberg() {
         assert_eq!(
             databricks_flags_from_provider("iceberg"),
             (false, TableFormat::Iceberg)
@@ -1969,6 +1980,10 @@ mod tests {
             databricks_flags_from_provider("ICEBERG"),
             (false, TableFormat::Iceberg)
         );
+    }
+
+    #[test]
+    fn databricks_flags_from_provider_classifies_delta_including_uniform() {
         assert_eq!(
             databricks_flags_from_provider("delta"),
             (true, TableFormat::Default)
@@ -1978,6 +1993,10 @@ mod tests {
             databricks_flags_from_provider("DELTA"),
             (true, TableFormat::Default)
         );
+    }
+
+    #[test]
+    fn databricks_flags_from_provider_ignores_other_formats() {
         assert_eq!(
             databricks_flags_from_provider("parquet"),
             (false, TableFormat::Default)
