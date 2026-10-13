@@ -1971,40 +1971,18 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn databricks_flags_from_provider_classifies_iceberg() {
-        assert_eq!(
-            databricks_flags_from_provider("iceberg"),
-            (false, TableFormat::Iceberg)
-        );
-        assert_eq!(
-            databricks_flags_from_provider("ICEBERG"),
-            (false, TableFormat::Iceberg)
-        );
-    }
-
-    #[test]
-    fn databricks_flags_from_provider_classifies_delta_including_uniform() {
-        assert_eq!(
-            databricks_flags_from_provider("delta"),
-            (true, TableFormat::Default)
-        );
-        // UniForm is still a Delta table; Iceberg is only a table property.
-        assert_eq!(
-            databricks_flags_from_provider("DELTA"),
-            (true, TableFormat::Default)
-        );
-    }
-
-    #[test]
-    fn databricks_flags_from_provider_ignores_other_formats() {
-        assert_eq!(
-            databricks_flags_from_provider("parquet"),
-            (false, TableFormat::Default)
-        );
-        assert_eq!(
-            databricks_flags_from_provider(""),
-            (false, TableFormat::Default)
-        );
+    fn databricks_flags_from_provider_classifies_formats() {
+        // UniForm reports `delta`; Iceberg is only a table property.
+        for (provider, expected) in [
+            ("iceberg", (false, TableFormat::Iceberg)),
+            ("ICEBERG", (false, TableFormat::Iceberg)),
+            ("delta", (true, TableFormat::Default)),
+            ("DELTA", (true, TableFormat::Default)),
+            ("parquet", (false, TableFormat::Default)),
+            ("", (false, TableFormat::Default)),
+        ] {
+            assert_eq!(databricks_flags_from_provider(provider), expected);
+        }
     }
 
     // Helper function to create a test relation with specific quoting policies
