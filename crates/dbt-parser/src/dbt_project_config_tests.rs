@@ -16,6 +16,7 @@ mod init_project_config_tests {
         ProjectSnapshotConfig, ResolvableConfig, SnapshotConfig, TypedRecursiveConfig,
         init_project_config,
     };
+    use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
     use dbt_tracing::{
         SeverityNumber, TelemetryOutputFlags,
         emit::create_root_info_span,
@@ -407,6 +408,58 @@ my_project:
         ]);
         assert_eq!(
             disabled.__warehouse_specific_config__.persist_constraints,
+            Some(false)
+        );
+    }
+
+    /// dbt#16699: Databricks snapshots run `optimize()`, which reads `zorder` and
+    /// `skip_optimize`, so both must be accepted and inherited under `snapshots:`.
+    #[test]
+    fn snapshot_zorder_and_skip_optimize_are_valid_and_inherit_with_nested_override() {
+        let yml = r#"
++zorder: ["id"]
++skip_optimize: true
+my_project:
+  inherited:
+    +enabled: true
+  overridden:
+    +zorder: updated_at
+    +skip_optimize: false
+"#;
+
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<SnapshotConfig, ProjectSnapshotConfig>(yml, false);
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+        assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+
+        let config = result.unwrap();
+        let inherited = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "inherited".to_string(),
+            "snapshot".to_string(),
+        ]);
+        assert_eq!(
+            inherited.__warehouse_specific_config__.zorder,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "id".to_string()
+            ]))
+        );
+        assert_eq!(
+            inherited.__warehouse_specific_config__.skip_optimize,
+            Some(true)
+        );
+
+        let overridden = config.get_config_for_fqn(&[
+            "my_project".to_string(),
+            "overridden".to_string(),
+            "snapshot".to_string(),
+        ]);
+        assert_eq!(
+            overridden.__warehouse_specific_config__.zorder,
+            Some(StringOrArrayOfStrings::String("updated_at".to_string()))
+        );
+        assert_eq!(
+            overridden.__warehouse_specific_config__.skip_optimize,
             Some(false)
         );
     }

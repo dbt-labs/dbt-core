@@ -202,10 +202,10 @@ pub struct WarehouseSpecificNodeConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     #[warehouse(valid(all_nodes))]
     pub auto_liquid_cluster: Option<bool>,
-    #[warehouse(valid(Model))]
+    #[warehouse(valid(Model, Snapshot))]
     pub zorder: Option<StringOrArrayOfStrings>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
-    #[warehouse(valid(Model))]
+    #[warehouse(valid(Model, Snapshot))]
     pub skip_optimize: Option<bool>,
     #[warehouse(valid(all_nodes))]
     pub clustered_by: Option<StringOrArrayOfStrings>,
