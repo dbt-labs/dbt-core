@@ -49,6 +49,7 @@ use dbt_telemetry::{
     ShowResult, SourceFreshnessDetail, SourceFreshnessOutcome, node_processed,
     update_dbt_core_event_code_for_node_processed_end,
 };
+use futures::future::join_all;
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::path::Path;
@@ -188,45 +189,87 @@ async fn measure_query_based_freshness(
     compile_base: &CompileBaseCtx,
     io_args: &IoArgs,
     dependencies: BTreeSet<String>,
-) -> FsResult<Option<FreshnessResult>> {
+) -> (FsResult<Option<FreshnessResult>>, Vec<FsError>) {
     let mut result = None;
+    let mut warnings = Vec::new();
 
     let loaded_at_field = node.get_loaded_at_field();
     if !loaded_at_field.is_empty() {
         let filter = node.get_freshness_filter().unwrap_or("");
-        result = Some(
-            calculate_freshness(
-                &loaded_at_field.escape_default().to_string(),
-                &filter.escape_default().to_string(),
-                node,
-                adapter_type,
-                jinja_env,
-                compile_base,
-                io_args,
-                dependencies.clone(),
-            )
-            .await?,
-        );
+        match calculate_freshness(
+            &loaded_at_field.escape_default().to_string(),
+            &filter.escape_default().to_string(),
+            node,
+            adapter_type,
+            jinja_env,
+            compile_base,
+            io_args,
+            dependencies.clone(),
+            &mut warnings,
+        )
+        .await
+        {
+            Ok(r) => result = Some(r),
+            Err(e) => return (Err(e), warnings),
+        }
     }
 
     // `loaded_at_query` wins when both are set, as before.
     let loaded_at_query = node.get_loaded_at_query();
     if !loaded_at_query.is_empty() {
-        result = Some(
-            calculate_freshness_custom_sql(
-                loaded_at_query,
-                node,
-                adapter_type,
-                jinja_env,
-                compile_base,
-                io_args,
-                dependencies,
-            )
-            .await?,
-        );
+        match calculate_freshness_custom_sql(
+            loaded_at_query,
+            node,
+            adapter_type,
+            jinja_env,
+            compile_base,
+            io_args,
+            dependencies,
+            &mut warnings,
+        )
+        .await
+        {
+            Ok(r) => result = Some(r),
+            Err(e) => return (Err(e), warnings),
+        }
     }
 
-    Ok(result)
+    (Ok(result), warnings)
+}
+
+/// Runs one node's freshness check for `join_all`.
+///
+/// Don't wrap this in another `TaskOp::Blocking` -- it already dispatches to
+/// the pool internally, and nesting can deadlock the pool.
+#[allow(clippy::too_many_arguments)]
+async fn measure_one_node<N>(
+    node: N,
+    unique_id: String,
+    kind_label_lower: String,
+    adapter_type: AdapterType,
+    jinja_env: Arc<JinjaEnv>,
+    compile_base: CompileBaseCtx,
+    io_args: IoArgs,
+    dependencies: BTreeSet<String>,
+) -> (
+    String,
+    String,
+    FsResult<Option<FreshnessResult>>,
+    Vec<FsError>,
+)
+where
+    N: FreshnessNodeRef + Send + 'static,
+{
+    let (result, warnings) = measure_query_based_freshness(
+        &node,
+        adapter_type,
+        &jinja_env,
+        &compile_base,
+        &io_args,
+        dependencies,
+    )
+    .await;
+    (unique_id, kind_label_lower, result, warnings)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -240,6 +283,7 @@ pub async fn calculate_freshness(
     compile_base: &CompileBaseCtx,
     io_args: &IoArgs,
     dependencies: BTreeSet<String>,
+    warnings: &mut Vec<FsError>,
 ) -> FsResult<FreshnessResult> {
     let relation = node
         .base()
@@ -262,6 +306,7 @@ pub async fn calculate_freshness(
         io_args,
         dependencies,
         "loaded_at_field",
+        warnings,
     )
     .await
 }
@@ -276,6 +321,7 @@ pub async fn calculate_freshness_custom_sql(
     compile_base: &CompileBaseCtx,
     io_args: &IoArgs,
     dependencies: BTreeSet<String>,
+    warnings: &mut Vec<FsError>,
 ) -> FsResult<FreshnessResult> {
     let relation = node
         .base()
@@ -379,6 +425,7 @@ pub async fn calculate_freshness_custom_sql(
         io_args,
         dependencies,
         "loaded_at_query",
+        warnings,
     )
     .await
 }
@@ -394,6 +441,7 @@ async fn calculate_freshness_common(
     io_args: &IoArgs,
     dependencies: BTreeSet<String>,
     error_message: &str,
+    warnings: &mut Vec<FsError>,
 ) -> FsResult<FreshnessResult> {
     let context = build_run_node_ctx(
         node,
@@ -445,6 +493,7 @@ async fn calculate_freshness_common(
         node,
         error_message,
         io_args,
+        warnings,
     )?;
 
     let snapshotted_at = validate_and_extract_timestamp_column(
@@ -453,6 +502,7 @@ async fn calculate_freshness_common(
         node,
         error_message,
         io_args,
+        warnings,
     )?;
 
     let max_loaded_at = as_timestamp_nanosecond_array(&cast_with_options(
@@ -819,7 +869,9 @@ async fn run_freshness_with_spans(
         }
     }
 
-    // Run 'loaded_at' and custom queries.
+    // Run 'loaded_at' and custom queries concurrently — see
+    // `measure_one_node` for why a plain sequential `.await` loop here
+    // would not actually overlap the warehouse queries.
     let dependencies: BTreeSet<String> = resolver_state
         .runtime_config
         .dependencies
@@ -828,41 +880,68 @@ async fn run_freshness_with_spans(
         .collect();
     let mut node_errors: HashMap<String, Box<FsError>> =
         HashMap::with_capacity(sources.len() + sla_models.len());
-    let sources_as_query_nodes = sources.iter().map(|node| *node as &dyn FreshnessNodeRef);
-    let sla_models_as_query_nodes = sla_models.iter().map(|node| *node as &dyn FreshnessNodeRef);
-    let query_based_nodes = sources_as_query_nodes.chain(sla_models_as_query_nodes);
-    for node in query_based_nodes {
+    let adapter_type = resolver_state.adapter_type;
+
+    let source_tasks = sources.iter().map(|node| {
         let node_span = node_spans
-            .get(node.common().unique_id.as_str())
+            .get(node.__common_attr__.unique_id.as_str())
             .cloned()
             .unwrap_or_else(tracing::Span::current);
-        match measure_query_based_freshness(
-            node,
-            resolver_state.adapter_type,
-            env,
-            compile_base,
-            io_args,
+        measure_one_node(
+            (*node).clone(),
+            node.__common_attr__.unique_id.clone(),
+            node.kind_label().to_lowercase(),
+            adapter_type,
+            env.clone(),
+            compile_base.clone(),
+            io_args.clone(),
             dependencies.clone(),
         )
         .instrument(node_span)
-        .await
-        {
-            Ok(Some(result)) => {
-                results.insert(node.common().unique_id.clone(), result);
+    });
+    let sla_tasks = sla_models.iter().map(|node| {
+        let node_span = node_spans
+            .get(node.__common_attr__.unique_id.as_str())
+            .cloned()
+            .unwrap_or_else(tracing::Span::current);
+        measure_one_node(
+            (*node).clone(),
+            node.__common_attr__.unique_id.clone(),
+            node.kind_label().to_lowercase(),
+            adapter_type,
+            env.clone(),
+            compile_base.clone(),
+            io_args.clone(),
+            dependencies.clone(),
+        )
+        .instrument(node_span)
+    });
+    // Both batches still run concurrently with each other, not sequentially.
+    let (source_results, sla_results) = futures::join!(join_all(source_tasks), join_all(sla_tasks));
+
+    for (unique_id, kind_label_lower, outcome, warnings) in
+        source_results.into_iter().chain(sla_results)
+    {
+        // Emitted regardless of `outcome`, so a later step's error doesn't drop warnings.
+        for warning in warnings {
+            emit_warn_log_from_fs_error(warning);
+        }
+        match outcome {
+            Ok(node_result) => {
+                if let Some(result) = node_result {
+                    results.insert(unique_id, result);
+                }
             }
-            Ok(None) => {}
             Err(e) if !is_freshness_command => {
                 emit_warn_log_message(
                     ErrorCode::FreshnessMetadataWarning,
                     format!(
-                        "Failed to calculate freshness for {} '{}': {e}. It will be treated as updated, and dependent models will rebuild.",
-                        node.kind_label().to_lowercase(),
-                        node.common().unique_id
+                        "Failed to calculate freshness for {kind_label_lower} '{unique_id}': {e}. It will be treated as updated, and dependent models will rebuild.",
                     ),
                 );
             }
             Err(e) => {
-                node_errors.insert(node.common().unique_id.clone(), e);
+                node_errors.insert(unique_id, e);
             }
         }
     }
@@ -980,6 +1059,25 @@ fn create_relation_and_map(
     Ok(relation.into())
 }
 
+/// `filter` only ever reaches SQL built from `loaded_at_field`/`loaded_at_query`;
+/// the metadata-only ("last altered") check has no query to filter. Mirrors
+/// dbt-core's warning instead of silently dropping the config.
+fn uses_metadata_check_warn_if_filter_ignored(node: &dyn FreshnessNodeRef) -> bool {
+    let uses_metadata_check =
+        node.get_loaded_at_field().is_empty() && node.get_loaded_at_query().is_empty();
+    if uses_metadata_check && node.get_freshness_filter().is_some() {
+        emit_warn_log_message(
+            ErrorCode::FreshnessConfigInvalid,
+            format!(
+                "A filter cannot be applied to a metadata freshness check on {} '{}'",
+                node.kind_label().to_lowercase(),
+                node.common().unique_id
+            ),
+        );
+    }
+    uses_metadata_check
+}
+
 /// Return collection of relations and a map from relation FQN to node unique_ids.
 ///
 /// Multiple source nodes from different packages may point to the same physical
@@ -999,9 +1097,7 @@ fn collect_relations(
     // Collect relations from sources
     let source_relations = sources
         .iter()
-        .filter(|node| {
-            node.get_loaded_at_field().is_empty() && node.get_loaded_at_query().is_empty()
-        })
+        .filter(|node| uses_metadata_check_warn_if_filter_ignored(**node))
         .map(|node| create_relation_and_map(*node, adapter_type, &mut name_map))
         .collect::<FsResult<Vec<_>>>()?;
 
@@ -1011,9 +1107,7 @@ fn collect_relations(
     // excluded, same as sources.
     let sla_model_relations = sla_models
         .iter()
-        .filter(|node| {
-            node.get_loaded_at_field().is_empty() && node.get_loaded_at_query().is_empty()
-        })
+        .filter(|node| uses_metadata_check_warn_if_filter_ignored(**node))
         .map(|node| create_relation_and_map(*node, adapter_type, &mut name_map))
         .collect::<FsResult<Vec<_>>>()?;
 
@@ -1043,6 +1137,7 @@ fn validate_and_extract_timestamp_column(
     node: &dyn FreshnessNodeRef,
     error_message: &str,
     io_args: &IoArgs,
+    warnings: &mut Vec<FsError>,
 ) -> FsResult<arrow::array::ArrayRef> {
     match batch.column(column_index).data_type() {
         DataType::Timestamp(_, None) => {
@@ -1055,7 +1150,8 @@ fn validate_and_extract_timestamp_column(
                 node.common().unique_id,
                 error_message
             );
-            emit_warn_log_from_fs_error(*err);
+            // Collected, not emitted here, so concurrent checks don't log out of node order.
+            warnings.push(*err);
 
             Ok(batch.column(column_index).clone())
         }
@@ -1678,6 +1774,54 @@ mod tests {
         assert_eq!(node.get_loaded_at_field(), "updated_at");
         assert_eq!(node.get_loaded_at_query(), "");
         assert_eq!(node.get_freshness_filter(), Some("id > 0"));
+    }
+
+    #[test]
+    fn warnings_survive_a_later_error_in_the_same_check() {
+        let source = source_with_freshness(None);
+        let node: &dyn FreshnessNodeRef = &source;
+        let io_args = IoArgs::default();
+        let mut warnings = Vec::new();
+
+        let tz_naive = arrow::record_batch::RecordBatch::try_from_iter([(
+            "ts",
+            Arc::new(arrow::array::TimestampNanosecondArray::from(vec![1_i64]))
+                as arrow::array::ArrayRef,
+        )])
+        .unwrap();
+        assert!(
+            validate_and_extract_timestamp_column(
+                &tz_naive,
+                0,
+                node,
+                "test",
+                &io_args,
+                &mut warnings
+            )
+            .is_ok()
+        );
+        assert_eq!(warnings.len(), 1);
+
+        let wrong_type = arrow::record_batch::RecordBatch::try_from_iter([(
+            "n",
+            Arc::new(arrow::array::Int64Array::from(vec![1_i64])) as arrow::array::ArrayRef,
+        )])
+        .unwrap();
+        assert!(
+            validate_and_extract_timestamp_column(
+                &wrong_type,
+                0,
+                node,
+                "test",
+                &io_args,
+                &mut warnings
+            )
+            .is_err()
+        );
+
+        // The first call's warning must still be here: it's threaded through `&mut
+        // Vec`, independent of this call's `Err`, not bundled into a single Result.
+        assert_eq!(warnings.len(), 1);
     }
 
     #[test]

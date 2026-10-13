@@ -1364,7 +1364,7 @@ impl<'a> AllPhasesExecutor<'a> {
                         !retrying && (schedule.select.is_some() || schedule.exclude.is_some());
                     let scope = dbt_tasks_sa::check::scope_for_selection(
                         selection_active,
-                        schedule.selected_nodes.iter(),
+                        schedule.all_selected_nodes.iter(),
                     );
                     // Checks query the parse metadata through a DuckDB
                     // adapter, so they run on a `dbt-runtime` worker: every

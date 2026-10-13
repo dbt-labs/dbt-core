@@ -611,6 +611,7 @@ mod tests {
                     // invocation helpers
                     "v1.public.events.fusion.invocation.InvocationEvalArgs",
                     "v1.public.events.fusion.invocation.InvocationMetrics",
+                    "v1.public.events.fusion.invocation.InvocationWarnErrorOptions",
                     // node
                     "v1.public.events.fusion.node.NodeCacheDetail",
                     "v1.public.events.fusion.node.NodeEvaluationDetail",
