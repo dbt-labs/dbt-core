@@ -11,6 +11,8 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
 
+use dbt_dag::schedule::Schedule;
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -55,14 +57,19 @@ pub enum SelectionFilter {
 /// check's own row, exactly like selecting a model narrows a check reading `dbt.models`. This
 /// governs scoping only — which checks *run* is decided separately by `check_names`/`named` at the
 /// call site.
-pub fn scope_for_selection<'a>(
+///
+/// The scope is the schedule's `all_selected_nodes`, not its `selected_nodes`: the latter is the
+/// set to *execute*, so it drops sources (and adds ephemeral ancestors the user never selected).
+/// Scoping on it made `--select source:...` match nothing, and a check reporting sources was
+/// skipped under `--select state:modified` even when a source changed.
+pub fn scope_for_selection(
     selection_active: bool,
-    selected_nodes: impl IntoIterator<Item = &'a String>,
+    schedule: &Schedule<String>,
 ) -> Option<BTreeSet<String>> {
     if !selection_active {
         return None;
     }
-    Some(selected_nodes.into_iter().cloned().collect())
+    Some(schedule.all_selected_nodes.clone())
 }
 
 /// Whether a zero-row result means "nothing was examined" rather than "nothing is wrong".
@@ -305,8 +312,20 @@ mod tests {
 
     // ── scoping ──────────────────────────────────────────────────────────────────
 
-    fn ids(v: &[&str]) -> Vec<String> {
-        v.iter().map(|s| s.to_string()).collect()
+    /// A schedule whose user selection (`all_selected_nodes`) is `selected`; the executable
+    /// `selected_nodes` gets the same ids minus sources, as `schedule_graph` builds it.
+    fn schedule_selecting(v: &[&str]) -> Schedule<String> {
+        let all_selected_nodes: BTreeSet<String> = v.iter().map(|s| s.to_string()).collect();
+        let selected_nodes = all_selected_nodes
+            .iter()
+            .filter(|id| !id.starts_with("source."))
+            .cloned()
+            .collect();
+        Schedule {
+            all_selected_nodes,
+            selected_nodes,
+            ..Default::default()
+        }
     }
 
     /// No selector means no scoping at all — *not* scoping against the default selection.
@@ -316,8 +335,8 @@ mod tests {
     /// keyed on those (e.g. "every group has an owner") and report a vacuous pass.
     #[test]
     fn scope_is_none_without_a_selector() {
-        let selected = ids(&["model.p.a", "group.p.analytics"]);
-        assert_eq!(scope_for_selection(false, selected.iter()), None);
+        let schedule = schedule_selecting(&["model.p.a", "group.p.analytics"]);
+        assert_eq!(scope_for_selection(false, &schedule), None);
     }
 
     /// With a selector, scope to the selected nodes, checks included — a check is a node in
@@ -327,8 +346,8 @@ mod tests {
     /// `check_names`/`named` at the call site — this only ever scopes rows.
     #[test]
     fn scope_with_a_selector_includes_check_ids() {
-        let selected = ids(&["model.p.a", "check.p.some_check", "seed.p.s"]);
-        let scope = scope_for_selection(true, selected.iter()).expect("selector active");
+        let schedule = schedule_selecting(&["model.p.a", "check.p.some_check", "seed.p.s"]);
+        let scope = scope_for_selection(true, &schedule).expect("selector active");
         assert_eq!(
             scope,
             BTreeSet::from([
@@ -344,11 +363,35 @@ mod tests {
     /// check reading `dbt.models` finds nothing in an all-checks scope and reports skipped, not pass.
     #[test]
     fn scope_can_contain_only_check_ids() {
-        let selected = ids(&["check.p.one", "check.p.two"]);
-        let scope = scope_for_selection(true, selected.iter()).expect("selector active");
+        let schedule = schedule_selecting(&["check.p.one", "check.p.two"]);
+        let scope = scope_for_selection(true, &schedule).expect("selector active");
         assert_eq!(
             scope,
             BTreeSet::from(["check.p.one".to_string(), "check.p.two".to_string()])
+        );
+    }
+
+    /// Sources are selectable even though they never execute: `schedule_graph` drops them from
+    /// `selected_nodes`, so the scope must come from `all_selected_nodes`. Otherwise
+    /// `--select source:*` matched nothing and a check reporting sources was always skipped.
+    /// dbt-labs/dbt#16554
+    #[test]
+    fn scope_includes_selected_sources() {
+        let schedule = schedule_selecting(&["source.p.raw.unused_table", "model.p.stg_orders"]);
+        let scope = scope_for_selection(true, &schedule).expect("selector active");
+        assert_eq!(
+            scope,
+            BTreeSet::from([
+                "source.p.raw.unused_table".to_string(),
+                "model.p.stg_orders".to_string()
+            ])
+        );
+
+        let only_sources = schedule_selecting(&["source.p.raw.unused_table"]);
+        let scope = scope_for_selection(true, &only_sources).expect("selector active");
+        assert_eq!(
+            scope,
+            BTreeSet::from(["source.p.raw.unused_table".to_string()])
         );
     }
 

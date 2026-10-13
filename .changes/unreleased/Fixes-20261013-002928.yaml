@@ -1,0 +1,7 @@
+kind: Fixes
+body: Let `dbt check --select` scope checks to selected sources, so source selectors and `state:modified` sources no longer match nothing
+time: 2026-10-13T00:29:28.6943671-05:00
+custom:
+    author: raams95
+    issue: "16554"
+    project: dbt-core

@@ -1362,10 +1362,8 @@ impl<'a> AllPhasesExecutor<'a> {
                     // check once came to exit 0.
                     let selection_active =
                         !retrying && (schedule.select.is_some() || schedule.exclude.is_some());
-                    let scope = dbt_tasks_sa::check::scope_for_selection(
-                        selection_active,
-                        schedule.selected_nodes.iter(),
-                    );
+                    let scope =
+                        dbt_tasks_sa::check::scope_for_selection(selection_active, &schedule);
                     // Checks query the parse metadata through a DuckDB
                     // adapter, so they run on a `dbt-runtime` worker: every
                     // database connection must be created by one.
