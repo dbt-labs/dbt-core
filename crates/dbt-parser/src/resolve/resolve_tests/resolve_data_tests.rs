@@ -653,7 +653,7 @@ pub async fn resolve_data_tests(
                     test_key,
                     root_test_key,
                     DbtQuoting::default(),
-                    (arg.static_analysis.unwrap_or_default(), arg.store_failures),
+                    (arg.unconfigured_static_analysis(), arg.store_failures),
                     &env,
                     &relation_context.base_context,
                     dependency_package_name,
