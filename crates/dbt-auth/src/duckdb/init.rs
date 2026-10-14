@@ -560,18 +560,18 @@ pub fn generate_duckdb_init_sql(config: &AdapterConfig) -> Result<Vec<String>, A
 pub fn generate_duckdb_connection_init_sql(
     config: &AdapterConfig,
 ) -> Result<Vec<String>, AuthError> {
-    let target = DuckDbTarget::from_config(config)?;
+    DuckDbTarget::from_config(config)?;
     let mut out = Settings::from_config(config)?.render();
-    match target {
-        DuckDbTarget::MotherDuck {
-            database_name: alias,
-            ..
-        }
-        | DuckDbTarget::MotherDuckWithToken {
-            database_name: alias,
-            ..
-        } => out.push(format!("USE {alias}")),
-        DuckDbTarget::Plain { .. } => {}
+    let path = config
+        .get("path")
+        .and_then(|value| value.as_str())
+        .unwrap_or_default();
+    if is_motherduck(path) {
+        let alias = match DuckDbTarget::database_name(path) {
+            name if name.is_empty() => "my_db".to_owned(),
+            name => name,
+        };
+        out.push(format!("USE {alias}"));
     }
     Ok(out)
 }
@@ -680,6 +680,39 @@ settings:
         assert_eq!(
             generate_duckdb_connection_init_sql(&config).unwrap(),
             vec!["SET preserve_identifier_case = false"]
+        );
+    }
+
+    #[test]
+    fn test_saas_connection_init_uses_primary_motherduck_database() {
+        let config = config_from_yaml(
+            r#"
+path: md:analytics
+settings:
+  motherduck_saas_mode: true
+"#,
+        );
+
+        assert_eq!(
+            generate_duckdb_connection_init_sql(&config).unwrap(),
+            vec!["USE analytics"]
+        );
+    }
+
+    #[test]
+    fn test_connection_init_does_not_use_motherduck_attachment() {
+        let config = config_from_yaml(
+            r#"
+path: local.duckdb
+attach:
+  - path: md:shared
+"#,
+        );
+
+        assert!(
+            generate_duckdb_connection_init_sql(&config)
+                .unwrap()
+                .is_empty()
         );
     }
 
