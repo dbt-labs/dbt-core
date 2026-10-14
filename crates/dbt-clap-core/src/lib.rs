@@ -768,6 +768,10 @@ pub struct CheckArgs {
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
     #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
     pub static_analysis: Option<StaticAnalysisKind>,
+
+    /// Limiting number of shown rows per check. Run with --limit -1 to remove limit [default: 10]
+    #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true)]
+    pub limit: RowLimit,
 }
 
 impl CheckArgs {
@@ -778,6 +782,7 @@ impl CheckArgs {
         // v1 is parse-time only. Do not force static analysis off the way
         // warehouse-introspecting commands do.
         eval_args.static_analysis = self.static_analysis;
+        eval_args.limit = self.limit.into();
         // Implied index is set on `EvalArgs` in `Cli::to_eval_args` (same as
         // `build` / `run`), not here: setting `write_index` on this struct
         // before that function's lineage block would turn on `write_lineage`,
@@ -2061,6 +2066,19 @@ pub struct CommonArgs {
     )]
     pub info_schema_dir: Option<PathBuf>,
 
+    /// Static analysis for nodes that do not configure `static_analysis`. Unlike
+    /// `--static-analysis`, nodes with a configured value keep it.
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_ENGINE_DEFAULT_STATIC_ANALYSIS",
+        // Leave out the deprecated `on` and `unsafe`.
+        value_parser = clap::builder::PossibleValuesParser::new(["off", "baseline", "strict"])
+            .map(|s| s.parse::<StaticAnalysisKind>().expect("restricted to valid kinds")),
+        hide = true
+    )]
+    pub default_static_analysis: Option<StaticAnalysisKind>,
+
     /// Compute and write column-level lineage into compile/cll parquet.
     ///
     /// Hidden. Auto-enabled when `--generate-info-schema` (or the hidden
@@ -2944,6 +2962,7 @@ impl CommonArgs {
             run_cache_mode: RunCacheMode::Noop,
             task_cache_url: self.task_cache_url.clone(),
             static_analysis: None,
+            default_static_analysis: self.default_static_analysis,
             full_refresh: false,
             // Derived later in `Cli::to_eval_args` from the caller's
             // original `--static-analysis`/`--write-lineage` values.
@@ -3790,6 +3809,34 @@ mod tests {
             Command::Core(cmd) => cmd,
             Command::Extension(_) => panic!("expected a core command"),
         }
+    }
+
+    #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn user_static_analysis_env_wins_over_default_static_analysis_env() {
+        // A platform-set default must not mask the user's own `DBT_STATIC_ANALYSIS`.
+        unsafe {
+            env::set_var("DBT_ENGINE_DEFAULT_STATIC_ANALYSIS", "off");
+            env::set_var("DBT_STATIC_ANALYSIS", "strict");
+        }
+        let cmd = parse_core_command(&["build"]);
+        unsafe {
+            env::remove_var("DBT_ENGINE_DEFAULT_STATIC_ANALYSIS");
+            env::remove_var("DBT_STATIC_ANALYSIS");
+        }
+        let CoreCommand::Build(args) = &cmd else {
+            panic!("expected CoreCommand::Build, got {cmd:?}");
+        };
+        let eval_args = args.to_eval_args(
+            test_system_args(FsCommand::Build),
+            Path::new("."),
+            Path::new("."),
+        );
+        assert_eq!(eval_args.static_analysis, Some(StaticAnalysisKind::Strict));
+        assert_eq!(
+            eval_args.default_static_analysis,
+            Some(StaticAnalysisKind::Off)
+        );
     }
 
     #[test]
