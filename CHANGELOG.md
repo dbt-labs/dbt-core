@@ -163,6 +163,29 @@ Released September 02, 2026
 - [@tauhid621](https://github.com/tauhid621)
 - [@wizardxz](https://github.com/wizardxz) ([#16080](https://github.com/dbt-labs/dbt-core/issues/16080))
 
+## 2.0.0-dev.42
+
+Released October 14, 2026
+
+### Features
+
+- Lower the minimum supported Python version for the dbt and dbt-oss PyPI wheels to 3.10
+
+### Fixes
+
+- Fix spurious TableNotFound errors during analyze caused by MapReduce silently dropping a key claimed by a worker whose connection report the driver had not yet observed
+- `dbt build --write-catalog` writes `catalog.json` again; since the preview that shipped #13328 (first observed in 2.0.0-preview.218) the implied index default for build/check overrode the explicit flag and the catalog was silently skipped.
+
+### Under the Hood
+
+- Add ProjectEnv::empty, ProjectBuilder::baseline and TaskSeq::from_builder test helpers for programmatic integration test projects
+
+### Contributors
+- [@HannanNaeem](https://github.com/HannanNaeem)
+- [@ash2shukla](https://github.com/ash2shukla)
+- [@eddowh](https://github.com/eddowh)
+- [@mishamsk](https://github.com/mishamsk)
+
 ## 2.0.0-beta.2
 
 Released August 18, 2026
