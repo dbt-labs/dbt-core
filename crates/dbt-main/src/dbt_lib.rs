@@ -644,7 +644,7 @@ fn emit_version_info(eval_arg: &EvalArgs, command_name: &str) -> FsResult<()> {
             let git_hash = git_version!(fallback = "unknown");
             let build_time = format!(
                 "{} ({} {})",
-                env!("CARGO_PKG_VERSION"),
+                option_env!("DBT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
                 git_hash,
                 formatted_time
             );
@@ -657,7 +657,7 @@ fn emit_version_info(eval_arg: &EvalArgs, command_name: &str) -> FsResult<()> {
     }
 
     // Show version (always shown in release builds, or in debug builds when not from_main)
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = option_env!("DBT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
     emit_info_progress_message(ProgressMessage::new_from_action_and_target(
         command_name.to_string(),
         current_version.to_string(),
@@ -787,6 +787,7 @@ impl<'a> AllPhasesExecutor<'a> {
             // model to scope to, and every check reported `skipped`, so retry exited 0 on a project
             // whose check still fails. Split them: check ids become names to re-run, everything else
             // becomes the schedule.
+            let nothing_to_retry = retry_state.retryable_node_ids.is_empty();
             let (retry_check_ids, retry_node_ids): (Vec<String>, Vec<String>) = retry_state
                 .retryable_node_ids
                 .into_iter()
@@ -820,6 +821,10 @@ impl<'a> AllPhasesExecutor<'a> {
             // a check-blocked `dbt build`. Empty means "run every check" (a model-only
             // failure, or a legacy artifact whose ids did not decode).
             self.arg.to_mut().check_names = failed_check_names;
+            // Empty `check_names` would run every check, so a no-op retry skips the gate instead.
+            if nothing_to_retry {
+                self.arg.to_mut().skip_checks = true;
+            }
             Ok(custom_schedule)
         } else {
             Ok(None)
@@ -1359,7 +1364,7 @@ impl<'a> AllPhasesExecutor<'a> {
                         !retrying && (schedule.select.is_some() || schedule.exclude.is_some());
                     let scope = dbt_tasks_sa::check::scope_for_selection(
                         selection_active,
-                        schedule.selected_nodes.iter(),
+                        schedule.all_selected_nodes.iter(),
                     );
                     // Checks query the parse metadata through a DuckDB
                     // adapter, so they run on a `dbt-runtime` worker: every
@@ -1367,8 +1372,18 @@ impl<'a> AllPhasesExecutor<'a> {
                     let outcome = {
                         let metadata_dir = self.arg.metadata_dir();
                         let scope = scope.clone();
+                        let row_limit = self.arg.limit;
+                        // `--limit` is only advertised where it works: `build` ignores it and
+                        // `retry` does not take it.
+                        let hint_limit = self.arg.command == FsCommand::Check && !retrying;
                         dbt_runtime::spawn_blocking(move || {
-                            run_parse_time_checks(&named, &metadata_dir, scope.as_ref(), 5)
+                            run_parse_time_checks(
+                                &named,
+                                &metadata_dir,
+                                scope.as_ref(),
+                                row_limit,
+                                hint_limit,
+                            )
                         })
                         .await
                         .map_err(|e| {
@@ -1999,6 +2014,7 @@ impl<'a> AllPhasesExecutor<'a> {
                     &compilation.dbt_cloud_config().cloned(),
                     &self.arg.io,
                     self.arg.write_catalog,
+                    !resolved_state.semantic_layer_spec_is_legacy,
                 )
                 .await?;
             }
