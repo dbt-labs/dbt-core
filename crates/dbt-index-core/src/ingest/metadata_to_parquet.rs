@@ -2123,6 +2123,7 @@ fn write_parse_columns(
             let col_col = str_col(batch, "column_name");
             let type_col = str_col(batch, "declared_type");
             let desc_col = str_col(batch, "description");
+            let constraints_col = str_col(batch, "constraints");
             let tags_col = list_col_batch(batch, "tags");
             let ts_col = i64_col(batch, "ingested_at");
             for i in 0..batch.num_rows() {
@@ -2142,6 +2143,7 @@ fn write_parse_columns(
                     "column_name": get_str(col_col, i).unwrap_or_default(),
                     "declared_type": get_str(type_col, i),
                     "description": get_str(desc_col, i),
+                    "column_constraints": get_str(constraints_col, i).or_else(|| Some("[]".to_string())),
                     "tags": tags,
                     // Placeholder; the real (declared ∪ propagated) classifiers
                     // arrive via the compile/columns merge.

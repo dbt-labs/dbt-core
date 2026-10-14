@@ -110,7 +110,7 @@ pub struct ParseSafeView {
 /// and `search_text` (written during compile); `classifiers` (partially written at parse,
 /// which is worse — a check filtering on it sees a subset and passes); `unique_key`,
 /// `pre_hook`, `post_hook`, `grants`, `persist_docs`, `incremental_strategy`,
-/// `on_schema_change`, `full_refresh`, `constraints`, `docs_show`, `time_spine` and
+/// `on_schema_change`, `full_refresh`, `docs_show`, `time_spine` and
 /// `ai_context` (no writer fills them — their real values are inside the `config` JSON,
 /// which is here). `file_path` and `checksum` are absent because the information schema
 /// does not have them.
@@ -228,7 +228,7 @@ pub const VIEWS: &[ParseSafeView] = &[
         vocabulary: "models",
         src: Src::Table("nodes"),
         filter: Filter::ResourceTypeIn(&["model"]),
-        cols: node_cols![],
+        cols: node_cols!["constraints"],
     },
     ParseSafeView {
         name: "seeds",
@@ -597,7 +597,7 @@ pub const VIEWS: &[ParseSafeView] = &[
     },
     // `data_type_inferred` needs static analysis, `data_type_actual` (and so the resolved
     // `data_type`) needs `dbt docs generate`, and `classifiers` is only partly written at
-    // parse. `column_index`, `label`, `quote`, `granularity`, `constraints`, `tests` and
+    // parse. `column_index`, `label`, `quote`, `granularity`, `tests` and
     // `meta` are filled by the same later merges. What is left is what YAML declared.
     ParseSafeView {
         name: "node_columns",
@@ -610,6 +610,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "data_type_declared",
             "description",
             "tags",
+            "constraints",
             "ingested_at",
         ],
     },

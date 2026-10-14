@@ -314,7 +314,7 @@ pub async fn resolve_snapshots(
         default_adapter,
     )?
     .with_resolve_defaults((
-        arg.static_analysis.unwrap_or_default(),
+        arg.unconfigured_static_analysis(),
         root_package.dbt_project.sync.clone(),
     ));
     let mut adapter_config_resolvers = HashMap::from([(default_adapter, config_resolver.clone())]);

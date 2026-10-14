@@ -53,7 +53,8 @@ use dbt_schemas::schemas::profiles::DbConfig;
 use dbt_schemas::schemas::properties::ModelState;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{
-    DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes,
+    DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, FreshnessNodeRef, InternalDbtNode,
+    InternalDbtNodeAttributes,
 };
 use dbt_state::explain::{
     StateExplainExecutionConfirmed, StateExplainLogRecord, StateExplainNode, StateExplainNodeInfo,
@@ -2352,6 +2353,8 @@ fn collect_source_freshness_overrides(
 /// The source-freshness override a source declares via `loaded_at_query` /
 /// `loaded_at_field`, if any. Query takes precedence over field (matching the
 /// dbt-core plugin); empty strings from the deserializer are treated as unset.
+/// `freshness.filter` is only meaningful for `Field` — `loaded_at_query` is
+/// the user's own full SQL, same as `dbt-core`.
 fn source_freshness_override(source: &DbtSource) -> Option<FreshnessOverride> {
     let trimmed_nonempty = |s: &str| {
         let t = s.trim();
@@ -2369,7 +2372,10 @@ fn source_freshness_override(source: &DbtSource) -> Option<FreshnessOverride> {
                 .loaded_at_field
                 .as_deref()
                 .and_then(trimmed_nonempty)
-                .map(FreshnessOverride::Field)
+                .map(|field| FreshnessOverride::Field {
+                    field,
+                    filter: source.get_freshness_filter().and_then(trimmed_nonempty),
+                })
         })
 }
 
@@ -5286,6 +5292,7 @@ mod tests {
     };
     use dbt_adapter::{Adapter, AdapterBuilder, AdapterImpl, AdapterStore};
     use dbt_common::path::DbtPath;
+    use dbt_schemas::schemas::common::FreshnessDefinition;
     use dbt_schemas::state::ProfileAdapter;
     use dbt_state::telemetry::SharedEventOrder;
     use indexmap::IndexMap;
@@ -9283,8 +9290,60 @@ mod tests {
             "source with loaded_at_field should produce an override"
         );
         assert!(
-            matches!(overrides[&source_fqn], FreshnessOverride::Field(_)),
+            matches!(overrides[&source_fqn], FreshnessOverride::Field { .. }),
             "override kind should be Field"
+        );
+    }
+
+    // Regression #15796: a source's `freshness.filter` must reach the run-cache
+    // clone-verification override query, not just the plain `source freshness`
+    // command's macro-based query.
+    #[test]
+    fn prefetch_source_freshness_override_includes_filter() {
+        let model = make_model(
+            "model.pkg.fact",
+            "db",
+            "analytics",
+            "fact",
+            DbtMaterialization::Incremental,
+        );
+        let mut source = DbtSource::default();
+        source.__common_attr__.unique_id = "source.pkg.raw.users".to_string();
+        source.__base_attr__.database = "db".to_string();
+        source.__base_attr__.schema = "raw".to_string();
+        source.__base_attr__.alias = "users".to_string();
+        source.__base_attr__.materialized = DbtMaterialization::View;
+        source.__source_attr__.loaded_at_field = Some("updated_at".to_string());
+        source.__source_attr__.freshness = Some(FreshnessDefinition {
+            filter: Some("deleted_at is null".to_string()),
+            ..Default::default()
+        });
+        let source = Arc::new(source);
+
+        let runnable_set: BTreeSet<String> = ["model.pkg.fact".to_string()].into_iter().collect();
+        let runtime_deps: BTreeMap<String, BTreeSet<String>> = [(
+            "model.pkg.fact".to_string(),
+            ["source.pkg.raw.users".to_string()].into_iter().collect(),
+        )]
+        .into_iter()
+        .collect();
+        let nodes = nodes_from(vec![model], vec![source]);
+
+        let (_, overrides) = collect_global_prefetch_relations(
+            AdapterType::Snowflake,
+            &runnable_set,
+            &runtime_deps,
+            &nodes,
+        );
+
+        let source_fqn = fqn_of("db", "raw", "users");
+        assert!(
+            matches!(
+                &overrides[&source_fqn],
+                FreshnessOverride::Field { field, filter: Some(filter) }
+                    if field == "updated_at" && filter == "deleted_at is null"
+            ),
+            "freshness.filter should be threaded into the Field override"
         );
     }
 
@@ -9340,13 +9399,18 @@ mod tests {
 
         // Field overrides are passed through untouched.
         let rendered = render_freshness_override(
-            FreshnessOverride::Field("updated_at".to_string()),
+            FreshnessOverride::Field {
+                field: "updated_at".to_string(),
+                filter: None,
+            },
             &relation,
             &jinja_env,
             &base_context,
         )
         .unwrap();
-        assert!(matches!(rendered, FreshnessOverride::Field(f) if f == "updated_at"));
+        assert!(
+            matches!(rendered, FreshnessOverride::Field { field, .. } if field == "updated_at")
+        );
 
         // A relation missing a required component (here, identifier) errors
         // rather than rendering an unqualified name into the warehouse SQL.
@@ -9522,7 +9586,10 @@ mod tests {
         };
         let overrides = BTreeMap::from([(
             fqn.clone(),
-            FreshnessOverride::Field("loaded_at".to_string()),
+            FreshnessOverride::Field {
+                field: "loaded_at".to_string(),
+                filter: None,
+            },
         )]);
 
         apply_unresolvable_last_modified_overrides(
@@ -10376,7 +10443,10 @@ mod tests {
         let relations = BTreeMap::from([(name.clone(), relation)]);
         let overrides = BTreeMap::from([(
             name.clone(),
-            FreshnessOverride::Field("loaded_at".to_string()),
+            FreshnessOverride::Field {
+                field: "loaded_at".to_string(),
+                filter: None,
+            },
         )]);
         let adapter = MockMetadataAdapter::with_response(MockFreshnessResponse::Ok(Vec::new()));
         let prefetch_guards = begin_last_modified_prefetches(cache, &relations).await;
@@ -10396,7 +10466,7 @@ mod tests {
         assert_eq!(recorded.len(), 1);
         assert_eq!(recorded[0].len(), 1);
         match recorded[0].get(&name) {
-            Some(FreshnessOverride::Field(field)) => assert_eq!(field, "loaded_at"),
+            Some(FreshnessOverride::Field { field, .. }) => assert_eq!(field, "loaded_at"),
             other => panic!("expected a Field override for {name}, got {other:?}"),
         }
     }
