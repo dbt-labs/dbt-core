@@ -9,7 +9,11 @@
 
 
 {% macro snowflake__create_columns(relation, columns) %}
-    {% if columns %}
-        {% do alter_relation_add_remove_columns(relation, columns, []) %}
+    {% if relation.is_iceberg_format %}
+        {% if columns %}
+            {% do alter_relation_add_remove_columns(relation, columns, []) %}
+        {% endif %}
+    {% else %}
+        {{ default__create_columns(relation, columns) }}
     {% endif %}
 {% endmacro %}

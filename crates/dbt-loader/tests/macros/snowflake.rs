@@ -20,16 +20,18 @@ fn snapshot_time_uses_iceberg_compatible_precision() {
         .build()
         .expect("harness should build");
 
-    let config = default_mock_config();
-    config.on("get", |args| {
-        let key = args.first().and_then(|v| v.as_str());
-        let default = args.get(1).cloned().unwrap_or(Value::UNDEFINED);
-        match key {
-            Some("table_format") => Ok(Value::from("iceberg")),
-            _ => Ok(default),
-        }
+    // Iceberg-ness comes from the catalog relation (so catalogs.yml-defined Iceberg counts too),
+    // not from a `table_format` key on the node config.
+    harness.mock().on("build_catalog_relation", |_| {
+        Ok(Value::from_serialize(BTreeMap::from([(
+            "table_format",
+            "iceberg",
+        )])))
     });
-    let ctx = BTreeMap::from([("config".to_string(), Value::from_dyn_object(config))]);
+    let ctx = BTreeMap::from([(
+        "config".to_string(),
+        Value::from_dyn_object(default_mock_config()),
+    )]);
 
     let rendered = harness
         .render("{{ snapshot_get_time() }}", ctx)
@@ -49,6 +51,12 @@ fn snapshot_time_uses_default_precision_for_non_iceberg() {
         .build()
         .expect("harness should build");
 
+    harness.mock().on("build_catalog_relation", |_| {
+        Ok(Value::from_serialize(BTreeMap::from([(
+            "table_format",
+            "default",
+        )])))
+    });
     let ctx = BTreeMap::from([(
         "config".to_string(),
         Value::from_dyn_object(default_mock_config()),
@@ -119,7 +127,7 @@ fn snapshot_schema_evolution_uses_iceberg_alter() {
 }
 
 #[test]
-fn snapshot_schema_evolution_uses_default_alter_for_non_iceberg() {
+fn snapshot_schema_evolution_matches_v1_default_for_non_iceberg() {
     let harness = MacroTestHarness::for_adapter(AdapterType::Snowflake)
         .load_all_macros()
         .with_stub_functions()
@@ -144,10 +152,16 @@ fn snapshot_schema_evolution_uses_default_alter_for_non_iceberg() {
         .with_quoting(resolved_quoting_for(AdapterType::Snowflake))
         .with_table_format(TableFormat::Default),
     );
-    let column = Arc::new(MockJinjaObject::new());
-    column.set_attr("name", Value::from("NEW_COLUMN"));
-    column.set_attr("data_type", Value::from("NUMBER"));
-    column.on("is_string", |_| Ok(Value::from(false)));
+    // Same SQL as dbt-snowflake v1 (no override there): one `ALTER TABLE ... ADD COLUMN` per
+    // column, typed with `expanded_data_type` (which carries the string size).
+    let new_column = |name: &str, expanded: &str| {
+        let column = Arc::new(MockJinjaObject::new());
+        column.set_attr("name", Value::from(name));
+        column.set_attr("data_type", Value::from("VARCHAR"));
+        column.set_attr("expanded_data_type", Value::from(expanded));
+        column.on("is_string", |_| Ok(Value::from(true)));
+        Value::from_dyn_object(column)
+    };
     let context = BTreeMap::from([
         (
             "relation".to_string(),
@@ -155,7 +169,10 @@ fn snapshot_schema_evolution_uses_default_alter_for_non_iceberg() {
         ),
         (
             "columns".to_string(),
-            Value::from(vec![Value::from_dyn_object(column)]),
+            Value::from(vec![
+                new_column("COL_A", "VARCHAR(100)"),
+                new_column("COL_B", "NUMBER(38,0)"),
+            ]),
         ),
         ("execute".to_string(), Value::from(true)),
     ]);
@@ -169,11 +186,29 @@ fn snapshot_schema_evolution_uses_default_alter_for_non_iceberg() {
         .iter()
         .map(|s| s.split_whitespace().collect::<Vec<_>>().join(" "))
         .collect();
+    let add_column_statements: Vec<&String> = normalized
+        .iter()
+        .filter(|s| {
+            s.to_lowercase()
+                .contains("alter table test_db.test_schema.snapshot add column")
+        })
+        .collect();
+    assert_eq!(
+        add_column_statements.len(),
+        2,
+        "expected one ALTER TABLE per added column, got: {sqls:?}"
+    );
     assert!(
-        normalized.iter().any(|s| s
-            .to_lowercase()
-            .contains("alter table test_db.test_schema.snapshot add column")),
-        "expected a plain ALTER TABLE for a non-Iceberg snapshot, got: {sqls:?}"
+        add_column_statements
+            .iter()
+            .any(|s| s.contains("\"COL_A\" VARCHAR(100)")),
+        "string size should come from expanded_data_type, got: {sqls:?}"
+    );
+    assert!(
+        add_column_statements
+            .iter()
+            .any(|s| s.contains("\"COL_B\" NUMBER(38,0)")),
+        "got: {sqls:?}"
     );
     assert!(
         !normalized

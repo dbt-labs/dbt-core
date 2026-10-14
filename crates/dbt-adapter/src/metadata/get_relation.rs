@@ -408,6 +408,15 @@ fn bigquery_get_relation(
 // Databricks runtimes without `AS JSON`. Output layout (col_name/data_type):
 // column defs, empty separator row, then metadata key-value pairs. Some catalogs
 // (e.g. hive_metastore) omit 'Type'/'Provider', so we default gracefully.
+/// Maps a Databricks table provider (or file format) to a [`TableFormat`], matching
+/// case-insensitively like the Snowflake `table_format` mapping.
+pub(crate) fn table_format_from_provider(provider: Option<&str>) -> TableFormat {
+    match provider {
+        Some(s) if s.eq_ignore_ascii_case("iceberg") => TableFormat::Iceberg,
+        _ => TableFormat::Default,
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn parse_describe_table_extended(
     adapter_type: AdapterType,
@@ -453,11 +462,7 @@ fn parse_describe_table_extended(
     };
     let is_delta = provider_str.as_deref() == Some("delta");
     let is_shallow_clone = type_str.as_deref().is_some_and(is_shallow_clone_type);
-    let table_format = if provider_str.as_deref() == Some("iceberg") {
-        TableFormat::Iceberg
-    } else {
-        TableFormat::Default
-    };
+    let table_format = table_format_from_provider(provider_str.as_deref());
 
     Ok((
         relation_type,
@@ -624,11 +629,7 @@ fn databricks_get_relation(
         debug_assert_eq!(batch.num_rows(), 1);
         let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
         let is_delta = json_metadata.provider.as_deref() == Some("delta");
-        let table_format = if json_metadata.provider.as_deref() == Some("iceberg") {
-            TableFormat::Iceberg
-        } else {
-            TableFormat::Default
-        };
+        let table_format = table_format_from_provider(json_metadata.provider.as_deref());
         let is_shallow_clone = is_shallow_clone_type(&json_metadata.type_);
         let relation_type = Some(RelationType::from_adapter_type(
             adapter.adapter_type(),

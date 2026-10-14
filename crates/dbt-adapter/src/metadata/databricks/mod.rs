@@ -23,7 +23,7 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
-use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern, TableFormat};
+use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use indexmap::IndexMap;
 use minijinja::value::Object;
 use minijinja::{State, Value};
@@ -45,6 +45,7 @@ use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::freshness_overrides::{
     FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
 };
+use crate::metadata::get_relation::table_format_from_provider;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch::RecordBatchExt;
@@ -125,11 +126,7 @@ WHERE table_catalog = '{}'
         let catalog = catalogs.value(i);
         let table_type = table_types.value(i).to_uppercase();
         let is_delta = file_formats.value(i) == "delta";
-        let table_format = if file_formats.value(i) == "iceberg" {
-            TableFormat::Iceberg
-        } else {
-            TableFormat::Default
-        };
+        let table_format = table_format_from_provider(Some(file_formats.value(i)));
         let is_shallow_clone = !databricks_table_types.is_null(i)
             && is_shallow_clone_type(databricks_table_types.value(i));
 

@@ -8,7 +8,8 @@
 {%- endmacro %}
 
 {% macro snowflake__snapshot_get_time() -%}
-  {%- if config.get('table_format') == 'iceberg' -%}
+  {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
+  {%- if catalog_relation is not none and catalog_relation.table_format == 'iceberg' -%}
     {#- Cast to microsecond precision because Iceberg tables reject TIMESTAMP_NTZ(9). -#}
     to_timestamp_ntz({{ current_timestamp() }})::timestamp_ntz(6)
   {%- else -%}
