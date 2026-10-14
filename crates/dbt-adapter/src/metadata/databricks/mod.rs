@@ -936,6 +936,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT column_name
             FROM `{database}`.`information_schema`.`columns`
@@ -964,6 +969,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT kcu.constraint_name, kcu.column_name
             FROM `{database}`.information_schema.key_column_usage kcu
@@ -995,6 +1005,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT
                 column_name,
@@ -1050,6 +1065,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT
                 kcu.constraint_name,
@@ -2504,12 +2524,20 @@ mod tests {
         let fqn = r.semantic_fqn();
         let relations = vec![r];
         let mut overrides = BTreeMap::new();
-        overrides.insert(fqn.clone(), FreshnessOverride::Field("updated_at".into()));
+        overrides.insert(
+            fqn.clone(),
+            FreshnessOverride::Field {
+                field: "updated_at".into(),
+                filter: None,
+            },
+        );
         let (bulk, targets) = partition_override_relations(&relations, &overrides);
         assert!(bulk.is_empty());
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].0.semantic_fqn(), fqn);
-        assert!(matches!(&targets[0].1, FreshnessOverride::Field(f) if f == "updated_at"));
+        assert!(
+            matches!(&targets[0].1, FreshnessOverride::Field { field, .. } if field == "updated_at")
+        );
     }
 
     #[test]

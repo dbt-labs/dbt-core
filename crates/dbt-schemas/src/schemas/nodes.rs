@@ -6,7 +6,9 @@ use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Ar
 
 use dbt_adapter_core::{AdapterType, MICROBATCH_SUPPORTED_ADAPTERS};
 use dbt_common::constants::{DBT_COMPILED_DIR_NAME, DBT_RUN_DIR_NAME};
-use dbt_common::io_args::{ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::io_args::{
+    ComputeArg, StaticAnalysisKind, StaticAnalysisOffReason, multi_adapter_enabled,
+};
 use dbt_common::path::{DbtPath, get_snapshot_write_path, get_target_write_path};
 use dbt_common::tracing::dbt_emit::{emit_error_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, Span, err};
@@ -589,7 +591,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 
         let node_checksum = common.checksum.to_checksum_string();
 
-        NodeProcessed::start(
+        let mut event = NodeProcessed::start(
             common.unique_id.clone(),
             self.original_name().unwrap_or(&common.name).to_string(),
             Some(database),
@@ -605,7 +607,12 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             node_checksum,
             in_selection,
             self.get_group(),
-        )
+        );
+        // Only worth reporting when nodes can run on different adapters.
+        if multi_adapter_enabled() {
+            event.adapter = Some(base.adapter.as_ref().to_string());
+        }
+        event
     }
 }
 
