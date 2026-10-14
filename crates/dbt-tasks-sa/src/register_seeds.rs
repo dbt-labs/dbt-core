@@ -1,3 +1,4 @@
+use dbt_datafusion_errors::DatafusionResultExt;
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -120,7 +121,7 @@ fn register_seed_json(
     let infer_column_name_strategy =
         infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 
-    let (source_schema, maybe_batches) = read_json_seed(&seed_path, true)?;
+    let (source_schema, maybe_batches) = read_json_seed(&seed_path, true).into_fs()?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
         Some(parse_provided_types(provided_types, type_ops.as_ref())?)
     } else {
@@ -158,7 +159,8 @@ async fn register_seed_parquet_async(
     let infer_column_name_strategy =
         infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 
-    let (source_schema, maybe_batches) = read_parquet_seed_view(&seed_path, true).await?;
+    let (source_schema, maybe_batches) =
+        read_parquet_seed_view(&seed_path, true).await.into_fs()?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
         Some(parse_provided_types(provided_types, type_ops.as_ref())?)
     } else {

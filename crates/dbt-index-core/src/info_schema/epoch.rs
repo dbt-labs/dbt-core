@@ -798,6 +798,13 @@ const NODES: &[(&str, EpochExpr)] = &[
         ),
     ),
     (
+        "node_constraints",
+        EpochExpr::SqlJson(
+            "COALESCE(json_extract(t.payload, '$.__model_attr__.constraints'), \
+             json_extract(t.payload, '$.constraints'))",
+        ),
+    ),
+    (
         "version",
         EpochExpr::SqlJson(
             "COALESCE(json_extract(t.payload, '$.__model_attr__.version'), \
@@ -889,7 +896,6 @@ const NODES: &[(&str, EpochExpr)] = &[
     ("pre_hook", EpochExpr::Null),
     ("post_hook", EpochExpr::Null),
     ("grants", EpochExpr::Null),
-    ("node_constraints", EpochExpr::Null),
     ("time_spine", EpochExpr::Null),
     ("ai_context", EpochExpr::Null),
     ("loaded_at_query", EpochExpr::Null),

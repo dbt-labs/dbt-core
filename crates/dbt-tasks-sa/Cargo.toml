@@ -21,6 +21,7 @@ dbt-common = { workspace = true }
 dbt-compilation = { workspace = true }
 dbt-csv = { workspace = true }
 dbt-dag = { workspace = true }
+dbt-datafusion-errors = { workspace = true }
 dbt-defer = { workspace = true }
 dbt-df-providers = { workspace = true }
 dbt-frontend-common = { workspace = true }

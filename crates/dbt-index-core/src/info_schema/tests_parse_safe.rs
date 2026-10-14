@@ -44,7 +44,6 @@ const DEAD_AT_PARSE: &[(&str, &[&str])] = &[
             "pre_hook",
             "post_hook",
             "grants",
-            "node_constraints",
             "docs_show",
             "time_spine",
             "ai_context",
@@ -71,7 +70,6 @@ const DEAD_AT_PARSE: &[(&str, &[&str])] = &[
             "quote",
             "granularity",
             "meta",
-            "column_constraints",
             "tests",
         ],
     ),
@@ -232,7 +230,8 @@ fn projected_view_sql() {
             r#"t."version" AS "version", t."latest_version" AS "latest_version", "#,
             r#"t."deprecation_date" AS "deprecation_date", t."primary_key" AS "primary_key", "#,
             r#"t."patch_path" AS "properties_yml_file_path", t."tags" AS "tags", "#,
-            r#"t."meta" AS "meta", t."ingested_at" AS "ingested_at" "#,
+            r#"t."meta" AS "meta", t."node_constraints" AS "constraints", "#,
+            r#"t."ingested_at" AS "ingested_at" "#,
             r#"FROM dbt_internal."nodes" AS t WHERE t."resource_type" IN ('model')"#,
         ),
     );
@@ -367,5 +366,18 @@ fn assembled_view_sql() {
     // Every DAG resource type reaches the filter, or rows go missing silently.
     for ty in super::schema::DAG_RESOURCE_TYPES {
         assert!(sql.contains(&format!("'{ty}'")), "{ty} not in: {sql}");
+    }
+}
+
+/// `constraints` is filled at parse, so checks may read it (dbt-labs/dbt#16553):
+/// a `not_null` column constraint counts as a not-null test.
+#[test]
+fn constraints_are_readable_by_checks() {
+    for name in ["models", "node_columns"] {
+        let view = VIEWS.iter().find(|v| v.name == name).unwrap();
+        assert!(
+            view.cols.contains(&"constraints"),
+            "dbt.{name} must expose `constraints`"
+        );
     }
 }

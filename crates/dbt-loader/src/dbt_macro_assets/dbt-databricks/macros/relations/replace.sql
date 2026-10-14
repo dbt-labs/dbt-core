@@ -14,6 +14,20 @@
     {{ return(get_replace_metric_view_sql(target_relation, sql)) }}
   {% endif %}
 
+  {# DIVERGENCE: replace same-type materialized views in place regardless of use_safer_relation_operations,
+     unless the change is one CREATE OR REPLACE cannot apply. #}
+  {% if existing_relation.is_materialized_view and target_relation.is_materialized_view %}
+    {%- set model_config = adapter.get_config_from_model(config.model) -%}
+    {%- set existing_config = adapter.get_relation_config(existing_relation, model_config) -%}
+    {%- set decision = databricks__get_mv_replace_strategy(model_config, existing_config) -%}
+    {% if decision.strategy == 'replace' %}
+      {{ return(get_replace_materialized_view_sql(target_relation, sql)) }}
+    {% elif decision.strategy != 'drop' %}
+      {{ exceptions.raise_compiler_error("Cannot rebuild materialized view " ~ existing_relation ~ ": "
+           ~ (decision.reason if decision.strategy == 'refuse' else "unrecognised replace strategy '" ~ decision.strategy ~ "'")) }}
+    {% endif %}
+  {% endif %}
+
   {% set safe_replace = config.get('use_safer_relation_operations', False) | as_bool  %}
   {% set file_format = adapter.resolve_file_format(config) %}
   {% set is_replaceable = existing_relation.type == target_relation.type and existing_relation.can_be_replaced and file_format == "delta" %}
