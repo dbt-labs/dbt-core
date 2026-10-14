@@ -248,6 +248,42 @@ pub(crate) fn foreign_key_constraints_to_agate(
     )
 }
 
+// https://github.com/databricks/dbt-databricks/blob/6bd2ef569831425b3eb4662fe9ededa1ac0c49c4/dbt/include/databricks/macros/relations/components/constraints.sql#L57
+// Constraint names are unique only within a schema.
+fn foreign_key_constraints_sql(database: &str, schema: &str, identifier: &str) -> String {
+    format!(
+        "SELECT
+            kcu.constraint_name,
+            kcu.column_name AS from_column,
+            ukcu.table_catalog AS to_catalog,
+            ukcu.table_schema AS to_schema,
+            ukcu.table_name AS to_table,
+            ukcu.column_name AS to_column
+        FROM `{database}`.information_schema.key_column_usage kcu
+        JOIN `{database}`.information_schema.referential_constraints rc
+            ON kcu.constraint_catalog = rc.constraint_catalog
+            AND kcu.constraint_schema = rc.constraint_schema
+            AND kcu.constraint_name = rc.constraint_name
+        JOIN `{database}`.information_schema.key_column_usage ukcu
+            ON rc.unique_constraint_catalog = ukcu.constraint_catalog
+            AND rc.unique_constraint_schema = ukcu.constraint_schema
+            AND rc.unique_constraint_name = ukcu.constraint_name
+            AND kcu.ordinal_position = ukcu.ordinal_position
+        WHERE kcu.table_catalog = '{database}'
+            AND kcu.table_schema = '{schema}'
+            AND kcu.table_name = '{identifier}'
+            AND kcu.constraint_name IN (
+            SELECT constraint_name
+            FROM `{database}`.information_schema.table_constraints
+            WHERE table_catalog = '{database}'
+                AND table_schema = '{schema}'
+                AND table_name = '{identifier}'
+                AND constraint_type = 'FOREIGN KEY'
+            )
+        ORDER BY kcu.ordinal_position;"
+    )
+}
+
 // Column name must match `constraints.rs::from_remote_state`'s "column_name"/"col_name" lookup.
 pub(crate) fn non_null_constraints_to_agate(
     rows: &[NonNullConstraintRow],
@@ -1040,7 +1076,7 @@ impl DatabricksMetadataAdapter {
         Ok(result)
     }
 
-    // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/relations/components/constraints.sql#L47
+    // https://github.com/databricks/dbt-databricks/blob/6bd2ef569831425b3eb4662fe9ededa1ac0c49c4/dbt/include/databricks/macros/relations/components/constraints.sql#L47
     fn fetch_foreign_key_constraints(
         &self,
         database: &str,
@@ -1050,33 +1086,7 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
-        let sql = format!(
-            "SELECT
-                kcu.constraint_name,
-                kcu.column_name AS from_column,
-                ukcu.table_catalog AS to_catalog,
-                ukcu.table_schema AS to_schema,
-                ukcu.table_name AS to_table,
-                ukcu.column_name AS to_column
-            FROM `{database}`.information_schema.key_column_usage kcu
-            JOIN `{database}`.information_schema.referential_constraints rc
-                ON kcu.constraint_name = rc.constraint_name
-            JOIN `{database}`.information_schema.key_column_usage ukcu
-                ON rc.unique_constraint_name = ukcu.constraint_name
-                AND kcu.ordinal_position = ukcu.ordinal_position
-            WHERE kcu.table_catalog = '{database}'
-                AND kcu.table_schema = '{schema}'
-                AND kcu.table_name = '{identifier}'
-                AND kcu.constraint_name IN (
-                SELECT constraint_name
-                FROM `{database}`.information_schema.table_constraints
-                WHERE table_catalog = '{database}'
-                    AND table_schema = '{schema}'
-                    AND table_name = '{identifier}'
-                    AND constraint_type = 'FOREIGN KEY'
-                )
-            ORDER BY kcu.ordinal_position;"
-        );
+        let sql = foreign_key_constraints_sql(database, schema, identifier);
         let (_, result) =
             self.execute_sql_with_context(&sql, state, "Fetch FK constraints", conn, token)?;
         Ok(result)
@@ -2028,6 +2038,35 @@ mod tests {
         assert_eq!(
             table_rows[0].get_attr("to_column").unwrap().as_str(),
             Some("user_id")
+        );
+    }
+
+    #[test]
+    fn test_foreign_key_constraints_sql_scopes_joins_to_constraint_schema() {
+        let sql = foreign_key_constraints_sql("some_database", "some_schema", "some_table");
+        assert_eq!(
+            sql.split_whitespace().collect::<Vec<_>>().join(" "),
+            "SELECT kcu.constraint_name, kcu.column_name AS from_column, \
+             ukcu.table_catalog AS to_catalog, ukcu.table_schema AS to_schema, \
+             ukcu.table_name AS to_table, ukcu.column_name AS to_column \
+             FROM `some_database`.information_schema.key_column_usage kcu \
+             JOIN `some_database`.information_schema.referential_constraints rc \
+             ON kcu.constraint_catalog = rc.constraint_catalog \
+             AND kcu.constraint_schema = rc.constraint_schema \
+             AND kcu.constraint_name = rc.constraint_name \
+             JOIN `some_database`.information_schema.key_column_usage ukcu \
+             ON rc.unique_constraint_catalog = ukcu.constraint_catalog \
+             AND rc.unique_constraint_schema = ukcu.constraint_schema \
+             AND rc.unique_constraint_name = ukcu.constraint_name \
+             AND kcu.ordinal_position = ukcu.ordinal_position \
+             WHERE kcu.table_catalog = 'some_database' \
+             AND kcu.table_schema = 'some_schema' \
+             AND kcu.table_name = 'some_table' \
+             AND kcu.constraint_name IN ( SELECT constraint_name \
+             FROM `some_database`.information_schema.table_constraints \
+             WHERE table_catalog = 'some_database' AND table_schema = 'some_schema' \
+             AND table_name = 'some_table' AND constraint_type = 'FOREIGN KEY' ) \
+             ORDER BY kcu.ordinal_position;"
         );
     }
 
