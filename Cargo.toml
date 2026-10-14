@@ -21,6 +21,7 @@ members = [
   "crates/dbt-cloud-api",
   "crates/dbt-cloud-config",
   "crates/dbt-df-providers",
+  "crates/dbt-datafusion-errors",
   "crates/dbt-classification-types",
   "crates/dbt-features",
   "crates/dbt-tasks-core",
@@ -118,7 +119,7 @@ homepage = "https://getdbt.com"
 keywords = ["sql", "parquet", "json", "csv", "dbt"]
 license = "Apache-2.0"
 repository = "https://github.com/dbt-labs/dbt-core"
-version = "2.0.5"
+version = "2.0.8"
 
 [patch.crates-io]
 
@@ -255,6 +256,7 @@ dbt-common = { path = "crates/dbt-common" }
 dbt-compilation = { path = "crates/dbt-compilation" }
 dbt-csv = { path = "crates/dbt-csv" }
 dbt-dag = { path = "crates/dbt-dag" }
+dbt-datafusion-errors = { path = "crates/dbt-datafusion-errors" }
 dbt-defer = { path = "crates/dbt-defer" }
 dbt-deps = { path = "crates/dbt-deps" }
 dbt-df-providers = { path = "crates/dbt-df-providers" }
@@ -525,6 +527,7 @@ term_size = "0.3.1"
 walkdir = "2.4.0"
 xshell = "0.2.7"
 zip = "8.3.0"
+zstd = "0.13"
 
 # async + threading
 astral-tokio-tar = { version = "0.6.4" }

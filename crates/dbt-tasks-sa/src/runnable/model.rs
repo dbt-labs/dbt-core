@@ -19,7 +19,7 @@ use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtMaterialization};
 use dbt_schemas::schemas::{InternalDbtNode, InternalDbtNodeAttributes};
-use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::context::{TaskRunnerCtx, record_microbatch_metrics};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeEvent, has_node_warning};
 
 use minijinja::Value;
@@ -302,7 +302,13 @@ pub fn execute_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
         &ctx.inner.arg.io,
     ) {
         Ok(relations_map) => {
-            if let Some(main_response) = result_store.main_adapter_response() {
+            let main_response = result_store.main_adapter_response();
+            record_microbatch_metrics(
+                &ctx.inner.microbatch_execution_metrics,
+                &model.__common_attr__.unique_id,
+                main_response.as_ref(),
+            );
+            if let Some(main_response) = main_response {
                 ctx.inner
                     .main_adapter_responses
                     .insert(model.__common_attr__.unique_id.clone(), main_response);

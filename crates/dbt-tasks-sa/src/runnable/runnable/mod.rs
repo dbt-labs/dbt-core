@@ -30,7 +30,7 @@ use dbt_schemas::schemas::{
     DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, InternalDbtNode,
     InternalDbtNodeAttributes, NodePathKind, Nodes,
 };
-use dbt_tasks_core::context::TaskRunnerCtx;
+use dbt_tasks_core::context::{TaskRunnerCtx, node_execution_metrics};
 use dbt_tasks_core::run_task_hooks::RunTaskHooks;
 use dbt_tasks_core::task::TaskResult;
 use dbt_tasks_core::task::{TP, Task, run_blocking_task_operation};
@@ -1089,17 +1089,33 @@ fn emit_run_usage_stats(
     // write_integration.catalog_type). See dbt-adapter's CatalogRelation builders.
     let catalog_type = resolve_catalog_type(catalog_name.as_deref());
 
+    let snapshot_strategy = node
+        .as_any()
+        .downcast_ref::<DbtSnapshot>()
+        .and_then(|snapshot| snapshot.deprecated_config.strategy.clone());
+
+    let unique_id = node.unique_id();
+    let is_microbatch = try_get_microbatch_model(node).is_some();
+    let execution_metrics = node_execution_metrics(
+        is_microbatch,
+        &unique_id,
+        &ctx.inner.microbatch_execution_metrics,
+        &ctx.inner.main_adapter_responses,
+    );
+
     run_model_event(
         ctx.inner.arg.io.invocation_id.to_string(),
         &ctx.inner.run_stats,
         node,
         maybe_incremental_strategy,
+        snapshot_strategy,
         is_contract_enforced,
         has_group,
         table_format,
         catalog_name,
         catalog_type,
         execution_path.compute_mode().to_string(),
+        execution_metrics,
     );
 }
 

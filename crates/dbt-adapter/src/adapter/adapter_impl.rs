@@ -1907,8 +1907,10 @@ impl AdapterImpl {
         fn duckdb_is_motherduck(config: &AdapterConfig) -> bool {
             matches!(
                 dbt_auth::DuckDbTarget::from_config(config),
-                Ok(dbt_auth::DuckDbTarget::MotherDuck { .. })
-                    | Ok(dbt_auth::DuckDbTarget::MotherDuckWithToken { .. })
+                Ok(dbt_auth::DuckDbTarget::MotherduckBrowserLogin { .. })
+                    | Ok(dbt_auth::DuckDbTarget::MotherduckTokenAuth { .. })
+                    | Ok(dbt_auth::DuckDbTarget::MotherduckSaasBrowserLogin { .. })
+                    | Ok(dbt_auth::DuckDbTarget::MotherduckSaasTokenAuth { .. })
             )
         }
 
@@ -2465,6 +2467,58 @@ impl AdapterImpl {
                     Ok(column.to_string())
                 }
             }
+        }
+    }
+
+    /// ClickHouse `adapter.get_clickhouse_cluster_name()` — see [`metadata::clickhouse::cluster_name`].
+    pub fn get_clickhouse_cluster_name(&self) -> Option<String> {
+        metadata::clickhouse::cluster_name(self.get_db_config("cluster").as_deref())
+    }
+
+    /// ClickHouse `adapter.get_clickhouse_local_suffix()` — see [`metadata::clickhouse::local_suffix`].
+    pub fn get_clickhouse_local_suffix(&self) -> String {
+        metadata::clickhouse::local_suffix(self.get_db_config("local_suffix").as_deref())
+    }
+
+    /// ClickHouse `adapter.get_clickhouse_local_db_prefix()` — see [`metadata::clickhouse::local_db_prefix`].
+    pub fn get_clickhouse_local_db_prefix(&self) -> String {
+        metadata::clickhouse::local_db_prefix(self.get_db_config("local_db_prefix").as_deref())
+    }
+
+    /// ClickHouse `adapter.clickhouse_db_engine_clause()` — see [`metadata::clickhouse::db_engine_clause`].
+    pub fn clickhouse_db_engine_clause(&self) -> String {
+        metadata::clickhouse::db_engine_clause(self.get_db_config("database_engine").as_deref())
+    }
+
+    /// ClickHouse `adapter.should_on_cluster(materialized, engine)` (impl.py ignores both
+    /// arguments) — see [`metadata::clickhouse::get_on_cluster`]. With `relation` (v2's
+    /// `on_cluster_clause`), [`metadata::clickhouse::relation_should_on_cluster`].
+    pub fn should_on_cluster(&self, relation: Option<&dyn BaseRelation>) -> bool {
+        let profile_default = metadata::clickhouse::get_on_cluster(
+            self.get_db_config("cluster").as_deref().unwrap_or(""),
+            self.get_db_config("database_engine")
+                .as_deref()
+                .unwrap_or(""),
+        );
+        match relation {
+            Some(relation) => {
+                metadata::clickhouse::relation_should_on_cluster(relation, profile_default)
+            }
+            None => profile_default,
+        }
+    }
+
+    /// ClickHouse `adapter.can_exchange(schema, rel_type)` — see [`metadata::clickhouse::can_exchange`].
+    pub fn can_exchange(
+        &self,
+        state: &State,
+        schema: &str,
+        rel_type: &str,
+        token: CancellationToken,
+    ) -> bool {
+        match self.inner_adapter() {
+            Impl(..) => metadata::clickhouse::can_exchange(self, state, schema, rel_type, token),
+            Replay(..) => false,
         }
     }
 
@@ -3557,7 +3611,6 @@ impl AdapterImpl {
         }
     }
 
-    /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L930
     #[allow(clippy::too_many_arguments)]
     pub fn load_dataframe(
         &self,
@@ -3574,6 +3627,7 @@ impl AdapterImpl {
         token: CancellationToken,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
+            // BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/0efd8d3d1081e1ab43e38797d5104f7b424a6284/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L930
             Bigquery => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/4b3966efc50b1d013907a88bee4ab8ebd022d17a/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L668
                 //
@@ -3625,11 +3679,79 @@ impl AdapterImpl {
 
                 Ok(none_value())
             }
+            DuckDB => {
+                // DuckDB cannot access local files when `motherduck_saas_mode`
+                // is enabled. In that case, we need to load the dataset in
+                // memory and bulk-ingest it into the motherduck instance
+                // manually.
+
+                if self.engine().is_mock() {
+                    return Ok(none_value());
+                }
+
+                if self.engine().is_replay() {
+                    crate::engine::duckdb_seed::copy_seed_csv(
+                        conn,
+                        database,
+                        schema,
+                        table_name,
+                        file_path,
+                        field_delimiter,
+                    )?;
+                    return Ok(none_value());
+                }
+
+                let saas_mode_enabled = matches!(
+                    dbt_auth::DuckDbTarget::from_config(self.engine().get_config()),
+                    Ok(dbt_auth::DuckDbTarget::MotherduckSaasBrowserLogin { .. })
+                        | Ok(dbt_auth::DuckDbTarget::MotherduckSaasTokenAuth { .. })
+                );
+                #[cfg(debug_assertions)]
+                {
+                    let (_, saas_mode_table) = self.query(
+                        ctx,
+                        conn,
+                        dbt_auth::motherduck_saas_mode_query(),
+                        None,
+                        token,
+                    )?;
+                    let live_saas_mode = saas_mode_table
+                        .original_record_batch()
+                        .column_values::<BooleanArray>("saas_mode")?
+                        .value(0);
+                    debug_assert_eq!(
+                        live_saas_mode, saas_mode_enabled,
+                        "live motherduck_saas_mode disagrees with the profile config"
+                    );
+                }
+
+                if saas_mode_enabled {
+                    crate::engine::duckdb_seed::ingest_seed_csv(
+                        ctx,
+                        conn,
+                        database,
+                        schema,
+                        table_name,
+                        file_path,
+                        field_delimiter,
+                    )?;
+                } else {
+                    crate::engine::duckdb_seed::copy_seed_csv(
+                        conn,
+                        database,
+                        schema,
+                        table_name,
+                        file_path,
+                        field_delimiter,
+                    )?;
+                }
+
+                Ok(none_value())
+            }
             Salesforce => todo!("load_dataframe() for the Salesforce adapter"),
-            Postgres | Snowflake | Databricks | Redshift | Spark | DuckDB | LakeCompute
-            | Fabric | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio
-            | Oracle => {
-                unimplemented!("only available with BigQuery or Salesforce adapter")
+            Postgres | Snowflake | Databricks | Redshift | Spark | LakeCompute | Fabric
+            | ClickHouse | Exasol | Starburst | Athena | Trino | Datafusion | Dremio | Oracle => {
+                unimplemented!("only available with BigQuery, DuckDB or Salesforce adapter")
             }
         }
     }
