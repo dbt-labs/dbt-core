@@ -257,8 +257,13 @@ pub enum FreshnessOverride {
     /// Custom SQL returning a single timestamp scalar. `{{ this }}` (or `{{this}}`)
     /// is substituted with the source's rendered FQN before execution.
     Query(String),
-    /// Column name. The metadata adapter runs `SELECT max({field}) FROM {relation}`.
-    Field(String),
+    /// Column name plus the source's optional `freshness.filter`. The metadata
+    /// adapter runs `SELECT max({field}) FROM {relation}`, adding
+    /// `WHERE {filter}` when set — matching `default__collect_freshness`.
+    Field {
+        field: String,
+        filter: Option<String>,
+    },
 }
 
 impl MetadataFreshness {
