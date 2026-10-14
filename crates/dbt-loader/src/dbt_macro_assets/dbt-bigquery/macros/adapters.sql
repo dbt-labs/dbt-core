@@ -154,6 +154,7 @@
     {% endfor %}
     {% set filtered_columns = validate_doc_columns(relation, model.columns, valid_names) %}
     {% do alter_column_comment(relation, filtered_columns) %}
+    {% do bigquery__alter_column_data_governance_tags(relation, filtered_columns) %}
   {% endif %}
 {% endmacro %}
 
@@ -175,6 +176,55 @@
 
 {% macro bigquery__alter_column_comment(relation, column_dict) -%}
   {% do adapter.update_columns(relation, column_dict) %}
+{% endmacro %}
+
+{% macro bigquery__alter_column_data_governance_tags(relation, column_dict) -%}
+  {% set sql = bigquery__get_alter_column_data_governance_tags_sql(relation, column_dict) %}
+  {% if sql %}
+    {% do run_query(sql) %}
+  {% endif %}
+{% endmacro %}
+
+{% macro bigquery__get_alter_column_data_governance_tags_sql(relation, column_dict) %}
+  {%- set ns = namespace(actions=[]) -%}
+  {%- for col_name in column_dict -%}
+    {%- set col = column_dict[col_name] -%}
+    {%- set gov = col['data_governance_tags'] -%}
+    {%- if gov is defined and gov is not none -%}
+      {%- if relation.type != 'table' -%}
+        {{ exceptions.raise_compiler_error(
+          "data_governance_tags are only supported on tables."
+        ) }}
+      {%- endif -%}
+      {%- set dtype = col['data_type'] | default('', true) | lower -%}
+      {%- if dtype in ['record', 'struct'] or 'struct<' in dtype or 'record<' in dtype -%}
+        {{ exceptions.raise_compiler_error(
+          "data_governance_tags on column '" ~ col_name ~ "' cannot be set on a RECORD or STRUCT parent. Set the tag on a leaf field."
+        ) }}
+      {%- endif -%}
+      {%- if '.' in col_name -%}
+        {{ exceptions.raise_compiler_error(
+          "data_governance_tags on column '" ~ col_name ~ "' cannot target a nested field. BigQuery ALTER COLUMN does not accept a dotted path."
+        ) }}
+      {%- endif -%}
+      {%- set key_text = gov['key'] | default('', true) | string -%}
+      {%- set value_text = gov['value'] | default('', true) | string -%}
+      {%- set parts = key_text.split('/') -%}
+      {%- if parts | length != 2 or parts[0] | length == 0 or parts[1] | length == 0 or value_text | length == 0 -%}
+        {{ exceptions.raise_compiler_error(
+          "Column '" ~ col_name ~ "' data_governance_tags must set key to '{parent_id}/{short_name}' and value to a non-empty short name."
+        ) }}
+      {%- endif -%}
+      {%- set quoted_name = adapter.quote(col_name) -%}
+      {%- set key_literal = '"' ~ (key_text | replace('\\', '\\\\') | replace('"', '\\"')) ~ '"' -%}
+      {%- set value_literal = '"' ~ (value_text | replace('\\', '\\\\') | replace('"', '\\"')) ~ '"' -%}
+      {%- set ns.actions = ns.actions + ["alter column " ~ quoted_name ~ " set options (data_governance_tags=[(" ~ key_literal ~ ", " ~ value_literal ~ ")])"] -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- if ns.actions | length == 0 -%}
+    {{ return('') }}
+  {%- endif -%}
+  {{ return('alter ' ~ relation.type ~ ' ' ~ relation ~ '\n' ~ (ns.actions | join(',\n'))) }}
 {% endmacro %}
 
 {% macro bigquery__alter_relation_add_columns(relation, add_columns) %}

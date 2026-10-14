@@ -253,3 +253,164 @@ fn generate_schema_name_composes_on_a_projects_own_default() {
         "sales_catalog.custom_staging"
     );
 }
+
+fn render_governance_tags(
+    relation_type: RelationType,
+    column_dict: Value,
+) -> dbt_common::FsResult<String> {
+    let harness = build_harness();
+    harness.mock().on("quote", |args| {
+        Ok(Value::from(format!(
+            "`{}`",
+            args[0].as_str().expect("column name")
+        )))
+    });
+    let relation = harness.relation("test-db", "test_schema", "customers", Some(relation_type));
+    let ctx = BTreeMap::from([
+        (
+            "relation".to_string(),
+            RelationObject::new(relation).into_value(),
+        ),
+        ("column_dict".to_string(), column_dict),
+    ]);
+    harness.render(
+        "{{ bigquery__get_alter_column_data_governance_tags_sql(relation, column_dict) }}",
+        ctx,
+    )
+}
+
+fn column_dict(columns: BTreeMap<&str, Value>) -> Value {
+    Value::from_serialize(columns)
+}
+
+fn governance_tag(key: &str, value: &str) -> Value {
+    Value::from_serialize(BTreeMap::from([("key", key), ("value", value)]))
+}
+
+#[test]
+fn data_governance_tags_alter_sets_one_tag() {
+    let mut email = BTreeMap::new();
+    email.insert(
+        "data_governance_tags".to_string(),
+        governance_tag("my-project/data_class", "email"),
+    );
+    let mut plain = BTreeMap::new();
+    plain.insert("description".to_string(), Value::from("untagged column"));
+
+    let rendered = render_governance_tags(
+        RelationType::Table,
+        column_dict(BTreeMap::from([
+            ("email", Value::from_serialize(email)),
+            ("name", Value::from_serialize(plain)),
+        ])),
+    )
+    .expect("governance tag SQL should render");
+
+    let sql = rendered.trim();
+    assert!(
+        sql.starts_with("alter table "),
+        "expected one ALTER TABLE, got: {sql}"
+    );
+    assert!(
+        sql.contains("alter column `email` set options (data_governance_tags=[(\"my-project/data_class\", \"email\")])"),
+        "missing set clause, got: {sql}"
+    );
+    assert!(
+        !sql.contains("`name`"),
+        "a column without data_governance_tags must be left alone, got: {sql}"
+    );
+}
+
+#[test]
+fn data_governance_tags_alter_escapes_literals_and_rejects_nested_path() {
+    let mut email = BTreeMap::new();
+    email.insert("data_type".to_string(), Value::from("STRING"));
+    email.insert(
+        "data_governance_tags".to_string(),
+        governance_tag("my-project/data_class", "say \"hi\""),
+    );
+    let rendered = render_governance_tags(
+        RelationType::Table,
+        column_dict(BTreeMap::from([("email", Value::from_serialize(email))])),
+    )
+    .expect("quoted value should render");
+    let sql = rendered.trim();
+    assert!(
+        sql.contains("alter column `email` set options (data_governance_tags=[(\"my-project/data_class\", \"say \\\"hi\\\"\")])"),
+        "unexpected escaped SQL: {sql}"
+    );
+
+    let mut nested = BTreeMap::new();
+    nested.insert("data_type".to_string(), Value::from("STRING"));
+    nested.insert(
+        "data_governance_tags".to_string(),
+        governance_tag("my-project/data_class", "email"),
+    );
+    let err = render_governance_tags(
+        RelationType::Table,
+        column_dict(BTreeMap::from([(
+            "address.email",
+            Value::from_serialize(nested),
+        )])),
+    )
+    .expect_err("a dotted field path must fail");
+    assert!(
+        err.to_string().contains("does not accept a dotted path"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn data_governance_tags_alter_rejects_struct_parent_and_bad_key() {
+    let mut parent = BTreeMap::new();
+    parent.insert(
+        "data_type".to_string(),
+        Value::from("ARRAY<STRUCT<email STRING>>"),
+    );
+    parent.insert(
+        "data_governance_tags".to_string(),
+        governance_tag("my-project/data_class", "email"),
+    );
+    let err = render_governance_tags(
+        RelationType::Table,
+        column_dict(BTreeMap::from([("address", Value::from_serialize(parent))])),
+    )
+    .expect_err("STRUCT parent must fail");
+    assert!(
+        err.to_string().contains("RECORD or STRUCT parent"),
+        "unexpected error: {err}"
+    );
+
+    let mut bad_key = BTreeMap::new();
+    bad_key.insert(
+        "data_governance_tags".to_string(),
+        governance_tag("data_class", "email"),
+    );
+    let err = render_governance_tags(
+        RelationType::Table,
+        column_dict(BTreeMap::from([("email", Value::from_serialize(bad_key))])),
+    )
+    .expect_err("a key without a namespace must fail");
+    assert!(
+        err.to_string().contains("{parent_id}/{short_name}"),
+        "unexpected error: {err}"
+    );
+
+    let mut view_email = BTreeMap::new();
+    view_email.insert(
+        "data_governance_tags".to_string(),
+        governance_tag("my-project/data_class", "email"),
+    );
+    let err = render_governance_tags(
+        RelationType::View,
+        column_dict(BTreeMap::from([(
+            "email",
+            Value::from_serialize(view_email),
+        )])),
+    )
+    .expect_err("a view must fail");
+    assert!(
+        err.to_string().contains("only supported on tables"),
+        "unexpected error: {err}"
+    );
+}
