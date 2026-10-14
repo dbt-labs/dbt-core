@@ -6,15 +6,15 @@ use std::{
     },
 };
 
-use crate::collections::HashSet;
+use crate::collections::{HashMap, HashSet};
 use console::Term;
 use dbt_telemetry::{
-    AssetParsed, CompiledCode, CompiledCodeInline, ConnectionLimitWait, DepsAddPackage,
-    DepsAllPackagesInstalled, DepsPackageInstalled, ExecutionPhase, GenericOpExecuted,
-    GenericOpItemProcessed, HookProcessed, Invocation, ListItemOutput, LogMessage, NodeEvaluated,
-    NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage,
-    QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, TestOutcome, UserLogMessage,
-    get_test_outcome,
+    AssetParsed, CompiledCode, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
+    DepsPackageInstalled, ExecutionPhase, GenericOpExecuted, GenericOpItemProcessed, HookProcessed,
+    Invocation, ListItemOutput, LogMessage, MicrobatchEvaluated, NodeEvaluated,
+    NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
+    ProgressMessage, QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, TestOutcome,
+    ThreadPoolWait, UserLogMessage, get_test_outcome,
 };
 use dbt_tracing::{
     AnyTelemetryEvent, LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStartInfo, SpanStatus,
@@ -36,9 +36,6 @@ use crate::{
         formatters::{
             asset::format_asset_parsed_start,
             color::BLUE,
-            connection_limit_wait::{
-                format_connection_limit_wait_end, format_connection_limit_wait_start,
-            },
             constants::SELECTED_NODES_TITLE,
             deps::{
                 INSTALLING_ACTION, format_package_add_end, format_package_add_start,
@@ -56,13 +53,16 @@ use crate::{
             log_message::format_log_message,
             node::{
                 format_aggregated_test_group_header, format_aggregated_test_group_member,
-                format_compiled_code, format_compiled_inline_code, format_node_evaluated_end,
-                format_node_evaluated_start, format_node_processed_end, format_skipped_test_group,
+                format_compiled_code, format_compiled_inline_code, format_microbatch_evaluated_end,
+                format_microbatch_evaluated_start, format_microbatch_member,
+                format_node_evaluated_end, format_node_evaluated_start, format_node_processed_end,
+                format_skipped_test_group,
             },
             phase::get_phase_progress_text,
             progress::format_progress_message,
             state_mod_diff::format_state_modified_diff_lines,
             test_result::format_test_failure,
+            thread_pool_wait::{format_thread_pool_wait_end, format_thread_pool_wait_start},
         },
         fs_error_log::get_log_message,
         layer::{ConsumerLayer, TelemetryConsumer},
@@ -223,6 +223,16 @@ struct SkippedTestNodes {
     node_count_total: Option<u32>,
 }
 
+/// Finished microbatches by the unique_id of their node, buffered on the root span until
+/// the node's `NodeProcessed` span closes. Each entry is the batch's event plus its span's
+/// wall time.
+///
+/// Kept on the root because a batch descends from its node's `NodeEvaluated` span, which
+/// only follows from `NodeProcessed` rather than nesting under it.
+struct PendingMicrobatches {
+    batches: HashMap<String, Vec<(MicrobatchEvaluated, std::time::Duration)>>,
+}
+
 /// Members of one aggregated generic-test group, buffered on the group's span until it
 /// closes. Each entry is the member's event plus the duration its flat line would show.
 ///
@@ -365,6 +375,9 @@ pub struct TuiLayer {
     list_header_emitted: AtomicBool,
     /// Whether to group skipped tests under TuiAllProcessingNodesGroup spans
     group_skipped_tests: bool,
+    /// Whether to report microbatches under their node's result line instead of
+    /// on their own lines
+    group_microbatches: bool,
     /// Progress bar controller for managing terminal progress indicators.
     /// Wrapped in Arc for the global suspension hook closure (TEMPORARY).
     /// None when not in interactive mode.
@@ -402,6 +415,9 @@ impl TuiLayer {
         };
 
         let group_skipped_tests = progress.is_some() && max_log_verbosity < LevelFilter::DEBUG;
+        // Batches are held back until their model finishes, which is only fine while the
+        // progress bar shows the model is alive. Debug output keeps per-batch lines.
+        let group_microbatches = progress.is_some() && max_log_verbosity < LevelFilter::DEBUG;
 
         #[cfg(debug_assertions)]
         let res = Self {
@@ -412,6 +428,7 @@ impl TuiLayer {
             quiet,
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests,
+            group_microbatches,
             progress,
             generic_op_is_bar: SccHashMap::default(),
             is_nextest: std::env::var("NEXTEST").is_ok(),
@@ -426,6 +443,7 @@ impl TuiLayer {
             quiet,
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests,
+            group_microbatches,
             progress,
             generic_op_is_bar: SccHashMap::default(),
         };
@@ -483,7 +501,7 @@ impl TelemetryConsumer for TuiLayer {
             // in the handler based on the verbosity level.
             && (span.attributes.is::<NodeEvaluated>()
                 || span.attributes.is::<NodeProcessed>()
-                || span.attributes.is::<ConnectionLimitWait>()
+                || span.attributes.is::<ThreadPoolWait>()
                 || span.attributes.is::<HookProcessed>()
                 || span.attributes.is::<GenericOpExecuted>()
                 || span.attributes.is::<GenericOpItemProcessed>()
@@ -513,6 +531,11 @@ impl TelemetryConsumer for TuiLayer {
                 test_failures: Vec::new(),
                 errors_and_warnings: Vec::new(),
             });
+            if self.group_microbatches {
+                data_provider.init_root(PendingMicrobatches {
+                    batches: HashMap::default(),
+                });
+            }
         }
 
         // Init skipped test nodes storage
@@ -543,8 +566,13 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
-        if let Some(wait) = span.attributes.downcast_ref::<ConnectionLimitWait>() {
-            self.handle_connection_limit_wait_start(span, wait, data_provider);
+        if let Some(batch) = span.attributes.downcast_ref::<MicrobatchEvaluated>() {
+            self.handle_microbatch_evaluated_start(batch);
+            return;
+        }
+
+        if let Some(wait) = span.attributes.downcast_ref::<ThreadPoolWait>() {
+            self.handle_thread_pool_wait_start(span, wait, data_provider);
             return;
         }
 
@@ -592,8 +620,8 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
-        if let Some(wait) = span.attributes.downcast_ref::<ConnectionLimitWait>() {
-            self.handle_connection_limit_wait_end(span, wait, data_provider);
+        if let Some(wait) = span.attributes.downcast_ref::<ThreadPoolWait>() {
+            self.handle_thread_pool_wait_end(span, wait, data_provider);
             return;
         }
 
@@ -606,6 +634,11 @@ impl TelemetryConsumer for TuiLayer {
         // Handle NodeEvaluated end
         if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
             self.handle_node_evaluated_end(span, ne);
+            return;
+        }
+
+        if let Some(batch) = span.attributes.downcast_ref::<MicrobatchEvaluated>() {
+            self.handle_microbatch_evaluated_end(span, batch, data_provider);
             return;
         }
 
@@ -989,13 +1022,17 @@ impl TuiLayer {
         }
     }
 
-    fn handle_connection_limit_wait_start(
+    fn handle_thread_pool_wait_start(
         &self,
         span: &SpanStartInfo,
-        wait: &ConnectionLimitWait,
+        wait: &ThreadPoolWait,
         data_provider: &DataProvider<'_>,
     ) {
-        self.set_node_context_idle_state(data_provider, true);
+        // A batch may wait while other batches of its node still run. Only
+        // node-level waits mean the whole node is idle.
+        if wait.batch_id.is_none() {
+            self.set_node_context_idle_state(data_provider, true);
+        }
 
         // In interactive mode, waiting is represented by the progress context
         // item state instead of a separate log line.
@@ -1003,7 +1040,7 @@ impl TuiLayer {
             return;
         }
 
-        let formatted = format_connection_limit_wait_start(wait);
+        let formatted = format_thread_pool_wait_start();
         self.write_suspended(|| {
             io::stdout()
                 .lock()
@@ -1012,13 +1049,15 @@ impl TuiLayer {
         });
     }
 
-    fn handle_connection_limit_wait_end(
+    fn handle_thread_pool_wait_end(
         &self,
         span: &SpanEndInfo,
-        wait: &ConnectionLimitWait,
+        wait: &ThreadPoolWait,
         data_provider: &DataProvider<'_>,
     ) {
-        self.set_node_context_idle_state(data_provider, false);
+        if wait.batch_id.is_none() {
+            self.set_node_context_idle_state(data_provider, false);
+        }
 
         // In interactive mode, waiting is represented by the progress context
         // item state instead of a separate log line.
@@ -1030,7 +1069,7 @@ impl TuiLayer {
             .end_time_unix_nano
             .duration_since(span.start_time_unix_nano)
             .unwrap_or_default();
-        let formatted = format_connection_limit_wait_end(wait, duration);
+        let formatted = format_thread_pool_wait_end(duration);
         self.write_suspended(|| {
             io::stdout()
                 .lock()
@@ -1160,6 +1199,63 @@ impl TuiLayer {
         });
     }
 
+    fn handle_microbatch_evaluated_start(&self, batch: &MicrobatchEvaluated) {
+        // Interactive non-debug output reports batches under their node's result line
+        if self.group_microbatches {
+            return;
+        }
+
+        // Shown like a node's start line in the run phase
+        if !should_show_progress_message(ExecutionPhase::Run, &self.show_options) {
+            return;
+        }
+
+        let formatted = format_microbatch_evaluated_start(batch, true);
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_microbatch_evaluated_end(
+        &self,
+        span: &SpanEndInfo,
+        batch: &MicrobatchEvaluated,
+        data_provider: &mut DataProvider<'_>,
+    ) {
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+
+        // Shown like a node's result line
+        if !self.show_options.contains(&ShowOptions::Completed) {
+            return;
+        }
+
+        // Buffered on the node and printed with its result line
+        if self.group_microbatches {
+            data_provider.with_root_mut::<PendingMicrobatches>(|pending| {
+                pending
+                    .batches
+                    .entry(batch.unique_id.clone())
+                    .or_default()
+                    .push((batch.clone(), duration))
+            });
+            return;
+        }
+
+        let formatted = format_microbatch_evaluated_end(batch, duration, true);
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
     fn handle_query_executed(&self, _span: &SpanEndInfo, query_data: &QueryExecuted) {
         let node_id = query_data.unique_id.as_deref().unwrap_or("unknown");
         let formatted_query = format!("Query executed on node {}:\n{}", node_id, query_data.sql);
@@ -1177,6 +1273,15 @@ impl TuiLayer {
         node: &NodeProcessed,
         data_provider: &mut DataProvider<'_>,
     ) {
+        // Taken before any early return, so a node that prints no line drops its batches too.
+        // Only incremental models (the microbatch strategy) have batches.
+        let mut pending_microbatches = None;
+        if self.group_microbatches && node.materialization() == NodeMaterialization::Incremental {
+            data_provider.with_root_mut::<PendingMicrobatches>(|pending| {
+                pending_microbatches = pending.batches.remove(&node.unique_id);
+            });
+        }
+
         // Skip nodes with unspecified outcome
         if node.node_outcome() == NodeOutcome::Unspecified {
             return;
@@ -1284,7 +1389,21 @@ impl TuiLayer {
         }
 
         // Format the output line using the formatter with color enabled
-        let output = format_node_processed_end(node, duration, true);
+        let mut output = format_node_processed_end(node, duration, true);
+
+        // A microbatch model lists its batches as tree branches under its result line.
+        if let Some(mut batches) = pending_microbatches {
+            batches.sort_by_key(|(batch, _)| batch.batch_index);
+            for (index, (batch, duration)) in batches.iter().enumerate() {
+                output.push('\n');
+                output.push_str(&format_microbatch_member(
+                    batch,
+                    *duration,
+                    index + 1 == batches.len(),
+                    true,
+                ));
+            }
+        }
 
         // Print to stdout with progress bars suspended
         self.write_suspended(|| {
@@ -1340,6 +1459,10 @@ impl TuiLayer {
                 max_duration,
                 // Every member shares the one invocation-wide denominator.
                 members.first().and_then(|(node, _)| node.node_count_total),
+                // A group attaches to one model, so its members share an adapter.
+                members
+                    .first()
+                    .and_then(|(node, _)| node.adapter.as_deref()),
                 true,
             )
         );

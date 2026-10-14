@@ -609,6 +609,9 @@ pub struct EvalArgs {
     pub update_deps: bool,
     pub replay: Option<ReplayMode>,
     pub static_analysis: Option<StaticAnalysisKind>,
+    /// Static analysis for nodes that configure none. Unlike `static_analysis`, it does not
+    /// override configured nodes, and `static_analysis` wins when both are set.
+    pub default_static_analysis: Option<StaticAnalysisKind>,
     /// A signal used to keep sidecar runners alive (no idle timeout).
     /// Set programmatically by `dbt-repl`; not exposed as a CLI flag on `dbt`.
     pub long_living: bool,
