@@ -309,7 +309,7 @@ pub async fn resolve_seeds(
                 "seeds",
                 "seeds",
                 DbtQuoting::default(),
-                arg.static_analysis.unwrap_or_default(),
+                arg.unconfigured_static_analysis(),
                 jinja_env,
                 &relation_context.base_context,
                 dependency_package_name,

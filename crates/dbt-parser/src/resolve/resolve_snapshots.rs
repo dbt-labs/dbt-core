@@ -464,7 +464,7 @@ pub async fn resolve_snapshots(
                         "snapshots",
                         DbtQuoting::default(),
                         (
-                            arg.static_analysis.unwrap_or_default(),
+                            arg.unconfigured_static_analysis(),
                             root_package.dbt_project.sync.clone(),
                         ),
                         &jinja_env,

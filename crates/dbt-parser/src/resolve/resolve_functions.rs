@@ -347,7 +347,7 @@ pub async fn resolve_functions(
                     "functions",
                     "functions",
                     DbtQuoting::default(),
-                    arg.static_analysis.unwrap_or_default(),
+                    arg.unconfigured_static_analysis(),
                     &env,
                     &relation_context.base_context,
                     dependency_package_name,

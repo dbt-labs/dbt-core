@@ -679,7 +679,7 @@ async fn build_model_nodes(
                     "models",
                     DbtQuoting::default(),
                     (
-                        arg.static_analysis.unwrap_or_default(),
+                        arg.unconfigured_static_analysis(),
                         root_package.dbt_project.sync.clone(),
                         Some(discovered_adapter),
                     ),
