@@ -231,7 +231,6 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-# Temporary: lets one dbt_project.yml be read by both v1 and v2 while projects migrate.
 V2_ONLY_PROJECT_KEYS = ("info_schema", "check-paths")
 
 
