@@ -11,6 +11,7 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::never_cancels;
 use dbt_schemas::schemas::relations::{DEFAULT_DBT_QUOTING, DEFAULT_RESOLVED_QUOTING};
 use indexmap::IndexMap;
+use minijinja_contrib::testing::jinja_assert;
 
 /// Helper to call [Adapter::call_method_impl] with jinja-valued arguments.
 fn dispatch_test(
@@ -707,5 +708,57 @@ fn test_check_schema_exists_tolerates_none_database() {
     assert!(
         message.contains("template not found") || message.contains("check_schema_exists"),
         "expected a macro-lookup failure past arg parsing, got: {message}"
+    );
+}
+
+#[dbt_runtime::worker_test]
+fn test_databricks_get_relation_falls_back_after_empty_schema_listing() {
+    let adapter = make_mock_adapter(AdapterType::Databricks);
+    let relation = crate::relation::do_create_relation(
+        AdapterType::Databricks,
+        "my_catalog".to_string(),
+        "my_schema".to_string(),
+        Some("my_table".to_string()),
+        None,
+        DEFAULT_RESOLVED_QUOTING,
+    )
+    .unwrap();
+    let schema = CatalogAndSchema::from(&relation);
+
+    // Model a stale Databricks schema listing.
+    adapter
+        .engine()
+        .relation_cache()
+        .insert_schema(schema, Vec::new());
+
+    jinja_assert(
+        adapter.as_ref().clone(),
+        "{{ obj.get_relation(database='my_catalog', schema='my_schema', identifier='my_table').identifier }}",
+        "my_table",
+    );
+}
+
+#[test]
+fn test_non_databricks_get_relation_trusts_empty_schema_listing() {
+    let adapter = make_mock_adapter(AdapterType::DuckDB);
+    let relation = crate::relation::do_create_relation(
+        AdapterType::DuckDB,
+        "my_catalog".to_string(),
+        "my_schema".to_string(),
+        Some("my_table".to_string()),
+        None,
+        DEFAULT_RESOLVED_QUOTING,
+    )
+    .unwrap();
+    let schema = CatalogAndSchema::from(&relation);
+    adapter
+        .engine()
+        .relation_cache()
+        .insert_schema(schema, Vec::new());
+
+    jinja_assert(
+        adapter.as_ref().clone(),
+        "{{ obj.get_relation(database='my_catalog', schema='my_schema', identifier='my_table') is none }}",
+        "True",
     );
 }
