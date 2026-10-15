@@ -348,6 +348,14 @@ pub struct ProjectSnapshotConfig {
     pub target_alias: Option<String>,
     #[serde(rename = "+tblproperties")]
     pub tblproperties: Option<TblProperties>,
+    #[serde(rename = "+zorder")]
+    pub zorder: Option<StringOrArrayOfStrings>,
+    #[serde(
+        default,
+        rename = "+skip_optimize",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub skip_optimize: Option<bool>,
     // Adapter-specific fields (Redshift)
     #[serde(default, rename = "+bind", deserialize_with = "bool_or_string_bool")]
     pub bind: Option<bool>,
@@ -499,6 +507,8 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
             || self.source_alias.is_some()
             || self.target_alias.is_some()
             || self.tblproperties.is_some()
+            || self.zorder.is_some()
+            || self.skip_optimize.is_some()
             || self.bind.is_some()
             || self.dist.is_some()
             || self.sort.is_some()
@@ -804,8 +814,8 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 include_full_name_in_path: config.include_full_name_in_path,
                 liquid_clustered_by: config.liquid_clustered_by,
                 auto_liquid_cluster: config.auto_liquid_cluster,
-                zorder: None,
-                skip_optimize: None,
+                zorder: config.zorder,
+                skip_optimize: config.skip_optimize,
                 clustered_by: config.clustered_by,
                 buckets: config.buckets,
                 catalog: config.catalog,
@@ -967,6 +977,8 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             catalog_name: config.__warehouse_specific_config__.catalog_name,
             location_root: config.__warehouse_specific_config__.location_root,
             tblproperties: config.__warehouse_specific_config__.tblproperties,
+            zorder: config.__warehouse_specific_config__.zorder,
+            skip_optimize: config.__warehouse_specific_config__.skip_optimize,
             include_full_name_in_path: config
                 .__warehouse_specific_config__
                 .include_full_name_in_path,
