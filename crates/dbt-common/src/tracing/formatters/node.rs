@@ -519,15 +519,13 @@ pub fn format_node_processed_end(
         desc.as_deref(),
     );
     let progress_formatted = format_progress_field(node.node_index, node.node_count_total, elapsed);
-    let test_outcome = get_test_outcome(node.into());
-    let num_failures = test_failure_count(node);
     let action_formatted = format_node_action(
         node_outcome,
         node.node_skip_reason.map(|_| node.node_skip_reason()),
-        test_outcome,
+        get_test_outcome(node.into()),
         None, // freshness_outcome - not applicable for non-freshness nodes
         has_node_warning(node.into()),
-        num_failures,
+        test_failure_count(node),
         colorize,
     );
 
