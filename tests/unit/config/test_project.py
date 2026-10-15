@@ -694,3 +694,20 @@ class TestDeprecations:
             event = event_catcher.caught_events[0]
 
         assert "'name' is a required property at top level" in event.info.msg
+
+
+class TestV2OnlyProjectKeys:
+    def test_load_raw_project_drops_v2_only_keys(self, tmp_path):
+        (tmp_path / "dbt_project.yml").write_text(
+            "name: p\nversion: '1.0'\nprofile: p\ninfo_schema:\n  version: 1\ncheck-paths: [checks]\n"
+        )
+        event_catcher = EventCatcher(Note)
+        get_event_manager().add_callback(event_catcher.catch)
+
+        project_dict = dbt.config.project.load_raw_project(str(tmp_path))
+
+        assert "info_schema" not in project_dict
+        assert "check-paths" not in project_dict
+        msgs = [e.info.msg for e in event_catcher.caught_events]
+        assert any("info_schema is not being used" in m for m in msgs)
+        assert any("check-paths is not being used" in m for m in msgs)

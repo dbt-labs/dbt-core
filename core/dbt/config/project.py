@@ -43,6 +43,7 @@ from dbt.version import get_installed_version
 from dbt_common.clients.system import load_file_contents, path_exists
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 from dbt_common.exceptions import SemverError
 from dbt_common.helper_types import NoValue
 from dbt_common.semver import VersionSpecifier, versions_compatible
@@ -230,6 +231,19 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
+# Temporary: lets one dbt_project.yml be read by both v1 and v2 while projects migrate.
+V2_ONLY_PROJECT_KEYS = ("info_schema", "check-paths")
+
+
+def _drop_v2_only_project_keys(project_dict: Dict[str, Any]) -> None:
+    for key in V2_ONLY_PROJECT_KEYS:
+        if key in project_dict:
+            del project_dict[key]
+            fire_event(
+                Note(msg=f"{key} is not being used because it's specific to the dbt v2 engine.")
+            )
+
+
 def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
     project_root = os.path.normpath(project_root)
     project_yaml_filepath = os.path.join(project_root, DBT_PROJECT_FILE_NAME)
@@ -243,6 +257,9 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
         )
 
     project_dict = _load_yaml(project_yaml_filepath, validate=validate)
+
+    if isinstance(project_dict, dict):
+        _drop_v2_only_project_keys(project_dict)
 
     if validate:
         from dbt.jsonschemas.jsonschemas import jsonschema_validate, project_schema
