@@ -410,6 +410,24 @@ pub fn format_node_processed_start(node: &NodeProcessed, colorize: bool) -> Stri
     format!("Started {} {}", node_type.pretty(), qualifier_alias)
 }
 
+/// Failure count for a test's result line.
+///
+/// dbt-core parity: a warned/failed test's result line carries its failing-row
+/// count (e.g. `Warned 528`). Only tests report one, and only when a positive
+/// count was recorded; every other node keeps the plain action label.
+fn test_failure_count(node: &NodeProcessed) -> Option<i32> {
+    if !matches!(node.node_type(), NodeType::Test | NodeType::UnitTest) {
+        return None;
+    }
+    if !matches!(
+        get_test_outcome(node.into()),
+        Some(TestOutcome::Warned) | Some(TestOutcome::Failed)
+    ) {
+        return None;
+    }
+    get_num_failures(node.into()).filter(|&n| n > 0)
+}
+
 /// Format a complete NodeProcessed event into a single output line
 ///
 /// Returns formatted string in the pattern:
@@ -502,17 +520,7 @@ pub fn format_node_processed_end(
     );
     let progress_formatted = format_progress_field(node.node_index, node.node_count_total, elapsed);
     let test_outcome = get_test_outcome(node.into());
-    // dbt-core parity: the result line for a warned/failed test carries its
-    // failure count. Only tests report one; other nodes keep the plain action.
-    let num_failures = if matches!(node_type, NodeType::Test | NodeType::UnitTest)
-        && matches!(
-            test_outcome,
-            Some(TestOutcome::Warned) | Some(TestOutcome::Failed)
-        ) {
-        get_num_failures(node.into()).filter(|&n| n > 0)
-    } else {
-        None
-    };
+    let num_failures = test_failure_count(node);
     let action_formatted = format_node_action(
         node_outcome,
         node.node_skip_reason.map(|_| node.node_skip_reason()),
