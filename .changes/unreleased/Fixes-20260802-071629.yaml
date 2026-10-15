@@ -1,0 +1,7 @@
+kind: Fixes
+body: Verify Databricks relation cache misses with a direct lookup, so Fusion finds existing Hive metastore relations and relations missing from a stale schema listing.
+time: 2026-08-02T07:16:29.000000+00:00
+custom:
+    author: sd-db
+    issue: "14129"
+    project: dbt-core
