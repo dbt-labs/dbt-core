@@ -399,7 +399,7 @@ impl DatabaseInfo for AdbcDatabase {
             .ok_or_else(|| Error::with_message_and_status("failed to get info", Status::Internal))?
             .map_err(Into::into)
             .and_then(|record_batch| {
-                if InfoCode::try_from(record_batch.column(0).as_primitive::<UInt32Type>().value(0))?
+                if InfoCode::from(record_batch.column(0).as_primitive::<UInt32Type>().value(0))
                     == info_code
                 {
                     Ok(record_batch.column(1).as_union().value(0))

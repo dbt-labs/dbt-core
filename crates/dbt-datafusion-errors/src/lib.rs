@@ -59,7 +59,8 @@ pub fn fs_error(err: DataFusionError) -> FsError {
         | DataFusionError::ObjectStore(_)
         | DataFusionError::Diagnostic(_, _)
         | DataFusionError::Collection(_)
-        | DataFusionError::Shared(_) => {
+        | DataFusionError::Shared(_)
+        | DataFusionError::Ffi(_) => {
             FsError::new(ErrorCode::GenericDatafusionError, "Datafusion error")
                 .with_cause(WrappedError::Datafusion(Box::new(err)))
         }

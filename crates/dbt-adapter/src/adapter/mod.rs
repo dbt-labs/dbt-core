@@ -1457,15 +1457,14 @@ impl Adapter {
                         // per-relation existence check falls back to a query over
                         // the unqualified `information_schema.tables`, which unions
                         // every attached database and fans out across all remote
-                        // catalogs on each call.
-                        let skip_schema_listing = match adapter.adapter_type() {
-                            AdapterType::DuckDB => {
-                                duckdb::is_duckdb_external_iceberg_catalog_database(
-                                    &resolved_catalog,
-                                )
-                            }
-                            _ => false,
-                        };
+                        // catalogs on each call. Lake compute is skipped for a
+                        // different reason: its service folds table references but
+                        // not the `information_schema` filter literals, so the
+                        // listing would come back empty and be cached as "absent".
+                        let skip_schema_listing = duckdb::skips_schema_wide_listing(
+                            adapter.adapter_type(),
+                            &resolved_catalog,
+                        );
 
                         if has_schema && !skip_schema_listing {
                             let mut conn = adapter

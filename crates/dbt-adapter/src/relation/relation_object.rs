@@ -358,6 +358,7 @@ impl Object for RelationObject {
             Some("identifier") | Some("name") | Some("table") => {
                 Some(Value::from(self.identifier()))
             }
+            Some("quote_policy") => Some(Value::from_serialize(self.quote_policy())),
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
