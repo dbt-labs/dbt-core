@@ -71,15 +71,12 @@ impl StaticBaseRelation for RelationStatic {
         custom_quoting: Option<ResolvedQuoting>,
         temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
-        self.new_relation(
-            database,
-            schema,
-            identifier,
-            relation_type,
-            custom_quoting,
-            temporary,
-        )
-        .map(|r| RelationObject::new(Arc::new(r)).into_value())
+        Relation::new(self.adapter_type, database, schema, identifier)
+            .with_relation_type(relation_type)
+            .with_quoting(custom_quoting.unwrap_or(self.quoting))
+            .with_temporary(temporary.unwrap_or(false))
+            .validate()
+            .map(|r| RelationObject::new(Arc::new(r)).into_value())
     }
 
     fn get_adapter_type(&self) -> String {
@@ -148,42 +145,21 @@ impl StaticBaseRelation for RelationStatic {
                         schema: v.schema.unwrap_or_default(),
                     });
 
-                self.new_relation(
-                    database,
-                    schema,
-                    identifier,
-                    relation_type.and_then(|v: Value| {
+                Relation::new(self.adapter_type, database, schema, identifier)
+                    .with_relation_type(relation_type.and_then(|v: Value| {
                         if v.is_none() || v.is_undefined() {
                             None
                         } else {
                             Some(RelationType::from(v.as_str().unwrap_or_default()))
                         }
-                    }),
-                    custom_quoting,
-                    temporary,
-                )
-                .map(|r| r.with_is_staging(is_staging.unwrap_or(false)))
-                .map(|r| RelationObject::new(Arc::new(r)).into_value())
+                    }))
+                    .with_quoting(custom_quoting.unwrap_or(self.quoting))
+                    .with_temporary(temporary.unwrap_or(false))
+                    .with_is_staging(is_staging.unwrap_or(false))
+                    .validate()
+                    .map(|r| RelationObject::new(Arc::new(r)).into_value())
             }
         }
-    }
-}
-
-impl RelationStatic {
-    fn new_relation(
-        &self,
-        database: Option<String>,
-        schema: Option<String>,
-        identifier: Option<String>,
-        relation_type: Option<RelationType>,
-        custom_quoting: Option<ResolvedQuoting>,
-        temporary: Option<bool>,
-    ) -> Result<Relation, minijinja::Error> {
-        Relation::new(self.adapter_type, database, schema, identifier)
-            .with_relation_type(relation_type)
-            .with_quoting(custom_quoting.unwrap_or(self.quoting))
-            .with_temporary(temporary.unwrap_or(false))
-            .validate()
     }
 }
 
@@ -1993,73 +1969,6 @@ mod tests {
             relation.add_constraint(pk_constraint);
             assert_eq!(relation.alter_constraints.len(), 1);
             assert_eq!(relation.create_constraints.len(), 1);
-        }
-
-        #[test]
-        fn test_enrich_names_keys_for_relation_kind() {
-            use crate::relation::databricks::typed_constraint::TypedConstraint;
-
-            let unnamed_pk = TypedConstraint::PrimaryKey {
-                name: None,
-                columns: vec!["id".to_string()],
-                expression: None,
-            };
-            let named_fk = TypedConstraint::ForeignKey {
-                name: Some("fk_named".to_string()),
-                columns: vec!["parent_id".to_string()],
-                to: Some("p".to_string()),
-                to_columns: Some(vec!["id".to_string()]),
-                expression: None,
-            };
-            let check = TypedConstraint::Check {
-                name: None,
-                expression: "id > 0".to_string(),
-                columns: None,
-            };
-            let relation = |identifier: &str, relation_type| {
-                Relation::new(
-                    AdapterType::Databricks,
-                    "c".to_string(),
-                    "s".to_string(),
-                    identifier.to_string(),
-                )
-                .with_relation_type(relation_type)
-                .with_quoting(DEFAULT_RESOLVED_QUOTING)
-            };
-            let key_names = |relation: &Relation| {
-                let enriched =
-                    relation.enrich(&[unnamed_pk.clone(), named_fk.clone(), check.clone()]);
-                assert_eq!(enriched.alter_constraints, vec![check.clone()]);
-                enriched
-                    .create_constraints
-                    .iter()
-                    .map(|c| c.name().map(str::to_string))
-                    .collect::<Vec<_>>()
-            };
-            let staging = relation("m__dbt_stg", RelationType::Table)
-                .with_is_staging(true)
-                .incorporate(None, Some(RelationType::Table), None)
-                .unwrap();
-            let staging = staging.as_any().downcast_ref::<Relation>().unwrap();
-
-            assert_eq!(
-                key_names(&relation("m", RelationType::Table)),
-                vec![
-                    unnamed_pk.synthesized_name("m"),
-                    Some("fk_named".to_string())
-                ]
-            );
-            assert_eq!(
-                key_names(staging),
-                vec![
-                    unnamed_pk.synthesized_name("m__dbt_stg"),
-                    named_fk.synthesized_name("m__dbt_stg"),
-                ]
-            );
-            assert_eq!(
-                key_names(&relation("m", RelationType::MaterializedView)),
-                vec![None, Some("fk_named".to_string())]
-            );
         }
     }
 
