@@ -45,6 +45,7 @@ use crate::metadata::databricks::version::EngineVersion;
 use crate::metadata::freshness_overrides::{
     FreshnessTask, FreshnessTaskResult, apply_freshness_task_result, run_override_query,
 };
+use crate::metadata::get_relation::table_format_from_provider;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch::RecordBatchExt;
@@ -165,15 +166,32 @@ WHERE table_catalog = '{}'
     let databricks_table_types = batch.column_values::<StringArray>("databricks_table_type")?;
 
     for i in 0..batch.num_rows() {
-        relations.push(relation_from_information_schema_row(
-            engine,
-            catalogs.value(i),
-            schemas.value(i),
-            names.value(i),
-            &table_types.value(i).to_uppercase(),
-            optional_utf8(&file_formats, i).unwrap_or(""),
-            optional_utf8(&databricks_table_types, i),
-        ));
+        let name = names.value(i);
+        let schema = schemas.value(i);
+        let catalog = catalogs.value(i);
+        let table_type = table_types.value(i).to_uppercase();
+        let is_delta = file_formats.value(i) == "delta";
+        let table_format = table_format_from_provider(Some(file_formats.value(i)));
+        let is_shallow_clone = !databricks_table_types.is_null(i)
+            && is_shallow_clone_type(databricks_table_types.value(i));
+
+        let relation = Arc::new(
+            Relation::new(
+                engine.adapter_type(),
+                catalog.to_string(),
+                schema.to_string(),
+                name.to_string(),
+            )
+            .with_relation_type(RelationType::from_adapter_type(
+                AdapterType::Databricks,
+                table_type.as_str(),
+            ))
+            .with_quoting(engine.quoting())
+            .with_is_delta(is_delta)
+            .with_table_format(table_format)
+            .with_is_shallow_clone(is_shallow_clone),
+        ) as Arc<dyn BaseRelation>;
+        relations.push(relation);
     }
 
     Ok(relations)
@@ -966,6 +984,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT column_name
             FROM `{database}`.`information_schema`.`columns`
@@ -994,6 +1017,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT kcu.constraint_name, kcu.column_name
             FROM `{database}`.information_schema.key_column_usage kcu
@@ -1025,6 +1053,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT
                 column_name,
@@ -1080,6 +1113,11 @@ impl DatabricksMetadataAdapter {
         conn: &mut dyn Connection,
         token: CancellationToken,
     ) -> AdapterResult<AgateTable> {
+        let (database, schema, identifier) = (
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase(),
+        );
         let sql = format!(
             "SELECT
                 kcu.constraint_name,

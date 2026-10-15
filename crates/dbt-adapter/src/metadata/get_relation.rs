@@ -409,10 +409,26 @@ fn bigquery_get_relation(
 // Databricks runtimes without `AS JSON`. Output layout (col_name/data_type):
 // column defs, empty separator row, then metadata key-value pairs. Some catalogs
 // (e.g. hive_metastore) omit 'Type'/'Provider', so we default gracefully.
+/// Maps a Databricks table provider (or file format) to a [`TableFormat`], matching
+/// case-insensitively like the Snowflake `table_format` mapping.
+pub(crate) fn table_format_from_provider(provider: Option<&str>) -> TableFormat {
+    match provider {
+        Some(s) if s.eq_ignore_ascii_case("iceberg") => TableFormat::Iceberg,
+        _ => TableFormat::Default,
+    }
+}
+
+#[allow(clippy::type_complexity)]
 fn parse_describe_table_extended(
     adapter_type: AdapterType,
     batch: &arrow::record_batch::RecordBatch,
-) -> AdapterResult<(RelationType, bool, bool, BTreeMap<String, String>)> {
+) -> AdapterResult<(
+    RelationType,
+    bool,
+    bool,
+    TableFormat,
+    BTreeMap<String, String>,
+)> {
     let col_names = batch.column_values::<StringArray>("col_name")?;
     let data_types = batch.column_values::<StringArray>("data_type")?;
 
@@ -449,8 +465,15 @@ fn parse_describe_table_extended(
         .as_deref()
         .is_some_and(|p| p.eq_ignore_ascii_case("delta"));
     let is_shallow_clone = type_str.as_deref().is_some_and(is_shallow_clone_type);
+    let table_format = table_format_from_provider(provider_str.as_deref());
 
-    Ok((relation_type, is_delta, is_shallow_clone, metadata_map))
+    Ok((
+        relation_type,
+        is_delta,
+        is_shallow_clone,
+        table_format,
+        metadata_map,
+    ))
 }
 
 fn spark_get_relation(
@@ -490,7 +513,7 @@ fn spark_get_relation(
         return Ok(None);
     }
 
-    let (relation_type, is_delta, is_shallow_clone, metadata) =
+    let (relation_type, is_delta, is_shallow_clone, table_format, metadata) =
         parse_describe_table_extended(AdapterType::Spark, &batch)?;
 
     Ok(Some(Box::new(
@@ -504,6 +527,7 @@ fn spark_get_relation(
         .with_quoting(adapter.quoting())
         .with_metadata(Some(metadata))
         .with_is_delta(is_delta)
+        .with_table_format(table_format)
         .with_is_shallow_clone(is_shallow_clone),
     )))
 }
@@ -638,8 +662,35 @@ fn databricks_get_relation(
         return Ok(None);
     }
 
-    let (relation_type, is_delta, table_format, is_shallow_clone, metadata) =
-        databricks_describe_relation_state(adapter.adapter_type(), batch, as_json_unsupported)?;
+    let (relation_type, is_delta, is_shallow_clone, table_format, metadata) = if as_json_unsupported
+    {
+        let (relation_type, is_delta, is_shallow_clone, table_format, metadata_map) =
+            parse_describe_table_extended(adapter.adapter_type(), &batch)?;
+        (
+            Some(relation_type),
+            is_delta,
+            is_shallow_clone,
+            table_format,
+            Some(metadata_map),
+        )
+    } else {
+        debug_assert_eq!(batch.num_rows(), 1);
+        let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
+        let is_delta = json_metadata.provider.as_deref() == Some("delta");
+        let table_format = table_format_from_provider(json_metadata.provider.as_deref());
+        let is_shallow_clone = is_shallow_clone_type(&json_metadata.type_);
+        let relation_type = Some(RelationType::from_adapter_type(
+            adapter.adapter_type(),
+            &json_metadata.type_,
+        ));
+        (
+            relation_type,
+            is_delta,
+            is_shallow_clone,
+            table_format,
+            Some(json_metadata.into_metadata()),
+        )
+    };
 
     let db = if database.is_empty() {
         None
@@ -1109,14 +1160,15 @@ fn clickhouse_get_relation(
     token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     use crate::metadata::clickhouse::{
-        build_get_relation_sql, relation_type_from_engine, server_capabilities_over_connection,
+        build_list_relations_sql, relation_type_from_engine, server_capabilities_over_connection,
         with_catalog_state,
     };
     use crate::record_batch::RecordBatchExt;
 
     // ClickHouse only has databases, not schemas — dbt `schema` maps to CH `database`.
     // dbt `database` is unused here.
-    let sql = build_get_relation_sql(schema, identifier);
+    let cluster = adapter.get_db_config("cluster");
+    let sql = build_list_relations_sql(schema, Some(identifier), cluster.as_deref());
 
     // Probe over the connection we already hold: the State-based entry would
     // borrow a second thread-local connection and trip the nested-guard check.
@@ -1130,7 +1182,7 @@ fn clickhouse_get_relation(
         return Ok(None);
     }
 
-    let engines = batch.column_values::<StringArray>("engine")?;
+    let engines = batch.column_values::<StringArray>("table_type")?;
     if engines.len() != 1 {
         return Err(AdapterError::new(
             AdapterErrorKind::UnexpectedResult,
@@ -1145,7 +1197,7 @@ fn clickhouse_get_relation(
     )
     .with_relation_type(relation_type_from_engine(engines.value(0)))
     .with_quoting(adapter.quoting());
-    let relation = with_catalog_state(relation, caps, &batch, 0)?;
+    let relation = with_catalog_state(relation, &caps, cluster.as_deref(), &batch, 0)?;
     Ok(Some(Box::new(relation) as Box<dyn BaseRelation>))
 }
 
@@ -1182,11 +1234,12 @@ mod tests {
             ("Catalog", "spark_catalog"),
             ("Type", "VIEW"),
         ]);
-        let (relation_type, is_delta, is_shallow_clone, _) =
+        let (relation_type, is_delta, is_shallow_clone, table_format, _) =
             parse_describe_table_extended(AdapterType::Spark, &batch).unwrap();
         assert_eq!(relation_type, RelationType::View);
         assert!(!is_delta);
         assert!(!is_shallow_clone);
+        assert_eq!(table_format, TableFormat::Default);
     }
 
     #[test]
@@ -1197,17 +1250,18 @@ mod tests {
             ("Type", "MANAGED"),
             ("Provider", "delta"),
         ]);
-        let (relation_type, is_delta, is_shallow_clone, _) =
+        let (relation_type, is_delta, is_shallow_clone, table_format, _) =
             parse_describe_table_extended(AdapterType::Spark, &batch).unwrap();
         assert_eq!(relation_type, RelationType::Table);
         assert!(is_delta);
         assert!(!is_shallow_clone);
+        assert_eq!(table_format, TableFormat::Default);
     }
 
     #[test]
     fn spark_describe_defaults_to_table_when_type_missing() {
         let batch = describe_batch(&[("id", "int"), ("", ""), ("Catalog", "spark_catalog")]);
-        let (relation_type, _, _, _) =
+        let (relation_type, _, _, _, _) =
             parse_describe_table_extended(AdapterType::Spark, &batch).unwrap();
         assert_eq!(relation_type, RelationType::Table);
     }
@@ -1220,11 +1274,28 @@ mod tests {
             ("Type", "MANAGED_SHALLOW_CLONE"),
             ("Provider", "delta"),
         ]);
-        let (relation_type, is_delta, is_shallow_clone, _) =
+        let (relation_type, is_delta, is_shallow_clone, table_format, _) =
             parse_describe_table_extended(AdapterType::Databricks, &batch).unwrap();
         assert_eq!(relation_type, RelationType::Table);
         assert!(is_delta);
         assert!(is_shallow_clone);
+        assert_eq!(table_format, TableFormat::Default);
+    }
+
+    #[test]
+    fn databricks_describe_classifies_managed_iceberg_table() {
+        let batch = describe_batch(&[
+            ("id", "int"),
+            ("", ""),
+            ("Type", "MANAGED"),
+            ("Provider", "iceberg"),
+        ]);
+        let (relation_type, is_delta, is_shallow_clone, table_format, _) =
+            parse_describe_table_extended(AdapterType::Databricks, &batch).unwrap();
+        assert_eq!(relation_type, RelationType::Table);
+        assert!(!is_delta);
+        assert!(!is_shallow_clone);
+        assert_eq!(table_format, TableFormat::Iceberg);
     }
 
     #[test]

@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 420] = [
+); 430] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.10"),
         "07c3a53a87d2304f37bcb5dedb9596432c5fed8e7f3403dfa9f1d5912e523aa8",
@@ -325,6 +325,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "1b42849a1926aaa35c2924e5445b137fd3cccd1a9658b9d392902786d4b62ee5",
     ),
     (
+        ("bigquery_foundry", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.1.9"),
+        "3da8d030bce3c9f82f4874c8195be6790cf1b870ae55863717fcd0398eeafb48",
+    ),
+    (
         ("bigquery_foundry", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.1.0"),
         "f6f0bb13dac398295b6aa33311a43dcaed6d9963c96bcc3f6cb57dbe81756de0",
     ),
@@ -355,6 +359,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery_foundry", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.1.8"),
         "d4a890d0b731a961d5e32551e2f39afd0a9f391471c964a6cba0738fb68c70f5",
+    ),
+    (
+        ("bigquery_foundry", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.1.9"),
+        "e7f3cbd4aab0fd58afa2db79c3c8b2f5421fc8b696a60a5d5dd1d566059729e9",
     ),
     (
         ("bigquery_foundry", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.1.0"),
@@ -389,6 +397,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "39e47b1e7865454efbab8eb7dd3834faf000bff1be5ff4477624f7026890fd21",
     ),
     (
+        ("bigquery_foundry", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.1.9"),
+        "319912039ce3b85a46702faffbd8bb18a25eb296e2e0f7b591681f71a27b58a3",
+    ),
+    (
         ("bigquery_foundry", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.1.0"),
         "f9a2c05ab38e1aff74bed11f650c332a7825e23c28db5219bef02101a9e4b4dc",
     ),
@@ -421,6 +433,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "e973689c398cddf987d75f6ed0065344161a5c70015aee5ffd6df9ea13d35861",
     ),
     (
+        ("bigquery_foundry", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.1.9"),
+        "24c4fba46a04051156abd2d903b926e29b56bebf0c7c1add259b6f9aad66f27e",
+    ),
+    (
         ("bigquery_foundry", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.1.0"),
         "90174bef515a240e3bf0a4a86904013149df9f97d1a12bfc92c0b28431fd26a7",
     ),
@@ -451,6 +467,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery_foundry", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.1.8"),
         "d44508e7b6c5abc5ff47c015021b0fb7ae60643adc21c80d1d8d83f7f9f21c34",
+    ),
+    (
+        ("bigquery_foundry", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.1.9"),
+        "5c3f1e7331a9a0de081475472d55573cf3fd18ae4c3361bba19d79086f2f4b7a",
     ),
     (
         ("clickhouse", "apple-darwin", "aarch64", "0.1.0"),
@@ -1489,6 +1509,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "1fced2b2722975394b1d146438c3ebb10027513f25b3c78c5f0eeefd2ed5d28d",
     ),
     (
+        ("snowflake", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.21.19"),
+        "3ab569e6bcdbbf532be4d61141f741fe8c5f5127e85a288abb37719368d26295",
+    ),
+    (
         ("snowflake", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.21.10"),
         "2373e633158e743e3df33ec7b79816f25c252be936e834a8e49400dd51c9f19e",
     ),
@@ -1523,6 +1547,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("snowflake", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.21.18"),
         "9e4b2e955542bca8676bfe01dc5a00709cc60802d4051517f307884c2bfe54eb",
+    ),
+    (
+        ("snowflake", "apple-darwin", "x86_64", "0.21.0.dev+dbt0.21.19"),
+        "61e0f6f48b16006d0014feeeae92481e4728fd37a928d89815bc0e0e8dcf17f5",
     ),
     (
         ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.21.10"),
@@ -1561,6 +1589,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "2ec2b93d401c0213afd96331dbeef05f2c6a3c511d8c6ac6dee698256e9a282d",
     ),
     (
+        ("snowflake", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0.dev+dbt0.21.19"),
+        "24bc403f5be2aa8b234ceb1bf48e516038d640ed3de9a7a76b76caae66bd142c",
+    ),
+    (
         ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.21.10"),
         "60212a57ec83687b8db4e5aeddda59b4f472b97518ba34322c4d3e8e64d14172",
     ),
@@ -1597,6 +1629,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "b6aa3c709716f0c512e26a33dd2154f3938e863ba29638817529254679f4a5f9",
     ),
     (
+        ("snowflake", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0.dev+dbt0.21.19"),
+        "cb566010026758c01ace4b666057c93cb1b6dd5a363bd36ea3c69c0b138bd3c5",
+    ),
+    (
         ("snowflake", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.10"),
         "896042c7f2d8ffc82093a79239a1adaa938e436952088fe369b86ccfdd04a79a",
     ),
@@ -1631,6 +1667,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("snowflake", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.18"),
         "f1a8f8171e3f7ab24ec0384d25898140ea908dc3298cf688196b8b50083fb952",
+    ),
+    (
+        ("snowflake", "pc-windows-msvc", "x86_64", "0.21.0.dev+dbt0.21.19"),
+        "a65c7d916f5ead783a8cc462a46abe9aea8fd6e5508cff0158f418ac4f1fdc02",
     ),
     (
         ("spark", "apple-darwin", "aarch64", "0.21.0.dev+dbt0.1.0"),

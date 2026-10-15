@@ -798,6 +798,13 @@ const NODES: &[(&str, EpochExpr)] = &[
         ),
     ),
     (
+        "node_constraints",
+        EpochExpr::SqlJson(
+            "COALESCE(json_extract(t.payload, '$.__model_attr__.constraints'), \
+             json_extract(t.payload, '$.constraints'))",
+        ),
+    ),
+    (
         "version",
         EpochExpr::SqlJson(
             "COALESCE(json_extract(t.payload, '$.__model_attr__.version'), \
@@ -889,7 +896,6 @@ const NODES: &[(&str, EpochExpr)] = &[
     ("pre_hook", EpochExpr::Null),
     ("post_hook", EpochExpr::Null),
     ("grants", EpochExpr::Null),
-    ("node_constraints", EpochExpr::Null),
     ("time_spine", EpochExpr::Null),
     ("ai_context", EpochExpr::Null),
     ("loaded_at_query", EpochExpr::Null),
@@ -933,7 +939,10 @@ const SEMANTIC_ENTITIES: &[(&str, EpochExpr)] = &[
     ("label", EpochExpr::ElemJson("label")),
     ("entity_role", EpochExpr::ElemJson("role")),
     ("expr", EpochExpr::ElemJson("expr")),
-    ("config", EpochExpr::Null),
+    (
+        "config",
+        EpochExpr::SqlJson("NULLIF(json_extract(u.e, '$.config'), 'null'::JSON)"),
+    ),
     ("ingested_at", EpochExpr::Same),
 ];
 
@@ -962,7 +971,10 @@ const SEMANTIC_MEASURES: &[(&str, EpochExpr)] = &[
         "non_additive_dimension",
         EpochExpr::ElemJsonRaw("non_additive_dimension"),
     ),
-    ("config", EpochExpr::Null),
+    (
+        "config",
+        EpochExpr::SqlJson("NULLIF(json_extract(u.e, '$.config'), 'null'::JSON)"),
+    ),
     ("ingested_at", EpochExpr::Same),
 ];
 
@@ -990,7 +1002,10 @@ const SEMANTIC_DIMENSIONS: &[(&str, EpochExpr)] = &[
         EpochExpr::ElemJson("type_params.time_granularity"),
     ),
     ("validity_params", EpochExpr::ElemJsonRaw("validity_params")),
-    ("config", EpochExpr::Null),
+    (
+        "config",
+        EpochExpr::SqlJson("NULLIF(json_extract(u.e, '$.config'), 'null'::JSON)"),
+    ),
     ("ingested_at", EpochExpr::Same),
 ];
 
@@ -1162,8 +1177,8 @@ const UNIT_TESTS: &[(&str, EpochExpr)] = &[
         "versions",
         EpochExpr::JsonRaw("__unit_test_attr__.versions"),
     ),
-    // `unit_test_rows` sets neither, though the staging schema has both.
-    ("config", EpochExpr::Null),
+    ("config", EpochExpr::JsonRaw("config")),
+    // `unit_test_rows` does not set it, though the staging schema has it.
     ("created_at", EpochExpr::Null),
     ("ingested_at", EpochExpr::Same),
 ];
@@ -1252,9 +1267,14 @@ const EXPOSURES: &[(&str, EpochExpr)] = &[
         "created_at",
         EpochExpr::Json("__exposure_attr__.created_at"),
     ),
-    // `exposure_rows` sets neither, though the staging schema has both.
-    ("config", EpochExpr::Null),
-    ("meta", EpochExpr::Null),
+    ("config", EpochExpr::JsonRaw("config")),
+    (
+        "meta",
+        EpochExpr::SqlJson(
+            "COALESCE(json_extract(t.payload, '$.__common_attr__.meta'), \
+             json_extract(t.payload, '$.meta'))",
+        ),
+    ),
     ("ingested_at", EpochExpr::Same),
 ];
 
@@ -1302,7 +1322,13 @@ const SAVED_QUERIES: &[(&str, EpochExpr)] = &[
         "created_at",
         EpochExpr::Json("__saved_query_attr__.created_at"),
     ),
-    ("config", EpochExpr::Null),
+    (
+        "config",
+        EpochExpr::SqlJson(
+            "NULLIF(COALESCE(NULLIF(json_extract(t.payload, '$.config'), 'null'::JSON), \
+             json_extract(t.payload, '$.deprecated_config')), 'null'::JSON)",
+        ),
+    ),
     ("ingested_at", EpochExpr::Same),
 ];
 
@@ -1346,10 +1372,16 @@ const SEMANTIC_MODELS: &[(&str, EpochExpr)] = &[
         "created_at",
         EpochExpr::Json("__semantic_model_attr__.created_at"),
     ),
-    // `sm_rows` sets none of the three, though the staging schema has them.
+    // `sm_rows` sets neither of these, though the staging schema has them.
     ("package_name", EpochExpr::Null),
     ("original_file_path", EpochExpr::Null),
-    ("config", EpochExpr::Null),
+    (
+        "config",
+        EpochExpr::SqlJson(
+            "NULLIF(COALESCE(NULLIF(json_extract(t.payload, '$.config'), 'null'::JSON), \
+             json_extract(t.payload, '$.deprecated_config')), 'null'::JSON)",
+        ),
+    ),
     ("ingested_at", EpochExpr::Same),
 ];
 
