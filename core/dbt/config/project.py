@@ -231,7 +231,7 @@ def value_or(value: Optional[T], default: T) -> T:
         return value
 
 
-V2_ONLY_PROJECT_KEYS = ("info_schema", "check-paths")
+V2_ONLY_PROJECT_KEYS = ("info_schema", "check-paths", "checks")
 
 
 # (file path, key) pairs already noted; the project file is loaded several times per invocation.

@@ -700,6 +700,7 @@ class TestV2OnlyProjectKeys:
     def test_load_raw_project_drops_v2_only_keys(self, tmp_path):
         (tmp_path / "dbt_project.yml").write_text(
             "name: p\nversion: '1.0'\nprofile: p\ninfo_schema:\n  version: 1\ncheck-paths: [checks]\n"
+            "checks:\n  +severity: warn\n"
         )
         event_catcher = EventCatcher(Note)
         get_event_manager().add_callback(event_catcher.catch)
@@ -709,6 +710,8 @@ class TestV2OnlyProjectKeys:
 
         assert "info_schema" not in project_dict
         assert "check-paths" not in project_dict
+        assert "checks" not in project_dict
         msgs = [e.info.msg for e in event_catcher.caught_events]
         assert sum("info_schema is not being used" in m for m in msgs) == 1
         assert sum("check-paths is not being used" in m for m in msgs) == 1
+        assert sum("checks is not being used" in m for m in msgs) == 1
