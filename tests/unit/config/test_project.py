@@ -705,9 +705,10 @@ class TestV2OnlyProjectKeys:
         get_event_manager().add_callback(event_catcher.catch)
 
         project_dict = dbt.config.project.load_raw_project(str(tmp_path))
+        dbt.config.project.load_raw_project(str(tmp_path))
 
         assert "info_schema" not in project_dict
         assert "check-paths" not in project_dict
         msgs = [e.info.msg for e in event_catcher.caught_events]
-        assert any("info_schema is not being used" in m for m in msgs)
-        assert any("check-paths is not being used" in m for m in msgs)
+        assert sum("info_schema is not being used" in m for m in msgs) == 1
+        assert sum("check-paths is not being used" in m for m in msgs) == 1

@@ -2,7 +2,7 @@ import os
 from copy import deepcopy
 from dataclasses import dataclass, field
 from itertools import chain
-from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, TypeVar, Union
 
 from typing_extensions import Protocol, runtime_checkable
 
@@ -234,13 +234,18 @@ def value_or(value: Optional[T], default: T) -> T:
 V2_ONLY_PROJECT_KEYS = ("info_schema", "check-paths")
 
 
-def _drop_v2_only_project_keys(project_dict: Dict[str, Any]) -> None:
+# (file path, key) pairs already noted; the project file is loaded several times per invocation.
+_noted_v2_only_project_keys: Set[Tuple[str, str]] = set()
+
+
+def _drop_v2_only_project_keys(project_dict: Dict[str, Any], file_path: str) -> Dict[str, Any]:
     for key in V2_ONLY_PROJECT_KEYS:
-        if key in project_dict:
-            del project_dict[key]
+        if key in project_dict and (file_path, key) not in _noted_v2_only_project_keys:
+            _noted_v2_only_project_keys.add((file_path, key))
             fire_event(
                 Note(msg=f"{key} is not being used because it's specific to the dbt v2 engine.")
             )
+    return {k: v for k, v in project_dict.items() if k not in V2_ONLY_PROJECT_KEYS}
 
 
 def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any]:
@@ -258,7 +263,7 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
     project_dict = _load_yaml(project_yaml_filepath, validate=validate)
 
     if isinstance(project_dict, dict):
-        _drop_v2_only_project_keys(project_dict)
+        project_dict = _drop_v2_only_project_keys(project_dict, project_yaml_filepath)
 
     if validate:
         from dbt.jsonschemas.jsonschemas import jsonschema_validate, project_schema
