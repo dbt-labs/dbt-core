@@ -697,21 +697,30 @@ class TestDeprecations:
 
 
 class TestV2OnlyProjectKeys:
-    def test_load_raw_project_drops_v2_only_keys(self, tmp_path):
-        (tmp_path / "dbt_project.yml").write_text(
-            "name: p\nversion: '1.0'\nprofile: p\ninfo_schema:\n  version: 1\ncheck-paths: [checks]\n"
-            "checks:\n  +severity: warn\n"
-        )
+    V2_PROJECT_YML = (
+        "name: p\nversion: '1.0'\nprofile: p\ninfo_schema:\n  version: 1\n"
+        "check-paths: [checks]\nchecks:\n  +severity: warn\n"
+    )
+
+    def test_load_raw_project_drops_v2_only_keys_silently(self, tmp_path):
+        (tmp_path / "dbt_project.yml").write_text(self.V2_PROJECT_YML)
         event_catcher = EventCatcher(Note)
         get_event_manager().add_callback(event_catcher.catch)
 
         project_dict = dbt.config.project.load_raw_project(str(tmp_path))
-        dbt.config.project.load_raw_project(str(tmp_path))
 
-        assert "info_schema" not in project_dict
-        assert "check-paths" not in project_dict
-        assert "checks" not in project_dict
+        for key in ("info_schema", "check-paths", "checks"):
+            assert key not in project_dict
+        assert not any("dbt v2 engine" in e.info.msg for e in event_catcher.caught_events)
+
+    def test_project_from_project_root_notes_v2_only_keys(self, tmp_path):
+        (tmp_path / "dbt_project.yml").write_text(self.V2_PROJECT_YML)
+        event_catcher = EventCatcher(Note)
+        get_event_manager().add_callback(event_catcher.catch)
+
+        project = dbt.config.Project.from_project_root(str(tmp_path), empty_project_renderer())
+
+        assert project.project_name == "p"
         msgs = [e.info.msg for e in event_catcher.caught_events]
-        assert sum("info_schema is not being used" in m for m in msgs) == 1
-        assert sum("check-paths is not being used" in m for m in msgs) == 1
-        assert sum("checks is not being used" in m for m in msgs) == 1
+        for key in ("info_schema", "check-paths", "checks"):
+            assert sum(m.startswith(f"{key} in project 'p' is not being used") for m in msgs) == 1
