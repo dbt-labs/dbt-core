@@ -48,7 +48,10 @@ pub struct DatabricksDescribeTableExtended {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DatabricksColumnInfo {
     pub name: String,
-    #[serde(rename = "type")]
+    #[serde(
+        rename = "type",
+        deserialize_with = "deserialize_databricks_column_type"
+    )]
     pub type_: DatabricksColumnTypeInfo,
     pub comment: Option<String>,
     pub nullable: bool,
@@ -151,6 +154,52 @@ pub enum DatabricksColumnTypeInfo {
     },
     Variant,
     Void,
+    Geography {
+        srid: u32,
+    },
+    Geometry {
+        srid: u32,
+    }
+}
+
+fn deserialize_databricks_column_type<'de, D>(deserializer: D) -> Result<DatabricksColumnTypeInfo, D::Error> where D: serde::Deserializer<'de> {
+    
+    // Read incoming JSON object of the column type
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    // Get the name of the column type
+    let type_name = value["name"].as_str().unwrap_or("").to_ascii_lowercase();
+
+    // Deserialize column type only if it is geography or geometry
+    if type_name.starts_with("geography(") || type_name.starts_with("geometry(") {
+
+        let (name, parameters) = type_name.split_once('(')
+            .ok_or_else(|| <D::Error as serde::de::Error>::custom(
+                format!("Invalid spatial type name: {type_name}")
+            ))?;
+
+        let srid_text = parameters.strip_suffix(')')
+            .ok_or_else(|| <D::Error as serde::de::Error>::custom(
+                format!("Invalid spatial type name: {type_name}")
+            ))?;
+
+        let srid = srid_text.trim().parse::<u32>()
+            .map_err(|err| <D::Error as serde::de::Error>::custom(
+                format!("Invalid SRID in '{type_name}': {err}")
+            ))?;
+        
+        if name.trim() == "geography" {
+            return Ok(DatabricksColumnTypeInfo::Geography { srid });
+        }
+
+        if name.trim() == "geometry" {
+            return Ok(DatabricksColumnTypeInfo::Geometry { srid });
+        }  
+        
+    }
+
+    serde_json::from_value(value).map_err(<D::Error as serde::de::Error>::custom)
+
 }
 
 impl DatabricksColumnTypeInfo {
@@ -237,6 +286,12 @@ impl DatabricksColumnTypeInfo {
                     }
                 }
                 write!(out, ">")?;
+            }
+            DatabricksColumnTypeInfo::Geography { srid } => {
+                write!(out, "GEOGRAPHY({srid})")?;
+            }
+            DatabricksColumnTypeInfo::Geometry { srid } => {
+                write!(out, "GEOMETRY({srid})")?;
             }
         };
         Ok(())
@@ -804,5 +859,69 @@ mod tests {
             struct_with_timestamps.sql_type(),
             "STRUCT<`created_at`:timestamp_ltz NOT NULL,`updated_at`:timestamp_ntz>"
         );
+    }
+
+    #[test]
+    fn test_deserialize_geography_type_with_srid() {
+        let json = r#"{
+            "columns": [
+                {
+                    "name": "coordinate",
+                    "type": {
+                        "name": "geography(4326)"
+                    },
+                    "nullable": true,
+                    "comment": "This is a test"
+                }
+            ]
+        }"#;
+
+        let table: DatabricksDescribeTableExtended = 
+            serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            table.columns[0].type_.sql_type(),
+            "GEOGRAPHY(4326)"
+        )
+    }
+
+    #[test]
+    fn test_geography_sql_type() {
+        let geography = Geography {
+            srid: 4326,
+        };
+        assert_eq!(geography.sql_type(), "GEOGRAPHY(4326)");
+    }
+
+    #[test]
+    fn test_deserialize_geometry_type_with_srid() {
+        let json = r#"{
+            "columns": [
+                {
+                    "name": "coordinate",
+                    "type": {
+                        "name": "geometry(4326)"
+                    },
+                    "nullable": true,
+                    "comment": "This is a test"
+                }
+            ]
+        }"#;
+
+        let table: DatabricksDescribeTableExtended = 
+            serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            table.columns[0].type_.sql_type(),
+            "GEOMETRY(4326)"
+        )
+    }
+
+    #[test]
+    fn test_geometry_sql_type() {
+        let geometry = Geometry {
+            srid: 4326,
+        };
+        assert_eq!(geometry.sql_type(), "GEOMETRY(4326)");
     }
 }
