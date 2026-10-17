@@ -544,7 +544,7 @@ impl TaskRunnerCtx {
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     pub fn build_compile_node_context<T>(
         &self,
-        model: &T,
+        model: Arc<T>,
         base_context: &BTreeMap<String, Value>,
         ref_validation_config: DependencyValidationConfig,
     ) -> FsResult<(BTreeMap<String, Value>, Arc<DashMap<String, Value>>)>

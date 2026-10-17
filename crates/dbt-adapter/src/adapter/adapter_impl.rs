@@ -423,13 +423,13 @@ impl AdapterImpl {
     /// Returns whether the connection changed and must be restored.
     pub fn use_warehouse(
         &self,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         warehouse: String,
         node_id: &str,
         token: CancellationToken,
     ) -> FsResult<bool> {
         match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_use_warehouse(conn, warehouse, node_id),
+            Replay(_, replay) => replay.replay_use_warehouse(conn.as_mut(), warehouse, node_id),
             Impl(Snowflake, _) => {
                 let ctx = QueryCtx::default().with_node_id(node_id);
                 let sql = format!("use warehouse {warehouse}");
@@ -473,7 +473,7 @@ impl AdapterImpl {
     /// SnowflakeAdapter https://github.com/dbt-labs/dbt-adapters/blob/8b55a4781229a420836fdac6c933969f31188634/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L249-L273
     pub fn restore_warehouse(
         &self,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         node_id: &str,
         token: CancellationToken,
     ) -> FsResult<()> {
@@ -501,7 +501,7 @@ impl AdapterImpl {
     /// Ref: dbt-labs/dbt-adapters#1787
     pub fn use_database(
         &self,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         database: String,
         node_id: &str,
         token: CancellationToken,
@@ -525,7 +525,7 @@ impl AdapterImpl {
     /// Ref: dbt-labs/dbt-adapters#1787
     pub fn reset_database(
         &self,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard,
         node_id: &str,
         token: CancellationToken,
     ) -> FsResult<()> {
@@ -794,7 +794,7 @@ impl AdapterImpl {
         &self,
         engine: Arc<dyn AdapterEngine>,
         state: Option<&State>,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         ctx: &QueryCtx,
         sql: &str,
         _auto_begin: bool,
@@ -852,18 +852,47 @@ impl AdapterImpl {
         }
 
         let mut last_batch = None;
+        let mut transaction_open = false;
         for sql in statements {
-            last_batch = Some(execute_query_with_retry(
+            match execute_query_with_retry(
                 engine.clone(),
                 state,
-                conn,
+                conn.as_mut(),
                 ctx,
                 sql,
-                1,
+                /* retry_limit = */ 1,
                 &options,
                 fetch,
                 token.clone(),
-            )?);
+            ) {
+                Ok(batch) => {
+                    match transaction_boundary(sql) {
+                        Some(TransactionBoundary::Begin) => transaction_open = true,
+                        Some(TransactionBoundary::End) => transaction_open = false,
+                        None => {}
+                    }
+                    last_batch = Some(batch);
+                }
+                Err(err) => {
+                    if transaction_open {
+                        // The driver may have given up on a request the warehouse is still
+                        // running, so the session's transaction state is unknown. Retire the
+                        // connection (closing its session) instead of recycling it.
+                        conn.discard_conn_on_drop();
+                        return Err(AdapterError::new_with_sqlstate_and_vendor_code(
+                            err.kind(),
+                            format!(
+                                "{} (the open transaction was left uncommitted and its \
+                                 connection was closed)",
+                                err.message()
+                            ),
+                            err.sqlstate().as_bytes().try_into().unwrap_or([b'0'; 5]),
+                            err.vendor_code(),
+                        ));
+                    }
+                    return Err(err);
+                }
+            }
         }
 
         let last_batch = last_batch.expect("last_batch should never be None");
@@ -900,7 +929,7 @@ impl AdapterImpl {
     pub fn execute(
         &self,
         state: Option<&State>,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         ctx: Option<&QueryCtx>,
         sql: &str,
         auto_begin: bool,
@@ -947,7 +976,7 @@ impl AdapterImpl {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_execute(
                 state,
-                conn,
+                conn.as_mut(),
                 ctx.as_ref(),
                 sql,
                 auto_begin,
@@ -974,7 +1003,7 @@ impl AdapterImpl {
     pub fn exec_stmt(
         &self,
         ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         sql: &str,
         auto_begin: bool,
         token: CancellationToken,
@@ -998,7 +1027,7 @@ impl AdapterImpl {
     pub fn query(
         &self,
         ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         sql: &str,
         limit: Option<i64>,
         token: CancellationToken,
@@ -1022,7 +1051,7 @@ impl AdapterImpl {
     pub fn add_query(
         &self,
         state: &State,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         sql: &str,
         auto_begin: bool,
         bindings: Option<&Value>,
@@ -1045,7 +1074,7 @@ impl AdapterImpl {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_add_query(
                 &ctx,
-                conn,
+                conn.as_mut(),
                 sql.as_ref(),
                 auto_begin,
                 bindings,
@@ -1087,7 +1116,7 @@ impl AdapterImpl {
     pub fn submit_python_job(
         &self,
         ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         state: &State,
         model: &Value,
         compiled_code: &str,
@@ -1115,7 +1144,7 @@ impl AdapterImpl {
                 // In DBT Replay mode, route through the replay adapter to consume recorded execute calls.
                 let (response, _) = replay.replay_execute(
                     Some(state),
-                    conn,
+                    conn.as_mut(),
                     ctx,
                     &code,
                     false,
@@ -1137,11 +1166,16 @@ impl AdapterImpl {
                 token,
             ),
             // https://docs.getdbt.com/reference/resource-configs/databricks-configs
-            Impl(Databricks, _) => {
-                python::databricks::submit_python_job(self, ctx, conn, state, model, compiled_code)
-            }
+            Impl(Databricks, _) => python::databricks::submit_python_job(
+                self,
+                ctx,
+                conn.as_mut(),
+                state,
+                model,
+                compiled_code,
+            ),
             Replay(Bigquery | Databricks, replay) => {
-                replay.replay_submit_python_job(ctx, conn, state, model, compiled_code)
+                replay.replay_submit_python_job(ctx, conn.as_mut(), state, model, compiled_code)
             }
             Replay(
                 adapter_type @ (Postgres | Redshift | Salesforce | DuckDB | LakeCompute | Spark
@@ -1429,7 +1463,7 @@ impl AdapterImpl {
         &self,
         state: &State,
         ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         database: &str,
         schema: &str,
         identifier: &str,
@@ -1454,7 +1488,7 @@ impl AdapterImpl {
         }
         match self.inner_adapter() {
             Replay(_, replay) => {
-                replay.replay_get_relation(state, ctx, conn, database, schema, identifier)
+                replay.replay_get_relation(state, ctx, conn.as_mut(), database, schema, identifier)
             }
             Impl(adapter_type, engine) if engine.is_sidecar() => {
                 let client = engine.sidecar_client().unwrap();
@@ -1512,7 +1546,7 @@ impl AdapterImpl {
     pub fn describe_dynamic_table(
         &self,
         state: &State,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         relation: &Arc<dyn BaseRelation>,
         include_transient: bool,
         token: CancellationToken,
@@ -1626,7 +1660,7 @@ impl AdapterImpl {
     pub fn describe_interactive_table(
         &self,
         state: &State,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         relation: &Arc<dyn BaseRelation>,
         token: CancellationToken,
     ) -> Result<Value, minijinja::Error> {
@@ -1954,7 +1988,7 @@ impl AdapterImpl {
             Databricks => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let has_capability = self.has_dbr_capability(state, conn.as_mut(), name, token)?;
+                let has_capability = self.has_dbr_capability(state, &mut conn, name, token)?;
                 Ok(Some(has_capability))
             }
             adapter_type => {
@@ -3615,7 +3649,7 @@ impl AdapterImpl {
     pub fn load_dataframe(
         &self,
         ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         sql: &str,
         database: &str,
         schema: &str,
@@ -3653,7 +3687,7 @@ impl AdapterImpl {
                 self.engine().execute_with_options(
                     None,
                     ctx,
-                    conn,
+                    conn.as_mut(),
                     sql,
                     vec![
                         (
@@ -3691,7 +3725,7 @@ impl AdapterImpl {
 
                 if self.engine().is_replay() {
                     crate::engine::duckdb_seed::copy_seed_csv(
-                        conn,
+                        conn.as_mut(),
                         database,
                         schema,
                         table_name,
@@ -3728,7 +3762,7 @@ impl AdapterImpl {
                 if saas_mode_enabled {
                     crate::engine::duckdb_seed::ingest_seed_csv(
                         ctx,
-                        conn,
+                        conn.as_mut(),
                         database,
                         schema,
                         table_name,
@@ -3737,7 +3771,7 @@ impl AdapterImpl {
                     )?;
                 } else {
                     crate::engine::duckdb_seed::copy_seed_csv(
-                        conn,
+                        conn.as_mut(),
                         database,
                         schema,
                         table_name,
@@ -3838,7 +3872,7 @@ impl AdapterImpl {
     pub fn get_column_schema_from_query(
         &self,
         state: &State,
-        conn: &mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         ctx: &QueryCtx,
         sql: &str,
         // ClickHouse only: see metadata::clickhouse::describe_query_columns.
@@ -3846,10 +3880,12 @@ impl AdapterImpl {
         token: CancellationToken,
     ) -> AdapterResult<Vec<Column>> {
         match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_get_column_schema_from_query(state, conn, ctx, sql),
+            Replay(_, replay) => {
+                replay.replay_get_column_schema_from_query(state, conn.as_mut(), ctx, sql)
+            }
             Impl(Bigquery, engine) => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/f4dfd350942cce11ff25e3d22f2bee9e60b12b6d/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
-                let batch = engine.execute(Some(state), conn, ctx, sql, token)?;
+                let batch = engine.execute(Some(state), conn.as_mut(), ctx, sql, token)?;
                 let schema = batch.schema();
 
                 let type_ops = engine.type_ops().as_ref();
@@ -3910,7 +3946,7 @@ impl AdapterImpl {
     pub fn get_columns_in_select_sql(
         &self,
         state: &State,
-        conn: &mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         ctx: &QueryCtx,
         sql: &str,
         token: CancellationToken,
@@ -3930,7 +3966,20 @@ impl AdapterImpl {
     pub fn verify_database(&self, database: String) -> AdapterResult<Value> {
         match self.inner_adapter() {
             Replay(_, replay) => replay.replay_verify_database(&database),
-            Impl(adapter_type @ (Postgres | DuckDB | LakeCompute | ClickHouse), engine) => {
+            Impl(ClickHouse, _) => {
+                if database.is_empty() {
+                    Ok(Value::from(()))
+                } else {
+                    Err(AdapterError::new(
+                        AdapterErrorKind::UnexpectedDbReference,
+                        format!(
+                            "Cross-db references not allowed in the {} adapter ({} vs )",
+                            ClickHouse, database
+                        ),
+                    ))
+                }
+            }
+            Impl(adapter_type @ (Postgres | DuckDB | LakeCompute), engine) => {
                 if let Some(configured_database) = engine.get_configured_database_name() {
                     if database == configured_database {
                         Ok(Value::from(()))
@@ -3995,7 +4044,7 @@ impl AdapterImpl {
     /// BigQueryAdapter https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
     pub fn is_replaceable(
         &self,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         relation: &Arc<dyn BaseRelation>,
         local_partition_by: Option<BigqueryPartitionConfig>,
         local_cluster_by: Option<ClusterConfig>,
@@ -4253,7 +4302,7 @@ impl AdapterImpl {
         &self,
         state: Option<&State>,
         query_ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         db_schema: &CatalogAndSchema,
         token: CancellationToken,
     ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
@@ -4275,7 +4324,7 @@ impl AdapterImpl {
         use crate::metadata::*;
 
         match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_list_relations(query_ctx, conn, db_schema),
+            Replay(_, replay) => replay.replay_list_relations(query_ctx, conn.as_mut(), db_schema),
             Impl(adapter_type, engine) if engine.is_sidecar() => {
                 let client = engine.sidecar_client().unwrap();
                 let query_database = db_schema.resolved_catalog.clone();
@@ -4303,7 +4352,7 @@ impl AdapterImpl {
             Impl(Bigquery, engine) => {
                 bigquery::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
-            Impl(Databricks | Spark, engine) => databricks::list_relations(
+            Impl(Databricks, engine) => databricks::list_relations(
                 engine.as_ref(),
                 state,
                 query_ctx,
@@ -4311,6 +4360,12 @@ impl AdapterImpl {
                 db_schema,
                 token,
             ),
+            // Spark has no `system.information_schema` outside Databricks
+            // Unity Catalog; SHOW TABLE EXTENDED exists on every backend,
+            // including Microsoft Fabric Lakehouses.
+            Impl(Spark, engine) => {
+                spark::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
+            }
             Impl(Redshift, engine) => {
                 redshift::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
@@ -4344,7 +4399,7 @@ impl AdapterImpl {
     pub fn list_relation_dependency_links(
         &self,
         query_ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         db_schema: &CatalogAndSchema,
         token: CancellationToken,
     ) -> AdapterResult<Vec<metadata::ParentChildPair>> {
@@ -4379,7 +4434,7 @@ impl AdapterImpl {
     fn has_dbr_capability(
         &self,
         state: &State,
-        conn: &mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         capability_name: &str,
         token: CancellationToken,
     ) -> AdapterResult<bool> {
@@ -4411,7 +4466,7 @@ impl AdapterImpl {
     pub fn compare_dbr_version(
         &self,
         state: &State,
-        conn: &mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         major: i64,
         minor: i64,
         token: CancellationToken,
@@ -4597,7 +4652,7 @@ impl AdapterImpl {
     pub fn update_tblproperties_for_uniform_iceberg(
         &self,
         state: &State,
-        conn: &mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         config: ModelConfig,
         node: &InternalDbtNodeWrapper,
         tblproperties: &mut IndexMap<String, Value>,
@@ -4642,14 +4697,14 @@ impl AdapterImpl {
                         )
                     })?;
 
-                    // TODO(versusfacit): support snapshot
                     if materialized != DbtMaterialization::Incremental
                         && materialized != DbtMaterialization::Table
                         && materialized != DbtMaterialization::Seed
+                        && materialized != DbtMaterialization::Snapshot
                     {
                         return Err(AdapterError::new(
                             AdapterErrorKind::Configuration,
-                            "When table_format is 'iceberg', materialized must be 'incremental', 'table', or 'seed'.",
+                            "When table_format is 'iceberg', materialized must be 'incremental', 'table', 'seed', or 'snapshot'.",
                         ));
                     }
 
@@ -4675,7 +4730,7 @@ impl AdapterImpl {
     pub fn is_uniform(
         &self,
         state: &State,
-        conn: &mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         config: ModelConfig,
         node: &InternalDbtNodeWrapper,
         token: CancellationToken,
@@ -4735,14 +4790,14 @@ impl AdapterImpl {
                     )
                 })?;
 
-                // TODO(versusfacit): support snapshot
                 if materialized != DbtMaterialization::Incremental
                     && materialized != DbtMaterialization::Table
                     && materialized != DbtMaterialization::Seed
+                    && materialized != DbtMaterialization::Snapshot
                 {
                     return Err(AdapterError::new(
                         AdapterErrorKind::Configuration,
-                        "When table_format is 'iceberg', materialized must be 'incremental', 'table', or 'seed'.",
+                        "When table_format is 'iceberg', materialized must be 'incremental', 'table', 'seed', or 'snapshot'.",
                     ));
                 }
 
@@ -4805,7 +4860,7 @@ impl AdapterImpl {
     pub fn get_relation_config(
         &self,
         state: &State,
-        conn: &mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         relation: &Arc<dyn BaseRelation>,
         model_config: Option<&RelationConfig>,
         token: CancellationToken,
@@ -5160,7 +5215,7 @@ impl AdapterImpl {
     pub fn describe_relation(
         &self,
         state: &State,
-        conn: &'_ mut dyn Connection,
+        conn: &mut ConnectionGuard<'_>,
         relation: &Arc<dyn BaseRelation>,
         include_transient: bool,
         token: CancellationToken,
@@ -5182,7 +5237,7 @@ impl AdapterImpl {
             }
         } else {
             Ok(self
-                .describe_relation_bigquery(conn, relation, Some(state))?
+                .describe_relation_bigquery(conn.as_mut(), relation, Some(state))?
                 .map(Value::from_object)
                 .unwrap_or_else(none_value))
         }
@@ -5665,6 +5720,22 @@ enum AdapterImplInner {
     Mock(MockState),
 }
 
+enum TransactionBoundary {
+    Begin,
+    End,
+}
+
+fn transaction_boundary(sql: &str) -> Option<TransactionBoundary> {
+    let sql = sql.trim().trim_end_matches(';').trim().to_ascii_lowercase();
+    let mut words = sql.split_whitespace();
+    match (words.next()?, words.next()) {
+        ("begin", None | Some("transaction" | "work" | "name"))
+        | ("start", Some("transaction")) => Some(TransactionBoundary::Begin),
+        ("commit" | "rollback", _) => Some(TransactionBoundary::End),
+        _ => None,
+    }
+}
+
 impl AdapterImpl {
     pub fn new(
         engine: Arc<dyn AdapterEngine>,
@@ -5885,7 +5956,7 @@ impl AdapterImpl {
             let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
             self.get_column_schema_from_query(
                 state,
-                conn.as_mut(),
+                &mut conn,
                 &ctx,
                 target_sql,
                 query_settings,
@@ -6342,7 +6413,12 @@ mod tests {
             ..Default::default()
         };
 
-        adapter.is_uniform(&state, &mut NoopConnection, config, &node, never_cancels())
+        let mut conn = ConnectionGuard::new(Box::new(NoopConnection));
+        let result = adapter.is_uniform(&state, &mut conn, config, &node, never_cancels());
+        // Don't park the throwaway connection: a second one in the slot trips the
+        // nested-guard assertion.
+        conn.discard_conn_on_drop();
+        result
     }
 
     #[test]
@@ -6447,6 +6523,33 @@ mod tests {
             None,
             None,
         ))
+    }
+
+    #[test]
+    fn transaction_boundary_recognises_explicit_transaction_statements() {
+        use TransactionBoundary::{Begin, End};
+        let cases = [
+            ("begin", Some(Begin)),
+            (" BEGIN;", Some(Begin)),
+            ("begin transaction", Some(Begin)),
+            ("begin work", Some(Begin)),
+            ("begin name t1", Some(Begin)),
+            ("start transaction", Some(Begin)),
+            ("commit", Some(End)),
+            ("COMMIT;", Some(End)),
+            ("rollback work", Some(End)),
+            ("begin\n  select 1;\nend", None),
+            ("select 'begin'", None),
+            ("insert into t select 1", None),
+        ];
+        for (sql, expected) in cases {
+            let got = transaction_boundary(sql);
+            let same = matches!(
+                (&got, &expected),
+                (Some(Begin), Some(Begin)) | (Some(End), Some(End)) | (None, None)
+            );
+            assert!(same, "unexpected classification for {sql:?}");
+        }
     }
 
     #[test]
