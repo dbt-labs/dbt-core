@@ -1384,42 +1384,25 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
               -> AdapterResult<Arc<Schema>> {
             let (_, rendered) = key;
             let sql = format!("describe table {};", rendered);
-            let new_ctx = |desc: &str| {
-                let mut ctx = QueryCtx::new_metadata().with_desc(desc);
-                if let Some(node_id) = unique_id.clone() {
-                    ctx = ctx.with_node_id(&node_id);
-                }
-                if let Some(phase) = phase {
-                    ctx = ctx.with_phase(phase.as_str());
-                }
-                ctx
-            };
-            let ctx = new_ctx("Get table schema");
-            let table = match adapter.query(&ctx, conn, &sql, None, token_clone.clone()) {
+            let mut ctx = QueryCtx::new_metadata();
+            if let Some(node_id) = unique_id.clone() {
+                ctx = ctx.with_node_id(&node_id);
+            }
+            if let Some(phase) = phase {
+                ctx = ctx.with_phase(phase.as_str());
+            }
+            let table_ctx = ctx.clone().with_desc("Get table schema");
+            let table = match adapter.query(&table_ctx, conn, &sql, None, token_clone.clone()) {
                 Ok((_, table)) => table,
-                // `describe table` rejects streams; describe an empty select instead
-                // (neither statement advances the stream offset). Describe the select
-                // by its own query id, not last_query_id(): a proxy or middleware may
-                // run statements on the session in between.
+                // Streams reject `describe table`: describe a `limit 0` select by its own query id.
                 Err(err) if is_describe_table_invalid_object_type(&err) => {
-                    let ctx = new_ctx("Get stream schema");
-                    // Keep cancellation; otherwise report the original describe-table error.
-                    let or_original = |e: AdapterError| {
-                        if e.kind() == AdapterErrorKind::Cancelled {
-                            e
-                        } else {
-                            err.clone()
-                        }
-                    };
+                    let ctx = ctx.with_desc("Get stream schema");
                     let select = format!("select * from {} limit 0;", rendered);
-                    let (response, _) = adapter
-                        .query(&ctx, conn, &select, None, token_clone.clone())
-                        .map_err(or_original)?;
-                    let query_id = response.query_id().ok_or_else(|| err.clone())?;
-                    let sql = format!("describe result '{}';", query_id);
+                    let (response, _) =
+                        adapter.query(&ctx, conn, &select, None, token_clone.clone())?;
+                    let sql = format!("describe result '{}';", response.query_id().ok_or(err)?);
                     adapter
-                        .query(&ctx, conn, &sql, None, token_clone.clone())
-                        .map_err(or_original)?
+                        .query(&ctx, conn, &sql, None, token_clone.clone())?
                         .1
                 }
                 Err(err) => return Err(err),
