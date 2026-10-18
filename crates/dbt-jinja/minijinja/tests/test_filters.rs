@@ -219,3 +219,118 @@ fn test_last_bool_errors_like_python() {
         "'bool' object is not reversible"
     );
 }
+
+// `sum` parity with Jinja2: `start` is a value added to the total, not a
+// number of items to skip (dbt-labs/dbt#16783), and `attribute` selects the
+// value to sum up (dbt-labs/dbt#16786).
+
+fn render(env: &Environment, expr: &str) -> String {
+    env.render_str(expr, (), &[]).unwrap()
+}
+
+#[test]
+fn test_sum_start_is_added_to_total() {
+    let env = Environment::new();
+    assert_eq!(render(&env, "{{ [1, 2, 3]|sum(start=0) }}"), "6");
+    assert_eq!(render(&env, "{{ [1, 2, 3]|sum(start=1) }}"), "7");
+    assert_eq!(render(&env, "{{ [1, 2, 3]|sum(start=10) }}"), "16");
+    assert_eq!(render(&env, "{{ [1, 2, 3]|sum(start=0.5) }}"), "6.5");
+}
+
+#[test]
+fn test_sum_without_start() {
+    let env = Environment::new();
+    assert_eq!(render(&env, "{{ [1, 2, 3]|sum }}"), "6");
+    assert_eq!(render(&env, "{{ []|sum }}"), "0");
+    assert_eq!(render(&env, "{{ [0.5, 1.0]|sum }}"), "1.5");
+}
+
+#[test]
+fn test_sum_attribute() {
+    let env = Environment::new();
+    assert_eq!(
+        render(&env, r#"{{ [{"x": 1}, {"x": 2}]|sum(attribute="x") }}"#),
+        "3"
+    );
+    // dotted paths work like `sort`/`map`
+    assert_eq!(
+        render(
+            &env,
+            r#"{{ [{"a": {"x": 1}}, {"a": {"x": 2}}]|sum(attribute="a.x") }}"#
+        ),
+        "3"
+    );
+    // `attribute` and an additive `start` combine
+    assert_eq!(
+        render(
+            &env,
+            r#"{{ [{"x": 1}, {"x": 2}]|sum(attribute="x", start=10) }}"#
+        ),
+        "13"
+    );
+    // non-numeric attribute values still error
+    let err = env
+        .render_str(r#"{{ [{"x": "a"}]|sum(attribute="x") }}"#, (), &[])
+        .unwrap_err();
+    assert!(err.to_string().contains("can only sum numbers, got str"));
+}
+
+#[test]
+fn test_sum_start_empty_list_flattens() {
+    let env = Environment::new();
+    assert_eq!(
+        render(&env, r#"{{ [[1, 2], [3]]|sum(start=[])|join(",") }}"#),
+        "1,2,3"
+    );
+}
+
+// `min`/`max` parity with Jinja2: strings compare case-insensitively by
+// default, `case_sensitive` and `attribute` are accepted
+// (dbt-labs/dbt#16786).
+
+#[test]
+fn test_min_max_case_insensitive_by_default() {
+    let env = Environment::new();
+    assert_eq!(render(&env, r#"{{ ["a", "B"]|min }}"#), "a");
+    assert_eq!(render(&env, r#"{{ ["a", "B"]|max }}"#), "B");
+    assert_eq!(
+        render(&env, r#"{{ ["a", "B"]|min(case_sensitive=true) }}"#),
+        "B"
+    );
+    assert_eq!(
+        render(&env, r#"{{ ["a", "B"]|max(case_sensitive=true) }}"#),
+        "a"
+    );
+}
+
+#[test]
+fn test_min_max_attribute() {
+    let env = Environment::new();
+    assert_eq!(
+        render(
+            &env,
+            r#"{{ [{"x": 1}, {"x": 2}]|min(attribute="x")|tojson }}"#
+        ),
+        r#"{"x": 1}"#
+    );
+    assert_eq!(
+        render(
+            &env,
+            r#"{{ [{"x": 1}, {"x": 2}]|max(attribute="x")|tojson }}"#
+        ),
+        r#"{"x": 2}"#
+    );
+    // the item itself is returned, not the attribute value
+    assert_eq!(
+        render(&env, r#"{{ [{"x": 1}, {"x": 2}]|min(attribute="x") }}"#),
+        r#"{'x': 1}"#
+    );
+}
+
+#[test]
+fn test_min_max_numbers_unchanged() {
+    let env = Environment::new();
+    assert_eq!(render(&env, "{{ [1, 2, 3, 4]|min }}"), "1");
+    assert_eq!(render(&env, "{{ [1, 2, 3, 4]|max }}"), "4");
+    assert_eq!(render(&env, "{{ []|min }}"), "");
+}

@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Restore Jinja2 semantics for the sum, min and max filters: accept attribute= on all three, and case_sensitive= (case-insensitive by default) on min and max'
+time: 2026-10-18T19:13:17.0963671+08:00
+custom:
+    author: inchang-ing
+    issue: "16786"
+    project: dbt-core

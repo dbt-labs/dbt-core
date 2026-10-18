@@ -800,62 +800,63 @@ mod builtins {
 
     /// Sums up all the values in a sequence.
     ///
+    /// The filter accepts a few keyword arguments:
+    ///
+    /// * `attribute`: can be set to an attribute or dotted path to sum up that
+    ///   attribute instead of the items themselves.
+    /// * `start`: a value to add to the total (defaults to `0`).
+    ///
     /// ```jinja
     /// {{ range(10)|sum }} -> 45
+    /// {{ [{"x": 1}, {"x": 2}]|sum(attribute="x") }} -> 3
+    /// {{ [1, 2, 3]|sum(start=10) }} -> 16
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
-    pub fn sum(state: &State, values: Value, start: Option<Value>) -> Result<Value, Error> {
-        let mut rv = Value::from(0);
+    pub fn sum(state: &State, values: Value, kwargs: Kwargs) -> Result<Value, Error> {
         let iter = ok!(state.undefined_behavior().try_iter(values));
-        let start = if let Some(start) = start {
-            if start.is_undefined() {
-                Ok(0 as f64)
-            } else if start.is_kwargs() {
-                // check if start has key "start"
-                let start = start.as_object().unwrap();
-                if let Some(value) = start.get_value(&Value::from("start")) {
-                    // first check if value is an empty list
-                    if value == Value::from(Vec::<Value>::new()) {
-                        // this sum(start=[]) means flatten the list
-                        // https://stackoverflow.com/questions/31876069/is-it-possible-to-flatten-a-lists-of-lists-with-ansible-jinja2/37481293#37481293
-                        let mut result = vec![];
-                        for item in iter {
-                            if item.is_undefined() {
-                                ok!(state.undefined_behavior().handle_undefined(false));
-                                continue;
-                            }
-                            if let Some(iter) = item.as_object().and_then(|x| x.try_iter()) {
-                                for value in iter {
-                                    result.push(value);
-                                }
-                            } else {
-                                result.push(item);
-                            }
-                        }
-                        return Ok(Value::from(result));
-                    }
+        let attribute = ok!(kwargs.get::<Option<Value>>("attribute"));
+        let start = ok!(kwargs.get::<Option<Value>>("start"));
+        ok!(kwargs.assert_all_used());
 
-                    as_f64(&value, true).ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::InvalidOperation,
-                            format!("cannot convert {} to int", value.kind()),
-                        )
-                    })
-                } else {
-                    Ok(0 as f64)
+        if start.as_ref().is_some_and(|start| {
+            !start.is_undefined() && start == &Value::from(Vec::<Value>::new())
+        }) {
+            // this sum(start=[]) means flatten the list
+            // https://stackoverflow.com/questions/31876069/is-it-possible-to-flatten-a-lists-of-lists-with-ansible-jinja2/37481293#37481293
+            let mut result = vec![];
+            for item in iter {
+                if item.is_undefined() {
+                    ok!(state.undefined_behavior().handle_undefined(false));
+                    continue;
                 }
-            } else {
-                as_f64(&start, true).ok_or_else(|| {
-                    Error::new(
+                if let Some(iter) = item.as_object().and_then(|x| x.try_iter()) {
+                    for value in iter {
+                        result.push(value);
+                    }
+                } else {
+                    result.push(item);
+                }
+            }
+            return Ok(Value::from(result));
+        }
+
+        let mut rv = match start {
+            Some(start) if !start.is_undefined() && !start.is_none() => {
+                if !start.is_number() {
+                    return Err(Error::new(
                         ErrorKind::InvalidOperation,
                         format!("cannot convert {} to int", start.kind()),
-                    )
-                })
+                    ));
+                }
+                start
             }
-        } else {
-            Ok(0 as f64)
-        }? as usize;
-        for value in iter.skip(start) {
+            _ => Value::from(0),
+        };
+        for item in iter {
+            let value = match &attribute {
+                Some(attr) => ok!(get_attr(&item, attr)),
+                None => item,
+            };
             if value.is_undefined() {
                 ok!(state.undefined_behavior().handle_undefined(false));
                 continue;
@@ -1015,28 +1016,79 @@ mod builtins {
 
     /// Returns the smallest item from an iterable.
     ///
+    /// The filter accepts a few keyword arguments:
+    ///
+    /// * `case_sensitive`: set to `true` to make the comparison of strings case sensitive.
+    /// * `attribute`: can be set to an attribute or dotted path to compare by that attribute.
+    ///
     /// ```jinja
     /// {{ [1, 2, 3, 4]|min }} -> 1
+    /// {{ ["a", "B"]|min }} -> "a"
+    /// {{ [{"x": 1}, {"x": 2}]|min(attribute="x") }} -> {"x": 1}
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
-    pub fn min(state: &State, value: Value) -> Result<Value, Error> {
-        let iter = ok!(state.undefined_behavior().try_iter(value).map_err(|err| {
-            Error::new(ErrorKind::InvalidOperation, "cannot convert value to list").with_source(err)
-        }));
-        Ok(iter.min().unwrap_or(Value::UNDEFINED))
+    pub fn min(state: &State, value: Value, kwargs: Kwargs) -> Result<Value, Error> {
+        extremum(state, value, kwargs, false)
     }
 
     /// Returns the largest item from an iterable.
     ///
+    /// The filter accepts a few keyword arguments:
+    ///
+    /// * `case_sensitive`: set to `true` to make the comparison of strings case sensitive.
+    /// * `attribute`: can be set to an attribute or dotted path to compare by that attribute.
+    ///
     /// ```jinja
     /// {{ [1, 2, 3, 4]|max }} -> 4
+    /// {{ ["a", "B"]|max }} -> "B"
+    /// {{ [{"x": 1}, {"x": 2}]|max(attribute="x") }} -> {"x": 2}
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
-    pub fn max(state: &State, value: Value) -> Result<Value, Error> {
+    pub fn max(state: &State, value: Value, kwargs: Kwargs) -> Result<Value, Error> {
+        extremum(state, value, kwargs, true)
+    }
+
+    /// Shared implementation of the `min` and `max` filters.  Like Python, on
+    /// ties the first matching item wins, so the item is only replaced when a
+    /// strictly smaller (`largest == false`) or strictly larger
+    /// (`largest == true`) item is found.
+    fn extremum(
+        state: &State,
+        value: Value,
+        kwargs: Kwargs,
+        largest: bool,
+    ) -> Result<Value, Error> {
+        let case_sensitive = ok!(kwargs.get::<Option<bool>>("case_sensitive")).unwrap_or(false);
+        let attribute = ok!(kwargs.get::<Option<Value>>("attribute"));
+        ok!(kwargs.assert_all_used());
         let iter = ok!(state.undefined_behavior().try_iter(value).map_err(|err| {
             Error::new(ErrorKind::InvalidOperation, "cannot convert value to list").with_source(err)
         }));
-        Ok(iter.max().unwrap_or(Value::UNDEFINED))
+        let mut best: Option<Value> = None;
+        for item in iter {
+            let replace = match &best {
+                None => true,
+                Some(current) => {
+                    let order = if let Some(attr) = &attribute {
+                        match (get_attr(current, attr), get_attr(&item, attr)) {
+                            (Ok(a), Ok(b)) => cmp_helper(&a, &b, case_sensitive),
+                            _ => Ordering::Equal,
+                        }
+                    } else {
+                        cmp_helper(current, &item, case_sensitive)
+                    };
+                    if largest {
+                        order == Ordering::Less
+                    } else {
+                        order == Ordering::Greater
+                    }
+                }
+            };
+            if replace {
+                best = Some(item);
+            }
+        }
+        Ok(best.unwrap_or(Value::UNDEFINED))
     }
 
     /// Returns the sorted version of the given list.

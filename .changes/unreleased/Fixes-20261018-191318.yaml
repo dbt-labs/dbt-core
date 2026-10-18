@@ -1,0 +1,7 @@
+kind: Fixes
+body: Treat the start argument of the sum filter as a value to add to the total instead of a number of items to skip
+time: 2026-10-18T19:13:18.3136931+08:00
+custom:
+    author: inchang-ing
+    issue: "16783"
+    project: dbt-core
