@@ -162,8 +162,23 @@ pub enum DatabricksColumnTypeInfo {
     }
 }
 
+/// Deserialize spatial datatypes from Databricks 'DESCRIBE TABLE <table> AS JSON output.
+///
+/// Currently (2026-10-18) the documented <type_json> schema does not include
+/// GEOGRAPHY or GEOMETRY
+/// https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-aux-describe-table
+///
+/// Inspecting the schema defition for the spatial types directly in Databricks,
+/// the JSON representation looks like:
+/// { "name" : "geography(<srid>)"} and { "name" : "geometry(<srid>)"}
+///
+/// This shows that Databricks is currently embedding the srid directly in the datatype name,
+/// unlike e.g. CHAR(n), whose JSON representation is { "name" : "char", "length": n }. 
+///
+/// If Databricks changes the JSON representation for spatial types to:
+/// { "name" : "geography", "srid" : n} and { "name" : "geometry", "srid" : n}
+/// this special handling of spatial data types can be removed.
 fn deserialize_databricks_column_type<'de, D>(deserializer: D) -> Result<DatabricksColumnTypeInfo, D::Error> where D: serde::Deserializer<'de> {
-    
     // Read incoming JSON object of the column type
     let value = serde_json::Value::deserialize(deserializer)?;
 
@@ -199,7 +214,6 @@ fn deserialize_databricks_column_type<'de, D>(deserializer: D) -> Result<Databri
     }
 
     serde_json::from_value(value).map_err(<D::Error as serde::de::Error>::custom)
-
 }
 
 impl DatabricksColumnTypeInfo {
