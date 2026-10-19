@@ -1,0 +1,7 @@
+kind: Fixes
+body: Populate `dbt.data_tests.node_unique_id` for generic tests defined on sources
+time: 2026-10-19T19:00:00+05:30
+custom:
+    author: Rishabh00b
+    issue: "16794"
+    project: dbt
