@@ -345,6 +345,15 @@ impl DispatchObject {
     }
 }
 
+fn parent_adapter(dialect: &str) -> Option<&'static str> {
+    match dialect {
+        "redshift" => Some("postgres"),
+        "databricks" => Some("spark"),
+        "lakecompute" | "motherduck" => Some("duckdb"),
+        _ => None,
+    }
+}
+
 /// Helper method to get adapter prefixes including parents
 pub fn get_adapter_prefixes(dialect: &str) -> Vec<String> {
     let mut prefixes = Vec::new();
@@ -352,17 +361,8 @@ pub fn get_adapter_prefixes(dialect: &str) -> Vec<String> {
     // Current adapter
     prefixes.push(dialect.to_string());
 
-    // Add parent adapters
-    match dialect {
-        "redshift" => prefixes.push("postgres".to_string()),
-        "databricks" => prefixes.push("spark".to_string()),
-        // `AdapterType::LakeCompute` renders as `lakecompute`; lake compute defines no
-        // macros of its own and inherits DuckDB's.
-        "lakecompute" => prefixes.push("duckdb".to_string()),
-        // MotherDuck's dedicated macro package lands after the adapter foundation.
-        "motherduck" => prefixes.push("duckdb".to_string()),
-        // Add other adapter hierarchies as needed
-        _ => {}
+    if let Some(parent) = parent_adapter(dialect) {
+        prefixes.push(parent.to_string());
     }
 
     // Always add default as last fallback
@@ -419,19 +419,10 @@ pub fn dbt_and_adapters_namespace_for(namespaces: &ValueMap, dialect: &str) -> A
 pub fn get_internal_packages(dialect: &str) -> Vec<String> {
     let mut internal_packages = Vec::new();
 
-    // Do not claim a dedicated package before MotherDuck's macros land.
-    if dialect != "motherduck" {
-        internal_packages.push(format!("dbt_{dialect}"));
-    }
+    internal_packages.push(format!("dbt_{dialect}"));
 
-    // Add parent packages
-    match dialect {
-        "redshift" => internal_packages.push("dbt_postgres".to_string()),
-        "databricks" => internal_packages.push("dbt_spark".to_string()),
-        // See `get_adapter_prefixes`: lake compute has no macro package of its own.
-        "lakecompute" | "motherduck" => internal_packages.push("dbt_duckdb".to_string()),
-        // Add other adapter hierarchies as needed
-        _ => {}
+    if let Some(parent) = parent_adapter(dialect) {
+        internal_packages.push(format!("dbt_{parent}"));
     }
     internal_packages.push("dbt".to_string());
 
@@ -443,14 +434,14 @@ mod adapter_inheritance_tests {
     use super::{get_adapter_prefixes, get_internal_packages};
 
     #[test]
-    fn motherduck_inherits_duckdb_without_claiming_its_own_package() {
+    fn motherduck_uses_its_package_then_duckdb_parent() {
         assert_eq!(
             get_adapter_prefixes("motherduck"),
             vec!["motherduck", "duckdb", "default"]
         );
         assert_eq!(
             get_internal_packages("motherduck"),
-            vec!["dbt_duckdb", "dbt"]
+            vec!["dbt_motherduck", "dbt_duckdb", "dbt"]
         );
     }
 }

@@ -315,12 +315,7 @@ async fn collect_packages(
 
 /// Returns the list of internal package directory names for a given adapter type.
 pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
-    // The dedicated MotherDuck package lands in a later change. Until then,
-    // load only its DuckDB parent rather than requesting a missing package.
-    let mut packages = match adapter_type {
-        AdapterType::MotherDuck => vec!["dbt-adapters".to_string()],
-        _ => vec!["dbt-adapters".to_string(), format!("dbt-{adapter_type}")],
-    };
+    let mut packages = vec!["dbt-adapters".to_string(), format!("dbt-{adapter_type}")];
     match adapter_type {
         AdapterType::Redshift => packages.push("dbt-postgres".to_string()),
         AdapterType::Databricks => packages.push("dbt-spark".to_string()),
@@ -577,10 +572,14 @@ mod internal_package_union_tests {
     use super::*;
 
     #[test]
-    fn motherduck_uses_only_its_duckdb_parent_package() {
+    fn motherduck_uses_its_package_then_duckdb_parent() {
         assert_eq!(
             internal_package_names(AdapterType::MotherDuck),
-            vec!["dbt-adapters".to_string(), "dbt-duckdb".to_string()]
+            vec![
+                "dbt-adapters".to_string(),
+                "dbt-motherduck".to_string(),
+                "dbt-duckdb".to_string(),
+            ]
         );
     }
 

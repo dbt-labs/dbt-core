@@ -1,0 +1,7 @@
+kind: Features
+body: Add experimental MotherDuck adapter support through the PostgreSQL endpoint with DuckDB SQL semantics.
+time: 2026-10-18T19:27:37.643259-07:00
+custom:
+    author: ""
+    issue: ""
+    project: dbt-core
