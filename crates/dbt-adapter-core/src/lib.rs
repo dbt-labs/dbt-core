@@ -20,6 +20,7 @@ pub const STATIC_ANALYSIS_SUPPORTED_ADAPTERS: &[AdapterType] = &[
     AdapterType::Databricks,
     AdapterType::Spark,
     AdapterType::DuckDB,
+    AdapterType::MotherDuck,
 ];
 
 /// Adapters that support concurrent execution of microbatch models.
@@ -63,6 +64,8 @@ pub enum AdapterType {
     /// Postgres
     #[strum(to_string = "postgres", serialize = "postgresql")]
     Postgres,
+    /// MotherDuck through its PostgreSQL wire endpoint
+    MotherDuck,
     /// Salesforce
     Salesforce,
     // Microsoft Fabric DWH
@@ -128,7 +131,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
         Bigquery => '`',
         Databricks | Spark => '`',
         Redshift => '"',
-        Postgres | Salesforce => '"',
+        Postgres | MotherDuck | Salesforce => '"',
         Fabric => '"',
         DuckDB | LakeCompute => '"',
         Athena | Trino | Starburst => '"',
@@ -185,6 +188,7 @@ mod tests {
             ("sAlesforce", AdapterType::Salesforce),
             ("sPark", AdapterType::Spark),
             ("dUckdb", AdapterType::DuckDB),
+            ("mOtherduck", AdapterType::MotherDuck),
             ("fAbric", AdapterType::Fabric),
             ("cLickhouse", AdapterType::ClickHouse),
             ("aThena", AdapterType::Athena),
@@ -274,6 +278,7 @@ mod tests {
                 (AdapterType::Spark, "spark"),
                 (AdapterType::DuckDB, "duckdb"),
                 (AdapterType::Postgres, "postgresql"),
+                (AdapterType::MotherDuck, "motherduck"),
                 (AdapterType::Salesforce, "salesforce"),
                 (AdapterType::Fabric, "fabric"),
                 (AdapterType::ClickHouse, "clickhouse"),
@@ -303,6 +308,7 @@ mod tests {
             AdapterType::Snowflake,
             AdapterType::Redshift,
             AdapterType::Postgres,
+            AdapterType::MotherDuck,
             AdapterType::Salesforce,
             AdapterType::Fabric,
             AdapterType::DuckDB,

@@ -15,7 +15,7 @@ pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {
         // falls back to Postgresql at the moment
         Salesforce => Dialect::Postgresql,
         // `LakeCompute` defines no dialect of its own, so it falls back to DuckDB's
-        DuckDB | LakeCompute => Dialect::Duckdb,
+        DuckDB | MotherDuck | LakeCompute => Dialect::Duckdb,
         Trino => Dialect::Trino,
         _ => return None,
     };
@@ -42,11 +42,14 @@ mod tests {
             }
             if matches!(
                 adapter_type,
-                AdapterType::Postgres | AdapterType::Salesforce | AdapterType::LakeCompute
+                AdapterType::Postgres
+                    | AdapterType::MotherDuck
+                    | AdapterType::Salesforce
+                    | AdapterType::LakeCompute
             ) {
                 // Postgres serializes as "postgres" but its dialect as "postgresql";
-                // Salesforce maps to Dialect::Postgresql and LakeCompute to
-                // Dialect::Duckdb, so both diverge by design.
+                // MotherDuck and LakeCompute map to Dialect::Duckdb; Salesforce
+                // maps to Dialect::Postgresql, so all diverge by design.
                 continue;
             }
             assert_eq!(

@@ -32,7 +32,7 @@ use super::AdapterImpl;
 
 pub fn backend_of(adapter_type: AdapterType) -> Backend {
     match adapter_type {
-        AdapterType::Postgres => Backend::Postgres,
+        AdapterType::Postgres | AdapterType::MotherDuck => Backend::Postgres,
         AdapterType::Snowflake => Backend::Snowflake,
         AdapterType::Bigquery => Backend::BigQuery,
         AdapterType::Databricks => Backend::Databricks,

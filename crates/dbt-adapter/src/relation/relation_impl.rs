@@ -39,7 +39,7 @@ use std::sync::Arc;
 
 fn include_policy(adapter_type: AdapterType, path: &RelationPath) -> Policy {
     match adapter_type {
-        AdapterType::DuckDB => Policy::new(
+        AdapterType::DuckDB | AdapterType::MotherDuck => Policy::new(
             path.database.as_ref().is_some_and(|db| {
                 !db.is_empty()
                     && !db.eq_ignore_ascii_case("main")

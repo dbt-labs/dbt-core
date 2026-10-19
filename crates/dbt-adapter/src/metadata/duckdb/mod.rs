@@ -312,7 +312,11 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
 /// leak in from other attached catalogs, including misreported Iceberg REST
 /// ones) and matches the per-catalog scope dbt expects when warming the relation
 /// cache. When the catalog is unknown (empty), the catalog predicate is omitted.
-fn list_relations_sql(quoting: ResolvedQuoting, db_schema: &CatalogAndSchema) -> String {
+fn list_relations_sql(
+    adapter_type: AdapterType,
+    quoting: ResolvedQuoting,
+    db_schema: &CatalogAndSchema,
+) -> String {
     let query_schema = if quoting.schema {
         db_schema.resolved_schema.clone()
     } else {
@@ -334,13 +338,43 @@ fn list_relations_sql(quoting: ResolvedQuoting, db_schema: &CatalogAndSchema) ->
         )
     };
 
-    format!(
-        "SELECT table_catalog, table_schema, table_name, table_type \
-         FROM information_schema.tables \
-         WHERE table_schema = '{}'{}",
-        dbt_adapter_sql::ident::escape_string_literal(&query_schema, AdapterType::DuckDB),
-        catalog_predicate,
-    )
+    match adapter_type {
+        AdapterType::MotherDuck => {
+            let schema = dbt_adapter_sql::ident::escape_string_literal(
+                &query_schema,
+                AdapterType::MotherDuck,
+            );
+            let catalog = dbt_adapter_sql::ident::escape_string_literal(
+                &db_schema.resolved_catalog,
+                AdapterType::MotherDuck,
+            );
+            let catalog_filter = if catalog.is_empty() {
+                String::new()
+            } else {
+                format!(" AND lower(database_name) = lower('{catalog}')")
+            };
+            let schema_filter = if quoting.schema {
+                format!("schema_name = '{schema}'")
+            } else {
+                format!("lower(schema_name) = lower('{schema}')")
+            };
+            format!(
+                "SELECT database_name AS table_catalog, schema_name AS table_schema, \
+                 table_name, 'BASE TABLE' AS table_type FROM duckdb_tables() \
+                 WHERE {schema_filter}{catalog_filter} UNION ALL \
+                 SELECT database_name AS table_catalog, schema_name AS table_schema, \
+                 view_name AS table_name, 'VIEW' AS table_type FROM duckdb_views() \
+                 WHERE {schema_filter}{catalog_filter}",
+            )
+        }
+        _ => format!(
+            "SELECT table_catalog, table_schema, table_name, table_type \
+             FROM information_schema.tables \
+             WHERE table_schema = '{}'{}",
+            dbt_adapter_sql::ident::escape_string_literal(&query_schema, AdapterType::DuckDB),
+            catalog_predicate,
+        ),
+    }
 }
 
 /// List all relations (tables, views) in a given schema.
@@ -369,7 +403,7 @@ pub fn list_relations(
         ));
     }
 
-    let sql = list_relations_sql(engine.quoting(), db_schema);
+    let sql = list_relations_sql(engine.adapter_type(), engine.quoting(), db_schema);
 
     let batch = engine.execute(None, conn.as_mut(), ctx, &sql, token)?;
 
@@ -872,6 +906,7 @@ mod tests {
         // from other attached databases (e.g. remote Iceberg REST catalogs that
         // `information_schema.tables` would otherwise union in) cannot leak.
         let sql = list_relations_sql(
+            AdapterType::DuckDB,
             ResolvedQuoting::trues(),
             &catalog_and_schema("aws_cloud_cost_demo", "aws_cloud_cost"),
         );
@@ -890,6 +925,7 @@ mod tests {
         // predicate must be lowercased to match; the catalog predicate is
         // case-insensitive on both sides via lower() and needs no folding.
         let sql = list_relations_sql(
+            AdapterType::DuckDB,
             ResolvedQuoting::falses(),
             &catalog_and_schema("My_Catalog", "My_Schema"),
         );
@@ -901,10 +937,36 @@ mod tests {
     fn list_relations_sql_omits_catalog_predicate_when_unknown() {
         // No catalog means we cannot scope; fall back to the schema-only filter
         // rather than emitting an empty/incorrect catalog predicate.
-        let sql = list_relations_sql(ResolvedQuoting::trues(), &catalog_and_schema("", "main"));
+        let sql = list_relations_sql(
+            AdapterType::DuckDB,
+            ResolvedQuoting::trues(),
+            &catalog_and_schema("", "main"),
+        );
         assert!(sql.ends_with("WHERE table_schema = 'main'"));
         assert!(!sql.contains("lower(table_catalog)"));
         assert!(!sql.contains(" AND "));
+    }
+
+    #[test]
+    fn motherduck_lists_relations_with_duckdb_metadata_functions() {
+        let sql = list_relations_sql(
+            AdapterType::MotherDuck,
+            ResolvedQuoting::trues(),
+            &catalog_and_schema("analytics", "main"),
+        );
+        assert!(sql.contains("FROM duckdb_tables()"));
+        assert!(sql.contains("FROM duckdb_views()"));
+        assert!(!sql.contains("information_schema"));
+    }
+
+    #[test]
+    fn motherduck_lowercases_unquoted_schema_lookup() {
+        let sql = list_relations_sql(
+            AdapterType::MotherDuck,
+            ResolvedQuoting::falses(),
+            &catalog_and_schema("analytics", "My_Schema"),
+        );
+        assert!(sql.contains("lower(schema_name) = lower('my_schema')"));
     }
 
     fn with_view(yaml: &str, test: impl FnOnce(&DbtCatalogsView<'_>)) {

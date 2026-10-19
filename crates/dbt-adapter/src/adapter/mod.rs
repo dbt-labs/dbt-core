@@ -2552,6 +2552,7 @@ impl Adapter {
                     | AdapterType::Redshift
                     | AdapterType::Spark
                     | AdapterType::DuckDB
+                    | AdapterType::MotherDuck
                     | AdapterType::Postgres
                     | AdapterType::Salesforce
                     | AdapterType::Fabric
@@ -2582,6 +2583,7 @@ impl Adapter {
                 | AdapterType::Redshift
                 | AdapterType::Spark
                 | AdapterType::DuckDB
+                | AdapterType::MotherDuck
                 | AdapterType::Postgres
                 | AdapterType::Salesforce
                 | AdapterType::Fabric

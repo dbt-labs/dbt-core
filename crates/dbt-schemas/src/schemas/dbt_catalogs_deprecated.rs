@@ -100,6 +100,7 @@ impl<'a> LoadedCatalogs<'a> {
 
 const CATALOG_DATABASE_PLATFORMS: &[AdapterType] = &[
     AdapterType::DuckDB,
+    AdapterType::MotherDuck,
     AdapterType::Snowflake,
     AdapterType::Databricks,
     AdapterType::Bigquery,
@@ -212,7 +213,9 @@ impl DbtCatalogs {
             .filter(|entry| entry.adapter_type == adapter_type)
             .filter_map(|entry| {
                 let alias = match adapter_type {
-                    AdapterType::DuckDB => entry.catalog_database.unwrap_or(entry.catalog_name),
+                    AdapterType::DuckDB | AdapterType::MotherDuck => {
+                        entry.catalog_database.unwrap_or(entry.catalog_name)
+                    }
                     _ => entry.catalog_database?,
                 };
                 alias

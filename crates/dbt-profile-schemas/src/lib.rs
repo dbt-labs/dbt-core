@@ -84,6 +84,13 @@ impl ProfileSetup {
                 let c1 = postgres_config::setup_postgres_profile(c0.map(Box::as_ref))?;
                 Ok(DbConfig::Postgres(c1))
             }
+            MotherDuck => {
+                let _c0 = unwrap_db_config!(MotherDuck);
+                Err(fs_err!(
+                    ErrorCode::Generic,
+                    "Interactive MotherDuck profile setup is not yet implemented."
+                ))
+            }
             Salesforce => {
                 let _c0 = unwrap_db_config!(Salesforce);
                 todo!("setup_salesforce_profile")
