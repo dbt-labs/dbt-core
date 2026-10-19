@@ -34,6 +34,8 @@ pub(crate) use adbc::resolve_connection_config;
 mod noop_connection;
 pub use noop_connection::NoopConnection;
 
+mod motherduck;
+
 mod record_replay;
 pub use record_replay::RecordReplayEngine;
 

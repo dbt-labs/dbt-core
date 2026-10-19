@@ -217,6 +217,7 @@ impl AdbcEngine {
             })
             .map_err(crate::errors::auth_error_to_adapter_error)?;
         let load_strategy = match (use_cloud_credentials, self.adapter_type) {
+            (_, AdapterType::MotherDuck) => LoadStrategy::System(None),
             (true, _) => LoadStrategy::Bridge,
             (false, AdapterType::DuckDB) => LoadStrategy::SystemThenCdnCache,
             (false, _) => LoadStrategy::CdnCache,
@@ -621,6 +622,10 @@ impl AdapterEngine for AdbcEngine {
                     adbc_core::options::OptionValue::String("true".to_string()),
                 );
             }
+        }
+        match self.adapter_type {
+            AdapterType::MotherDuck => super::motherduck::apply_init_sql(conn.as_mut(), config)?,
+            _ => {}
         }
         // Tag the connection with its config fingerprint and cache it on the
         // engine, so the pool reuses a connection only among engines with an

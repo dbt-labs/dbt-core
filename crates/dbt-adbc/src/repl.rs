@@ -24,6 +24,7 @@ fn parse_backend(s: &str) -> Result<Backend> {
         "snowflake" => Ok(Backend::Snowflake),
         "bigquery" => Ok(Backend::BigQuery),
         "postgres" | "postgresql" => Ok(Backend::Postgres),
+        "motherduck" => Ok(Backend::MotherDuck),
         "databricks" => Ok(Backend::Databricks),
         "redshift" => Ok(Backend::Redshift),
         "spark" => Ok(Backend::Spark),

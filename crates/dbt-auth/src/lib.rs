@@ -17,6 +17,7 @@ mod databricks;
 mod duckdb;
 mod exasol;
 mod lake_compute;
+pub mod motherduck;
 mod postgres;
 mod redshift;
 mod salesforce;
@@ -74,6 +75,7 @@ pub fn auth_for_backend_with_warnings(
     match backend {
         Backend::Snowflake => Box::new(snowflake::SnowflakeAuth::new(warning_printer)),
         Backend::Postgres => Box::new(postgres::PostgresAuth::new(warning_printer)),
+        Backend::MotherDuck => Box::new(motherduck::MotherDuckAuth::new(warning_printer)),
         Backend::BigQuery => Box::new(bigquery::BigqueryAuth::new(warning_printer)),
         Backend::Databricks => Box::new(databricks::DatabricksAuth::new(warning_printer)),
         Backend::Redshift => Box::new(redshift::RedshiftAuth::new(warning_printer)),

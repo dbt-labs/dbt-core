@@ -10,14 +10,14 @@
 mod tests {
     use adbc_core::{
         error::{Error, Result},
-        options::{AdbcVersion, OptionConnection},
+        options::{AdbcVersion, OptionConnection, OptionStatement, OptionValue},
     };
     use arrow_array::Array as _;
     use arrow_array::{cast::AsArray, types::*};
     use dbt_adbc::{
         Backend, Connection, Database, Driver, Statement, athena, bigquery, connection,
         database::{self, LogLevel},
-        driver, salesforce, snowflake,
+        driver, postgres, salesforce, snowflake,
     };
     use std::collections::HashSet;
     use std::env;
@@ -50,7 +50,7 @@ mod tests {
                     .with_named_option(bigquery::AUTH_CREDENTIALS, auth_credentials)?;
                 Ok(builder)
             }
-            Backend::Postgres | Backend::Redshift => {
+            Backend::Postgres | Backend::MotherDuck | Backend::Redshift => {
                 // Configuration for Postgres:
                 //     CREATE ROLE username WITH LOGIN PASSWORD 'an_secure_password';
                 //     CREATE DATABASE adbc_test;
@@ -280,6 +280,7 @@ mod tests {
                     );
                 }
                 Backend::Postgres
+                | Backend::MotherDuck
                 | Backend::Redshift
                 | Backend::Databricks
                 | Backend::DuckDB
@@ -328,6 +329,107 @@ mod tests {
     #[test]
     fn statement_execute_postgres() -> Result<()> {
         execute_statement(Backend::Postgres)
+    }
+
+    fn motherduck_connection() -> Result<Box<dyn Connection>> {
+        let uri = env::var("ADBC_MOTHERDUCK_URI").expect("ADBC_MOTHERDUCK_URI is set");
+        let mut driver =
+            driver::Builder::new(Backend::MotherDuck, driver::LoadStrategy::System(None))
+                .with_adbc_version(ADBC_VERSION)
+                .try_load()?;
+        let mut builder = database::Builder::new(Backend::MotherDuck);
+        builder.with_parse_uri(uri)?;
+        let mut database = builder.build(&mut driver)?;
+        connection::Builder::default().build(&mut database)
+    }
+
+    fn motherduck_statement(
+        connection: &mut dyn Connection,
+        sql: &str,
+    ) -> Result<Box<dyn Statement>> {
+        let mut statement = connection.new_statement()?;
+        statement.set_option(
+            OptionStatement::Other(postgres::USE_COPY.to_string()),
+            OptionValue::String("false".to_string()),
+        )?;
+        statement.set_sql_query(sql)?;
+        Ok(statement)
+    }
+
+    #[test]
+    fn motherduck_postgres_endpoint_qualification() -> Result<()> {
+        if env::var_os("ADBC_MOTHERDUCK_URI").is_none() {
+            eprintln!("skipping: ADBC_MOTHERDUCK_URI is not set");
+            return Ok(());
+        }
+        let mut connection = motherduck_connection()?;
+
+        let mut statement = motherduck_statement(
+            connection.as_mut(),
+            "SELECT 42::INTEGER AS answer, [1, 2, 3]::INTEGER[] AS values",
+        )?;
+        let batch = statement
+            .execute()?
+            .next()
+            .expect("a record batch")
+            .map_err(Error::from)?;
+        eprintln!("MotherDuck qualification schema: {:?}", batch.schema());
+        assert_eq!(batch.column(0).as_primitive::<Int32Type>().value(0), 42);
+        assert_eq!(batch.column(1).as_list::<i32>().value_length(0), 3);
+        drop(statement);
+
+        let mut statement = motherduck_statement(
+            connection.as_mut(),
+            "SELECT column_name, column_type FROM (DESCRIBE SELECT 1::INTEGER AS id)",
+        )?;
+        let batch = statement
+            .execute()?
+            .next()
+            .expect("a record batch")
+            .map_err(Error::from)?;
+        assert_eq!(batch.column(0).as_string::<i32>().value(0), "id");
+        assert_eq!(batch.column(1).as_string::<i32>().value(0), "INTEGER");
+        drop(statement);
+
+        let table = format!("main.__dbt_adbc_motherduck_{}", std::process::id());
+        let qualification = (|| -> Result<()> {
+            let mut statement = motherduck_statement(
+                connection.as_mut(),
+                &format!("CREATE TABLE {table} (id INTEGER)"),
+            )?;
+            statement.execute_update()?;
+            drop(statement);
+
+            connection.set_option(OptionConnection::AutoCommit, "false".into())?;
+            let mut statement = motherduck_statement(
+                connection.as_mut(),
+                &format!("INSERT INTO {table} VALUES (1), (2)"),
+            )?;
+            assert_eq!(statement.execute_update()?, Some(2));
+            drop(statement);
+            connection.rollback()?;
+
+            let mut statement = motherduck_statement(
+                connection.as_mut(),
+                &format!("SELECT count(*) AS count FROM {table}"),
+            )?;
+            let batch = statement
+                .execute()?
+                .next()
+                .expect("a record batch")
+                .map_err(Error::from)?;
+            assert_eq!(batch.column(0).as_primitive::<Int64Type>().value(0), 0);
+            Ok(())
+        })();
+
+        let mut cleanup = motherduck_statement(
+            connection.as_mut(),
+            &format!("DROP TABLE IF EXISTS {table}"),
+        )?;
+        let cleanup_result = cleanup.execute_update();
+        qualification?;
+        cleanup_result?;
+        Ok(())
     }
 
     #[test_with::env(DATABRICKS_TOKEN)]
