@@ -4028,43 +4028,40 @@ mod source_test_node_unique_id_tests {
     use super::{source_unique_id_from_test_metadata, Value};
 
     #[test]
-    fn resolves_source_subject_from_generic_test_model_argument() {
-        let metadata: Value = serde_json::from_str(
-            r#"{"kwargs":{"model":"{{ get_where_subquery(source('raw', 'orders')) }}"}}"#,
-        )
-        .unwrap();
+    fn resolves_literal_source_arguments_and_rejects_dynamic_or_missing_subjects() {
+        for (model, package, expected) in [
+            (
+                "{{ get_where_subquery(source('raw', 'orders')) }}",
+                Some("source_test_node_unique_id"),
+                Some("source.source_test_node_unique_id.raw.orders"),
+            ),
+            (
+                "{{ source(\"raw\", \"orders\") }}",
+                Some("pkg"),
+                Some("source.pkg.raw.orders"),
+            ),
+            (
+                "{{ source(var('source_name'), 'orders') }}",
+                Some("pkg"),
+                None,
+            ),
+        ] {
+            let metadata = serde_json::json!({"kwargs": {"model": model}});
+            assert_eq!(
+                source_unique_id_from_test_metadata(&metadata, package).as_deref(),
+                expected,
+                "model argument: {model}"
+            );
+        }
 
+        let missing = serde_json::json!({"kwargs": {}});
         assert_eq!(
-            source_unique_id_from_test_metadata(&metadata, Some("source_test_node_unique_id")),
-            Some("source.source_test_node_unique_id.raw.orders".to_string())
+            source_unique_id_from_test_metadata(&missing, Some("pkg")),
+            None
         );
-    }
-
-    #[test]
-    fn resolves_double_quoted_source_arguments() {
-        let metadata: Value = serde_json::from_str(
-            r#"{"kwargs":{"model":"{{ source(\"raw\", \"orders\") }}"}}"#,
-        )
-        .unwrap();
-
+        let literal = serde_json::json!({"kwargs": {"model": "{{ source('raw', 'orders') }}"}});
         assert_eq!(
-            source_unique_id_from_test_metadata(&metadata, Some("pkg")),
-            Some("source.pkg.raw.orders".to_string())
-        );
-    }
-
-    #[test]
-    fn leaves_dynamic_or_missing_subjects_unresolved() {
-        let dynamic: Value = serde_json::from_str(
-            r#"{"kwargs":{"model":"{{ source(var('source_name'), 'orders') }}"}}"#,
-        )
-        .unwrap();
-        let missing: Value = serde_json::from_str(r#"{"kwargs":{}}"#).unwrap();
-
-        assert_eq!(source_unique_id_from_test_metadata(&dynamic, Some("pkg")), None);
-        assert_eq!(source_unique_id_from_test_metadata(&missing, Some("pkg")), None);
-        assert_eq!(
-            source_unique_id_from_test_metadata(&dynamic, None),
+            source_unique_id_from_test_metadata(&literal, None),
             None
         );
     }
