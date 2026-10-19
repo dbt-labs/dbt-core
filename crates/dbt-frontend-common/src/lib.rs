@@ -3,6 +3,7 @@ pub mod constraint;
 pub mod error;
 pub mod expr;
 pub mod ident;
+pub mod result;
 pub mod span;
 pub mod types;
 pub mod utils;

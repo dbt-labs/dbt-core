@@ -4087,7 +4087,7 @@ impl AdapterImpl {
                         Ok(is_partition_match && is_cluster_match)
                     }
                     Err(e) => {
-                        if e.kind() == AdapterErrorKind::NotFound {
+                        if is_bigquery_not_found_error(&e) {
                             Ok(true)
                         } else {
                             Err(e)
