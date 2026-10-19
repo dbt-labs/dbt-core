@@ -6,10 +6,9 @@
 use arrow::array::RecordBatch;
 use arrow::compute::CastOptions;
 use arrow_schema::{ArrowError, DataType, Field, Schema};
-use datafusion_common::DataFusionError;
 use dbt_adapter_core::AdapterType;
+use dbt_common::FsResult;
 use futures::TryStreamExt;
-use parquet::arrow::ArrowWriter;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use std::fs::File;
 use std::io::{BufReader, Seek, SeekFrom};
@@ -37,37 +36,26 @@ pub enum InferColumnNameStrategy {
 pub fn read_json_seed(
     path: &Path,
     load_batches: bool,
-) -> Result<(Arc<Schema>, Option<Vec<RecordBatch>>), DataFusionError> {
-    let file = File::open(path).map_err(|e| DataFusionError::External(Box::new(e)))?;
+) -> FsResult<(Arc<Schema>, Option<Vec<RecordBatch>>)> {
+    let file = File::open(path)?;
     let mut reader = BufReader::new(file);
-    let (schema, _) = arrow::json::reader::infer_json_schema(&mut reader, None)
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
+    let (schema, _) = arrow::json::reader::infer_json_schema(&mut reader, None)?;
     let schema = Arc::new(schema);
     if !load_batches {
         return Ok((schema, None));
     }
-    reader
-        .seek(SeekFrom::Start(0))
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
-    let json_reader = arrow::json::reader::ReaderBuilder::new(schema.clone())
-        .build(reader)
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
-    let batches: Vec<RecordBatch> = json_reader
-        .collect::<Result<_, _>>()
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
+    reader.seek(SeekFrom::Start(0))?;
+    let json_reader = arrow::json::reader::ReaderBuilder::new(schema.clone()).build(reader)?;
+    let batches: Vec<RecordBatch> = json_reader.collect::<Result<_, _>>()?;
     Ok((schema, Some(batches)))
 }
 
 /// Open `path` as a tokio file and build a parquet stream reader.
 async fn open_parquet_stream(
     path: &Path,
-) -> Result<ParquetRecordBatchStreamBuilder<tokio::fs::File>, DataFusionError> {
-    let file = tokio::fs::File::open(path)
-        .await
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
-    ParquetRecordBatchStreamBuilder::new(file)
-        .await
-        .map_err(|e| DataFusionError::External(Box::new(e)))
+) -> FsResult<ParquetRecordBatchStreamBuilder<tokio::fs::File>> {
+    let file = tokio::fs::File::open(path).await?;
+    Ok(ParquetRecordBatchStreamBuilder::new(file).await?)
 }
 
 /// Read a Parquet seed file with view-type promotion (Utf8/LargeUtf8 → Utf8View,
@@ -77,62 +65,31 @@ async fn open_parquet_stream(
 pub async fn read_parquet_seed_view(
     path: &Path,
     load_batches: bool,
-) -> Result<(Arc<Schema>, Option<Vec<RecordBatch>>), DataFusionError> {
+) -> FsResult<(Arc<Schema>, Option<Vec<RecordBatch>>)> {
     let builder = open_parquet_stream(path).await?;
     let listing_schema = Arc::new(transform_schema_to_view(builder.schema().as_ref()));
     if !load_batches {
         return Ok((listing_schema, None));
     }
-    let stream = builder
-        .build()
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
-    let raw_batches: Vec<RecordBatch> = stream
-        .try_collect()
-        .await
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
+    let stream = builder.build()?;
+    let raw_batches: Vec<RecordBatch> = stream.try_collect().await?;
     let batches = raw_batches
         .into_iter()
         .map(|batch| promote_batch_to_view(batch, &listing_schema))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
+        .collect::<Result<Vec<_>, _>>()?;
     Ok((listing_schema, Some(batches)))
 }
 
 /// Read a Parquet seed file with physical Arrow types (no view promotion).
 /// Returns the footer-derived schema and all decoded batches.
 /// Blocking.
-pub fn read_parquet_seed_physical(
-    path: &Path,
-) -> Result<(Arc<Schema>, Vec<RecordBatch>), DataFusionError> {
-    let file = File::open(path).map_err(|e| DataFusionError::External(Box::new(e)))?;
-    let builder = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
+pub fn read_parquet_seed_physical(path: &Path) -> FsResult<(Arc<Schema>, Vec<RecordBatch>)> {
+    let file = File::open(path)?;
+    let builder = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(file)?;
     let schema = builder.schema().clone();
-    let reader = builder
-        .build()
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
-    let batches: Vec<RecordBatch> = reader
-        .collect::<Result<_, _>>()
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
+    let reader = builder.build()?;
+    let batches: Vec<RecordBatch> = reader.collect::<Result<_, _>>()?;
     Ok((schema, batches))
-}
-
-/// Build a zero-row parquet file in memory that preserves the given schema.
-/// Used by `--empty` to ship a schema-only seed payload to the db-runner.
-pub fn write_empty_parquet_bytes(schema: &Arc<Schema>) -> Result<Vec<u8>, String> {
-    let empty_batch = RecordBatch::new_empty(schema.clone());
-    let mut buf: Vec<u8> = Vec::new();
-    {
-        let mut writer = ArrowWriter::try_new(&mut buf, schema.clone(), None)
-            .map_err(|e| format!("ArrowWriter init failed: {e}"))?;
-        writer
-            .write(&empty_batch)
-            .map_err(|e| format!("ArrowWriter write failed: {e}"))?;
-        writer
-            .close()
-            .map_err(|e| format!("ArrowWriter close failed: {e}"))?;
-    }
-    Ok(buf)
 }
 
 /// Rebuild `batch` under `target_schema`, casting columns where types differ.
