@@ -493,6 +493,7 @@ class TestMicrobatchBuilder:
         context = MicrobatchBuilder.build_jinja_context_for_batch(
             model=microbatch_model,
             incremental_batch=True,
+            adapter=mock.Mock(),
         )
 
         assert context["model"] == microbatch_model.to_dict()
@@ -506,6 +507,7 @@ class TestMicrobatchBuilder:
         context = MicrobatchBuilder.build_jinja_context_for_batch(
             model=microbatch_model,
             incremental_batch=False,
+            adapter=mock.Mock(),
         )
 
         assert context["model"] == microbatch_model.to_dict()

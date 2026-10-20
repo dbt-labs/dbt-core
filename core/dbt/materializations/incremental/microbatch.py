@@ -102,7 +102,7 @@ class MicrobatchBuilder:
 
     @staticmethod
     def build_jinja_context_for_batch(
-        model: ModelNode, incremental_batch: bool, adapter: Optional[Any] = None
+        model: ModelNode, incremental_batch: bool, adapter: Any
     ) -> Dict[str, Any]:
         """
         Create context with entries that reflect microbatch model + incremental execution state
@@ -113,11 +113,7 @@ class MicrobatchBuilder:
 
         # Microbatch model properties
         model_dict = model.to_dict()
-        # Translate contract data_type aliases (e.g. float -> FLOAT64), as the base model context does
-        if adapter is not None and model.contract.alias_types is True:
-            for column in model_dict.get("columns", {}).values():
-                if column.get("data_type"):
-                    column["data_type"] = adapter.Column.translate_type(column["data_type"])
+        MicrobatchBuilder._translate_contract_alias_types(model, model_dict, adapter)
         jinja_context["model"] = model_dict
         jinja_context["sql"] = model.compiled_code
         jinja_context["compiled_code"] = model.compiled_code
@@ -128,6 +124,17 @@ class MicrobatchBuilder:
             jinja_context["should_full_refresh"] = lambda: False
 
         return jinja_context
+
+    @staticmethod
+    def _translate_contract_alias_types(
+        model: ModelNode, model_dict: Dict[str, Any], adapter: Any
+    ) -> None:
+        """Translate contract data_type aliases (e.g. float -> FLOAT64), as the base model context does"""
+        if model.contract.alias_types is not True:
+            return
+        for column in model_dict.get("columns", {}).values():
+            if column.get("data_type"):
+                column["data_type"] = adapter.Column.translate_type(column["data_type"])
 
     @staticmethod
     def offset_timestamp(timestamp: datetime, batch_size: BatchSize, offset: int) -> datetime:
