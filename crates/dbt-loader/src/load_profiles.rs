@@ -215,8 +215,7 @@ pub fn load_profiles(
 
 /// `type: fabricspark` (the v1 dbt-fabricspark adapter's profile type) is an
 /// alias for the "fabric" platform flavor of the spark adapter: rewrite it to
-/// `type: spark` before typed parsing so v1 profiles work unchanged. The
-/// fabric fields themselves identify the target as a Fabric Lakehouse.
+/// `type: spark` before typed parsing.
 fn rewrite_fabricspark_alias(credentials: &mut dbt_yaml::Mapping) {
     let is_fabricspark = matches!(
         credentials.get("type"),
