@@ -298,8 +298,17 @@ class NodeSelector(MethodManager):
         indirect_nodes = set()
         selected_and_parents = set()
         if indirect_selection == IndirectSelection.Buildable:
-            selected_and_parents = selected.union(self.graph.select_parents(selected)).union(
-                self.manifest.sources
+            # Sources and seeds are static tables with no parents: count them as present,
+            # so a test that reads one runs once its other parents are built.
+            seeds = {
+                unique_id
+                for unique_id, node in self.manifest.nodes.items()
+                if node.resource_type == NodeType.Seed
+            }
+            selected_and_parents = (
+                selected.union(self.graph.select_parents(selected))
+                .union(self.manifest.sources)
+                .union(seeds)
             )
 
         for unique_id in self.graph.select_successors(selected):
