@@ -315,12 +315,18 @@ async fn collect_packages(
 
 /// Returns the list of internal package directory names for a given adapter type.
 pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
-    let adapter_package = format!("dbt-{adapter_type}");
-    let mut packages = vec!["dbt-adapters".to_string(), adapter_package];
+    // The dedicated MotherDuck package lands in a later change. Until then,
+    // load only its DuckDB parent rather than requesting a missing package.
+    let mut packages = match adapter_type {
+        AdapterType::MotherDuck => vec!["dbt-adapters".to_string()],
+        _ => vec!["dbt-adapters".to_string(), format!("dbt-{adapter_type}")],
+    };
     match adapter_type {
         AdapterType::Redshift => packages.push("dbt-postgres".to_string()),
         AdapterType::Databricks => packages.push("dbt-spark".to_string()),
-        AdapterType::LakeCompute => packages.push("dbt-duckdb".to_string()),
+        AdapterType::LakeCompute | AdapterType::MotherDuck => {
+            packages.push("dbt-duckdb".to_string())
+        }
         _ => {}
     }
     packages
@@ -569,6 +575,14 @@ fn fill_default(paths: &mut Option<Vec<String>>, defaults: &[&str]) {
 #[cfg(test)]
 mod internal_package_union_tests {
     use super::*;
+
+    #[test]
+    fn motherduck_uses_only_its_duckdb_parent_package() {
+        assert_eq!(
+            internal_package_names(AdapterType::MotherDuck),
+            vec!["dbt-adapters".to_string(), "dbt-duckdb".to_string()]
+        );
+    }
 
     /// The union is over each adapter's *transitive closure*, so lake compute
     /// drags in `dbt-duckdb` via the inheritance table just as it does on its own.

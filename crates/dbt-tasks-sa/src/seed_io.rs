@@ -179,6 +179,7 @@ pub fn infer_seed_column_name_strategy(
             | AdapterType::Salesforce
             | AdapterType::Redshift
             | AdapterType::DuckDB
+            | AdapterType::MotherDuck
             | AdapterType::LakeCompute,
         ) => InferColumnNameStrategy::Lowercase,
         (false, AdapterType::Snowflake) => InferColumnNameStrategy::Uppercase,
@@ -208,6 +209,16 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn motherduck_uses_duckdb_seed_column_name_strategy() {
+        for quote_columns in [false, true] {
+            assert_eq!(
+                infer_seed_column_name_strategy(quote_columns, AdapterType::MotherDuck),
+                infer_seed_column_name_strategy(quote_columns, AdapterType::DuckDB),
+            );
+        }
+    }
 
     /// Footer-derived listing schema with [`transform_schema_to_view`] — reference for async listing.
     fn parquet_footer_listing_schema_gold(path: &Path) -> Arc<Schema> {

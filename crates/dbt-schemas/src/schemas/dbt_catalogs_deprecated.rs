@@ -187,7 +187,11 @@ impl DbtCatalogs {
             CATALOG_DATABASE_PLATFORMS
                 .iter()
                 .filter_map(move |&adapter_type| {
-                    let block = catalog.config_block(adapter_type.as_ref())?;
+                    let platform = match adapter_type {
+                        AdapterType::MotherDuck => AdapterType::DuckDB,
+                        _ => adapter_type,
+                    };
+                    let block = catalog.config_block(platform.as_ref())?;
                     let catalog_database = block
                         .get(yml::Value::from("catalog_database"))
                         .and_then(|v| v.as_str())
@@ -3171,5 +3175,26 @@ catalogs:
             .catalogs_matching_database("horizon_db", AdapterType::DuckDB)
             .unwrap();
         assert!(matches.is_empty(), "matches was: {matches:?}");
+    }
+
+    #[test]
+    fn catalogs_matching_database_motherduck_uses_duckdb_config() {
+        let c = make_catalogs(
+            r#"
+catalogs:
+  - name: horizon_remote
+    type: horizon
+    table_format: iceberg
+    config:
+      duckdb:
+        endpoint: "https://horizon.example.com"
+        catalog_database: "motherduck_alias"
+"#,
+        );
+
+        let matches = c
+            .catalogs_matching_database("MOTHERDUCK_ALIAS", AdapterType::MotherDuck)
+            .unwrap();
+        assert_eq!(matches, vec!["horizon_remote"]);
     }
 }
