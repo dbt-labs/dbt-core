@@ -356,9 +356,53 @@ mod tests {
         Ok(statement)
     }
 
+    fn cleanup_motherduck_table(connection: &mut dyn Connection, table: &str) -> Result<()> {
+        // Clear a failed transaction before attempting cleanup. If rollback itself
+        // fails, DROP will return the actionable cleanup error.
+        let _ = connection.rollback();
+        let mut cleanup =
+            motherduck_statement(connection, &format!("DROP TABLE IF EXISTS {table}"))?;
+        cleanup.execute_update()?;
+        drop(cleanup);
+        connection.commit()
+    }
+
+    fn finish_motherduck_qualification(
+        connection: &mut dyn Connection,
+        table: &str,
+        qualification: Result<()>,
+    ) -> Result<()> {
+        cleanup_motherduck_table(connection, table)?;
+        qualification
+    }
+
+    fn assert_motherduck_table_absent(
+        connection: &mut dyn Connection,
+        table_name: &str,
+    ) -> Result<()> {
+        let mut statement = motherduck_statement(
+            connection,
+            &format!(
+                "SELECT count(*) AS count FROM duckdb_tables() \
+                 WHERE schema_name = 'main' AND table_name = '{table_name}'"
+            ),
+        )?;
+        let batch = statement
+            .execute()?
+            .next()
+            .expect("a record batch")
+            .map_err(Error::from)?;
+        assert_eq!(batch.column(0).as_primitive::<Int64Type>().value(0), 0);
+        Ok(())
+    }
+
     #[test]
     fn motherduck_postgres_endpoint_qualification() -> Result<()> {
         if env::var_os("ADBC_MOTHERDUCK_URI").is_none() {
+            assert!(
+                env::var_os("ADBC_MOTHERDUCK_TESTS").is_none(),
+                "ADBC_MOTHERDUCK_URI must be set when ADBC_MOTHERDUCK_TESTS is enabled"
+            );
             eprintln!("skipping: ADBC_MOTHERDUCK_URI is not set");
             return Ok(());
         }
@@ -422,13 +466,36 @@ mod tests {
             Ok(())
         })();
 
-        let mut cleanup = motherduck_statement(
+        finish_motherduck_qualification(connection.as_mut(), &table, qualification)?;
+        assert_motherduck_table_absent(connection.as_mut(), table.rsplit_once('.').unwrap().1)?;
+
+        let failed_table_name = format!("__dbt_adbc_motherduck_failed_{}", std::process::id());
+        let failed_table = format!("main.{failed_table_name}");
+        let mut statement = motherduck_statement(
             connection.as_mut(),
-            &format!("DROP TABLE IF EXISTS {table}"),
+            &format!("CREATE TABLE {failed_table} (id INTEGER)"),
         )?;
-        let cleanup_result = cleanup.execute_update();
-        qualification?;
-        cleanup_result?;
+        statement.execute_update()?;
+        drop(statement);
+        connection.commit()?;
+
+        let mut statement = motherduck_statement(
+            connection.as_mut(),
+            &format!("INSERT INTO {failed_table} VALUES ('not-an-integer')"),
+        )?;
+        let qualification_failure = statement
+            .execute_update()
+            .expect_err("invalid insert must fail qualification");
+        drop(statement);
+        assert!(
+            finish_motherduck_qualification(
+                connection.as_mut(),
+                &failed_table,
+                Err(qualification_failure),
+            )
+            .is_err()
+        );
+        assert_motherduck_table_absent(connection.as_mut(), &failed_table_name)?;
         Ok(())
     }
 

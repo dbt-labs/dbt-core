@@ -721,6 +721,8 @@ Original error: {}",
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_auth::NoopAuthWarningPrinter;
+    use dbt_auth::motherduck::MotherDuckAuth;
     use dbt_yaml::Mapping;
     use minijinja::Environment;
     use minijinja::value::Value;
@@ -791,6 +793,58 @@ mod tests {
                 panic!("expected an overridden config with the compute override applied")
             }
         }
+    }
+
+    #[dbt_runtime::worker_test]
+    fn motherduck_production_connection_path() -> AdapterResult<()> {
+        if std::env::var_os("ADBC_MOTHERDUCK_TESTS").is_none() {
+            return Ok(());
+        }
+
+        let required_env = |name| {
+            std::env::var(name).unwrap_or_else(|_| {
+                panic!("{name} must be set when ADBC_MOTHERDUCK_TESTS is enabled")
+            })
+        };
+        let config = AdapterConfig::new(Mapping::from_iter([
+            ("host".into(), required_env("ADBC_MOTHERDUCK_HOST").into()),
+            ("token".into(), required_env("ADBC_MOTHERDUCK_TOKEN").into()),
+            (
+                "database".into(),
+                required_env("ADBC_MOTHERDUCK_DATABASE").into(),
+            ),
+            ("schema".into(), "main".into()),
+        ]));
+        let adapter_type = AdapterType::MotherDuck;
+        let engine = AdbcEngine::new(
+            adapter_type,
+            Arc::new(MotherDuckAuth::new(Box::new(NoopAuthWarningPrinter))),
+            config,
+            ResolvedQuoting::trues(),
+            QueryCommentConfig::from_query_comment(None, adapter_type, false, None),
+            Arc::new(crate::sql_types::DefaultTypeOps::new(adapter_type)),
+            Arc::new(crate::stmt_splitter::DefaultStmtSplitter),
+            Arc::new(RelationCache::default()),
+            BTreeMap::new(),
+            None,
+            None,
+        );
+
+        assert_eq!(engine.backend(), Backend::MotherDuck);
+        let mut connection = engine.new_connection(None, None)?;
+        let batch = engine.execute(
+            None,
+            connection.as_mut(),
+            &QueryCtx::new("motherduck production-path qualification"),
+            "SELECT 42::INTEGER AS answer",
+            CancellationToken::never_cancels(),
+        )?;
+        assert_eq!(batch.num_rows(), 1);
+        assert_eq!(
+            batch.schema().field(0).data_type(),
+            &arrow_schema::DataType::Int32
+        );
+        Ok(())
     }
 }
 

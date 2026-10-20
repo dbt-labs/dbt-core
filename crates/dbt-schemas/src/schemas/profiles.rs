@@ -244,7 +244,6 @@ impl DbConfig {
                 "schema",
                 "sslrootcert",
                 "connect_timeout",
-                "attach_databases",
                 "settings",
                 "is_ducklake",
             ],
@@ -967,9 +966,6 @@ pub struct MotherDuckDbConfig {
     pub connect_timeout: Option<StringOrInteger>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub attach_databases: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub settings: Option<HashMap<String, YmlValue>>,
