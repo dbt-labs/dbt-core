@@ -60,6 +60,7 @@ drivers = [
   "duckdb_extended-0.21.0.dev+dbt0.0.30",
   "duckdb_extended-0.21.0.dev+dbt0.0.31",
   "duckdb_extended-0.21.0.dev+dbt0.0.32",
+  "duckdb_extended-0.21.0.dev+dbt0.0.33",
   "postgresql-0.18.0+dbt0.0.3",
   "postgresql-0.21.0+dbt0.21.0",
   # skipped: "snowflake-0.21.0.dev+dbt0.21.8"
@@ -73,6 +74,7 @@ drivers = [
   "snowflake-0.21.0.dev+dbt0.21.17",
   "snowflake-0.21.0.dev+dbt0.21.18",
   "snowflake-0.21.0.dev+dbt0.21.19",
+  "snowflake-0.21.0.dev+dbt0.21.20",
   "redshift-0.18.0+dbt0.18.2",
   "redshift-0.18.0+dbt0.18.3",
   "redshift-0.18.0+dbt0.18.4",

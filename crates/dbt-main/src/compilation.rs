@@ -131,6 +131,7 @@ use std::{sync::Arc, time::SystemTime};
 
 use crate::utils::update_manifest_with_macro_depends_on;
 use dbt_common::io_args::LocalExecutionBackendKind;
+use dbt_common::telemetry_command::TelemetryCommand;
 use dbt_schemas::state::NodeResolverTracker;
 use serde_json::to_string_pretty;
 
@@ -2773,7 +2774,7 @@ fn send_vortex_telemetry_if_possible(
                 &arg.io.invocation_id,
                 root_project_name,
                 Some(&dbt_state.dbt_profile.relative_profile_path),
-                arg.command.as_str().to_string(),
+                TelemetryCommand::bare(arg.command),
             );
         }
         adapter_info_event(

@@ -55,7 +55,7 @@ parquet = { workspace = true, features = ["async"] }
 petgraph = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
 sqlparser = { workspace = true, features = ["visitor"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
