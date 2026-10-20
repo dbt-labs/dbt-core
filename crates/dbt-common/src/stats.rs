@@ -107,7 +107,7 @@ pub struct Stat {
     /// Rows affected by the warehouse DML (e.g. `CREATE TABLE AS SELECT`).
     /// Set from the NodeEvaluated OTel span after execution; `None` for views.
     pub rows_affected: Option<i64>,
-    /// Connection-limit wait time accumulated on the NodeEvaluated span.
+    /// Thread pool wait time accumulated on the NodeEvaluated span.
     /// Subtracted from wall-clock duration to report net execution time.
     pub idle_time_ms: Option<u64>,
     pub start_time: SystemTime,

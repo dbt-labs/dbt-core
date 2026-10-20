@@ -578,7 +578,6 @@ impl Task for RunTask {
                             ctx.thread_id,
                         );
                         stat.rows_affected = span_rows_affected;
-                        stat.idle_time_ms = span_idle_time_ms;
                         ctx.inner.run_stats.insert(unique_id.clone(), stat);
                     }
 
@@ -621,6 +620,12 @@ impl Task for RunTask {
                     node_status
                 }
             };
+
+            // Tests, unit tests and the error path insert their own stats, so set
+            // the idle time on whichever stat was recorded.
+            if let Some(mut stat) = ctx.inner.run_stats.get_mut(&unique_id) {
+                stat.idle_time_ms = span_idle_time_ms;
+            }
 
             // Regression guard: run_stats must be populated before telemetry
             // emission. PR #9146 broke this by emitting before stats were
