@@ -318,6 +318,13 @@ impl CatalogRelation {
         }
     }
 
+    fn default_catalog_relation_motherduck() -> CatalogRelation {
+        CatalogRelation {
+            adapter_type: AdapterType::MotherDuck,
+            ..Self::default_catalog_relation_duckdb()
+        }
+    }
+
     // ==========
     // Databricks
     // ==========
@@ -1144,8 +1151,12 @@ fn from_model_config_and_catalogs_default(
                 Some(catalog_name) => catalog_name,
             }
         }
+        AdapterType::MotherDuck => match model_catalog_name(model, AdapterType::MotherDuck) {
+            None => return Ok(CatalogRelation::default_catalog_relation_motherduck()),
+            Some(catalog_name) => catalog_name,
+        },
         // Lake compute behaves as DuckDB-backed for relation-building purposes.
-        AdapterType::DuckDB | AdapterType::MotherDuck | AdapterType::LakeCompute => {
+        AdapterType::DuckDB | AdapterType::LakeCompute => {
             match model_catalog_name(model, adapter_type) {
                 None => return Ok(CatalogRelation::default_catalog_relation_duckdb()),
                 Some(catalog_name) => catalog_name,
@@ -1203,6 +1214,9 @@ fn from_model_config_and_catalogs_default(
         }
         (AdapterType::Bigquery, CatalogType::BiglakeMetastore) => {
             CatalogRelation::build_bigquery_biglake_with_catalogs(model, catalog, &catalog_name)
+        }
+        (AdapterType::MotherDuck, CatalogType::MotherDuck) => {
+            CatalogRelation::build_motherduck_with_catalogs(catalog, &catalog_name)
         }
         // Horizon/Unity are Iceberg REST under the hood; with duckdb 1.5.4's
         // write-compat ATTACH options they are writable, so models may target
@@ -1271,6 +1285,13 @@ fn from_model_config_and_catalogs_default(
             AdapterErrorKind::Configuration,
             format!(
                 "Catalog '{catalog_name}' has type '{}'; Bigquery v2 mapping supports only 'biglake_metastore'",
+                other.as_str()
+            ),
+        )),
+        (AdapterType::MotherDuck, other) => Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Catalog '{catalog_name}' has type '{}'; MotherDuck v2 mapping supports only 'motherduck'",
                 other.as_str()
             ),
         )),
@@ -1424,6 +1445,37 @@ fn reject_unsupported_databricks_hive_model_fields(model: &Value) -> AdapterResu
 }
 
 impl CatalogRelation {
+    fn build_motherduck_with_catalogs(
+        catalog: &CatalogSpecView<'_>,
+        catalog_name: &str,
+    ) -> AdapterResult<CatalogRelation> {
+        let motherduck = require_platform_block(catalog, catalog_name, "motherduck")?;
+        let database = get_yaml_str(motherduck, "database").unwrap_or(catalog_name);
+        let catalog_database = get_yaml_str(motherduck, FIELD_CATALOG_DATABASE).unwrap_or(database);
+
+        let mut adapter_properties = BTreeMap::new();
+        adapter_properties.insert("database".to_string(), database.to_string());
+        adapter_properties.insert(
+            "attached_database".to_string(),
+            catalog_database.to_string(),
+        );
+
+        Ok(CatalogRelation {
+            adapter_type: AdapterType::MotherDuck,
+            catalog_name: Some(catalog_name.to_string()),
+            integration_name: None,
+            catalog_type: CatalogType::MotherDuck,
+            table_format: catalog.table_format,
+            file_format: None,
+            external_volume: None,
+            catalog_database: Some(catalog_database.to_string()),
+            lakehouse_catalog: None,
+            base_location: None,
+            adapter_properties,
+            is_transient: None,
+        })
+    }
+
     fn build_databricks_unity_with_catalogs(
         model: &Value,
         catalog: &CatalogSpecView<'_>,
@@ -3189,6 +3241,158 @@ catalogs:
                 "Snowflake v2 unity does not support model field 'external_volume' yet."
             ));
         }
+    }
+
+    // ===== MotherDuck v2 tests =====
+
+    #[test]
+    fn motherduck_catalog_defaults_database_and_alias_to_catalog_name() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: reporting
+    type: motherduck
+    table_format: default
+    config:
+      motherduck: {}
+"#,
+        );
+        let m = model(
+            AdapterType::MotherDuck,
+            json!({ "catalog_name": "reporting" }),
+        );
+
+        let relation =
+            from_model_config_and_catalogs_default(AdapterType::MotherDuck, &m, Arc::new(catalogs))
+                .unwrap();
+
+        assert_eq!(relation.adapter_type, AdapterType::MotherDuck);
+        assert_eq!(relation.catalog_name.as_deref(), Some("reporting"));
+        assert_eq!(relation.catalog_type, CatalogType::MotherDuck);
+        assert_eq!(relation.table_format, TableFormat::Default);
+        assert_eq!(relation.catalog_database.as_deref(), Some("reporting"));
+        assert_eq!(
+            relation
+                .adapter_properties
+                .get("database")
+                .map(String::as_str),
+            Some("reporting")
+        );
+        assert_eq!(
+            relation
+                .adapter_properties
+                .get("attached_database")
+                .map(String::as_str),
+            Some("reporting")
+        );
+    }
+
+    #[test]
+    fn motherduck_catalog_uses_source_database_and_routing_alias() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: reporting
+    type: motherduck
+    table_format: default
+    config:
+      motherduck:
+        database: actual_database_name
+        catalog_database: reporting_alias
+"#,
+        );
+        let m = model(
+            AdapterType::MotherDuck,
+            json!({ "catalog_name": "reporting" }),
+        );
+
+        let relation =
+            from_model_config_and_catalogs_default(AdapterType::MotherDuck, &m, Arc::new(catalogs))
+                .unwrap();
+
+        assert_eq!(
+            relation
+                .adapter_properties
+                .get("database")
+                .map(String::as_str),
+            Some("actual_database_name")
+        );
+        assert_eq!(
+            relation.catalog_database.as_deref(),
+            Some("reporting_alias")
+        );
+        assert_eq!(
+            relation
+                .adapter_properties
+                .get("attached_database")
+                .map(String::as_str),
+            Some("reporting_alias")
+        );
+    }
+
+    #[test]
+    fn motherduck_catalog_defaults_alias_to_source_database() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: reporting
+    type: motherduck
+    table_format: default
+    config:
+      motherduck:
+        database: actual_database_name
+"#,
+        );
+        let m = model(
+            AdapterType::MotherDuck,
+            json!({ "catalog_name": "reporting" }),
+        );
+
+        let relation =
+            from_model_config_and_catalogs_default(AdapterType::MotherDuck, &m, Arc::new(catalogs))
+                .unwrap();
+
+        assert_eq!(
+            relation.catalog_database.as_deref(),
+            Some("actual_database_name")
+        );
+        assert_eq!(
+            relation
+                .adapter_properties
+                .get("attached_database")
+                .map(String::as_str),
+            Some("actual_database_name")
+        );
+    }
+
+    #[test]
+    fn motherduck_rejects_unsupported_catalog_type_as_configuration_error() {
+        let catalogs = load_catalogs_yaml(
+            r#"
+catalogs:
+  - name: local_files
+    type: local_filesystem
+    table_format: default
+    config:
+      duckdb:
+        root_path: data
+"#,
+        );
+        let m = model(
+            AdapterType::MotherDuck,
+            json!({ "catalog_name": "local_files" }),
+        );
+
+        let error =
+            from_model_config_and_catalogs_default(AdapterType::MotherDuck, &m, Arc::new(catalogs))
+                .unwrap_err();
+        assert_eq!(error.kind(), AdapterErrorKind::Configuration);
+        assert!(
+            error
+                .to_string()
+                .contains("MotherDuck v2 mapping supports only 'motherduck'"),
+            "unexpected error: {error}"
+        );
     }
 
     // ===== DuckDB v2 tests =====

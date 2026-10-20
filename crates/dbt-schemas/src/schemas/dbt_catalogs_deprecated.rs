@@ -187,16 +187,20 @@ impl DbtCatalogs {
             CATALOG_DATABASE_PLATFORMS
                 .iter()
                 .filter_map(move |&adapter_type| {
-                    let platform = match adapter_type {
-                        AdapterType::MotherDuck => AdapterType::DuckDB,
-                        _ => adapter_type,
-                    };
-                    let block = catalog.config_block(platform.as_ref())?;
-                    let catalog_database = block
+                    let block = catalog.config_block(adapter_type.as_ref())?;
+                    let configured_alias = block
                         .get(yml::Value::from("catalog_database"))
-                        .and_then(|v| v.as_str())
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty());
+                        .and_then(|v| v.as_str());
+                    let catalog_database = match adapter_type {
+                        AdapterType::MotherDuck => configured_alias.or_else(|| {
+                            block
+                                .get(yml::Value::from("database"))
+                                .and_then(|v| v.as_str())
+                        }),
+                        _ => configured_alias,
+                    }
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty());
                     Some(DeprecatedCatalogPlatformEntry {
                         adapter_type,
                         catalog_name: catalog.name,
@@ -234,7 +238,8 @@ impl DbtCatalogs {
             .iter()
             .filter(|catalog| {
                 names.contains(&catalog.name)
-                    && catalog.physical_table_format() != PhysicalTableFormat::Default
+                    && (catalog.catalog_type == CatalogType::MotherDuck
+                        || catalog.physical_table_format() != PhysicalTableFormat::Default)
             })
             .map(|catalog| catalog.name.to_string())
             .collect())
@@ -3178,23 +3183,23 @@ catalogs:
     }
 
     #[test]
-    fn catalogs_matching_database_motherduck_uses_duckdb_config() {
+    fn catalogs_matching_database_motherduck_uses_native_alias() {
         let c = make_catalogs(
             r#"
 catalogs:
-  - name: horizon_remote
-    type: horizon
-    table_format: iceberg
+  - name: reporting
+    type: motherduck
+    table_format: default
     config:
-      duckdb:
-        endpoint: "https://horizon.example.com"
-        catalog_database: "motherduck_alias"
+      motherduck:
+        database: "actual_database"
+        catalog_database: "reporting_alias"
 "#,
         );
 
         let matches = c
-            .catalogs_matching_database("MOTHERDUCK_ALIAS", AdapterType::MotherDuck)
+            .catalogs_matching_database("REPORTING_ALIAS", AdapterType::MotherDuck)
             .unwrap();
-        assert_eq!(matches, vec!["horizon_remote"]);
+        assert_eq!(matches, vec!["reporting"]);
     }
 }

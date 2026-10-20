@@ -16,10 +16,10 @@ impl CatalogRelation {
             AdapterType::Bigquery => {
                 Self::deprecated_from_model_config_and_catalogs_bigquery(model, catalogs)
             }
-            // Lake compute is DuckDB-backed for relation-building purposes;
-            // the deprecated catalogs.yml shape never supported per-catalog DuckDB
-            // selection either, so this mirrors the DuckDB arm exactly.
-            AdapterType::DuckDB | AdapterType::MotherDuck | AdapterType::LakeCompute => {
+            // The deprecated catalogs.yml shape never supported per-catalog
+            // DuckDB or MotherDuck selection.
+            AdapterType::MotherDuck => Ok(Self::default_catalog_relation_motherduck()),
+            AdapterType::DuckDB | AdapterType::LakeCompute => {
                 Ok(Self::default_catalog_relation_duckdb())
             }
             _ => Err(AdapterError::new(
