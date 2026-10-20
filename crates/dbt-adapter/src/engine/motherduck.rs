@@ -282,4 +282,15 @@ catalogs:
             assert!(catalog_init_sql(Some(view)).unwrap().is_empty());
         });
     }
+
+    #[test]
+    fn init_sql_does_not_attach_profile_databases() {
+        let value: dbt_yaml::Value =
+            dbt_yaml::from_str("attach_databases: [raw, analytics]\n").unwrap();
+        let dbt_yaml::Value::Mapping(mapping, _) = value else {
+            panic!("expected mapping");
+        };
+
+        assert!(init_sql(&AdapterConfig::new(mapping)).unwrap().is_empty());
+    }
 }

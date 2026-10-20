@@ -43,7 +43,7 @@
             'BASE TABLE' as table_type,
             t.comment as table_comment
         from duckdb_tables() t
-        where upper(t.database_name) = upper('{{ information_schema.database }}')
+        where upper(t.database_name) = upper('{{ information_schema.database | replace("'", "''") }}')
 
         union all
 
@@ -54,7 +54,7 @@
             'VIEW' as table_type,
             v.comment as table_comment
         from duckdb_views() v
-        where upper(v.database_name) = upper('{{ information_schema.database }}')
+        where upper(v.database_name) = upper('{{ information_schema.database | replace("'", "''") }}')
     ) catalog_tables
 {%- endmacro %}
 
@@ -71,7 +71,7 @@
             c.data_type as column_type,
             c.comment as column_comment
         from duckdb_columns() c
-        where upper(c.database_name) = upper('{{ information_schema.database }}')
+        where upper(c.database_name) = upper('{{ information_schema.database | replace("'", "''") }}')
     ) catalog_columns
 {%- endmacro %}
 
@@ -100,7 +100,7 @@
     {% else %}
         where (
             {%- for schema in schemas -%}
-                upper(table_schema) = upper('{{ schema }}'){% if not loop.last %} or {% endif %}
+                upper(table_schema) = upper('{{ schema | replace("'", "''") }}'){% if not loop.last %} or {% endif %}
             {%- endfor -%}
         )
     {% endif %}
@@ -120,9 +120,9 @@
                 {% endif %}
 
                 (
-                    upper(table_schema) = upper('{{ relation.schema }}')
+                    upper(table_schema) = upper('{{ relation.schema | replace("'", "''") }}')
                     {%- if relation.identifier %}
-                    and upper(table_name) = upper('{{ relation.identifier }}')
+                    and upper(table_name) = upper('{{ relation.identifier | replace("'", "''") }}')
                     {%- endif %}
                 ){% if not loop.last %} or {% endif %}
             {%- endfor -%}

@@ -2,7 +2,7 @@
   {%- call statement('create_schema') -%}
     {% set sql %}
         select type from duckdb_databases()
-        where lower(database_name)='{{ relation.database | lower }}'
+        where lower(database_name)='{{ relation.database | lower | replace("'", "''") }}'
         and type='sqlite'
     {% endset %}
     {% set results = run_query(sql) %}
@@ -339,8 +339,8 @@ def materialize(df, con):
   {% call statement('get_indexes_on_relation', fetch_result=True) %}
     SELECT index_name
     FROM duckdb_indexes()
-    WHERE schema_name = '{{ relation.schema }}'
-      AND table_name = '{{ relation.identifier }}'
+    WHERE schema_name = '{{ relation.schema | replace("'", "''") }}'
+      AND table_name = '{{ relation.identifier | replace("'", "''") }}'
   {% endcall %}
 
   {% set results = load_result('get_indexes_on_relation').table %}
@@ -355,8 +355,8 @@ def materialize(df, con):
   {% call statement('verify_indexes_dropped', fetch_result=True) %}
     SELECT COUNT(*) as remaining_indexes
     FROM duckdb_indexes()
-    WHERE schema_name = '{{ relation.schema }}'
-      AND table_name = '{{ relation.identifier }}'
+    WHERE schema_name = '{{ relation.schema | replace("'", "''") }}'
+      AND table_name = '{{ relation.identifier | replace("'", "''") }}'
   {% endcall %}
   {% set verify_results = load_result('verify_indexes_dropped').table %}
 {%- endmacro %}

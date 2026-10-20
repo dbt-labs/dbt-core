@@ -1,5 +1,5 @@
 {% macro motherduck__get_binding_char() %}
-  {{ return(adapter.get_binding_char()) }}
+  {{ return('%s') }}
 {% endmacro %}
 
 {% macro motherduck__get_batch_size() %}

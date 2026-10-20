@@ -86,11 +86,18 @@
     {% set build_sql = strategy_sql_macro_func(strategy_arg_dict) %}
     {% set language = "sql" %}
 
-    {#-- Emit CREATE TEMP TABLE + strategy as ONE multi-statement batch.
-         DuckDB does not split on ';', so the entire batch runs in a single execute() call
-         on one connection, ensuring the temp table is visible to the subsequent DML. --#}
     {% set create_tmp_sql = create_table_as(temporary, temp_relation, compiled_code) %}
-    {% set build_sql = create_tmp_sql ~ ";\n" ~ build_sql %}
+    {% set _is_motherduck = adapter.has_feature("motherduck") if dbt_version.startswith('2.') else adapter.is_motherduck() %}
+    {% if _is_motherduck %}
+      {# MotherDuck prepares every statement before executing any of them, so the staging
+         table must exist before preparing the dependent incremental DML. #}
+      {% call statement("create_incremental_temp", language="sql") %}
+        {{- create_tmp_sql }}
+      {% endcall %}
+    {% else %}
+      {# DuckDB needs both statements in one execute() call so temporary tables stay visible. #}
+      {% set build_sql = create_tmp_sql ~ ";\n" ~ build_sql %}
+    {% endif %}
 
   {% endif %}
 
