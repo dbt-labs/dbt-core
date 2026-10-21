@@ -10,11 +10,11 @@ use crate::functions::build_flat_graph;
 use crate::invocation_graph::invocation_graph;
 use crate::jinja_environment::JinjaEnv;
 use crate::phases::compile::DependencyValidationConfig;
-use dbt_adapter::Adapter;
 use dbt_adapter::load_store::ResultStore;
 use dbt_adapter::relation::RelationObject;
-use dbt_adapter_core::AdapterType;
+use dbt_adapter::{Adapter, AdapterType};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::{RunFilter, Sample};
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
@@ -271,10 +271,8 @@ pub struct RefFunction {
     /// The unique_id of the node that owns this ref context.
     /// Used for O(1) defer decisions via `NodeResolver::prefers_deferred`.
     current_node_unique_id: String,
-    /// Adapter compiling the consumer. Absent only in the package-level base
-    /// context, which is replaced by a node-scoped ref function before model SQL
-    /// is rendered.
-    consumer_adapter: Option<AdapterType>,
+    /// Adapter of the node that owns this ref context; `ref()` spells relations for it.
+    caller_adapter: Option<AdapterType>,
 }
 
 impl RefFunction {
@@ -292,7 +290,7 @@ impl RefFunction {
             validation_config: DependencyValidationConfig::default(),
             microbatch_context: None,
             current_node_unique_id: String::new(),
-            consumer_adapter: None,
+            caller_adapter: None,
         }
     }
 
@@ -303,6 +301,7 @@ impl RefFunction {
         runtime_config: Arc<DbtRuntimeConfig>,
         validation_config: DependencyValidationConfig,
         current_node_unique_id: String,
+        caller_adapter: AdapterType,
     ) -> Self {
         Self {
             node_resolver,
@@ -311,7 +310,7 @@ impl RefFunction {
             validation_config,
             microbatch_context: None,
             current_node_unique_id,
-            consumer_adapter: None,
+            caller_adapter: Some(caller_adapter),
         }
     }
 
@@ -327,6 +326,7 @@ impl RefFunction {
         validation_config: DependencyValidationConfig,
         microbatch_context: MicrobatchRefContext,
         current_node_unique_id: String,
+        caller_adapter: AdapterType,
     ) -> Self {
         Self {
             node_resolver,
@@ -335,13 +335,13 @@ impl RefFunction {
             validation_config,
             microbatch_context: Some(microbatch_context),
             current_node_unique_id,
-            consumer_adapter: None,
+            caller_adapter: Some(caller_adapter),
         }
     }
 
     /// Set the adapter used by the node that invokes this ref function.
     pub fn with_consumer_adapter(mut self, consumer_adapter: AdapterType) -> Self {
-        self.consumer_adapter = Some(consumer_adapter);
+        self.caller_adapter = Some(consumer_adapter);
         self
     }
 
@@ -353,7 +353,7 @@ impl RefFunction {
 
     #[cfg(test)]
     pub(crate) fn consumer_binding(&self) -> (Option<AdapterType>, &str) {
-        (self.consumer_adapter, &self.current_node_unique_id)
+        (self.caller_adapter, &self.current_node_unique_id)
     }
 
     /// Set the microbatch context on this RefFunction.
@@ -457,6 +457,26 @@ To fix this, add the following hint to the top of the model \"{model_name}\":
     }
 }
 
+/// Respells a resolved relation for `caller_adapter` when it was built for another adapter.
+/// Ephemeral relations pass through: every adapter renders them as `__dbt__cte__<identifier>`.
+fn for_caller(
+    relation: MinijinjaValue,
+    caller_adapter: Option<AdapterType>,
+) -> Result<MinijinjaValue, MinijinjaError> {
+    let Some(caller_adapter) = caller_adapter else {
+        return Ok(relation);
+    };
+    let respelled = relation
+        .downcast_object_ref::<RelationObject>()
+        .filter(|object| {
+            object.adapter_type() != caller_adapter
+                && object.relation_type() != Some(RelationType::Ephemeral)
+        })
+        .map(|object| object.for_adapter(caller_adapter))
+        .transpose()?;
+    Ok(respelled.map_or(relation, RelationObject::into_value))
+}
+
 impl Object for RefFunction {
     fn call(
         self: &Arc<Self>,
@@ -466,7 +486,7 @@ impl Object for RefFunction {
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let (package_name, model_name, version) = self.resolve_args(args)?;
 
-        let resolved_ref = match self.consumer_adapter {
+        let resolved_ref = match self.caller_adapter {
             Some(consumer_adapter) => self.node_resolver.lookup_ref_for_adapter(
                 &package_name,
                 &model_name,
@@ -494,6 +514,7 @@ impl Object for RefFunction {
                     (true, Some(deferred)) => deferred,
                     _ => relation,
                 };
+                let resolved_relation = for_caller(resolved_relation, self.caller_adapter)?;
 
                 for listener in listeners {
                     listener.on_ref_or_source_resolved(&unique_id);

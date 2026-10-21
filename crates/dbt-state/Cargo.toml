@@ -35,7 +35,6 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 crossbeam-queue = { workspace = true }
-dashmap = { workspace = true }
 dirs = { workspace = true }
 futures = { workspace = true }
 gcloud-auth = { workspace = true }

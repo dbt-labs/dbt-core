@@ -326,7 +326,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "ingested_at",
         ],
     },
-    // `config` and `created_at` are in the information schema but unwritten here.
+    // `created_at` is in the information schema but unwritten here.
     ParseSafeView {
         name: "unit_tests",
         vocabulary: "unit_tests",
@@ -344,6 +344,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "expect",
             "overrides",
             "versions",
+            "config",
             "ingested_at",
         ],
     },
@@ -395,7 +396,6 @@ pub const VIEWS: &[ParseSafeView] = &[
             "ingested_at",
         ],
     },
-    // `meta` and `config` are in the information schema but unwritten here.
     ParseSafeView {
         name: "exposures",
         vocabulary: "exposures",
@@ -416,6 +416,8 @@ pub const VIEWS: &[ParseSafeView] = &[
             "fqn",
             "depends_on",
             "tags",
+            "meta",
+            "config",
             "created_at",
             "ingested_at",
         ],
@@ -462,7 +464,6 @@ pub const VIEWS: &[ParseSafeView] = &[
             "ingested_at",
         ],
     },
-    // `config` is in the information schema but unwritten here.
     ParseSafeView {
         name: "saved_queries",
         vocabulary: "saved_queries",
@@ -481,14 +482,14 @@ pub const VIEWS: &[ParseSafeView] = &[
             "depends_on",
             "group",
             "tags",
+            "config",
             "created_at",
             "ingested_at",
         ],
     },
     // ── semantic layer ──────────────────────────────────────────────────
-    // `config` is unwritten on all four of these, and the semantic model row also has no
-    // `package_name` or `original_file_path` — it is built from the payload, which does
-    // not carry them.
+    // The semantic model row has no `package_name` or `original_file_path` — it is built
+    // from the payload, which does not carry them.
     ParseSafeView {
         name: "semantic_models",
         vocabulary: "semantic_models",
@@ -505,6 +506,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "primary_entity",
             "defaults",
             "group",
+            "config",
             "created_at",
             "ingested_at",
         ],
@@ -522,6 +524,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "label",
             "entity_role",
             "expr",
+            "config",
             "ingested_at",
         ],
     },
@@ -541,6 +544,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "agg_time_dimension",
             "agg_params",
             "non_additive_dimension",
+            "config",
             "ingested_at",
         ],
     },
@@ -559,6 +563,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "is_partition",
             "time_granularity",
             "validity_params",
+            "config",
             "ingested_at",
         ],
     },
@@ -597,8 +602,8 @@ pub const VIEWS: &[ParseSafeView] = &[
     },
     // `data_type_inferred` needs static analysis, `data_type_actual` (and so the resolved
     // `data_type`) needs `dbt docs generate`, and `classifiers` is only partly written at
-    // parse. `column_index`, `label`, `quote`, `granularity`, `tests` and
-    // `meta` are filled by the same later merges. What is left is what YAML declared.
+    // parse. `column_index`, `label`, `quote`, `granularity` and `tests` are filled by
+    // the same later merges. What is left is what YAML declared.
     ParseSafeView {
         name: "node_columns",
         vocabulary: "node_columns",
@@ -611,6 +616,7 @@ pub const VIEWS: &[ParseSafeView] = &[
             "description",
             "tags",
             "constraints",
+            "meta",
             "ingested_at",
         ],
     },
