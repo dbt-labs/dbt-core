@@ -796,6 +796,7 @@ impl BaseRelation for Relation {
         .with_is_delta(self.is_delta)
         .with_is_shallow_clone(self.is_shallow_clone)
         .with_temporary(self.temporary)
+        .with_table_format(self.table_format)
         .with_can_exchange(self.can_exchange)
         .with_can_on_cluster(self.can_on_cluster)
         .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
@@ -827,6 +828,7 @@ impl BaseRelation for Relation {
         .with_is_delta(self.is_delta)
         .with_is_shallow_clone(self.is_shallow_clone)
         .with_temporary(self.temporary)
+        .with_table_format(self.table_format)
         .with_can_exchange(self.can_exchange)
         .with_can_on_cluster(self.can_on_cluster)
         .with_mvs_pointing_to_it(self.mvs_pointing_to_it.clone())
@@ -922,10 +924,13 @@ impl BaseRelation for Relation {
     }
 
     fn set_table_format(&mut self, table_format: Option<TableFormat>) {
-        if self.adapter_type == AdapterType::Snowflake
-            && let Some(table_format) = table_format
-        {
-            self.table_format = table_format;
+        match self.adapter_type {
+            AdapterType::Snowflake | AdapterType::Databricks => {
+                if let Some(table_format) = table_format {
+                    self.table_format = table_format;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -2475,6 +2480,25 @@ mod tests {
                 .incorporate(None, Some(RelationType::Table), None)
                 .unwrap();
             assert!(incorporated.is_iceberg_format());
+        }
+
+        #[test]
+        fn databricks_incorporate_preserves_iceberg_table_format() {
+            let iceberg: Arc<dyn BaseRelation> = Arc::new(
+                Relation::new(
+                    AdapterType::Databricks,
+                    "d".to_string(),
+                    "s".to_string(),
+                    "i".to_string(),
+                )
+                .with_relation_type(Some(RelationType::Table))
+                .with_table_format(TableFormat::Iceberg),
+            );
+            let incorporated = iceberg
+                .incorporate(None, Some(RelationType::Table), None)
+                .unwrap();
+            assert!(incorporated.is_iceberg_format());
+            assert!(!incorporated.is_delta());
         }
     }
 
