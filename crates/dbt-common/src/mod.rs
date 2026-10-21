@@ -10,10 +10,12 @@ pub mod hashing;
 pub mod io_utils;
 pub mod node_selector;
 pub mod pretty_string;
+pub mod sources_extractor;
 pub mod static_analysis;
 pub mod stats;
 pub mod stdfs;
 pub mod string_utils;
+pub mod telemetry_command;
 pub mod tokiofs;
 #[macro_use]
 pub extern crate dbt_error as error;

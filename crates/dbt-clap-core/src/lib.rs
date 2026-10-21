@@ -22,7 +22,7 @@ use strum_macros::Display;
 use uuid::Uuid;
 
 use clap::{
-    ArgAction, Parser, ValueEnum,
+    ArgAction, Parser, ValueEnum, ValueHint,
     builder::{BoolishValueParser, TypedValueParser},
 };
 use clap_complete::Shell;
@@ -73,6 +73,7 @@ pub mod help_headings {
     pub const EVENT_TIME: &str = "Microbatch Event Time";
     pub const SAMPLE: &str = "Sample";
     pub const ADVANCED: &str = "Advanced";
+    pub const UNSTABLE: &str = "Unstable";
 }
 const MANAGE_STATE_ENV: &str = "DBT_ENGINE_MANAGE_STATE";
 const USER_SETTINGS_YML: &str = ".dbt/user_settings.yml";
@@ -151,7 +152,8 @@ impl CliParser {
 
     /// Build the [clap::Command] for the CLI application.
     fn app(&self) -> clap::Command {
-        let app = clap::Command::new(self.command_name);
+        // Match dbt Core: a repeated single-value flag keeps the last value.
+        let app = clap::Command::new(self.command_name).args_override_self(true);
 
         // -- Augment arguments
         let app = app.group(clap::ArgGroup::new("Cli").multiple(true).args({
@@ -766,6 +768,10 @@ pub struct CheckArgs {
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
     #[arg(global = true, long, env = "DBT_STATIC_ANALYSIS")]
     pub static_analysis: Option<StaticAnalysisKind>,
+
+    /// Limiting number of shown rows per check. Run with --limit -1 to remove limit [default: 10]
+    #[arg(long, default_value=DEFAULT_LIMIT, allow_hyphen_values = true)]
+    pub limit: RowLimit,
 }
 
 impl CheckArgs {
@@ -776,6 +782,7 @@ impl CheckArgs {
         // v1 is parse-time only. Do not force static analysis off the way
         // warehouse-introspecting commands do.
         eval_args.static_analysis = self.static_analysis;
+        eval_args.limit = self.limit.into();
         // Implied index is set on `EvalArgs` in `Cli::to_eval_args` (same as
         // `build` / `run`), not here: setting `write_index` on this struct
         // before that function's lineage block would turn on `write_lineage`,
@@ -1247,6 +1254,9 @@ impl BuildArgs {
                 ClapResourceType::UnitTest,
                 ClapResourceType::Function,
                 ClapResourceType::Check,
+                // Plugin nodes are never selected by default, so this only keeps the ones
+                // selected directly.
+                ClapResourceType::Plugin,
             ];
             if eval_args.export_saved_queries {
                 eval_args.resource_types.push(ClapResourceType::SavedQuery);
@@ -1624,8 +1634,9 @@ pub enum StateSubcommand {
 
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
 pub struct StateExplainArgs {
-    #[arg(short, long)]
-    pub verbose: bool,
+    /// Enable more detailed output. Pass twice (-vv) to also include all upstream dependency changes
+    #[arg(short, long, action = ArgAction::Count)]
+    pub verbose: u8,
 
     #[arg(short = 'l', long = "log-file")]
     pub log_file: Option<PathBuf>,
@@ -2058,6 +2069,19 @@ pub struct CommonArgs {
     )]
     pub info_schema_dir: Option<PathBuf>,
 
+    /// Static analysis for nodes that do not configure `static_analysis`. Unlike
+    /// `--static-analysis`, nodes with a configured value keep it.
+    #[arg(
+        global = true,
+        long,
+        env = "DBT_ENGINE_DEFAULT_STATIC_ANALYSIS",
+        // Leave out the deprecated `on` and `unsafe`.
+        value_parser = clap::builder::PossibleValuesParser::new(["off", "baseline", "strict"])
+            .map(|s| s.parse::<StaticAnalysisKind>().expect("restricted to valid kinds")),
+        hide = true
+    )]
+    pub default_static_analysis: Option<StaticAnalysisKind>,
+
     /// Compute and write column-level lineage into compile/cll parquet.
     ///
     /// Hidden. Auto-enabled when `--generate-info-schema` (or the hidden
@@ -2140,6 +2164,7 @@ pub struct CommonArgs {
         global = true,
         long = "otel-file-name",
         env = "DBT_OTEL_FILE_NAME",
+        value_hint = ValueHint::FilePath,
         help_heading = help_headings::LOGGING,
         hide_short_help = true
     )]
@@ -2151,6 +2176,7 @@ pub struct CommonArgs {
         global = true,
         long = "otel-parquet-file-name",
         env = "DBT_OTEL_PARQUET_FILE_NAME",
+        value_hint = ValueHint::FilePath,
         help_heading = help_headings::LOGGING,
         hide_short_help = true
     )]
@@ -2251,6 +2277,19 @@ pub struct CommonArgs {
     #[arg(global = true, long, short = 'r', hide = true)]
     pub record_timing_info: Option<PathBuf>,
 
+    /// Turn on a feature flag (`NAME`) or set it (`NAME=true|false`). Repeatable; also read
+    /// from DBT_ENGINE_FEATURES as a comma-separated list. Unstable: features may change or be
+    /// removed between releases.
+    #[arg(
+        global = true,
+        long = "feature",
+        value_name = "NAME[=VALUE]",
+        action = ArgAction::Append,
+        help_heading = help_headings::UNSTABLE,
+        hide_short_help = true
+    )]
+    pub features: Vec<String>,
+
     // Send anonymous usage stats to dbt Labs.
     #[arg(global = true, long, default_value_t=true, action = ArgAction::SetTrue, env = "DBT_SEND_ANONYMOUS_USAGE_STATS", value_parser = BoolishValueParser::new(), help_heading = help_headings::ADVANCED, hide_short_help = true)]
     pub send_anonymous_usage_stats: bool,
@@ -2348,7 +2387,13 @@ pub struct CommonArgs {
     // - `redis://<host>` for shared Redis coordination
     //
     /// Task cache coordination URL. Use `redis://<host>` for shared Redis coordination
-    #[clap(long, env = "DBT_TASK_CACHE_URL", default_value = "noop", hide = true)]
+    #[clap(
+        long,
+        env = "DBT_TASK_CACHE_URL",
+        default_value = "noop",
+        value_hint = ValueHint::Url,
+        hide = true
+    )]
     pub task_cache_url: String,
 
     /// Enable service-backed dbt State without legacy task-cache coordination
@@ -2928,6 +2973,7 @@ impl CommonArgs {
             run_cache_mode: RunCacheMode::Noop,
             task_cache_url: self.task_cache_url.clone(),
             static_analysis: None,
+            default_static_analysis: self.default_static_analysis,
             full_refresh: false,
             // Derived later in `Cli::to_eval_args` from the caller's
             // original `--static-analysis`/`--write-lineage` values.
@@ -3777,6 +3823,34 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::disallowed_methods)]
+    fn user_static_analysis_env_wins_over_default_static_analysis_env() {
+        // A platform-set default must not mask the user's own `DBT_STATIC_ANALYSIS`.
+        unsafe {
+            env::set_var("DBT_ENGINE_DEFAULT_STATIC_ANALYSIS", "off");
+            env::set_var("DBT_STATIC_ANALYSIS", "strict");
+        }
+        let cmd = parse_core_command(&["build"]);
+        unsafe {
+            env::remove_var("DBT_ENGINE_DEFAULT_STATIC_ANALYSIS");
+            env::remove_var("DBT_STATIC_ANALYSIS");
+        }
+        let CoreCommand::Build(args) = &cmd else {
+            panic!("expected CoreCommand::Build, got {cmd:?}");
+        };
+        let eval_args = args.to_eval_args(
+            test_system_args(FsCommand::Build),
+            Path::new("."),
+            Path::new("."),
+        );
+        assert_eq!(eval_args.static_analysis, Some(StaticAnalysisKind::Strict));
+        assert_eq!(
+            eval_args.default_static_analysis,
+            Some(StaticAnalysisKind::Off)
+        );
+    }
+
+    #[test]
     fn top_level_freshness_command_parses_and_is_not_sources_only() {
         let cmd = parse_core_command(&["freshness", "--select", "stg_orders+"]);
 
@@ -3872,6 +3946,51 @@ mod tests {
         assert_eq!(
             eval_args.select.as_ref().map(|s| s.to_string()),
             Some("resource_type:source".to_string())
+        );
+    }
+
+    #[test]
+    fn repeated_target_flag_keeps_last_value() {
+        let cmd = parse_core_command(&["compile", "--target", "dev", "--target", "prod"]);
+        let CoreCommand::Compile(args) = &cmd else {
+            panic!("expected CoreCommand::Compile, got {cmd:?}");
+        };
+        assert_eq!(args.common_args.target, Some("prod".to_string()));
+
+        let cmd = parse_core_command(&["compile", "-t", "dev", "-t", "prod"]);
+        let CoreCommand::Compile(args) = &cmd else {
+            panic!("expected CoreCommand::Compile, got {cmd:?}");
+        };
+        assert_eq!(args.common_args.target, Some("prod".to_string()));
+    }
+
+    #[test]
+    fn repeated_debug_flag_parses() {
+        let cmd = parse_core_command(&["build", "--debug", "--debug"]);
+        let CoreCommand::Build(args) = &cmd else {
+            panic!("expected CoreCommand::Build, got {cmd:?}");
+        };
+        assert!(args.common_args.debug);
+    }
+
+    #[test]
+    fn repeated_local_set_arg_keeps_last_value() {
+        let cmd = parse_core_command(&["compile", "--limit", "1", "--limit", "4"]);
+        let CoreCommand::Compile(args) = &cmd else {
+            panic!("expected CoreCommand::Compile, got {cmd:?}");
+        };
+        assert_eq!(args.limit.value(), Some(4));
+    }
+
+    #[test]
+    fn repeated_select_flag_still_unions() {
+        let cmd = parse_core_command(&["ls", "--select", "a", "--select", "b"]);
+        let CoreCommand::Ls(args) = &cmd else {
+            panic!("expected CoreCommand::Ls, got {cmd:?}");
+        };
+        assert_eq!(
+            args.common_args.select.as_deref(),
+            Some(["a".to_string(), "b".to_string()].as_slice())
         );
     }
 

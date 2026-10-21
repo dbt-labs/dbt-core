@@ -358,6 +358,7 @@ impl Object for RelationObject {
             Some("identifier") | Some("name") | Some("table") => {
                 Some(Value::from(self.identifier()))
             }
+            Some("quote_policy") => Some(Value::from_serialize(self.quote_policy())),
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
@@ -417,6 +418,15 @@ impl Object for RelationObject {
 
             // ClickHouse
             Some("can_exchange") => Some(Value::from(self.can_exchange())),
+            Some("can_on_cluster") => Some(Value::from(self.can_on_cluster())),
+            // No adapter at hand in an attribute getter, so an unstamped relation reads `false`
+            // here; `on_cluster_clause` asks `adapter.should_on_cluster(relation=…)` instead.
+            Some("should_on_cluster") => Some(Value::from(
+                crate::metadata::clickhouse::relation_should_on_cluster(
+                    self.relation.as_ref(),
+                    false,
+                ),
+            )),
             Some("mvs_pointing_to_it") => Some(Value::from_serialize(self.mvs_pointing_to_it())),
             Some("is_refreshable") => Some(Value::from(self.is_refreshable())),
             Some("refreshable_append") => Some(Value::from(self.refreshable_append())),
@@ -608,14 +618,52 @@ pub fn create_relation_from_node(
     node: &dyn InternalDbtNodeAttributes,
     _sample_config: Option<RunFilter>,
 ) -> FsResult<Box<dyn BaseRelation>> {
-    create_relation(
+    // Build sources like Jinja's `source()`: untyped (as in dbt Core, so no length check).
+    if let Some(source) = node.as_any().downcast_ref::<DbtSource>() {
+        return create_relation_from_source(
+            adapter_type,
+            node.database(),
+            node.schema(),
+            node.base().alias.clone(), // all identifiers are consolidated to alias in InternalDbtNode
+            node.quoting(),
+            source,
+        );
+    }
+
+    let mut relation = create_relation(
         adapter_type,
         node.database(),
         node.schema(),
         Some(node.base().alias.clone()), // all identifiers are consolidated to alias in InternalDbtNode
         Some(RelationType::from(node.materialized())),
         node.quoting(),
-    )
+    )?;
+    if adapter_type == AdapterType::ClickHouse {
+        apply_clickhouse_node_config(&mut relation, &node.serialized_config());
+    }
+    Ok(relation)
+}
+
+/// relation.py `ClickHouseRelation.create_from`: the per-model `disable_on_cluster` opt-out.
+pub fn apply_clickhouse_node_config(
+    relation: &mut Box<dyn BaseRelation>,
+    config: &dbt_yaml::Value,
+) {
+    let disable = config
+        .get("disable_on_cluster")
+        .or_else(|| {
+            config
+                .get("__warehouse_specific_config__")
+                .and_then(|wh| wh.get("disable_on_cluster"))
+        })
+        .is_some_and(|v| match v {
+            dbt_yaml::Value::Bool(b, _) => *b,
+            dbt_yaml::Value::String(s, _) => s.eq_ignore_ascii_case("true"),
+            _ => false,
+        });
+    if disable && let Some(inner) = relation.as_any().downcast_ref::<Relation>() {
+        *relation = Box::new(inner.clone().with_can_on_cluster(Some(false)));
+    }
 }
 
 fn duckdb_external_location_for_source(source: &DbtSource) -> FsResult<Option<String>> {
@@ -972,6 +1020,7 @@ mod tests {
     use crate::relation::factory::create_static_relation;
 
     use super::*;
+    use dbt_schemas::schemas::common::DbtMaterialization;
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
     use minijinja_contrib::testing::jinja_assert;
 
@@ -989,6 +1038,56 @@ mod tests {
         source.__source_attr__.identifier = "orders".to_string();
         source.__source_attr__.source_name = "raw".to_string();
         source
+    }
+
+    /// Sources over the adapter's identifier length limit must not be rejected.
+    /// dbt-redshift/dbt-postgres only check relations with a `type`, and Core
+    /// builds source relations without one.
+    #[test]
+    fn redshift_source_with_long_identifier_is_not_length_validated() {
+        let long_identifier = "x".repeat(130);
+        let mut source = source_with_meta_location("ignored");
+        source.__base_attr__.alias = long_identifier.clone();
+        source.__source_attr__.identifier = long_identifier.clone();
+        // Mirrors what resolve_sources assigns to every source
+        source.__base_attr__.materialized = DbtMaterialization::External;
+
+        assert!(
+            create_relation_from_source(
+                AdapterType::Redshift,
+                "main".to_string(),
+                "raw".to_string(),
+                long_identifier,
+                DEFAULT_RESOLVED_QUOTING,
+                &source,
+            )
+            .is_ok()
+        );
+
+        // Used for sources by e.g. local_schema_builder, source freshness, and
+        // try_get_relation_from_node
+        let from_node = create_relation_from_node(AdapterType::Redshift, &source, None);
+        assert!(from_node.is_ok(), "{:?}", from_node.err());
+        assert_eq!(from_node.unwrap().relation_type(), None);
+    }
+
+    /// Non-source nodes still carry a `type`, so the length check must stay
+    /// enforced for them -- this isn't an excuse to drop it for models too.
+    #[test]
+    fn redshift_model_with_long_identifier_is_still_length_validated() {
+        let long_identifier = "x".repeat(130);
+        let mut model = dbt_schemas::schemas::DbtModel::default();
+        model.__base_attr__.database = "main".to_string();
+        model.__base_attr__.schema = "raw".to_string();
+        model.__base_attr__.alias = long_identifier;
+        model.__base_attr__.quoting = DEFAULT_RESOLVED_QUOTING;
+        model.__base_attr__.materialized = DbtMaterialization::Table;
+
+        let err = create_relation_from_node(AdapterType::Redshift, &model, None).unwrap_err();
+        assert!(
+            err.to_string().contains("is longer than 127 characters"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -1079,6 +1178,34 @@ mod tests {
         );
     }
 
+    /// `create_relation_from_node` must honor `catalog_name` for sources, so
+    /// freshness, defer, and the run cache use the same FQN that `source()` renders.
+    #[test]
+    fn source_catalog_name_overrides_database_via_node() {
+        let mut source = source_with_meta_location("ignored/{name}.csv");
+        source.__source_attr__.catalog_name = Some("GLUE_SOURCE".to_string());
+
+        let from_source = create_relation_from_source(
+            AdapterType::Snowflake,
+            "main".to_string(),
+            "raw".to_string(),
+            "orders".to_string(),
+            DEFAULT_RESOLVED_QUOTING,
+            &source,
+        )
+        .unwrap();
+        let from_node = create_relation_from_node(AdapterType::Snowflake, &source, None).unwrap();
+
+        assert_eq!(
+            from_node.render_self_as_str(),
+            "\"GLUE_SOURCE\".\"raw\".\"orders\""
+        );
+        assert_eq!(
+            from_node.render_self_as_str(),
+            from_source.render_self_as_str()
+        );
+    }
+
     #[test]
     fn source_without_catalog_name_keeps_database() {
         let source = source_with_meta_location("ignored/{name}.csv");
@@ -1151,6 +1278,29 @@ mod tests {
             RelationObject::new(Arc::new(relation)),
             "{{ obj.is_metric_view }} | {{ obj.type }}",
             "True | metric_view",
+        );
+    }
+
+    #[test]
+    fn clickhouse_identifier_less_relation_should_go_on_cluster() {
+        let relation = Relation::new(
+            AdapterType::ClickHouse,
+            String::new(),
+            "analytics".to_string(),
+            "events".to_string(),
+        )
+        .with_can_on_cluster(Some(false));
+        let database = relation.without_identifier().unwrap();
+
+        jinja_assert(
+            RelationObject::new(Arc::new(relation)),
+            "{{ obj.should_on_cluster }}",
+            "False",
+        );
+        jinja_assert(
+            RelationObject::new(database),
+            "{{ obj.should_on_cluster }}",
+            "True",
         );
     }
 
