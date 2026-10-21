@@ -958,6 +958,8 @@ pub enum ClapResourceType {
     SavedQuery,
     Check,
     Exposure,
+    /// Nodes added by plugins.
+    Plugin,
 }
 
 impl Display for ClapResourceType {
@@ -976,6 +978,7 @@ impl Display for ClapResourceType {
             ClapResourceType::SavedQuery => "saved_query",
             ClapResourceType::Check => "check",
             ClapResourceType::Exposure => "exposure",
+            ClapResourceType::Plugin => "plugin",
         };
         write!(f, "{s}")
     }
@@ -997,6 +1000,7 @@ impl From<&ClapResourceType> for NodeType {
             ClapResourceType::SavedQuery => NodeType::SavedQuery,
             ClapResourceType::Check => NodeType::Check,
             ClapResourceType::Exposure => NodeType::Exposure,
+            ClapResourceType::Plugin => NodeType::Plugin,
         }
     }
 }

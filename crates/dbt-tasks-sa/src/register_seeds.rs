@@ -1,10 +1,13 @@
-use dbt_datafusion_errors::DatafusionResultExt;
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 
+use crate::seed_io::{
+    TableFormat, adapt_schema, infer_seed_column_name_strategy, read_json_seed,
+    read_parquet_seed_view,
+};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use dbt_adapter::column::ColumnStatic;
 use dbt_adapter::relation::create_relation_from_node;
@@ -13,10 +16,6 @@ use dbt_adapter_core::AdapterType;
 use dbt_common::tracing::{dbt_emit::emit_warn_log_message, spawn_traced};
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_csv::{CustomCsvOptions, read_to_arrow_records};
-use dbt_df_providers::seed_io::{
-    TableFormat, adapt_schema, infer_seed_column_name_strategy, read_json_seed,
-    read_parquet_seed_view,
-};
 
 use dbt_frontend_common::Dialect;
 use dbt_schema_store::{CanonicalFqn, DataStoreTrait, SchemaStoreTrait};
@@ -121,7 +120,7 @@ fn register_seed_json(
     let infer_column_name_strategy =
         infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 
-    let (source_schema, maybe_batches) = read_json_seed(&seed_path, true).into_fs()?;
+    let (source_schema, maybe_batches) = read_json_seed(&seed_path, true)?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
         Some(parse_provided_types(provided_types, type_ops.as_ref())?)
     } else {
@@ -159,8 +158,7 @@ async fn register_seed_parquet_async(
     let infer_column_name_strategy =
         infer_seed_column_name_strategy(seed.__seed_attr__.quote_columns, adapter_type);
 
-    let (source_schema, maybe_batches) =
-        read_parquet_seed_view(&seed_path, true).await.into_fs()?;
+    let (source_schema, maybe_batches) = read_parquet_seed_view(&seed_path, true).await?;
     let logical_fields = if let Some(provided_types) = &seed.__seed_attr__.column_types {
         Some(parse_provided_types(provided_types, type_ops.as_ref())?)
     } else {
