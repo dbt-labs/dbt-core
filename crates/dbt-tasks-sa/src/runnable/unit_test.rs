@@ -126,7 +126,7 @@ fn execute_unit_test_remote_inner(
             let start = SystemTime::now();
 
             // Add stats for this test
-            ctx.inner.run_stats.insert(
+            ctx.inner.run_stats.upsert_sync(
                 unique_id.to_string(),
                 Stat::new(
                     unique_id.to_string(),
@@ -165,7 +165,7 @@ pub fn process_unit_test_result(
         let thread_id = ctx.thread_id;
 
         // Add stats for this test
-        ctx.inner.run_stats.insert(
+        ctx.inner.run_stats.upsert_sync(
             unique_id.to_string(),
             Stat::new(
                 unique_id.to_string(),
@@ -206,7 +206,7 @@ pub fn process_unit_test_result(
         let thread_id = ctx.thread_id;
 
         // Add stats for this test
-        ctx.inner.run_stats.insert(
+        ctx.inner.run_stats.upsert_sync(
             unique_id.to_string(),
             Stat::new(
                 unique_id.to_string(),

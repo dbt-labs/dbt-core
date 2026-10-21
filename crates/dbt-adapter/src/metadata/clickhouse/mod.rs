@@ -1,7 +1,7 @@
 use crate::AdapterEngine;
 use crate::adapter::adapter_impl::{AdapterImpl, InnerAdapter};
 use crate::column::Column;
-use crate::connection::AdapterConnectionFactory;
+use crate::connection::{AdapterConnectionFactory, ConnectionGuard};
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::record_batch::RecordBatchExt;
 use crate::relation::Relation;
@@ -414,7 +414,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
+        let map_f = move |conn: &mut ConnectionGuard<'_>,
                           key: &(String, String)|
               -> AdapterResult<Arc<Schema>> {
             let (_semantic_fqn, sql_name) = key;
@@ -493,7 +493,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
 
         let adapter = self.adapter.clone();
         let token_clone = token.clone();
-        let map_f = move |conn: &'_ mut dyn Connection,
+        let map_f = move |conn: &mut ConnectionGuard<'_>,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
             let ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
@@ -549,7 +549,7 @@ impl MetadataAdapter for ClickHouseMetadataAdapter {
 pub fn list_relations(
     engine: &dyn AdapterEngine,
     ctx: &QueryCtx,
-    conn: &'_ mut dyn Connection,
+    conn: &mut ConnectionGuard<'_>,
     db_schema: &CatalogAndSchema,
     token: CancellationToken,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
@@ -557,9 +557,9 @@ pub fn list_relations(
     let cluster = engine.config("cluster");
     let sql = build_list_relations_sql(&db_schema.resolved_schema, None, cluster.as_deref());
 
-    let caps = server_capabilities_over_connection(engine, ctx, conn, token.clone());
+    let caps = server_capabilities_over_connection(engine, ctx, conn.as_mut(), token.clone());
 
-    let batch = engine.execute(None, conn, ctx, &sql, token)?;
+    let batch = engine.execute(None, conn.as_mut(), ctx, &sql, token)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());
@@ -622,7 +622,7 @@ fn describe_name_type_pairs(batch: &RecordBatch) -> AdapterResult<Vec<(String, S
 pub fn describe_query_columns(
     engine: &dyn AdapterEngine,
     state: Option<&State>,
-    conn: &mut dyn Connection,
+    conn: &mut ConnectionGuard<'_>,
     ctx: &QueryCtx,
     sql: &str,
     settings_clause: &str,
@@ -633,7 +633,7 @@ pub fn describe_query_columns(
     // the `)` and break the query.
     let batch = engine.execute(
         state,
-        conn,
+        conn.as_mut(),
         ctx,
         &format!("DESCRIBE TABLE ({sql}\n){settings_clause}"),
         token,

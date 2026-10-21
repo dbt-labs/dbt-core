@@ -9,11 +9,13 @@ use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_info_span;
 use dbt_common::io_args::FsCommand;
+use dbt_common::sccmap;
 use dbt_common::stats::{NodeStatus, Stat};
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::span_info::{SpanStatusRecorder, record_span_status_with_attrs};
 use dbt_dag::schedule::Schedule;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::phases::run::reset_result_store;
 use dbt_scheduler::schedule::summarize_stats;
 use dbt_schema_store::DataStoreTrait;
 use dbt_schema_store::SchemaStoreTrait;
@@ -60,17 +62,12 @@ pub fn summarize_task_runner_stats(
         batch_results: Default::default(),
         compiled_code: Default::default(),
     };
-    let batch_results = ctx
-        .inner
-        .batch_results_map
-        .iter()
-        .map(|entry| (entry.key().clone(), entry.value().clone()))
+    let batch_results = sccmap::to_vec_cloned(&ctx.inner.batch_results_map)
+        .into_iter()
         .collect();
-    let compiled_code = ctx
-        .inner
-        .rendered_sql
-        .iter()
-        .map(|entry| (entry.key().clone(), entry.value().sql.clone()))
+    let compiled_code = sccmap::to_vec_cloned(&ctx.inner.rendered_sql)
+        .into_iter()
+        .map(|(unique_id, info)| (unique_id, info.sql))
         .collect();
     let run = Stats {
         stats: summarize_stats(schedule, &ctx.inner.run_stats),
@@ -285,18 +282,62 @@ impl TaskRunner {
                 ))
             })
             .collect::<FsResult<Vec<_>>>()?;
-        dbt_runtime::spawn_blocking(move || {
-            for (adapter, jinja_env, adapter_base_context, catalog_schemas) in registrations {
-                let state = jinja_env.new_state_with_context(adapter_base_context);
 
-                let catalog_schemas_to_register =
-                    filter_missing_schemas(&adapter, &state, &catalog_schemas)?;
-
-                register_catalog_schemas_remote(&adapter, &state, catalog_schemas_to_register)?;
-            }
-            Ok(())
+        let registrations = dbt_runtime::spawn_blocking(move || {
+            registrations
+                .into_iter()
+                .map(
+                    |(adapter, jinja_env, adapter_base_context, catalog_schemas)| {
+                        let state = jinja_env.new_state_with_context(adapter_base_context.clone());
+                        let missing_catalog_schemas =
+                            filter_missing_schemas(&adapter, &state, &catalog_schemas)?;
+                        Ok((
+                            adapter,
+                            jinja_env,
+                            adapter_base_context,
+                            missing_catalog_schemas,
+                        ))
+                    },
+                )
+                .collect::<FsResult<Vec<_>>>()
         })
-        .await?
+        .await??;
+
+        // Keep schema creation sequential per adapter during recording and replay because
+        // Time Machine requires writes to occur in recorded order. Other adapters and
+        // non-Time-Machine schema creates may overlap.
+        let mut create_handles = Vec::new();
+        for (adapter, jinja_env, adapter_base_context, missing_catalog_schemas) in registrations {
+            let schema_batches = if adapter.time_machine().is_some() {
+                vec![missing_catalog_schemas]
+            } else {
+                missing_catalog_schemas
+                    .into_iter()
+                    .map(|catalog_schema| vec![catalog_schema])
+                    .collect()
+            };
+
+            for catalog_schemas in schema_batches {
+                let jinja_env = Arc::clone(&jinja_env);
+                let adapter = Arc::clone(&adapter);
+                let mut base_context = adapter_base_context.clone();
+                // Cloning the context shares the result store, so concurrent creates could
+                // overwrite or consume each other's statement results.
+                reset_result_store(&mut base_context);
+                create_handles.push(dbt_runtime::spawn_blocking(move || {
+                    let state = jinja_env.new_state_with_context(base_context);
+                    register_catalog_schemas_remote(&adapter, &state, catalog_schemas)
+                }));
+            }
+        }
+
+        // Await every create, even after a failure, so none is still running when the run reports
+        // the error. `and` keeps the first error in submission order.
+        let mut outcome: FsResult<()> = Ok(());
+        for create in create_handles {
+            outcome = outcome.and(create.await.map_err(Into::into).flatten());
+        }
+        outcome
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -421,12 +462,10 @@ impl TaskRunner {
             .await?;
 
         let mut stats = summarize_task_runner_stats(&ctx, &schedule, self.resolved_state.as_ref());
-        let adapter_responses: HashMap<String, AdapterResponse> = ctx
-            .inner
-            .main_adapter_responses
-            .iter()
-            .map(|entry| (entry.key().clone(), entry.value().clone()))
-            .collect();
+        let adapter_responses: HashMap<String, AdapterResponse> =
+            sccmap::to_vec_cloned(&ctx.inner.main_adapter_responses)
+                .into_iter()
+                .collect();
         let results = stats.collect_as_results(&adapter_responses);
         let successful_relational_nodes =
             stats.collect_successful_relational_nodes(&self.resolved_state);
@@ -496,6 +535,7 @@ impl TaskRunner {
                                 status: NodeStatus::SkippedUpstreamFailed,
                                 thread_id: "main".to_string(),
                                 message: None,
+                                assertion: false,
                             });
                             continue;
                         }
@@ -560,6 +600,7 @@ impl TaskRunner {
                             status,
                             thread_id: "main".to_string(),
                             message: error_message,
+                            assertion: false,
                         });
 
                         if let Err(e) = result {
