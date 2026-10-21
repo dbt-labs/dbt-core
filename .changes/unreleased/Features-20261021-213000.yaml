@@ -3,5 +3,5 @@ body: Accept Databricks merge_actions_explicit config to supply the full WHEN â€
 time: 2026-10-21T21:30:00.000000+05:30
 custom:
     author: sd-db
-    issue: ""
+    issue: "16835"
     project: dbt-core
