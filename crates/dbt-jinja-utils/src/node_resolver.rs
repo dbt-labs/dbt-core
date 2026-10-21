@@ -543,7 +543,7 @@ impl NodeResolverTracker for NodeResolver {
         let package_name = &node.package_name();
         let model_name = node.name();
         let unique_id = node.unique_id();
-        if let Some(catalog_ref) = Self::catalog_ref(node, adapter_type) {
+        if let Some(catalog_ref) = Self::catalog_ref(node, node.node_adapter()) {
             self.catalog_refs.insert(unique_id.clone(), catalog_ref);
         } else {
             self.catalog_refs.remove(&unique_id);
