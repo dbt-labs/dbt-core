@@ -4588,7 +4588,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_default_change_tracking() {
+    fn snowflake_legacy_default_change_tracking() {
         for table_format in [None, Some("DEFAULT")] {
             for expected in [Some(true), Some(false), None] {
                 let mut conf = json!({});
@@ -4630,6 +4630,23 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn snowflake_legacy_default_rejects_invalid_change_tracking() {
+        let conf = json!({ "change_tracking": "maybe" });
+
+        for m in [
+            model(AdapterType::Snowflake, conf.clone()),
+            model_deprecated_config(conf),
+        ] {
+            let err = CatalogRelation::build_without_catalogs_yml(&m).unwrap_err();
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("change_tracking") && msg.contains("expected \"true\" or \"false\""),
+                "unexpected error: {msg}"
+            );
         }
     }
 
