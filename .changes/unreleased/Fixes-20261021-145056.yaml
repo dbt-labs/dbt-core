@@ -1,0 +1,6 @@
+kind: Fixes
+time: 2026-10-21T14:50:56.18188+11:00
+custom:
+    author: kevinsoenandar-dbt
+    issue: ""
+    project: dbt-core
