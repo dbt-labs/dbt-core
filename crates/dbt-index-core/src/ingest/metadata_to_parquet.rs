@@ -1306,6 +1306,48 @@ fn write_parse_nodes(
     Ok(count)
 }
 
+/// Recover the explicit source subject from a generic test's `model` argument.
+///
+/// Source tests intentionally keep `attached_node` null in the legacy manifest.
+/// The information schema can still expose the tested resource because the generic
+/// test metadata retains the original `source('source_name', 'table_name')` call.
+/// Only literal source arguments are resolved; dynamic or ambiguous expressions stay null.
+fn source_unique_id_from_test_metadata(
+    test_metadata: &Value,
+    package_name: Option<&str>,
+) -> Option<String> {
+    let package_name = package_name?;
+    let model = test_metadata
+        .get("kwargs")?
+        .get("model")?
+        .as_str()?;
+
+    let (_, after_call) = model.split_once("source(")?;
+    let mut rest = after_call.trim_start();
+    let quote = rest.chars().next()?;
+    if quote != '\'' && quote != '"' {
+        return None;
+    }
+    rest = &rest[quote.len_utf8()..];
+    let source_end = rest.find(quote)?;
+    let source_name = &rest[..source_end];
+    rest = rest[source_end + quote.len_utf8()..].trim_start();
+    rest = rest.strip_prefix(',')?.trim_start();
+
+    let table_quote = rest.chars().next()?;
+    if table_quote != '\'' && table_quote != '"' {
+        return None;
+    }
+    rest = &rest[table_quote.len_utf8()..];
+    let table_end = rest.find(table_quote)?;
+    let table_name = &rest[..table_end];
+    if source_name.is_empty() || table_name.is_empty() {
+        return None;
+    }
+
+    Some(format!("source.{package_name}.{source_name}.{table_name}"))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn extract_parse_nodes_batch(
     batch: &arrow_array::RecordBatch,
@@ -1698,7 +1740,8 @@ pub fn extract_parse_nodes_batch(
                     .and_then(|v| v.as_str())
                     .or_else(|| payload.get("attached_node").and_then(|v| v.as_str()))
                     .or_else(|| payload.get("file_key_name").and_then(|v| v.as_str()))
-                    .map(|s| s.to_string());
+                    .map(|s| s.to_string())
+                    .or_else(|| source_unique_id_from_test_metadata(tm, get_str(pkg_col, i)));
                 // severity and fail/warn thresholds live in deprecated_config or config
                 let config = payload.get("config");
                 let dep_config = payload.get("deprecated_config");
@@ -3977,5 +4020,49 @@ mod tests {
         assert!(trimmed.get("config").is_none());
         assert!(trimmed.get("__model_attr__").is_none());
         assert_eq!(trim_model_payload(None), serde_json::json!({}));
+    }
+}
+
+#[cfg(test)]
+mod source_test_node_unique_id_tests {
+    use super::source_unique_id_from_test_metadata;
+
+    #[test]
+    fn resolves_literal_source_arguments_and_rejects_dynamic_or_missing_subjects() {
+        for (model, package, expected) in [
+            (
+                "{{ get_where_subquery(source('raw', 'orders')) }}",
+                Some("source_test_node_unique_id"),
+                Some("source.source_test_node_unique_id.raw.orders"),
+            ),
+            (
+                "{{ source(\"raw\", \"orders\") }}",
+                Some("pkg"),
+                Some("source.pkg.raw.orders"),
+            ),
+            (
+                "{{ source(var('source_name'), 'orders') }}",
+                Some("pkg"),
+                None,
+            ),
+        ] {
+            let metadata = serde_json::json!({"kwargs": {"model": model}});
+            assert_eq!(
+                source_unique_id_from_test_metadata(&metadata, package).as_deref(),
+                expected,
+                "model argument: {model}"
+            );
+        }
+
+        let missing = serde_json::json!({"kwargs": {}});
+        assert_eq!(
+            source_unique_id_from_test_metadata(&missing, Some("pkg")),
+            None
+        );
+        let literal = serde_json::json!({"kwargs": {"model": "{{ source('raw', 'orders') }}"}});
+        assert_eq!(
+            source_unique_id_from_test_metadata(&literal, None),
+            None
+        );
     }
 }
