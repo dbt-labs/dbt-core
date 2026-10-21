@@ -451,6 +451,46 @@ my_project:
         );
     }
 
+    #[test]
+    fn merge_actions_explicit_is_valid_and_inherits_with_nested_override() {
+        let yml = r#"
+my_project:
+  explicit:
+    +merge_actions_explicit: "when matched then delete"
+    nested:
+      +merge_actions_explicit: "when not matched then insert *"
+  unset:
+    +enabled: true
+"#;
+
+        let (result, errors, warnings) =
+            init_project_config_from_yaml::<ModelConfig, ProjectModelConfig>(yml, false);
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+        assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
+
+        let config = result.unwrap();
+        let merge_actions_explicit = |path: &[&str]| {
+            let fqn: Vec<String> = path.iter().map(|s| s.to_string()).collect();
+            config
+                .get_config_for_fqn(&fqn)
+                .__warehouse_specific_config__
+                .merge_actions_explicit
+                .clone()
+        };
+        assert_eq!(
+            merge_actions_explicit(&["my_project", "explicit", "model"]).as_deref(),
+            Some("when matched then delete")
+        );
+        assert_eq!(
+            merge_actions_explicit(&["my_project", "explicit", "nested", "model"]).as_deref(),
+            Some("when not matched then insert *")
+        );
+        assert_eq!(
+            merge_actions_explicit(&["my_project", "unset", "model"]),
+            None
+        );
+    }
+
     /// Residual (fs#13424): Databricks' `target_catalog` -> `target_database`
     /// alias has no dedicated field the way `catalog` -> `database` does (there is no
     /// `target_catalog` field on `SnapshotConfig`/`ProjectSnapshotConfig` to canonicalize),
