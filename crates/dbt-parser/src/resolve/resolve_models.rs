@@ -44,7 +44,6 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::DbtModelAttr;
@@ -66,7 +65,7 @@ use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::OnSchemaChange;
 use dbt_schemas::schemas::common::Versions;
 use dbt_schemas::schemas::common::normalize_sql;
-use dbt_schemas::schemas::dbt_catalogs::{DbtCatalogs, LoadedCatalogs};
+use dbt_schemas::schemas::dbt_catalogs_deprecated::{DbtCatalogs, LoadedCatalogs};
 use dbt_schemas::schemas::dbt_column::ColumnInheritanceRules;
 use dbt_schemas::schemas::dbt_column::ColumnProperties;
 use dbt_schemas::schemas::dbt_column::DbtColumnRef;
@@ -102,7 +101,7 @@ use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::resolve_tests::persist_generic_data_tests::{
     TestUnrenderedConfigs, extract_test_unrendered_configs,
 };
-use super::resolve_utils::{validate_compute, validate_node_adapter};
+use super::resolve_utils::{resolve_node_quoting, select_node_adapter, validate_compute};
 use super::validate_models::validate_model;
 
 /// Parses `ref('name')`, `ref('pkg', 'name')`, `ref('name', version=N)`, or
@@ -236,7 +235,7 @@ pub async fn resolve_models(
         default_adapter,
     )?
     .with_resolve_defaults((
-        arg.static_analysis.unwrap_or_default(),
+        arg.unconfigured_static_analysis(),
         root_package.dbt_project.sync.clone(),
         Some(default_adapter),
     ));
@@ -462,7 +461,6 @@ pub async fn resolve_models(
         models_with_execute,
         node_resolver,
         env,
-        default_adapter,
         package_name,
         &root_package.dbt_project.name,
         runtime_config,
@@ -533,8 +531,8 @@ async fn build_model_nodes(
     let catalogs = load_catalogs::fetch_catalogs();
     let use_catalogs_v2 = load_catalogs::fetch_use_catalogs_v2();
     let catalogs_state = match catalogs.as_deref() {
-        Some(c) if use_catalogs_v2 => LoadedCatalogs::V2(c),
-        Some(c) => LoadedCatalogs::V1(c),
+        Some(c) if use_catalogs_v2 => LoadedCatalogs::Active(c),
+        Some(c) => LoadedCatalogs::Deprecated(c),
         None => LoadedCatalogs::None,
     };
 
@@ -760,12 +758,17 @@ async fn build_model_nodes(
         // precondition is checked here: parse resolves every node in the project
         // while only selected nodes run, so one checked here would reject nodes the
         // invocation never touches. See `resolve_compute_write_target`.
-        validate_node_adapter(model_config.adapter, &dbt_asset.path)?;
-        let resolved_node_adapter = arg.adapter_override.or(model_config.adapter);
+        let selected_adapter = select_node_adapter(
+            arg,
+            model_config.adapter,
+            None,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
         validate_interactive_table_config(
             &model_config,
             status,
-            resolved_node_adapter.unwrap_or(default_adapter),
+            selected_adapter,
             &dbt_asset.path,
         )?;
 
@@ -816,7 +819,7 @@ async fn build_model_nodes(
                     &model_name,
                     database,
                     catalogs,
-                    resolved_node_adapter.unwrap_or(default_adapter),
+                    selected_adapter,
                     &dbt_asset.path,
                 )?;
             }
@@ -939,7 +942,6 @@ async fn build_model_nodes(
             .clone()
             .map(Into::into)
             .unwrap_or_default();
-        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
         let catalog_requires_snowflake = catalogs_state
             .catalog_requires_snowflake_propagation(model_config.catalog_name.as_deref())?;
         let effective_propagation_target = (selected_adapter == AdapterType::LakeCompute)
@@ -953,13 +955,8 @@ async fn build_model_nodes(
                 })
             })
             .flatten();
-        model_config.quoting = resolve_package_quoting(
-            Some(match adapter_quoting.get(&selected_adapter) {
-                Some(authored) => model_config.quoting.filled_from(authored),
-                None => model_config.quoting,
-            }),
-            resolved_node_adapter.unwrap_or(default_adapter),
-        );
+        model_config.quoting =
+            resolve_node_quoting(model_config.quoting, adapter_quoting, selected_adapter);
 
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
@@ -1151,7 +1148,7 @@ async fn build_model_nodes(
             },
             __adapter_attr__: AdapterAttr::from_config_and_dialect(
                 &model_config.__warehouse_specific_config__,
-                default_adapter,
+                selected_adapter,
             ),
             // Derived from the model config
             deprecated_config: model_config.clone().into(),
@@ -1166,8 +1163,8 @@ async fn build_model_nodes(
         };
 
         // update model components using the generate_relation_components function
-        update_node_relation_components(
-            &mut dbt_model,
+        dbt_model = update_node_relation_components(
+            dbt_model,
             env,
             &root_package.dbt_project.name,
             package_name,
@@ -1192,7 +1189,7 @@ async fn build_model_nodes(
                 };
             }
         }
-        match node_resolver.insert_ref(&dbt_model, default_adapter, status, false) {
+        match node_resolver.insert_ref(&dbt_model, status, false) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
@@ -1984,7 +1981,7 @@ mod tests {
     use dbt_schemas::schemas::common::{
         DbtMaterialization, FreshnessPeriod, FreshnessRules, ModelFreshnessRules,
     };
-    use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+    use dbt_schemas::schemas::dbt_catalogs_deprecated::DbtCatalogs;
     use dbt_schemas::schemas::properties::ModelFreshness;
     use dbt_schemas::schemas::serde::NodeVersion;
     use std::path::Path;

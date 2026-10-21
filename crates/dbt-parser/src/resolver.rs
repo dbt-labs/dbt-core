@@ -36,10 +36,11 @@ use dbt_schemas::schemas::properties::{
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSource, InternalDbtNode, Nodes};
 use dbt_telemetry::GenericOpExecuted;
 
-use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+use dbt_schemas::schemas::dbt_catalogs_deprecated::DbtCatalogs;
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
+use crate::plugin::{ActivePlugins, ResolvePlugins};
 use crate::resolve::resolve_groups::resolve_groups;
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::resolve::resolve_query_comment::resolve_query_comment;
@@ -70,6 +71,9 @@ use crate::resolve::resolve_macros::resolve_macros;
 use crate::resolve::resolve_macros::typecheck_macros;
 use crate::resolve::resolve_metrics::resolve_metrics;
 use crate::resolve::resolve_models::resolve_models;
+use crate::resolve::resolve_plugins::{
+    PluginNodeContext, ResolvedPluginNodes, resolve_plugin_entries, resolve_plugin_paths,
+};
 use crate::resolve::resolve_properties;
 use crate::resolve::resolve_properties::resolve_minimal_properties;
 use crate::resolve::resolve_saved_queries::resolve_saved_queries;
@@ -138,6 +142,7 @@ pub async fn resolve(
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
     resolver_hooks: Arc<dyn ResolverHooks>,
+    plugins: ResolvePlugins,
     jinja_factory: Arc<dyn JinjaFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     // Hand this invocation a fresh `graph` mapping before any Jinja renders.
@@ -272,6 +277,7 @@ pub async fn resolve(
             let runtime_config = Arc::new(DbtRuntimeConfig::new(
                 &arg.io.in_dir,
                 package,
+                dbt_state.root_project().flags.as_ref(),
                 &dbt_state.dbt_profile,
                 &configs,
                 vars,
@@ -318,6 +324,7 @@ pub async fn resolve(
         root_runtime_config.clone(),
         token,
         jinja_type_checking_event_listener_factory.clone(),
+        Arc::new(plugins.turned_on(dbt_state.root_project().flags.as_ref())),
     )
     .await?;
     nodes.extend(resolved_nodes);
@@ -758,6 +765,7 @@ pub async fn resolve_inner(
     seen_generic_test_paths: &mut HashMap<PathBuf, String>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    plugins: &ActivePlugins,
 ) -> FsResult<(
     Nodes,
     Nodes,
@@ -803,7 +811,9 @@ pub async fn resolve_inner(
         &base_ctx,
         token,
         adapter_type,
-    )?;
+        plugins,
+    )
+    .await?;
 
     let package_name = package.dbt_project.name.as_str();
 
@@ -1053,6 +1063,26 @@ pub async fn resolve_inner(
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
 
+    let plugin_ctx = PluginNodeContext {
+        args: arg,
+        package,
+        root_package: dbt_state.root_package(),
+        database,
+        schema,
+        adapter_type,
+        env: &jinja_env,
+        base_ctx: &base_ctx,
+    };
+    let mut plugin_nodes = ResolvedPluginNodes::default();
+    for plugin in &plugins.on {
+        if let Some(entries) = min_properties.plugins.get_mut(plugin.plugin_type()) {
+            resolve_plugin_entries(&plugin_ctx, plugin.as_ref(), entries, &mut plugin_nodes)?;
+        }
+    }
+    resolve_plugin_paths(&plugin_ctx, plugins, &mut plugin_nodes)?;
+    nodes.plugins.extend(plugin_nodes.enabled);
+    disabled_nodes.plugins.extend(plugin_nodes.disabled);
+
     if !semantic_layer_spec_is_legacy {
         let (semantic_models, disabled_semantic_models) = resolve_semantic_models(
             adapter_type,
@@ -1165,7 +1195,8 @@ pub async fn resolve_inner(
         &dbt_state.packages,
         adapter_type,
         &node_resolver,
-    )?;
+    )
+    .await?;
 
     nodes.unit_tests.extend(unit_tests);
     disabled_nodes.unit_tests.extend(disabled_unit_tests);
@@ -1196,9 +1227,9 @@ pub async fn resolve_inner(
 }
 
 fn catalog_is_lake_compute_reachable(catalogs: &DbtCatalogs, name: &str) -> FsResult<bool> {
-    use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
+    use dbt_schemas::schemas::dbt_catalogs::CatalogType;
 
-    let view = catalogs.view_v2()?;
+    let view = catalogs.view()?;
     // Catalog names are validated as unique before resolution, so this lookup
     // has at most one matching declaration.
     let Some(catalog) = view.catalogs.iter().find(|catalog| catalog.name == name) else {
@@ -1499,6 +1530,7 @@ async fn resolve_package(
     root_runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    plugins: &ActivePlugins,
 ) -> FsResult<(
     String,
     Nodes,
@@ -1553,6 +1585,7 @@ async fn resolve_package(
         &mut seen_generic_test_paths,
         token,
         jinja_type_checking_event_listener_factory.clone(),
+        plugins,
     )
     .await?;
 
@@ -1585,6 +1618,7 @@ async fn resolve_package_waves(
     root_runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    plugins: Arc<ActivePlugins>,
 ) -> FsResult<(
     Nodes,
     Nodes,
@@ -1628,6 +1662,7 @@ async fn resolve_package_waves(
         let token = token.clone();
         let jinja_type_checking_event_listener_factory =
             jinja_type_checking_event_listener_factory.clone();
+        let plugins = plugins.clone();
 
         let results = crate::parallel::dispatch_maybe_parallel(
             package_wave,
@@ -1645,6 +1680,7 @@ async fn resolve_package_waves(
                 let token = token.clone();
                 let jinja_type_checking_event_listener_factory =
                     jinja_type_checking_event_listener_factory.clone();
+                let plugins = plugins.clone();
 
                 async move {
                     resolve_package(
@@ -1661,6 +1697,7 @@ async fn resolve_package_waves(
                         root_runtime_config,
                         &token,
                         jinja_type_checking_event_listener_factory,
+                        &plugins,
                     )
                     .await
                 }
@@ -1896,7 +1933,7 @@ mod tests {
     /// exhaustively so that adding a `CatalogType` has to answer it.
     #[test]
     fn lake_compute_reads_open_catalogs_and_not_engine_owned_ones() {
-        use dbt_schemas::schemas::dbt_catalogs_v2::CatalogType;
+        use dbt_schemas::schemas::dbt_catalogs::CatalogType;
 
         for readable in [
             CatalogType::Horizon,
@@ -1924,7 +1961,7 @@ mod tests {
 
     #[test]
     fn lake_compute_catalog_reachability_is_resolved_here() {
-        use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+        use dbt_schemas::schemas::dbt_catalogs_deprecated::DbtCatalogs;
 
         use super::catalog_is_lake_compute_reachable;
 
@@ -2085,7 +2122,7 @@ mod tests {
         use std::sync::Arc;
 
         use dbt_adapter_core::AdapterType;
-        use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+        use dbt_schemas::schemas::dbt_catalogs_deprecated::DbtCatalogs;
         use dbt_schemas::schemas::{CommonAttributes, DbtModel, DbtSeed, DbtSource, Nodes};
 
         use super::check_compute_platform_upstreams;

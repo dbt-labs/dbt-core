@@ -190,6 +190,19 @@ pub trait MetadataAdapter: Send + Sync {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>>;
 
+    /// Add adapter-provided semantics to schemas fetched from the warehouse.
+    ///
+    /// Implementations should encode relation-local semantics in Arrow metadata so
+    /// they survive schema caching, replay, scans, and relation aliases.
+    fn enrich_relation_schemas<'a>(
+        &'a self,
+        _relations: &'a [Arc<dyn BaseRelation>],
+        schemas: HashMap<String, AdapterResult<Arc<Schema>>>,
+        _token: CancellationToken,
+    ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<Arc<Schema>>>> {
+        Box::pin(async move { Ok(schemas) })
+    }
+
     /// List relations and their schemas.
     ///
     /// This is a provided method that wraps `list_relations_schemas_inner`
@@ -203,21 +216,30 @@ pub trait MetadataAdapter: Send + Sync {
         token: CancellationToken,
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let caller_id = unique_id.clone().unwrap_or_else(|| "global".to_string());
+        let inner_unique_id = unique_id.clone();
+        let inner_token = token.clone();
+        let future = async move {
+            let schemas = self
+                .list_relations_schemas_inner(
+                    inner_unique_id,
+                    phase,
+                    relations,
+                    item_span_operation_id,
+                    inner_token,
+                )
+                .await?;
+            self.enrich_relation_schemas(relations, schemas, token)
+                .await
+        };
         with_time_machine_metadata_wrapper(
             caller_id,
             "list_relations_schemas",
             args_list_relations_schemas(
-                unique_id.clone(),
+                unique_id,
                 phase.map(|p| p.as_str().to_string()),
                 relations.iter().map(|r| r.semantic_fqn()),
             ),
-            self.list_relations_schemas_inner(
-                unique_id,
-                phase,
-                relations,
-                item_span_operation_id,
-                token,
-            ),
+            future,
         )
     }
 
@@ -637,7 +659,7 @@ pub(crate) fn group_relations_by_resolved_database_schema(
         let database = relation.database_as_resolved_str().unwrap_or_default();
         let schema = relation.schema_as_resolved_str().unwrap_or_default();
         groups
-            .entry((database, schema))
+            .entry((database.into_owned(), schema.into_owned()))
             .or_default()
             .push(Arc::clone(relation));
     }
@@ -776,16 +798,14 @@ pub fn flatten_catalog_schemas(
 mod tests {
     use super::*;
     use crate::time_machine::{
-        EventReplayer, MetadataCallArgs, RecordedEvent, get_or_init_recording,
-        get_or_init_replayer, reset_time_machine_globals,
+        EventReplayer, MetadataCallArgs, RecordedEvent, TIME_MACHINE_TEST_LOCK,
+        get_or_init_recording, get_or_init_replayer, reset_time_machine_globals,
     };
     use chrono::{TimeZone, Utc};
     use dbt_schemas::schemas::common::ResolvedQuoting;
     use flate2::read::GzDecoder;
     use std::io::{BufRead, BufReader};
     use std::sync::atomic::{AtomicUsize, Ordering};
-
-    static TIME_MACHINE_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     struct MockMetadataAdapter {
         freshness_all_in_schema_calls: AtomicUsize,

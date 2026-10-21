@@ -1,8 +1,9 @@
 use dbt_common::collections::DashMap;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::telemetry_command::TelemetryCommand;
 use dbt_common::{
     DiscreteEventEmitter, FsResult,
-    stats::{NodeStatus, Stat},
+    stats::{ExecutionMetrics, NodeStatus, Stat},
 };
 use dbt_env::env::InternalEnv;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -50,7 +51,7 @@ impl DiscreteEventEmitter for NoopEventEmitter {
         _invocation_id: &Uuid,
         _root_project_name: &str,
         _profile_path: Option<&Path>,
-        _command: String,
+        _command: TelemetryCommand,
     ) {
         // No-op implementation
     }
@@ -86,7 +87,7 @@ impl DiscreteEventEmitter for DefaultEventEmitter {
         invocation_id: &Uuid,
         root_project_name: &str,
         profile_path: Option<&Path>,
-        command: String,
+        command: TelemetryCommand,
     ) {
         match self.enabled {
             Some(explicitly_enabled) => {
@@ -123,8 +124,9 @@ impl DiscreteEventEmitter for DefaultEventEmitter {
             project_id,
             //  user_id - UUID generated to identify a unique user (~/.dbt/.user.yml)
             user_id: profile_path.map(get_user_id).unwrap_or_default(),
-            //  command - full string of the command that was run
-            command,
+            //  command - subcommand name (dbt-core: `flags.WHICH`). Extension commands
+            //  append their arguments, with path values hashed.
+            command: command.event_value().to_string(),
             //  result_type - ok/error.
             //  only provided on invocation_end
             result_type: "".to_string(),
@@ -230,12 +232,14 @@ pub fn run_model_event(
     run_stats: &DashMap<String, Stat>,
     node: &dyn InternalDbtNodeAttributes,
     maybe_incremental_strategy: Option<String>,
+    snapshot_strategy: Option<String>,
     is_contract_enforced: bool,
     has_group: bool,
     table_format: Option<String>,
     catalog_name: Option<String>,
     catalog_type: Option<String>,
     compute_mode: String,
+    execution_metrics: Option<ExecutionMetrics>,
 ) {
     let unique_id = node.unique_id();
     if !run_stats.contains_key(&unique_id) {
@@ -353,6 +357,11 @@ pub fn run_model_event(
         catalog_type: catalog_type.unwrap_or_default(),
         common_context: None,
         compute_mode,
+        rows_affected: execution_metrics.and_then(|m| m.rows_affected),
+        snapshot_strategy: snapshot_strategy.unwrap_or_default(),
+        bytes_processed: execution_metrics.and_then(|m| m.bytes_processed),
+        bytes_billed: execution_metrics.and_then(|m| m.bytes_billed),
+        slot_ms: execution_metrics.and_then(|m| m.slot_ms),
     };
 
     let _ = log_proto(message);
