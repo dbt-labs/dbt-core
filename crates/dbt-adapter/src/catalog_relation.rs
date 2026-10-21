@@ -489,13 +489,20 @@ impl CatalogRelation {
                     ));
                 }
 
+                let mut adapter_properties = BTreeMap::new();
+                if let Some(value) =
+                    parse_model_bool(model, FIELD_CHANGE_TRACKING, AdapterType::Snowflake)?
+                {
+                    adapter_properties.insert(FIELD_CHANGE_TRACKING.to_owned(), value.to_string());
+                }
+
                 Ok(CatalogRelation {
                     adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
                     integration_name: None,
                     catalog_type: CatalogType::SnowflakeNative,
                     table_format: TableFormat::Default,
-                    adapter_properties: BTreeMap::new(),
+                    adapter_properties,
                     is_transient: Some(transient_parsed.unwrap_or(true)),
                     external_volume: None,
                     catalog_database: None,
@@ -4577,6 +4584,52 @@ mod tests {
             let r = CatalogRelation::deprecated_build_with_catalogs(&m, &cats, "CAT").unwrap();
             assert!(!r.is_transient.unwrap());
             assert_eq!(r.external_volume.as_deref(), Some("ext_vol"));
+        }
+    }
+
+    #[test]
+    fn legacy_default_change_tracking() {
+        for table_format in [None, Some("DEFAULT")] {
+            for expected in [Some(true), Some(false), None] {
+                let mut conf = json!({});
+
+                if let Some(format) = table_format {
+                    conf["table_format"] = json!(format);
+                }
+                if let Some(value) = expected {
+                    conf["change_tracking"] = json!(value);
+                }
+
+                for m in [
+                    model(AdapterType::Snowflake, conf.clone()),
+                    model_deprecated_config(conf),
+                ] {
+                    let relation = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
+
+                    assert_eq!(relation.catalog_type, CatalogType::SnowflakeNative);
+
+                    assert_eq!(
+                        relation
+                            .adapter_properties
+                            .get("change_tracking")
+                            .map(String::as_str),
+                        expected.map(|v| if v { "true" } else { "false" }),
+                    );
+
+                    let exposed = JVal::from_object(relation)
+                        .get_attr("change_tracking")
+                        .unwrap();
+
+                    match expected {
+                        Some(value) => {
+                            assert_eq!(bool::try_from(exposed).unwrap(), value);
+                        }
+                        None => {
+                            assert!(exposed.is_none());
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -145,6 +145,7 @@ create or replace {{ transient }} table {{ relation }}
     {% if copy_tags -%} copy tags {%- endif %}
     {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
+    {{ optional('change_tracking', catalog_relation.change_tracking)}}
     as (
     {#- DIVERGENCE: when we store this under the Catalog Relation, we can change this back to how it is in Core -#}
 	{%- if cluster_by_string -%}
