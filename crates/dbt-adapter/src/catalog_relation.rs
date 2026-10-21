@@ -489,12 +489,7 @@ impl CatalogRelation {
                     ));
                 }
 
-                let mut adapter_properties = BTreeMap::new();
-                if let Some(value) =
-                    parse_model_bool(model, FIELD_CHANGE_TRACKING, AdapterType::Snowflake)?
-                {
-                    adapter_properties.insert(FIELD_CHANGE_TRACKING.to_owned(), value.to_string());
-                }
+                let adapter_properties = legacy_snowflake_adapter_properties(model)?;
 
                 Ok(CatalogRelation {
                     adapter_type: AdapterType::Snowflake,
@@ -1302,6 +1297,15 @@ fn parse_model_bool(
     let raw = CatalogRelation::get_model_config_value(model, key, adapter_type);
     try_parse_bool_str(raw.as_deref(), key)
         .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e.to_string()))
+}
+
+/// Adapter properties a legacy (no catalogs.yml) Snowflake native table reads from its model config.
+fn legacy_snowflake_adapter_properties(model: &Value) -> AdapterResult<BTreeMap<String, String>> {
+    let mut adapter_properties = BTreeMap::new();
+    if let Some(value) = parse_model_bool(model, FIELD_CHANGE_TRACKING, AdapterType::Snowflake)? {
+        adapter_properties.insert(FIELD_CHANGE_TRACKING.to_owned(), value.to_string());
+    }
+    Ok(adapter_properties)
 }
 
 fn parse_model_u32(
@@ -4587,47 +4591,49 @@ mod tests {
         }
     }
 
+    fn change_tracking_conf(table_format: Option<&str>, value: Option<bool>) -> serde_json::Value {
+        let mut conf = json!({});
+        if let Some(format) = table_format {
+            conf["table_format"] = json!(format);
+        }
+        if let Some(value) = value {
+            conf["change_tracking"] = json!(value);
+        }
+        conf
+    }
+
+    fn assert_change_tracking(m: &JVal, expected: Option<bool>) {
+        let relation = CatalogRelation::build_without_catalogs_yml(m).unwrap();
+
+        assert_eq!(relation.catalog_type, CatalogType::SnowflakeNative);
+        assert_eq!(
+            relation
+                .adapter_properties
+                .get("change_tracking")
+                .map(String::as_str),
+            expected.map(|v| v.to_string()).as_deref(),
+        );
+
+        let exposed = JVal::from_object(relation)
+            .get_attr("change_tracking")
+            .unwrap();
+        assert_eq!(exposed.is_none(), expected.is_none());
+        if let Some(value) = expected {
+            assert_eq!(bool::try_from(exposed).unwrap(), value);
+        }
+    }
+
     #[test]
     fn snowflake_legacy_default_change_tracking() {
         for table_format in [None, Some("DEFAULT")] {
             for expected in [Some(true), Some(false), None] {
-                let mut conf = json!({});
-
-                if let Some(format) = table_format {
-                    conf["table_format"] = json!(format);
-                }
-                if let Some(value) = expected {
-                    conf["change_tracking"] = json!(value);
-                }
+                let conf = change_tracking_conf(table_format, expected);
 
                 for m in [
                     model(AdapterType::Snowflake, conf.clone()),
                     model_deprecated_config(conf),
                 ] {
-                    let relation = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-
-                    assert_eq!(relation.catalog_type, CatalogType::SnowflakeNative);
-
-                    assert_eq!(
-                        relation
-                            .adapter_properties
-                            .get("change_tracking")
-                            .map(String::as_str),
-                        expected.map(|v| if v { "true" } else { "false" }),
-                    );
-
-                    let exposed = JVal::from_object(relation)
-                        .get_attr("change_tracking")
-                        .unwrap();
-
-                    match expected {
-                        Some(value) => {
-                            assert_eq!(bool::try_from(exposed).unwrap(), value);
-                        }
-                        None => {
-                            assert!(exposed.is_none());
-                        }
-                    }
+                    assert_change_tracking(&m, expected);
                 }
             }
         }

@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Snowflake: respect the change_tracking config when creating native (non-Iceberg) tables'
+time: 2026-10-21T15:06:47.064518+11:00
+custom:
+    author: kevinsoenandar-dbt
+    issue: "16826"
+    project: dbt-core

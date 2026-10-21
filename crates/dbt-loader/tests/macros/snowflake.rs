@@ -328,7 +328,7 @@ fn render_sql_table(change_tracking: Option<bool>) -> String {
     catalog_relation.set_attr("is_transient", Value::from(false));
     catalog_relation.set_attr(
         "change_tracking",
-        change_tracking.map_or(Value::from(()), Value::from),
+        change_tracking.map_or_else(|| Value::from(()), Value::from),
     );
     harness.mock().on("build_catalog_relation", move |_| {
         Ok(Value::from_dyn_object(catalog_relation.clone()))
