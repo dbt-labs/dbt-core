@@ -12,11 +12,11 @@ use crate::renderer::strip_deprecated_warehouse_keys_from_properties;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
 use crate::resolve::resolve_utils::{
-    build_unrendered_config, err_resource_name_has_spaces, validate_compute, validate_node_adapter,
+    build_unrendered_config, err_resource_name_has_spaces, resolve_node_quoting,
+    select_node_adapter, validate_compute,
 };
 use crate::utils::RelationComponents;
 use crate::utils::extract_resource_config_from_raw_project;
-use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_contents;
 use crate::utils::get_original_file_path;
@@ -41,7 +41,6 @@ use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::IntrospectionKind;
@@ -630,15 +629,16 @@ pub async fn resolve_data_tests(
         });
         // See `resolve_models`: the flag overrides the config. `None` from both
         // leaves inheritance to fill the gap.
-        validate_node_adapter(test_config.adapter, &dbt_asset.path)?;
-        let resolved_node_adapter = arg
-            .adapter_override
-            .or(test_config.adapter)
-            .or(inherited_adapter);
+        let selected_adapter = select_node_adapter(
+            arg,
+            test_config.adapter,
+            inherited_adapter,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
 
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
-        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
         let relation_context = adapter_relation_contexts.get_for_node(
             profile,
             selected_adapter,
@@ -646,13 +646,8 @@ pub async fn resolve_data_tests(
             status,
             base_ctx,
         )?;
-        test_config.quoting = resolve_package_quoting(
-            Some(match adapter_quoting.get(&selected_adapter) {
-                Some(authored) => test_config.quoting.filled_from(authored),
-                None => test_config.quoting,
-            }),
-            selected_adapter,
-        );
+        test_config.quoting =
+            resolve_node_quoting(test_config.quoting, adapter_quoting, selected_adapter);
 
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =
@@ -870,8 +865,8 @@ pub async fn resolve_data_tests(
         };
 
         // Update with relation components
-        update_node_relation_components(
-            &mut dbt_test,
+        dbt_test = update_node_relation_components(
+            dbt_test,
             &env,
             &root_package.dbt_project.name,
             package_name,
@@ -945,7 +940,6 @@ pub async fn resolve_data_tests(
         nodes_with_execute,
         node_resolver,
         env.clone(),
-        default_adapter,
         package.dbt_project.name.as_str(),
         &root_package.dbt_project.name,
         runtime_config,

@@ -91,6 +91,27 @@ impl RelationObject {
         }
     }
 
+    /// This relation for `adapter_type`: its components (in the case its own adapter renders),
+    /// type, quote policy and run filter, with that adapter's quote character and include policy.
+    pub fn for_adapter(&self, adapter_type: AdapterType) -> Result<Self, minijinja::Error> {
+        let relation = &self.relation;
+        let (database, schema, identifier) = canonical_relation_parts(
+            Some(relation.adapter_type()),
+            relation.database().unwrap_or_default(),
+            relation.schema().unwrap_or_default(),
+            relation.identifier().unwrap_or_default(),
+        );
+        let rebuilt = do_create_relation(
+            adapter_type,
+            database,
+            schema,
+            Some(identifier),
+            relation.relation_type(),
+            relation.quote_policy(),
+        )?;
+        Ok(self.with_relation(rebuilt.into()))
+    }
+
     pub fn has_filter(&self) -> bool {
         self.run_filter.is_some()
     }
@@ -358,6 +379,7 @@ impl Object for RelationObject {
             Some("identifier") | Some("name") | Some("table") => {
                 Some(Value::from(self.identifier()))
             }
+            Some("quote_policy") => Some(Value::from_serialize(self.quote_policy())),
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
@@ -1121,6 +1143,22 @@ mod tests {
         );
     }
 
+    // Takes the target's include policy: DuckDB drops a `main` database.
+    #[test]
+    fn for_adapter_respells_with_the_target_adapter() {
+        let databricks = RelationObject::new(Arc::new(
+            Relation::new(
+                AdapterType::Databricks,
+                "main".to_string(),
+                "sch".to_string(),
+                "up".to_string(),
+            )
+            .with_quoting(ResolvedQuoting::trues()),
+        ));
+        let duckdb = databricks.for_adapter(AdapterType::DuckDB).unwrap();
+        assert_eq!(duckdb.render_self_as_str(), r#""sch"."up""#);
+    }
+
     #[test]
     fn duckdb_source_external_location_formats_and_quotes_path() {
         let source = source_with_meta_location("data/{name}.csv");
@@ -1408,6 +1446,7 @@ mod tests {
             },
             Some("event_date".to_string()),
         );
+        let lakecompute = relation.for_adapter(AdapterType::LakeCompute).unwrap();
 
         jinja_assert(
             relation,
@@ -1425,6 +1464,11 @@ mod tests {
             (select * from "d"."s"."k" where event_date >= to_timestamp_tz('2026-07-13T00:00:00+00:00') and event_date < to_timestamp_tz('2026-07-14T00:00:00+00:00'))
             (select * from "d"."s" where event_date >= to_timestamp_tz('2026-07-13T00:00:00+00:00') and event_date < to_timestamp_tz('2026-07-14T00:00:00+00:00'))
             "#,
+        );
+        jinja_assert(
+            lakecompute,
+            "{{ obj }}",
+            r#"(select * from "d"."s"."i" where event_date >= '2026-07-13T00:00:00+00:00' and event_date < '2026-07-14T00:00:00+00:00')"#,
         );
     }
 
