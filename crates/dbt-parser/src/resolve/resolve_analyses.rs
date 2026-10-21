@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::resolve::resolve_utils::{err_resource_name_has_spaces, validate_node_adapter};
+use crate::resolve::resolve_utils::{err_resource_name_has_spaces, select_node_adapter};
 
 use dbt_adapter_core::AdapterType;
 use dbt_common::cancellation::CancellationToken;
@@ -14,6 +14,7 @@ use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::AnalysesConfig;
+use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::{
     schemas::{
@@ -102,7 +103,7 @@ pub async fn resolve_analyses(
                 .as_ref()
                 .unwrap_or(&vec![])
                 .clone(),
-            resource_type: None,
+            resource_type: Some(NodeType::Analysis),
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
@@ -162,11 +163,13 @@ pub async fn resolve_analyses(
         // An analysis is compiled rather than materialized, but it still renders
         // refs and dispatches macros, so which adapter it renders *as* is a real
         // choice. Resolved the same way every other node type resolves it.
-        validate_node_adapter(analysis_config.adapter, &dbt_asset.path)?;
-        let selected_adapter = arg
-            .adapter_override
-            .or(analysis_config.adapter)
-            .unwrap_or(default_adapter);
+        let selected_adapter = select_node_adapter(
+            arg,
+            analysis_config.adapter,
+            None,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
         // unique_id.push_str(&format!(".{statement_index}"));
 
         let fqn = get_node_fqn(
@@ -304,8 +307,8 @@ pub async fn resolve_analyses(
         };
 
         // update model components using the generate_relation_components function
-        update_node_relation_components(
-            &mut dbt_analysis,
+        dbt_analysis = update_node_relation_components(
+            dbt_analysis,
             &env,
             &root_package.dbt_project.name,
             package_name,
