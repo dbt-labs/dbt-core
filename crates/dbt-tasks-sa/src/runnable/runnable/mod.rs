@@ -214,7 +214,7 @@ impl Task for RunTask {
                             .inner
                             .run_cache_ctx
                             .run_cache_dev_cloned_nodes
-                            .contains_key(&self.node.unique_id())
+                            .contains_sync(&self.node.unique_id())
                     {
                         let status = replay_dev_clone_decision(&unique_id)
                             .map(|clone| clone.replay_status())
@@ -277,7 +277,7 @@ impl Task for RunTask {
                     if let Some(node_hash) = decision.node_hash() {
                         ctx.inner
                             .node_hashes
-                            .insert(unique_id.to_string(), node_hash);
+                            .upsert_sync(unique_id.to_string(), node_hash);
                     }
 
                     if let RunCacheServiceDecision::Skip {
@@ -312,7 +312,7 @@ impl Task for RunTask {
                                 test.deprecated_config.store_failures,
                                 None,
                             );
-                            ctx.inner.run_stats.insert(
+                            ctx.inner.run_stats.upsert_sync(
                                 unique_id.clone(),
                                 Stat::new(
                                     unique_id.clone(),
@@ -554,7 +554,7 @@ impl Task for RunTask {
             // Get status and insert stats
             // Note: Inner visit_run implementations may insert their own stats on success,
             // but we need to ensure stats are inserted even when errors occur early.
-            // The DashMap will just overwrite if there's a duplicate.
+            // The SccHashMap will just overwrite if there's a duplicate.
             // Ensure stats are always inserted, even if inner visit_run had early returns
             let node_status = match result {
                 Ok(node_status) => {
@@ -569,7 +569,7 @@ impl Task for RunTask {
 
                     // Insert stats for success case if not already inserted by inner implementation
                     // This ensures stats are present even if inner code didn't insert them
-                    if !ctx.inner.run_stats.contains_key(&unique_id) {
+                    if !ctx.inner.run_stats.contains_sync(&unique_id) {
                         let mut stat = Stat::new(
                             unique_id.clone(),
                             start_time.into(),
@@ -579,7 +579,7 @@ impl Task for RunTask {
                             ctx.thread_id,
                         );
                         stat.rows_affected = span_rows_affected;
-                        ctx.inner.run_stats.insert(unique_id.clone(), stat);
+                        ctx.inner.run_stats.upsert_sync(unique_id.clone(), stat);
                     }
 
                     node_status
@@ -606,7 +606,7 @@ impl Task for RunTask {
                     }
 
                     // Insert stats for the error case so it appears in run_results.json
-                    ctx.inner.run_stats.insert(
+                    ctx.inner.run_stats.upsert_sync(
                         unique_id.clone(),
                         Stat::new(
                             unique_id.clone(),
@@ -626,7 +626,7 @@ impl Task for RunTask {
             // emission. PR #9146 broke this by emitting before stats were
             // inserted for dbt State-reused models.
             debug_assert!(
-                ctx.inner.run_stats.contains_key(&unique_id),
+                ctx.inner.run_stats.contains_sync(&unique_id),
                 "run_stats missing for {unique_id} before telemetry emission"
             );
 
@@ -883,9 +883,9 @@ async fn run_cache_after_success_action(
                 if let Some(result) = ctx
                     .inner
                     .data_test_execution_results
-                    .get(node.unique_id().as_str())
+                    .read_sync(node.unique_id().as_str(), |_, result| *result)
                 {
-                    confirmation.set_test_execution_results(*result);
+                    confirmation.set_test_execution_results(result);
                 }
             }
             confirm_run_cache_service_execution(

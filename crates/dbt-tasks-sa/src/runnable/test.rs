@@ -152,7 +152,7 @@ pub fn insert_test_run_stat(
     status: TestExecutionStatus,
 ) {
     let thread_id = ctx.thread_id;
-    ctx.inner.run_stats.insert(
+    ctx.inner.run_stats.upsert_sync(
         unique_id.clone(),
         Stat::new(
             unique_id,
@@ -446,7 +446,7 @@ impl AggregatedTestRunRemoteTask {
             if let Some(main_response) = &main_response {
                 ctx.inner
                     .main_adapter_responses
-                    .insert(unique_id.clone(), main_response.clone());
+                    .upsert_sync(unique_id.clone(), main_response.clone());
             }
             let (_, span) = span_by_id
                 .remove(unique_id)
@@ -497,7 +497,7 @@ impl AggregatedTestRunRemoteTask {
         if let Some(execution_result) = result.execution_result {
             ctx.inner
                 .data_test_execution_results
-                .insert(unique_id.to_string(), execution_result);
+                .upsert_sync(unique_id.to_string(), execution_result);
         }
 
         ctx.inner
@@ -639,7 +639,7 @@ fn execute_test_remote_inner(
     if let Some(main_response) = main_response {
         ctx.inner
             .main_adapter_responses
-            .insert(test.__common_attr__.unique_id.clone(), main_response);
+            .upsert_sync(test.__common_attr__.unique_id.clone(), main_response);
     }
     let test_result = test_results
         .into_iter()
@@ -712,7 +712,7 @@ pub fn process_test_result(
     if let Some(execution_result) = result.execution_result {
         ctx.inner
             .data_test_execution_results
-            .insert(unique_id.clone(), execution_result);
+            .upsert_sync(unique_id.clone(), execution_result);
     }
 
     Ok(node_status)
@@ -736,7 +736,7 @@ pub fn process_statically_checked_test_result(
     );
 
     let unique_id = &test.common().unique_id;
-    ctx.inner.run_stats.insert(
+    ctx.inner.run_stats.upsert_sync(
         unique_id.clone(),
         Stat::new(
             unique_id.clone(),

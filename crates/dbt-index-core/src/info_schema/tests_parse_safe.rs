@@ -69,7 +69,6 @@ const DEAD_AT_PARSE: &[(&str, &[&str])] = &[
             "expression",
             "quote",
             "granularity",
-            "meta",
             "tests",
         ],
     ),
@@ -92,17 +91,12 @@ const DEAD_AT_PARSE: &[(&str, &[&str])] = &[
         "groups",
         &["package_name", "file_path", "original_file_path", "config"],
     ),
-    ("exposures", &["meta", "config"]),
     ("metrics", &["semantic_model_name", "ai_context"]),
-    ("saved_queries", &["config"]),
-    ("unit_tests", &["config", "created_at"]),
+    ("unit_tests", &["created_at"]),
     (
         "semantic_models",
-        &["package_name", "file_path", "original_file_path", "config"],
+        &["package_name", "file_path", "original_file_path"],
     ),
-    ("semantic_entities", &["config"]),
-    ("semantic_measures", &["config"]),
-    ("semantic_dimensions", &["config"]),
 ];
 
 /// Resolve a view's columns to the source column each one reads.
@@ -379,5 +373,26 @@ fn constraints_are_readable_by_checks() {
             view.cols.contains(&"constraints"),
             "dbt.{name} must expose `constraints`"
         );
+    }
+}
+
+/// `meta` and `config` are filled at parse for these tables, so checks may read them
+/// (dbt-labs/dbt#16584): skip a disabled exposure, or accept a violation from `meta`.
+#[test]
+fn meta_and_config_are_readable_by_checks() {
+    for (view, cols) in [
+        ("exposures", &["meta", "config"][..]),
+        ("unit_tests", &["config"][..]),
+        ("node_columns", &["meta"][..]),
+        ("saved_queries", &["config"][..]),
+        ("semantic_models", &["config"][..]),
+        ("semantic_entities", &["config"][..]),
+        ("semantic_measures", &["config"][..]),
+        ("semantic_dimensions", &["config"][..]),
+    ] {
+        let v = VIEWS.iter().find(|v| v.name == view).unwrap();
+        for col in cols {
+            assert!(v.cols.contains(col), "dbt.{view} must expose `{col}`");
+        }
     }
 }
