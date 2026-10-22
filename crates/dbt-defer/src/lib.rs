@@ -1343,12 +1343,7 @@ mod tests {
 
         let mut resolver = NodeResolver::default();
         resolver
-            .insert_ref(
-                &local_node,
-                AdapterType::DuckDB,
-                ModelStatus::Enabled,
-                false,
-            )
+            .insert_ref(&local_node, ModelStatus::Enabled, false)
             .unwrap();
         let mut local_nodes = BTreeMap::from([(unique_id.to_string(), Arc::new(local_node))]);
 
