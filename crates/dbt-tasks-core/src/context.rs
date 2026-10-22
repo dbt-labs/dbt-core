@@ -199,7 +199,7 @@ pub struct TaskRunnerCtxInner {
     /// Per-adapter Jinja environments for execution. The shared environment is
     /// bound to the command's base adapter; non-default nodes need the same
     /// macros and globals with `adapter`, `api`, and `dialect` rebound.
-    pub adapter_envs: DashMap<AdapterType, Arc<JinjaEnv>>,
+    pub adapter_envs: SccHashMap<AdapterType, Arc<JinjaEnv>>,
     pub sources_extractor: Arc<dyn SourcesExtractor>,
     pub dbt_profile: Arc<DbtProfile>,
     pub runtime_config: Arc<DbtRuntimeConfig>,
@@ -290,7 +290,7 @@ impl TaskRunnerCtxInner {
             materialization_resolver: Arc::new(materialization_resolver),
             root_project_name: resolver_state.root_project_name.clone(),
             adapter_store,
-            adapter_envs: DashMap::default(),
+            adapter_envs: SccHashMap::default(),
             sources_extractor,
             dbt_profile: Arc::new(resolver_state.dbt_profile.clone()),
             runtime_config: resolver_state.runtime_config.clone(),
@@ -501,8 +501,12 @@ impl TaskRunnerCtx {
             return Ok(Arc::clone(&self.env));
         }
 
-        if let Some(env) = self.inner.adapter_envs.get(&adapter_type) {
-            return Ok(Arc::clone(env.value()));
+        if let Some(env) = self
+            .inner
+            .adapter_envs
+            .read_sync(&adapter_type, |_, env| Arc::clone(env))
+        {
+            return Ok(env);
         }
 
         let adapter = self.adapter_store().get(adapter_type)?;
@@ -511,7 +515,7 @@ impl TaskRunnerCtx {
         let env = Arc::new(env);
         self.inner
             .adapter_envs
-            .insert(adapter_type, Arc::clone(&env));
+            .upsert_sync(adapter_type, Arc::clone(&env));
         Ok(env)
     }
 
