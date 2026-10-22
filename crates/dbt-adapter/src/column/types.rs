@@ -1033,6 +1033,11 @@ impl Column {
                 }
                 bigquery_data_type_inner(self)
             }
+            // `mariadb__get_columns_in_relation` keeps the server's full type
+            // text (`text`, `varchar(20)`, `int(10) unsigned`, `enum(...)`),
+            // which is valid DDL as-is; rebuilding it from parts would turn
+            // `text` into `character varying(256)`.
+            AdapterType::MariaDB => self.core_dtype.to_string(),
             _ => {
                 if self.is_string() {
                     self.as_static().string_type(Some(

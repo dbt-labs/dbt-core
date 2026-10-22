@@ -120,6 +120,11 @@ pub fn max_identifier_length(adapter_type: AdapterType) -> Option<NonZero<usize>
             // SAFETY: literal 127 is never 0
             Some(unsafe { NonZero::new_unchecked(127) })
         }
+        // https://mariadb.com/docs/server/reference/sql-structure/sql-language-structure/identifier-names
+        MariaDB => {
+            // SAFETY: literal 64 is never 0
+            Some(unsafe { NonZero::new_unchecked(64) })
+        }
         Snowflake | Bigquery | Databricks | Spark | DuckDB | Salesforce | Fabric | ClickHouse
         | Exasol | Athena | Starburst | Trino | Datafusion | Dremio | Oracle | LakeCompute => None,
     }
@@ -139,7 +144,7 @@ pub fn max_identifier_length(adapter_type: AdapterType) -> Option<NonZero<usize>
 pub const fn canonical_quote(backend: AdapterType) -> QuotingStyle {
     use AdapterType::*;
     match backend {
-        Bigquery | Databricks | Spark | Athena => QuotingStyle::Backtick,
+        Bigquery | Databricks | Spark | Athena | MariaDB => QuotingStyle::Backtick,
         ClickHouse | Exasol | Snowflake | Redshift | Postgres | Salesforce | DuckDB => {
             QuotingStyle::Double
         }
@@ -178,6 +183,7 @@ pub fn is_valid_ident_char(c: char, backend: AdapterType) -> bool {
             | Oracle
             | LakeCompute
             | Exasol => c.is_alphanumeric() || c == '_',
+        MariaDB => c.is_alphanumeric() || c == '_' || c == '$',
     }
 }
 

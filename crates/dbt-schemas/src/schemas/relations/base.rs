@@ -594,6 +594,19 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
                     end.map(|end| format!("{event_time} < {}", to_exasol_ts(&end))),
                 )
             }
+            // MariaDB datetime literals take no time-zone offset; the session
+            // runs in UTC, so strip the (always +00:00) offset and the 'T'.
+            AdapterType::MariaDB => {
+                let to_mariadb_ts = |s: &str| {
+                    s.trim_end_matches("+00:00")
+                        .trim_end_matches('Z')
+                        .replace('T', " ")
+                };
+                (
+                    start.map(|start| format!("{event_time} >= '{}'", to_mariadb_ts(&start))),
+                    end.map(|end| format!("{event_time} < '{}'", to_mariadb_ts(&end))),
+                )
+            }
             AdapterType::Starburst => todo!("Starburst"),
             AdapterType::Athena => todo!("Athena"),
             AdapterType::Trino => todo!("Trino"),
