@@ -23,7 +23,7 @@ use super::resolve_exposures::resolve_yaml_depends_on;
 use super::resolve_properties::MinimalPropertiesEntry;
 use crate::args::ResolveArgs;
 use crate::plugin::{
-    ActivePlugins, PluginDiagnostics, PluginEntry, PluginFile, PluginNodeDef, PluginPackage,
+    ActivePlugins, PluginDiagnostics, PluginEntry, PluginFile, PluginNodeDef, PluginPackage, keys,
 };
 use crate::utils::get_node_fqn;
 
@@ -63,8 +63,8 @@ impl ResolvedPluginNodes {
     }
 }
 
-/// Resolves a package's plugin nodes: each plugin that is on gets the package's entries under its
-/// keys in properties files and its files under `plugin-paths`, all at once.
+/// Resolves a package's plugin nodes: each plugin that is on gets the package's entries and files
+/// under each of its keys, in properties files and `plugin-paths`, all at once.
 ///
 /// Two entries under the same key with the same name are reported, and neither reaches the
 /// plugin. A node the plugin defines twice is reported and gets no second node.
@@ -79,15 +79,19 @@ pub(crate) fn resolve_plugins(
     for plugin in &plugins.on {
         let plugin_type = plugin.plugin_type();
         let mut entries = BTreeMap::new();
-        for key in std::iter::once(plugin_type).chain(plugin.definition_keys().iter().copied()) {
+        let mut plugin_files = BTreeMap::new();
+        for key in keys(plugin.as_ref()) {
             if let Some(by_name) = properties.remove(key) {
                 entries.insert(key, plugin_entries(key, package_name, by_name));
+            }
+            if let Some(key_files) = files.remove(key) {
+                plugin_files.insert(key, key_files);
             }
         }
         let package = PluginPackage {
             package_name,
             entries,
-            files: files.remove(plugin_type).unwrap_or_default(),
+            files: plugin_files,
             jinja: Some((ctx.env, ctx.base_ctx)),
         };
         let mut diagnostics = PluginDiagnostics::default();
@@ -157,73 +161,68 @@ fn plugin_entries(
     entries
 }
 
-/// The files under a package's `plugin-paths`, by plugin type.
+/// The files under a package's `plugin-paths`, by key.
 ///
-/// A path that names no reserved plugin, or a plugin that is off, is ignored with a warning. A
-/// path that overlaps one dbt reads, or another plugin's, is an error.
+/// A key that isn't reserved, or whose plugin is off, is ignored with a warning. A path that
+/// overlaps one dbt reads, or another key's, is an error.
 fn plugin_path_files(
     ctx: &PluginNodeContext<'_>,
     plugins: &ActivePlugins,
 ) -> FsResult<BTreeMap<&'static str, Vec<PluginFile>>> {
-    let mut files_by_type = BTreeMap::new();
+    let mut files_by_key = BTreeMap::new();
     let project = &ctx.package.dbt_project;
     let Some(plugin_paths) = &project.plugin_paths else {
-        return Ok(files_by_type);
+        return Ok(files_by_key);
     };
     let package_name = project.name.as_str();
     let dbt_paths = project.all_dbt_paths();
     let claims = Claims::new(&dbt_paths, plugin_paths);
-    for (plugin_type, paths) in plugin_paths {
-        if !plugins.is_reserved(plugin_type) {
+    for (key, paths) in plugin_paths {
+        if !plugins.is_reserved(key) {
             emit_warn_log_message(
                 ErrorCode::UnknownPlugin,
                 format!(
-                    "Ignoring `plugin-paths: {plugin_type}` in package '{package_name}': there \
-                     is no `{plugin_type}` plugin"
+                    "Ignoring `plugin-paths: {key}` in package '{package_name}': there is no \
+                     `{key}` plugin"
                 ),
             );
             continue;
         }
-        let Some(plugin) = plugins.of_type(plugin_type) else {
-            let why = match plugins.reading(plugin_type) {
-                Some(reader) => format!(
-                    "`{plugin_type}` isn't a plugin type, only a key the `{}` plugin reads \
-                     under `plugins:`",
-                    reader.plugin_type()
-                ),
-                None => plugins.why_ignored(plugin_type),
-            };
+        let Some(key) = plugins
+            .reading(key)
+            .and_then(|plugin| keys(plugin.as_ref()).find(|own| own == key))
+        else {
             emit_warn_log_message(
                 ErrorCode::PluginNotEnabled,
                 format!(
-                    "Ignoring `plugin-paths: {plugin_type}` in package '{package_name}': {why}"
+                    "Ignoring `plugin-paths: {key}` in package '{package_name}': {}",
+                    plugins.why_ignored(key)
                 ),
             );
             continue;
         };
-        let plugin_type = plugin.plugin_type();
 
-        let files = files_by_type.entry(plugin_type).or_insert_with(Vec::new);
+        let files = files_by_key.entry(key).or_insert_with(Vec::new);
         for path in paths {
-            if let Some(other) = claims.overlap(plugin_type, path) {
+            if let Some(other) = claims.overlap(key, path) {
                 emit_error_log_from_fs_error(*fs_err!(
                     ErrorCode::PluginPathOverlap,
-                    "`plugin-paths: {plugin_type}` in package '{package_name}' has '{path}', \
-                     which overlaps '{other}'. A plugin's paths can't overlap a path dbt reads \
-                     or another plugin's."
+                    "`plugin-paths: {key}` in package '{package_name}' has '{path}', which \
+                     overlaps '{other}'. A key's paths can't overlap a path dbt reads or \
+                     another key's."
                 ));
                 continue;
             }
-            if let Some(dir) = contained_dir(ctx.package, plugin_type, path) {
+            if let Some(dir) = contained_dir(ctx.package, key, path) {
                 collect_files(&ctx.package.package_root_path, &dir, files)?;
             }
         }
     }
-    Ok(files_by_type)
+    Ok(files_by_key)
 }
 
 /// The paths a package's dbt paths and `plugin-paths` claim, normalized, by who claims them:
-/// `None` for dbt, else a plugin type.
+/// `None` for dbt, else a key.
 ///
 /// A path's overlaps are its ancestors and descendants among them, found by lookup rather than
 /// by comparing it with every other path.
@@ -233,9 +232,9 @@ impl<'a> Claims<'a> {
     fn new(dbt_paths: &'a [String], plugin_paths: &'a BTreeMap<String, Vec<String>>) -> Self {
         let mut claims: BTreeMap<_, Vec<_>> = BTreeMap::new();
         let dbt = dbt_paths.iter().map(|path| (None, path));
-        let plugins = plugin_paths.iter().flat_map(|(plugin_type, paths)| {
-            paths.iter().map(|path| (Some(plugin_type.as_str()), path))
-        });
+        let plugins = plugin_paths
+            .iter()
+            .flat_map(|(key, paths)| paths.iter().map(|path| (Some(key.as_str()), path)));
         for (owner, path) in dbt.chain(plugins) {
             claims
                 .entry(normalize(path))
@@ -245,8 +244,8 @@ impl<'a> Claims<'a> {
         Self(claims)
     }
 
-    /// A path that overlaps `path`, one inside the other, claimed by anyone but `plugin_type`.
-    fn overlap(&self, plugin_type: &str, path: &str) -> Option<&'a str> {
+    /// A path that overlaps `path`, one inside the other, claimed by anyone but `key`.
+    fn overlap(&self, key: &str, path: &str) -> Option<&'a str> {
         let path = normalize(path);
         let ancestors = path.ancestors().filter_map(|ancestor| self.0.get(ancestor));
         // Paths order by component, so the paths inside `path` directly follow it.
@@ -258,7 +257,7 @@ impl<'a> Claims<'a> {
         ancestors
             .chain(descendants)
             .flatten()
-            .find(|(owner, _)| *owner != Some(plugin_type))
+            .find(|(owner, _)| *owner != Some(key))
             .map(|(_, other)| *other)
     }
 }
@@ -275,7 +274,7 @@ fn normalize(path: &str) -> PathBuf {
 ///
 /// Containment is checked on canonical paths, so it holds for symlinks as well as `..`, as for
 /// `skill-paths`. A path that doesn't exist is not an error.
-fn contained_dir(package: &DbtPackage, plugin_type: &str, path: &str) -> Option<PathBuf> {
+fn contained_dir(package: &DbtPackage, key: &str, path: &str) -> Option<PathBuf> {
     let root = &package.package_root_path;
     let dir = root.join(path);
     if !dir.is_dir() {
@@ -290,7 +289,7 @@ fn contained_dir(package: &DbtPackage, plugin_type: &str, path: &str) -> Option<
             emit_warn_log_message(
                 ErrorCode::PluginPathEscapesProject,
                 format!(
-                    "Skipping '{path}' in `plugin-paths: {plugin_type}` of '{package_name}': it \
+                    "Skipping '{path}' in `plugin-paths: {key}` of '{package_name}': it \
                      resolves to {}, which is outside that project",
                     canonical_dir.display()
                 ),
@@ -301,7 +300,7 @@ fn contained_dir(package: &DbtPackage, plugin_type: &str, path: &str) -> Option<
             emit_warn_log_message(
                 ErrorCode::PluginPathEscapesProject,
                 format!(
-                    "Skipping '{path}' in `plugin-paths: {plugin_type}` of '{package_name}': dbt \
+                    "Skipping '{path}' in `plugin-paths: {key}` of '{package_name}': dbt \
                      could not resolve it to confirm it stays inside the project"
                 ),
             );

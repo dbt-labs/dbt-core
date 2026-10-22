@@ -1,9 +1,9 @@
 //! Plugins that add their own kind of node to a project.
 //!
-//! A plugin reads its definitions from one or both of two sources:
+//! A plugin reads its definitions under its keys: its type, and any other keys it reads for
+//! definitions that aren't nodes. Each key works in both of two places:
 //!
-//! - **`plugins:` in properties files.** Entries under the plugin's type, and under any other keys
-//!   the plugin reads for definitions that aren't nodes:
+//! - **`plugins:` in properties files.** Entries under the key:
 //!
 //!   ```yaml
 //!   plugins:
@@ -14,11 +14,13 @@
 //!     part:
 //!       - name: bolt
 //!   ```
-//! - **Plugin paths.** Directories a project names for the plugin in its `dbt_project.yml`:
+//! - **Plugin paths.** Directories a project names for the key in its `dbt_project.yml`, whose
+//!   files hold definitions of that key's kind:
 //!
 //!   ```yaml
 //!   plugin-paths:
 //!     widget: ["widgets"]
+//!     part: ["parts"]
 //!   ```
 //!
 //! The plugin resolves one package at a time, seeing all of the package's entries and files at
@@ -54,8 +56,9 @@ pub trait ResolvePlugin: Send + Sync {
     /// registered with.
     fn plugin_type(&self) -> &'static str;
 
-    /// Other keys under `plugins:` the plugin reads, for definitions that aren't nodes of their
-    /// own but that its nodes name (e.g. `part`). Each must be reserved, like a plugin type.
+    /// Other keys the plugin reads, under `plugins:` and `plugin-paths:`, for definitions that
+    /// aren't nodes of their own but that its nodes name (e.g. `part`). Each must be reserved,
+    /// like a plugin type.
     fn definition_keys(&self) -> &'static [&'static str] {
         &[]
     }
@@ -74,13 +77,13 @@ pub trait ResolvePlugin: Send + Sync {
     ) -> Result<Vec<PluginNodeDef>, PluginError>;
 }
 
-/// What one package gives a plugin: its entries under the plugin's keys in properties files, and
-/// its files under the plugin's `plugin-paths`.
+/// What one package gives a plugin, by key: its entries under `plugins: <key>:` in properties
+/// files, and its files under `plugin-paths: {<key>: [...]}`.
 pub struct PluginPackage<'a> {
     /// The package's name.
     pub package_name: &'a str,
     pub(crate) entries: BTreeMap<&'static str, Vec<PluginEntry>>,
-    pub(crate) files: Vec<PluginFile>,
+    pub(crate) files: BTreeMap<&'static str, Vec<PluginFile>>,
     /// What entries and files are rendered with; `None` reads them as written.
     pub(crate) jinja: Option<(&'a JinjaEnv, &'a BTreeMap<String, MinijinjaValue>)>,
 }
@@ -91,7 +94,7 @@ impl<'a> PluginPackage<'a> {
     pub fn unrendered(
         package_name: &'a str,
         entries: BTreeMap<&'static str, Vec<PluginEntry>>,
-        files: Vec<PluginFile>,
+        files: BTreeMap<&'static str, Vec<PluginFile>>,
     ) -> Self {
         Self {
             package_name,
@@ -107,10 +110,10 @@ impl<'a> PluginPackage<'a> {
         self.entries.get(key).map_or(&[], Vec::as_slice)
     }
 
-    /// The files under the package's `plugin-paths` for the plugin, in path order, hidden ones
-    /// skipped.
-    pub fn files(&self) -> &[PluginFile] {
-        &self.files
+    /// The files under `plugin-paths: {<key>: [...]}`, in path order, hidden ones skipped. `key`
+    /// is the plugin's type or one of its definition keys.
+    pub fn files(&self, key: &str) -> &[PluginFile] {
+        self.files.get(key).map_or(&[], Vec::as_slice)
     }
 
     /// `entry` as a `T`, rendered as dbt renders properties: fields typed `Verbatim<_>` stay as
@@ -206,7 +209,7 @@ impl PluginEntry {
     }
 }
 
-/// A file under one of a package's `plugin-paths` for a plugin.
+/// A file under one of a package's `plugin-paths` for one of a plugin's keys.
 #[derive(Debug, Clone)]
 pub struct PluginFile {
     /// The file, relative to its package's root.
@@ -350,14 +353,8 @@ pub struct ActivePlugins {
 }
 
 impl ActivePlugins {
-    /// The plugin that is on and adds nodes of `plugin_type`.
-    pub(crate) fn of_type(&self, plugin_type: &str) -> Option<&Arc<dyn ResolvePlugin>> {
-        self.on
-            .iter()
-            .find(|plugin| plugin.plugin_type() == plugin_type)
-    }
-
-    /// The plugin that is on and reads `key` under `plugins:`: its type or a definition key.
+    /// The plugin that is on and reads `key`, under `plugins:` and `plugin-paths:`: its type or
+    /// a definition key.
     pub(crate) fn reading(&self, key: &str) -> Option<&Arc<dyn ResolvePlugin>> {
         self.on.iter().find(|plugin| reads(plugin.as_ref(), key))
     }
@@ -380,9 +377,14 @@ impl ActivePlugins {
     }
 }
 
-/// Whether `plugin` reads `key` under `plugins:`.
+/// Whether `plugin` reads `key`.
 fn reads(plugin: &dyn ResolvePlugin, key: &str) -> bool {
-    plugin.plugin_type() == key || plugin.definition_keys().contains(&key)
+    keys(plugin).any(|own| own == key)
+}
+
+/// The keys `plugin` reads: its type, then its definition keys.
+pub(crate) fn keys(plugin: &dyn ResolvePlugin) -> impl Iterator<Item = &'static str> {
+    std::iter::once(plugin.plugin_type()).chain(plugin.definition_keys().iter().copied())
 }
 
 #[cfg(test)]
@@ -436,19 +438,17 @@ mod tests {
     /// A plugin is off unless its flag is on, here in the project's `flags:`.
     #[test]
     fn plugins_are_on_only_when_their_flag_is() {
-        assert!(plugins("{}").of_type("widget").is_none());
-        assert!(plugins("test_widgets: true").of_type("widget").is_some());
+        assert!(plugins("{}").reading("widget").is_none());
+        assert!(plugins("test_widgets: true").reading("widget").is_some());
     }
 
-    /// A plugin reads its type and its definition keys under `plugins:`, and nothing else.
+    /// A plugin reads its type and its definition keys, and nothing else.
     #[test]
     fn plugins_read_their_definition_keys() {
         let plugins = plugins("test_widgets: true");
         assert!(plugins.reading("widget").is_some());
         assert!(plugins.reading("part").is_some());
         assert!(plugins.reading("gadget").is_none());
-        // Only its type has nodes, and so `plugin-paths`.
-        assert!(plugins.of_type("part").is_none());
     }
 
     /// An unrendered package reads entries, and parts of them, as written.
@@ -468,7 +468,7 @@ mod tests {
         let package = PluginPackage::unrendered(
             "widgets",
             BTreeMap::from([("part", vec![entry.clone()])]),
-            vec![],
+            BTreeMap::new(),
         );
         let part: Part = package.deserialize(&package.entries("part")[0]).unwrap();
         assert_eq!(part.name, "bolt");

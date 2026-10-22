@@ -1582,16 +1582,21 @@ impl Adapter {
     /// In Core, there are numerous derived flavors of CatalogRelation.
     /// We handle this in Fusion as a piecemeal instantiated flat object
     /// and push down validation to the DDL level.
-    #[tracing::instrument(skip(self), level = "trace")]
-    pub fn build_catalog_relation(&self, model: &Value) -> Result<Value, minijinja::Error> {
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    pub fn build_catalog_relation(
+        &self,
+        state: &State,
+        model: &Value,
+    ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let relation = adapter.build_catalog_relation(model)?;
                 Ok(Value::from_object(relation))
             }
             Parse(parse_adapter_state) => {
+                // Build for the node's own adapter, as `type` answers, not the default's.
                 let relation = CatalogRelation::from_model_config_and_catalogs(
-                    parse_adapter_state.adapter_type,
+                    self.effective_adapter_type(state),
                     model,
                     parse_adapter_state.catalogs.clone(),
                 )?;
@@ -3976,14 +3981,14 @@ impl Adapter {
                 // incremental polaris model. TODO: remove this when catalog_relation is
                 // fully engineered to no longer require runtime attribute shim-based solutions
                 if model.kind() == ValueKind::String {
-                    return self.build_catalog_relation(model);
+                    return self.build_catalog_relation(state, model);
                 }
 
                 // Case 2: caller passed a model object
                 // TODO: When we remove case 1, we can serialize this as an InternalDbtNode (and add the necessary attributes to their respective resource-type specific attribute structs)
                 // Ex: minijinja_value_to_typed_struct::<DbtModel>(model.clone()).is_ok();
 
-                self.build_catalog_relation(model)
+                self.build_catalog_relation(state, model)
             }
             "get_catalog_integration" => self.get_catalog_integration(state, args),
             "type" => Ok(Value::from(self.effective_adapter_type(state).to_string())),

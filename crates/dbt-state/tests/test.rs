@@ -469,4 +469,71 @@ mod tests {
 
         println!("✅ get_info test passed: data retrieval works correctly");
     }
+
+    /// A later step of the same run re-claiming a node must not inherit the
+    /// overdue heartbeat an earlier step left behind. Eviction only deletes
+    /// `start`, so this relies on each invocation having its own owner ID
+    /// (`resolve_lock_owner_id` appends the invocation ID to the run ID).
+    #[dbt_runtime::test]
+    async fn test_redis_reclaim_ignores_prior_step_heartbeat() {
+        let prefix = "test_reclaim_heartbeat_";
+        let Some(task_cache) =
+            redis_cache_or_skip(prefix, "test_redis_reclaim_ignores_prior_step_heartbeat").await
+        else {
+            return;
+        };
+
+        let key = "reclaim_heartbeat_test_node";
+        task_cache.invalidate_task(key).await.unwrap();
+
+        // Step 1 of run 123 builds the node and releases it.
+        let step_1 = "123/invocation-step-1";
+        let start_1 = TaskValue::new_now(step_1.into(), Some("hash".into()));
+        assert!(
+            task_cache
+                .try_start_task(key, &start_1, &None)
+                .await
+                .unwrap()
+        );
+        let stop_1 = TaskValue::new_now(step_1.into(), Some("hash".into()));
+        let info = dbt_state::task_cache::TaskInfo {
+            upstreams: HashMap::new(),
+        };
+        task_cache.stop_task(key, &stop_1, &info).await.unwrap();
+
+        // Its last heartbeat stays behind, long overdue.
+        let overdue = TaskValue::new(
+            step_1.into(),
+            chrono::Utc::now() - chrono::Duration::minutes(10),
+            Some("hash".into()),
+        );
+        let mut con = redis::Client::open(redis_uri())
+            .unwrap()
+            .get_connection()
+            .unwrap();
+        let heartbeat_key = format!("{prefix}fs-orc:1:1:redis-test/node/{{{key}}}/heartbeat");
+        let _: () = redis::cmd("SET")
+            .arg(&heartbeat_key)
+            .arg(serde_json::to_string(&overdue).unwrap())
+            .query(&mut con)
+            .unwrap();
+
+        // Step 2 of the same run evicts the completed entry and re-claims it.
+        task_cache
+            .try_cleanup_task(key, &Some(start_1))
+            .await
+            .unwrap();
+        let start_2 = TaskValue::new_now("123/invocation-step-2".into(), Some("hash".into()));
+        assert!(
+            task_cache
+                .try_start_task(key, &start_2, &None)
+                .await
+                .unwrap()
+        );
+
+        // Before step 2 writes its own heartbeat, other runs must see it as
+        // in progress, not stale.
+        let (state, _) = task_cache.get_task_state(key).await.unwrap();
+        assert_eq!(state, TaskState::InProgress);
+    }
 }

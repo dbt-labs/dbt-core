@@ -332,6 +332,7 @@ impl DbtProfile {
         hex::encode(&hash.as_bytes()[..16])
     }
 }
+
 /// A propagation target selection failed validation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PropagationTargetError {

@@ -21,7 +21,8 @@ use dbt_jinja_utils::node_resolver::{
     NodeResolver, PackageSearchOrder, check_for_model_deprecations, resolve_dependencies,
 };
 use dbt_jinja_utils::phases::parse::{
-    build_docs_jinja_environment, build_docs_resolve_context, build_resolve_context,
+    ParseAdapterScopes, build_docs_jinja_environment, build_docs_resolve_context,
+    build_resolve_context,
 };
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -128,7 +129,7 @@ fn parse_asset_count_total(dbt_state: &DbtState) -> u64 {
 )]
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve(
-    arg: &ResolveArgs,
+    mut arg: ResolveArgs,
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
     macros: Macros,
@@ -179,6 +180,8 @@ pub async fn resolve(
     inject_default_overview(&mut macros.docs_macros);
 
     let adapter_type = dbt_state.dbt_profile.default_db_config().adapter_type();
+    let parse_adapter_scopes = Arc::new(ParseAdapterScopes::from_profile(&dbt_state.dbt_profile));
+    arg.profile_adapter_types = Some(dbt_state.dbt_profile.adapter_types());
 
     // Build the root project config
     let root_project_quoting =
@@ -212,9 +215,9 @@ pub async fn resolve(
     );
 
     // Load and resolve selectors
-    let resolved_selectors_map = resolve_selectors_from_yaml(arg, root_project_name, &jinja_env)?;
+    let resolved_selectors_map = resolve_selectors_from_yaml(&arg, root_project_name, &jinja_env)?;
     let manifest_selectors = resolve_manifest_selectors(resolved_selectors_map.clone())?;
-    let resolved_selectors = resolve_final_selectors(resolved_selectors_map, arg)?;
+    let resolved_selectors = resolve_final_selectors(resolved_selectors_map, &arg)?;
 
     // let mut nodes = Nodes::default();
     let mut disabled_nodes = disabled_nodes;
@@ -310,11 +313,12 @@ pub async fn resolve(
         resolved_macro_properties,
     ) = resolve_package_waves(
         package_waves,
-        arg,
+        &arg,
         dbt_state.clone(),
         root_project_name,
         root_project_configs.clone(),
         adapter_type,
+        parse_adapter_scopes,
         &macros,
         jinja_env.clone(),
         &mut node_resolver,
@@ -754,6 +758,7 @@ pub async fn resolve_inner(
     root_package_name: &str,
     root_project_configs: &RootProjectConfigs,
     adapter_type: AdapterType,
+    parse_adapter_scopes: &ParseAdapterScopes,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     mut node_resolver: NodeResolver,
@@ -772,10 +777,6 @@ pub async fn resolve_inner(
     bool,
     BTreeMap<String, resolve_properties::MinimalPropertiesEntry>,
 )> {
-    let mut resolve_args = arg.clone();
-    resolve_args.profile_adapter_types = Some(dbt_state.dbt_profile.adapter_types());
-    let arg = &resolve_args;
-
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
 
@@ -893,6 +894,7 @@ pub async fn resolve_inner(
         root_project_configs,
         database,
         schema,
+        parse_adapter_scopes,
         adapter_type,
         package_name,
         &jinja_env,
@@ -920,6 +922,7 @@ pub async fn resolve_inner(
         &macros.macros,
         database,
         schema,
+        parse_adapter_scopes,
         adapter_type,
         &root_project_configs.adapter_quoting,
         jinja_env.clone(),
@@ -960,6 +963,7 @@ pub async fn resolve_inner(
         // TODO: pass in typed_models_properties
         database,
         schema,
+        parse_adapter_scopes,
         adapter_type,
         package_name,
         jinja_env.clone(),
@@ -988,6 +992,7 @@ pub async fn resolve_inner(
         &mut min_properties.analyses,
         database,
         schema,
+        parse_adapter_scopes,
         adapter_type,
         package_name,
         jinja_env.clone(),
@@ -1031,6 +1036,7 @@ pub async fn resolve_inner(
         &mut min_properties.functions,
         database,
         schema,
+        parse_adapter_scopes,
         adapter_type,
         &root_project_configs.adapter_quoting,
         package_name,
@@ -1154,6 +1160,7 @@ pub async fn resolve_inner(
             &mut min_properties.tests,
             database,
             schema,
+            parse_adapter_scopes,
             adapter_type,
             jinja_env.clone(),
             &base_ctx,
@@ -1599,6 +1606,7 @@ async fn resolve_package(
     root_project_name: String,
     root_project_configs: Arc<RootProjectConfigs>,
     adapter_type: AdapterType,
+    parse_adapter_scopes: &ParseAdapterScopes,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     node_resolver: NodeResolver,
@@ -1652,6 +1660,7 @@ async fn resolve_package(
         &root_project_name,
         &root_project_configs,
         adapter_type,
+        parse_adapter_scopes,
         macros,
         jinja_env.clone(),
         node_resolver,
@@ -1687,6 +1696,7 @@ async fn resolve_package_waves(
     root_project_name: &str,
     root_project_configs: Arc<RootProjectConfigs>,
     adapter_type: AdapterType,
+    parse_adapter_scopes: Arc<ParseAdapterScopes>,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     node_resolver: &mut NodeResolver,
@@ -1739,6 +1749,7 @@ async fn resolve_package_waves(
         let jinja_type_checking_event_listener_factory =
             jinja_type_checking_event_listener_factory.clone();
         let plugins = plugins.clone();
+        let parse_adapter_scopes = parse_adapter_scopes.clone();
 
         let results = crate::parallel::dispatch_maybe_parallel(
             package_wave,
@@ -1757,6 +1768,7 @@ async fn resolve_package_waves(
                 let jinja_type_checking_event_listener_factory =
                     jinja_type_checking_event_listener_factory.clone();
                 let plugins = plugins.clone();
+                let parse_adapter_scopes = parse_adapter_scopes.clone();
 
                 async move {
                     resolve_package(
@@ -1766,6 +1778,7 @@ async fn resolve_package_waves(
                         root_project_name,
                         root_project_configs,
                         adapter_type,
+                        &parse_adapter_scopes,
                         &macros,
                         jinja_env,
                         node_resolver,
