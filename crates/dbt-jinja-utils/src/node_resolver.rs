@@ -1767,7 +1767,7 @@ catalogs:
         };
         model.__model_attr__.catalog_name = Some("shared".to_string());
         resolver
-            .insert_ref(&model, AdapterType::Snowflake, ModelStatus::Enabled, false)
+            .insert_ref(&model, ModelStatus::Enabled, false)
             .unwrap();
 
         let (_, relation, _, _) = resolver
@@ -1829,7 +1829,7 @@ catalogs:
         };
         model.__model_attr__.catalog_name = Some("shared".to_string());
         resolver
-            .insert_ref(&model, AdapterType::DuckDB, ModelStatus::Enabled, false)
+            .insert_ref(&model, ModelStatus::Enabled, false)
             .unwrap();
 
         let (_, relation, _, _) = resolver
@@ -1888,7 +1888,7 @@ catalogs:
         };
         model.__model_attr__.catalog_name = Some("shared".to_string());
         resolver
-            .insert_ref(&model, AdapterType::DuckDB, ModelStatus::Enabled, false)
+            .insert_ref(&model, ModelStatus::Enabled, false)
             .unwrap();
         resolver
             .update_ref_with_deferral(&model, AdapterType::Snowflake, true)
@@ -1950,12 +1950,7 @@ catalogs:
         };
         state_model.__model_attr__.catalog_name = Some("shared".to_string());
         resolver
-            .insert_ref(
-                &state_model,
-                AdapterType::Snowflake,
-                ModelStatus::Enabled,
-                false,
-            )
+            .insert_ref(&state_model, ModelStatus::Enabled, false)
             .unwrap();
         resolver
             .update_ref_with_deferral(&state_model, AdapterType::DuckDB, true)
