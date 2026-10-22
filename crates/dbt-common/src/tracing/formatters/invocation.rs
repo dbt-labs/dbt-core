@@ -354,11 +354,7 @@ impl fmt::Display for SummaryLines<'_> {
         }
 
         // A centered execution summary delimiter line
-        write!(
-            f,
-            "\n{}\n",
-            Delimiter::new(" Execution Summary ", max_line_width, colorize)
-        )?;
+        write_delimiter(f, " Execution Summary ", max_line_width, colorize)?;
         write_status_line(f, input, colorize)?;
 
         if is_summary_command {
@@ -374,11 +370,7 @@ impl fmt::Display for SummaryLines<'_> {
 
         // Close the block with a matching delimiter so one invocation's end is
         // distinguishable from the next one's start in scrollback.
-        write!(
-            f,
-            "\n{}\n",
-            Delimiter::new(" End of Execution ", max_line_width, colorize)
-        )?;
+        write_delimiter(f, " End of Execution ", max_line_width, colorize)?;
         Ok(())
     }
 }
@@ -408,6 +400,15 @@ impl SummaryLines<'_> {
         }
         Ok(())
     }
+}
+
+fn write_delimiter(
+    f: &mut fmt::Formatter<'_>,
+    label: &str,
+    max_line_width: Option<usize>,
+    colorize: bool,
+) -> fmt::Result {
+    write!(f, "\n{}\n", Delimiter::new(label, max_line_width, colorize))
 }
 
 fn write_status_line(
