@@ -8,12 +8,13 @@ use crate::renderer::RenderCtxInner;
 use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
+use crate::renderer::rerender_sql_file_for_selected_adapter;
 use crate::renderer::strip_deprecated_warehouse_keys_from_properties;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
 use crate::resolve::resolve_utils::{
-    build_unrendered_config, err_resource_name_has_spaces, resolve_node_quoting,
-    select_node_adapter, validate_compute,
+    build_unrendered_config, err_resource_name_has_spaces, render_config_map,
+    render_project_config_resolver, resolve_node_quoting, select_node_adapter, validate_compute,
 };
 use crate::utils::RelationComponents;
 use crate::utils::extract_resource_config_from_raw_project;
@@ -39,6 +40,7 @@ use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
+use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -56,9 +58,9 @@ use dbt_schemas::schemas::nodes::DbtModel;
 use dbt_schemas::schemas::nodes::DbtSeed;
 use dbt_schemas::schemas::nodes::DbtSnapshot;
 use dbt_schemas::schemas::nodes::TestMetadata;
-use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::project::ResolvableConfig;
 use dbt_schemas::schemas::project::ResolvedConfig;
+use dbt_schemas::schemas::project::{DataTestConfig, ProjectDataTestConfig};
 use dbt_schemas::schemas::properties::DataTestProperties;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
@@ -71,7 +73,7 @@ use dbt_schemas::schemas::{
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
-use dbt_schemas::state::{DbtAsset, DbtPackage};
+use dbt_schemas::state::{DbtAsset, DbtPackage, DbtProfile};
 use dbt_yaml::Spanned;
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
@@ -363,6 +365,7 @@ pub async fn resolve_data_tests(
     database: &str,
     schema: &str,
     default_adapter: AdapterType,
+    profile: &DbtProfile,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -380,10 +383,16 @@ pub async fn resolve_data_tests(
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
+    let mut adapter_relation_contexts = AdapterTargetContextCache::default();
     let package_name = package.dbt_project.name.as_str();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
     let test_key = if package.dbt_project.data_tests.is_some() {
+        "data_tests"
+    } else {
+        "tests"
+    };
+    let root_test_key = if root_package.dbt_project.data_tests.is_some() {
         "data_tests"
     } else {
         "tests"
@@ -397,7 +406,7 @@ pub async fn resolve_data_tests(
     let raw_root_project_cfg = if is_dependency {
         Some(extract_resource_config_from_raw_project(
             &root_package.raw_project_yml,
-            test_key,
+            root_test_key,
             default_adapter,
         )?)
     } else {
@@ -445,12 +454,13 @@ pub async fn resolve_data_tests(
         default_adapter,
     )?
     .with_resolve_defaults((arg.unconfigured_static_analysis(), arg.store_failures));
+    let mut adapter_config_resolvers = HashMap::from([(default_adapter, config_resolver.clone())]);
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
             root_project_name: root_package.dbt_project.name.clone(),
-            config_resolver,
+            config_resolver: config_resolver.clone(),
             package_quoting,
             uses_snapshot_fqn: false,
             defer_render_errors_to_compile: true,
@@ -494,15 +504,16 @@ pub async fn resolve_data_tests(
 
     for SqlFileRenderResult {
         asset: dbt_asset,
-        sql_file_info,
+        mut sql_file_info,
         config: mut test_config,
         rendered_sql: _,
         macro_spans: _macro_spans,
         properties: maybe_properties,
-        status,
-        render_error_deferred,
+        mut status,
+        mut render_error_deferred,
         patch_path: _,
-        raw_config_call_dict: rendered_raw_config_call_dict,
+        raw_config_call_dict: mut rendered_raw_config_call_dict,
+        parse_adapter,
         ..
     } in test_sql_resources_map.into_iter()
     {
@@ -531,14 +542,6 @@ pub async fn resolve_data_tests(
         } else {
             &DataTestProperties::empty(test_name.to_owned())
         };
-
-        // Merge column test tags into the top-level config.
-        // Reference: https://github.com/dbt-labs/dbt-core/blob/b783c97eff9cf72e6fc43ef93523b8ec7b029583/core/dbt/parser/schema_generic_tests.py#L368
-        let test_tags = test_config.tags.inner().clone().map(|tags| tags.into());
-        let column_tags = test_path_to_test_asset
-            .get(&dbt_asset.path)
-            .map(|asset| asset.column_tags.clone());
-        let tags = merge_vec(test_tags, column_tags);
 
         // To conform to the unique_id format in dbt-core, we need to hash the test name
         // plus the test metadata (namespace, name, kwargs) and append the last 10 characters
@@ -584,15 +587,6 @@ pub async fn resolve_data_tests(
             &package.dbt_project.all_source_paths(),
         );
 
-        let static_analysis = test_config.static_analysis.clone();
-        check_node_static_analysis(
-            &test_config,
-            arg.static_analysis,
-            unique_id.as_str(),
-            dependency_package_name,
-        );
-        validate_compute(test_config.compute, &dbt_asset.path)?;
-
         let test_asset = test_path_to_test_asset.get(&dbt_asset.path);
         let test_subject_unique_id = test_asset.map(|ta| {
             format_node_unique_id(
@@ -633,6 +627,129 @@ pub async fn resolve_data_tests(
 
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
+        let discovered_adapter = selected_adapter;
+        let relation_context = adapter_relation_contexts.get_for_node(
+            profile,
+            discovered_adapter,
+            default_adapter,
+            status,
+            base_ctx,
+        )?;
+        let raw_schema_config = test_asset.map(|asset| &asset.unrendered_schema_config);
+        let adapter_properties_config: Option<DataTestConfig> = render_config_map(
+            raw_schema_config,
+            &env,
+            &relation_context.base_context,
+            dependency_package_name,
+        )?;
+        if !adapter_config_resolvers.contains_key(&discovered_adapter) {
+            let selected_resolver =
+                render_project_config_resolver::<DataTestConfig, ProjectDataTestConfig>(
+                    &package.raw_project_yml,
+                    &root_package.raw_project_yml,
+                    test_key,
+                    root_test_key,
+                    DbtQuoting::default(),
+                    (arg.unconfigured_static_analysis(), arg.store_failures),
+                    &env,
+                    &relation_context.base_context,
+                    dependency_package_name,
+                    disallow_plus_prefix_from_flags(root_package.dbt_project.flags.as_ref()),
+                    discovered_adapter,
+                )?;
+            adapter_config_resolvers.insert(discovered_adapter, selected_resolver);
+        }
+        test_config = adapter_config_resolvers
+            .get(&discovered_adapter)
+            .expect("selected adapter config resolver was inserted")
+            .resolve_with_configs_for_adapter(
+                &fqn,
+                &fqn,
+                &[
+                    adapter_properties_config.as_ref(),
+                    sql_file_info.explicit_config.as_deref(),
+                ],
+                discovered_adapter,
+            );
+        let selected_resolver = adapter_config_resolvers
+            .get(&discovered_adapter)
+            .expect("selected adapter config resolver was inserted")
+            .clone();
+        let replay = rerender_sql_file_for_selected_adapter(
+            &render_ctx,
+            profile,
+            discovered_adapter,
+            default_adapter,
+            selected_resolver,
+            relation_context,
+            adapter_quoting
+                .get(&discovered_adapter)
+                .cloned()
+                .unwrap_or_default(),
+            SqlFileRenderResult {
+                asset: dbt_asset.clone(),
+                status,
+                render_error_deferred,
+                sql_file_info,
+                config: test_config,
+                raw_code: String::new(),
+                rendered_sql: String::new(),
+                macro_spans: Default::default(),
+                properties: maybe_properties.clone(),
+                patch_path: None,
+                macro_dependencies: macro_depends_on,
+                raw_config_call_dict: rendered_raw_config_call_dict,
+                parse_adapter,
+            },
+            adapter_properties_config.as_ref(),
+            token,
+            jinja_type_checking_event_listener_factory.clone(),
+        )
+        .await?;
+        sql_file_info = replay.sql_file_info;
+        test_config = replay.config;
+        render_error_deferred = replay.render_error_deferred;
+        rendered_raw_config_call_dict = replay.raw_config_call_dict;
+        macro_depends_on = replay.macro_dependencies;
+        filter_core_builtin_test_macro_dependencies(
+            test_path_to_test_asset.get(&dbt_asset.path).copied(),
+            &mut macro_depends_on,
+        );
+        let selected_adapter = select_node_adapter(
+            arg,
+            test_config.adapter,
+            inherited_adapter,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
+        if selected_adapter != discovered_adapter {
+            return Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => dbt_asset.path.clone(),
+                "Node adapter changed from '{discovered_adapter}' to '{selected_adapter}' while \
+                 rendering adapter-specific config"
+            ));
+        }
+        status = if test_config.enabled {
+            ModelStatus::Enabled
+        } else {
+            ModelStatus::Disabled
+        };
+        let static_analysis = test_config.static_analysis.clone();
+        check_node_static_analysis(
+            &test_config,
+            arg.static_analysis,
+            unique_id.as_str(),
+            dependency_package_name,
+        );
+        validate_compute(test_config.compute, &dbt_asset.path)?;
+
+        // Merge column test tags into the top-level config.
+        // Reference: https://github.com/dbt-labs/dbt-core/blob/b783c97eff9cf72e6fc43ef93523b8ec7b029583/core/dbt/parser/schema_generic_tests.py#L368
+        let test_tags = test_config.tags.inner().clone().map(|tags| tags.into());
+        let column_tags = test_asset.map(|asset| asset.column_tags.clone());
+        let tags = merge_vec(test_tags, column_tags);
+
         test_config.quoting =
             resolve_node_quoting(test_config.quoting, adapter_quoting, selected_adapter);
 
@@ -699,9 +816,6 @@ pub async fn resolve_data_tests(
         // `persist` and passed here as the `schema` arg, matching how models/seeds/snapshots
         // populate unrendered_config. Singular tests carry no such asset (raw_inline_config
         // covers them).
-        let raw_schema_config = test_path_to_test_asset
-            .get(&dbt_asset.path)
-            .map(|test_asset| &test_asset.unrendered_schema_config);
         let unrendered_config = build_unrendered_config(
             &fqn,
             &raw_local_project_config,
@@ -746,8 +860,8 @@ pub async fn resolve_data_tests(
                 // it has nothing to publish: no `+propagate` config exists for this node type.
                 propagate: Vec::new(),
                 effective_propagation_target: None,
-                database: database.to_owned(),
-                schema: schema.to_owned(),
+                database: relation_context.database.clone(),
+                schema: relation_context.schema.clone(),
                 alias: "will_be_updated_below".to_owned(),
                 relation_name: None,
                 static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
@@ -858,9 +972,9 @@ pub async fn resolve_data_tests(
             &env,
             &root_package.dbt_project.name,
             package_name,
-            base_ctx,
+            &relation_context.base_context,
             &components,
-            default_adapter,
+            selected_adapter,
         )?;
 
         // Mirror dbt-core behavior: when the synthesized name was truncated and the user
