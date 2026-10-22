@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
-use dbt_common::tracing::formatters::duration::format_duration_fixed_width;
-use dbt_common::tracing::formatters::node::{format_node_action, format_node_type_fixed_width};
+use dbt_common::tracing::formatters::duration::FixedWidthDuration;
+use dbt_common::tracing::formatters::node::{NodeAction, NodeTypeFixedWidth};
 
 use dbt_adapter::load_store::ResultStore;
 use dbt_adapter::{
@@ -28,7 +28,7 @@ use dbt_common::{
     io_args::{DisplayFormat, EvalArgs, ListOutputFormat, Phases, ShowOptions, SystemArgs},
     node_selector::IndirectSelection,
     path::get_target_write_path,
-    pretty_string::{GREEN, RED, color_quotes},
+    pretty_string::{ColoredQuotes, GREEN, RED},
     stdfs,
     tracing::{
         dbt_emit::{
@@ -209,7 +209,7 @@ pub async fn setup_and_execute_fs(
         eprintln!(
             "{} {}",
             RED.apply_to(format!("[{ERROR}]")),
-            color_quotes(e.pretty().as_str())
+            ColoredQuotes(e.pretty().as_str())
         );
         FsError::exit_with_status(1)
     })?;
@@ -518,7 +518,9 @@ async fn do_execute_fs(
         let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
+            option_env!("DBT_VERSION")
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
+                .to_string(),
         ));
 
         return match execute_deps_command(
@@ -542,7 +544,9 @@ async fn do_execute_fs(
         let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
+            option_env!("DBT_VERSION")
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
+                .to_string(),
         ));
 
         return execute_clean_command(eval_arg, &clean_args.files, token).await;
@@ -644,7 +648,7 @@ fn emit_version_info(eval_arg: &EvalArgs, command_name: &str) -> FsResult<()> {
             let git_hash = git_version!(fallback = "unknown");
             let build_time = format!(
                 "{} ({} {})",
-                env!("CARGO_PKG_VERSION"),
+                option_env!("DBT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
                 git_hash,
                 formatted_time
             );
@@ -657,7 +661,7 @@ fn emit_version_info(eval_arg: &EvalArgs, command_name: &str) -> FsResult<()> {
     }
 
     // Show version (always shown in release builds, or in debug builds when not from_main)
-    let current_version = env!("CARGO_PKG_VERSION");
+    let current_version = option_env!("DBT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"));
     emit_info_progress_message(ProgressMessage::new_from_action_and_target(
         command_name.to_string(),
         current_version.to_string(),
@@ -1372,8 +1376,18 @@ impl<'a> AllPhasesExecutor<'a> {
                     let outcome = {
                         let metadata_dir = self.arg.metadata_dir();
                         let scope = scope.clone();
+                        let row_limit = self.arg.limit;
+                        // `--limit` is only advertised where it works: `build` ignores it and
+                        // `retry` does not take it.
+                        let hint_limit = self.arg.command == FsCommand::Check && !retrying;
                         dbt_runtime::spawn_blocking(move || {
-                            run_parse_time_checks(&named, &metadata_dir, scope.as_ref(), 5)
+                            run_parse_time_checks(
+                                &named,
+                                &metadata_dir,
+                                scope.as_ref(),
+                                row_limit,
+                                hint_limit,
+                            )
                         })
                         .await
                         .map_err(|e| {
@@ -1419,7 +1433,7 @@ impl<'a> AllPhasesExecutor<'a> {
                         // through `NodeProcessed` -- borrowing the formatting is what
                         // keeps them from looking like a different program's output.
                         //
-                        // The verdict comes from `format_node_action` rather than a
+                        // The verdict comes from `NodeAction` rather than a
                         // local match, so a check's label and colour are a test's by
                         // construction: green Passed, yellow Warned, red Failed. The
                         // file and JSON layers strip ANSI from message bodies, so
@@ -1440,16 +1454,19 @@ impl<'a> AllPhasesExecutor<'a> {
                         };
                         emit_info_log_message(format!(
                             "{} [{}] {} {}",
-                            format_node_action(
-                                outcome,
+                            NodeAction {
+                                node_outcome: outcome,
                                 skip_reason,
                                 test_outcome,
-                                None,
-                                false,
-                                true
-                            ),
-                            format_duration_fixed_width(Duration::from_secs_f64(r.execution_time)),
-                            format_node_type_fixed_width("check", true),
+                                freshness_outcome: None,
+                                has_warn: false,
+                                colorize: true,
+                            },
+                            FixedWidthDuration(Duration::from_secs_f64(r.execution_time)),
+                            NodeTypeFixedWidth {
+                                node_type: "check",
+                                colorize: true,
+                            },
                             r.name,
                         ));
 
@@ -1673,6 +1690,7 @@ impl<'a> AllPhasesExecutor<'a> {
                                         status: dbt_common::stats::NodeStatus::Errored,
                                         thread_id: "main".to_string(),
                                         message: Some("Compilation Error".to_string()),
+                                        assertion: false,
                                     })
                                     .collect(),
                                 nodes: Some(compilation.nodes().clone()),
