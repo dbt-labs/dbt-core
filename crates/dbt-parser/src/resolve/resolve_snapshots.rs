@@ -14,7 +14,7 @@ use crate::resolve::resolve_tests::persist_generic_data_tests::{
 };
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map, render_config_map,
-    render_project_config_resolver, validate_compute, validate_node_adapter,
+    render_project_config_resolver, resolve_node_quoting, select_node_adapter, validate_compute,
 };
 use crate::resolve::yaml_field_utils;
 use crate::sql_file_info::SqlFileInfo;
@@ -37,7 +37,6 @@ use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
-use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::{
     DbtChecksum, DbtQuoting, ModelFreshnessRules, NodeDependsOn,
     conform_normalized_snapshot_raw_code_to_mantle_format, normalize_sql,
@@ -438,10 +437,13 @@ pub async fn resolve_snapshots(
                 snapshot_paths,
             );
 
-            let discovered_adapter = arg
-                .adapter_override
-                .or(snapshot_config.adapter)
-                .unwrap_or(default_adapter);
+            let discovered_adapter = select_node_adapter(
+                arg,
+                snapshot_config.adapter,
+                None,
+                default_adapter,
+                error_path,
+            )?;
             let relation_context = adapter_relation_contexts.get_for_node(
                 profile,
                 discovered_adapter,
@@ -487,10 +489,13 @@ pub async fn resolve_snapshots(
                     ],
                     discovered_adapter,
                 );
-            let selected_adapter = arg
-                .adapter_override
-                .or(snapshot_config.adapter)
-                .unwrap_or(default_adapter);
+            let selected_adapter = select_node_adapter(
+                arg,
+                snapshot_config.adapter,
+                None,
+                default_adapter,
+                error_path,
+            )?;
             if selected_adapter != discovered_adapter {
                 return Err(fs_err!(
                     code => ErrorCode::InvalidConfig,
@@ -518,9 +523,6 @@ pub async fn resolve_snapshots(
                 dependency_package_name,
             );
             validate_compute(snapshot_config.compute, error_path)?;
-            // See `resolve_models`: the flag overrides the config. A snapshot
-            // selects explicitly -- it has no attached node to inherit from.
-            validate_node_adapter(snapshot_config.adapter, error_path)?;
 
             // See `resolve_models`: both remaining quoting layers depend on which
             // adapter the node runs on, which is only known after the config merge.
@@ -532,13 +534,8 @@ pub async fn resolve_snapshots(
                 .clone()
                 .map(Into::into)
                 .unwrap_or_default();
-            snapshot_config.quoting = resolve_package_quoting(
-                Some(match adapter_quoting.get(&selected_adapter) {
-                    Some(authored) => snapshot_config.quoting.filled_from(authored),
-                    None => snapshot_config.quoting,
-                }),
-                selected_adapter,
-            );
+            snapshot_config.quoting =
+                resolve_node_quoting(snapshot_config.quoting, adapter_quoting, selected_adapter);
 
             if let Some(state) = &snapshot_config.state {
                 ModelFreshnessRules::validate(state.lag_tolerance.as_ref()).map_err(|e| {
@@ -688,6 +685,11 @@ pub async fn resolve_snapshots(
                     },
                     sync: snapshot_config.sync.clone(),
                     state: snapshot_config.state.clone(),
+                    catalog_name: snapshot_config
+                        .__warehouse_specific_config__
+                        .catalog_name
+                        .clone(),
+                    table_format: snapshot_config.table_format.clone(),
                 },
                 __adapter_attr__: AdapterAttr::from_config_and_dialect(
                     &snapshot_config.__warehouse_specific_config__,
@@ -730,8 +732,8 @@ pub async fn resolve_snapshots(
             };
 
             // Update with relation components
-            update_node_relation_components(
-                &mut dbt_snapshot,
+            dbt_snapshot = update_node_relation_components(
+                dbt_snapshot,
                 &jinja_env,
                 &root_package.dbt_project.name,
                 &package_name,
@@ -740,7 +742,7 @@ pub async fn resolve_snapshots(
                 selected_adapter,
             )?;
 
-            match node_resolver.insert_ref(&dbt_snapshot, selected_adapter, status, false) {
+            match node_resolver.insert_ref(&dbt_snapshot, status, false) {
                 Ok(_) => (),
                 Err(e) => {
                     let err_with_loc = e.with_location(error_path.clone());
@@ -836,7 +838,6 @@ pub async fn resolve_snapshots(
         snapshots_with_execute,
         node_resolver,
         jinja_env,
-        default_adapter,
         package.dbt_project.name.as_str(),
         &root_package.dbt_project.name,
         runtime_config,

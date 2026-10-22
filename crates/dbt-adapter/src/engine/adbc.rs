@@ -217,7 +217,7 @@ impl AdbcEngine {
             })
             .map_err(crate::errors::auth_error_to_adapter_error)?;
         let load_strategy = match (use_cloud_credentials, self.adapter_type) {
-            (true, _) => LoadStrategy::Remote,
+            (true, _) => LoadStrategy::Bridge,
             (false, AdapterType::DuckDB) => LoadStrategy::SystemThenCdnCache,
             (false, _) => LoadStrategy::CdnCache,
         };

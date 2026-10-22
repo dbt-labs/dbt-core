@@ -16,7 +16,7 @@ use dbt_adapter::relation::create_relation_from_node;
 use dbt_adapter::response::AdapterResponse;
 use dbt_adapter_core::AdapterType;
 use dbt_common::FsResult;
-use dbt_common::collections::{DashMap, SccHashMap};
+use dbt_common::collections::SccHashMap;
 use dbt_common::io_args::OptimizeTestsOptions;
 use dbt_common::path::DbtPath;
 use dbt_common::sources_extractor::SourcesExtractor;
@@ -57,7 +57,7 @@ use dbt_schemas::schemas::common::DbtMaterialization;
 /// construction time from the extended-context factory.
 pub struct RunCacheCtx {
     pub run_cache_metadata: Arc<RunCacheMetadataCache>,
-    pub run_cache_dev_cloned_nodes: DashMap<String, StateExplainDevClone>,
+    pub run_cache_dev_cloned_nodes: SccHashMap<String, StateExplainDevClone>,
     pub run_cache_deferred_fqns: BTreeSet<String>,
     pub run_cache_service_requested: bool,
     pub run_cache_service_config: Option<RunCacheServiceConfig>,
@@ -172,14 +172,14 @@ pub struct TaskRunnerCtxInner {
     pub schedule: Schedule<String>,
     pub runtime_deps: BTreeMap<String, BTreeSet<String>>,
     pub base_context: BTreeMap<String, Value>,
-    pub analyze_stats: DashMap<String, Stat>,
-    pub run_stats: DashMap<String, Stat>,
-    pub data_test_execution_results: DashMap<String, CachedTestExecutionResult>,
-    pub batch_results_map: DashMap<String, BatchResults>,
-    pub main_adapter_responses: DashMap<String, AdapterResponse>,
+    pub analyze_stats: SccHashMap<String, Stat>,
+    pub run_stats: SccHashMap<String, Stat>,
+    pub data_test_execution_results: SccHashMap<String, CachedTestExecutionResult>,
+    pub batch_results_map: SccHashMap<String, BatchResults>,
+    pub main_adapter_responses: SccHashMap<String, AdapterResponse>,
     pub microbatch_execution_metrics: SccHashMap<String, ExecutionMetrics>,
-    pub node_hashes: DashMap<String, String>,
-    pub rendered_sql: DashMap<String, RenderedNodeInfo>,
+    pub node_hashes: SccHashMap<String, String>,
+    pub rendered_sql: SccHashMap<String, RenderedNodeInfo>,
     pub freshness_seconds: SccHashMap<String, i64>,
     pub updates_on: SccHashMap<String, UpdatesOn>,
     pub execute: dbt_schemas::schemas::profiles::Execute,
@@ -199,7 +199,7 @@ pub struct TaskRunnerCtxInner {
     /// Per-adapter Jinja environments for execution. The shared environment is
     /// bound to the command's base adapter; non-default nodes need the same
     /// macros and globals with `adapter`, `api`, and `dialect` rebound.
-    pub adapter_envs: DashMap<AdapterType, Arc<JinjaEnv>>,
+    pub adapter_envs: SccHashMap<AdapterType, Arc<JinjaEnv>>,
     pub sources_extractor: Arc<dyn SourcesExtractor>,
     pub dbt_profile: Arc<DbtProfile>,
     pub runtime_config: Arc<DbtRuntimeConfig>,
@@ -226,7 +226,7 @@ impl TaskRunnerCtxInner {
         worker_id: String,
         schedule: Schedule<String>,
         base_context: BTreeMap<String, Value>,
-        node_hashes: DashMap<String, String>,
+        node_hashes: SccHashMap<String, String>,
         extended_ctx: Box<dyn ExtendedCtx>,
         compiled_sql_cache: Arc<dyn crate::CompiledSqlCache>,
         adhoc_runner: Arc<dyn crate::AdhocRunner>,
@@ -255,10 +255,10 @@ impl TaskRunnerCtxInner {
             &resolver_state.root_project_name,
         );
 
-        let batch_results_map: DashMap<String, BatchResults> = {
-            let map = DashMap::default();
+        let batch_results_map: SccHashMap<String, BatchResults> = {
+            let map = SccHashMap::default();
             for (uid, br) in &arg.previous_batch_results {
-                map.insert(uid.clone(), br.clone());
+                map.upsert_sync(uid.clone(), br.clone());
             }
             map
         };
@@ -272,14 +272,14 @@ impl TaskRunnerCtxInner {
             schedule,
             runtime_deps,
             base_context,
-            analyze_stats: DashMap::default(),
-            run_stats: DashMap::default(),
-            data_test_execution_results: DashMap::default(),
+            analyze_stats: SccHashMap::default(),
+            run_stats: SccHashMap::default(),
+            data_test_execution_results: SccHashMap::default(),
             batch_results_map,
-            main_adapter_responses: DashMap::default(),
+            main_adapter_responses: SccHashMap::default(),
             microbatch_execution_metrics: SccHashMap::default(),
             node_hashes,
-            rendered_sql: DashMap::default(),
+            rendered_sql: SccHashMap::default(),
             freshness_seconds: SccHashMap::default(),
             updates_on: SccHashMap::default(),
             execute,
@@ -290,7 +290,7 @@ impl TaskRunnerCtxInner {
             materialization_resolver: Arc::new(materialization_resolver),
             root_project_name: resolver_state.root_project_name.clone(),
             adapter_store,
-            adapter_envs: DashMap::default(),
+            adapter_envs: SccHashMap::default(),
             sources_extractor,
             dbt_profile: Arc::new(resolver_state.dbt_profile.clone()),
             runtime_config: resolver_state.runtime_config.clone(),
@@ -501,8 +501,12 @@ impl TaskRunnerCtx {
             return Ok(Arc::clone(&self.env));
         }
 
-        if let Some(env) = self.inner.adapter_envs.get(&adapter_type) {
-            return Ok(Arc::clone(env.value()));
+        if let Some(env) = self
+            .inner
+            .adapter_envs
+            .read_sync(&adapter_type, |_, env| Arc::clone(env))
+        {
+            return Ok(env);
         }
 
         let adapter = self.adapter_store().get(adapter_type)?;
@@ -511,7 +515,7 @@ impl TaskRunnerCtx {
         let env = Arc::new(env);
         self.inner
             .adapter_envs
-            .insert(adapter_type, Arc::clone(&env));
+            .upsert_sync(adapter_type, Arc::clone(&env));
         Ok(env)
     }
 
@@ -598,10 +602,10 @@ impl TaskRunnerCtx {
     #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     pub fn build_compile_node_context<T>(
         &self,
-        model: &T,
+        model: Arc<T>,
         base_context: &BTreeMap<String, Value>,
         ref_validation_config: DependencyValidationConfig,
-    ) -> FsResult<(BTreeMap<String, Value>, Arc<DashMap<String, Value>>)>
+    ) -> FsResult<(BTreeMap<String, Value>, Arc<SccHashMap<String, Value>>)>
     where
         T: InternalDbtNodeAttributes + ?Sized,
     {
@@ -671,7 +675,7 @@ pub fn node_execution_metrics(
     is_microbatch: bool,
     unique_id: &str,
     microbatch_totals: &SccHashMap<String, ExecutionMetrics>,
-    main_responses: &DashMap<String, AdapterResponse>,
+    main_responses: &SccHashMap<String, AdapterResponse>,
 ) -> Option<ExecutionMetrics> {
     if is_microbatch {
         Some(
@@ -680,9 +684,7 @@ pub fn node_execution_metrics(
                 .unwrap_or_default(),
         )
     } else {
-        main_responses
-            .get(unique_id)
-            .map(|response| response.execution_metrics())
+        main_responses.read_sync(unique_id, |_, response| response.execution_metrics())
     }
 }
 
@@ -746,11 +748,11 @@ mod execution_metrics_tests {
     #[test]
     fn node_metrics_selects_source_by_materialization() {
         let totals = SccHashMap::default();
-        let main = DashMap::default();
+        let main = SccHashMap::default();
         record_microbatch_metrics(&totals, "model.mb", Some(&response(10, 100)));
         record_microbatch_metrics(&totals, "model.mb", Some(&response(5, 300)));
-        main.insert("model.mb".to_string(), response(99, 99));
-        main.insert("model.t".to_string(), response(3, 30));
+        main.upsert_sync("model.mb".to_string(), response(99, 99));
+        main.upsert_sync("model.t".to_string(), response(3, 30));
 
         let microbatch = node_execution_metrics(true, "model.mb", &totals, &main).unwrap();
         assert_eq!(microbatch.rows_affected, Some(15));

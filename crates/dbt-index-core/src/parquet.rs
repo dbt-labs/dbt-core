@@ -1290,6 +1290,7 @@ impl IndexWriter {
                 "column_constraints".to_string(),
                 Value::String("[]".to_string()),
             );
+            obj.insert("meta".to_string(), Value::String("{}".to_string()));
             obj.insert(
                 "classifiers".to_string(),
                 Value::Array(
@@ -1448,6 +1449,7 @@ impl IndexWriter {
                 "column_constraints".to_string(),
                 Value::String("[]".to_string()),
             );
+            obj.insert("meta".to_string(), Value::String("{}".to_string()));
             // `classifiers` is a non-nullable list column; catalog-only columns
             // carry none, but the field must be present for serde_arrow.
             obj.insert("classifiers".to_string(), Value::Array(vec![]));
