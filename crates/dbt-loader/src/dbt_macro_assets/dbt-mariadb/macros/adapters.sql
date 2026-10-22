@@ -19,8 +19,11 @@
     {{- get_assert_columns_equivalent(sql) }}
   {%- endif %}
   create or replace {% if temporary -%} temporary {%- endif %} table {{ relation }}
-    {%- if contract_config.enforced and not temporary %}
+    {%- if contract_config.enforced and not temporary and mariadb__is_model_target(relation) %}
     {{ get_table_columns_and_constraints() }}
+    {%- elif contract_config.enforced and not temporary %}
+    {#- Intermediate table: its foreign keys get generated names, see foreign_keys.sql. #}
+    {{ mariadb__table_columns_and_constraints(unnamed_foreign_keys=True) }}
     {%- elif contract_config.enforced %}
     {#- TEMPORARY tables cannot hold foreign keys: declare the contract
         types only, so on_schema_change compares the same types. #}
@@ -78,10 +81,17 @@
 {% endmacro %}
 
 {% macro mariadb__rename_relation(from_relation, to_relation) -%}
+  {%- set named_foreign_keys = mariadb__named_foreign_keys() -%}
+  {%- if named_foreign_keys and mariadb__is_model_target(from_relation) -%}
+    {{ mariadb__drop_named_foreign_keys(from_relation, named_foreign_keys) }}
+  {%- endif -%}
   {#- RENAME TABLE also renames views. -#}
   {% call statement('rename_relation') -%}
     rename table {{ from_relation }} to {{ to_relation }}
   {%- endcall %}
+  {%- if named_foreign_keys and mariadb__is_model_target(to_relation) -%}
+    {{ mariadb__restore_foreign_key_names(to_relation, named_foreign_keys) }}
+  {%- endif -%}
 {% endmacro %}
 
 {% macro mariadb__truncate_relation(relation) -%}
