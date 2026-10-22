@@ -668,32 +668,26 @@ mod tests {
     }
 
     #[test]
-    fn test_optimization_banner_matches_execution_summary_shape() {
-        let lines = section(1, 0, 0).expect("section should be present");
-        assert_eq!(
-            lines[0],
-            "==================== Test Optimization ====================="
+    fn summary_delimiters_match_execution_summary_shape() {
+        let execution_width = Delimiter::new(" Execution Summary ", WIDTH, false)
+            .to_string()
+            .len();
+        let test_optimization = section(1, 0, 0).expect("section should be present");
+
+        assert_delimiter_matches_width(
+            &test_optimization[0],
+            "==================== Test Optimization =====================",
+            execution_width,
         );
-        assert_eq!(
-            lines[0].len(),
-            Delimiter::new(" Execution Summary ", WIDTH, false)
-                .to_string()
-                .len()
+        assert_delimiter_matches_width(
+            &Delimiter::new(" End of Execution ", WIDTH, false).to_string(),
+            "===================== End of Execution =====================",
+            execution_width,
         );
     }
 
-    #[test]
-    fn end_of_execution_footer_matches_execution_summary_shape() {
-        let footer = Delimiter::new(" End of Execution ", WIDTH, false).to_string();
-        assert_eq!(
-            footer,
-            "===================== End of Execution ====================="
-        );
-        assert_eq!(
-            footer.len(),
-            Delimiter::new(" Execution Summary ", WIDTH, false)
-                .to_string()
-                .len()
-        );
+    fn assert_delimiter_matches_width(actual: &str, expected: &str, width: usize) {
+        assert_eq!(actual, expected);
+        assert_eq!(actual.len(), width);
     }
 }
