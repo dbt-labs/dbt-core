@@ -39,6 +39,7 @@ use dbt_jinja_utils::jinja_arg_format::format_value_for_jinja;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
+use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
@@ -71,7 +72,7 @@ use dbt_schemas::schemas::{
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
-use dbt_schemas::state::{DbtAsset, DbtPackage};
+use dbt_schemas::state::{DbtAsset, DbtPackage, DbtProfile};
 use dbt_yaml::Spanned;
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
@@ -363,6 +364,7 @@ pub async fn resolve_data_tests(
     database: &str,
     schema: &str,
     default_adapter: AdapterType,
+    profile: &DbtProfile,
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -380,6 +382,7 @@ pub async fn resolve_data_tests(
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
+    let mut adapter_relation_contexts = AdapterTargetContextCache::default();
     let package_name = package.dbt_project.name.as_str();
     let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
@@ -633,6 +636,13 @@ pub async fn resolve_data_tests(
 
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
+        let relation_context = adapter_relation_contexts.get_for_node(
+            profile,
+            selected_adapter,
+            default_adapter,
+            status,
+            base_ctx,
+        )?;
         test_config.quoting =
             resolve_node_quoting(test_config.quoting, adapter_quoting, selected_adapter);
 
@@ -746,8 +756,8 @@ pub async fn resolve_data_tests(
                 // it has nothing to publish: no `+propagate` config exists for this node type.
                 propagate: Vec::new(),
                 effective_propagation_target: None,
-                database: database.to_owned(),
-                schema: schema.to_owned(),
+                database: relation_context.database.clone(),
+                schema: relation_context.schema.clone(),
                 alias: "will_be_updated_below".to_owned(),
                 relation_name: None,
                 static_analysis_off_reason: (*static_analysis == StaticAnalysisKind::Off)
@@ -858,9 +868,9 @@ pub async fn resolve_data_tests(
             &env,
             &root_package.dbt_project.name,
             package_name,
-            base_ctx,
+            &relation_context.base_context,
             &components,
-            default_adapter,
+            selected_adapter,
         )?;
 
         // Mirror dbt-core behavior: when the synthesized name was truncated and the user
