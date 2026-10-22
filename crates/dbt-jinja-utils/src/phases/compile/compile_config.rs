@@ -79,6 +79,32 @@ impl Object for CompileConfig {
                 let result = match self.config.get(&name) {
                     Some(val) if !val.is_none() => val.clone(),
                     _ => {
+                        // Backwards compatibility fallback: check meta.reload_strategy
+                        if name == "reload_strategy" {
+                            if let Some(meta_value) = self.config.get("meta") {
+                                let meta = meta_value.value();
+                                if let Some(meta_obj) = meta.as_object()
+                                    && let Some(val) = meta_obj.get_value(&Value::from("reload_strategy"))
+                                    && !val.is_none()
+                                {
+                                    let span = state.current_span();
+                                    let path = state.current_path();
+                                    let location = CodeLocationWithFile::new(
+                                        span.start_line,
+                                        span.start_col,
+                                        span.start_offset,
+                                        path.clone(),
+                                    );
+                                    let warning = fs_err!(
+                                        ErrorCode::Generic,
+                                        "`meta.reload_strategy` is deprecated and will be removed in a future release. \
+                                        Please configure `reload_strategy` directly under model config."
+                                    ).with_location(location);
+                                    emit_warn_log_from_fs_error(warning);
+                                    return Ok(val);
+                                }
+                            }
+                        }
                         // Check if key exists in meta and warn if it's a custom config
                         if let Some(meta_value) = self.config.get("meta") {
                             let meta = meta_value.value();
@@ -139,6 +165,32 @@ impl Object for CompileConfig {
                 match self.config.get(&name) {
                     Some(val) if !val.is_none() => Ok(val.clone()),
                     _ => {
+                        // Backwards compatibility fallback: check meta.reload_strategy
+                        if name == "reload_strategy" {
+                            if let Some(meta_value) = self.config.get("meta") {
+                                let meta = meta_value.value();
+                                if let Some(meta_obj) = meta.as_object()
+                                    && let Some(val) = meta_obj.get_value(&Value::from("reload_strategy"))
+                                    && !val.is_none()
+                                {
+                                    let span = state.current_span();
+                                    let path = state.current_path();
+                                    let location = CodeLocationWithFile::new(
+                                        span.start_line,
+                                        span.start_col,
+                                        span.start_offset,
+                                        path.clone(),
+                                    );
+                                    let warning = fs_err!(
+                                        ErrorCode::Generic,
+                                        "`meta.reload_strategy` is deprecated and will be removed in a future release. \
+                                        Please configure `reload_strategy` directly under model config."
+                                    ).with_location(location);
+                                    emit_warn_log_from_fs_error(warning);
+                                    return Ok(val);
+                                }
+                            }
+                        }
                         // Check if key exists in meta and warn if it's a custom config
                         if let Some(meta_value) = self.config.get("meta") {
                             let meta = meta_value.value();

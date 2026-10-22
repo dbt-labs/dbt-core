@@ -44,10 +44,24 @@ pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, minijinja::Valu
         YmlValue::Mapping(map, _) => {
             let value_map = DashMap::default();
             for (k, v) in map {
+                let key_str = k
+                    .as_scalar_string()
+                    .expect("mapping key is not a scalar")
+                    .into_owned();
+                if key_str == "__warehouse_specific_config__" {
+                    if let YmlValue::Mapping(ref wh_map, _) = v {
+                        for (wh_k, wh_v) in wh_map {
+                            if let Some(wh_key_str) = wh_k.as_scalar_string() {
+                                value_map.insert(
+                                    wh_key_str.into_owned(),
+                                    convert_yml_value(wh_v.clone()),
+                                );
+                            }
+                        }
+                    }
+                }
                 value_map.insert(
-                    k.as_scalar_string()
-                        .expect("mapping key is not a scalar")
-                        .into_owned(),
+                    key_str,
                     convert_yml_value(v),
                 );
             }
@@ -99,10 +113,24 @@ pub fn convert_yml_to_value_map(yml: YmlValue) -> IndexMap<String, minijinja::Va
         YmlValue::Mapping(map, _) => {
             let mut value_map = IndexMap::with_capacity(map.len());
             for (k, v) in map {
+                let key_str = k
+                    .as_scalar_string()
+                    .expect("mapping key is not a scalar")
+                    .into_owned();
+                if key_str == "__warehouse_specific_config__" {
+                    if let YmlValue::Mapping(ref wh_map, _) = v {
+                        for (wh_k, wh_v) in wh_map {
+                            if let Some(wh_key_str) = wh_k.as_scalar_string() {
+                                value_map.insert(
+                                    wh_key_str.into_owned(),
+                                    convert_yml_value_ordered(wh_v.clone()),
+                                );
+                            }
+                        }
+                    }
+                }
                 value_map.insert(
-                    k.as_scalar_string()
-                        .expect("mapping key is not a scalar")
-                        .into_owned(),
+                    key_str,
                     convert_yml_value_ordered(v),
                 );
             }

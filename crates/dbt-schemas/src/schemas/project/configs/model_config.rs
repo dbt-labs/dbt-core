@@ -603,6 +603,8 @@ pub struct ProjectModelConfig {
     pub unique_table_key: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+fulltext_key")]
     pub fulltext_key: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+reload_strategy")]
+    pub reload_strategy: Option<super::common::ReloadStrategy>,
 
     /// Schema synchronization configuration
     #[serde(rename = "+sync")]
@@ -884,6 +886,7 @@ fn has_singlestore_fields(config: &ProjectModelConfig) -> bool {
         || config.sort_key.is_some()
         || config.unique_table_key.is_some()
         || config.fulltext_key.is_some()
+        || config.reload_strategy.is_some()
 }
 
 #[derive(
@@ -1203,6 +1206,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 sort_key: config.sort_key,
                 unique_table_key: config.unique_table_key,
                 fulltext_key: config.fulltext_key,
+                reload_strategy: config.reload_strategy,
 
                 engine: config.engine,
                 order_by: config.order_by,
@@ -1440,6 +1444,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             sort_key: config.__warehouse_specific_config__.sort_key,
             unique_table_key: config.__warehouse_specific_config__.unique_table_key,
             fulltext_key: config.__warehouse_specific_config__.fulltext_key,
+            reload_strategy: config.__warehouse_specific_config__.reload_strategy,
             sync: config.sync,
             engine: config.__warehouse_specific_config__.engine,
             order_by: config.__warehouse_specific_config__.order_by,

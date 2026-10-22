@@ -452,6 +452,33 @@ pub struct WarehouseSpecificNodeConfig {
     pub unique_table_key: Option<StringOrArrayOfStrings>,
     #[warehouse(valid(Model))]
     pub fulltext_key: Option<StringOrArrayOfStrings>,
+    #[warehouse(valid(Model))]
+    pub reload_strategy: Option<ReloadStrategy>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, DbtSchema, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ReloadStrategyType {
+    #[default]
+    DateWindow,
+    HkeyMod,
+    Pit,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema, Default)]
+pub struct ReloadStrategy {
+    #[serde(rename = "type")]
+    pub strategy_type: ReloadStrategyType,
+    pub column: String,
+    #[serde(default)]
+    pub batches: Option<u32>,
+    #[serde(default)]
+    pub start: Option<String>,
+    #[serde(default)]
+    pub end: Option<String>,
+    #[serde(default)]
+    pub limit: Option<u64>,
 }
 
 impl ResolvedConfig for WarehouseSpecificNodeConfig {
@@ -1631,22 +1658,26 @@ pub fn same_warehouse_config(
     result
 }
 
+impl crate::schemas::project::configs::config_merge::ReplaceIfNone for ReloadStrategy {}
+
 fn singlestore_config_diff(
     self_wh: &WarehouseSpecificNodeConfig,
     other_wh: &WarehouseSpecificNodeConfig,
-) -> (bool, [(&'static str, bool, Option<(String, String)>); 6]) {
+) -> (bool, [(&'static str, bool, Option<(String, String)>); 7]) {
     let storage_type_eq = self_wh.storage_type == other_wh.storage_type;
     let reference_eq = self_wh.reference == other_wh.reference;
     let shard_key_eq = self_wh.shard_key == other_wh.shard_key;
     let sort_key_eq = self_wh.sort_key == other_wh.sort_key;
     let unique_table_key_eq = self_wh.unique_table_key == other_wh.unique_table_key;
     let fulltext_key_eq = self_wh.fulltext_key == other_wh.fulltext_key;
+    let reload_strategy_eq = self_wh.reload_strategy == other_wh.reload_strategy;
     let eq = storage_type_eq
         && reference_eq
         && shard_key_eq
         && sort_key_eq
         && unique_table_key_eq
-        && fulltext_key_eq;
+        && fulltext_key_eq
+        && reload_strategy_eq;
     let diffs = [
         (
             "storage_type",
@@ -1694,6 +1725,14 @@ fn singlestore_config_diff(
             Some((
                 format!("{:?}", &self_wh.fulltext_key),
                 format!("{:?}", &other_wh.fulltext_key),
+            )),
+        ),
+        (
+            "reload_strategy",
+            reload_strategy_eq,
+            Some((
+                format!("{:?}", &self_wh.reload_strategy),
+                format!("{:?}", &other_wh.reload_strategy),
             )),
         ),
     ];
@@ -1902,5 +1941,62 @@ mod tests {
                 "DAILY".to_string(),
             ]))
         );
+    }
+
+    #[test]
+    fn test_reload_strategy_serde_valid() {
+        let yaml_hkey = r#"
+type: hkey_mod
+column: hkey_record
+batches: 5
+"#;
+        let strategy: ReloadStrategy =
+            dbt_yaml::from_str(yaml_hkey).expect("Failed to deserialize hkey_mod ReloadStrategy");
+        assert_eq!(strategy.strategy_type, ReloadStrategyType::HkeyMod);
+        assert_eq!(strategy.column, "hkey_record");
+        assert_eq!(strategy.batches, Some(5));
+
+        let yaml_dw = r#"
+type: date_window
+column: event_date
+start: '2023-01-01'
+end: '2026-01-01'
+"#;
+        let strategy_dw: ReloadStrategy =
+            dbt_yaml::from_str(yaml_dw).expect("Failed to deserialize date_window ReloadStrategy");
+        assert_eq!(strategy_dw.strategy_type, ReloadStrategyType::DateWindow);
+        assert_eq!(strategy_dw.column, "event_date");
+        assert_eq!(strategy_dw.start.as_deref(), Some("2023-01-01"));
+        assert_eq!(strategy_dw.end.as_deref(), Some("2026-01-01"));
+
+        let yaml_pit = r#"
+type: pit
+column: pit_key
+limit: 50000
+"#;
+        let strategy_pit: ReloadStrategy =
+            dbt_yaml::from_str(yaml_pit).expect("Failed to deserialize pit ReloadStrategy");
+        assert_eq!(strategy_pit.strategy_type, ReloadStrategyType::Pit);
+        assert_eq!(strategy_pit.column, "pit_key");
+        assert_eq!(strategy_pit.limit, Some(50000));
+    }
+
+    #[test]
+    fn test_reload_strategy_serde_invalid_type() {
+        let yaml = r#"
+type: unsupported_strategy
+column: some_col
+"#;
+        let res: Result<ReloadStrategy, _> = dbt_yaml::from_str(yaml);
+        assert!(res.is_err(), "Invalid strategy type should error");
+    }
+
+    #[test]
+    fn test_reload_strategy_serde_missing_column() {
+        let yaml = r#"
+type: hkey_mod
+"#;
+        let res: Result<ReloadStrategy, _> = dbt_yaml::from_str(yaml);
+        assert!(res.is_err(), "Missing column should error");
     }
 }
