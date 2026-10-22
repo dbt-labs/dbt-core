@@ -5131,10 +5131,10 @@ impl Nodes {
         Ok(())
     }
 
-    pub fn warn_on_microbatch(&self, adapter_type: AdapterType) -> FsResult<()> {
+    pub fn warn_on_microbatch(&self, _default_adapter_type: AdapterType) -> FsResult<()> {
         let models_forcing_concurrent_batches: usize = self
             .iter()
-            .map(|(_, node)| node.warn_on_microbatch(adapter_type))
+            .map(|(_, node)| node.warn_on_microbatch(node.node_adapter()))
             .sum();
 
         if models_forcing_concurrent_batches > 0 {
@@ -5143,11 +5143,9 @@ impl Nodes {
             } else {
                 format!("{models_forcing_concurrent_batches} microbatch models")
             };
-
             return err!(
                 ErrorCode::InvalidConcurrentBatchesConfig,
-                "Found {maybe_plural_count_of_models} with the `concurrent_batches` config set to true, but the {} adapter does not support running batches concurrently. Batches will be run sequentially.",
-                adapter_type
+                "Found {maybe_plural_count_of_models} with the `concurrent_batches` config set to true, but one or more configured adapters do not support running batches concurrently. Batches will be run sequentially.",
             );
         }
 
@@ -6861,17 +6859,19 @@ fn default_introspection() -> IntrospectionKind {
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
 
     use serde::Deserialize;
 
     use super::{
         AbsorbedOverload, DbtAnalysis, DbtExposure, DbtFunction, DbtMacro, DbtModel, DbtSeed,
         DbtSnapshot, DbtSource, DbtTest, InternalDbtNode, InternalDbtNodeAttributes, ModelConfig,
-        ModelFreshness, NodePathKind, hooks_equal, normalize_description,
+        ModelFreshness, NodePathKind, Nodes, hooks_equal, normalize_description,
         persist_docs_configs_equal, quoting_equal, test_alias_config_equal,
     };
     use crate::schemas::common::{
-        FreshnessPeriod, FreshnessRules, Hooks, ModelFreshnessRules, PersistDocsConfig,
+        DbtIncrementalStrategy, FreshnessPeriod, FreshnessRules, Hooks, ModelFreshnessRules,
+        PersistDocsConfig,
     };
     use crate::schemas::manifest::{DbtMetric, DbtOperation, DbtSavedQuery};
     use crate::schemas::project::SnapshotMetaColumnNames;
@@ -6881,6 +6881,34 @@ mod tests {
     use dbt_yaml::Verbatim;
 
     type YmlValue = dbt_yaml::Value;
+
+    #[test]
+    fn microbatch_warning_uses_each_models_adapter() {
+        let mut snowflake_model = DbtModel::default();
+        snowflake_model.__common_attr__.unique_id = "model.test.snowflake".to_string();
+        snowflake_model.__base_attr__.adapter = AdapterType::Snowflake;
+        snowflake_model.__model_attr__.incremental_strategy =
+            Some(DbtIncrementalStrategy::Microbatch);
+        snowflake_model.deprecated_config.concurrent_batches = Some(true);
+
+        let mut duckdb_model = snowflake_model.clone();
+        duckdb_model.__common_attr__.unique_id = "model.test.duckdb".to_string();
+        duckdb_model.__base_attr__.adapter = AdapterType::DuckDB;
+
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            snowflake_model.__common_attr__.unique_id.clone(),
+            Arc::new(snowflake_model),
+        );
+        assert!(nodes.warn_on_microbatch(AdapterType::Snowflake).is_ok());
+
+        nodes.models.insert(
+            duckdb_model.__common_attr__.unique_id.clone(),
+            Arc::new(duckdb_model),
+        );
+
+        assert!(nodes.warn_on_microbatch(AdapterType::Snowflake).is_err());
+    }
 
     fn snapshot_with_paths(name: &str, path: &str, original_file_path: &str) -> DbtSnapshot {
         let mut snapshot = DbtSnapshot::default();
