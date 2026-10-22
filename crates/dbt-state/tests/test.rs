@@ -7,7 +7,7 @@ mod tests {
     use std::{collections::HashMap, sync::Arc};
 
     use crossbeam_queue::SegQueue;
-    use dashmap::DashMap;
+    use dbt_common::collections::SccHashMap;
     use dbt_schemas::schemas::{CloudCredentials, ResolvedCloudConfig};
     use dbt_state::node_session::{Acquired, Contention, NodeCacheSession};
     use dbt_state::task_cache::{TaskCache, TaskState, TaskValue};
@@ -100,10 +100,12 @@ mod tests {
 
         // Build a reverse mapping of child nodes to parent nodes
         let mut reverse_nodes = HashMap::new();
-        let indegree = Arc::new(DashMap::<String, AtomicUsize>::new());
+        let indegree = Arc::new(SccHashMap::<String, AtomicUsize>::default());
 
         for (id, children) in nodes.iter() {
-            indegree.insert(id.to_string(), AtomicUsize::new(children.len()));
+            indegree
+                .insert_sync(id.to_string(), AtomicUsize::new(children.len()))
+                .expect("node ids are unique");
             for child_id in children {
                 reverse_nodes
                     .entry(child_id.to_string())
@@ -115,9 +117,7 @@ mod tests {
         // Initialize the worklist with nodes that have no pending children
         let worklist = Arc::new(SegQueue::new());
         for id in nodes.keys() {
-            if let Some(indegree) = indegree.get(id)
-                && indegree.load(Ordering::SeqCst) == 0
-            {
+            if indegree.read_sync(id, |_, count| count.load(Ordering::SeqCst) == 0) == Some(true) {
                 worklist.push(id.clone());
             }
         }
@@ -157,8 +157,9 @@ mod tests {
                     // Update the pending count and potentially add parent nodes to the worklist
                     if let Some(parents) = reverse_nodes.get(&node_id).as_ref() {
                         for parent_id in parents.iter() {
-                            if let Some(indegree) = indegree.get(parent_id)
-                                && indegree.fetch_sub(1, Ordering::SeqCst) == 1
+                            if indegree.read_sync(parent_id, |_, count| {
+                                count.fetch_sub(1, Ordering::SeqCst) == 1
+                            }) == Some(true)
                             {
                                 worklist.push(parent_id.clone());
                             }
