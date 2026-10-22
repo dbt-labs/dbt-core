@@ -5,7 +5,7 @@ use crate::dbt_project_config::{
 use crate::renderer::strip_warehouse_keys_in_config_block;
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, extract_config_map, render_config_map,
-    render_project_config_resolver, validate_node_adapter,
+    render_project_config_resolver, resolve_node_quoting, select_node_adapter,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, get_node_fqn,
@@ -24,7 +24,6 @@ use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::dbt_utils::validate_delimiter;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_catalogs_deprecated::LoadedCatalogs;
@@ -279,11 +278,8 @@ pub async fn resolve_seeds(
             config_resolver.resolve_with_properties(&fqn, seed.config.as_ref());
 
         // See `resolve_models`: the flag overrides the config.
-        validate_node_adapter(properties_config.adapter, &path)?;
-        let discovered_adapter = arg
-            .adapter_override
-            .or(properties_config.adapter)
-            .unwrap_or(default_adapter);
+        let discovered_adapter =
+            select_node_adapter(arg, properties_config.adapter, None, default_adapter, &path)?;
         let initial_status = if properties_config.enabled {
             ModelStatus::Enabled
         } else {
@@ -327,10 +323,8 @@ pub async fn resolve_seeds(
                 &[adapter_properties_config.as_ref()],
                 discovered_adapter,
             );
-        let selected_adapter = arg
-            .adapter_override
-            .or(properties_config.adapter)
-            .unwrap_or(default_adapter);
+        let selected_adapter =
+            select_node_adapter(arg, properties_config.adapter, None, default_adapter, &path)?;
         if selected_adapter != discovered_adapter {
             return Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
@@ -359,7 +353,6 @@ pub async fn resolve_seeds(
         )?;
 
         validate_delimiter(&properties_config.delimiter)?;
-
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds
         let original_file_path =
@@ -432,13 +425,8 @@ pub async fn resolve_seeds(
                 })
             })
             .flatten();
-        properties_config.quoting = resolve_package_quoting(
-            Some(match adapter_quoting.get(&selected_adapter) {
-                Some(authored) => properties_config.quoting.filled_from(authored),
-                None => properties_config.quoting,
-            }),
-            selected_adapter,
-        );
+        properties_config.quoting =
+            resolve_node_quoting(properties_config.quoting, adapter_quoting, selected_adapter);
 
         // Create initial seed with default values
         let mut dbt_seed = DbtSeed {
@@ -511,8 +499,8 @@ pub async fn resolve_seeds(
             store_failures: None,
         };
 
-        update_node_relation_components(
-            &mut dbt_seed,
+        dbt_seed = update_node_relation_components(
+            dbt_seed,
             jinja_env,
             &root_package.dbt_project.name,
             package_name,
@@ -521,7 +509,7 @@ pub async fn resolve_seeds(
             selected_adapter,
         )?;
 
-        match node_resolver.insert_ref(&dbt_seed, selected_adapter, status, false) {
+        match node_resolver.insert_ref(&dbt_seed, status, false) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(path.clone());

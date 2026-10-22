@@ -13,7 +13,6 @@ use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
-use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::project::ResolvedConfig;
 use dbt_schemas::schemas::project::{FunctionConfig, ProjectFunctionConfig};
@@ -40,7 +39,7 @@ use crate::dbt_project_config::{
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::resolve::resolve_utils::{
     build_unrendered_config, extract_config_map, render_config_map, render_project_config_resolver,
-    validate_node_adapter,
+    resolve_node_quoting, select_node_adapter,
 };
 use crate::utils::{
     RelationComponents, extract_resource_config_from_raw_project, update_node_relation_components,
@@ -294,12 +293,17 @@ pub async fn resolve_functions(
 
         // See `resolve_models`: discover the adapter, then re-render the raw
         // schema.yml config and merge all layers with that adapter's rules.
-        validate_node_adapter(model_config.adapter, &dbt_asset.path)?;
+        let configured_adapter = select_node_adapter(
+            arg,
+            model_config.adapter,
+            None,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
         let discovered_adapter = arg
             .adapter_override
             .or(inherited_overload_adapter)
-            .or(model_config.adapter)
-            .unwrap_or(default_adapter);
+            .unwrap_or(configured_adapter);
         let relation_context = adapter_relation_contexts.get_for_node(
             profile,
             discovered_adapter,
@@ -384,11 +388,17 @@ pub async fn resolve_functions(
         macro_spans = replay.macro_spans;
         render_macro_dependencies = replay.macro_dependencies;
         raw_config_call_dict = replay.raw_config_call_dict;
+        let configured_adapter = select_node_adapter(
+            arg,
+            model_config.adapter,
+            None,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
         let selected_adapter = arg
             .adapter_override
             .or(inherited_overload_adapter)
-            .or(model_config.adapter)
-            .unwrap_or(default_adapter);
+            .unwrap_or(configured_adapter);
         if selected_adapter != discovered_adapter {
             return Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
@@ -452,13 +462,8 @@ pub async fn resolve_functions(
             continue;
         }
 
-        model_config.quoting = resolve_package_quoting(
-            Some(match adapter_quoting.get(&selected_adapter) {
-                Some(authored) => model_config.quoting.filled_from(authored),
-                None => model_config.quoting,
-            }),
-            selected_adapter,
-        );
+        model_config.quoting =
+            resolve_node_quoting(model_config.quoting, adapter_quoting, selected_adapter);
         let static_analysis = model_config.static_analysis.clone();
         if let Some(spanned) = model_config.get_static_analysis() {
             let kind = spanned.into_inner();
@@ -639,8 +644,8 @@ pub async fn resolve_functions(
         };
 
         // update model components using the generate_relation_components function
-        update_node_relation_components(
-            &mut function,
+        function = update_node_relation_components(
+            function,
             &env,
             &root_package.dbt_project.name,
             package_name,
@@ -649,7 +654,7 @@ pub async fn resolve_functions(
             selected_adapter,
         )?;
 
-        match node_resolver.insert_function(&function, selected_adapter, status) {
+        match node_resolver.insert_function(&function, status) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
