@@ -1,8 +1,8 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 
-use dbt_adapter::Adapter;
 use dbt_adapter::engine::SidecarClient;
+use dbt_adapter::{Adapter, AdapterStore};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::{EvalArgs, StaticAnalysisKind};
 use dbt_common::pretty_string::CYAN;
@@ -130,6 +130,7 @@ impl StaticAnalysisBuckets for NoopStaticAnalysisBuckets {
 /// deferral for introspective (Execute/Unknown) nodes.
 pub struct DefaultSchemaHydrator {
     adapter: Arc<Adapter>,
+    adapter_store: Arc<AdapterStore>,
 }
 
 #[async_trait::async_trait]
@@ -174,14 +175,14 @@ impl SchemaHydrator for DefaultSchemaHydrator {
 
         if should_hydrate_schemas(arg) {
             hydrate_selected_get_relations(
-                &self.adapter,
+                &self.adapter_store,
                 schedule,
                 resolved_state,
                 schema_hydration_state,
                 SchemaHydrationScope::Full,
                 arg.infer_schemas_and_typeless,
             )
-            .await;
+            .await?;
         }
 
         Ok(Box::new(DefaultStaticAnalysisBuckets::new(
@@ -198,12 +199,16 @@ impl SchemaHydratorFactory for DefaultSchemaHydratorFactory {
     fn create(
         &self,
         adapter: Arc<Adapter>,
+        adapter_store: Arc<AdapterStore>,
         _execute_mode: dbt_schemas::schemas::profiles::Execute,
         _compilation_config: CompilationConfig,
         _schema_store: Arc<SchemaStore>,
         _sidecar_client: Option<Arc<dyn SidecarClient>>,
         _metricflow_server_client: Option<Arc<dyn MetricflowClient>>,
     ) -> Box<dyn SchemaHydrator> {
-        Box::new(DefaultSchemaHydrator { adapter })
+        Box::new(DefaultSchemaHydrator {
+            adapter,
+            adapter_store,
+        })
     }
 }
