@@ -911,7 +911,7 @@ pub struct ResolverState {
 
 pub fn hydrate_user_defined_schema_registry(
     nodes: &Nodes,
-    adapter_type: AdapterType,
+    _default_adapter_type: AdapterType,
 ) -> Arc<dbt_common::user_defined_schema_registry::UserDefinedSchemaRegistry> {
     let registry =
         Arc::new(dbt_common::user_defined_schema_registry::UserDefinedSchemaRegistry::new());
@@ -919,12 +919,12 @@ pub fn hydrate_user_defined_schema_registry(
     fn record(
         node: &dyn InternalDbtNode,
         registry: &dbt_common::user_defined_schema_registry::UserDefinedSchemaRegistry,
-        adapter_type: AdapterType,
     ) {
         let base = node.base();
         if base.columns.is_empty() {
             return;
         }
+        let adapter_type = base.adapter;
         let (database, schema, alias) = match adapter_type {
             AdapterType::Snowflake => (
                 base.database.to_uppercase(),
@@ -949,16 +949,16 @@ pub fn hydrate_user_defined_schema_registry(
     }
 
     for model in nodes.models.values() {
-        record(model.as_ref(), &registry, adapter_type);
+        record(model.as_ref(), &registry);
     }
     for source in nodes.sources.values() {
-        record(source.as_ref(), &registry, adapter_type);
+        record(source.as_ref(), &registry);
     }
     for seed in nodes.seeds.values() {
-        record(seed.as_ref(), &registry, adapter_type);
+        record(seed.as_ref(), &registry);
     }
     for snapshot in nodes.snapshots.values() {
-        record(snapshot.as_ref(), &registry, adapter_type);
+        record(snapshot.as_ref(), &registry);
     }
 
     registry
@@ -1742,11 +1742,13 @@ mod user_defined_schema_registry_tests {
         schema: &str,
         alias: &str,
         columns: &[&str],
+        adapter: AdapterType,
     ) -> NodeBaseAttributes {
         NodeBaseAttributes {
             database: database.to_string(),
             schema: schema.to_string(),
             alias: alias.to_string(),
+            adapter,
             columns: columns
                 .iter()
                 .map(|name| {
@@ -1760,13 +1762,19 @@ mod user_defined_schema_registry_tests {
         }
     }
 
-    fn model_with_columns(database: &str, schema: &str, alias: &str, columns: &[&str]) -> DbtModel {
+    fn model_with_columns(
+        database: &str,
+        schema: &str,
+        alias: &str,
+        columns: &[&str],
+        adapter: AdapterType,
+    ) -> DbtModel {
         DbtModel {
             __common_attr__: CommonAttributes {
                 unique_id: "model.m".to_string(),
                 ..Default::default()
             },
-            __base_attr__: base_attr(database, schema, alias, columns),
+            __base_attr__: base_attr(database, schema, alias, columns, adapter),
             __model_attr__: DbtModelAttr::default(),
             ..Default::default()
         }
@@ -1777,7 +1785,13 @@ mod user_defined_schema_registry_tests {
         let mut models = BTreeMap::new();
         models.insert(
             "model.m".to_string(),
-            Arc::new(model_with_columns("db", "sch", "tbl", &["col"])),
+            Arc::new(model_with_columns(
+                "db",
+                "sch",
+                "tbl",
+                &["col"],
+                AdapterType::Snowflake,
+            )),
         );
         let nodes = Nodes {
             models,
@@ -1793,13 +1807,19 @@ mod user_defined_schema_registry_tests {
         let mut models = BTreeMap::new();
         models.insert(
             "model.m".to_string(),
-            Arc::new(model_with_columns("db", "sch", "tbl", &["col"])),
+            Arc::new(model_with_columns(
+                "db",
+                "sch",
+                "tbl",
+                &["col"],
+                AdapterType::DuckDB,
+            )),
         );
         let nodes = Nodes {
             models,
             ..Default::default()
         };
-        let registry = hydrate_user_defined_schema_registry(&nodes, AdapterType::DuckDB);
+        let registry = hydrate_user_defined_schema_registry(&nodes, AdapterType::Snowflake);
         let relation = dbt_common::user_defined_schema_registry::relation_key("db", "sch", "tbl");
         assert!(registry.columns_for(&relation).unwrap().contains("col"));
     }
@@ -1809,7 +1829,13 @@ mod user_defined_schema_registry_tests {
         let mut models = BTreeMap::new();
         models.insert(
             "model.m".to_string(),
-            Arc::new(model_with_columns("db", "sch", "tbl", &[])),
+            Arc::new(model_with_columns(
+                "db",
+                "sch",
+                "tbl",
+                &[],
+                AdapterType::Snowflake,
+            )),
         );
         let nodes = Nodes {
             models,
@@ -1830,7 +1856,7 @@ mod user_defined_schema_registry_tests {
                     unique_id: "source.s".to_string(),
                     ..Default::default()
                 },
-                __base_attr__: base_attr("db", "sch", "src_tbl", &["scol"]),
+                __base_attr__: base_attr("db", "sch", "src_tbl", &["scol"], AdapterType::DuckDB),
                 ..Default::default()
             }),
         );
@@ -1843,7 +1869,13 @@ mod user_defined_schema_registry_tests {
                     unique_id: "seed.sd".to_string(),
                     ..Default::default()
                 },
-                __base_attr__: base_attr("db", "sch", "seed_tbl", &["seedcol"]),
+                __base_attr__: base_attr(
+                    "db",
+                    "sch",
+                    "seed_tbl",
+                    &["seedcol"],
+                    AdapterType::DuckDB,
+                ),
                 ..Default::default()
             }),
         );
@@ -1856,7 +1888,13 @@ mod user_defined_schema_registry_tests {
                     unique_id: "snapshot.sn".to_string(),
                     ..Default::default()
                 },
-                __base_attr__: base_attr("db", "sch", "snap_tbl", &["snapcol"]),
+                __base_attr__: base_attr(
+                    "db",
+                    "sch",
+                    "snap_tbl",
+                    &["snapcol"],
+                    AdapterType::DuckDB,
+                ),
                 ..Default::default()
             }),
         );
@@ -1867,7 +1905,7 @@ mod user_defined_schema_registry_tests {
             snapshots,
             ..Default::default()
         };
-        let registry = hydrate_user_defined_schema_registry(&nodes, AdapterType::DuckDB);
+        let registry = hydrate_user_defined_schema_registry(&nodes, AdapterType::Snowflake);
 
         let source_relation =
             dbt_common::user_defined_schema_registry::relation_key("db", "sch", "src_tbl");
