@@ -1,5 +1,6 @@
 mod aggregated_tests;
 mod bigquery;
+mod clickhouse;
 mod contract_wrappers;
 mod databricks_catalog;
 mod databricks_metadata;
@@ -11,4 +12,5 @@ mod persist_docs;
 mod python;
 mod relations;
 mod snowflake;
+mod snowflake_drop_table;
 mod spark;

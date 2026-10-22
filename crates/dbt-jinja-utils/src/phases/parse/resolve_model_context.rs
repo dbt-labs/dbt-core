@@ -1,7 +1,6 @@
 //! This module contains the scope guard for resolving models.
 
 use dbt_adapter_core::AdapterType;
-use indexmap::IndexMap;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -13,14 +12,11 @@ use std::{
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
 use dbt_adapter::{cast_util::THIS_RELATION_KEY, load_store::ResultStore};
-use dbt_common::{
-    io_args::StaticAnalysisKind, path::DbtPath, serde_utils::convert_yml_to_value_map,
-};
+use dbt_common::{io_args::StaticAnalysisKind, path::DbtPath};
 use dbt_frontend_common::error::CodeLocation;
 use dbt_schemas::schemas::{
-    DbtModelAttr, InternalDbtNode, IntrospectionKind,
-    common::{Access, ResolvedQuoting},
-    nodes::AdapterAttr,
+    InternalDbtNode,
+    common::ResolvedQuoting,
     project::{
         ModelConfig, ResolvableConfig, WarningEmission, resolved_surface_key_status,
         warn_and_strip_deprecated_warehouse_keys,
@@ -30,8 +26,10 @@ use dbt_schemas::schemas::{
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::{
-        CommonAttributes, DbtModel, NodeBaseAttributes,
-        common::{DbtChecksum, DbtQuoting, NodeDependsOn},
+        CommonAttributes, DbtAnalysis, DbtCheck, DbtFunction, DbtModel, DbtSnapshot, DbtTest,
+        NodeBaseAttributes,
+        common::DbtQuoting,
+        manifest::DbtOperation,
         serde::{NodeVersion, yml_value_to_minijinja},
     },
     state::DbtRuntimeConfig,
@@ -50,9 +48,7 @@ use minijinja::{
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 use serde::Serialize;
 
-use dbt_jinja_ctx::{
-    JinjaObject, ParseExecute, ResolveModelCtx, to_jinja_btreemap, to_model_context_map,
-};
+use dbt_jinja_ctx::{JinjaObject, ParseExecute, ResolveModelCtx, to_jinja_btreemap};
 
 use crate::{
     invocation_graph::invocation_graph, phases::MacroLookupContext, serde::into_typed_with_error,
@@ -180,86 +176,76 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         }),
     );
 
-    // TODO (Ani): Make this more extensible and depending on the resouce it could be model, macro, or source
-    let model = DbtModel {
-        __common_attr__: CommonAttributes {
-            name: model_name.to_owned(),
-            package_name: package_name.to_owned(),
-            path: DbtPath::from(model_path),
-            name_span: dbt_common::Span::default(),
-            original_file_path: DbtPath::from(display_path),
-            patch_path: None,
-            unique_id: format!("{package_name}.{model_name}"),
-            fqn,
-            description: None,
-            raw_code: None,
-            checksum: DbtChecksum::default(),
-            language: None,
-            tags: vec![],
-            classifiers: vec![],
-            meta: IndexMap::new(),
-        },
-        __base_attr__: NodeBaseAttributes {
-            database: database.to_string(),
-            schema: schema.to_string(),
-            alias: model_name.to_string(),
-            relation_name: None,
-            // A placeholder node built during parse, before `+adapter` is resolved;
-            // the target default is the only answer available here.
-            adapter: adapter_type,
-            propagate: Vec::new(),
-            effective_propagation_target: None,
-            materialized: ModelConfig::default_materialized(),
-            static_analysis: global_static_analysis.unwrap_or_default().into(),
-            static_analysis_off_reason: None,
-            compute: None,
-            enabled: true,
-            extended_model: false,
-            persist_docs: None,
-            quoting: ResolvedQuoting::trues(),
-            quoting_ignore_case: false,
-            columns: vec![],
-            depends_on: NodeDependsOn {
-                macros: vec![],
-                nodes: vec![],
-                nodes_with_ref_location: vec![],
-            },
-            refs: vec![],
-            sources: vec![],
-            functions: vec![],
-            metrics: vec![],
-            unrendered_config: Default::default(),
-        },
-        __model_attr__: DbtModelAttr {
-            introspection: IntrospectionKind::None,
-            version: None,
-            latest_version: None,
-            constraints: vec![],
-            deprecation_date: None,
-            primary_key: vec![],
-            time_spine: None,
-            access: Access::default(),
-            group: None,
-            incremental_strategy: None,
-            freshness: None,
-            state: None,
-            contract: None,
-            event_time: None,
-            catalog_name: None,
-            table_format: None,
-            sync: None,
-            compiled_code: None,
-        },
-        __adapter_attr__: AdapterAttr::default(),
-        __other__: BTreeMap::new(),
-        deprecated_config: ModelConfig::default(),
+    let common_attr = CommonAttributes {
+        name: model_name.to_owned(),
+        package_name: package_name.to_owned(),
+        path: DbtPath::from(model_path),
+        original_file_path: DbtPath::from(display_path),
+        unique_id: format!("{package_name}.{model_name}"),
+        fqn,
+        ..Default::default()
+    };
+    let base_attr = NodeBaseAttributes {
+        database: database.to_string(),
+        schema: schema.to_string(),
+        alias: model_name.to_string(),
+        // A placeholder node built during parse, before `+adapter` is resolved;
+        // the target default is the only answer available here.
+        adapter: adapter_type,
+        materialized: ModelConfig::default_materialized(),
+        static_analysis: global_static_analysis.unwrap_or_default().into(),
+        enabled: true,
+        quoting: ResolvedQuoting::trues(),
+        ..Default::default()
     };
 
-    let mut model_map = convert_yml_to_value_map(InternalDbtNode::serialize(&model));
-    // Stub `DbtModel` uses `ModelConfig::default()` for `config` in YAML serialization. At parse
-    // time, kwargs to `config(...)` (e.g. `post_hook=my_macro(model)`) are evaluated while
-    // rendering; macros must see the merged node config (`properties_config` / `BaseConfig`),
-    // matching dbt-core (dbt-fusion#1414).
+    let node: Arc<dyn InternalDbtNode> = match resource_type {
+        Some(NodeType::Snapshot) => Arc::new(DbtSnapshot {
+            __common_attr__: common_attr,
+            __base_attr__: base_attr,
+            ..Default::default()
+        }),
+        Some(NodeType::Test) => Arc::new(DbtTest {
+            __common_attr__: common_attr,
+            __base_attr__: base_attr,
+            ..Default::default()
+        }),
+        Some(NodeType::Analysis) => Arc::new(DbtAnalysis {
+            __common_attr__: common_attr,
+            __base_attr__: base_attr,
+            ..Default::default()
+        }),
+        Some(NodeType::Function) => Arc::new(DbtFunction {
+            __common_attr__: common_attr,
+            __base_attr__: base_attr,
+            ..Default::default()
+        }),
+        Some(NodeType::Check) => Arc::new(DbtCheck {
+            __common_attr__: common_attr,
+            __base_attr__: base_attr,
+            ..Default::default()
+        }),
+        Some(NodeType::Operation) => Arc::new(DbtOperation {
+            __common_attr__: common_attr,
+            __base_attr__: base_attr,
+            ..Default::default()
+        }),
+        _ => Arc::new(DbtModel {
+            __common_attr__: common_attr,
+            __base_attr__: base_attr,
+            ..Default::default()
+        }),
+    };
+    let model_map = dbt_schemas::jinja_node::LazyNodeContext::from_node(
+        node,
+        dbt_schemas::schemas::serialization_utils::SerializationMode::OmitNone,
+    )
+    // TODO(LazyNodeContext): See `with_eager_nested_maps`.
+    .with_eager_nested_maps();
+    // Each stub uses its respective `<Resource>Config::default()` for `config` in YAML
+    // serialization. At parse time, kwargs to `config(...)` (e.g. `post_hook=my_macro(model)`)
+    // are evaluated while rendering; macros must see the merged node config
+    // (`properties_config` / `BaseConfig`), matching dbt-core (dbt-fusion#1414).
     //
     // Use `dbt_yaml::to_value` + `yml_value_to_minijinja` — same pipeline as
     // `DbtModel::serialized_config()` — not `MinijinjaValue::from_serialize`, so later
@@ -267,9 +253,12 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
     // (`get_view_options`, `get_config_from_model`, …) round-trips correctly.
     let config_yml = dbt_yaml::to_value(config)
         .expect("Failed to serialize merged node config to dbt_yaml::Value for parse model.config");
-    model_map.insert("config".to_owned(), yml_value_to_minijinja(&config_yml));
     model_map.insert(
-        "batch".to_owned(),
+        MinijinjaValue::from("config"),
+        yml_value_to_minijinja(&config_yml),
+    );
+    model_map.insert(
+        MinijinjaValue::from("batch"),
         MinijinjaValue::from_object(init_batch_context()),
     );
 
@@ -290,7 +279,7 @@ pub fn build_resolve_model_context<T: ResolvableConfig<T> + Serialize + 'static>
         function: function_value,
         metric: metric_value,
         config: config_value,
-        model: MinijinjaValue::from_dyn_object(to_model_context_map(model_map)),
+        model: MinijinjaValue::from_object(model_map),
         builtins: MinijinjaValue::from_object(builtins),
         // The invocation-wide `graph` mapping, empty at this point — matching
         // dbt-core, where parse-time `graph` is `manifest.flat_graph` before

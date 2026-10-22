@@ -581,27 +581,37 @@ fn data_tests_keeps_tests_without_detail() {
         "nodes",
         &[
             node_row("test.pkg.generic", "generic", "test"),
+            node_row("test.pkg.source_generic", "source_generic", "test"),
             node_row("test.pkg.singular", "singular", "test"),
         ],
     );
     write_source(
         staging.path(),
         "test_metadata",
-        &[json!({
-            "unique_id": "test.pkg.generic",
-            "test_name": "not_null",
-            "test_namespace": "dbt_utils",
-            "attached_node": "model.pkg.a",
-            "test_where": "id > 0",
-            "test_limit": 10,
-            "kwargs": "{\"column_name\":\"id\"}",
-            "ingested_at": "2026-08-21T00:00:00Z",
-        })],
+        &[
+            json!({
+                "unique_id": "test.pkg.generic",
+                "test_name": "not_null",
+                "test_namespace": "dbt_utils",
+                "attached_node": "model.pkg.a",
+                "test_where": "id > 0",
+                "test_limit": 10,
+                "kwargs": "{\"column_name\":\"id\"}",
+                "ingested_at": "2026-08-21T00:00:00Z",
+            }),
+            json!({
+                "unique_id": "test.pkg.source_generic",
+                "test_name": "relationships",
+                "attached_node": "source.pkg.raw.orders",
+                "kwargs": "{\"field\":\"id\"}",
+                "ingested_at": "2026-08-21T00:00:00Z",
+            }),
+        ],
     );
     super::project_all(staging.path(), out.path()).unwrap();
 
     let rows = out_rows(out.path(), "dbt.data_tests.parquet");
-    assert_eq!(rows.len(), 2, "the singular test must not be dropped");
+    assert_eq!(rows.len(), 3, "the singular test must not be dropped");
 
     let generic = rows.iter().find(|r| r["name"] == json!("generic")).unwrap();
     // Node-level and detail columns on the same row, under their new names.
@@ -612,6 +622,12 @@ fn data_tests_keeps_tests_without_detail() {
     assert_eq!(generic["where"], json!("id > 0"));
     assert_eq!(generic["limit"], json!(10));
     assert_eq!(generic["arguments"], json!("{\"column_name\":\"id\"}"));
+
+    let source = rows
+        .iter()
+        .find(|r| r["name"] == json!("source_generic"))
+        .unwrap();
+    assert_eq!(source["node_unique_id"], json!("source.pkg.raw.orders"));
 
     let singular = rows
         .iter()

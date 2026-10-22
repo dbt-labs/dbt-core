@@ -10,9 +10,9 @@ use dbt_common::static_analysis::{
 use dbt_common::tracing::dbt_emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
+use dbt_jinja_utils::phases::parse::ParseAdapterScopes;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
-use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting};
 use dbt_schemas::schemas::project::FunctionConfig;
 use dbt_schemas::schemas::project::ResolvedConfig;
@@ -38,10 +38,11 @@ use crate::dbt_project_config::{
 };
 use crate::renderer::{RenderCtx, RenderCtxInner};
 use crate::resolve::resolve_utils::{
-    build_unrendered_config, extract_config_map, validate_node_adapter,
+    build_unrendered_config, extract_config_map, resolve_node_quoting, select_node_adapter,
 };
 use crate::utils::{
-    RelationComponents, extract_resource_config_from_raw_project, update_node_relation_components,
+    RelationComponents, extract_resource_config_from_raw_project,
+    node_starting_database_and_schema, update_node_relation_components,
 };
 use crate::{
     args::ResolveArgs,
@@ -76,6 +77,7 @@ pub async fn resolve_functions(
     function_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
+    parse_adapter_scopes: &ParseAdapterScopes,
     default_adapter: AdapterType,
     adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
     package_name: &str,
@@ -107,7 +109,7 @@ pub async fn resolve_functions(
         },
         default_adapter,
     )?
-    .with_resolve_defaults(arg.static_analysis.unwrap_or_default());
+    .with_resolve_defaults(arg.unconfigured_static_analysis());
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -305,18 +307,17 @@ pub async fn resolve_functions(
         let unique_id = get_unique_id(function_name, package_name, None, "function");
         // See `resolve_models`: the flag overrides the config. A function selects
         // explicitly; it has no attached node to inherit from.
-        validate_node_adapter(model_config.adapter, &dbt_asset.path)?;
-        let resolved_node_adapter = arg.adapter_override.or(model_config.adapter);
+        let selected_adapter = select_node_adapter(
+            arg,
+            model_config.adapter,
+            None,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
-        let selected_adapter = resolved_node_adapter.unwrap_or(default_adapter);
-        model_config.quoting = resolve_package_quoting(
-            Some(match adapter_quoting.get(&selected_adapter) {
-                Some(authored) => model_config.quoting.filled_from(authored),
-                None => model_config.quoting,
-            }),
-            selected_adapter,
-        );
+        model_config.quoting =
+            resolve_node_quoting(model_config.quoting, adapter_quoting, selected_adapter);
         let static_analysis = model_config.static_analysis.clone();
         if let Some(spanned) = model_config.get_static_analysis() {
             let kind = spanned.into_inner();
@@ -372,6 +373,14 @@ pub async fn resolve_functions(
 
         rendering_results.insert(unique_id.clone(), (rendered_sql.clone(), macro_spans));
 
+        let (node_database, node_schema) = node_starting_database_and_schema(
+            Some(parse_adapter_scopes),
+            selected_adapter,
+            database,
+            schema,
+            &dbt_asset.path,
+        )?;
+
         let mut function = DbtFunction {
             __common_attr__: CommonAttributes {
                 unique_id: unique_id.clone(),
@@ -407,10 +416,10 @@ pub async fn resolve_functions(
                 // platform's catalog: no `+propagate` config exists for this node type.
                 propagate: Vec::new(),
                 effective_propagation_target: None,
-                database: database.to_string(), // will be updated below
-                schema: schema.to_string(),     // will be updated below
-                alias: "".to_owned(),           // will be updated below
-                relation_name: None,            // will be updated below
+                database: node_database.to_owned(), // will be updated below
+                schema: node_schema.to_owned(),     // will be updated below
+                alias: "".to_owned(),               // will be updated below
+                relation_name: None,                // will be updated below
                 materialized: DbtMaterialization::Function,
                 static_analysis,
                 static_analysis_off_reason: None,
@@ -508,17 +517,17 @@ pub async fn resolve_functions(
         };
 
         // update model components using the generate_relation_components function
-        update_node_relation_components(
-            &mut function,
+        function = update_node_relation_components(
+            function,
             &env,
             &root_package.dbt_project.name,
             package_name,
             base_ctx,
             &components,
-            default_adapter,
+            Some(parse_adapter_scopes),
         )?;
 
-        match node_resolver.insert_function(&function, default_adapter, status) {
+        match node_resolver.insert_function(&function, status) {
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());

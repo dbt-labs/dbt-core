@@ -1694,10 +1694,14 @@ pub fn extract_parse_nodes_batch(
                 .or_else(|| payload.get("test_metadata"));
             if let Some(tm) = tm {
                 let attached = test_attr
-                    .and_then(|a| a.get("attached_node"))
+                    .and_then(|a| a.get("test_subject_unique_id"))
                     .and_then(|v| v.as_str())
+                    .or_else(|| {
+                        test_attr
+                            .and_then(|a| a.get("attached_node"))
+                            .and_then(|v| v.as_str())
+                    })
                     .or_else(|| payload.get("attached_node").and_then(|v| v.as_str()))
-                    .or_else(|| payload.get("file_key_name").and_then(|v| v.as_str()))
                     .map(|s| s.to_string());
                 // severity and fail/warn thresholds live in deprecated_config or config
                 let config = payload.get("config");
@@ -1886,6 +1890,7 @@ fn build_semantic_model_from_payload(
         "depends_on_macros": m.depends_on_macros,
         "group_name": m.group_name,
         "created_at": m.created_at,
+        "config": m.config.as_ref().map(|v| v.to_string()),
         "ingested_at": now,
     }));
     for ent in &m.entities {
@@ -1897,6 +1902,7 @@ fn build_semantic_model_from_payload(
             "label": ent.label,
             "entity_role": ent.entity_role,
             "expr": ent.expr,
+            "config": ent.config.as_ref().map(|v| v.to_string()),
             "ingested_at": now,
         }));
     }
@@ -1912,6 +1918,7 @@ fn build_semantic_model_from_payload(
             "agg_time_dimension": meas.agg_time_dimension,
             "agg_params": meas.agg_params.as_ref().map(|v| v.to_string()),
             "non_additive_dimension": meas.non_additive_dimension.as_ref().map(|v| v.to_string()),
+            "config": meas.config.as_ref().map(|v| v.to_string()),
             "ingested_at": now,
         }));
     }
@@ -1926,6 +1933,7 @@ fn build_semantic_model_from_payload(
             "is_partition": dim.is_partition,
             "time_granularity": dim.time_granularity,
             "validity_params": dim.validity_params.as_ref().map(|v| v.to_string()),
+            "config": dim.config.as_ref().map(|v| v.to_string()),
             "ingested_at": now,
         }));
     }
@@ -1949,6 +1957,7 @@ fn build_saved_query_from_payload(uid: &str, payload: &Value, now: &str, rows: &
         "tags": m.tags,
         "group_name": m.group_name,
         "created_at": m.created_at,
+        "config": m.config.as_ref().map(|v| v.to_string()),
         "ingested_at": now,
     }));
 }
@@ -1979,6 +1988,8 @@ fn build_exposure_from_payload(
         "depends_on_nodes": m.depends_on_nodes,
         "depends_on_macros": m.depends_on_macros,
         "tags": m.tags,
+        "meta": m.meta.as_ref().map(|v| v.to_string()),
+        "config": m.config.as_ref().map(|v| v.to_string()),
         "enabled": enabled,
         "created_at": m.created_at,
         "ingested_at": now,
@@ -2056,6 +2067,7 @@ fn build_unit_test_from_payload(
         "schema_name": m.schema_name,
         "depends_on_nodes": m.depends_on_nodes,
         "depends_on_macros": m.depends_on_macros,
+        "config": m.config.as_ref().map(|v| v.to_string()),
         "enabled": enabled,
         "ingested_at": now,
     }));
@@ -2123,6 +2135,8 @@ fn write_parse_columns(
             let col_col = str_col(batch, "column_name");
             let type_col = str_col(batch, "declared_type");
             let desc_col = str_col(batch, "description");
+            let constraints_col = str_col(batch, "constraints");
+            let meta_col = str_col(batch, "meta");
             let tags_col = list_col_batch(batch, "tags");
             let ts_col = i64_col(batch, "ingested_at");
             for i in 0..batch.num_rows() {
@@ -2142,6 +2156,8 @@ fn write_parse_columns(
                     "column_name": get_str(col_col, i).unwrap_or_default(),
                     "declared_type": get_str(type_col, i),
                     "description": get_str(desc_col, i),
+                    "column_constraints": get_str(constraints_col, i).or_else(|| Some("[]".to_string())),
+                    "meta": get_str(meta_col, i).or_else(|| Some("{}".to_string())),
                     "tags": tags,
                     // Placeholder; the real (declared ∪ propagated) classifiers
                     // arrive via the compile/columns merge.

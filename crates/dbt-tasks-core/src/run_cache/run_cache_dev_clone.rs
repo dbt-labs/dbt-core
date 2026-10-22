@@ -161,7 +161,8 @@ async fn finish_dev_clone(
     ctx.inner
         .run_cache_ctx
         .run_cache_dev_cloned_nodes
-        .insert(node.unique_id(), explain_dev_clone);
+        .upsert_async(node.unique_id(), explain_dev_clone)
+        .await;
     confirm_run_cache_service_execution(ctx, node, clone.success_confirmation(), None).await;
 }
 
@@ -451,7 +452,8 @@ async fn prepare_dev_clone_request(
         table_properties: candidate.table_properties(),
         clone_chain_depth_limit: clone_chain_depth_limit_for_adapter(
             ctx.default_adapter_type(),
-            false,
+            false, // dev clone target is never the prod/defer target
+            ctx.inner.arg.defer,
             ctx.dbt_profile().allow_clones,
         ),
         table_namespace: project_info.table_namespace,

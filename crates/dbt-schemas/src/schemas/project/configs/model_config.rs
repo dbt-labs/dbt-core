@@ -206,6 +206,12 @@ pub struct ProjectModelConfig {
     pub persist_constraints: Option<bool>,
     #[serde(
         default,
+        rename = "+use_materialization_v2",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub use_materialization_v2: Option<bool>,
+    #[serde(
+        default,
         rename = "+use_safer_relation_operations",
         deserialize_with = "bool_or_string_bool"
     )]
@@ -372,6 +378,12 @@ pub struct ProjectModelConfig {
     pub intermediate_format: Option<String>,
     #[serde(rename = "+storage_uri")]
     pub storage_uri: Option<String>,
+    #[serde(
+        default,
+        rename = "+enable_change_history",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub enable_change_history: Option<bool>,
     #[serde(rename = "+merge_exclude_columns")]
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+merge_update_columns")]
@@ -599,6 +611,15 @@ pub struct ProjectModelConfig {
     // list of `{name, query}` maps rendered as `ADD PROJECTION` by table.sql
     #[serde(rename = "+projections")]
     pub projections: Option<Vec<YmlValue>>,
+    // distributed materializations
+    #[serde(rename = "+sharding_key")]
+    pub sharding_key: Option<String>,
+    #[serde(
+        default,
+        rename = "+disable_on_cluster",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub disable_on_cluster: Option<bool>,
     // incremental materialization
     #[serde(
         default,
@@ -717,6 +738,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.environment_dependencies.is_some()
             || self.incremental_apply_config_changes.is_some()
             || self.persist_constraints.is_some()
+            || self.use_materialization_v2.is_some()
             || self.use_safer_relation_operations.is_some()
             || self.view_update_via_alter.is_some()
             || self.description.is_some()
@@ -763,6 +785,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
             || self.enable_list_inference.is_some()
             || self.intermediate_format.is_some()
             || self.storage_uri.is_some()
+            || self.enable_change_history.is_some()
             || self.merge_exclude_columns.is_some()
             || self.merge_update_columns.is_some()
             || self.merge_with_schema_evolution.is_some()
@@ -1090,8 +1113,10 @@ impl From<ProjectModelConfig> for ModelConfig {
                 enable_list_inference: config.enable_list_inference,
                 intermediate_format: config.intermediate_format,
                 storage_uri: config.storage_uri,
+                enable_change_history: config.enable_change_history,
                 incremental_apply_config_changes: config.incremental_apply_config_changes,
                 persist_constraints: config.persist_constraints,
+                use_materialization_v2: config.use_materialization_v2,
                 use_safer_relation_operations: config.use_safer_relation_operations,
                 view_update_via_alter: config.view_update_via_alter,
 
@@ -1146,6 +1171,8 @@ impl From<ProjectModelConfig> for ModelConfig {
                 settings: config.settings,
                 query_settings: config.query_settings,
                 projections: config.projections,
+                sharding_key: config.sharding_key,
+                disable_on_cluster: config.disable_on_cluster,
                 inserts_only: config.inserts_only,
                 connection_overrides: config.connection_overrides,
                 fields: config.fields,
@@ -1279,6 +1306,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             enable_list_inference: config.__warehouse_specific_config__.enable_list_inference,
             intermediate_format: config.__warehouse_specific_config__.intermediate_format,
             storage_uri: config.__warehouse_specific_config__.storage_uri,
+            enable_change_history: config.__warehouse_specific_config__.enable_change_history,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
             copy_tags: config.__warehouse_specific_config__.copy_tags,
             secure: config.__warehouse_specific_config__.secure,
@@ -1361,6 +1389,7 @@ impl From<ModelConfig> for ProjectModelConfig {
                 .__warehouse_specific_config__
                 .incremental_apply_config_changes,
             persist_constraints: config.__warehouse_specific_config__.persist_constraints,
+            use_materialization_v2: config.__warehouse_specific_config__.use_materialization_v2,
             use_safer_relation_operations: config
                 .__warehouse_specific_config__
                 .use_safer_relation_operations,
@@ -1375,6 +1404,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             settings: config.__warehouse_specific_config__.settings,
             query_settings: config.__warehouse_specific_config__.query_settings,
             projections: config.__warehouse_specific_config__.projections,
+            sharding_key: config.__warehouse_specific_config__.sharding_key,
+            disable_on_cluster: config.__warehouse_specific_config__.disable_on_cluster,
             inserts_only: config.__warehouse_specific_config__.inserts_only,
             connection_overrides: config.__warehouse_specific_config__.connection_overrides,
             fields: config.__warehouse_specific_config__.fields,
