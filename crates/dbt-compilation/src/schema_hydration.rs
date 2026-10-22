@@ -1,9 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use dbt_adapter::Adapter;
 use dbt_adapter::cache::hydrate_relation_cache_if_not_already_cached;
 use dbt_adapter::engine::SidecarClient;
+use dbt_adapter::{Adapter, AdapterStore};
+use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -15,6 +16,7 @@ use dbt_dag::schedule::Schedule;
 use dbt_defer::DeferState;
 use dbt_schema_store::store::SchemaStore;
 use dbt_schemas::schemas::profiles::Execute;
+use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::state::ResolverState;
 use dbt_tasks_core::metricflow::MetricflowClient;
 use dbt_tasks_core::static_analysis_buckets::StaticAnalysisBuckets;
@@ -68,6 +70,7 @@ pub trait SchemaHydratorFactory: Send + Sync {
     fn create(
         &self,
         adapter: Arc<Adapter>,
+        adapter_store: Arc<AdapterStore>,
         execute_mode: Execute,
         compilation_config: CompilationConfig,
         schema_store: Arc<SchemaStore>,
@@ -86,15 +89,15 @@ pub fn should_hydrate_schemas(arg: &EvalArgs) -> bool {
 }
 
 pub async fn hydrate_selected_get_relations(
-    adapter: &Arc<Adapter>,
+    adapter_store: &AdapterStore,
     schedule: &Schedule<String>,
     resolver_state: &ResolverState,
     state: &SchemaHydrationState,
     scope: SchemaHydrationScope,
     infer_schemas: bool,
-) {
+) -> FsResult<()> {
     if infer_schemas || scope == SchemaHydrationScope::FrontierOnly {
-        return;
+        return Ok(());
     }
     let selected_get_relations = resolver_state
         .get_relation_calls
@@ -104,10 +107,62 @@ pub async fn hydrate_selected_get_relations(
         .filter(|relation| !state.fetched_schema_fqns.contains(&relation.semantic_fqn()))
         .cloned()
         .collect::<Vec<_>>();
-    let _ = hydrate_relation_cache_if_not_already_cached(
-        &selected_get_relations,
-        adapter,
-        "downloading referenced relations",
-    )
-    .await;
+    for (adapter_type, relations) in group_relations_by_adapter(selected_get_relations) {
+        let adapter = adapter_store.get(adapter_type)?;
+        let _ = hydrate_relation_cache_if_not_already_cached(
+            &relations,
+            &adapter,
+            "downloading referenced relations",
+        )
+        .await;
+    }
+    Ok(())
+}
+
+fn group_relations_by_adapter(
+    relations: Vec<Arc<dyn BaseRelation>>,
+) -> Vec<(AdapterType, Vec<Arc<dyn BaseRelation>>)> {
+    let mut grouped = HashMap::<AdapterType, Vec<_>>::new();
+    for relation in relations {
+        grouped
+            .entry(relation.adapter_type())
+            .or_default()
+            .push(relation);
+    }
+    let mut grouped = grouped.into_iter().collect::<Vec<_>>();
+    grouped.sort_by_key(|(adapter_type, _)| adapter_type.to_string());
+    grouped
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_adapter::relation::create_relation;
+    use dbt_schemas::schemas::common::ResolvedQuoting;
+
+    #[test]
+    fn relation_hydration_groups_by_relation_adapter() {
+        let relation = |adapter_type| {
+            Arc::<dyn BaseRelation>::from(
+                create_relation(
+                    adapter_type,
+                    "db".to_string(),
+                    "schema".to_string(),
+                    Some("table".to_string()),
+                    None,
+                    ResolvedQuoting::default(),
+                )
+                .unwrap(),
+            )
+        };
+
+        let grouped = group_relations_by_adapter(vec![
+            relation(AdapterType::Snowflake),
+            relation(AdapterType::DuckDB),
+        ]);
+
+        assert_eq!(grouped.len(), 2);
+        assert_eq!(grouped[0].0, AdapterType::DuckDB);
+        assert_eq!(grouped[1].0, AdapterType::Snowflake);
+    }
 }
