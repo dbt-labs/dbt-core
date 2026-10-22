@@ -259,7 +259,7 @@ impl MicrobatchRefContext {
 /// - Package-qualified refs: `ref('package_name', 'model_name')`
 /// - Versioned refs: `ref('model_name', version=1)`
 /// - Microbatch-aware filtering when `microbatch_context` is set
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RefFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
@@ -337,6 +337,23 @@ impl RefFunction {
             current_node_unique_id,
             caller_adapter: Some(caller_adapter),
         }
+    }
+
+    /// Set the adapter used by the node that invokes this ref function.
+    pub fn with_consumer_adapter(mut self, consumer_adapter: AdapterType) -> Self {
+        self.caller_adapter = Some(consumer_adapter);
+        self
+    }
+
+    /// Set the node that owns this ref context for phase-aware deferral.
+    pub fn with_current_node_unique_id(mut self, unique_id: String) -> Self {
+        self.current_node_unique_id = unique_id;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn consumer_binding(&self) -> (Option<AdapterType>, &str) {
+        (self.caller_adapter, &self.current_node_unique_id)
     }
 
     /// Set the microbatch context on this RefFunction.
@@ -469,12 +486,22 @@ impl Object for RefFunction {
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let (package_name, model_name, version) = self.resolve_args(args)?;
 
-        match self.node_resolver.lookup_ref(
-            &package_name,
-            &model_name,
-            &version,
-            &Some(self.package_name.clone()),
-        ) {
+        let resolved_ref = match self.caller_adapter {
+            Some(consumer_adapter) => self.node_resolver.lookup_ref_for_adapter(
+                &package_name,
+                &model_name,
+                &version,
+                &Some(self.package_name.clone()),
+                consumer_adapter,
+            ),
+            None => self.node_resolver.lookup_ref(
+                &package_name,
+                &model_name,
+                &version,
+                &Some(self.package_name.clone()),
+            ),
+        };
+        match resolved_ref {
             Ok((unique_id, relation, _, deferred_relation)) => {
                 // Validate that this ref is allowed (only if validation is configured)
                 self.validate_dependency(&unique_id, &package_name, &model_name)?;
@@ -572,13 +599,14 @@ impl Object for RefFunction {
 }
 
 /// Function for resolving source() calls in Jinja templates.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SourceFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
     microbatch_context: Option<MicrobatchRefContext>,
     validation_config: DependencyValidationConfig,
+    consumer_adapter: Option<AdapterType>,
 }
 
 impl SourceFunction {
@@ -598,6 +626,7 @@ impl SourceFunction {
             runtime_config,
             microbatch_context: Some(microbatch_context),
             validation_config: DependencyValidationConfig::default(),
+            consumer_adapter: None,
         }
     }
 }
@@ -616,6 +645,7 @@ impl SourceFunction {
             runtime_config,
             microbatch_context: None,
             validation_config: DependencyValidationConfig::default(),
+            consumer_adapter: None,
         }
     }
 
@@ -632,7 +662,19 @@ impl SourceFunction {
             runtime_config,
             microbatch_context: None,
             validation_config,
+            consumer_adapter: None,
         }
+    }
+
+    /// Set the adapter used by the node that invokes this source function.
+    pub fn with_consumer_adapter(mut self, consumer_adapter: AdapterType) -> Self {
+        self.consumer_adapter = Some(consumer_adapter);
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn consumer_adapter(&self) -> Option<AdapterType> {
+        self.consumer_adapter
     }
 
     /// Validate that the referenced source is in the allowed dependencies.
@@ -669,6 +711,73 @@ rows: [...]\n\n\
 Or remove the source() from the model if it's unused."
             ),
         ))
+    }
+}
+
+/// Bind a ref callable to the node or operation consuming its relation.
+pub(crate) fn bind_ref_to_node(
+    value: &MinijinjaValue,
+    adapter_type: AdapterType,
+    unique_id: &str,
+) -> MinijinjaValue {
+    value
+        .as_object()
+        .and_then(|object| object.downcast_ref::<RefFunction>())
+        .map(|ref_function| {
+            MinijinjaValue::from_object(
+                ref_function
+                    .clone()
+                    .with_consumer_adapter(adapter_type)
+                    .with_current_node_unique_id(unique_id.to_string()),
+            )
+        })
+        .unwrap_or_else(|| value.clone())
+}
+
+/// Bind a source callable to the adapter consuming its relation.
+pub(crate) fn bind_source_to_node(
+    value: &MinijinjaValue,
+    adapter_type: AdapterType,
+) -> MinijinjaValue {
+    value
+        .as_object()
+        .and_then(|object| object.downcast_ref::<SourceFunction>())
+        .map(|source_function| {
+            MinijinjaValue::from_object(source_function.clone().with_consumer_adapter(adapter_type))
+        })
+        .unwrap_or_else(|| value.clone())
+}
+
+/// Bind the ref/source callables in an existing context to the node or
+/// operation that will consume their relations.
+pub fn bind_resolution_functions(
+    context: &mut BTreeMap<String, MinijinjaValue>,
+    adapter_type: AdapterType,
+    unique_id: &str,
+) {
+    if let Some(ref_function) = context.get("ref").cloned() {
+        context.insert(
+            "ref".to_string(),
+            bind_ref_to_node(&ref_function, adapter_type, unique_id),
+        );
+    }
+    if let Some(source_function) = context.get("source").cloned() {
+        context.insert(
+            "source".to_string(),
+            bind_source_to_node(&source_function, adapter_type),
+        );
+    }
+    if let Some(builtins) = context.get("builtins").cloned() {
+        let mut builtins = builtins
+            .as_object()
+            .and_then(|object| object.downcast_ref::<BTreeMap<String, MinijinjaValue>>())
+            .expect("builtins must be a BTreeMap")
+            .clone();
+        bind_resolution_functions(&mut builtins, adapter_type, unique_id);
+        context.insert(
+            "builtins".to_string(),
+            MinijinjaValue::from_object(builtins),
+        );
     }
 }
 
@@ -722,10 +831,18 @@ impl Object for SourceFunction {
                 "source",
             )),
         }?;
-        match self
-            .node_resolver
-            .lookup_source(&self.package_name, &source_name, &table_name)
-        {
+        let resolved_source = match self.consumer_adapter {
+            Some(consumer_adapter) => self.node_resolver.lookup_source_for_adapter(
+                &self.package_name,
+                &source_name,
+                &table_name,
+                consumer_adapter,
+            ),
+            None => self
+                .node_resolver
+                .lookup_source(&self.package_name, &source_name, &table_name),
+        };
+        match resolved_source {
             Ok((unique_id, relation, _)) => {
                 for listener in listeners {
                     listener.on_ref_or_source_resolved(&unique_id);
