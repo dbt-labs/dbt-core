@@ -260,47 +260,77 @@ impl TaskRunner {
         &self,
         schedule: &Schedule<String>,
         base_context: BTreeMap<String, minijinja::Value>,
+        ctx: &TaskRunnerCtx,
     ) -> FsResult<()> {
         // Walking the schedule is pure in-memory work; only the adapter calls
         // below talk to the warehouse and need the blocking pool.
         let selected_catalog_schemas =
             get_catalog_schemas_and_ids(&self.resolved_state.nodes, schedule);
 
-        let jinja_env = Arc::clone(&self.jinja_env);
-        let adapter = Arc::clone(&self.adapter);
-        let filter_context = base_context.clone();
-        let missing_catalog_schemas = dbt_runtime::spawn_blocking(move || {
-            let state = jinja_env.new_state_with_context(filter_context);
-            filter_missing_schemas(&adapter, &state, &selected_catalog_schemas)
+        let registrations = selected_catalog_schemas
+            .into_iter()
+            .map(|(adapter_type, catalog_schemas)| {
+                Ok((
+                    self.adapter_store.get(adapter_type)?,
+                    ctx.jinja_env_for_adapter(adapter_type)?,
+                    if adapter_type == ctx.default_adapter_type() {
+                        base_context.clone()
+                    } else {
+                        ctx.base_context_for_adapter(adapter_type)?
+                    },
+                    catalog_schemas,
+                ))
+            })
+            .collect::<FsResult<Vec<_>>>()?;
+
+        let registrations = dbt_runtime::spawn_blocking(move || {
+            registrations
+                .into_iter()
+                .map(
+                    |(adapter, jinja_env, adapter_base_context, catalog_schemas)| {
+                        let state = jinja_env.new_state_with_context(adapter_base_context.clone());
+                        let missing_catalog_schemas =
+                            filter_missing_schemas(&adapter, &state, &catalog_schemas)?;
+                        Ok((
+                            adapter,
+                            jinja_env,
+                            adapter_base_context,
+                            missing_catalog_schemas,
+                        ))
+                    },
+                )
+                .collect::<FsResult<Vec<_>>>()
         })
         .await??;
 
-        // Keep schema creation sequential during recording and replay because
-        // Time Machine requires writes to occur in recorded order.
-        let schema_batches = if self.adapter.time_machine().is_some() {
-            vec![missing_catalog_schemas]
-        } else {
-            missing_catalog_schemas
-                .into_iter()
-                .map(|catalog_schema| vec![catalog_schema])
-                .collect()
-        };
-        // Submit all batches before awaiting so schema creation can overlap.
-        let create_handles = schema_batches
-            .into_iter()
-            .map(|catalog_schemas| {
-                let jinja_env = Arc::clone(&self.jinja_env);
-                let adapter = Arc::clone(&self.adapter);
-                let mut base_context = base_context.clone();
+        // Keep schema creation sequential per adapter during recording and replay because
+        // Time Machine requires writes to occur in recorded order. Other adapters and
+        // non-Time-Machine schema creates may overlap.
+        let mut create_handles = Vec::new();
+        for (adapter, jinja_env, adapter_base_context, missing_catalog_schemas) in registrations {
+            let schema_batches = if adapter.time_machine().is_some() {
+                vec![missing_catalog_schemas]
+            } else {
+                missing_catalog_schemas
+                    .into_iter()
+                    .map(|catalog_schema| vec![catalog_schema])
+                    .collect()
+            };
+
+            for catalog_schemas in schema_batches {
+                let jinja_env = Arc::clone(&jinja_env);
+                let adapter = Arc::clone(&adapter);
+                let mut base_context = adapter_base_context.clone();
                 // Cloning the context shares the result store, so concurrent creates could
                 // overwrite or consume each other's statement results.
                 reset_result_store(&mut base_context);
-                dbt_runtime::spawn_blocking(move || {
+                create_handles.push(dbt_runtime::spawn_blocking(move || {
                     let state = jinja_env.new_state_with_context(base_context);
                     register_catalog_schemas_remote(&adapter, &state, catalog_schemas)
-                })
-            })
-            .collect::<Vec<_>>();
+                }));
+            }
+        }
+
         // Await every create, even after a failure, so none is still running when the run reports
         // the error. `and` keeps the first error in submission order.
         let mut outcome: FsResult<()> = Ok(());
@@ -326,7 +356,7 @@ impl TaskRunner {
 
         let registered_schemas = if self.should_register_schemas(run_task_args.as_ref(), &schedule)
         {
-            self.register_schemas(&schedule, base_context).await?;
+            self.register_schemas(&schedule, base_context, &ctx).await?;
             true
         } else {
             false

@@ -35,6 +35,7 @@ use dbt_common::{ErrorCode, FsResult, fs_err, stdfs, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
+use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::schemas::common::{
     DbtChecksum, DbtQuoting, ModelFreshnessRules, NodeDependsOn,
@@ -52,7 +53,8 @@ use dbt_schemas::schemas::{
     NodeBaseAttributes, NodePathKind,
 };
 use dbt_schemas::state::{
-    DbtAsset, DbtPackage, DbtRuntimeConfig, GenericTestAsset, ModelStatus, NodeResolverTracker,
+    DbtAsset, DbtPackage, DbtProfile, DbtRuntimeConfig, GenericTestAsset, ModelStatus,
+    NodeResolverTracker,
 };
 use indexmap::IndexMap;
 use minijinja::Value as MinijinjaValue;
@@ -75,6 +77,7 @@ pub async fn resolve_snapshots(
     schema: &str,
     default_adapter: AdapterType,
     adapter_quoting: &IndexMap<AdapterType, DbtQuoting>,
+    profile: &DbtProfile,
     jinja_env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -90,6 +93,7 @@ pub async fn resolve_snapshots(
 )> {
     let mut snapshots: HashMap<String, Arc<DbtSnapshot>> = HashMap::new();
     let mut disabled_snapshots: HashMap<String, Arc<DbtSnapshot>> = HashMap::new();
+    let mut adapter_relation_contexts = AdapterTargetContextCache::default();
     let jinja_type_checking_event_listener_factory =
         Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
     let mut snapshots_with_execute: HashMap<String, DbtSnapshot> = HashMap::new();
@@ -465,6 +469,13 @@ pub async fn resolve_snapshots(
                 .clone()
                 .map(Into::into)
                 .unwrap_or_default();
+            let relation_context = adapter_relation_contexts.get_for_node(
+                profile,
+                selected_adapter,
+                default_adapter,
+                status,
+                base_ctx,
+            )?;
             snapshot_config.quoting =
                 resolve_node_quoting(snapshot_config.quoting, adapter_quoting, selected_adapter);
 
@@ -668,9 +679,9 @@ pub async fn resolve_snapshots(
                 &jinja_env,
                 &root_package.dbt_project.name,
                 &package_name,
-                base_ctx,
+                &relation_context.base_context,
                 &components,
-                default_adapter,
+                selected_adapter,
             )?;
 
             match node_resolver.insert_ref(&dbt_snapshot, status, false) {
