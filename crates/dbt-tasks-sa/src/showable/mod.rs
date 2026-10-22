@@ -262,15 +262,16 @@ pub(super) fn rendered_sql_for(
     unique_id: &str,
     resource_label: &str,
 ) -> FsResult<String> {
-    let rendered_node_info = ctx.inner.rendered_sql.get(unique_id).ok_or_else(|| {
-        dbt_common::fs_err!(
-            ErrorCode::Unexpected,
-            "No rendered SQL found for {resource_label}: {}",
-            unique_id
-        )
-    })?;
-
-    Ok(rendered_node_info.sql.clone())
+    ctx.inner
+        .rendered_sql
+        .read_sync(unique_id, |_, info| info.sql.clone())
+        .ok_or_else(|| {
+            dbt_common::fs_err!(
+                ErrorCode::Unexpected,
+                "No rendered SQL found for {resource_label}: {}",
+                unique_id
+            )
+        })
 }
 
 /// A task that shows the compiled SQL results for a node

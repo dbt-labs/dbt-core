@@ -14,11 +14,10 @@ use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::resolve::resolve_tests::persist_generic_data_tests::format_node_unique_id;
 use crate::resolve::resolve_utils::{
     build_unrendered_config, err_resource_name_has_spaces, render_config_map,
-    render_project_config_resolver, validate_compute, validate_node_adapter,
+    render_project_config_resolver, resolve_node_quoting, select_node_adapter, validate_compute,
 };
 use crate::utils::RelationComponents;
 use crate::utils::extract_resource_config_from_raw_project;
-use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_contents;
 use crate::utils::get_original_file_path;
@@ -43,7 +42,6 @@ use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::AdapterTargetContextCache;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::dbt_utils::resolve_package_quoting;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::IntrospectionKind;
@@ -622,15 +620,17 @@ pub async fn resolve_data_tests(
         });
         // See `resolve_models`: the flag overrides the config. `None` from both
         // leaves inheritance to fill the gap.
-        validate_node_adapter(test_config.adapter, &dbt_asset.path)?;
-        let resolved_node_adapter = arg
-            .adapter_override
-            .or(test_config.adapter)
-            .or(inherited_adapter);
+        let selected_adapter = select_node_adapter(
+            arg,
+            test_config.adapter,
+            inherited_adapter,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
 
         // See `resolve_models`: both remaining quoting layers depend on which
         // adapter the node runs on, which is only known after the config merge.
-        let discovered_adapter = resolved_node_adapter.unwrap_or(default_adapter);
+        let discovered_adapter = selected_adapter;
         let relation_context = adapter_relation_contexts.get_for_node(
             profile,
             discovered_adapter,
@@ -718,11 +718,13 @@ pub async fn resolve_data_tests(
             test_path_to_test_asset.get(&dbt_asset.path).copied(),
             &mut macro_depends_on,
         );
-        let selected_adapter = arg
-            .adapter_override
-            .or(test_config.adapter)
-            .or(inherited_adapter)
-            .unwrap_or(default_adapter);
+        let selected_adapter = select_node_adapter(
+            arg,
+            test_config.adapter,
+            inherited_adapter,
+            default_adapter,
+            &dbt_asset.path,
+        )?;
         if selected_adapter != discovered_adapter {
             return Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
@@ -751,13 +753,8 @@ pub async fn resolve_data_tests(
         let column_tags = test_asset.map(|asset| asset.column_tags.clone());
         let tags = merge_vec(test_tags, column_tags);
 
-        test_config.quoting = resolve_package_quoting(
-            Some(match adapter_quoting.get(&selected_adapter) {
-                Some(authored) => test_config.quoting.filled_from(authored),
-                None => test_config.quoting,
-            }),
-            selected_adapter,
-        );
+        test_config.quoting =
+            resolve_node_quoting(test_config.quoting, adapter_quoting, selected_adapter);
 
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =
@@ -972,8 +969,8 @@ pub async fn resolve_data_tests(
         };
 
         // Update with relation components
-        update_node_relation_components(
-            &mut dbt_test,
+        dbt_test = update_node_relation_components(
+            dbt_test,
             &env,
             &root_package.dbt_project.name,
             package_name,
@@ -1047,7 +1044,6 @@ pub async fn resolve_data_tests(
         nodes_with_execute,
         node_resolver,
         env.clone(),
-        default_adapter,
         package.dbt_project.name.as_str(),
         &root_package.dbt_project.name,
         runtime_config,

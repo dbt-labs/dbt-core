@@ -1099,12 +1099,13 @@ pub async fn render_unresolved_sql_files<
 
 /// Collect the adapter identifiers for the given nodes and check if they are detected as unsafe
 #[allow(clippy::too_many_arguments)]
-pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttributes + 'static>(
+pub async fn collect_adapter_identifiers_detect_unsafe<
+    T: InternalDbtNodeAttributes + Clone + 'static,
+>(
     arg: &ResolveArgs,
     node_map: HashMap<String, T>,
     node_resolver: &NodeResolver,
     jinja_env: Arc<JinjaEnv>,
-    adapter_type: AdapterType,
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -1146,7 +1147,6 @@ pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttribu
                     arg,
                     node_resolver,
                     &jinja_env,
-                    adapter_type,
                     package_name,
                     root_project_name,
                     runtime_config,
@@ -1171,12 +1171,13 @@ pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttribu
 
 /// Processes a chunk of models to detect unsafe identifiers
 #[allow(clippy::too_many_arguments)]
-async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes + 'static>(
+async fn process_model_chunk_for_unsafe_detection<
+    T: InternalDbtNodeAttributes + Clone + 'static,
+>(
     chunk: Vec<(String, T)>,
     arg: Arc<ResolveArgs>,
     node_resolver: Arc<NodeResolver>,
     jinja_env: &JinjaEnv,
-    adapter_type: AdapterType,
     package_name: String,
     root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -1220,14 +1221,15 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             MinijinjaValue::from(model.common().unique_id.clone()),
         );
 
+        let model = Arc::new(model);
         let (mut render_resolved_context, _) = build_compile_node_context_inner(
-            &model,
-            adapter_type,
+            model.clone(),
+            model.node_adapter(),
             &render_base_context,
             &root_project_name,
             node_resolver.clone(),
             runtime_config.clone(),
-            DependencyValidationConfig::new_for_node(&model).skip_validation(),
+            DependencyValidationConfig::new_for_node(&*model).skip_validation(),
         )?;
 
         // Inject the DbtNamespace to intercept dbt macro calls
@@ -1259,8 +1261,10 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             .parse_adapter_state()
             .expect("Adapter must be configured for the parse phase")
             .unsafe_nodes()
-            .contains(&model.common().unique_id);
-        nodes.push((model, is_unsafe));
+            .contains_sync(&model.common().unique_id);
+        // The node context holds the other reference; drop it so the node is moved out, not cloned.
+        drop(render_resolved_context);
+        nodes.push((Arc::unwrap_or_clone(model), is_unsafe));
     }
     Ok(nodes)
 }

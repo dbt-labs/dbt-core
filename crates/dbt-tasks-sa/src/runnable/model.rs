@@ -15,7 +15,7 @@ use dbt_common::tracing::span_info::{
     find_and_record_span_status_from_attrs, find_and_update_span_attrs,
 };
 use dbt_common::{ErrorCode, create_info_span, fs_err};
-use dbt_jinja_utils::phases::run::{build_run_node_context, reset_result_store};
+use dbt_jinja_utils::phases::run::{build_run_node_context_from_arc, reset_result_store};
 use dbt_jinja_utils::utils::add_task_context;
 use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::DbtModel;
@@ -91,8 +91,7 @@ pub async fn prepare_microbatch_batches(
 
     let sql_header = task_result
         .config_map
-        .get("sql_header")
-        .map(|v| v.value().clone());
+        .read_sync("sql_header", |_, v| v.clone());
 
     let model = node
         .as_any()
@@ -131,8 +130,8 @@ pub async fn prepare_microbatch_batches(
     let event_time_mapping = Arc::new(build_event_time_mapping(model, ctx.nodes()));
 
     let run_node_context = Arc::new(
-        build_run_node_context(
-            model,
+        build_run_node_context_from_arc(
+            node.clone(),
             &model.deprecated_config,
             model.node_adapter(),
             None,
@@ -387,7 +386,7 @@ fn materialize_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
             if let Some(main_response) = main_response {
                 ctx.inner
                     .main_adapter_responses
-                    .insert(model.__common_attr__.unique_id.clone(), main_response);
+                    .upsert_sync(model.__common_attr__.unique_id.clone(), main_response);
             }
             let _ = cache_materialization_return_value(jinja_env, &relations_map);
             Ok(())
@@ -414,14 +413,15 @@ pub fn execute_model_remote(
 
     let sql_header = task_result
         .config_map
-        .get("sql_header")
-        .map(|v| v.value().clone());
+        .read_sync("sql_header", |_, v| v.clone());
     let jinja_env = ctx.jinja_env_for_adapter(model.node_adapter())?;
 
     // Traditional warehouse execution via Jinja materialization macros
     match materialize_model(
         &task_result.sql_instruction.sql,
-        model,
+        ctx.nodes()
+            .get_node_owned(&model.common().unique_id)
+            .expect("model must be present in the node graph"),
         model.node_adapter(),
         ctx.runtime_config(),
         &ctx.inner.materialization_resolver,
@@ -434,7 +434,7 @@ pub fn execute_model_remote(
             if let Some(main_response) = main_response {
                 ctx.inner
                     .main_adapter_responses
-                    .insert(model.__common_attr__.unique_id.clone(), main_response);
+                    .upsert_sync(model.__common_attr__.unique_id.clone(), main_response);
             }
             let _ = cache_materialization_return_value(Arc::clone(&jinja_env), &relations_map);
         }
