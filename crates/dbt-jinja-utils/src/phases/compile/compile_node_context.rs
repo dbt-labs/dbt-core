@@ -324,7 +324,8 @@ where
         model.common().package_name.clone(),
         runtime_config.clone(),
         validation_config_with_depends_on,
-    );
+    )
+    .with_consumer_adapter(adapter_type);
     let source_value = MinijinjaValue::from_object(source_function);
     base_builtins.insert("source".to_string(), source_value.clone());
 
