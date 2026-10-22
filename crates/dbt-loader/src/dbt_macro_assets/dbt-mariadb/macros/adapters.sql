@@ -18,12 +18,28 @@
   {%- if contract_config.enforced -%}
     {{- get_assert_columns_equivalent(sql) }}
   {%- endif %}
-  create or replace {% if temporary -%} temporary {%- endif %} table {{ relation }} as
+  create or replace {% if temporary -%} temporary {%- endif %} table {{ relation }}
+    {%- if contract_config.enforced and not temporary %}
+    {{ get_table_columns_and_constraints() }}
+    {%- elif contract_config.enforced %}
+    {#- TEMPORARY tables cannot hold foreign keys: declare the contract
+        types only, so on_schema_change compares the same types. #}
+    {{ mariadb__get_table_columns() }}
+    {%- endif %}
+  as
     {%- if contract_config.enforced %}
     {{ get_select_subquery(sql) }}
     {%- else %}
     {{ sql }}
     {%- endif %}
+{%- endmacro %}
+
+{% macro mariadb__get_table_columns() -%}
+    (
+    {%- for column in model['columns'].values() %}
+      {{ adapter.quote(column['name']) if column.get('quote') else column['name'] }} {{ column['data_type'] }}{{ "," if not loop.last }}
+    {%- endfor %}
+    )
 {%- endmacro %}
 
 {% macro mariadb__create_view_as(relation, sql) -%}
@@ -35,7 +51,27 @@
     {{ sql }}
 {%- endmacro %}
 
+{#- MariaDB ignores DROP ... CASCADE and refuses to drop a table that a
+    foreign key references. Drop those foreign keys first, as Postgres'
+    CASCADE does, so a referenced model can still be rebuilt. -#}
+{% macro mariadb__drop_referencing_foreign_keys(relation) -%}
+  {% call statement('referencing_foreign_keys', fetch_result=True, auto_begin=False) -%}
+    select constraint_schema, table_name, constraint_name
+    from information_schema.referential_constraints
+    where unique_constraint_schema = '{{ relation.schema | replace("\\", "\\\\") | replace("'", "''") }}'
+      and referenced_table_name = '{{ relation.identifier | replace("\\", "\\\\") | replace("'", "''") }}'
+  {%- endcall %}
+  {% for row in load_result('referencing_foreign_keys').table.rows %}
+    {% call statement('drop_referencing_foreign_key', auto_begin=False) -%}
+      alter table {{ adapter.quote(row[0]) }}.{{ adapter.quote(row[1]) }} drop foreign key {{ adapter.quote(row[2]) }}
+    {%- endcall %}
+  {% endfor %}
+{% endmacro %}
+
 {% macro mariadb__drop_relation(relation) -%}
+  {% if relation.type == 'table' %}
+    {{ mariadb__drop_referencing_foreign_keys(relation) }}
+  {% endif %}
   {% call statement('drop_relation', auto_begin=False) -%}
     drop {{ relation.type }} if exists {{ relation }}
   {%- endcall %}

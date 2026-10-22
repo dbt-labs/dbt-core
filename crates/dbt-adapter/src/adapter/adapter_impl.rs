@@ -3039,9 +3039,13 @@ impl AdapterImpl {
             (Exasol, Check) => NotSupported,
             (Exasol, Custom) => NotSupported,
 
-            // MariaDB: CTAS cannot carry constraint definitions and the
-            // mariadb__ macros do not apply them yet.
-            (MariaDB, _) => NotSupported,
+            // MariaDB (verified on MariaDB 11.4, InnoDB)
+            (MariaDB, NotNull) => Enforced,
+            (MariaDB, Unique) => Enforced,
+            (MariaDB, PrimaryKey) => Enforced,
+            (MariaDB, ForeignKey) => Enforced,
+            (MariaDB, Check) => Enforced,
+            (MariaDB, Custom) => NotSupported,
 
             // ClickHouse (dbt-clickhouse impl.py CONSTRAINT_SUPPORT)
             (ClickHouse, Check) => Enforced,

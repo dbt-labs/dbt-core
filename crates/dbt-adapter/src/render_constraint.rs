@@ -90,7 +90,15 @@ pub fn render_model_constraint(
         };
     }
 
-    let constraint_prefix = if let Some(name) = constraint.name {
+    // MariaDB foreign key names are unique per schema, so a named foreign key
+    // collides with itself when the table materialization builds the
+    // `__dbt_tmp` table next to the existing one. Generated names
+    // (`<table>_ibfk_N`) follow RENAME TABLE instead.
+    let name = match (adapter_type, constraint.type_) {
+        (AdapterType::MariaDB, ConstraintType::ForeignKey) => None,
+        _ => constraint.name,
+    };
+    let constraint_prefix = if let Some(name) = name {
         format!("constraint {name} ")
     } else {
         String::new()
@@ -230,6 +238,33 @@ mod tests {
         assert_eq!(
             render_model_constraint(AdapterType::ClickHouse, foreign_key).unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn mariadb_model_foreign_key_drops_name() {
+        let foreign_key = ModelConstraint {
+            type_: ConstraintType::ForeignKey,
+            name: Some("fk_parent".to_string()),
+            columns: Some(vec!["parent_id".to_string()]),
+            to: Some(dbt_yaml::Spanned::new("`s`.`parent`".to_string())),
+            to_columns: Some(vec!["id".to_string()]),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_model_constraint(AdapterType::MariaDB, foreign_key).unwrap(),
+            Some("foreign key (parent_id) references `s`.`parent` (id)".to_string())
+        );
+
+        let check = ModelConstraint {
+            type_: ConstraintType::Check,
+            name: Some("positive".to_string()),
+            expression: Some("amount >= 0".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_model_constraint(AdapterType::MariaDB, check).unwrap(),
+            Some("constraint positive check (amount >= 0)".to_string())
         );
     }
 
