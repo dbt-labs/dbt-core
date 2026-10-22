@@ -33,7 +33,9 @@ use dbt_schemas::schemas::properties::{
     FUNCTION_LANGUAGE_JAVASCRIPT, FUNCTION_LANGUAGE_PYTHON, FUNCTION_LANGUAGE_SQL, FunctionKind,
     ModelProperties,
 };
-use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSource, InternalDbtNode, Nodes, TableFormat};
+use dbt_schemas::schemas::{
+    DbtFunction, DbtModel, DbtSeed, DbtSource, InternalDbtNode, Nodes, TableFormat,
+};
 use dbt_telemetry::GenericOpExecuted;
 
 use dbt_schemas::schemas::dbt_catalogs_deprecated::DbtCatalogs;
@@ -469,7 +471,7 @@ pub async fn resolve(
 
     // Validate function configuration against per-adapter capabilities:
     // JS UDF language support, JS-aggregate restrictions, default arguments.
-    validate_function_config(&nodes, adapter_type);
+    validate_function_config(&nodes);
 
     resolver_hooks.post_resolve(
         &arg.io,
@@ -591,75 +593,81 @@ fn check_access(
 ///   arguments must form a trailing suffix of the argument list (mirrors
 ///   `expand_default_fields` in the SQL binder, which only peels trailing
 ///   defaults when expanding `CREATE FUNCTION` into candidate arities).
-fn validate_function_config(nodes: &Nodes, adapter_type: AdapterType) {
-    use AdapterType::*;
+fn validate_function_config(nodes: &Nodes) {
     for function in nodes.functions.values() {
-        let name = &function.__common_attr__.name;
-        let language = function.__function_attr__.language.as_deref();
-        let function_kind = function.deprecated_config.function_kind.as_ref();
+        for error in function_config_errors(function) {
+            emit_error_log_from_fs_error(error);
+        }
+    }
+}
 
-        // JavaScript language + function-kind support
-        match (adapter_type, language) {
-            (Bigquery, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {}
-            (Snowflake, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
-                if function_kind == Some(&FunctionKind::Aggregate) {
-                    let err = fs_err!(
-                        ErrorCode::InvalidConfig,
-                        "Function '{}' is a JavaScript aggregate function and not supported on '{}'.",
-                        name,
-                        adapter_type,
-                    );
-                    emit_error_log_from_fs_error(*err);
-                    continue;
-                }
-            }
-            (_, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
-                let err = fs_err!(
+fn function_config_errors(function: &DbtFunction) -> Vec<FsError> {
+    use AdapterType::*;
+    let adapter_type = function.node_adapter();
+    let name = &function.__common_attr__.name;
+    let language = function.__function_attr__.language.as_deref();
+    let function_kind = function.deprecated_config.function_kind.as_ref();
+    let mut errors = Vec::new();
+
+    // JavaScript language + function-kind support
+    match (adapter_type, language) {
+        (Bigquery, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {}
+        (Snowflake, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
+            if function_kind == Some(&FunctionKind::Aggregate) {
+                errors.push(*fs_err!(
                     ErrorCode::InvalidConfig,
-                    "Function '{}' uses JavaScript, which is not supported on '{}'.",
+                    "Function '{}' is a JavaScript aggregate function and not supported on '{}'.",
                     name,
                     adapter_type,
-                );
-                emit_error_log_from_fs_error(*err);
-                continue;
-            }
-            // SQL / Python / unspecified: no per-adapter restrictions today.
-            (_, Some(FUNCTION_LANGUAGE_SQL)) | (_, Some(FUNCTION_LANGUAGE_PYTHON)) | (_, None) => {}
-            (_, Some(other)) => {
-                unimplemented!("No per-adapter validation defined for function language '{other}'")
+                ));
+                return errors;
             }
         }
+        (_, Some(FUNCTION_LANGUAGE_JAVASCRIPT)) => {
+            errors.push(*fs_err!(
+                ErrorCode::InvalidConfig,
+                "Function '{}' uses JavaScript, which is not supported on '{}'.",
+                name,
+                adapter_type,
+            ));
+            return errors;
+        }
+        // SQL / Python / unspecified: no per-adapter restrictions today.
+        (_, Some(FUNCTION_LANGUAGE_SQL)) | (_, Some(FUNCTION_LANGUAGE_PYTHON)) | (_, None) => {}
+        (_, Some(other)) => {
+            unimplemented!("No per-adapter validation defined for function language '{other}'")
+        }
+    }
 
-        // Default-value argument support
-        if let Some(arguments) = function.__function_attr__.arguments.as_ref()
-            && let Some(first_default) = arguments.iter().position(|a| a.default_value.is_some())
-        {
-            match adapter_type {
-                Snowflake => {
-                    if arguments[first_default..]
-                        .iter()
-                        .any(|a| a.default_value.is_none())
-                    {
-                        let err = fs_err!(
-                            ErrorCode::InvalidConfig,
-                            "Function '{}' has arguments with 'default_value' that are not at the end of the argument list. Defaulted arguments must form a trailing suffix.",
-                            name,
-                        );
-                        emit_error_log_from_fs_error(*err);
-                    }
-                }
-                _ => {
-                    let err = fs_err!(
+    // Default-value argument support
+    if let Some(arguments) = function.__function_attr__.arguments.as_ref()
+        && let Some(first_default) = arguments.iter().position(|a| a.default_value.is_some())
+    {
+        match adapter_type {
+            Snowflake => {
+                if arguments[first_default..]
+                    .iter()
+                    .any(|a| a.default_value.is_none())
+                {
+                    errors.push(*fs_err!(
                         ErrorCode::InvalidConfig,
-                        "Function '{}' declares an argument with 'default_value', which is not supported on '{}'.",
+                        "Function '{}' has arguments with 'default_value' that are not at the end of the argument list. Defaulted arguments must form a trailing suffix.",
                         name,
-                        adapter_type,
-                    );
-                    emit_error_log_from_fs_error(*err);
+                    ));
                 }
+            }
+            _ => {
+                errors.push(*fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Function '{}' declares an argument with 'default_value', which is not supported on '{}'.",
+                    name,
+                    adapter_type,
+                ));
             }
         }
     }
+
+    errors
 }
 
 fn microbatch_model_no_event_time_inputs_warnings(nodes: &Nodes) -> Vec<FsError> {
@@ -891,9 +899,8 @@ pub async fn resolve_inner(
         &root_project_configs.adapter_quoting,
         dbt_state.root_package(),
         root_project_configs,
-        database,
-        schema,
         adapter_type,
+        &dbt_state.dbt_profile,
         package_name,
         &jinja_env,
         &base_ctx,
@@ -922,6 +929,7 @@ pub async fn resolve_inner(
         schema,
         adapter_type,
         &root_project_configs.adapter_quoting,
+        &dbt_state.dbt_profile,
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
@@ -961,6 +969,7 @@ pub async fn resolve_inner(
         database,
         schema,
         adapter_type,
+        &dbt_state.dbt_profile,
         package_name,
         jinja_env.clone(),
         &base_ctx,
@@ -1033,6 +1042,7 @@ pub async fn resolve_inner(
         schema,
         adapter_type,
         &root_project_configs.adapter_quoting,
+        &dbt_state.dbt_profile,
         package_name,
         jinja_env.clone(),
         &base_ctx,
@@ -1155,6 +1165,7 @@ pub async fn resolve_inner(
             database,
             schema,
             adapter_type,
+            &dbt_state.dbt_profile,
             jinja_env.clone(),
             &base_ctx,
             runtime_config.clone(),
@@ -1852,11 +1863,27 @@ fn inject_default_overview(docs: &mut BTreeMap<String, DbtDocsMacro>) {
 mod tests {
     use std::collections::BTreeMap;
 
+    use dbt_adapter_core::AdapterType;
     use dbt_common::path::DbtPath;
-    use dbt_schemas::schemas::macros::DbtDocsMacro;
+    use dbt_schemas::schemas::{DbtFunction, macros::DbtDocsMacro};
 
-    use super::inject_default_overview;
+    use super::{function_config_errors, inject_default_overview};
     use crate::constants::DEFAULT_OVERVIEW_CONTENTS;
+
+    #[test]
+    fn function_capability_validation_uses_the_function_adapter() {
+        let mut function = DbtFunction::default();
+        function.__common_attr__.name = "js_function".to_string();
+        function.__base_attr__.adapter = AdapterType::DuckDB;
+        function.__function_attr__.language = Some("javascript".to_string());
+
+        let errors = function_config_errors(&function);
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].to_string().contains("duckdb"));
+
+        function.__base_attr__.adapter = AdapterType::Bigquery;
+        assert!(function_config_errors(&function).is_empty());
+    }
 
     /// When a project defines no {% docs %} blocks, `doc.dbt.__overview__`
     /// must be present in the manifest so the dbt Docs HTML doesn't crash.
