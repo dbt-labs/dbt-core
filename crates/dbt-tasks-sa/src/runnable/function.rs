@@ -43,8 +43,9 @@ pub fn execute_function_remote(
     let already_successful: std::collections::HashSet<String> = ctx
         .inner
         .batch_results_map
-        .get(unique_id)
-        .map(|br| br.successful.iter().map(|(name, _)| name.clone()).collect())
+        .read_sync(unique_id, |_, br| {
+            br.successful.iter().map(|(name, _)| name.clone()).collect()
+        })
         .unwrap_or_default();
 
     // The run-phase model reads model.compiled_code from disk. All overloads share
@@ -124,7 +125,7 @@ pub fn execute_function_remote(
 
     ctx.inner
         .batch_results_map
-        .insert(unique_id.clone(), BatchResults { successful, failed });
+        .upsert_sync(unique_id.clone(), BatchResults { successful, failed });
 
     if has_failures {
         Ok(NodeStatus::Errored)

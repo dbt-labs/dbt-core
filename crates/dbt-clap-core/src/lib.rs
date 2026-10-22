@@ -1254,6 +1254,9 @@ impl BuildArgs {
                 ClapResourceType::UnitTest,
                 ClapResourceType::Function,
                 ClapResourceType::Check,
+                // Plugin nodes are never selected by default, so this only keeps the ones
+                // selected directly.
+                ClapResourceType::Plugin,
             ];
             if eval_args.export_saved_queries {
                 eval_args.resource_types.push(ClapResourceType::SavedQuery);

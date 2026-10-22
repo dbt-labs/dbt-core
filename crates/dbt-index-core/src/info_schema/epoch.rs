@@ -1103,14 +1103,12 @@ const TEST_METADATA: &[(&str, EpochExpr)] = &[
         )),
     ),
     ("column_name", EpochExpr::Json("__test_attr__.column_name")),
-    // `file_key_name` is the last fallback the Rust path tries, so it is the last
-    // branch here too.
     (
         "attached_node",
         EpochExpr::Sql(
-            "COALESCE(json_extract_string(t.payload, '$.__test_attr__.attached_node'), \
-             json_extract_string(t.payload, '$.attached_node'), \
-             json_extract_string(t.payload, '$.file_key_name'))",
+            "COALESCE(json_extract_string(t.payload, '$.__test_attr__.test_subject_unique_id'), \
+             json_extract_string(t.payload, '$.__test_attr__.attached_node'), \
+             json_extract_string(t.payload, '$.attached_node'))",
         ),
     ),
     (
@@ -1594,6 +1592,22 @@ mod tests {
             "the epoch mapping does not cover every staging column the \
              information schema reads:\n{report}"
         );
+    }
+
+    #[test]
+    fn test_subject_precedes_legacy_attachment_without_file_key_fallback() {
+        let Some(EpochExpr::Sql(sql)) = epoch_expr("test_metadata", "attached_node") else {
+            panic!("test metadata attachment must use a SQL expression");
+        };
+        let subject = sql
+            .find("test_subject_unique_id")
+            .expect("explicit test subject");
+        let legacy = sql
+            .find("attached_node")
+            .expect("legacy attachment fallback");
+
+        assert!(subject < legacy);
+        assert!(!sql.contains("file_key_name"));
     }
 
     /// The enumeration the map has to cover, grouped by staging table. Kept as

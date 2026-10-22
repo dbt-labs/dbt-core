@@ -54,8 +54,8 @@ use arrow::array::{BooleanArray, RecordBatch, StringArray};
 use arrow_array::{Array as _, ArrayRef, Decimal128Array};
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
-use dashmap::DashMap;
 use dbt_adapter_core::AdapterType;
+use dbt_adapter_engine::cow::lowercase;
 use dbt_adapter_sql::is_keyword_ignore_ascii_case;
 use dbt_adbc::bigquery::*;
 use dbt_adbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
@@ -63,6 +63,7 @@ use dbt_adbc::{Connection, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::collections::SccHashMap;
 use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_schema_store::SchemaStoreTrait;
@@ -3071,14 +3072,15 @@ impl AdapterImpl {
         let mut result = IndexMap::new();
 
         // Case-insensitive lookup for model columns (matches upstream behavior).
-        let mut model_columns_lower: HashMap<String, &DbtColumnRef> = HashMap::new();
-        for (name, col) in &model_columns {
-            model_columns_lower.insert(name.to_lowercase(), col);
+        let mut model_columns_lower: HashMap<String, Arc<DbtColumn>> = HashMap::new();
+        for (name, col) in model_columns.into_iter() {
+            let lowercase_name = lowercase(Cow::Owned(name)).into_owned();
+            model_columns_lower.insert(lowercase_name, col);
         }
 
         for existing_col in existing_columns {
-            let Some(model_col) = model_columns_lower.get(&existing_col.name().to_lowercase())
-            else {
+            let lowercase_col = lowercase(Cow::Borrowed(existing_col.name()));
+            let Some(model_col) = model_columns_lower.get(lowercase_col.as_ref()) else {
                 continue;
             };
 
@@ -3086,7 +3088,13 @@ impl AdapterImpl {
             let existing = existing_col.comment().unwrap_or("");
 
             if desired != existing {
-                result.insert(existing_col.name().to_string(), (*model_col).clone());
+                let name = Cow::Borrowed(existing_col.name());
+                let key: String = if name == lowercase_col {
+                    lowercase_col.into_owned() // no allocation needed
+                } else {
+                    name.into_owned() // allocation needed
+                };
+                result.insert(key, Arc::clone(model_col));
             }
         }
 
@@ -3149,7 +3157,7 @@ impl AdapterImpl {
         }
 
         match self.adapter_type() {
-            Postgres | Bigquery | DuckDB | LakeCompute | Exasol => {
+            Postgres | Bigquery | DuckDB | LakeCompute | Exasol | ClickHouse => {
                 let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
                 let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
 
@@ -3343,8 +3351,8 @@ impl AdapterImpl {
 
                 Ok(result)
             }
-            Salesforce | Spark | Fabric | ClickHouse | Starburst | Athena | Trino | Datafusion
-            | Dremio | Oracle => {
+            Salesforce | Spark | Fabric | Starburst | Athena | Trino | Datafusion | Dremio
+            | Oracle => {
                 unimplemented!("grants not implemented")
             }
         }
@@ -3472,7 +3480,8 @@ impl AdapterImpl {
                 }
                 // https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L834
                 /// but instead of locking the thread, put the lock on the dataset
-                static DATASET_LOCK: LazyLock<DashMap<String, bool>> = LazyLock::new(DashMap::new);
+                static DATASET_LOCK: LazyLock<SccHashMap<String, Arc<parking_lot::Mutex<()>>>> =
+                    LazyLock::new(SccHashMap::default);
 
                 // adapter.grant_access_to when seen in Jinja macros, `entity_type` is always set to view
                 // https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L842
@@ -3503,9 +3512,14 @@ impl AdapterImpl {
                     }],
                 );
 
-                let _lock = DATASET_LOCK
-                    .entry(format!("{database}.{schema}"))
-                    .or_insert_with(|| true);
+                // Clone the dataset's mutex out so the map's bucket lock drops here;
+                // only calls for the same dataset wait on it.
+                let dataset_lock = DATASET_LOCK
+                    .entry_sync(format!("{database}.{schema}"))
+                    .or_default()
+                    .get()
+                    .clone();
+                let _guard = dataset_lock.lock();
 
                 let ctx = query_ctx_from_state(state)?;
                 let sql = "none"; // empty sql that won't really be executed
@@ -4378,9 +4392,12 @@ impl AdapterImpl {
             Impl(Fabric, engine) => {
                 fabric::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
             }
+            Impl(ClickHouse, engine) => {
+                clickhouse::list_relations(engine.as_ref(), query_ctx, conn, db_schema, token)
+            }
             Impl(
-                adapter_type @ (Postgres | Salesforce | ClickHouse | Exasol | Starburst | Athena
-                | Trino | Datafusion | Dremio | Oracle),
+                adapter_type @ (Postgres | Salesforce | Exasol | Starburst | Athena | Trino
+                | Datafusion | Dremio | Oracle),
                 _,
             ) => {
                 let err = AdapterError::new(

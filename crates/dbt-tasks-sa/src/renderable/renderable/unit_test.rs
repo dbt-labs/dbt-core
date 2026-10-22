@@ -18,7 +18,7 @@ use dbt_adapter::sql_types::{TypeOps, make_arrow_field};
 use dbt_adapter::{Adapter, Column};
 use dbt_adapter_core::{AdapterType, ExecutionPhase, quote_char};
 use dbt_common::cancellation::Cancellable;
-use dbt_common::collections::DashMap;
+use dbt_common::collections::SccHashMap;
 use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::io_args::{ReplayMode, TimeMachineMode};
 use dbt_common::static_analysis::is_static_analysis_off_or_baseline;
@@ -1390,7 +1390,7 @@ fn render_unit_test(
     ctx: &mut TaskRunnerCtx,
     given_relations: DiscoveredGivenRelations,
     task_hooks: &dyn RenderTaskHooks,
-) -> FsResult<(SqlInstruction, Arc<DashMap<String, MinijinjaValue>>)> {
+) -> FsResult<(SqlInstruction, Arc<SccHashMap<String, MinijinjaValue>>)> {
     let node = unit_test
         .as_any()
         .downcast_ref::<DbtUnitTest>()

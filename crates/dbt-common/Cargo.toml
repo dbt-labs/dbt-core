@@ -36,7 +36,6 @@ uuid = { workspace = true, features = ["v7"] }
 
 chrono = { workspace = true }
 console = { workspace = true }
-dashmap = { workspace = true }
 dbt-yaml = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }

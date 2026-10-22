@@ -1694,10 +1694,14 @@ pub fn extract_parse_nodes_batch(
                 .or_else(|| payload.get("test_metadata"));
             if let Some(tm) = tm {
                 let attached = test_attr
-                    .and_then(|a| a.get("attached_node"))
+                    .and_then(|a| a.get("test_subject_unique_id"))
                     .and_then(|v| v.as_str())
+                    .or_else(|| {
+                        test_attr
+                            .and_then(|a| a.get("attached_node"))
+                            .and_then(|v| v.as_str())
+                    })
                     .or_else(|| payload.get("attached_node").and_then(|v| v.as_str()))
-                    .or_else(|| payload.get("file_key_name").and_then(|v| v.as_str()))
                     .map(|s| s.to_string());
                 // severity and fail/warn thresholds live in deprecated_config or config
                 let config = payload.get("config");

@@ -1,4 +1,4 @@
-use dbt_common::collections::DashMap;
+use dbt_common::collections::SccHashMap;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::telemetry_command::TelemetryCommand;
 use dbt_common::{
@@ -229,7 +229,7 @@ pub fn invocation_end_event(
 #[allow(clippy::too_many_arguments)]
 pub fn run_model_event(
     invocation_id: String,
-    run_stats: &DashMap<String, Stat>,
+    run_stats: &SccHashMap<String, Stat>,
     node: &dyn InternalDbtNodeAttributes,
     maybe_incremental_strategy: Option<String>,
     snapshot_strategy: Option<String>,
@@ -242,7 +242,7 @@ pub fn run_model_event(
     execution_metrics: Option<ExecutionMetrics>,
 ) {
     let unique_id = node.unique_id();
-    if !run_stats.contains_key(&unique_id) {
+    let Some(stat) = run_stats.read_sync(&unique_id, |_, stat| stat.clone()) else {
         // Seeds are expected to not have stats. Any other node type missing
         // stats indicates a bug (see PR #9146 regression).
         debug_assert!(
@@ -250,8 +250,7 @@ pub fn run_model_event(
             "run_stats missing for non-seed node {unique_id} — telemetry will be skipped"
         );
         return;
-    }
-    let stat = run_stats.get(&unique_id).unwrap();
+    };
     let access = node
         .get_access()
         .as_ref()

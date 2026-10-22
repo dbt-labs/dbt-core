@@ -70,6 +70,7 @@ fn node_results(cases: &mut Vec<Case>) {
         SemanticModel,
         Function,
         Check,
+        Plugin,
     }) {
         match node_type {
             NodeType::Model => {
@@ -298,6 +299,23 @@ fn node_results(cases: &mut Vec<Case>) {
                         .expect(
                             TERMINAL,
                             "<green+bold> Succeeded</> check <cyan+bold>analytics.</><blue+bold>orders_are_recent</> [3 of 12 in 0.25s]\n",
+                        ),
+                );
+            }
+            NodeType::Plugin => {
+                // Plugin nodes show their own kind, and write no relation.
+                cases.push(
+                    node_case("plugin node succeeded", node(NodeType::Plugin))
+                        .expect(
+                            DBT_LOG,
+                            indoc! {"
+                                03:04:05.678901 [info ]: Started widget orders_widget
+                                03:04:05.928901 [info ]:  Succeeded widget orders_widget [3 of 12 in 0.25s]
+                            "},
+                        )
+                        .expect(
+                            TERMINAL,
+                            "<green+bold> Succeeded</> widget <cyan+bold></><blue+bold>orders_widget</> [3 of 12 in 0.25s]\n",
                         ),
                 );
             }

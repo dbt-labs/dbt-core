@@ -164,17 +164,15 @@ where
 
     // Drop ephemeral schemas from the remote warehouse after recording.
     if is_full_update {
-        let macro_abs_path = PathBuf::from(root)
-            .join(project_path)
-            .join("macros")
-            .join(DROP_DEV_SCHEMA_FILENAME);
-
-        let write_path = macro_abs_path.clone();
-        task_seq.task_fn(move |_project_env, _test_env, _idx| {
-            if let Some(parent) = write_path.parent() {
-                stdfs::create_dir_all(parent)?;
-            }
-            stdfs::write(&write_path, DROP_DEV_SCHEMA_MACRO)?;
+        // Written into the copy of the project the commands run in, which was
+        // taken before this task runs.
+        task_seq.task_fn(|project_env, _test_env, _idx| {
+            let macros_dir = project_env.absolute_project_dir.join("macros");
+            stdfs::create_dir_all(&macros_dir)?;
+            stdfs::write(
+                macros_dir.join(DROP_DEV_SCHEMA_FILENAME),
+                DROP_DEV_SCHEMA_MACRO,
+            )?;
             Ok(())
         });
 
@@ -183,14 +181,6 @@ where
             runner,
             &format!("run-operation drop_dev_schema --target {}", dialect),
         );
-
-        let rm_path = macro_abs_path;
-        task_seq.task_fn(move |_project_env, _test_env, _idx| {
-            if rm_path.exists() {
-                stdfs::remove_file(&rm_path)?;
-            }
-            Ok(())
-        });
     }
 
     // Schema Pt 2 — SedTask for each recording directory

@@ -395,7 +395,21 @@ where
         0
     };
     let materialization = b.materialized.to_string();
-    let payload = serde_json::to_string(node).unwrap_or_else(|_| "{}".into());
+    let mut payload = serde_json::to_value(node).unwrap_or_default();
+    if let Some(subject) = node
+        .as_any()
+        .downcast_ref::<DbtTest>()
+        .and_then(|test| test.__test_attr__.test_subject_unique_id.as_ref())
+        && let Some(test_attr) = payload
+            .get_mut("__test_attr__")
+            .and_then(serde_json::Value::as_object_mut)
+    {
+        test_attr.insert(
+            "test_subject_unique_id".to_string(),
+            serde_json::Value::String(subject.clone()),
+        );
+    }
+    let payload = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into());
     let description = c.description.clone();
     let database = if b.database.is_empty() {
         None
@@ -1005,7 +1019,11 @@ fn collect_parse_test_metadata_rows(
                     .ok()
                     .filter(|s| s != "null"),
                 column_name: test.__test_attr__.column_name.clone(),
-                attached_node: test.__test_attr__.attached_node.clone(),
+                attached_node: test
+                    .__test_attr__
+                    .test_subject_unique_id
+                    .clone()
+                    .or_else(|| test.__test_attr__.attached_node.clone()),
                 severity,
                 warn_if: test.deprecated_config.warn_if.clone(),
                 error_if: test.deprecated_config.error_if.clone(),
@@ -1716,6 +1734,7 @@ pub fn snapshot_packages(packages: &[DbtPackage]) -> Vec<PackageSnapshot> {
 mod tests {
     use super::*;
     use crate::index_resolution::resolve_dirty_unique_ids_from_index;
+    use dbt_schemas::schemas::nodes::TestMetadata;
     use dbt_schemas::state::DbtAsset;
     use minijinja::machinery::Span;
     use tempfile::TempDir;
@@ -1734,6 +1753,54 @@ mod tests {
             payload: payload.to_string(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn source_test_metadata_uses_the_explicit_subject_unique_id() {
+        let mut nodes = Nodes::default();
+        let mut test = DbtTest::default();
+        test.__common_attr__.unique_id = "test.pkg.not_null_raw_orders_id.abc".to_string();
+        test.__test_attr__.attached_node = None;
+        test.__test_attr__.test_subject_unique_id = Some("source.pkg.raw.orders".to_string());
+        test.__test_attr__.file_key_name = Some("sources.raw".to_string());
+        test.__test_attr__.test_metadata = Some(TestMetadata {
+            name: "not_null".to_string(),
+            kwargs: BTreeMap::new(),
+            namespace: None,
+        });
+        nodes
+            .tests
+            .insert(test.__common_attr__.unique_id.clone(), Arc::new(test));
+
+        let rows = collect_parse_test_metadata_rows(&nodes, None, 1);
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].attached_node.as_deref(),
+            Some("source.pkg.raw.orders")
+        );
+    }
+
+    #[test]
+    fn test_subject_is_metadata_only_but_survives_parse_payload() {
+        let mut test = DbtTest::default();
+        test.__test_attr__.test_subject_unique_id = Some("source.pkg.raw.orders".to_string());
+
+        let node_json = serde_json::to_value(&test).unwrap();
+        assert!(
+            node_json
+                .get("__test_attr__")
+                .and_then(|attr| attr.get("test_subject_unique_id"))
+                .is_none(),
+            "ordinary node serialization must keep the transport field private"
+        );
+
+        let row = node_row_from_trait("test.pkg.not_null", &test, "test", 0);
+        let cached: DbtTest = serde_json::from_str(&row.payload).unwrap();
+        assert_eq!(
+            cached.__test_attr__.test_subject_unique_id.as_deref(),
+            Some("source.pkg.raw.orders")
+        );
     }
 
     /// Write epoch 0 with 3 rows, then 9 delta epochs each updating row "a".

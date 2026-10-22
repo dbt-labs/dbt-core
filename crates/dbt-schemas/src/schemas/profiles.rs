@@ -505,6 +505,18 @@ impl DbConfig {
         }
     }
 
+    /// The database and schema a profile reports for this connection
+    /// (`DbtProfile.database` / `DbtProfile.schema`).
+    pub fn profile_database_and_schema(&self) -> (String, String) {
+        let database = self.get_database_or_default();
+        let schema = self
+            .get_schema()
+            .map(String::as_str)
+            .unwrap_or("public")
+            .to_string();
+        (database, schema)
+    }
+
     pub fn get_threads(&self) -> Option<&StringOrInteger> {
         match self {
             DbConfig::Snowflake(config) => config.threads.as_ref(),
@@ -3331,5 +3343,40 @@ threads: 8
 
         assert_eq!(config.get_database(), None);
         assert_eq!(config.get_database_or_default(), "");
+    }
+
+    #[test]
+    fn test_profile_database_and_schema() {
+        let pair = |database: &str, schema: &str| (database.to_string(), schema.to_string());
+        let snowflake: DbConfig = SnowflakeDbConfig {
+            database: Some("ANALYTICS".to_string()),
+            schema: Some("DBT_X".to_string()),
+            ..Default::default()
+        }
+        .into();
+        assert_eq!(
+            snowflake.profile_database_and_schema(),
+            pair("ANALYTICS", "DBT_X")
+        );
+
+        let no_schema: DbConfig = PostgresDbConfig {
+            database: Some("pg".to_string()),
+            ..Default::default()
+        }
+        .into();
+        assert_eq!(
+            no_schema.profile_database_and_schema(),
+            pair("pg", "public")
+        );
+
+        let duckdb_path_only: DbConfig = DuckDbConfig {
+            path: Some("/data/jaffle_shop.duckdb".to_string()),
+            ..Default::default()
+        }
+        .into();
+        assert_eq!(
+            duckdb_path_only.profile_database_and_schema(),
+            pair("jaffle_shop", "public")
+        );
     }
 }

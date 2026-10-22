@@ -907,14 +907,15 @@ impl Adapter {
 
                 if state.is_execute() {
                     if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID, &[]) {
-                        parse_state.unsafe_nodes.insert(
+                        // Set insert: `Err` only means the node is already recorded.
+                        let _already_present = parse_state.unsafe_nodes.insert_sync(
                             unique_id
                                 .as_str()
                                 .expect("unique_id must be a string")
                                 .to_string(),
                         );
                     }
-                    parse_state.execute_sqls.insert(sql.to_string());
+                    let _already_present = parse_state.execute_sqls.insert_sync(sql.to_string());
                 }
 
                 Ok((response, table))
