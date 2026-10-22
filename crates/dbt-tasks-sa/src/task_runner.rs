@@ -4,6 +4,7 @@ use std::time::SystemTime;
 
 use dbt_adapter::response::AdapterResponse;
 use dbt_adapter::{Adapter, AdapterStore};
+use dbt_adapter_core::AdapterType;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationToken;
@@ -21,6 +22,7 @@ use dbt_schema_store::DataStoreTrait;
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schema_store::store::SchemaStore;
 use dbt_schemas::schemas::profiles::Execute;
+use dbt_schemas::schemas::{DbtSeed, InternalDbtNodeAttributes};
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
 use dbt_state::telemetry::SharedEventOrder;
@@ -111,6 +113,24 @@ pub struct TaskRunner {
     run_cache: Arc<RunCacheLifecycle>,
 }
 
+fn group_seed_ids_by_adapter<'a>(
+    seed_ids: &[&'a String],
+    seeds: &BTreeMap<String, Arc<DbtSeed>>,
+) -> Vec<(AdapterType, Vec<&'a String>)> {
+    let mut grouped = HashMap::<AdapterType, Vec<_>>::new();
+    for unique_id in seed_ids {
+        if let Some(seed) = seeds.get(*unique_id) {
+            grouped
+                .entry(seed.node_adapter())
+                .or_default()
+                .push(*unique_id);
+        }
+    }
+    let mut grouped = grouped.into_iter().collect::<Vec<_>>();
+    grouped.sort_by_key(|(adapter_type, _)| adapter_type.to_string());
+    grouped
+}
+
 impl TaskRunner {
     pub fn new(
         hooks: Box<dyn TaskRunnerHooks>,
@@ -171,15 +191,20 @@ impl TaskRunner {
                     && schedule.selected_nodes.contains(*uid)
             })
             .collect();
-        register_seeds::pre_register_seeds(
-            &selected_seed_ids,
-            &self.resolved_state.nodes.seeds,
-            Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
-            Arc::clone(&self.data_store),
-            Arc::clone(self.adapter.engine().type_ops()),
-            &run_task_args.io.in_dir,
-        )
-        .await;
+        for (adapter_type, seed_ids) in
+            group_seed_ids_by_adapter(&selected_seed_ids, &self.resolved_state.nodes.seeds)
+        {
+            let adapter = self.adapter_store.get(adapter_type)?;
+            register_seeds::pre_register_seeds(
+                &seed_ids,
+                &self.resolved_state.nodes.seeds,
+                Arc::clone(&self.schema_store) as Arc<dyn SchemaStoreTrait>,
+                Arc::clone(&self.data_store),
+                Arc::clone(adapter.engine().type_ops()),
+                &run_task_args.io.in_dir,
+            )
+            .await;
+        }
 
         Ok(())
     }
@@ -652,6 +677,28 @@ impl TaskRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn seed_registration_groups_by_seed_adapter() {
+        let duckdb_id = "seed.test.duckdb".to_string();
+        let snowflake_id = "seed.test.snowflake".to_string();
+        let mut duckdb_seed = DbtSeed::default();
+        duckdb_seed.__base_attr__.adapter = AdapterType::DuckDB;
+        let mut snowflake_seed = DbtSeed::default();
+        snowflake_seed.__base_attr__.adapter = AdapterType::Snowflake;
+        let seeds = BTreeMap::from([
+            (duckdb_id.clone(), Arc::new(duckdb_seed)),
+            (snowflake_id.clone(), Arc::new(snowflake_seed)),
+        ]);
+
+        let grouped = group_seed_ids_by_adapter(&[&snowflake_id, &duckdb_id], &seeds);
+
+        assert_eq!(grouped.len(), 2);
+        assert_eq!(grouped[0].0, AdapterType::DuckDB);
+        assert_eq!(grouped[0].1, vec![&duckdb_id]);
+        assert_eq!(grouped[1].0, AdapterType::Snowflake);
+        assert_eq!(grouped[1].1, vec![&snowflake_id]);
+    }
 
     #[test]
     fn on_run_start_hooks_run_when_there_are_hooks_and_infer_schemas_is_off() {
