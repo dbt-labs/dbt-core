@@ -2167,6 +2167,7 @@ impl DbtProjectCompilation {
         // Renders, Analyzes, and Runs Tasks (lineage is handled in background for lineage command)
         let schema_hydrator = feature_stack.task_runner.schema_hydrator_factory.create(
             adapter.clone(),
+            adapter_store.clone(),
             execute_mode,
             self.loaded_project.config().clone(),
             schema_store.clone(),
