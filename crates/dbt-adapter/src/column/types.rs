@@ -1327,6 +1327,7 @@ mod tests {
             AdapterType::Spark,
             AdapterType::Databricks,
             AdapterType::Bigquery,
+            AdapterType::MariaDB,
         ] {
             let col = Column::new(
                 adapter,
@@ -1357,6 +1358,27 @@ mod tests {
                 "\"id\"",
                 "{adapter:?} should double-quote identifiers"
             );
+        }
+    }
+
+    #[test]
+    fn test_mariadb_data_type_keeps_server_type_text() {
+        for (dtype, char_size) in [
+            ("text", None),
+            ("varchar(20)", Some(20)),
+            ("int(10) unsigned", None),
+            ("enum('a','b')", None),
+            ("datetime(6)", None),
+        ] {
+            let col = Column::new(
+                AdapterType::MariaDB,
+                "c".to_string(),
+                dtype.to_string(),
+                char_size,
+                None,
+                None,
+            );
+            assert_eq!(col.data_type(), dtype);
         }
     }
 

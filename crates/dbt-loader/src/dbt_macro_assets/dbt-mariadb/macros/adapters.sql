@@ -14,6 +14,8 @@
 {% endmacro %}
 
 {% macro mariadb__create_table_as(temporary, relation, sql) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+  {{ sql_header if sql_header is not none }}
   {%- set contract_config = config.get('contract') -%}
   {%- if contract_config.enforced -%}
     {{- get_assert_columns_equivalent(sql) }}
@@ -46,6 +48,8 @@
 {%- endmacro %}
 
 {% macro mariadb__create_view_as(relation, sql) -%}
+  {%- set sql_header = config.get('sql_header', none) -%}
+  {{ sql_header if sql_header is not none }}
   {%- set contract_config = config.get('contract') -%}
   {%- if contract_config.enforced -%}
     {{- get_assert_columns_equivalent(sql) }}

@@ -17,7 +17,7 @@
     set DBT_INTERNAL_DEST.{{ columns.dbt_valid_to }} = DBT_INTERNAL_SOURCE.{{ columns.dbt_valid_to }}
     where (
         {%- if dbt_valid_to_current %}
-            DBT_INTERNAL_DEST.{{ columns.dbt_valid_to }} = {{ snapshot_string_as_time(dbt_valid_to_current) }}
+            DBT_INTERNAL_DEST.{{ columns.dbt_valid_to }} = {{ dbt_valid_to_current }}
             or DBT_INTERNAL_DEST.{{ columns.dbt_valid_to }} is null
         {%- else %}
             DBT_INTERNAL_DEST.{{ columns.dbt_valid_to }} is null
@@ -31,3 +31,11 @@
     where DBT_INTERNAL_SOURCE.dbt_change_type = 'insert'
 {%- endmacro %}
 
+
+
+{#- MariaDB only reads `--` as a comment when whitespace follows it. The
+    default staging SQL has `--avoid updating the record's valid_to ...`,
+    where the quote then opens a string literal. -#}
+{% macro mariadb__snapshot_staging_table(strategy, source_sql, target_relation) -%}
+    {{ default__snapshot_staging_table(strategy, source_sql, target_relation) | replace('--avoid', '-- avoid') }}
+{%- endmacro %}

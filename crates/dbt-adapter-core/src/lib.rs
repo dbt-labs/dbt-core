@@ -300,6 +300,8 @@ mod tests {
             AdapterType::Bigquery,
             AdapterType::Databricks,
             AdapterType::Spark,
+            AdapterType::ClickHouse,
+            AdapterType::MariaDB,
         ] {
             assert_eq!(quote_char(adapter_type), '`', "{adapter_type:?}");
         }
@@ -320,16 +322,6 @@ mod tests {
         ] {
             assert_eq!(quote_char(adapter_type), '"', "{adapter_type:?}");
         }
-        assert_eq!(
-            quote_char(AdapterType::ClickHouse),
-            '`',
-            "ClickHouse uses backtick quoting"
-        );
-        assert_eq!(
-            quote_char(AdapterType::MariaDB),
-            '`',
-            "MariaDB uses backtick quoting"
-        );
     }
 
     #[test]

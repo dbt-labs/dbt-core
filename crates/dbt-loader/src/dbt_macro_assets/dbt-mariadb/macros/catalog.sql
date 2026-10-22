@@ -11,7 +11,7 @@
         table_name as table_name,
         '' as table_owner,
         case when table_type = 'VIEW' then 'VIEW' else 'BASE TABLE' end as table_type,
-        table_comment as table_comment
+        case when table_type = 'VIEW' then '' else table_comment end as table_comment
     from information_schema.tables
     where table_type in ('BASE TABLE', 'SYSTEM VERSIONED', 'VIEW')
 {%- endmacro %}

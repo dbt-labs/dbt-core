@@ -743,7 +743,8 @@ impl AdapterImpl {
             ClickHouse => &[Append, DeleteInsert, InsertOverwrite, Microbatch, Legacy],
             Spark => &[Append, Merge, InsertOverwrite, Microbatch],
             Exasol => &[Append, DeleteInsert, Merge, Microbatch],
-            // MariaDB has no MERGE statement.
+            // MariaDB has no MERGE statement. The v1 adapter only does a delete
+            // then insert: https://github.com/dbeatty10/dbt-mysql/blob/09e076f7203ffe1486f3bf8394ec3bb9c5b38ddc/dbt/include/mariadb/macros/materializations/incremental/incremental.sql#L33-L37
             MariaDB => &[Append, DeleteInsert, Microbatch],
             Athena | Starburst | Trino | Datafusion | Dremio | Oracle => {
                 unimplemented!("valid_incremental_strategies not implemented")
@@ -3039,7 +3040,10 @@ impl AdapterImpl {
             (Exasol, Check) => NotSupported,
             (Exasol, Custom) => NotSupported,
 
-            // MariaDB (verified on MariaDB 11.4, InnoDB)
+            // MariaDB (verified on MariaDB 11.4 and 11.8, InnoDB). The v1 adapter
+            // declares foreign keys NotSupported because CREATE TABLE AS SELECT
+            // was thought to reject them; it accepts them when the columns are
+            // declared: https://github.com/dbeatty10/dbt-mysql/blob/09e076f7203ffe1486f3bf8394ec3bb9c5b38ddc/dbt/adapters/mariadb/impl.py#L33-L44
             (MariaDB, NotNull) => Enforced,
             (MariaDB, Unique) => Enforced,
             (MariaDB, PrimaryKey) => Enforced,
@@ -7359,6 +7363,16 @@ mod tests {
             "Int64"
         );
         assert_eq!(adapter.convert_type(&state, table, 1).unwrap(), "Int64");
+    }
+
+    #[test]
+    fn test_verify_database_mariadb_has_no_database_level() {
+        let adapter = AdapterImpl::new(build_engine(MariaDB, Mapping::new()), None);
+        assert!(adapter.verify_database(String::new()).is_ok());
+        let err = adapter
+            .verify_database("otherdb".to_string())
+            .expect_err("a database other than '' should be refused");
+        assert_eq!(err.kind(), AdapterErrorKind::UnexpectedDbReference);
     }
 
     #[test]

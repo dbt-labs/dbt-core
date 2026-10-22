@@ -269,11 +269,14 @@ pub fn quote_identifier(id: &str, backend: AdapterType) -> String {
 /// value can never terminate the literal early. The literal-value member of
 /// the family next to [`sanitize_identifier`] (strip) and [`quote_identifier`]
 /// (quote), which handle identifiers.
-pub fn escape_string_literal(s: &str, _backend: AdapterType) -> String {
-    // ANSI '' doubling — correct for every currently supported backend.
-    // Dialects with different literal-escape rules (e.g. backslash-escaped
-    // strings) grow a match arm on `_backend` when they arrive.
-    s.replace('\'', "''")
+pub fn escape_string_literal(s: &str, backend: AdapterType) -> String {
+    match backend {
+        // Backslash is a string escape on MariaDB unless the
+        // NO_BACKSLASH_ESCAPES sql_mode is set.
+        AdapterType::MariaDB => s.replace('\\', "\\\\").replace('\'', "''"),
+        // ANSI '' doubling for every other supported backend.
+        _ => s.replace('\'', "''"),
+    }
 }
 
 #[cfg(test)]
@@ -304,6 +307,14 @@ mod sanitize_tests {
         let e = |s: &str| escape_string_literal(s, AdapterType::DuckDB);
         assert_eq!(e("o'brien"), "o''brien");
         assert_eq!(e("'; DROP TABLE x; --"), "''; DROP TABLE x; --");
+        assert_eq!(e("plain"), "plain");
+    }
+
+    #[test]
+    fn escape_string_literal_escapes_backslashes_on_mariadb() {
+        let e = |s: &str| escape_string_literal(s, AdapterType::MariaDB);
+        assert_eq!(e("o'brien"), "o''brien");
+        assert_eq!(e("a\\'b"), "a\\\\''b");
         assert_eq!(e("plain"), "plain");
     }
 

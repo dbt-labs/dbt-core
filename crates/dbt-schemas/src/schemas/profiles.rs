@@ -474,7 +474,8 @@ impl DbConfig {
             DbConfig::Fabric(config) => config.database.as_ref(),
             DbConfig::Exasol(config) => config.database.as_ref(),
             DbConfig::ClickHouse(config) => config.database.as_ref(),
-            DbConfig::MariaDB(config) => config.database.as_ref(),
+            // MariaDB has no catalog level, see `TargetContext::try_from`.
+            DbConfig::MariaDB(_) => None,
             DbConfig::LakeCompute(config) => config.database.as_ref(),
         }
     }
@@ -3255,6 +3256,40 @@ extensions:
         };
         assert_eq!(target.__common__.database, "");
         assert_eq!(target.__common__.schema, "analytics");
+    }
+
+    #[test]
+    fn test_mariadb_schema_is_target_database() {
+        for profile in [
+            "type: mariadb\nuser: dbt\nschema: analytics\n",
+            "type: mariadb\nuser: dbt\nschema: analytics\ndatabase: analytics\n",
+        ] {
+            let config: DbConfig = dbt_yaml::from_str(profile).unwrap();
+
+            assert_eq!(config.get_database(), None);
+            let target = TargetContext::try_from(config).expect("mariadb target context");
+            let TargetContext::MariaDB(target) = target else {
+                panic!("expected mariadb target context");
+            };
+            assert_eq!(target.__common__.database, "");
+            assert_eq!(target.__common__.schema, "analytics");
+        }
+    }
+
+    #[test]
+    fn test_mariadb_database_other_than_schema_is_rejected() {
+        let config: DbConfig = dbt_yaml::from_str(
+            "type: mariadb\n\
+             user: dbt\n\
+             schema: analytics\n\
+             database: other\n",
+        )
+        .unwrap();
+
+        let Err(err) = TargetContext::try_from(config) else {
+            panic!("expected database other than schema to be rejected");
+        };
+        assert!(err.contains("MariaDB has no database level"), "{err}");
     }
 
     #[test]

@@ -915,15 +915,16 @@ fn mariadb_get_relation(
     identifier: &str,
     token: CancellationToken,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
-    // MariaDB stores identifiers verbatim, so match exactly. Backslashes are
-    // string escapes unless NO_BACKSLASH_ESCAPES is set, so escape both.
-    let escape = |s: &str| s.replace('\\', "\\\\").replace('\'', "''");
-    let q_schema = escape(schema);
-    let q_ident = escape(identifier);
+    // MariaDB stores identifiers verbatim, so match exactly. Since 11.2 the
+    // session's TEMPORARY tables are listed too; they can shadow a real
+    // table of the same name, so keep only persistent relations.
+    let q_schema = dbt_adapter_sql::ident::escape_string_literal(schema, AdapterType::MariaDB);
+    let q_ident = dbt_adapter_sql::ident::escape_string_literal(identifier, AdapterType::MariaDB);
 
     let sql = format!(
         "select table_type as table_type from information_schema.tables \
-         where table_schema = '{q_schema}' and table_name = '{q_ident}'"
+         where table_schema = '{q_schema}' and table_name = '{q_ident}' \
+         and table_type in ('BASE TABLE', 'SYSTEM VERSIONED', 'VIEW')"
     );
     let batch = adapter
         .engine()
@@ -936,12 +937,7 @@ fn mariadb_get_relation(
     let relation_type = match arr.value(0) {
         "BASE TABLE" | "SYSTEM VERSIONED" => Some(RelationType::Table),
         "VIEW" => Some(RelationType::View),
-        other => {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Internal,
-                format!("Unexpected relation type: {other}"),
-            ));
-        }
+        other => return invalid_value!("Unsupported relation type {}", other),
     };
     let relation = do_create_relation(
         AdapterType::MariaDB,

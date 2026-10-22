@@ -59,16 +59,46 @@ fn snapshot_hash_arguments_joins_with_concat_ws() {
 }
 
 #[test]
-fn split_part_handles_negative_parts() {
+fn split_part_handles_negative_and_out_of_range_parts() {
     let harness = build_harness();
+    let part_count =
+        "((char_length(s) - char_length(replace(s, ',', ''))) div char_length(',') + 1)";
     assert_eq!(
         render(&harness, r#"{{ split_part("s", "','", 2) }}"#),
-        "substring_index(substring_index(s, ',', 2), ',', -1)"
+        format!(
+            "case when 2 > {part_count} then '' else \
+             substring_index(substring_index(s, ',', 2), ',', -1) end"
+        )
     );
     assert_eq!(
         render(&harness, r#"{{ split_part("s", "','", -2) }}"#),
-        "substring_index(substring_index(s, ',', -2), ',', 1)"
+        format!(
+            "case when 2 > {part_count} then '' else \
+             substring_index(substring_index(s, ',', -2), ',', 1) end"
+        )
     );
+}
+
+#[test]
+fn cast_maps_types_to_cast_targets() {
+    let harness = build_harness();
+    for (data_type, target) in [
+        ("text", "char"),
+        ("varchar(20)", "char"),
+        ("bigint", "signed"),
+        ("int unsigned", "unsigned"),
+        ("boolean", "signed"),
+        ("double precision", "double"),
+        ("timestamp", "datetime(6)"),
+        ("numeric(10,2)", "decimal(10,2)"),
+        ("date", "date"),
+    ] {
+        assert_eq!(
+            render(&harness, &format!(r#"{{{{ cast("x", "{data_type}") }}}}"#)),
+            format!("cast(x as {target})"),
+            "{data_type}"
+        );
+    }
 }
 
 #[test]

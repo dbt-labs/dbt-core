@@ -1,10 +1,18 @@
 use crate::{AdapterConfig, Auth, AuthError, AuthWarningPrinter, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
+use dbt_adbc::duration::parse_duration;
 use dbt_adbc::{Backend, database, mysql};
 use std::borrow::Cow;
+use std::time::Duration;
 
+// The ADBC MySQL driver rejects a URI without a host, so dbt picks the default.
 const DEFAULT_HOST: &str = "localhost";
+// The driver appends `:3306` to a URI host without a port:
+// https://github.com/adbc-drivers/mysql/blob/4f13448fc0e1612c1692a97eaa139801b518b5d9/go/db_factory.go#L177-L181
 const DEFAULT_PORT: &str = "3306";
+// An unset or zero `timeout` means no dial timeout in go-sql-driver:
+// https://github.com/go-sql-driver/mysql/blob/7ca26e801d130be8be84c1e265be71784f6f70c1/connector.go#L92
+const DEFAULT_CONNECT_TIMEOUT: &str = "0s";
 
 /// Value of the driver's `tls` DSN parameter for each profile `ssl_mode`.
 ///
@@ -25,6 +33,25 @@ fn tls_param(ssl_mode: &str) -> Result<&'static str, AuthError> {
     }
 }
 
+/// `connect_timeout` as a Go duration for the driver's `timeout` parameter:
+/// a plain number is seconds, and duration strings such as `1s` (set by
+/// `dbt debug`) or `1m30s` are parsed as Go does.
+fn go_duration(timeout: &str) -> Result<String, AuthError> {
+    let duration = if !timeout.is_empty() && timeout.chars().all(|c| c.is_ascii_digit()) {
+        timeout.parse().map(Duration::from_secs).ok()
+    } else {
+        parse_duration(timeout).ok()
+    };
+    match duration {
+        Some(duration) if duration.subsec_nanos() == 0 => Ok(format!("{}s", duration.as_secs())),
+        Some(duration) => Ok(format!("{}ns", duration.as_nanos())),
+        None => Err(AuthError::config(format!(
+            "Invalid MariaDB 'connect_timeout' '{timeout}': expected a number of \
+             seconds or a duration such as '10s'"
+        ))),
+    }
+}
+
 #[derive(Debug)]
 enum MariaDbAuthIR<'a> {
     UserPass {
@@ -33,7 +60,7 @@ enum MariaDbAuthIR<'a> {
         host: &'a str,
         port: Cow<'a, str>,
         tls: &'static str,
-        connect_timeout: Option<Cow<'a, str>>,
+        connect_timeout: Cow<'a, str>,
     },
 }
 
@@ -54,21 +81,12 @@ impl<'a> MariaDbAuthIR<'a> {
             } => {
                 // No default database in the URI: the target schema may not
                 // exist yet, and dbt always renders `schema`.`identifier`.
-                let mut uri = format!("mysql://{host}:{port}/");
-
-                uri.push_str("?tls=");
-                uri.push_str(tls);
-
-                // Plain numbers are seconds; duration strings such as `1s`
-                // (set by `dbt debug`) pass through unchanged.
-                if let Some(timeout) = &connect_timeout {
-                    let unit = if timeout.chars().all(|c| c.is_ascii_digit()) {
-                        "s"
-                    } else {
-                        ""
-                    };
-                    uri.push_str(&format!("&timeout={timeout}{unit}"));
-                }
+                // An IPv6 host needs brackets in a URI.
+                let uri = if host.contains(':') && !host.starts_with('[') {
+                    format!("mysql://[{host}]:{port}/?tls={tls}&timeout={connect_timeout}")
+                } else {
+                    format!("mysql://{host}:{port}/?tls={tls}&timeout={connect_timeout}")
+                };
 
                 builder.with_parse_uri(uri)?;
                 builder.with_username(user);
@@ -94,6 +112,11 @@ fn parse_auth<'a>(
 
     let tls = tls_param(config.get_str("ssl_mode").unwrap_or("preferred"))?;
 
+    let connect_timeout = match config.get_string("connect_timeout") {
+        Some(timeout) => Cow::Owned(go_duration(&timeout)?),
+        None => Cow::Borrowed(DEFAULT_CONNECT_TIMEOUT),
+    };
+
     Ok(MariaDbAuthIR::UserPass {
         user,
         password,
@@ -102,7 +125,7 @@ fn parse_auth<'a>(
             .get_string("port")
             .unwrap_or(Cow::Borrowed(DEFAULT_PORT)),
         tls,
-        connect_timeout: config.get_string("connect_timeout"),
+        connect_timeout,
     })
 }
 
@@ -160,7 +183,7 @@ mod tests {
         let builder = configure(base_config()).expect("configure");
 
         let uri = uri_value(&builder);
-        assert_eq!(uri, "mysql://localhost:3306/?tls=preferred");
+        assert_eq!(uri, "mysql://localhost:3306/?tls=preferred&timeout=0s");
         assert_eq!(
             other_option_value(&builder, mysql::VENDOR),
             Some(mysql::VENDOR_MARIADB)
@@ -189,6 +212,37 @@ mod tests {
         let builder = configure(config).expect("configure");
 
         assert_contains!(&uri_value(&builder), "&timeout=1s");
+    }
+
+    #[test]
+    fn test_compound_duration_timeout() {
+        let mut config = base_config();
+        config.insert("connect_timeout".into(), "1m30s".into());
+
+        let builder = configure(config).expect("configure");
+
+        assert_contains!(&uri_value(&builder), "&timeout=90s");
+    }
+
+    #[test]
+    fn test_invalid_timeout() {
+        for timeout in ["10.5", "1s&tls=false", "fast", "", "99999999999999999999"] {
+            let mut config = base_config();
+            config.insert("connect_timeout".into(), timeout.into());
+
+            let err = configure(config).expect_err("invalid connect_timeout");
+            assert_contains!(err.msg(), "Invalid MariaDB 'connect_timeout'");
+        }
+    }
+
+    #[test]
+    fn test_ipv6_host_is_bracketed() {
+        let mut config = base_config();
+        config.insert("host".into(), "::1".into());
+
+        let builder = configure(config).expect("configure");
+
+        assert_contains!(&uri_value(&builder), "mysql://[::1]:3306/?");
     }
 
     #[test]

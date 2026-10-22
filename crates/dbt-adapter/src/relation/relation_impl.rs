@@ -1703,6 +1703,50 @@ mod tests {
             );
         }
 
+        /// MariaDB rejects a derived table without an alias, and its datetime
+        /// literals take no offset.
+        #[test]
+        fn test_render_with_run_filter_mariadb() {
+            let at = |d: u32, h: u32| {
+                let naive = NaiveDate::from_ymd_opt(2024, 7, d)
+                    .unwrap()
+                    .and_hms_opt(h, 0, 0)
+                    .unwrap();
+                DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc)
+            };
+            let relation = Relation::new(
+                AdapterType::MariaDB,
+                String::new(),
+                "my_schema".to_string(),
+                "my_table".to_string(),
+            );
+            let run_filter = RunFilter {
+                empty: false,
+                sample: Some(Sample {
+                    start: Some(at(1, 0)),
+                    end: Some(at(8, 18)),
+                }),
+            };
+            let event_time = Some("created_at".to_string());
+            let result = relation.render_with_run_filter(&run_filter, &event_time);
+            assert!(
+                result.ends_with(
+                    " where created_at >= '2024-07-01 00:00:00' and created_at < '2024-07-08 18:00:00') as `my_table`"
+                ),
+                "{result}"
+            );
+
+            let empty = RunFilter {
+                empty: true,
+                sample: None,
+            };
+            let result = relation.render_with_run_filter(&empty, &None);
+            assert!(
+                result.ends_with(" where false limit 0) as `my_table`"),
+                "{result}"
+            );
+        }
+
         #[test]
         fn test_render_with_run_filter_start_only() {
             let start = NaiveDate::from_ymd_opt(2024, 7, 1)
