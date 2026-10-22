@@ -268,6 +268,21 @@ class ContextConfigGenerator(BaseContextConfigGenerator[C]):
 
 
 class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
+    @staticmethod
+    def _merge_grants(inherited: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, List[Any]]:
+        # Resolve +privilege at each layer so later replacements remove earlier additions.
+        # Copy raw grantee expressions without rendering or mutating their config sources.
+        grants: Dict[str, List[Any]] = {}
+        for source in (inherited, incoming):
+            for privilege, grantees in source.items():
+                key = privilege.lstrip("+")
+                values = deepcopy(grantees if isinstance(grantees, list) else [grantees])
+                if privilege.startswith("+") and key in grants:
+                    grants[key].extend(values)
+                else:
+                    grants[key] = values
+        return grants
+
     def get_config_source(self, project: Project) -> ConfigSource:
         return UnrenderedConfig(project)
 
@@ -300,24 +315,16 @@ class UnrenderedConfigGenerator(BaseContextConfigGenerator[Dict[str, Any]]):
         validate: bool = False,
     ) -> Dict[str, Any]:
         translated = self._active_project.credentials.translate_aliases(partial)
-        if get_flags().state_modified_compare_more_unrendered_values:
-            inherited_grants = result.get("grants", {})
-            incoming_grants = translated.get("grants")
-            # Raw values can be Jinja expressions, not dictionaries. Only merge grants
-            # whose privilege keys are visible without rendering; leave opaque values alone.
-            if isinstance(inherited_grants, dict) and isinstance(incoming_grants, dict):
-                grants: Dict[str, List[Any]] = {}
-                for source in (inherited_grants, incoming_grants):
-                    for privilege, grantees in source.items():
-                        key = privilege.lstrip("+")
-                        values = deepcopy(grantees if isinstance(grantees, list) else [grantees])
-                        if privilege.startswith("+") and key in grants:
-                            grants[key].extend(values)
-                        else:
-                            grants[key] = values
-                # Resolve +privilege at each layer so a later replacement also removes
-                # earlier additions from state comparison, just as it does from effective grants.
-                translated["grants"] = grants
+        inherited_grants = result.get("grants", {})
+        incoming_grants = translated.get("grants")
+        # Raw values can be Jinja expressions, not dictionaries. Only merge grants
+        # whose privilege keys are visible without rendering; leave opaque values alone.
+        if (
+            get_flags().state_modified_compare_more_unrendered_values
+            and isinstance(inherited_grants, dict)
+            and isinstance(incoming_grants, dict)
+        ):
+            translated["grants"] = self._merge_grants(inherited_grants, incoming_grants)
         result.update(translated)
         return result
 
