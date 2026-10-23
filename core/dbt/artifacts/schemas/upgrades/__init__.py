@@ -1,4 +1,4 @@
-from dbt.artifacts.schemas.upgrades.drop_unknown_resource_types import (
+from dbt.artifacts.schemas.upgrades.unknown_resource_types import (
     drop_unknown_resource_types,
 )
 from dbt.artifacts.schemas.upgrades.upgrade_manifest import upgrade_manifest_json

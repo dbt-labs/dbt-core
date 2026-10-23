@@ -25,7 +25,7 @@ def _manifest_dict_with_checks() -> dict:
 
 def test_manifest_with_unknown_resource_types_loads():
     with mock.patch(
-        "dbt.artifacts.schemas.upgrades.drop_unknown_resource_types.fire_event"
+        "dbt.artifacts.schemas.upgrades.unknown_resource_types.fire_event"
     ) as fire_event:
         writable = WritableManifest.upgrade_schema_version(_manifest_dict_with_checks())
 
@@ -39,7 +39,7 @@ def test_manifest_with_unknown_resource_types_loads():
 def test_manifest_without_unknown_resource_types_fires_no_note():
     data = make_manifest(nodes=[make_model("pkg", "a", "select 1 as id")])
     with mock.patch(
-        "dbt.artifacts.schemas.upgrades.drop_unknown_resource_types.fire_event"
+        "dbt.artifacts.schemas.upgrades.unknown_resource_types.fire_event"
     ) as fire_event:
         writable = WritableManifest.upgrade_schema_version(data.writable_manifest().to_dict())
 
