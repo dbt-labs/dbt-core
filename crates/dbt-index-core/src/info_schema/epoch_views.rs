@@ -489,7 +489,8 @@ fn project_snapshot(present: &[&'static str]) -> String {
     } else {
         "SELECT CAST(NULL AS VARCHAR) AS vars_json, CAST(NULL AS VARCHAR) AS env_vars_json, \
          CAST(NULL AS VARCHAR) AS git_sha, CAST(NULL AS VARCHAR) AS git_branch, \
-         CAST(NULL AS INTEGER) AS git_is_dirty, CAST(NULL AS VARCHAR) AS pkg_kinds_json"
+         CAST(NULL AS INTEGER) AS git_is_dirty, CAST(NULL AS VARCHAR) AS pkg_kinds_json, \
+         CAST(NULL AS VARCHAR) AS pkg_lock_json"
             .to_string()
     };
     format!(
@@ -506,6 +507,7 @@ fn project_snapshot(present: &[&'static str]) -> String {
          \x20   r.git_is_dirty <> 0 AS git_is_dirty,\n\
          \x20   NULLIF(r.pkg_kinds_json, '') AS pkg_kinds_json,\n\
          \x20   COALESCE(json_keys(NULLIF(r.pkg_kinds_json, '')), []) AS installed_packages,\n\
+         \x20   NULLIF(r.pkg_lock_json, '') AS pkg_lock_json,\n\
          \x20   g.ingested_at AS ingested_at\n\
          \x20 FROM (SELECT * FROM dbt_internal.epoch_parse_generation LIMIT 1) g\n\
          \x20 LEFT JOIN ({resolver}) r ON TRUE\n\
@@ -747,19 +749,24 @@ fn own_sql(
             );
             Some((sql, Some("epoch_parse_generation")))
         }
-        // One row per key of `pkg_kinds_json`. The other columns have no epoch
-        // source yet — `write_parse_project` writes `package_name` only — so
-        // they stay null, matching the Rust path.
+        // One row per key of `pkg_kinds_json`, with the rest looked up in that
+        // package's `pkg_lock_json` entry -- null where it has none, as in
+        // `package_rows`.
         "packages" => {
+            let lock = |field: &str| {
+                format!(
+                    "json_extract_string({BASE}.pkg_lock_json, '$.\"' || {ELEM} || '\".{field}')"
+                )
+            };
             let cols = cast_cols(
                 spec,
                 &[
                     ("package_name", ELEM.to_string()),
-                    ("package_source", "NULL".to_string()),
-                    ("version", "NULL".to_string()),
-                    ("git_url", "NULL".to_string()),
-                    ("git_revision", "NULL".to_string()),
-                    ("local_path", "NULL".to_string()),
+                    ("package_source", lock("package_source")),
+                    ("version", lock("version")),
+                    ("git_url", lock("git_url")),
+                    ("git_revision", lock("git_revision")),
+                    ("local_path", lock("local_path")),
                     ("ingested_at", format!("{BASE}.ingested_at")),
                 ],
             )?;

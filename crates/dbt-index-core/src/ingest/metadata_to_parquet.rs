@@ -795,6 +795,7 @@ pub struct CompileFields {
     pub grain: Vec<String>,
     pub grain_declared: Vec<String>,
     pub grain_tested: Vec<String>,
+    pub grain_inferred: Vec<String>,
     pub classifiers: Vec<String>,
     pub table_role: Option<String>,
 }
@@ -872,6 +873,7 @@ pub fn load_compile_nodes_map(
         "grain",
         "grain_declared",
         "grain_tested",
+        "grain_inferred",
         "classifiers",
         "table_role",
     ];
@@ -888,6 +890,7 @@ pub fn load_compile_nodes_map(
             let grain_col = str_col(batch, "grain");
             let gdecl_col = str_col(batch, "grain_declared");
             let gtest_col = str_col(batch, "grain_tested");
+            let ginf_col = str_col(batch, "grain_inferred");
             let classifiers_col = str_col(batch, "classifiers");
             let trole_col = str_col(batch, "table_role");
             for i in 0..batch.num_rows() {
@@ -903,6 +906,9 @@ pub fn load_compile_nodes_map(
                 let grain_tested = get_str(gtest_col, i)
                     .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
                     .unwrap_or_default();
+                let grain_inferred = get_str(ginf_col, i)
+                    .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+                    .unwrap_or_default();
                 let classifiers = get_str(classifiers_col, i)
                     .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
                     .unwrap_or_default();
@@ -915,6 +921,7 @@ pub fn load_compile_nodes_map(
                         grain,
                         grain_declared,
                         grain_tested,
+                        grain_inferred,
                         classifiers,
                         table_role: get_str(trole_col, i),
                     },
@@ -988,6 +995,7 @@ pub struct OwnedNodeRow {
     pub grain: Vec<String>,
     pub grain_declared: Vec<String>,
     pub grain_tested: Vec<String>,
+    pub grain_inferred: Vec<String>,
     pub classifiers: Vec<String>,
     pub ingested_at: String,
 }
@@ -1063,7 +1071,7 @@ impl OwnedNodeRow {
             grain: self.grain.clone(),
             grain_declared: self.grain_declared.clone(),
             grain_tested: self.grain_tested.clone(),
-            grain_inferred: vec![],
+            grain_inferred: self.grain_inferred.clone(),
             classifiers: self.classifiers.clone(),
             table_role: self.table_role.as_deref(),
             ingested_at: &self.ingested_at,
@@ -1275,6 +1283,7 @@ fn write_parse_nodes(
                     "grain",
                     "grain_declared",
                     "grain_tested",
+                    "grain_inferred",
                     "table_role",
                 ],
                 valid_ids: valid,
@@ -1604,6 +1613,7 @@ pub fn extract_parse_nodes_batch(
                 grain,
                 grain_declared,
                 grain_tested,
+                grain_inferred,
                 classifiers,
             ) = if let Some(c) = compile_map.get(&uid) {
                 (
@@ -1614,10 +1624,21 @@ pub fn extract_parse_nodes_batch(
                     c.grain.clone(),
                     c.grain_declared.clone(),
                     c.grain_tested.clone(),
+                    c.grain_inferred.clone(),
                     c.classifiers.clone(),
                 )
             } else {
-                (None, None, None, None, vec![], vec![], vec![], vec![])
+                (
+                    None,
+                    None,
+                    None,
+                    None,
+                    vec![],
+                    vec![],
+                    vec![],
+                    vec![],
+                    vec![],
+                )
             };
             node_rows.push(OwnedNodeRow {
                 unique_id: uid.clone(),
@@ -1684,6 +1705,7 @@ pub fn extract_parse_nodes_batch(
                 grain,
                 grain_declared,
                 grain_tested,
+                grain_inferred,
                 classifiers,
                 ingested_at: ts.clone(),
             });
@@ -2296,6 +2318,40 @@ fn project_var_rows(
         .unwrap_or_default()
 }
 
+/// `dbt.packages` rows: one per installed package.
+///
+/// `pkg_kinds_json` is `{package: path-kinds}` and decides which packages exist;
+/// `pkg_lock_json` is `{package: {column: value}}` from `package-lock.yml` and
+/// fills the rest. The root project and the packages dbt installs itself have no
+/// lock entry, so their other columns stay null.
+fn package_rows(
+    pkg_kinds_json: Option<&str>,
+    pkg_lock_json: Option<&str>,
+    now: &str,
+) -> Vec<Value> {
+    let parse = |s: Option<&str>| {
+        s.and_then(|s| serde_json::from_str::<serde_json::Map<String, Value>>(s).ok())
+            .unwrap_or_default()
+    };
+    let lock = parse(pkg_lock_json);
+    parse(pkg_kinds_json)
+        .into_iter()
+        .map(|(package_name, _)| {
+            let details = lock.get(&package_name);
+            let field = |name: &str| details.and_then(|d| d.get(name)).cloned();
+            json!({
+                "package_name": package_name,
+                "package_source": field("package_source"),
+                "version": field("version"),
+                "git_url": field("git_url"),
+                "git_revision": field("git_revision"),
+                "local_path": field("local_path"),
+                "ingested_at": now,
+            })
+        })
+        .collect()
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn write_parse_project(
     writer: &mut IndexWriter,
@@ -2392,6 +2448,7 @@ fn write_parse_project(
     let mut git_branch: Option<String> = None;
     let mut git_is_dirty: Option<bool> = None;
     let mut pkg_kinds_json: Option<String> = None;
+    let mut pkg_lock_json: Option<String> = None;
 
     let rs_path = metadata_dir.join(PARSE_RESOLVER_STATE);
     if rs_path.exists() {
@@ -2402,6 +2459,7 @@ fn write_parse_project(
             read_str_opt!(batch, "vars_json", vars_json);
             read_str_opt!(batch, "env_vars_json", env_vars_json);
             read_str_opt!(batch, "pkg_kinds_json", pkg_kinds_json);
+            read_str_opt!(batch, "pkg_lock_json", pkg_lock_json);
             read_str_opt!(batch, "git_sha", git_sha);
             read_str_opt!(batch, "git_branch", git_branch);
             if git_is_dirty.is_none() {
@@ -2462,22 +2520,7 @@ fn write_parse_project(
         .unwrap_or_default();
     writer.write_dbt_table("project_env_vars", env_rows)?;
 
-    // One row per installed package. `pkg_kinds_json` is `{package: path-kinds}`;
-    // the other package columns have no epoch source yet.
-    let pkg_rows: Vec<Value> = pkg_kinds_json
-        .as_deref()
-        .and_then(|s| serde_json::from_str::<serde_json::Map<String, Value>>(s).ok())
-        .map(|obj| {
-            obj.into_iter()
-                .map(|(package_name, _)| {
-                    json!({
-                        "package_name": package_name,
-                        "ingested_at": now,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let pkg_rows = package_rows(pkg_kinds_json.as_deref(), pkg_lock_json.as_deref(), now);
     writer.write_dbt_table("packages", pkg_rows)?;
 
     Ok(1)
@@ -3669,13 +3712,38 @@ mod tests {
 
     use super::{
         CATALOG_COLUMNS_SUBDIR, COMPILE_COLUMNS_SUBDIR, IngestState, extract_json_field_raw,
-        project_var_rows, read_parquet_batches, trim_model_payload, write_catalog_columns,
-        write_compile_columns,
+        package_rows, project_var_rows, read_parquet_batches, trim_model_payload,
+        write_catalog_columns, write_compile_columns,
     };
     use crate::parquet::IndexWriter;
 
     /// `(project_name, var_name, var_value)` of each row, sorted, for comparing
     /// against an expected table.
+    /// Lock details join onto the installed packages by name. A package with no
+    /// lock entry -- the root project -- keeps null details, and a lock entry for a
+    /// package that is not installed adds no row.
+    #[test]
+    fn packages_take_their_details_from_the_lock() {
+        let kinds = r#"{"proj":["ModelPaths"],"dbt_utils":["MacroPaths"]}"#;
+        let lock = r#"{"dbt_utils":{"package_source":"hub","version":"1.3.0"},"gone":{"package_source":"hub"}}"#;
+
+        let mut rows = package_rows(Some(kinds), Some(lock), "2026-10-19T00:00:00Z");
+        rows.sort_by_key(|r| r["package_name"].as_str().unwrap().to_string());
+
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["package_name"], "dbt_utils");
+        assert_eq!(rows[0]["package_source"], "hub");
+        assert_eq!(rows[0]["version"], "1.3.0");
+        assert!(rows[0]["git_url"].is_null());
+        assert_eq!(rows[1]["package_name"], "proj");
+        assert!(rows[1]["package_source"].is_null());
+        assert!(
+            package_rows(Some(kinds), None, "2026-10-19T00:00:00Z")
+                .iter()
+                .all(|r| r["version"].is_null())
+        );
+    }
+
     fn var_table(rows: &[serde_json::Value]) -> Vec<(String, String, String)> {
         let mut got: Vec<_> = rows
             .iter()
