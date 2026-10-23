@@ -3,6 +3,13 @@ from unittest import mock
 import pytest
 
 from dbt.clients import git
+from dbt.exceptions import (
+    CommandResultError,
+    DbtRuntimeError,
+    GitCheckoutError,
+    GitCloningError,
+    UnknownGitCloningProblemError,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -54,7 +61,6 @@ class TestSplitCredentials:
     def test_helper_list_is_reset_before_ours(self):
         _, env = git._split_credentials("https://tok@github.com/dbt-labs/repo.git")
 
-        # an empty value resets the helpers configured elsewhere for this host; ours comes after
         assert env["GIT_CONFIG_VALUE_0"] == ""
         assert env["GIT_CONFIG_VALUE_1"] == git._CREDENTIAL_HELPER
 
@@ -144,3 +150,46 @@ class TestCredentialsDoNotReachCommandLine:
         sparse = [c for c in run_cmd.call_args_list if c.args[1][:2] == ["git", "sparse-checkout"]]
         assert len(sparse) == 1
         assert sparse[0].kwargs["env"]["DBT_GIT_CREDENTIAL_USERNAME"] == "ghp_abc123"
+
+
+class TestCredentialsNotInErrors:
+    REPO = "https://ghp_abc123@github.com/dbt-labs/repo.git"
+
+    @staticmethod
+    def _failure():
+        return CommandResultError("/cwd", ["git"], 128, b"", b"fatal: nope")
+
+    @mock.patch("dbt.clients.git.run_cmd")
+    def test_clone_error(self, run_cmd):
+        run_cmd.side_effect = self._failure()
+
+        with pytest.raises(GitCloningError) as exc:
+            git.clone(self.REPO, "/cwd")
+
+        assert "ghp_abc123" not in str(exc.value)
+        assert "https://github.com/dbt-labs/repo.git" in str(exc.value)
+
+    @mock.patch("dbt.clients.git.run_cmd")
+    def test_checkout_error(self, run_cmd):
+        run_cmd.side_effect = self._failure()
+
+        with pytest.raises(GitCheckoutError) as exc:
+            git.checkout("/cwd", self.REPO, "main")
+
+        assert "ghp_abc123" not in str(exc.value)
+
+    @mock.patch("dbt.clients.git.clone")
+    def test_unknown_clone_problem(self, clone):
+        clone.side_effect = self._failure()
+
+        with pytest.raises(UnknownGitCloningProblemError) as exc:
+            git.clone_and_checkout(self.REPO, "/cwd")
+
+        assert "ghp_abc123" not in str(exc.value)
+
+    @mock.patch("dbt.clients.git.clone", return_value=(b"", b"unexpected"))
+    def test_missing_cloning_into(self, _clone):
+        with pytest.raises(DbtRuntimeError) as exc:
+            git.clone_and_checkout(self.REPO, "/cwd")
+
+        assert "ghp_abc123" not in str(exc.value)

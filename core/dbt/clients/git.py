@@ -31,8 +31,7 @@ def _is_commit(revision: str) -> bool:
     return bool(re.match(r"\b[0-9a-f]{40}\b", revision))
 
 
-# Answers git's credential request ("get") from the environment, so the secret is never written to
-# argv, logged commands or .git/config. printf's \n is deliberate: it is interpreted by printf.
+# Credential helper that answers git's "get" from env vars, keeping the secret off argv/.git/config.
 _CREDENTIAL_HELPER = (
     "!f() { test \"$1\" = get && printf 'username=%s\\npassword=%s\\n' "
     '"$DBT_GIT_CREDENTIAL_USERNAME" "$DBT_GIT_CREDENTIAL_PASSWORD"; }; f'
@@ -40,32 +39,22 @@ _CREDENTIAL_HELPER = (
 
 
 def _split_credentials(repo: str) -> Tuple[str, Dict[str, str]]:
-    """Move credentials embedded in an http(s) repo URL into a git credential helper.
+    """Return `repo` without http(s) credentials, plus env vars that make git get them from a
+    credential helper scoped to the repo's origin.
 
-    Returns the URL without credentials, and env vars that make git get the credentials from a
-    helper (scoped to the repo's origin) instead.
-
-    libcurl 7.81.0-1ubuntu1.30 (CVE-2026-94266) strips credentials from CURLINFO_EFFECTIVE_URL.
-    git uses it to follow redirects, so URL-embedded credentials are lost after a redirect and
-    git fails with "could not read Username". A credential helper does not depend on that.
-
-    A helper rather than an `Authorization` header because git only asks a helper after the server
-    challenges with a 401, exactly like URL credentials. A header is sent up front, and GitHub
-    rejects an invalid one even on a public repo, which URL credentials never hit.
-
-    Settings go through GIT_CONFIG_* env vars (appended to any already set) so the secret stays
-    out of argv, logged commands and the clone's .git/config. URLs without credentials,
-    non-http(s) URLs (e.g. ssh) and credentials that cannot be sent safely are returned unchanged.
+    libcurl 7.81.0-1ubuntu1.30 drops URL credentials when git follows a redirect. A helper
+    (unlike an Authorization header) is only asked after a 401, like URL credentials.
+    Other URLs are returned unchanged.
     """
     parts = urlsplit(repo)
     if parts.scheme not in ("http", "https") or parts.username is None:
         return repo, {}
 
-    # like git, treat "token@host" as username=token with an empty password
+    # like git, "token@host" is a username with an empty password
     username = unquote(parts.username)
     password = unquote(parts.password or "")
     if any(char in value for value in (username, password) for char in "\r\n\0"):
-        # these would corrupt the helper's line-based protocol
+        # would corrupt the helper protocol
         return repo, {}
 
     host = parts.netloc.rpartition("@")[2]
@@ -77,7 +66,7 @@ def _split_credentials(repo: str) -> Tuple[str, Dict[str, str]]:
         index = 0
     env = {
         "GIT_CONFIG_COUNT": str(index + 2),
-        # an empty value resets the helper list, so only our credentials are offered for this host
+        # empty value resets other helpers for this host
         f"GIT_CONFIG_KEY_{index}": helper_key,
         f"GIT_CONFIG_VALUE_{index}": "",
         f"GIT_CONFIG_KEY_{index + 1}": helper_key,
@@ -117,16 +106,15 @@ def clone(repo, cwd, dirname=None, remove_git_dir=False, revision=None, subdirec
     try:
         result = run_cmd(cwd, clone_cmd, env=git_env)
     except CommandResultError as exc:
-        raise GitCloningError(repo, revision, exc)
+        raise GitCloningError(clone_url, revision, exc)
 
     if subdirectory:
         cwd_subdir = os.path.join(cwd, dirname or "")
         clone_cmd_subdir = ["git", "sparse-checkout", "set", subdirectory]
         try:
-            # a --filter=blob:none clone fetches blobs from origin here, so this needs auth too
-            run_cmd(cwd_subdir, clone_cmd_subdir, env=auth_env or None)
+            run_cmd(cwd_subdir, clone_cmd_subdir, env=auth_env)  # fetches blobs from origin
         except CommandResultError as exc:
-            raise GitCloningError(repo, revision, exc)
+            raise GitCloningError(clone_url, revision, exc)
 
     if remove_git_dir:
         rmdir(os.path.join(dirname, ".git"))
@@ -144,15 +132,13 @@ def _checkout(cwd, repo, revision):
     fire_event(GitProgressCheckoutRevision(revision=revision))
 
     fetch_cmd = ["git", "fetch", "origin", "--depth", "1"]
-    # origin's URL has no credentials (see _split_credentials), so fetching needs the helper too
-    _, auth_env = _split_credentials(repo)
-    fetch_env = auth_env or None
+    _, auth_env = _split_credentials(repo)  # origin has no credentials, so fetch needs them
 
     if _is_commit(revision):
-        run_cmd(cwd, fetch_cmd + [revision], env=fetch_env)
+        run_cmd(cwd, fetch_cmd + [revision], env=auth_env)
     else:
         run_cmd(cwd, ["git", "remote", "set-branches", "origin", revision])
-        run_cmd(cwd, fetch_cmd + ["--tags", revision], env=fetch_env)
+        run_cmd(cwd, fetch_cmd + ["--tags", revision], env=auth_env)
 
     if _is_commit(revision):
         spec = revision
@@ -172,7 +158,7 @@ def checkout(cwd, repo, revision=None):
     try:
         return _checkout(cwd, repo, revision)
     except CommandResultError as exc:
-        raise GitCheckoutError(repo=repo, revision=revision, error=exc)
+        raise GitCheckoutError(repo=_split_credentials(repo)[0], revision=revision, error=exc)
 
 
 def get_current_sha(cwd):
@@ -201,7 +187,7 @@ def clone_and_checkout(
         err = exc.stderr
         exists = re.match("fatal: destination path '(.+)' already exists", err)
         if not exists:
-            raise UnknownGitCloningProblemError(repo)
+            raise UnknownGitCloningProblemError(_split_credentials(repo)[0])
 
     directory = None
     start_sha = None
@@ -211,7 +197,9 @@ def clone_and_checkout(
     else:
         matches = re.match("Cloning into '(.+)'", err.decode("utf-8"))
         if matches is None:
-            raise DbtRuntimeError(f'Error cloning {repo} - never saw "Cloning into ..." from git')
+            raise DbtRuntimeError(
+                f'Error cloning {_split_credentials(repo)[0]} - never saw "Cloning into ..." from git'
+            )
         directory = matches.group(1)
         fire_event(GitProgressPullingNewDependency(dir=directory))
     full_path = os.path.join(cwd, directory)
