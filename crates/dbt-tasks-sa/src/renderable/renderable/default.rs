@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use dbt_common::collections::SccHashMap;
@@ -8,11 +8,12 @@ use dbt_common::constants::RENDERING;
 use dbt_common::serde_utils::convert_yml_to_scc_map;
 use dbt_common::stats::NodeStatus;
 use dbt_common::tracing::emit::emit_debug_event;
-use dbt_common::{FsResult, MacroSpansOnly, stdfs};
+use dbt_common::{ErrorCode, FsResult, MacroSpansOnly, fs_err, stdfs};
 use dbt_jinja_utils::phases::compile::DependencyValidationConfig;
+use dbt_jinja_utils::render_trace::RenderTrace;
 use dbt_jinja_utils::utils::{
     add_task_context, inject_and_persist_ephemeral_models, macro_spans_to_macro_span_vec,
-    render_sql,
+    render_sql, render_sql_with_trace,
 };
 use dbt_scheduler::instructions::SqlInstruction;
 use dbt_schemas::schemas::common::DbtMaterialization;
@@ -22,6 +23,7 @@ use dbt_tasks_core::context::TaskRunnerCtx;
 use dbt_tasks_core::task::run_blocking_task_operation_with_wait_parents;
 use dbt_telemetry::{CompiledCode, NodeType};
 use minijinja::Value as MinijinjaValue;
+use serde::Serialize;
 
 use dbt_tasks_core::task::TaskResult;
 
@@ -56,10 +58,14 @@ fn render_default(
 ) -> FsResult<(SqlInstruction, Arc<SccHashMap<String, MinijinjaValue>>)> {
     report_rendering_progress(node, ctx);
 
-    if let Some((rendered_sql_maybe_with_cte, macro_spans, reclassify_spans)) = ctx
-        .inner
-        .compiled_sql_cache
-        .try_get_compiled_sql(&ctx.inner.arg.io, node.common())
+    let write_render_trace = dbt_flags::WRITE_RENDER_TRACE.enabled();
+    // A compiled-SQL cache entry does not currently contain render events.
+    // Trace requests must observe a fresh execution rather than reuse SQL alone.
+    if !write_render_trace
+        && let Some((rendered_sql_maybe_with_cte, macro_spans, reclassify_spans)) = ctx
+            .inner
+            .compiled_sql_cache
+            .try_get_compiled_sql(&ctx.inner.arg.io, node.common())
     {
         let config_map = Arc::new(convert_yml_to_scc_map(node.serialized_config()));
         emit_compiled_code(node, ctx, &rendered_sql_maybe_with_cte);
@@ -124,14 +130,27 @@ fn render_default(
         )
         .into_owned();
 
-    let rendered_sql = render_sql(
-        &raw_sql,
-        &ctx.env,
-        &compile_context,
-        ctx.rendering_listener_factory.as_ref(),
-        &render_file_path,
-    )
-    .map_err(|e| e.with_location(render_file_path.clone()))?;
+    let rendered_sql = if write_render_trace {
+        let trace = render_sql_with_trace(
+            &raw_sql,
+            &ctx.env,
+            &compile_context,
+            ctx.rendering_listener_factory.as_ref(),
+            &render_file_path,
+        )
+        .map_err(|e| e.with_location(render_file_path.clone()))?;
+        write_model_render_trace(node, ctx, &render_file_path, &absolute_path, &trace)?;
+        trace.rendered
+    } else {
+        render_sql(
+            &raw_sql,
+            &ctx.env,
+            &compile_context,
+            ctx.rendering_listener_factory.as_ref(),
+            &render_file_path,
+        )
+        .map_err(|e| e.with_location(render_file_path.clone()))?
+    };
 
     let mut macro_spans = ctx
         .rendering_listener_factory
@@ -169,6 +188,55 @@ fn render_default(
         },
         config_map,
     ))
+}
+
+#[derive(Serialize)]
+struct ModelRenderTrace<'a> {
+    protocol_version: u32,
+    dbt_version: &'static str,
+    invocation_id: String,
+    unique_id: String,
+    filename: &'a Path,
+    source_path: &'a Path,
+    render_stage: &'static str,
+    #[serde(flatten)]
+    trace: &'a RenderTrace,
+}
+
+fn write_model_render_trace(
+    node: &Arc<dyn InternalDbtNodeAttributes>,
+    ctx: &TaskRunnerCtx,
+    filename: &Path,
+    source_path: &Path,
+    trace: &RenderTrace,
+) -> FsResult<()> {
+    let io = &ctx.inner.arg.io;
+    let path = ctx
+        .inner
+        .compiled_sql_cache
+        .get_compiled_sql_path(io, node.common())
+        .with_extension("render_trace.json");
+    let artifact = ModelRenderTrace {
+        protocol_version: 1,
+        dbt_version: env!("CARGO_PKG_VERSION"),
+        invocation_id: io.invocation_id.to_string(),
+        unique_id: node.unique_id(),
+        filename,
+        source_path,
+        render_stage: "jinja_before_ephemeral_injection",
+        trace,
+    };
+    let bytes = serde_json::to_vec_pretty(&artifact).map_err(|error| {
+        fs_err!(
+            ErrorCode::SerializationError,
+            "Failed to serialize render trace for '{}': {error}",
+            node.unique_id()
+        )
+    })?;
+    if let Some(parent) = path.parent() {
+        stdfs::create_dir_all(parent)?;
+    }
+    stdfs::write(path, bytes)
 }
 
 fn report_rendering_progress(node: &Arc<dyn InternalDbtNodeAttributes>, ctx: &TaskRunnerCtx) {
