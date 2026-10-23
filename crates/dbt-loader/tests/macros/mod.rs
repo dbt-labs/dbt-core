@@ -1,7 +1,6 @@
 mod aggregated_tests;
 mod bigquery;
 mod clickhouse;
-mod clickhouse_persist_docs;
 mod contract_wrappers;
 mod databricks_catalog;
 mod databricks_metadata;
