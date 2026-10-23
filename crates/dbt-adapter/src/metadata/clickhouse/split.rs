@@ -4,15 +4,16 @@
 //! backslash escapes (`\'`, `\\`, `\xNN`) *and* the server accepts
 //! PostgreSQL-style heredocs (`$tag$ … $tag$`, which `persist_docs` relies
 //! on). This scanner knows exactly the constructs that can hide a `;`:
-//! quoted literals and identifiers, comments and heredocs (rules per
-//! ClickHouse's `Lexer.cpp`, checked against a 26.3 server).
+//! quoted literals and identifiers, heredocs, and `--`, `//`, `# `, `#!` and
+//! nested `/* */` comments (rules per ClickHouse's `Lexer.cpp`, checked
+//! against a 26.3 server).
 
 /// Split `sql` on top-level `;` (the `StmtSplitter::split` contract): the
 /// input's surrounding whitespace and the delimiters are removed, everything
 /// else is kept verbatim (statements carry their own leading whitespace and
 /// comments); a trailing whitespace-only segment is dropped.
 pub(crate) fn split_statements(sql: &str) -> Vec<&str> {
-    let sql = sql.trim();
+    let sql = trim_keeping_hash_comment_space(sql);
     let mut statements = Vec::new();
     let mut start = 0;
     let mut scanner = Scanner::new(sql);
@@ -29,13 +30,28 @@ pub(crate) fn split_statements(sql: &str) -> Vec<&str> {
     statements
 }
 
-/// Whether `sql` holds no statement at all: only whitespace and comments.
+/// `str::trim`, except that a trailing `# ` comment keeps its space: ClickHouse
+/// only treats `#` as a comment when a space (or `!`) follows it.
+fn trim_keeping_hash_comment_space(sql: &str) -> &str {
+    let trimmed = sql.trim();
+    let start = sql.len() - sql.trim_start().len();
+    let end = start + trimmed.len();
+    if trimmed.ends_with('#') && sql[end..].starts_with(' ') {
+        &sql[start..=end]
+    } else {
+        trimmed
+    }
+}
+
+/// Whether `sql` holds no statement at all: only whitespace and comments. A
+/// lone literal or heredoc is not empty; it goes to the server, which rejects it.
 pub(crate) fn is_empty_or_comment_only(sql: &str) -> bool {
     Scanner::new(sql).next_significant().is_none()
 }
 
-/// Walks `sql` and yields the bytes that sit outside comments, string literals,
-/// quoted identifiers and heredocs (whitespace excluded).
+/// Walks `sql` and yields the bytes that sit outside comments and whitespace.
+/// A quoted literal, identifier or heredoc is yielded as its opening byte with
+/// the body skipped: it counts as content but cannot hide a `;`.
 struct Scanner<'a> {
     sql: &'a str,
     bytes: &'a [u8],
@@ -52,25 +68,23 @@ impl<'a> Scanner<'a> {
     }
 
     fn next_significant(&mut self) -> Option<(usize, u8)> {
-        while self.pos < self.bytes.len() {
+        while let Some(&byte) = self.bytes.get(self.pos) {
             let pos = self.pos;
-            let byte = self.bytes[pos];
+            let next = self.bytes.get(pos + 1).copied();
             match byte {
-                b'\'' | b'"' | b'`' => self.skip_quoted(byte),
-                b'-' if self.bytes.get(pos + 1) == Some(&b'-') => self.skip_line_comment(),
-                // MySQL-style `# ` and shebang `#!` comments; a bare `#word` is not a comment.
-                b'#' if matches!(self.bytes.get(pos + 1), Some(b' ' | b'!')) => {
-                    self.skip_line_comment()
+                b'\'' | b'"' | b'`' => {
+                    self.skip_quoted(byte);
+                    return Some((pos, byte));
                 }
-                b'/' if self.bytes.get(pos + 1) == Some(&b'*') => self.skip_block_comment(),
                 b'$' => {
-                    if let Some(end) = self.heredoc_end(pos) {
-                        self.pos = end;
-                    } else {
-                        self.pos += 1;
-                        return Some((pos, byte));
-                    }
+                    self.pos = self.heredoc_end(pos).unwrap_or(pos + 1);
+                    return Some((pos, byte));
                 }
+                b'-' if next == Some(b'-') => self.skip_line_comment(),
+                b'/' if next == Some(b'/') => self.skip_line_comment(),
+                // MySQL-style `# ` and shebang `#!` comments; a bare `#word` is not a comment.
+                b'#' if matches!(next, Some(b' ' | b'!')) => self.skip_line_comment(),
+                b'/' if next == Some(b'*') => self.skip_block_comment(),
                 _ if byte.is_ascii_whitespace() => self.pos += 1,
                 _ => {
                     self.pos += 1;
@@ -86,18 +100,13 @@ impl<'a> Scanner<'a> {
     /// which keeps a broken statement whole instead of splitting it.
     fn skip_quoted(&mut self, quote: u8) {
         self.pos += 1;
-        while self.pos < self.bytes.len() {
-            match self.bytes[self.pos] {
-                b'\\' => self.pos += 2,
-                b if b == quote => {
-                    self.pos += 1;
-                    if self.bytes.get(self.pos) == Some(&quote) {
-                        self.pos += 1;
-                    } else {
-                        return;
-                    }
-                }
-                _ => self.pos += 1,
+        while let Some(&byte) = self.bytes.get(self.pos) {
+            self.pos += 1;
+            match byte {
+                b'\\' => self.pos += 1,
+                b if b == quote && self.bytes.get(self.pos) == Some(&quote) => self.pos += 1,
+                b if b == quote => return,
+                _ => {}
             }
         }
         self.pos = self.bytes.len();
@@ -109,14 +118,25 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    /// Block comments nest (`/* a /* b */ c */`), as in ClickHouse.
     fn skip_block_comment(&mut self) {
         self.pos += 2;
+        let mut depth = 1;
         while self.pos < self.bytes.len() {
-            if self.bytes[self.pos] == b'*' && self.bytes.get(self.pos + 1) == Some(&b'/') {
-                self.pos += 2;
-                return;
+            match (self.bytes[self.pos], self.bytes.get(self.pos + 1)) {
+                (b'/', Some(b'*')) => {
+                    depth += 1;
+                    self.pos += 2;
+                }
+                (b'*', Some(b'/')) => {
+                    depth -= 1;
+                    self.pos += 2;
+                    if depth == 0 {
+                        return;
+                    }
+                }
+                _ => self.pos += 1,
             }
-            self.pos += 1;
         }
     }
 
@@ -196,6 +216,18 @@ mod tests {
             split_statements("select '#'; select 1 #notacomment; select 2"),
             vec!["select '#'", " select 1 #notacomment", " select 2"]
         );
+        assert_eq!(
+            split_statements("select 1 // slash ; comment\n; select 2"),
+            vec!["select 1 // slash ; comment\n", " select 2"]
+        );
+        assert_eq!(
+            split_statements("select 1 /* outer /* inner */ ; select 99; */; select 2"),
+            vec!["select 1 /* outer /* inner */ ; select 99; */", " select 2"]
+        );
+        // a trailing `# ` comment keeps the space the trim would take
+        assert_eq!(split_statements("select 1; # \n"), vec!["select 1", " # "]);
+        assert_eq!(split_statements("select 2 # \n"), vec!["select 2 # "]);
+        assert_eq!(split_statements("select 3 #\n"), vec!["select 3 #"]);
     }
 
     #[test]
@@ -252,9 +284,12 @@ mod tests {
             "-- line comment",
             "# hash comment",
             "#!/usr/bin/clickhouse-local",
+            " # ",
+            "// slash comment",
             "  /* comment */  ",
             "/* comment */ -- line comment",
             "/* multi\nline\ncomment */",
+            "/* outer /* inner */ ; */",
         ] {
             assert!(is_empty_or_comment_only(sql), "{sql:?}");
         }
@@ -265,7 +300,15 @@ mod tests {
             "/* comment */\nselect 1\n-- trailing",
             r#"select 'don\'t'"#,
             "#notacomment",
+            "#\nselect 1",
+            "#",
             ";",
+            "'oops'",
+            "'unterminated",
+            "\"id\"",
+            "`id`",
+            "$$heredoc$$",
+            "$tag$a;b$tag$",
         ] {
             assert!(!is_empty_or_comment_only(sql), "{sql:?}");
         }
