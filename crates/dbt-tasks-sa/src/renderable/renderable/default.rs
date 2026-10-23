@@ -333,3 +333,68 @@ fn render_python_model(
         config_map,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_jinja_utils::jinja_environment::JinjaEnv;
+    use dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory;
+    use minijinja::Environment;
+
+    #[test]
+    fn render_trace_example_matches_fixture() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/render_trace/example.sql"
+        ));
+        let mut environment = Environment::new();
+        environment.set_keep_trailing_newline(true);
+        let filename = Path::new("models/trace.sql");
+        let trace = render_sql_with_trace(
+            source,
+            &JinjaEnv::new(environment),
+            &BTreeMap::new(),
+            &DefaultRenderingEventListenerFactory::default(),
+            filename,
+        )
+        .unwrap();
+        // Fixed producer metadata keeps the example independent of releases,
+        // machines and invocation IDs. The artifact uses the production type.
+        let artifact = ModelRenderTrace {
+            protocol_version: 1,
+            dbt_version: "0.0.0-example",
+            invocation_id: "00000000-0000-4000-8000-000000000001".to_owned(),
+            unique_id: "model.example.trace".to_owned(),
+            filename,
+            source_path: filename,
+            render_stage: "jinja_before_ephemeral_injection",
+            trace: &trace,
+        };
+        let expected: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/render_trace/example.render_trace.json"
+        )))
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(&artifact).unwrap(),
+            expected,
+            "Rendered trace fixture:\n{}",
+            serde_json::to_string_pretty(&artifact).unwrap()
+        );
+        assert!(trace.rendered.contains("select 2 as n union all"));
+        assert!(trace.rendered.contains("select 4 as n"));
+        assert!(!trace.rendered.contains("skipped"));
+        for kind in [
+            "literal",
+            "templated",
+            "comment",
+            "loop_iteration",
+            "loop_skipped",
+        ] {
+            assert!(
+                trace.events.iter().any(|event| event.kind == kind),
+                "missing {kind}"
+            );
+        }
+    }
+}

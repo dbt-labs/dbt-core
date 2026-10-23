@@ -60,12 +60,33 @@ Before treating this as stable, agree the schema, validate warehouse-dependent
 macros and both shipped distributions, measure overhead, and extend the cache
 and source-rewriting cases as needed.
 
+## Executable format example
+
+See the six-line [SQL/Jinja input](../../crates/dbt-tasks-sa/tests/fixtures/render_trace/example.sql)
+and its [complete JSON trace](../../crates/dbt-tasks-sa/tests/fixtures/render_trace/example.render_trace.json).
+They demonstrate UTF-8 source offsets, literal and generated output, an inline
+macro, repeated loop spans, a conditional separator and a skipped loop. The
+macro-generated values are mapped to the calling `{{ doubled(n) }}` expressions
+as `templated` output.
+
+The Rust `render_trace_example_matches_fixture` test renders that input and
+compares the entire artifact with the JSON fixture using the production artifact
+type. Producer version, invocation ID and paths are fixed example values so the
+fixture stays stable across releases and machines; execution events are captured
+from the real renderer. The local attributes keep fixture newlines as LF because
+the byte offsets describe those exact input bytes.
+
 ## Local prototype validation
 
 Checked on Windows x86-64, Python 3.13.5 and Rust stable 1.98.1:
 
-- All 16 `dbt-flags` and all 145 `dbt-jinja-utils` library tests passed,
-  including the four new provenance tests.
+- After rebasing onto upstream main (`4b4701c77`), all 16 `dbt-flags` and
+  all 158 `dbt-jinja-utils` library tests passed, including the four new
+  provenance tests. The executable artifact example test also passed.
+
+Before the rebase, the following integration checks passed on the same
+trace implementation:
+
 - Built and installed the `dbt-sa-python` ABI3 wheel and ran both tests in
   `tests/integration/test_render_trace.py` successfully. These exercise a real
   project, dbt `return()`, an ephemeral parent, output equality with tracing off,
