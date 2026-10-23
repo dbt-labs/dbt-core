@@ -1,0 +1,6 @@
+kind: Fixes
+body: Install local packages with no package dependencies when another package fails to resolve or install.
+time: 2026-10-23T09:42:09.835483-04:00
+custom:
+    Author: Oliver-Weng-Sorcerer
+    Issue: ""
