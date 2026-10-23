@@ -121,76 +121,11 @@
     drop table if exists {{ relation.render() }};
   {%- endif %}
 
-  {%- set reload_strategy = config.get('reload_strategy') or (config.get('meta') or {}).get('reload_strategy') -%}
-  {%- set is_full_refresh = should_full_refresh() if should_full_refresh is defined else (flags.FULL_REFRESH if flags is defined else False) -%}
-
-  {%- if not temporary and reload_strategy and is_full_refresh -%}
-    {%- set model_name = model.name if (model is defined and model.name is defined) else (model['name'] if (model is defined and model['name'] is defined) else relation.identifier) -%}
-    {%- if target.name == 'reload' -%}
-      {# Staged reload mode (Airflow): capture compiled SQL, build empty scratch table #}
-      {%- do reload_capture(model_name, reload_strategy, compiled_code) -%}
-      {%- set compiled_code = "select * from (" ~ (compiled_code | trim | trim(";")) ~ ") as _reload_src where 1 = 0" -%}
-      create {{ table_type }} table {{ relation.render() }}
-        {% if create_definition_str | length %}{{ create_definition_str }}{% endif %}
-        {{ charset_str }}
-      as
-        {{ singlestore__strip_db_limit_aliases(compiled_code) }}
-    {%- else -%}
-      {%- if execute -%}
-        {# Inline chunked reload: build empty intermediate table, loop slices, return select 1 #}
-        {%- set empty_code = "select * from (" ~ (compiled_code | trim | trim(";")) ~ ") as _reload_src where 1 = 0" -%}
-        {%- set create_empty_ddl -%}
-          create {{ table_type }} table {{ relation.render() }}
-            {% if create_definition_str | length %}{{ create_definition_str }}{% endif %}
-            {{ charset_str }}
-          as
-            {{ singlestore__strip_db_limit_aliases(empty_code) }}
-        {%- endset -%}
-        {%- do run_query(create_empty_ddl) -%}
-
-        {%- set kind = reload_strategy["type"] -%}
-        {%- set col = reload_strategy["column"] -%}
-        {%- set batches = (reload_strategy.get("batches") or 10) | int -%}
-        {%- set parts = 1 -%}
-        {%- set start_date = reload_strategy.get("start") -%}
-        {%- set end_date = reload_strategy.get("end") -%}
-        {%- set limit = reload_strategy.get("limit") -%}
-
-        {%- if kind == "date_window" and (start_date is none or end_date is none) -%}
-          {%- set bounds_query = "select cast(min(" ~ col ~ ") as char), cast(date_add(max(" ~ col ~ "), interval 1 day) as char) from (" ~ (compiled_code | trim | trim(";")) ~ ") as _bounds_src" -%}
-          {%- set bounds_res = run_query(bounds_query) -%}
-          {%- set start_date = bounds_res.rows[0][0] -%}
-          {%- set end_date = bounds_res.rows[0][1] -%}
-          {{ log("Derived date_window bounds for " ~ model_name ~ ": [" ~ start_date ~ ", " ~ end_date ~ ")", info=True) }}
-        {%- endif -%}
-
-        {%- set head = "insert into " ~ relation.render() ~ " select * from (" ~ (compiled_code | trim | trim(";")) ~ ") as _reload_src where " -%}
-
-        {%- for batch in range(1, batches + 1) -%}
-          {%- for j in range(parts) -%}
-            {%- set slice_stmt = reload_slice_stmt(kind, col, head, batch, batches, parts, j, start_date, end_date, limit, relation.render()) -%}
-            {%- do run_query(slice_stmt) -%}
-          {%- endfor -%}
-          {%- set cnt = run_query("select count(*) from " ~ relation.render()) -%}
-          {{ log("Inline reload batch " ~ batch ~ "/" ~ batches ~ " done; " ~ relation.render() ~ " has " ~ cnt.rows[0][0] ~ " rows", info=True) }}
-        {%- endfor -%}
-
-        {{ return("select 1") }}
-      {%- else -%}
-        create {{ table_type }} table {{ relation.render() }}
-          {% if create_definition_str | length %}{{ create_definition_str }}{% endif %}
-          {{ charset_str }}
-        as
-          {{ singlestore__strip_db_limit_aliases(compiled_code) }}
-      {%- endif -%}
-    {%- endif -%}
-  {%- else -%}
-    create {{ table_type }} table {{ relation.render() }}
-      {% if create_definition_str | length %}{{ create_definition_str }}{% endif %}
-      {{ charset_str }}
-    as
-      {{ singlestore__strip_db_limit_aliases(compiled_code) }}
-  {%- endif -%}
+  create {{ table_type }} table {{ relation.render() }}
+    {% if create_definition_str | length %}{{ create_definition_str }}{% endif %}
+    {{ charset_str }}
+  as
+    {{ singlestore__strip_db_limit_aliases(compiled_code) }}
 {%- endmacro %}
 
 {% macro singlestore__create_view_as(relation, sql) -%}

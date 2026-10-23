@@ -2726,6 +2726,7 @@ dependencies = [
  "http 1.5.0",
  "ini",
  "libloading",
+ "log",
  "parking_lot 0.12.5",
  "percent-encoding",
  "rand 0.9.5",

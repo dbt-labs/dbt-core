@@ -799,6 +799,22 @@ pub enum DbtBatchSize {
     Year,
 }
 
+/// `reload_strategy` model config: when an incremental model is built from scratch, create it
+/// empty and fill it in batches (see `reload.sql` in the dbt-adapters incremental macros).
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DbtReloadStrategy {
+    /// Built in: `hash`, `time_range` or `value_range`. A project adds its own type by
+    /// overriding `get_reload_plan` and `get_reload_batch_filter`.
+    #[serde(rename = "type")]
+    pub strategy_type: String,
+    /// Output column of the model that rows are split on.
+    pub column: String,
+    /// Number of batches (10 when not set).
+    pub batches: Option<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct DbtContract {
     #[serde(default = "default_alias_types")]

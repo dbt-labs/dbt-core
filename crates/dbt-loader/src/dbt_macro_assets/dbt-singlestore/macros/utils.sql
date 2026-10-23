@@ -26,6 +26,10 @@
         NULL)
 {% endmacro %}
 
+{% macro singlestore__cast(field, type) %}
+    ({{ field }} :> {{ type }})
+{% endmacro %}
+
 {% macro singlestore__safe_cast(field, type) %}
     ({{ field }} !:> {{ type }})
 {% endmacro %}
@@ -56,6 +60,15 @@
 
 {% macro singlestore__hash(field) -%}
     md5({{ field }} :> TEXT)
+{%- endmacro %}
+
+{% macro singlestore__get_reload_hash_bucket_sql(column, buckets) -%}
+    {{ return("conv(substr(" ~ dbt.hash(column) ~ ", 1, 8), 16, 10) % " ~ buckets) }}
+{%- endmacro %}
+
+{# A backslash starts an escape sequence in SingleStore string literals, so it is escaped too. #}
+{% macro singlestore__escape_single_quotes(expression) -%}
+{{ expression | replace("\\", "\\\\") | replace("'", "''") }}
 {%- endmacro %}
 
 {% macro singlestore__cast_bool_to_text(field) %}

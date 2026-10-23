@@ -1652,6 +1652,10 @@ pub struct SingleStoreDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(alias = "cleartext_plugin")]
     pub allow_cleartext_plugin: Option<bool>,
+    /// Seconds after which a statement is logged as a slow-statement warning (default 1).
+    /// 0 turns the warning off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slow_statement_threshold: Option<StringOrInteger>,
 }
 
 #[derive(Serialize, DbtSchema)]

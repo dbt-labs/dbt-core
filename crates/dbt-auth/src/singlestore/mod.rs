@@ -78,6 +78,10 @@ impl Auth for SingleStoreAuth {
             .unwrap_or(true);
         builder.with_named_option("allow_cleartext_plugin", allow_cleartext_plugin.to_string())?;
 
+        if let Some(seconds) = config.get_string("slow_statement_threshold") {
+            builder.with_named_option("slow_statement_threshold", seconds.into_owned())?;
+        }
+
         if !query_params.is_empty() {
             uri.push('?');
             uri.push_str(&query_params.join("&"));

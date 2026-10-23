@@ -391,6 +391,7 @@ impl ReplaceIfNone for crate::schemas::serde::RefreshableConfig {}
 impl ReplaceIfNone for crate::schemas::common::DbtBatchSize {}
 impl ReplaceIfNone for crate::schemas::common::DbtContract {}
 impl ReplaceIfNone for crate::schemas::common::DbtIncrementalStrategy {}
+impl ReplaceIfNone for crate::schemas::common::DbtReloadStrategy {}
 impl ReplaceIfNone for crate::schemas::common::DbtMaterialization {}
 impl ReplaceIfNone for crate::schemas::common::DbtUniqueKey {}
 impl ReplaceIfNone for crate::schemas::common::HardDeletes {}

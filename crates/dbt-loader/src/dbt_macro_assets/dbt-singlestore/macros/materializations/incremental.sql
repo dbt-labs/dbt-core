@@ -27,11 +27,15 @@
   {% set incremental_strategy = config.get('incremental_strategy') or 'default' %}
   {% set strategy_sql_macro_func = adapter.get_incremental_strategy_macro(context, incremental_strategy) %}
 
+  {#-- With a reload_strategy, a table built from scratch is created empty and filled in batches --#}
+  {% set reload = config.get('reload_strategy') is not none and (existing_relation is none or full_refresh_mode) %}
+  {% set create_sql = get_empty_subquery_sql(sql) if reload else sql %}
+
   {% if existing_relation is none %}
-      {% set build_sql = get_create_table_as_sql(False, target_relation, sql) %}
+      {% set build_sql = get_create_table_as_sql(False, target_relation, create_sql) %}
       {% set relation_for_indexes = target_relation %}
   {% elif full_refresh_mode %}
-      {% set build_sql = get_create_table_as_sql(False, intermediate_relation, sql) %}
+      {% set build_sql = get_create_table_as_sql(False, intermediate_relation, create_sql) %}
       {% set relation_for_indexes = intermediate_relation %}
       {% set need_swap = true %}
   {% else %}
@@ -58,6 +62,10 @@
   {% call statement("main") %}
       {{ build_sql }}
   {% endcall %}
+
+  {% if reload %}
+      {% do reload_in_batches(relation_for_indexes, sql) %}
+  {% endif %}
 
   {% if existing_relation is none or existing_relation.is_view or should_full_refresh() %}
     {% do create_indexes(relation_for_indexes) %}

@@ -1,6 +1,9 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::sqlx::mysql::MySqlConnectOptions;
+use log::LevelFilter;
+use sqlx_core::connection::ConnectOptions;
 use adbc_core::error::{Error, Result, Status};
 use adbc_core::options::{OptionDatabase, OptionValue};
 
@@ -39,6 +42,7 @@ impl Driver for SingleStoreDriver {
         let mut ssl_cert = None;
         let mut ssl_key = None;
         let mut allow_cleartext_plugin = true;
+        let mut slow_statement_threshold = None;
 
         for (k, v) in opts {
             match k {
@@ -103,6 +107,11 @@ impl Driver for SingleStoreDriver {
                         }
                         _ => {}
                     },
+                    "slow_statement_threshold" => match v {
+                        OptionValue::Int(i) => slow_statement_threshold = u64::try_from(i).ok(),
+                        OptionValue::String(s) => slow_statement_threshold = s.trim().parse().ok(),
+                        _ => {}
+                    },
                     _ => {}
                 },
                 _ => {}
@@ -163,6 +172,18 @@ impl Driver for SingleStoreDriver {
         }
 
         connect_options = connect_options.enable_cleartext_plugin(allow_cleartext_plugin);
+
+        // Seconds after which a statement is logged as a slow-statement warning (sqlx default: 1).
+        // 0 turns the warning off.
+        if let Some(seconds) = slow_statement_threshold {
+            let level = if seconds == 0 {
+                LevelFilter::Off
+            } else {
+                LevelFilter::Warn
+            };
+            connect_options =
+                connect_options.log_slow_statements(level, Duration::from_secs(seconds));
+        }
 
         Ok(Box::new(SingleStoreDatabase::new(
             connect_options,

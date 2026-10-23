@@ -18,6 +18,7 @@ use dbt_yaml::Verbatim;
 
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtIncrementalStrategy;
+use crate::schemas::common::DbtReloadStrategy;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::{DocsConfig, HardDeletes, OnConfigurationChange, OnError};
 use crate::schemas::common::{HookConfig, Hooks, OnSchemaChange};
@@ -891,6 +892,8 @@ pub struct ManifestModelConfig {
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub incremental_predicates: Option<StringOrArrayOfStrings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reload_strategy: Option<DbtReloadStrategy>,
     pub batch_size: Option<DbtBatchSize>,
     pub lookback: Option<i32>,
     pub begin: Option<dbt_yaml::Timestamp>,
@@ -1178,6 +1181,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             group: config.group,
             materialized: config.materialized,
             incremental_strategy: config.incremental_strategy,
+            reload_strategy: config.reload_strategy,
             incremental_predicates: config.incremental_predicates,
             batch_size: config.batch_size,
             lookback: config.lookback,
@@ -1258,6 +1262,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             group: config.group,
             materialized: config.materialized,
             incremental_strategy: config.incremental_strategy,
+            reload_strategy: config.reload_strategy,
             incremental_predicates: config.incremental_predicates,
             // ManifestModelConfig has no constraints field: dbt-core keeps constraints on
             // the node itself (`__model_attr__.constraints`), not under `config`.

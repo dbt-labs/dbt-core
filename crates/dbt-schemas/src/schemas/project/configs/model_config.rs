@@ -22,6 +22,7 @@ use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtContract;
 use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtMaterialization;
+use crate::schemas::common::DbtReloadStrategy;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::PersistDocsConfig;
@@ -294,6 +295,8 @@ pub struct ProjectModelConfig {
     pub incremental_predicates: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+incremental_strategy")]
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
+    #[serde(rename = "+reload_strategy")]
+    pub reload_strategy: Option<DbtReloadStrategy>,
     #[serde(
         default,
         rename = "+constraints",
@@ -603,8 +606,6 @@ pub struct ProjectModelConfig {
     pub unique_table_key: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+fulltext_key")]
     pub fulltext_key: Option<StringOrArrayOfStrings>,
-    #[serde(rename = "+reload_strategy")]
-    pub reload_strategy: Option<super::common::ReloadStrategy>,
 
     /// Schema synchronization configuration
     #[serde(rename = "+sync")]
@@ -867,6 +868,7 @@ fn has_python_sproc_fields(config: &ProjectModelConfig) -> bool {
 fn has_incremental_fields(config: &ProjectModelConfig) -> bool {
     config.incremental_predicates.is_some()
         || config.incremental_strategy.is_some()
+        || config.reload_strategy.is_some()
         || config.incremental_apply_config_changes.is_some()
         || config.matched_condition.is_some()
         || config.not_matched_by_source_action.is_some()
@@ -886,7 +888,6 @@ fn has_singlestore_fields(config: &ProjectModelConfig) -> bool {
         || config.sort_key.is_some()
         || config.unique_table_key.is_some()
         || config.fulltext_key.is_some()
-        || config.reload_strategy.is_some()
 }
 
 #[derive(
@@ -930,6 +931,7 @@ pub struct ModelConfig {
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
     pub incremental_predicates: Option<StringOrArrayOfStrings>,
+    pub reload_strategy: Option<DbtReloadStrategy>,
     // Hashed into the run-cache key only; the functional source of a model's constraints is the
     // schema.yml `constraints:` property (`resolve_models.rs:1163`). Matches dbt-core.
     #[serde(default, deserialize_with = "model_constraints_or_map")]
@@ -1062,6 +1064,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             incremental_predicates: config.incremental_predicates,
             constraints: config.constraints,
             incremental_strategy: config.incremental_strategy,
+            reload_strategy: config.reload_strategy,
             location: config.location,
             lookback: config.lookback,
             materialized: config.materialized,
@@ -1206,7 +1209,6 @@ impl From<ProjectModelConfig> for ModelConfig {
                 sort_key: config.sort_key,
                 unique_table_key: config.unique_table_key,
                 fulltext_key: config.fulltext_key,
-                reload_strategy: config.reload_strategy,
 
                 engine: config.engine,
                 order_by: config.order_by,
@@ -1275,6 +1277,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             incremental_predicates: config.incremental_predicates,
             constraints: config.constraints,
             incremental_strategy: config.incremental_strategy,
+            reload_strategy: config.reload_strategy,
             location: config.location,
             lookback: config.lookback,
             materialized: config.materialized,
@@ -1444,7 +1447,6 @@ impl From<ModelConfig> for ProjectModelConfig {
             sort_key: config.__warehouse_specific_config__.sort_key,
             unique_table_key: config.__warehouse_specific_config__.unique_table_key,
             fulltext_key: config.__warehouse_specific_config__.fulltext_key,
-            reload_strategy: config.__warehouse_specific_config__.reload_strategy,
             sync: config.sync,
             engine: config.__warehouse_specific_config__.engine,
             order_by: config.__warehouse_specific_config__.order_by,
@@ -1596,6 +1598,8 @@ impl ModelConfig {
         // so we don't compare them. To compare them we will need a SQL AST whose
         // shape and node types can be compared rather contents of each node.
         // && self.incremental_predicates == other.incremental_predicates
+        // reload_strategy only changes how a full build is split into batches, not its result,
+        // so it is not compared.
         let batch_size_eq = self.batch_size == other.batch_size;
         let lookback_eq_result = lookback_eq(&self.lookback, &other.lookback); // Custom comparison for lookback
         let begin_eq = self.begin == other.begin;
@@ -2564,6 +2568,35 @@ __warehouse_specific_config__: {}
             config.event_time.as_deref(),
             Some(r#"{"column":"event_at"}"#)
         );
+    }
+
+    #[test]
+    fn test_model_config_reload_strategy_parses() {
+        let config: ModelConfig = dbt_yaml::from_str(
+            r#"
+reload_strategy:
+  type: value_range
+  column: snapshot_date
+  batches: 4
+__warehouse_specific_config__: {}
+"#,
+        )
+        .unwrap();
+        let strategy = config.reload_strategy.unwrap();
+        assert_eq!(strategy.strategy_type, "value_range");
+        assert_eq!(strategy.column, "snapshot_date");
+        assert_eq!(strategy.batches, Some(4));
+
+        let unknown_key: Result<ModelConfig, _> = dbt_yaml::from_str(
+            r#"
+reload_strategy:
+  type: hash
+  column: id
+  limit: 100
+__warehouse_specific_config__: {}
+"#,
+        );
+        assert!(unknown_key.is_err(), "unknown reload_strategy keys are rejected");
     }
 
     /// dbt-core accepts a mapping-valued `config: constraints:` and yields no constraint from
