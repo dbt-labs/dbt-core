@@ -79,17 +79,20 @@ pub(crate) fn prepare_blocks<'env, 'template>(
         .collect()
 }
 
+// Share the render location with observers and the VM's value-override path.
 // Nested macro buffers must not replace the observers' top-level location.
-fn notify_render_output_tracker(
+fn share_location(
+    tracker: &crate::OutputTracker<'_>,
     listeners: &[Rc<dyn RenderingEventListener>],
-    location: &Rc<crate::OutputTrackerLocation>,
     use_listener_location: bool,
-) {
+) -> Rc<crate::OutputTrackerLocation> {
+    let location = tracker.location.clone();
     if use_listener_location {
         for listener in listeners {
             listener.on_output_tracker(location.clone());
         }
     }
+    location
 }
 
 fn get_or_lookup_local<T, F>(vec: &mut [Option<T>], local_id: u8, f: F) -> Option<T>
@@ -404,8 +407,7 @@ impl<'env> Vm<'env> {
         // Cloned before `out` borrows `output_tracker` mutably so the current
         // output position can still be read (via the shared `RefCell`s) when
         // substituting a value-override marker (see `VALUE_OVERRIDE_MARKER`).
-        let output_location = output_tracker.location.clone();
-        notify_render_output_tracker(listeners, &output_location, use_listener_location);
+        let output_location = share_location(&output_tracker, listeners, use_listener_location);
         let mut out = Output::with_write(&mut output_tracker);
 
         let initial_auto_escape = state.auto_escape;
