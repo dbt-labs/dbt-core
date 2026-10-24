@@ -543,9 +543,11 @@ impl Task for RunTask {
             }
 
             let mut span_rows_affected: Option<i64> = None;
+            let mut span_idle_time_ms: Option<u64> = None;
             find_and_update_span_attrs(|attrs: &mut NodeEvaluated| {
                 attrs.sao_enabled = Some(cache_enabled);
                 span_rows_affected = attrs.rows_affected.map(|n| n as i64);
+                span_idle_time_ms = attrs.idle_time_ms;
             });
 
             // Get status and insert stats
@@ -618,6 +620,12 @@ impl Task for RunTask {
                     node_status
                 }
             };
+
+            // Tests, unit tests and the error path insert their own stats, so set
+            // the idle time on whichever stat was recorded.
+            if let Some(mut stat) = ctx.inner.run_stats.get_mut(&unique_id) {
+                stat.idle_time_ms = span_idle_time_ms;
+            }
 
             // Regression guard: run_stats must be populated before telemetry
             // emission. PR #9146 broke this by emitting before stats were
