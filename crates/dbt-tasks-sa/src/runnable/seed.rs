@@ -236,7 +236,7 @@ pub fn execute_seed_remote(seed: &DbtSeed, ctx: &TaskRunnerCtx) -> FsResult<Node
     if let Some(main_response) = main_response {
         ctx.inner
             .main_adapter_responses
-            .insert(seed.__common_attr__.unique_id.clone(), main_response);
+            .upsert_sync(seed.__common_attr__.unique_id.clone(), main_response);
     }
     let _ = cache_materialization_return_value(ctx.env.clone(), &relations_map);
 

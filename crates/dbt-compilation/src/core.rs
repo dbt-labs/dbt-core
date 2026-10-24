@@ -177,7 +177,7 @@ async fn resolve_phase(
 
     // Call the actual resolver
     let (mut resolved_state, jinja_env) = resolve(
-        &resolve_args,
+        resolve_args,
         invocation_args,
         dbt_state.clone(),
         macros,

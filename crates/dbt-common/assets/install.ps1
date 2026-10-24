@@ -16,10 +16,10 @@ Install the dbt CLI Binary for Windows.
 This script installs the dbt CLI Binary. It allows specifying the version, target platform, and installation location.
 
 .PARAMETER Update
-Updates to latest or specified version.
+Updates to stable or specified version.
 
 .PARAMETER Version
-Version of dbt to install. Default is the latest release.
+Version of dbt to install. Default is the stable release.
 
 .PARAMETER Target
 Install the release compiled for the specified target OS.
@@ -291,9 +291,9 @@ function Get-VersionInfo {
             Write-ErrorAndExit 'Invalid version information received from server'
         }
 
-        # Validate latest version exists
-        if (-not ($versionInfo.PSObject.Properties.Name -contains 'latest')) {
-            Write-ErrorAndExit 'No latest version information available'
+        # Validate stable version exists
+        if (-not ($versionInfo.PSObject.Properties.Name -contains 'stable')) {
+            Write-ErrorAndExit 'No stable version information available'
         }
 
         return $versionInfo
@@ -303,7 +303,7 @@ function Get-VersionInfo {
             "*Could not establish trust relationship*" { "SSL/TLS connection failed. Check your internet security settings" }
             "*Unable to connect*" { "Connection failed. Check your internet connection" }
             "*Invalid version information*" { "Invalid version information received from server" }
-            "*No latest version*" { "No latest version information available" }
+            "*No stable version*" { "No stable version information available" }
             default { "Failed to fetch version information: $($_.Exception.Message)" }
         }
         Write-ErrorAndExit $errorMsg -AdditionalInfo "URL: $versionsUrl"
@@ -325,22 +325,22 @@ function Get-TargetVersion {
 
     try {
         if ([string]::IsNullOrEmpty($SpecificVersion)) {
-            Write-GrayLog 'Checking for latest version'
+            Write-GrayLog 'Checking for stable version'
 
-            if (-not $VersionInfo.PSObject.Properties['latest']) {
-                Write-ErrorAndExit 'No latest version found in versions.json'
+            if (-not $VersionInfo.PSObject.Properties['stable']) {
+                Write-ErrorAndExit 'No stable version found in versions.json'
             }
 
-            if (-not $VersionInfo.latest.PSObject.Properties['tag']) {
-                Write-ErrorAndExit 'No tag field found in latest version'
+            if (-not $VersionInfo.stable.PSObject.Properties['tag']) {
+                Write-ErrorAndExit 'No tag field found in stable version'
             }
 
-            $script:version = $VersionInfo.latest.tag -replace '^v', ''
+            $script:version = $VersionInfo.stable.tag -replace '^v', ''
             if (-not $version) {
-                Write-ErrorAndExit 'Empty version tag in latest version'
+                Write-ErrorAndExit 'Empty version tag in stable version'
             }
 
-            Write-Log ('Latest version: ' + $version)
+            Write-Log ('Stable version: ' + $version)
             return $version
         } else {
             Write-GrayLog ("Checking for " + $SpecificVersion + " version")

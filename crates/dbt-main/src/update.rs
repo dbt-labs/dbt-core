@@ -1138,6 +1138,7 @@ mod tests {
 
     fn test_versions_json() -> serde_json::Value {
         serde_json::json!({
+            "stable":  { "tag": "v2.0.0-preview.150", "date": "2026-03-10" },
             "latest":  { "tag": "v2.0.0-preview.154", "date": "2026-03-13" },
             "dev":     { "tag": "v2.0.0-preview.157", "date": "2026-03-18" },
             "canary":  { "tag": "v2.0.0-preview.157", "date": "2026-03-18" }
@@ -1174,7 +1175,7 @@ mod tests {
             MockHttpClient::new().with_text(format!("{}/versions.json", cdn_base_url()), &manifest);
 
         let version = resolve_target_version(None, &client).await.unwrap();
-        assert_eq!(version, "2.0.0-preview.154");
+        assert_eq!(version, "2.0.0-preview.150");
     }
 
     #[dbt_runtime::test]
@@ -1191,7 +1192,7 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[dbt_runtime::test]
     async fn test_native_update_installs_only_dbt_by_default() {
-        let version = "2.0.0-preview.154";
+        let version = "2.0.0-preview.150";
         let binary_content = b"#!/bin/sh\necho fake-dbt";
 
         let client = native_update_client(
@@ -1471,7 +1472,7 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[dbt_runtime::test]
     async fn test_native_update_missing_binary_in_archive_errors() {
-        let version = "2.0.0-preview.154";
+        let version = "2.0.0-preview.150";
         let client = native_update_client(
             version,
             build_fake_tarball("wrong-name", b"data"),
@@ -1491,7 +1492,7 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[dbt_runtime::test]
     async fn test_native_update_overwrites_existing_binaries() {
-        let version = "2.0.0-preview.154";
+        let version = "2.0.0-preview.150";
 
         let client = native_update_client(
             version,
@@ -1656,7 +1657,7 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[dbt_runtime::test]
     async fn test_native_update_records_correct_urls() {
-        let version = "2.0.0-preview.154";
+        let version = "2.0.0-preview.150";
         let target = current_target_triple().unwrap();
         let base = cdn_base_url();
 

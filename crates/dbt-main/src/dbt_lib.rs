@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
-use dbt_common::tracing::formatters::duration::format_duration_fixed_width;
-use dbt_common::tracing::formatters::node::{format_node_action, format_node_type_fixed_width};
+use dbt_common::tracing::formatters::duration::FixedWidthDuration;
+use dbt_common::tracing::formatters::node::{NodeAction, NodeTypeFixedWidth};
 
 use dbt_adapter::load_store::ResultStore;
 use dbt_adapter::{
@@ -28,7 +28,7 @@ use dbt_common::{
     io_args::{DisplayFormat, EvalArgs, ListOutputFormat, Phases, ShowOptions, SystemArgs},
     node_selector::IndirectSelection,
     path::get_target_write_path,
-    pretty_string::{GREEN, RED, color_quotes},
+    pretty_string::{ColoredQuotes, GREEN, RED},
     stdfs,
     tracing::{
         dbt_emit::{
@@ -100,7 +100,9 @@ use git_version::git_version;
 use minijinja::Value;
 use serde_json::{json, to_string_pretty};
 use tracing::Instrument;
-use vortex_events::{build_result_string, invocation_end_event};
+use vortex_events::{
+    RunCheckEventArgs, build_result_string, invocation_end_event, run_check_event,
+};
 
 use crate::{
     compilation::{
@@ -209,7 +211,7 @@ pub async fn setup_and_execute_fs(
         eprintln!(
             "{} {}",
             RED.apply_to(format!("[{ERROR}]")),
-            color_quotes(e.pretty().as_str())
+            ColoredQuotes(e.pretty().as_str())
         );
         FsError::exit_with_status(1)
     })?;
@@ -278,6 +280,10 @@ pub async fn setup_and_execute_fs(
             Err(_) => "error",
         };
         ctx.write(status);
+        // The row for this invocation only exists now, so any index or
+        // information schema written during the command is missing it. Bring
+        // that one table up to date.
+        refresh_invocation_artifacts(&eval_arg);
     }
 
     // Shutdown must be called to ensure vortex flushes all events.
@@ -328,6 +334,53 @@ is false. This should not happen."
             error,
             artifacts: artifacts_sink,
         }),
+    }
+}
+
+/// Re-materialize the invocations table in whichever artifacts were requested,
+/// once the current invocation's record has been written.
+///
+/// `--write-index` and `--generate-info-schema` both produce their output while
+/// the command is still running, and [`InvocationContext::write`] only appends
+/// the row for that command after it returns. Without this pass the invocation
+/// that produced an artifact is the one invocation missing from it, so joining
+/// `dbt_rt.run_results` to `dbt_rt.invocations` — as `dbt_rt.dag_validity` does —
+/// silently drops the run that was just recorded.
+///
+/// The two artifacts are refreshed independently, each from the metadata
+/// epochs: the information schema does not read the index, matching the write
+/// it is catching up. Each refresh no-ops when its artifact was not actually
+/// written — a command that failed, was interrupted, or never reached the write
+/// leaves nothing to bring up to date.
+///
+/// Advisory, like the writes themselves: a failure here leaves the rest of the
+/// artifact usable and must not fail the command.
+fn refresh_invocation_artifacts(eval_arg: &EvalArgs) {
+    let metadata_dir = eval_arg.metadata_dir();
+    if !metadata_dir.exists() {
+        return;
+    }
+
+    if eval_arg.generate_info_schema
+        && let Err(err) =
+            dbt_index_core::refresh_invocations(&metadata_dir, &eval_arg.info_schema_dir())
+    {
+        emit_warn_log_message(
+            ErrorCode::InfoSchemaWriteFailed,
+            format!("dbt: generate-info-schema: refreshing dbt_rt.invocations: {err}"),
+        );
+    }
+
+    if eval_arg.write_index {
+        let index_dir = eval_arg.index_dir();
+        if has_persisted_state(&index_dir)
+            && let Err(err) = dbt_index_core::ingest::rewrite_invocations(&metadata_dir, &index_dir)
+        {
+            emit_warn_log_message(
+                ErrorCode::IndexWriteFailed,
+                format!("dbt-index: refreshing dbt_rt.invocations: {err}"),
+            );
+        }
     }
 }
 
@@ -518,7 +571,9 @@ async fn do_execute_fs(
         let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
+            option_env!("DBT_VERSION")
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
+                .to_string(),
         ));
 
         return match execute_deps_command(
@@ -542,7 +597,9 @@ async fn do_execute_fs(
         let command_name = feature_stack.cli.command_name;
         emit_info_progress_message(ProgressMessage::new_from_action_and_target(
             command_name.to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
+            option_env!("DBT_VERSION")
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
+                .to_string(),
         ));
 
         return execute_clean_command(eval_arg, &clean_args.files, token).await;
@@ -1084,6 +1141,28 @@ impl<'a> AllPhasesExecutor<'a> {
             })
     }
 
+    /// One `RunCheck` per check, so check usage is visible whichever command ran it: checks do
+    /// not run as tasks, so they emit no `RunModel`. `log_proto` does not check opt-out itself,
+    /// so this does, like every other event.
+    fn report_check_telemetry(&self, results: &[dbt_tasks_sa::check::CheckResult]) {
+        if !self.arg.io.send_anonymous_usage_stats {
+            return;
+        }
+        let invocation_id = self.arg.io.invocation_id.to_string();
+        for r in results {
+            run_check_event(RunCheckEventArgs {
+                invocation_id: invocation_id.clone(),
+                unique_id: &r.unique_id,
+                status: r.status,
+                severity: r.severity,
+                reason: r.reason,
+                selection: r.selection,
+                violations: r.violations,
+                execution_time: r.execution_time,
+            });
+        }
+    }
+
     async fn write_json(
         &self,
         run_task_results: &RunTaskResults,
@@ -1258,6 +1337,21 @@ impl<'a> AllPhasesExecutor<'a> {
         // artifact after the graph runs, so a passing check still appears in the results.
         let mut check_result_rows: Vec<dbt_schemas::schemas::RunResultOutput> = Vec::new();
 
+        // `command` is rewritten to the original command during retry, so `command_entrypoint` is
+        // what still says how we were invoked.
+        let retrying = self.arg.command_entrypoint == FsCommand::Retry;
+        // Naming checks and scoping their rows are orthogonal: `check_names` chooses which checks
+        // run, a selector chooses which of their rows are reported. So
+        // `dbt check <name> --select <subset>` composes -- run that check, report only the
+        // subset's violations.
+        //
+        // Never on a retry, and that exclusion is load-bearing rather than tidy: `check_names` is
+        // set from the retry artifact, and the accompanying schedule holds only the failed nodes.
+        // Scoping to it would verify a fraction of the gate and report the rest as a green
+        // `skipped`, which is how a retry of a failing check once came to exit 0.
+        let selection_active =
+            !retrying && (schedule.select.is_some() || schedule.exclude.is_some());
+
         // Parse-time checks run here: parse has finished, the parse layer is in the index, and the
         // task graph has not been built yet. A failing check therefore needs no graph edges to stop
         // anything — we simply do not proceed. `dbt check` and `dbt build` share this one call, so
@@ -1267,7 +1361,7 @@ impl<'a> AllPhasesExecutor<'a> {
         // this same `execute_all_phases` pipeline, but a check is a project-quality gate on the
         // build as a whole, not something a narrower command implicitly opts into. `command`, not
         // `command_entrypoint`, because a retry rewrites `command` back to the original command
-        // (see the retry comment on `retrying` below), so a retried build/check still gates here.
+        // (see the retry comment on `retrying` above), so a retried build/check still gates here.
         //
         // `--skip-checks` is the one opt-out: the user asked to skip, so do not warn. Nothing
         // about the index enters into it any more -- the views a check queries are declared over
@@ -1291,10 +1385,6 @@ impl<'a> AllPhasesExecutor<'a> {
             // `dbt retry` after either `check` or `build` re-runs only the checks recorded as
             // failed, via `check_names`. A retried build still materializes the skipped/failed
             // nodes from the original run if those checks then pass.
-            //
-            // `command` is rewritten to the original command during retry, so
-            // `command_entrypoint` is what still says how we were invoked.
-            let retrying = self.arg.command_entrypoint == FsCommand::Retry;
             let named: Vec<_> = if self.arg.check_names.is_empty() {
                 checks
             } else {
@@ -1349,19 +1439,12 @@ impl<'a> AllPhasesExecutor<'a> {
                         ErrorCode::CheckMetadataUnavailable,
                         format!("{reason}. Skipping checks..."),
                     );
+                    self.report_check_telemetry(&dbt_tasks_sa::check::not_run_results(
+                        &named,
+                        "metadata_unavailable",
+                        selection_active,
+                    ));
                 } else {
-                    // Naming checks and scoping their rows are orthogonal: `check_names` chooses
-                    // which checks run, a selector chooses which of their rows are reported. So
-                    // `dbt check <name> --select <subset>` composes -- run that check, report only
-                    // the subset's violations.
-                    //
-                    // Never on a retry, and that exclusion is load-bearing rather than tidy:
-                    // `check_names` is set from the retry artifact, and the accompanying schedule
-                    // holds only the failed nodes. Scoping to it would verify a fraction of the gate
-                    // and report the rest as a green `skipped`, which is how a retry of a failing
-                    // check once came to exit 0.
-                    let selection_active =
-                        !retrying && (schedule.select.is_some() || schedule.exclude.is_some());
                     let scope = dbt_tasks_sa::check::scope_for_selection(
                         selection_active,
                         schedule.all_selected_nodes.iter(),
@@ -1429,7 +1512,7 @@ impl<'a> AllPhasesExecutor<'a> {
                         // through `NodeProcessed` -- borrowing the formatting is what
                         // keeps them from looking like a different program's output.
                         //
-                        // The verdict comes from `format_node_action` rather than a
+                        // The verdict comes from `NodeAction` rather than a
                         // local match, so a check's label and colour are a test's by
                         // construction: green Passed, yellow Warned, red Failed. The
                         // file and JSON layers strip ANSI from message bodies, so
@@ -1450,16 +1533,19 @@ impl<'a> AllPhasesExecutor<'a> {
                         };
                         emit_info_log_message(format!(
                             "{} [{}] {} {}",
-                            format_node_action(
-                                outcome,
+                            NodeAction {
+                                node_outcome: outcome,
                                 skip_reason,
                                 test_outcome,
-                                None,
-                                false,
-                                true
-                            ),
-                            format_duration_fixed_width(Duration::from_secs_f64(r.execution_time)),
-                            format_node_type_fixed_width("check", true),
+                                freshness_outcome: None,
+                                has_warn: false,
+                                colorize: true,
+                            },
+                            FixedWidthDuration(Duration::from_secs_f64(r.execution_time)),
+                            NodeTypeFixedWidth {
+                                node_type: "check",
+                                colorize: true,
+                            },
                             r.name,
                         ));
 
@@ -1522,6 +1608,8 @@ impl<'a> AllPhasesExecutor<'a> {
                             }
                         }
                     }
+
+                    self.report_check_telemetry(&outcome.results);
 
                     // `run_results.json` rows keyed `check.<project>.<name>`, which is what `dbt retry`
                     // reads to decide what to re-run.
@@ -1595,6 +1683,35 @@ impl<'a> AllPhasesExecutor<'a> {
                     }
                 }
             }
+        }
+
+        // `--skip-checks` still reports each check to telemetry, as `skipped`, so a deliberate skip
+        // can be told apart from checks that never ran. Nothing is logged or written for them.
+        // Not on a retry: a retry with nothing to redo sets `skip_checks` itself.
+        if matches!(self.arg.command, FsCommand::Build | FsCommand::Check)
+            && self.arg.skip_checks
+            && !retrying
+        {
+            let skipped: Vec<_> = compilation
+                .resolved_state()
+                .nodes
+                .checks
+                .values()
+                .filter(|c| {
+                    self.arg.check_names.is_empty()
+                        || self
+                            .arg
+                            .check_names
+                            .iter()
+                            .any(|n| *n == c.__common_attr__.name)
+                })
+                .cloned()
+                .collect();
+            self.report_check_telemetry(&dbt_tasks_sa::check::not_run_results(
+                &skipped,
+                "skip_checks_flag",
+                selection_active,
+            ));
         }
 
         // `dbt check` never needs the task graph: a check's rows are already scoped above, and

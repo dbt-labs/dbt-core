@@ -263,6 +263,30 @@ fn log_messages(cases: &mut Vec<Case>) {
             "Couldn'<yellow>t find </>'customers",
         ),
         (
+            "doesn't is not a quote",
+            "Column 'id' doesn't exist in 'orders'",
+            "Column 'id' doesn't exist in 'orders'",
+            "Column '<yellow>id</>' does not exist in '<yellow>orders</>'",
+        ),
+        (
+            "doesn't between quotes",
+            "Model 'it doesn't matter' is unused",
+            "Model 'it doesn't matter' is unused",
+            "Model '<yellow>it does not matter</>' is unused",
+        ),
+        (
+            "doesn't with backticks",
+            "Package `dbt_utils` doesn't exist",
+            "Package `dbt_utils` doesn't exist",
+            "Package `<yellow>dbt_utils</>` does not exist",
+        ),
+        (
+            "doesn't with an unbalanced quote",
+            "Model 'customers doesn't exist",
+            "Model 'customers doesn't exist",
+            "Model 'customers doesn't exist",
+        ),
+        (
             "ansi codes in the body",
             "\x1b[31mred\x1b[0m alert",
             "red alert",

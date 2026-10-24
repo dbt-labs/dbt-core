@@ -156,7 +156,7 @@ help() {
     echo "Usage: install.sh [options]"
     echo ""
     echo "Options:"
-    echo "  --update, -u       Update to latest or specified version"
+    echo "  --update, -u       Update to stable or specified version"
     echo "  --version VER      Install version VER"
     echo "  --target TARGET    Install for target platform TARGET"
     echo "  --to DEST          Install to DEST"
@@ -462,9 +462,9 @@ determine_version() {
     fi
 
     if [ -z "$specific_version" ];then
-        log_grey "Checking for latest version"
-        TARGET_VERSION=$(echo "$versions" | jq -r ".latest.tag" | sed 's/^v//') || err_and_exit "Failed to parse latest version from versions data."
-        log_grey "Latest available version: $TARGET_VERSION"
+        log_grey "Checking for stable version"
+        TARGET_VERSION=$(echo "$versions" | jq -r ".stable.tag" | sed 's/^v//') || err_and_exit "Failed to parse stable version from versions data."
+        log_grey "Stable available version: $TARGET_VERSION"
     # check the version that tag maps to, if the tag exists
     elif echo "$versions" | jq -e "has(\"$specific_version\")" > /dev/null;then
         log_grey "Checking for $specific_version version"

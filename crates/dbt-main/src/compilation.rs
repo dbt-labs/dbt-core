@@ -2813,11 +2813,18 @@ fn send_vortex_telemetry_if_possible(
                 .default_db_config()
                 .adapter_type()
                 .to_string(),
+            // `get_adapter_unique_id` hashes an adapter-specific field that
+            // identifies the warehouse (`base_url` on lake compute, `account` on
+            // Snowflake, ...). That field is optional in every profile schema, so
+            // a target that omits it -- legal for commands that never connect,
+            // such as `compile --static-analysis off` -- yields `None`. Reporting
+            // it as unknown keeps anonymous telemetry from taking the whole
+            // invocation down with it.
             dbt_state
                 .dbt_profile
                 .default_db_config()
                 .get_adapter_unique_id()
-                .unwrap(),
+                .unwrap_or_default(),
         );
     }
 }

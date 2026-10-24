@@ -907,14 +907,15 @@ impl Adapter {
 
                 if state.is_execute() {
                     if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID, &[]) {
-                        parse_state.unsafe_nodes.insert(
+                        // Set insert: `Err` only means the node is already recorded.
+                        let _already_present = parse_state.unsafe_nodes.insert_sync(
                             unique_id
                                 .as_str()
                                 .expect("unique_id must be a string")
                                 .to_string(),
                         );
                     }
-                    parse_state.execute_sqls.insert(sql.to_string());
+                    let _already_present = parse_state.execute_sqls.insert_sync(sql.to_string());
                 }
 
                 Ok((response, table))
@@ -1581,16 +1582,21 @@ impl Adapter {
     /// In Core, there are numerous derived flavors of CatalogRelation.
     /// We handle this in Fusion as a piecemeal instantiated flat object
     /// and push down validation to the DDL level.
-    #[tracing::instrument(skip(self), level = "trace")]
-    pub fn build_catalog_relation(&self, model: &Value) -> Result<Value, minijinja::Error> {
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    pub fn build_catalog_relation(
+        &self,
+        state: &State,
+        model: &Value,
+    ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let relation = adapter.build_catalog_relation(model)?;
                 Ok(Value::from_object(relation))
             }
             Parse(parse_adapter_state) => {
+                // Build for the node's own adapter, as `type` answers, not the default's.
                 let relation = CatalogRelation::from_model_config_and_catalogs(
-                    parse_adapter_state.adapter_type,
+                    self.effective_adapter_type(state),
                     model,
                     parse_adapter_state.catalogs.clone(),
                 )?;
@@ -3615,6 +3621,17 @@ impl Adapter {
         }
     }
 
+    /// Emit the once-only warning registered for the calling macro.
+    #[tracing::instrument(skip_all, level = "trace")]
+    pub fn warn_once(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let iter = ArgsIter::new("warn_once", &["msg"], args);
+        let _msg = iter.next_arg::<&str>()?;
+        iter.finish()?;
+
+        crate::warn_once::warn_once_from_macro(state.name());
+        Ok(none_value())
+    }
+
     /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement.
     #[tracing::instrument(skip(self), level = "trace")]
     pub fn use_warehouse(
@@ -3973,14 +3990,14 @@ impl Adapter {
                 // incremental polaris model. TODO: remove this when catalog_relation is
                 // fully engineered to no longer require runtime attribute shim-based solutions
                 if model.kind() == ValueKind::String {
-                    return self.build_catalog_relation(model);
+                    return self.build_catalog_relation(state, model);
                 }
 
                 // Case 2: caller passed a model object
                 // TODO: When we remove case 1, we can serialize this as an InternalDbtNode (and add the necessary attributes to their respective resource-type specific attribute structs)
                 // Ex: minijinja_value_to_typed_struct::<DbtModel>(model.clone()).is_ok();
 
-                self.build_catalog_relation(model)
+                self.build_catalog_relation(state, model)
             }
             "get_catalog_integration" => self.get_catalog_integration(state, args),
             "type" => Ok(Value::from(self.effective_adapter_type(state).to_string())),
@@ -4245,6 +4262,7 @@ impl Adapter {
             "strip_trailing_statement_terminator" => {
                 self.strip_trailing_statement_terminator(state, args)
             }
+            "warn_once" => self.warn_once(state, args),
             "get_seed_file_path" => {
                 // model: dict (seed node)
                 let iter = ArgsIter::new(name, &["model"], args);

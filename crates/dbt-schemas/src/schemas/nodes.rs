@@ -5712,6 +5712,10 @@ pub struct DbtTestAttr {
     /// for a model-level test; a `column_name` macro kwarg lives in `test_metadata.kwargs`.
     pub column_name: Option<String>,
     pub attached_node: Option<String>,
+    /// The resource declared as a generic test's subject. Unlike `attached_node`, this is
+    /// populated for source tests and is not part of the dbt manifest contract.
+    #[serde(default, skip_serializing)]
+    pub test_subject_unique_id: Option<String>,
     pub test_metadata: Option<TestMetadata>,
     pub file_key_name: Option<String>,
     /// dbt State configs (restricted subset), read by the run-cache at run time.

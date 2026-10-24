@@ -91,8 +91,7 @@ pub async fn prepare_microbatch_batches(
 
     let sql_header = task_result
         .config_map
-        .get("sql_header")
-        .map(|v| v.value().clone());
+        .read_sync("sql_header", |_, v| v.clone());
 
     let model = node
         .as_any()
@@ -386,7 +385,7 @@ fn materialize_microbatch_batch(mb_unit: MicrobatchExecUnit, ctx: &TaskRunnerCtx
             if let Some(main_response) = main_response {
                 ctx.inner
                     .main_adapter_responses
-                    .insert(model.__common_attr__.unique_id.clone(), main_response);
+                    .upsert_sync(model.__common_attr__.unique_id.clone(), main_response);
             }
             let _ = cache_materialization_return_value(ctx.env.clone(), &relations_map);
             Ok(())
@@ -413,8 +412,7 @@ pub fn execute_model_remote(
 
     let sql_header = task_result
         .config_map
-        .get("sql_header")
-        .map(|v| v.value().clone());
+        .read_sync("sql_header", |_, v| v.clone());
 
     // Traditional warehouse execution via Jinja materialization macros
     match materialize_model(
@@ -434,7 +432,7 @@ pub fn execute_model_remote(
             if let Some(main_response) = main_response {
                 ctx.inner
                     .main_adapter_responses
-                    .insert(model.__common_attr__.unique_id.clone(), main_response);
+                    .upsert_sync(model.__common_attr__.unique_id.clone(), main_response);
             }
             let _ = cache_materialization_return_value(ctx.env.clone(), &relations_map);
         }

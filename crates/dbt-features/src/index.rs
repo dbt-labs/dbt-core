@@ -334,6 +334,7 @@ fn write_metadata_parquet_impl(
                 grain: serde_json::to_string(&grain).unwrap_or_default(),
                 grain_declared: serde_json::to_string(&grain_declared).unwrap_or_default(),
                 grain_tested: serde_json::to_string(&grain_tested_val).unwrap_or_default(),
+                grain_inferred: serde_json::to_string(&grain_inferred).unwrap_or_default(),
                 classifiers: merge_classifiers_json(
                     node_declared_classifiers(node),
                     node_classifiers.get(uid.as_str()),
@@ -359,6 +360,7 @@ fn write_metadata_parquet_impl(
                     grain: "[]".to_string(),
                     grain_declared: "[]".to_string(),
                     grain_tested: "[]".to_string(),
+                    grain_inferred: "[]".to_string(),
                     classifiers: serde_json::to_string(&node_clf)
                         .unwrap_or_else(|_| "[]".to_string()),
                     table_role: None,

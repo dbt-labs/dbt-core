@@ -54,7 +54,6 @@ use arrow::array::{BooleanArray, RecordBatch, StringArray};
 use arrow_array::{Array as _, ArrayRef, Decimal128Array};
 use arrow_ipc::writer::StreamWriter;
 use arrow_schema::{DataType, Field, Schema};
-use dashmap::DashMap;
 use dbt_adapter_core::AdapterType;
 use dbt_adapter_engine::cow::lowercase;
 use dbt_adapter_sql::is_keyword_ignore_ascii_case;
@@ -64,6 +63,7 @@ use dbt_adbc::{Connection, QueryCtx};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::collections::SccHashMap;
 use dbt_common::tracing::dbt_emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_schema_store::SchemaStoreTrait;
@@ -3157,7 +3157,7 @@ impl AdapterImpl {
         }
 
         match self.adapter_type() {
-            Postgres | Bigquery | DuckDB | LakeCompute | Exasol => {
+            Postgres | Bigquery | DuckDB | LakeCompute | Exasol | ClickHouse => {
                 let grantee_cols = record_batch.column_values::<StringArray>("grantee")?;
                 let privilege_cols = record_batch.column_values::<StringArray>("privilege_type")?;
 
@@ -3351,8 +3351,8 @@ impl AdapterImpl {
 
                 Ok(result)
             }
-            Salesforce | Spark | Fabric | ClickHouse | Starburst | Athena | Trino | Datafusion
-            | Dremio | Oracle => {
+            Salesforce | Spark | Fabric | Starburst | Athena | Trino | Datafusion | Dremio
+            | Oracle => {
                 unimplemented!("grants not implemented")
             }
         }
@@ -3480,7 +3480,8 @@ impl AdapterImpl {
                 }
                 // https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L834
                 /// but instead of locking the thread, put the lock on the dataset
-                static DATASET_LOCK: LazyLock<DashMap<String, bool>> = LazyLock::new(DashMap::new);
+                static DATASET_LOCK: LazyLock<SccHashMap<String, Arc<parking_lot::Mutex<()>>>> =
+                    LazyLock::new(SccHashMap::default);
 
                 // adapter.grant_access_to when seen in Jinja macros, `entity_type` is always set to view
                 // https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L842
@@ -3511,9 +3512,14 @@ impl AdapterImpl {
                     }],
                 );
 
-                let _lock = DATASET_LOCK
-                    .entry(format!("{database}.{schema}"))
-                    .or_insert_with(|| true);
+                // Clone the dataset's mutex out so the map's bucket lock drops here;
+                // only calls for the same dataset wait on it.
+                let dataset_lock = DATASET_LOCK
+                    .entry_sync(format!("{database}.{schema}"))
+                    .or_default()
+                    .get()
+                    .clone();
+                let _guard = dataset_lock.lock();
 
                 let ctx = query_ctx_from_state(state)?;
                 let sql = "none"; // empty sql that won't really be executed
