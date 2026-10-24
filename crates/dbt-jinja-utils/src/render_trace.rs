@@ -1,6 +1,7 @@
 //! Ordered source/output provenance from one real Jinja render.
 
 use std::cell::RefCell;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -61,13 +62,13 @@ impl RenderTraceListener {
         self.location.borrow().index() as usize
     }
 
-    fn record(&self, kind: &str, span: &Span, start: usize, end: usize) {
+    fn record(&self, kind: &str, span: &Span, rendered: Range<usize>) {
         self.events.borrow_mut().push(RenderTraceEvent {
             kind: kind.to_owned(),
             source_start: span.start_offset as usize,
             source_end: span.end_offset as usize,
-            rendered_start: start,
-            rendered_end: end,
+            rendered_start: rendered.start,
+            rendered_end: rendered.end,
         });
     }
 
@@ -93,6 +94,9 @@ impl RenderingEventListener for RenderTraceListener {
         self.location.replace(location);
     }
 
+    // The existing RenderingEventListener contract requires line/column arguments,
+    // even though this byte-oriented observer only needs the path and offset.
+    // @codescene(disable:"Excess Number of Function Arguments")
     fn on_macro_start(&self, path: Option<&Path>, _line: &u32, _col: &u32, offset: &u32) {
         if path == Some(self.source_path.as_path()) {
             self.macros
@@ -101,6 +105,8 @@ impl RenderingEventListener for RenderTraceListener {
         }
     }
 
+    // Keep the shared trait signature; line/column are unused by trace events.
+    // @codescene(disable:"Excess Number of Function Arguments")
     fn on_macro_stop(&self, path: Option<&Path>, _line: &u32, _col: &u32, offset: &u32) {
         if path != Some(self.source_path.as_path()) {
             return;
@@ -118,7 +124,7 @@ impl RenderingEventListener for RenderTraceListener {
 
     fn on_raw_emit(&self, raw: &str, span: &Span) {
         let start = self.position();
-        self.record("literal", span, start, start + raw.len());
+        self.record("literal", span, start..start + raw.len());
     }
 
     fn on_emit_start(&self, span: &Span) {
@@ -127,7 +133,7 @@ impl RenderingEventListener for RenderTraceListener {
 
     fn on_emit_end(&self, _span: &Span) {
         if let Some((span, start)) = self.emits.borrow_mut().pop() {
-            self.record("templated", &span, start, self.position());
+            self.record("templated", &span, start..self.position());
         }
     }
 
@@ -141,17 +147,17 @@ impl RenderingEventListener for RenderTraceListener {
             JinjaLayoutEventKind::Comment => "comment",
         };
         let position = self.position();
-        self.record(name, span, position, position);
+        self.record(name, span, position..position);
     }
 
     fn on_jinja_loop_iteration_start(&self, span: &Span) {
         let position = self.position();
-        self.record("loop_iteration", span, position, position);
+        self.record("loop_iteration", span, position..position);
     }
 
     fn on_jinja_loop_skipped_end(&self, span: &Span) {
         let position = self.position();
-        self.record("loop_skipped", span, position, position);
+        self.record("loop_skipped", span, position..position);
     }
 
     fn on_function_start(&self) {

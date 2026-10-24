@@ -58,35 +58,8 @@ fn render_default(
 ) -> FsResult<(SqlInstruction, Arc<SccHashMap<String, MinijinjaValue>>)> {
     report_rendering_progress(node, ctx);
 
-    let write_render_trace = dbt_flags::WRITE_RENDER_TRACE.enabled();
-    // A compiled-SQL cache entry does not currently contain render events.
-    // Trace requests must observe a fresh execution rather than reuse SQL alone.
-    if !write_render_trace
-        && let Some((rendered_sql_maybe_with_cte, macro_spans, reclassify_spans)) = ctx
-            .inner
-            .compiled_sql_cache
-            .try_get_compiled_sql(&ctx.inner.arg.io, node.common())
-    {
-        let config_map = Arc::new(convert_yml_to_scc_map(node.serialized_config()));
-        emit_compiled_code(node, ctx, &rendered_sql_maybe_with_cte);
-        // The cache returns the raw span components; the rendering listener
-        // factory rebuilds the `CompiledSpans`.
-        let spans = ctx
-            .rendering_listener_factory
-            .create_spans(macro_spans, reclassify_spans);
-        return Ok((
-            SqlInstruction {
-                fqn: vec![
-                    node.base().database.clone(),
-                    node.base().schema.clone(),
-                    node.base().alias.clone(),
-                ],
-                sql: rendered_sql_maybe_with_cte,
-                original_path: node.common().original_file_path.to_path_buf(),
-                spans,
-            },
-            config_map,
-        ));
+    if let Some(cached) = cached_render(node, ctx) {
+        return Ok(cached);
     }
 
     let mut base_context = ctx.inner.base_context.clone();
@@ -130,27 +103,16 @@ fn render_default(
         )
         .into_owned();
 
-    let rendered_sql = if write_render_trace {
-        let trace = render_sql_with_trace(
-            &raw_sql,
-            &ctx.env,
-            &compile_context,
-            ctx.rendering_listener_factory.as_ref(),
-            &render_file_path,
-        )
-        .map_err(|e| e.with_location(render_file_path.clone()))?;
-        write_model_render_trace(node, ctx, &render_file_path, &absolute_path, &trace)?;
-        trace.rendered
-    } else {
-        render_sql(
-            &raw_sql,
-            &ctx.env,
-            &compile_context,
-            ctx.rendering_listener_factory.as_ref(),
-            &render_file_path,
-        )
-        .map_err(|e| e.with_location(render_file_path.clone()))?
-    };
+    let rendered_sql = render_model_sql(
+        node,
+        ctx,
+        &compile_context,
+        &ModelRenderInput {
+            source: &raw_sql,
+            filename: &render_file_path,
+            source_path: &absolute_path,
+        },
+    )?;
 
     let mut macro_spans = ctx
         .rendering_listener_factory
@@ -190,6 +152,77 @@ fn render_default(
     ))
 }
 
+/// Restore the complete rendered result only when execution events are not needed.
+fn cached_render(
+    node: &Arc<dyn InternalDbtNodeAttributes>,
+    ctx: &TaskRunnerCtx,
+) -> Option<(SqlInstruction, Arc<SccHashMap<String, MinijinjaValue>>)> {
+    // The compiled-SQL cache does not store render events. Trace requests must
+    // observe a fresh execution rather than reuse SQL alone.
+    if dbt_flags::WRITE_RENDER_TRACE.enabled() {
+        return None;
+    }
+    let (rendered_sql, macro_spans, reclassify_spans) = ctx
+        .inner
+        .compiled_sql_cache
+        .try_get_compiled_sql(&ctx.inner.arg.io, node.common())?;
+    let config_map = Arc::new(convert_yml_to_scc_map(node.serialized_config()));
+    emit_compiled_code(node, ctx, &rendered_sql);
+    // The cache returns raw components; the factory rebuilds CompiledSpans.
+    let spans = ctx
+        .rendering_listener_factory
+        .create_spans(macro_spans, reclassify_spans);
+    Some((
+        SqlInstruction {
+            fqn: vec![
+                node.base().database.clone(),
+                node.base().schema.clone(),
+                node.base().alias.clone(),
+            ],
+            sql: rendered_sql,
+            original_path: node.common().original_file_path.to_path_buf(),
+            spans,
+        },
+        config_map,
+    ))
+}
+
+/// The exact Jinja input and its display and on-disk source identities.
+struct ModelRenderInput<'a> {
+    source: &'a str,
+    filename: &'a Path,
+    source_path: &'a Path,
+}
+
+fn render_model_sql(
+    node: &Arc<dyn InternalDbtNodeAttributes>,
+    ctx: &TaskRunnerCtx,
+    compile_context: &BTreeMap<String, MinijinjaValue>,
+    input: &ModelRenderInput<'_>,
+) -> FsResult<String> {
+    if dbt_flags::WRITE_RENDER_TRACE.enabled() {
+        let trace = render_sql_with_trace(
+            input.source,
+            &ctx.env,
+            compile_context,
+            ctx.rendering_listener_factory.as_ref(),
+            input.filename,
+        )
+        .map_err(|error| error.with_location(input.filename.to_path_buf()))?;
+        write_model_render_trace(node, ctx, input, &trace)?;
+        Ok(trace.rendered)
+    } else {
+        Ok(render_sql(
+            input.source,
+            &ctx.env,
+            compile_context,
+            ctx.rendering_listener_factory.as_ref(),
+            input.filename,
+        )
+        .map_err(|error| error.with_location(input.filename.to_path_buf()))?)
+    }
+}
+
 #[derive(Serialize)]
 struct ModelRenderTrace<'a> {
     protocol_version: u32,
@@ -206,8 +239,7 @@ struct ModelRenderTrace<'a> {
 fn write_model_render_trace(
     node: &Arc<dyn InternalDbtNodeAttributes>,
     ctx: &TaskRunnerCtx,
-    filename: &Path,
-    source_path: &Path,
+    input: &ModelRenderInput<'_>,
     trace: &RenderTrace,
 ) -> FsResult<()> {
     let io = &ctx.inner.arg.io;
@@ -221,8 +253,8 @@ fn write_model_render_trace(
         dbt_version: env!("CARGO_PKG_VERSION"),
         invocation_id: io.invocation_id.to_string(),
         unique_id: node.unique_id(),
-        filename,
-        source_path,
+        filename: input.filename,
+        source_path: input.source_path,
         render_stage: "jinja_before_ephemeral_injection",
         trace,
     };
